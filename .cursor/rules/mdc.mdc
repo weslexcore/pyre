@@ -1,6 +1,20 @@
 ---
-description: Cursor Rules Location
-globs: *.mdc
+description: "Cursor Rules Location - Standards for placing and organizing Cursor rule files"
+globs:
+  - "**/*.mdc"
+  - ".cursor/**/*"
+  - "**/rules/**/*"
+alwaysApply: false
+triggers:
+  - "cursor"
+  - "rule"
+  - "mdc"
+  - "file"
+  - "create"
+  - "organize"
+  - "structure"
+  - "directory"
+  - "placement"
 ---
 # Cursor Rules Location
 

@@ -1,7 +1,28 @@
 ---
 description: "Package manager configuration"
-globs: ["**/*"]
+globs: 
+  - "package.json"
+  - "yarn.lock"
+  - "package-lock.json"
+  - "pnpm-lock.yaml"
+  - "**/*.{astro,tsx,ts,js,jsx}"
 alwaysApply: false
+triggers:
+  - "package"
+  - "dependency"
+  - "install"
+  - "yarn"
+  - "npm"
+  - "pnpm"
+  - "add"
+  - "remove"
+  - "update"
+  - "dev"
+  - "build"
+  - "start"
+  - "lint"
+  - "script"
+  - "command"
 ---
 
 - Use `yarn` as the package manager

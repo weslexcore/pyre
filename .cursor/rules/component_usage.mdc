@@ -1,3 +1,31 @@
+---
+description: "Pyre Component Usage Patterns - Guidelines for component development and usage"
+globs:
+  - "src/**/*.{astro,tsx,ts,js,jsx}"
+  - "src/components/**/*"
+  - "src/layouts/**/*"
+  - "src/pages/**/*"
+  - "src/styles/**/*"
+alwaysApply: false
+triggers:
+  - "component"
+  - "ui"
+  - "button"
+  - "card"
+  - "form"
+  - "symbol"
+  - "color"
+  - "typography"
+  - "spacing"
+  - "accessibility"
+  - "astro"
+  - "react"
+  - "layout"
+  - "design"
+  - "pattern"
+  - "usage"
+---
+
 # Pyre Component Usage Patterns
 
 ## Component Patterns
@@ -198,7 +226,3 @@ const componentName = "ComponentName";
 - [ ] Maintains responsive design
 - [ ] Uses semantic HTML structure
 - [ ] Follows component naming conventions
-description:
-globs:
-alwaysApply: false
----

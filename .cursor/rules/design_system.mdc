@@ -346,7 +346,3 @@ The design system includes comprehensive dark mode support with:
 10. Follow the established component patterns
 11. Use semantic HTML elements
 12. Maintain brand consistency across all components
-description:
-globs:
-alwaysApply: false
----
