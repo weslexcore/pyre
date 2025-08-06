@@ -12,4 +12,20 @@ export default defineConfig({
 	},
 
   integrations: [react()],
+  
+  // Image optimization configuration
+  image: {
+    // Enable image optimization
+    service: {
+      entrypoint: 'astro/assets/services/sharp'
+    },
+    // Configure supported formats
+    formats: ['webp', 'avif'],
+    // Responsive image sizes
+    densities: [1, 2],
+    // Quality settings
+    quality: 80,
+    // Enable lazy loading by default
+    loading: 'lazy'
+  }
 });

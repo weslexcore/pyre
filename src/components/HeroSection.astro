@@ -1,0 +1,80 @@
+---
+import { Image } from 'astro:assets';
+// Component for hero section with design system implementation
+---
+
+<section class="relative min-h-screen flex items-center justify-center overflow-hidden color-combo-black-creme">
+  <!-- Background Image -->
+  <div class="absolute inset-0 z-0">
+    <Image 
+      src="/images/giant_clouds.jpeg" 
+      alt="Peaceful clouds background" 
+      class="w-full h-full object-cover"
+      width={1920}
+      height={1080}
+      loading="eager"
+    />
+    <div class="absolute inset-0 bg-gradient-to-b from-background/0 via-background/60 to-background/90"></div>
+  </div>
+  
+  <!-- Content -->
+  <div class="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <!-- Logo -->
+    <div class="mb-8">
+      <Image 
+        src="/logos/gray/logo_with_text.png" 
+        alt="Pyre Sauna + Cold Plunge" 
+        class="mx-auto h-48 sm:h-64 md:h-80 lg:h-96 object-contain"
+        width={400}
+        height={200}
+        loading="eager"
+      />
+    </div>
+    
+    <!-- Main Announcement -->
+    <div class="max-w-4xl mx-auto mb-12">
+      <h1 class="font-primary-semibold text-scale-3 sm:text-scale-4 md:text-scale-5 lg:text-scale-6 text-foreground mb-6 leading-tight tracking-tight">
+        <span class="text-primary">Self care, together.</span>
+        <span class="block text-scale-2">Coming to Richmond</span>
+      </h1>
+      
+      
+      <p class="font-primary-regular text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+        Experience the ancient traditions of sauna and cold therapy in a modern, welcoming space designed for your health and wellness journey.
+      </p>
+    </div>
+    
+    <!-- Features Preview -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-12 max-w-4xl mx-auto">
+      <div class="text-center">
+        <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">2</div>
+        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Traditional Saunas</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">1</div>
+        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Cold Plunge</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">1</div>
+        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Hot Pool</div>
+      </div>
+      <div class="text-center">
+        <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">∞</div>
+        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Wellness</div>
+      </div>
+    </div>
+    
+    <!-- CTA Button -->
+    <div class="mb-8">
+      <a 
+        href="#signup" 
+        class="inline-flex items-center justify-center px-8 py-4 bg-primary text-primary-foreground font-primary-semibold text-lg rounded-lg hover:bg-primary/90 transition-colors duration-200 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      >
+        Join the Waitlist
+      </a>
+    </div>
+    
+    <!-- Scroll Indicator -->
+    
+  </div>
+</section> 

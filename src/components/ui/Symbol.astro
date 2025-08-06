@@ -1,0 +1,55 @@
+---
+import { Image } from 'astro:assets';
+
+export interface Props {
+  name: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  className?: string;
+  alt?: string;
+}
+
+const { name, size = 'md', className = '', alt } = Astro.props;
+
+// Size mapping
+const sizeMap = {
+  sm: 'w-8 h-8',
+  md: 'w-12 h-12',
+  lg: 'w-16 h-16',
+  xl: 'w-20 h-20'
+};
+
+// Symbol name mapping to file paths
+const symbolMap: Record<string, string> = {
+  'sauna': '/symbols/sauna-symbol.png',
+  'community': '/symbols/community-symbol.png',
+  'connection': '/symbols/connection-symbol.png',
+  'growth': '/symbols/growth-symbol.png',
+  'harmony': '/symbols/harmony-symbol.png',
+  'healing': '/symbols/healing-symbol.png',
+  'ritual': '/symbols/ritual-symbol.png',
+  'transformation': '/symbols/transformation-symbol.png',
+  'wellness': '/symbols/wellness-symbol.png'
+};
+
+const symbolPath = symbolMap[name] || `/symbols/${name}-symbol.png`;
+const sizeClass = sizeMap[size];
+const defaultAlt = `${name} symbol`;
+
+// Size mapping for Image component dimensions
+const sizeDimensions = {
+  sm: { width: 32, height: 32 },
+  md: { width: 48, height: 48 },
+  lg: { width: 64, height: 64 },
+  xl: { width: 80, height: 80 }
+};
+
+const dimensions = sizeDimensions[size];
+---
+
+<Image 
+  src={symbolPath} 
+  alt={alt || defaultAlt}
+  class={`${sizeClass} object-contain ${className}`}
+  width={dimensions.width}
+  height={dimensions.height}
+/> 

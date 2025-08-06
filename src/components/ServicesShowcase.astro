@@ -1,0 +1,113 @@
+---
+import { Image } from 'astro:assets';
+import Card from './ui/card.astro';
+import Symbol from './ui/Symbol.astro';
+
+const services = [
+  {
+    title: "Traditional Saunas",
+    description: "Two authentic saunas designed for deep relaxation and detoxification, featuring traditional Finnish techniques and modern comfort.",
+    image: "/images/sauna_ladle.jpeg",
+    symbol: "sauna",
+    count: "2"
+  },
+  {
+    title: "Cold Plunge",
+    description: "A large cold plunge pool for invigorating cold therapy, helping to reduce inflammation and boost circulation.",
+    image: "/images/sauna_ladle_in_bucket.jpeg",
+    symbol: "wellness",
+    count: "1"
+  },
+  {
+    title: "Hot Pool",
+    description: "A spacious hot pool for gentle hydrotherapy and muscle relaxation, perfect for unwinding after sauna sessions.",
+    image: "/images/sauna_ladle_multiexposure.jpeg",
+    symbol: "healing",
+    count: "1"
+  },
+  {
+    title: "Guided Classes",
+    description: "Expert-led wellness classes including meditation, breathwork, and movement practices to enhance your experience.",
+    image: "/images/red_flowers_in_hand.jpeg",
+    symbol: "transformation",
+    count: "∞"
+  },
+  {
+    title: "Social Events",
+    description: "Community gatherings and wellness events to connect with like-minded individuals on their health journey.",
+    image: "/images/heads_with_flowers.jpeg",
+    symbol: "community",
+    count: "∞"
+  },
+  {
+    title: "Wellness Rituals",
+    description: "Curated wellness rituals combining ancient traditions with modern practices for complete mind-body wellness.",
+    image: "/images/holding_flowers.jpeg",
+    symbol: "ritual",
+    count: "∞"
+  }
+];
+---
+
+<section id="services" class="py-20 color-combo-black-creme">
+  <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Section Header -->
+    <div class="text-center mb-16">
+      <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground mb-6 tracking-tight leading-tight">
+        Our Offerings
+      </h2>
+      <p class="font-primary-regular text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+        Discover a comprehensive wellness experience designed to nourish your body, mind, and spirit through ancient traditions and modern comfort.
+      </p>
+    </div>
+    
+    <!-- Services Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {services.map((service) => (
+        <Card class="group">
+          <div class="relative overflow-hidden">
+            <Image 
+              src={service.image} 
+              alt={service.title}
+              class="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+              width={400}
+              height={192}
+            />
+            <!-- Symbol as accent element -->
+            <div class="absolute top-4 left-4">
+              <Symbol 
+                name={service.symbol} 
+                size="sm"
+                className="opacity-80 transition-opacity duration-300 group-hover:opacity-100"
+              />
+            </div>
+            <div class="absolute top-4 right-4 bg-primary text-primary-foreground font-mono-bold text-lg px-3 py-1 rounded-full">
+              {service.count}
+            </div>
+          </div>
+          <div class="p-6">
+            <h3 class="font-primary-semibold text-xl text-foreground mb-3">
+              {service.title}
+            </h3>
+            <p class="font-primary-regular text-muted-foreground leading-relaxed">
+              {service.description}
+            </p>
+          </div>
+        </Card>
+      ))}
+    </div>
+    
+    <!-- Call to Action -->
+    <div class="text-center mt-16">
+      <p class="font-primary-regular text-lg text-muted-foreground mb-6">
+        Be among the first to experience Pyre when we open our doors.
+      </p>
+      <a 
+        href="#signup" 
+        class="inline-flex items-center justify-center px-8 py-4 bg-primary text-primary-foreground font-primary-semibold text-lg rounded-lg hover:bg-primary/90 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      >
+        Join the Waitlist
+      </a>
+    </div>
+  </div>
+</section> 

@@ -1,19 +1,29 @@
 ---
-// Click button, get confetti!
-// Styled by Tailwind :)
+export interface Props {
+	variant?: 'primary' | 'secondary' | 'outline';
+	size?: 'sm' | 'md' | 'lg';
+	class?: string;
+}
+
+const { variant = 'primary', size = 'md', class: className = '' } = Astro.props;
+
+const baseClasses = 'inline-flex items-center justify-center font-primary-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
+
+const variantClasses = {
+	primary: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary',
+	secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90 focus:ring-secondary',
+	outline: 'border-2 border-border text-foreground hover:bg-muted focus:ring-primary'
+};
+
+const sizeClasses = {
+	sm: 'px-4 py-2 text-sm',
+	md: 'px-6 py-3 text-base',
+	lg: 'px-8 py-4 text-lg'
+};
+
+const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
 ---
 
-<button
-	class="appearance-none py-2 px-4 bg-purple-500 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-75"
->
+<button class={classes}>
 	<slot />
 </button>
-
-<script>
-	import confetti from 'canvas-confetti';
-	const button = document.body.querySelector('button');
-
-	if (button) {
-		button.addEventListener('click', () => confetti());
-	}
-</script>

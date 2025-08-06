@@ -1,0 +1,61 @@
+---
+import { Image } from 'astro:assets';
+---
+
+<section id="about" class="py-20 color-combo-blue-creme">
+  <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <!-- Content -->
+      <div class="space-y-6">
+        <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground tracking-tight leading-tight">
+          About Pyre
+        </h2>
+        
+        <p class="font-primary-regular text-lg text-muted-foreground leading-relaxed">
+          Pyre is more than just a sauna and cold plunge facility. We're creating a wellness sanctuary where ancient traditions meet modern comfort, designed to nourish your body, mind, and spirit.
+        </p>
+        
+        <p class="font-primary-regular text-lg text-muted-foreground leading-relaxed">
+          Our mission is to provide a welcoming space for the Richmond community to experience the transformative benefits of heat therapy, cold therapy, and mindful wellness practices. Whether you're a wellness enthusiast or just beginning your journey, Pyre offers a sanctuary for all.
+        </p>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
+          <div class="space-y-2">
+            <h3 class="font-primary-semibold text-xl text-foreground">Traditional Wisdom</h3>
+            <p class="font-primary-regular text-muted-foreground">
+              Rooted in centuries-old practices from Finland and beyond, our saunas and cold therapy facilities honor the traditions that have supported human wellness for generations.
+            </p>
+          </div>
+          
+          <div class="space-y-2">
+            <h3 class="font-primary-semibold text-xl text-foreground">Modern Comfort</h3>
+            <p class="font-primary-regular text-muted-foreground">
+              While we honor tradition, we also embrace modern design and amenities to ensure your experience is both authentic and comfortable.
+            </p>
+          </div>
+        </div>
+        
+        <div class="pt-6">
+          <a 
+            href="#signup" 
+            class="inline-flex items-center justify-center px-8 py-4 bg-primary text-primary-foreground font-primary-semibold text-lg rounded-lg hover:bg-primary/90 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          >
+            Join Our Community
+          </a>
+        </div>
+      </div>
+      
+      <!-- Image -->
+      <div class="relative">
+        <Image 
+          src="/images/flowers_on_back.jpeg" 
+          alt="Wellness and relaxation" 
+          class="w-full h-96 lg:h-[500px] object-cover rounded-lg shadow-lg"
+          width={600}
+          height={500}
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent rounded-lg"></div>
+      </div>
+    </div>
+  </div>
+</section> 

@@ -1,1 +1,301 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@plugin "daisyui";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Pyre Brand Fonts */
+@font-face {
+  font-family: 'PPNeueMontreal-Regular';
+  src: url('/fonts/PPNeueMontreal-Regular.woff2') format('woff2'),
+       url('/fonts/PPNeueMontreal-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PPNeueMontreal-SemiBold';
+  src: url('/fonts/PPNeueMontreal-SemiBold.woff2') format('woff2'),
+       url('/fonts/PPNeueMontreal-SemiBold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PPFraktionMono-Bold';
+  src: url('/fonts/PPFraktionMono-Bold.woff2') format('woff2'),
+       url('/fonts/PPFraktionMono-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Pyre Custom Fonts */
+  --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+:root {
+  --radius: 0.625rem;
+  
+  /* Pyre Brand Colors - RGB to OKLCH Conversion */
+  --pyre-black: oklch(0.15 0.01 60); /* rgb(38, 37, 37) */
+  --pyre-creme: oklch(0.98 0.005 60); /* rgb(250, 248, 236) */
+  --pyre-red: oklch(0.65 0.18 25); /* rgb(241, 88, 54) */
+  --pyre-blue: oklch(0.35 0.12 220); /* rgb(36, 90, 130) */
+  
+  /* Design system color combinations */
+  --button-primary-bg: var(--pyre-red);
+  --button-primary-text: var(--pyre-creme);
+  --button-secondary-bg: var(--pyre-blue);
+  --button-secondary-text: var(--pyre-creme);
+  --button-outline-border: var(--pyre-black);
+  --button-outline-text: var(--pyre-black);
+  
+  /* Button utility classes */
+  --btn-primary: bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary;
+  --btn-secondary: bg-secondary text-secondary-foreground hover:bg-secondary/90 focus:ring-secondary;
+  --btn-outline: border-2 border-button-outline-border text-button-outline-text hover:bg-muted focus:ring-primary;
+  
+  /* Base Colors */
+  --background: var(--pyre-creme);
+  --foreground: var(--pyre-black);
+  --card: var(--pyre-creme);
+  --card-foreground: var(--pyre-black);
+  --popover: var(--pyre-creme);
+  --popover-foreground: var(--pyre-black);
+  --primary: var(--pyre-red);
+  --primary-foreground: var(--pyre-creme);
+  --secondary: var(--pyre-blue);
+  --secondary-foreground: var(--pyre-creme);
+  --muted: oklch(0.96 0.01 60);
+  --muted-foreground: oklch(0.55 0.01 60);
+  --accent: var(--pyre-blue);
+  --accent-foreground: var(--pyre-creme);
+  --destructive: var(--pyre-red);
+  --border: oklch(0.92 0.01 60);
+  --input: oklch(0.92 0.01 60);
+  --ring: var(--pyre-red);
+  --chart-1: var(--pyre-red);
+  --chart-2: var(--pyre-blue);
+  --chart-3: var(--pyre-black);
+  --chart-4: var(--pyre-creme);
+  --chart-5: oklch(0.65 0.18 25);
+  --sidebar: var(--pyre-creme);
+  --sidebar-foreground: var(--pyre-black);
+  --sidebar-primary: var(--pyre-red);
+  --sidebar-primary-foreground: var(--pyre-creme);
+  --sidebar-accent: var(--pyre-blue);
+  --sidebar-accent-foreground: var(--pyre-creme);
+  --sidebar-border: oklch(0.92 0.01 60);
+  --sidebar-ring: var(--pyre-red);
+}
+
+.dark {
+  --background: var(--pyre-black);
+  --foreground: var(--pyre-creme);
+  --card: oklch(0.216 0.006 56.043);
+  --card-foreground: var(--pyre-creme);
+  --popover: oklch(0.216 0.006 56.043);
+  --popover-foreground: var(--pyre-creme);
+  --primary: var(--pyre-red);
+  --primary-foreground: var(--pyre-black);
+  --secondary: var(--pyre-blue);
+  --secondary-foreground: var(--pyre-creme);
+  --muted: oklch(0.268 0.007 34.298);
+  --muted-foreground: oklch(0.709 0.01 56.259);
+  --accent: var(--pyre-blue);
+  --accent-foreground: var(--pyre-creme);
+  --destructive: var(--pyre-red);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--pyre-red);
+  --chart-1: var(--pyre-red);
+  --chart-2: var(--pyre-blue);
+  --chart-3: var(--pyre-creme);
+  --chart-4: var(--pyre-black);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.216 0.006 56.043);
+  --sidebar-foreground: var(--pyre-creme);
+  --sidebar-primary: var(--pyre-red);
+  --sidebar-primary-foreground: var(--pyre-black);
+  --sidebar-accent: var(--pyre-blue);
+  --sidebar-accent-foreground: var(--pyre-creme);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--pyre-red);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-weight: 400;
+    line-height: 1.6;
+  }
+  
+  /* Pyre Typography Utilities */
+  .font-primary-regular {
+    font-family: var(--font-sans);
+    font-weight: 400;
+  }
+  
+  .font-primary-semibold {
+    font-family: var(--font-sans);
+    font-weight: 600;
+  }
+  
+  .font-mono-bold {
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+  
+  /* Golden Ratio Type Scale Utilities */
+  .text-scale-1 { font-size: 1rem; }
+  .text-scale-2 { font-size: 1.618rem; }
+  .text-scale-3 { font-size: 2.618rem; }
+  .text-scale-4 { font-size: 4.236rem; }
+  .text-scale-5 { font-size: 6.854rem; }
+  .text-scale-6 { font-size: 11.09rem; }
+  
+  /* High Contrast Typography */
+  .text-dramatic {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  
+  /* Kerning Utilities */
+  .kern-tight { letter-spacing: -0.02em; }
+  .kern-loose { letter-spacing: 0.02em; }
+  .kern-variable { letter-spacing: 0.01em; }
+  
+  /* Color Combination Utilities */
+  .color-combo-black-creme {
+    color: var(--pyre-black);
+    background-color: var(--pyre-creme);
+  }
+  
+  .color-combo-blue-creme {
+    color: var(--pyre-blue);
+    background-color: var(--pyre-creme);
+  }
+  
+  .color-combo-red-black {
+    color: var(--pyre-red);
+    background-color: var(--pyre-black);
+  }
+  
+  .color-combo-red-creme {
+    color: var(--pyre-red);
+    background-color: var(--pyre-creme);
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+  
+  /* Responsive container */
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  @media (min-width: 640px) {
+    .container {
+      max-width: 640px;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .container {
+      max-width: 768px;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .container {
+      max-width: 1024px;
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .container {
+      max-width: 1280px;
+    }
+  }
+  
+  /* Focus styles for accessibility */
+  *:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  
+  /* Button focus styles */
+  button:focus,
+  a:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

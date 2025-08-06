@@ -1,0 +1,193 @@
+---
+import Form from './ui/form.astro';
+import Input from './ui/input.astro';
+---
+
+<section id="signup" class="py-20 color-combo-red-creme">
+  <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto text-center">
+      <!-- Section Header -->
+      <div class="mb-12">
+        <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground mb-6 tracking-tight leading-tight">
+          Stay Connected
+        </h2>
+        <p class="font-primary-regular text-lg sm:text-xl text-muted-foreground">
+          Be the first to know when we open our doors. Join our mailing list for exclusive updates, early access, and wellness tips.
+        </p>
+      </div>
+      
+      <!-- Signup Form -->
+      <div class="bg-card border border-border rounded-lg p-8 shadow-lg">
+        <Form class="space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="firstName" class="block font-primary-semibold text-sm text-foreground mb-2">
+                First Name
+              </label>
+              <Input 
+                type="text" 
+                id="firstName" 
+                name="firstName" 
+                placeholder="Your first name" 
+                required 
+                class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              />
+            </div>
+            <div>
+              <label for="lastName" class="block font-primary-semibold text-sm text-foreground mb-2">
+                Last Name
+              </label>
+              <Input 
+                type="text" 
+                id="lastName" 
+                name="lastName" 
+                placeholder="Your last name" 
+                required 
+                class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label for="email" class="block font-primary-semibold text-sm text-foreground mb-2">
+              Email Address
+            </label>
+            <Input 
+              type="email" 
+              id="email" 
+              name="email" 
+              placeholder="your.email@example.com" 
+              required 
+              class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            />
+          </div>
+          
+          <div class="flex items-start space-x-3">
+            <input 
+              type="checkbox" 
+              id="newsletter" 
+              name="newsletter" 
+              aria-describedby="newsletter-description"
+              class="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            />
+            <label for="newsletter" class="font-primary-regular text-sm text-muted-foreground">
+              I'd like to receive wellness tips and updates about Pyre's opening. You can unsubscribe at any time.
+            </label>
+            <div id="newsletter-description" class="sr-only">
+              Check this box to receive email updates about Pyre's opening and wellness tips
+            </div>
+          </div>
+          
+          <button 
+            type="submit" 
+            class="w-full bg-primary text-primary-foreground font-primary-semibold py-4 px-8 rounded-lg hover:bg-primary/90 transition-colors duration-200 text-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          >
+            Join the Waitlist
+          </button>
+        </Form>
+        
+        <!-- Success/Error Messages (Hidden by default) -->
+        <div id="success-message" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg" role="alert" aria-live="polite">
+          <p class="font-primary-regular text-green-800">
+            Thank you! You've been added to our waitlist. We'll be in touch soon with updates.
+          </p>
+        </div>
+        
+        <div id="error-message" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg" role="alert" aria-live="assertive">
+          <p class="font-primary-regular text-red-800">
+            Something went wrong. Please try again or contact us directly.
+          </p>
+        </div>
+        
+        <div id="validation-errors" class="hidden mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg" role="alert" aria-live="assertive">
+          <p class="font-primary-regular text-yellow-800">
+            Please check the form and try again.
+          </p>
+        </div>
+      </div>
+      
+      <!-- Additional Info -->
+      <div class="mt-8">
+        <p class="font-primary-regular text-sm text-muted-foreground">
+          We respect your privacy. Your information will never be shared with third parties.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Form handling script with improved validation and error handling
+  document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const successMessage = document.getElementById('success-message');
+    const errorMessage = document.getElementById('error-message');
+    const validationErrors = document.getElementById('validation-errors');
+    
+    function hideAllMessages() {
+      successMessage?.classList.add('hidden');
+      errorMessage?.classList.add('hidden');
+      validationErrors?.classList.add('hidden');
+    }
+    
+    function showValidationError(message: string) {
+      hideAllMessages();
+      if (validationErrors) {
+        const errorText = validationErrors.querySelector('p');
+        if (errorText) {
+          errorText.textContent = message;
+        }
+        validationErrors.classList.remove('hidden');
+      }
+    }
+    
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        hideAllMessages();
+        
+        // Get form data
+        const formData = new FormData(form);
+        const email = formData.get('email')?.toString().trim();
+        const firstName = formData.get('firstName')?.toString().trim();
+        const lastName = formData.get('lastName')?.toString().trim();
+        
+        // Validation
+        const errors: string[] = [];
+        
+        if (!firstName) {
+          errors.push('First name is required');
+        } else if (firstName.length < 2) {
+          errors.push('First name must be at least 2 characters');
+        }
+        
+        if (!lastName) {
+          errors.push('Last name is required');
+        } else if (lastName.length < 2) {
+          errors.push('Last name must be at least 2 characters');
+        }
+        
+        if (!email) {
+          errors.push('Email address is required');
+        } else {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            errors.push('Please enter a valid email address');
+          }
+        }
+        
+        if (errors.length > 0) {
+          showValidationError(errors.join('. '));
+          return;
+        }
+        
+        // Simulate form submission (replace with actual backend integration)
+        setTimeout(() => {
+          successMessage?.classList.remove('hidden');
+          form.reset();
+        }, 1000);
+      });
+    }
+  });
+</script> 
