@@ -1,0 +1,91 @@
+
+# Tech Stack Guidelines
+
+This project uses the following technology stack. Always follow these guidelines when making changes or adding new features.
+
+## Core Framework
+- **Astro 5.12.8** - Static site generator with component islands
+- **React 19.1.1** - UI library (for interactive components)
+- **TypeScript 5** - Type-safe JavaScript
+- **MDX** - Markdown with JSX support
+
+## Styling & UI
+- **Tailwind CSS 4.1.3** - Utility-first CSS framework
+- **shadcn/ui** - Re-usable components built with Radix UI and Tailwind CSS
+  - Use `npx shadcn@latest add [component]` to add components
+  - Components are added to `src/components/ui/`
+  - Follow shadcn/ui patterns and conventions
+  - Use Radix UI primitives for accessibility
+- **Canvas Confetti** - For interactive effects and animations
+
+## Development Tools
+- **Vite** - Fast build tool (via Astro)
+- **ESLint** - Code linting
+- **PostCSS** - CSS processing
+
+## Project Structure
+```
+src/
+├── components/    # Reusable components (Astro, React, etc.)
+│   └── ui/       # shadcn/ui components
+├── layouts/      # Astro layout components
+├── pages/        # Astro pages and routes
+└── styles/       # Global styles and CSS
+```
+
+## Coding Standards
+
+### TypeScript
+- Use strict TypeScript configuration
+- Define proper types for all functions and components
+- Use interfaces for object shapes
+- Prefer `type` over `interface` for simple unions
+
+### Astro
+- Use Astro components (.astro) for static content
+- Use React components for interactive features
+- Follow Astro's component islands architecture
+- Use server-side rendering for static content
+- Client-side hydration only when necessary
+
+### React (within Astro)
+- Use React 19 features when appropriate
+- Create interactive components as needed
+- Use client:load, client:idle, or client:visible directives
+- Keep React components focused on interactivity
+
+### Styling
+- Use Tailwind CSS classes for styling
+- Follow mobile-first responsive design
+- Use global.css for custom styles
+- Leverage Astro's scoped styles when needed
+
+### Component Guidelines
+- **ALWAYS use shadcn/ui components as the foundation for new components**
+- Use Astro components for static content
+- Use React components for interactive features
+- Follow component composition patterns
+- Maintain consistent spacing and typography
+- Use semantic HTML elements
+- Extend shadcn/ui components through composition
+- Follow the shadcn/ui design patterns and conventions
+
+## Environment Setup
+- Ensure all dependencies are installed: `yarn install`
+- Configure Tailwind CSS properly
+- Set up Astro configuration as needed
+- Configure MDX for content authoring
+- Set up shadcn/ui components as needed
+
+## Best Practices
+- Write clean, readable code
+- Use proper TypeScript types
+- Follow Astro's performance-first approach
+- Implement proper error handling
+- Use semantic HTML elements
+- Ensure accessibility compliance
+- Write meaningful commit messages
+- Leverage Astro's zero-JS by default philosophy
+- **Always start with shadcn/ui components when building new UI elements**
+- Use Radix UI primitives for complex interactive components
+- Follow shadcn/ui's component patterns and styling conventions

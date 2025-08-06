@@ -1,0 +1,204 @@
+# Pyre Component Usage Patterns
+
+## Component Patterns
+
+### 1. Color Combinations
+Always use the predefined color combination classes to maintain the "no more than 2 colors together" rule:
+
+```astro
+<!-- Correct usage -->
+<section class="color-combo-black-creme">
+<section class="color-combo-red-creme">
+<section class="color-combo-blue-creme">
+
+<!-- Avoid mixing more than 2 colors -->
+<section class="color-combo-black-creme-red"> <!-- ❌ Too many colors -->
+```
+
+### 2. Typography Hierarchy
+Use the golden ratio type scale for consistent typography:
+
+```astro
+<!-- Scale classes -->
+<h1 class="text-scale-4 font-primary-semibold">Main Heading</h1>
+<h2 class="text-scale-3 font-primary-semibold">Section Heading</h2>
+<h3 class="text-scale-2 font-primary-semibold">Subsection</h3>
+<p class="text-scale-1 font-primary-regular">Body text</p>
+
+<!-- High contrast for dramatic effect -->
+<h1 class="text-dramatic text-scale-5">Hero Text</h1>
+```
+
+### 3. Button Components
+Use the standardized button classes:
+
+```astro
+<!-- Primary CTA -->
+<button class="px-6 py-3 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary">
+  Primary Action
+</button>
+
+<!-- Secondary action -->
+<button class="px-6 py-3 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 bg-secondary text-secondary-foreground hover:bg-secondary/90 focus:ring-secondary">
+  Secondary Action
+</button>
+```
+
+### 4. Symbol Usage
+Use the Symbol component for consistent symbol display:
+
+```astro
+---
+import Symbol from './ui/Symbol.astro';
+---
+
+<!-- Available symbols: sauna, community, connection, growth, harmony, healing, ritual, transformation, wellness -->
+<Symbol name="sauna" size="md" className="opacity-80" />
+<Symbol name="wellness" size="lg" />
+<Symbol name="healing" size="sm" />
+```
+
+### 5. Form Components
+Follow accessibility guidelines for forms:
+
+```astro
+<div class="space-y-4">
+  <div>
+    <label for="email" class="block font-primary-semibold text-sm text-foreground mb-2">
+      Email Address
+    </label>
+    <input 
+      type="email" 
+      id="email" 
+      name="email" 
+      required 
+      class="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      aria-describedby="email-description"
+    />
+    <div id="email-description" class="sr-only">
+      Enter your email address
+    </div>
+  </div>
+</div>
+```
+
+## Design Principles
+
+### 1. High Contrast Philosophy
+- Use dramatic typography for important messages
+- Maintain strong contrast ratios (WCAG AA compliant)
+- Don't be afraid of bold, saturated colors
+
+### 2. Color Separation
+- Never use more than 2 Pyre brand colors together
+- Use the predefined color combination classes
+- Validate color combinations using the utility functions
+
+### 3. Typography Guidelines
+- Use PPNeueMontreal for body text and headings
+- Use PPFraktionMono for numbers and technical content
+- Apply proper kerning based on font size
+- Use the golden ratio scale for consistent sizing
+
+### 4. Spacing System
+- Use consistent border radius: `--radius` (10px base)
+- Apply proper padding and margins using the spacing scale
+- Maintain visual hierarchy through spacing
+
+## Accessibility Requirements
+
+### 1. Focus Indicators
+All interactive elements must have visible focus indicators:
+```css
+focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+```
+
+### 2. ARIA Labels
+- Add `aria-describedby` for form inputs
+- Use `role="alert"` for error messages
+- Include `aria-live` for dynamic content
+
+### 3. Semantic HTML
+- Use proper heading hierarchy (h1 → h2 → h3)
+- Use semantic elements (`<section>`, `<article>`, `<nav>`)
+- Include alt text for all images
+
+### 4. Color Contrast
+- Maintain WCAG AA contrast ratios
+- Test color combinations for accessibility
+- Provide alternative text for color-coded information
+
+## Component Structure Template
+
+```astro
+---
+// Component metadata
+const componentName = "ComponentName";
+---
+
+<section class="component-name color-combo-{primary}-{secondary}">
+  <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Section Header -->
+    <div class="text-center mb-16">
+      <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground mb-6 tracking-tight leading-tight">
+        Section Title
+      </h2>
+      <p class="font-primary-regular text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+        Section description
+      </p>
+    </div>
+    
+    <!-- Content -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <!-- Content items -->
+    </div>
+  </div>
+</section>
+```
+
+## Best Practices
+
+1. **Consistency**: Always use the design system variables and classes
+2. **Accessibility**: Test all components for accessibility compliance
+3. **Performance**: Use lazy loading for images and optimize symbol files
+4. **Maintainability**: Follow the established patterns and naming conventions
+5. **Responsiveness**: Ensure all components work across all breakpoints
+
+## Common Mistakes to Avoid
+
+1. ❌ Using hardcoded colors instead of design system variables
+2. ❌ Mixing more than 2 brand colors in a single component
+3. ❌ Using random kerning values (use deterministic values)
+4. ❌ Missing ARIA labels and focus indicators
+5. ❌ Inconsistent spacing and typography
+6. ❌ Not testing for accessibility compliance
+
+## Implementation Guidelines
+
+### When Creating New Components
+1. Start with the component structure template
+2. Choose appropriate color combination classes
+3. Use the golden ratio typography scale
+4. Include proper accessibility attributes
+5. Test across all breakpoints
+6. Validate color combinations
+
+### When Modifying Existing Components
+1. Maintain existing color separation rules
+2. Preserve accessibility features
+3. Update typography to match the scale
+4. Ensure responsive behavior
+5. Test for contrast compliance
+
+### Code Review Checklist
+- [ ] Uses design system color variables
+- [ ] Follows color combination rules (max 2 colors)
+- [ ] Implements proper typography hierarchy
+- [ ] Includes accessibility attributes
+- [ ] Maintains responsive design
+- [ ] Uses semantic HTML structure
+- [ ] Follows component naming conventions
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,352 @@
+---
+description: "Pyre Design System - Comprehensive guide for colors, typography, spacing, and design principles"
+globs:
+  - "src/**/*.{astro,tsx,ts,js,jsx}"
+  - "src/**/*.css"
+  - "src/styles/**/*"
+  - "src/components/**/*"
+  - "src/layouts/**/*"
+  - "src/pages/**/*"
+  - "public/**/*.{png,jpg,jpeg,svg,ico}"
+  - "astro.config.*"
+  - "tailwind.config.*"
+  - "components.json"
+  - "package.json"
+alwaysApply: false
+triggers:
+  - "frontend"
+  - "design"
+  - "color"
+  - "font"
+  - "typography"
+  - "spacing"
+  - "layout"
+  - "component"
+  - "ui"
+  - "ux"
+  - "copy"
+  - "text"
+  - "brand"
+  - "visual"
+  - "styling"
+  - "css"
+  - "astro"
+  - "button"
+  - "card"
+  - "form"
+  - "symbol"
+  - "icon"
+  - "image"
+  - "logo"
+---
+
+# Pyre Design System
+
+### Primary Brand Colors (RGB)
+- **Pyre Black**: `rgb(38, 37, 37)` - Primary text and dark elements
+- **Pyre Creme**: `rgb(250, 248, 236)` - Background and light elements  
+- **Pyre Red**: `rgb(241, 88, 54)` - Accent and call-to-action
+- **Pyre Blue**: `rgb(36, 90, 130)` - Secondary accent and links
+
+### CSS Custom Properties
+The project uses OKLCH color space for better color management:
+
+```css
+/* Pyre Brand Colors */
+--pyre-warm: oklch(0.85 0.15 45); /* Warm earth tone */
+--pyre-cool: oklch(0.75 0.12 220); /* Cool blue tone */
+--pyre-neutral: oklch(0.92 0.02 60); /* Neutral warm gray */
+--pyre-accent: oklch(0.65 0.18 25); /* Deep accent color */
+```
+
+### Color Usage Guidelines
+
+#### Conceptual Framework
+The color palette is built on the juxtaposition of elements and the harmony therein. To emphasize dramatic contrast - the aesthetic ethos of Pyre's visual identity - **no more than 2 colors from the palette should typically be utilized together**.
+
+#### Primary Color Combinations
+- **Pyre Black + Pyre Creme**: Default hero swatches that should dominate brand assets as a general rule
+- **Pyre Blue + Pyre White**: Designed to work together harmoniously
+- **Pyre Red + Pyre Black/White**: Either black or white may be used in conjunction with red
+
+#### Color Separation Rules
+- **Pyre Blue and Pyre Red**: Should generally not be utilized on the same application without Pyre Creme or Pyre Black separating the tones
+- Maintain clear visual separation between complementary colors
+
+#### General Guidelines
+- Use dark gray (Pyre Black) for primary text and headings
+- Use cream (Pyre Creme) for backgrounds and card surfaces
+- Use orange (Pyre Red) sparingly for CTAs and important actions
+- Use blue (Pyre Blue) for secondary actions and links
+- Maintain sufficient contrast ratios for accessibility
+
+## Typography
+
+### Font Families
+
+Both type families are from **Pangram Pangram Type Foundry** - a firm at the forefront of modern type design and application.
+
+#### PPNeueMontreal (Hero Typeface)
+- **Regular**: `PPNeueMontreal-Regular` - Weight 400
+- **SemiBold**: `PPNeueMontreal-SemiBold` - Weight 600
+- **CSS Variable**: `var(--font-sans)`
+- **Role**: Primary brand typeface for communication and materials
+
+#### PPFraktionMono (Technical Typeface)
+- **Bold**: `PPFraktionMono-Bold` - Weight 700
+- **CSS Variable**: `var(--font-mono)`
+- **Role**: Supporting typeface for technical and ancillary content
+
+### Typography Rules
+
+#### Type Scale - Golden Ratio (1:1.618)
+The Golden Ratio determines the referential type scale for Pyre's typographic identity. This classic high-contrast ratio prioritizes dramatic scale and definitive hierarchy.
+
+- **Base Scale**: Use multiples of 1.618 for type scaling
+- **High Contrast**: Prioritize dramatic scale for optical impact
+- **Legibility**: Maintain readability while achieving visual impact
+- **Flexibility**: Multiples of the ratio are acceptable
+- **Reference Tool**: This scale is presented as a referential tool rather than a strict formula
+
+#### PPNeueMontreal Kerning Guidelines
+- **px > 200**: Kern to -40
+- **px 20-200**: Kern to -20  
+- **px < 20**: Kern to 0-100 (variable)
+
+#### PPFraktionMono Kerning Guidelines
+- **px > 20**: Kern to -20
+- **px < 20**: Kern from 0-200 (variable)
+
+#### Leading (Line Height)
+- Use tight leading without obscuring legibility
+- Default line-height: 1.6
+- Adjust based on font size and context
+
+### Font Usage Guidelines
+
+#### PPNeueMontreal (Hero Typeface)
+- **Primary Use**: Brand materials and communication
+- **Role**: Hero typeface for main content and messaging
+- **Application**: Headlines, body text, brand statements
+- **Priority**: Chief utilization for brand identity
+
+#### PPFraktionMono (Technical Typeface)
+- **Primary Use**: Technical information and ancillary typographic details
+- **Role**: Supporting typeface for technical content
+- **Application**: Code snippets, technical specifications, metadata
+- **Priority**: Relegated to secondary/technical content
+
+### Typography Utilities
+```css
+.font-primary-regular {
+  font-family: var(--font-sans);
+  font-weight: 400;
+}
+
+.font-primary-semibold {
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+
+.font-mono-bold {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+```
+
+## Spacing & Layout
+
+### Border Radius
+- **Base radius**: `0.625rem` (10px)
+- **Small**: `calc(var(--radius) - 4px)`
+- **Medium**: `calc(var(--radius) - 2px)`
+- **Large**: `var(--radius)`
+- **Extra Large**: `calc(var(--radius) + 4px)`
+
+### Container System
+- Responsive container with max-widths:
+  - Mobile: 100% (with padding)
+  - 640px+: max-width 640px
+  - 768px+: max-width 768px
+  - 1024px+: max-width 1024px
+  - 1280px+: max-width 1280px
+
+### Padding & Margins
+- Use consistent spacing scale
+- Container padding: 1rem (16px) on mobile
+- Maintain visual hierarchy through spacing
+
+## Design Principles
+
+### Core Philosophy
+Pyre's design approach is informed by history and compelling in all its grit and blur. While clear communication is paramount, the gospel of clean minimalism is being successfully challenged every day in the landscape of memorable communication.
+
+#### High-Contrast Philosophy
+- **When in doubt, high-contrast is king**
+- The Swiss type treatment, when used with respect to strong content hierarchies and intelligent organization, is timeless and punchy
+- When used with abandon, it becomes sterile, uninspired, invisible, and ultimately forgettable
+
+#### Brand Personality
+- **Saturate a message**: Give people a strong enough reason to look twice, and they will
+- **Be brave**: We are leading a new culture forward
+- **Embrace grit and blur**: The brand is informed by history, compelling in all its complexity
+- **Challenge minimalism**: Move beyond sterile clean design to create memorable communication
+
+### Accessibility
+- Maintain WCAG AA contrast ratios
+- Provide focus indicators: `outline: 2px solid var(--ring)`
+- Use semantic HTML structure
+- Ensure keyboard navigation support
+
+### Responsive Design
+- Mobile-first approach
+- Fluid typography and spacing
+- Breakpoint system: 640px, 768px, 1024px, 1280px
+
+### Animation & Interactions
+- Smooth scrolling: `scroll-behavior: smooth`
+- Fade-in animations for content
+- Subtle hover states
+- Focus states for all interactive elements
+
+## Component Guidelines
+
+### Buttons
+- Use primary color for main CTAs
+- Secondary color for less important actions
+- Maintain consistent padding and border-radius
+- Include focus states
+
+### Cards
+- Use cream background for light mode
+- Subtle borders and shadows
+- Consistent padding and spacing
+
+### Forms
+- Clear input styling with focus states
+- Consistent spacing between form elements
+- Accessible labels and error states
+
+## Logos & Brand Assets
+
+### Logo Color Variants
+The Pyre brand includes two distinct logo color variants to ensure optimal visibility across different backgrounds and themes:
+
+#### Creme Variant (Dark Mode)
+- **Location**: `public/logos/creme/`
+- **Use Case**: Dark backgrounds, dark mode interfaces
+- **Color**: Pyre Creme (`rgb(250, 248, 236)`) on dark backgrounds
+- **Available Formats**:
+  - `logo.png` - Icon only
+  - `logo_with_text.png` - Icon with horizontal text
+  - `text.png` - Text only
+  - `vertical_logo_w_text.png` - Icon with vertical text layout
+  - `full_logo_text_with_subtitle.png` - Complete logo with subtitle
+
+#### Gray Variant (Light Mode)
+- **Location**: `public/logos/gray/`
+- **Use Case**: Light backgrounds, light mode interfaces
+- **Color**: Pyre Black (`rgb(38, 37, 37)`) on light backgrounds
+- **Available Formats**:
+  - `logo.png` - Icon only
+  - `logo_with_text.png` - Icon with horizontal text
+  - `text.png` - Text only
+  - `vertical_logo_w_text.png` - Icon with vertical text layout
+  - `full_logo_text_with_subtitle.png` - Complete logo with subtitle
+
+### Logo Usage Guidelines
+
+#### Color Selection Rules
+- **Dark Mode**: Use creme variant on dark backgrounds
+- **Light Mode**: Use gray variant on light backgrounds
+- **High Contrast**: Always ensure sufficient contrast between logo and background
+- **Consistency**: Use the same variant throughout a single interface/context
+
+#### Format Selection
+- **Hero Sections**: Use `full_logo_text_with_subtitle.png` for maximum brand impact
+- **Navigation**: Use `logo_with_text.png` for horizontal layouts
+- **Footer**: Use `text.png` or `logo.png` for compact spaces
+- **Mobile**: Use `logo.png` for small spaces, `vertical_logo_w_text.png` for vertical layouts
+
+#### Implementation Notes
+- Use CSS media queries to switch between variants based on theme
+- Ensure logos scale appropriately across different screen sizes
+- Maintain aspect ratios when resizing
+- Use high-resolution versions for print and high-DPI displays
+
+### Background Assets
+- **Repeating Background**: `public/logos/repeating_background.png`
+- **Use Case**: Subtle background patterns, texture overlays
+- **Application**: Hero sections, section dividers, decorative elements
+
+## Symbols & Icons
+
+### Symbol Usage
+- **Location**: `public/symbols/`
+- **Purpose**: Accent different offerings and services
+- **Available Symbols**: Artboard 1-9 (PNG format)
+- **Application**: Use to visually distinguish and enhance different service offerings
+
+### Symbol Guidelines
+- Use symbols as accent elements, not primary content
+- Maintain consistent sizing across similar contexts
+- Ensure symbols complement the high-contrast aesthetic
+- Use symbols to create visual hierarchy and interest
+- Consider symbol placement in relation to typography and color usage
+
+### Symbol Naming Convention
+- **Rename symbols** to reflect their designated use case (e.g., `sauna-symbol.png`, `community-symbol.png`)
+- **Maintain consistency**: Once a symbol is assigned to a specific purpose, use it exclusively for that purpose
+- **Clear identification**: File names should immediately indicate the symbol's intended use
+- **Avoid generic names**: Replace generic "Artboard" names with descriptive, purpose-specific names
+- **Document usage**: Keep track of symbol assignments to prevent duplication or confusion
+
+## Dark Mode Support
+The design system includes comprehensive dark mode support with:
+- Inverted color schemes
+- Maintained contrast ratios
+- Consistent component styling
+- Smooth transitions between modes
+
+## Implementation Notes
+
+### CSS Architecture
+- Uses Tailwind CSS with custom theme configuration
+- Custom CSS variables for brand colors
+- Component-based styling approach
+- Utility-first methodology
+
+### Font Loading
+- Fonts use `font-display: swap` for performance
+- WOFF2 and WOFF formats for broad browser support
+- Preloaded critical fonts
+
+### Performance
+- Optimized font loading
+- Efficient CSS custom properties
+- Minimal unused CSS through Tailwind purging
+
+## File Structure
+- **Global styles**: `src/styles/global.css`
+- **Font definitions**: `src/lib/fonts.ts`
+- **Utility functions**: `src/lib/utils.ts`
+- **Component styles**: Individual component files
+- **Symbols**: `public/symbols/` - Accent symbols for different offerings
+
+## Best Practices
+1. **Prioritize high-contrast**: When in doubt, high-contrast is king
+2. **Saturate messages**: Give people a strong enough reason to look twice
+3. **Be brave**: Challenge sterile minimalism with memorable communication
+4. **Respect hierarchies**: Use Swiss type treatment with strong content organization
+5. **Embrace complexity**: The brand is informed by history, compelling in all its grit and blur
+6. Always use CSS custom properties for colors
+7. Maintain consistent spacing and typography
+8. Test accessibility with screen readers
+9. Ensure responsive behavior across devices
+10. Follow the established component patterns
+11. Use semantic HTML elements
+12. Maintain brand consistency across all components
+description:
+globs:
+alwaysApply: false
+---

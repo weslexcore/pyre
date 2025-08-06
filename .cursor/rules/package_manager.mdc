@@ -1,0 +1,37 @@
+---
+description: "Package manager configuration"
+globs: ["**/*"]
+alwaysApply: false
+---
+
+- Use `yarn` as the package manager
+
+## Package Manager
+- **Always use yarn** as the package manager, not npm
+- Use `yarn add` instead of `npm install`
+- Use `yarn dev` instead of `npm run dev`
+- Use `yarn build` instead of `npm run build`
+- Use `yarn lint` instead of `npm run lint`
+- Use `yarn start` instead of `npm start`
+
+## Project Context
+This is a Next.js 15 project for Pyre Sauna + Cold Plunge, a wellness facility coming to Richmond, VA. The project uses:
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+- Custom fonts (PPNeueMontreal and PPFraktionMono)
+
+## Code Style
+- Use TypeScript for all new files
+- Follow the existing component structure in `src/components/`
+- Use Tailwind CSS for styling
+- Maintain responsive design patterns
+- Follow the established naming conventions
+
+## File Organization
+- Components go in `src/components/`
+- UI components go in `src/components/ui/`
+- Utilities go in `src/lib/`
+- Images go in `public/images/`
+- Fonts go in `public/fonts/`
+- Logos go in `public/logos/` 

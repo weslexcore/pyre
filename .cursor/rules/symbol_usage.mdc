@@ -1,0 +1,191 @@
+# Pyre Symbol Usage Guide
+
+## Symbol Assignments
+
+### Current Symbol Files
+- `sauna-symbol.png` - Sauna and heat therapy services
+- `community-symbol.png` - Community building and group activities
+- `wellness-symbol.png` - General wellness and health services
+- `healing-symbol.png` - Healing and therapeutic services
+- `ritual-symbol.png` - Ritual and ceremonial practices
+- `transformation-symbol.png` - Personal transformation and growth
+- `connection-symbol.png` - Connection and relationship building
+- `growth-symbol.png` - Personal development and growth
+- `harmony-symbol.png` - Balance and harmony services
+
+## Usage Guidelines
+
+### Design Principles
+- **Accent Elements**: Use symbols as accent elements, not primary content
+- **Consistent Sizing**: Maintain consistent sizing across similar contexts
+- **High-Contrast Aesthetic**: Ensure symbols complement the high-contrast aesthetic
+- **Visual Hierarchy**: Use symbols to create visual hierarchy and interest
+- **Typography Integration**: Consider symbol placement in relation to typography and color usage
+
+### Implementation
+- **File Path**: `/public/symbols/`
+- **Format**: PNG with transparency
+- **Sizing**: Use consistent sizing within similar contexts
+- **Placement**: Position as accent elements alongside content
+
+### Color Usage with Symbols
+- Follow the "no more than 2 colors together" rule
+- Symbols should work with the established color combinations:
+  - Pyre Black + Pyre Creme
+  - Pyre Blue + Pyre Creme
+  - Pyre Red + Pyre Black/Creme
+
+### Responsive Considerations
+- Ensure symbols scale appropriately across breakpoints
+- Maintain visual impact on mobile devices
+- Consider symbol visibility in different contexts
+
+## Best Practices
+1. **Consistency**: Use the same symbol for the same service type across the site
+2. **Context**: Ensure symbols are contextually appropriate
+3. **Accessibility**: Provide alt text for screen readers
+4. **Performance**: Optimize symbol file sizes for web use
+5. **Brand Alignment**: Ensure symbols align with Pyre's brand personality
+
+## Technical Implementation
+
+### Using the Symbol Component
+```astro
+---
+import Symbol from './ui/Symbol.astro';
+---
+
+<!-- Available symbols: sauna, community, connection, growth, harmony, healing, ritual, transformation, wellness -->
+<Symbol name="sauna" size="md" className="opacity-80" />
+<Symbol name="wellness" size="lg" />
+<Symbol name="healing" size="sm" />
+```
+
+### Direct Image Usage
+```html
+<!-- Example usage in Astro components -->
+<img 
+  src="/symbols/sauna-symbol.png" 
+  alt="Sauna therapy symbol" 
+  class="symbol-accent"
+/>
+```
+
+### CSS Styling
+```css
+/* Symbol styling */
+.symbol-accent {
+  width: 48px;
+  height: 48px;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.symbol-accent:hover {
+  opacity: 1;
+}
+
+/* Responsive symbol sizing */
+.symbol-sm {
+  width: 32px;
+  height: 32px;
+}
+
+.symbol-md {
+  width: 48px;
+  height: 48px;
+}
+
+.symbol-lg {
+  width: 64px;
+  height: 64px;
+}
+```
+
+## Symbol Placement Guidelines
+
+### Hero Sections
+- Use larger symbols (lg size) for maximum visual impact
+- Position symbols to complement headline text
+- Consider using symbols as background accents
+
+### Service Cards
+- Use medium symbols (md size) for service identification
+- Position symbols above or beside service titles
+- Maintain consistent placement across all service cards
+
+### Navigation Elements
+- Use small symbols (sm size) for compact spaces
+- Ensure symbols don't interfere with text readability
+- Consider using symbols as visual indicators
+
+### Footer and Sidebar
+- Use small to medium symbols for accent elements
+- Position symbols to enhance content without overwhelming
+- Maintain brand consistency across all instances
+
+## Accessibility Requirements
+
+### Alt Text Guidelines
+- Provide descriptive alt text for all symbols
+- Include the service or concept the symbol represents
+- Keep alt text concise but informative
+
+```html
+<!-- Good alt text examples -->
+<img src="/symbols/sauna-symbol.png" alt="Sauna therapy symbol" />
+<img src="/symbols/community-symbol.png" alt="Community building symbol" />
+<img src="/symbols/healing-symbol.png" alt="Healing and wellness symbol" />
+```
+
+### Screen Reader Considerations
+- Symbols should enhance understanding, not replace text
+- Ensure symbols have proper semantic meaning
+- Test with screen readers to verify accessibility
+
+## Performance Optimization
+
+### File Size Guidelines
+- Keep symbol files under 10KB when possible
+- Use PNG format for transparency support
+- Consider WebP format for modern browsers
+- Optimize images for web delivery
+
+### Loading Strategies
+- Use lazy loading for symbols below the fold
+- Preload critical symbols used in hero sections
+- Consider using CSS sprites for multiple symbols
+
+## Common Mistakes to Avoid
+
+1. ❌ Using symbols as primary content instead of accents
+2. ❌ Inconsistent sizing across similar contexts
+3. ❌ Missing alt text for accessibility
+4. ❌ Using symbols that don't align with brand personality
+5. ❌ Overusing symbols in a single component
+6. ❌ Not considering responsive behavior
+7. ❌ Using symbols that conflict with color combinations
+
+## Implementation Checklist
+
+### When Adding Symbols to Components
+- [ ] Choose appropriate symbol for the service/context
+- [ ] Use consistent sizing within the component type
+- [ ] Add descriptive alt text
+- [ ] Ensure proper color contrast
+- [ ] Test responsive behavior
+- [ ] Verify accessibility compliance
+- [ ] Optimize file size if using direct images
+- [ ] Follow brand alignment guidelines
+
+### When Creating New Symbol Placements
+- [ ] Review existing symbol usage patterns
+- [ ] Ensure consistency with established guidelines
+- [ ] Test across all breakpoints
+- [ ] Verify visual hierarchy
+- [ ] Check color combination compliance
+- [ ] Validate accessibility requirements
+description:
+globs:
+alwaysApply: false
+---

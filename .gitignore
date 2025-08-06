@@ -1,24 +1,110 @@
-# build output
+# Build outputs
 dist/
-# generated types
+.output/
+
+# Generated types
 .astro/
 
-# dependencies
+# Dependencies
 node_modules/
+jspm_packages/
 
-# logs
+# Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-
-# environment variables
+# Environment variables
 .env
 .env.production
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# macOS-specific files
-.DS_Store
+# TypeScript
+*.tsbuildinfo
 
-# jetbrains setting folder
+# Coverage and testing
+coverage/
+*.lcov
+.nyc_output
+lib-cov
+
+# Cache directories
+.cache
+.parcel-cache
+.npm
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Package manager files
+*.tgz
+.yarn-integrity
+.node_repl_history
+
+# Yarn PnP (Plug'n'Play)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# Temporary folders
+tmp/
+temp/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IDE and editor files
+.vscode/*
+!.vscode/extensions.json
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+
+# Build tools
+.grunt
+build/Release
+.lock-wscript
+bower_components
+
+# Framework-specific (keeping for reference, though not used in this project)
+.next
+.nuxt
+out
+storybook-static
