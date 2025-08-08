@@ -139,7 +139,7 @@ import Symbol from './ui/Symbol.astro';
       validationErrors?.classList.add('hidden');
     }
     
-    function showValidationError(message: string) {
+    function showValidationError(message) {
       hideAllMessages();
       if (validationErrors) {
         const errorText = validationErrors.querySelector('p');
@@ -158,12 +158,12 @@ import Symbol from './ui/Symbol.astro';
         
         // Get form data
         const formData = new FormData(form);
-        const email = formData.get('email')?.toString().trim();
-        const firstName = formData.get('firstName')?.toString().trim();
-        const lastName = formData.get('lastName')?.toString().trim();
+        const email = (formData.get('email') || '').toString().trim();
+        const firstName = (formData.get('firstName') || '').toString().trim();
+        const lastName = (formData.get('lastName') || '').toString().trim();
         
         // Validation
-        const errors: string[] = [];
+        const errors = [];
         
         if (!firstName) {
           errors.push('First name is required');

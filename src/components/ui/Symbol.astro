@@ -1,4 +1,5 @@
 ---
+// @ts-ignore - types provided via astro/client
 import { Image } from 'astro:assets';
 
 export interface Props {
@@ -43,19 +44,7 @@ const symbolPath = symbolMap[name] || `/symbols/${name}-symbol.png`;
 const sizeClass = prominent ? 'symbol-prominent' : sizeMap[size];
 const defaultAlt = `${name} symbol`;
 
-// Validate symbol file exists (client-side validation)
-if (typeof window !== 'undefined') {
-  // Client-side file existence check
-  fetch(symbolPath, { method: 'HEAD' })
-    .then(response => {
-      if (!response.ok) {
-        console.warn(`Symbol file not found: ${symbolPath}`);
-      }
-    })
-    .catch(() => {
-      console.warn(`Failed to load symbol file: ${symbolPath}`);
-    });
-}
+// Removed client-side network validation to avoid runtime fetches
 
 // Size mapping for Image component dimensions - Updated to match new sizes
 const sizeDimensions = {
