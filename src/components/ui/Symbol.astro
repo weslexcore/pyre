@@ -2,20 +2,28 @@
 import { Image } from 'astro:assets';
 
 export interface Props {
-  name: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  name: 'sauna' | 'community' | 'connection' | 'growth' | 'harmony' | 'healing' | 'ritual' | 'transformation' | 'wellness';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
   className?: string;
   alt?: string;
+  prominent?: boolean;
 }
 
-const { name, size = 'md', className = '', alt } = Astro.props;
+const { name, size = 'md', className = '', alt, prominent = false } = Astro.props;
 
-// Size mapping
+// Validate symbol name exists in our mapping
+const validSymbols = ['sauna', 'community', 'connection', 'growth', 'harmony', 'healing', 'ritual', 'transformation', 'wellness'];
+if (!validSymbols.includes(name)) {
+  console.warn(`Symbol "${name}" not found in valid symbols list. Available symbols: ${validSymbols.join(', ')}`);
+}
+
+// Size mapping - Updated to use larger sizes
 const sizeMap = {
-  sm: 'w-8 h-8',
-  md: 'w-12 h-12',
-  lg: 'w-16 h-16',
-  xl: 'w-20 h-20'
+  sm: 'symbol-sm',
+  md: 'symbol-md',
+  lg: 'symbol-lg',
+  xl: 'symbol-xl',
+  xxl: 'symbol-xxl'
 };
 
 // Symbol name mapping to file paths
@@ -32,24 +40,41 @@ const symbolMap: Record<string, string> = {
 };
 
 const symbolPath = symbolMap[name] || `/symbols/${name}-symbol.png`;
-const sizeClass = sizeMap[size];
+const sizeClass = prominent ? 'symbol-prominent' : sizeMap[size];
 const defaultAlt = `${name} symbol`;
 
-// Size mapping for Image component dimensions
+// Validate symbol file exists (client-side validation)
+if (typeof window !== 'undefined') {
+  // Client-side file existence check
+  fetch(symbolPath, { method: 'HEAD' })
+    .then(response => {
+      if (!response.ok) {
+        console.warn(`Symbol file not found: ${symbolPath}`);
+      }
+    })
+    .catch(() => {
+      console.warn(`Failed to load symbol file: ${symbolPath}`);
+    });
+}
+
+// Size mapping for Image component dimensions - Updated to match new sizes
 const sizeDimensions = {
-  sm: { width: 32, height: 32 },
-  md: { width: 48, height: 48 },
-  lg: { width: 64, height: 64 },
-  xl: { width: 80, height: 80 }
+  sm: { width: 80, height: 80 },
+  md: { width: 120, height: 120 },
+  lg: { width: 160, height: 160 },
+  xl: { width: 200, height: 200 },
+  xxl: { width: 240, height: 240 }
 };
 
-const dimensions = sizeDimensions[size];
+const dimensions = prominent ? { width: 280, height: 280 } : sizeDimensions[size];
 ---
 
 <Image 
   src={symbolPath} 
   alt={alt || defaultAlt}
-  class={`${sizeClass} object-contain ${className}`}
+  class={`${sizeClass} object-contain symbol-hover ${className}`}
   width={dimensions.width}
   height={dimensions.height}
+  role="img"
+  aria-label={alt || defaultAlt}
 /> 

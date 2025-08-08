@@ -1,6 +1,5 @@
 ---
 import { Image } from 'astro:assets';
-import Card from './ui/card.astro';
 import Symbol from './ui/Symbol.astro';
 
 const services = [
@@ -49,14 +48,14 @@ const services = [
 ];
 ---
 
-<section id="services" class="py-20 color-combo-black-creme">
+<section id="services" class="py-20 bg-background text-foreground">
   <div class="container mx-auto px-4 sm:px-6 lg:px-8">
     <!-- Section Header -->
     <div class="text-center mb-16">
       <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground mb-6 tracking-tight leading-tight">
         Our Offerings
       </h2>
-      <p class="font-primary-regular text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+      <p class="font-primary-regular text-lg sm:text-xl text-base-content/70 max-w-3xl mx-auto">
         Discover a comprehensive wellness experience designed to nourish your body, mind, and spirit through ancient traditions and modern comfort.
       </p>
     </div>
@@ -64,47 +63,46 @@ const services = [
     <!-- Services Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
       {services.map((service) => (
-        <Card class="group">
-          <div class="relative overflow-hidden">
-            <Image 
-              src={service.image} 
-              alt={service.title}
-              class="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
-              width={400}
-              height={192}
-            />
-            <!-- Symbol as accent element -->
-            <div class="absolute top-4 left-4">
+        <div class="card bg-base-100 shadow-xl group hover:shadow-2xl transition-shadow duration-300">
+          <div class="card-body p-0">
+            <!-- Prominent Symbol at Top -->
+            <div class="flex justify-center pt-8 pb-4">
               <Symbol 
                 name={service.symbol} 
-                size="sm"
-                className="opacity-80 transition-opacity duration-300 group-hover:opacity-100"
+                size="xl"
+                className="opacity-90 transition-opacity duration-300 group-hover:opacity-100"
               />
             </div>
-            <div class="absolute top-4 right-4 bg-primary text-primary-foreground font-mono-bold text-lg px-3 py-1 rounded-full">
-              {service.count}
+            
+            <!-- Service Count Badge -->
+            <div class="absolute top-4 right-4">
+              <div class="badge badge-primary font-mono-bold text-lg">
+                {service.count}
+              </div>
+            </div>
+            
+            <!-- Content -->
+            <div class="px-6 pb-6">
+              <h3 class="card-title font-primary-semibold text-xl text-base-content mb-3 justify-center">
+                {service.title}
+              </h3>
+              <p class="font-primary-regular text-base-content/70 leading-relaxed text-center">
+                {service.description}
+              </p>
             </div>
           </div>
-          <div class="p-6">
-            <h3 class="font-primary-semibold text-xl text-foreground mb-3">
-              {service.title}
-            </h3>
-            <p class="font-primary-regular text-muted-foreground leading-relaxed">
-              {service.description}
-            </p>
-          </div>
-        </Card>
+        </div>
       ))}
     </div>
     
     <!-- Call to Action -->
     <div class="text-center mt-16">
-      <p class="font-primary-regular text-lg text-muted-foreground mb-6">
+      <p class="font-primary-regular text-lg text-base-content/70 mb-6">
         Be among the first to experience Pyre when we open our doors.
       </p>
       <a 
         href="#signup" 
-        class="inline-flex items-center justify-center px-8 py-4 bg-primary text-primary-foreground font-primary-semibold text-lg rounded-lg hover:bg-primary/90 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        class="btn btn-primary btn-lg font-primary-semibold text-lg"
       >
         Join the Waitlist
       </a>

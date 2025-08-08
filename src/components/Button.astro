@@ -3,27 +3,33 @@ export interface Props {
 	variant?: 'primary' | 'secondary' | 'outline';
 	size?: 'sm' | 'md' | 'lg';
 	class?: string;
+	ariaLabel?: string;
+	disabled?: boolean;
 }
 
-const { variant = 'primary', size = 'md', class: className = '' } = Astro.props;
+const { variant = 'primary', size = 'md', class: className = '', ariaLabel, disabled = false } = Astro.props;
 
-const baseClasses = 'inline-flex items-center justify-center font-primary-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
+const baseClasses = 'btn font-primary-semibold rounded-lg transition-all duration-300';
 
 const variantClasses = {
 	primary: 'bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary',
 	secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90 focus:ring-secondary',
-	outline: 'border-2 border-border text-foreground hover:bg-muted focus:ring-primary'
+	outline: 'border-2 border-foreground text-foreground hover:bg-muted focus:ring-primary'
 };
 
 const sizeClasses = {
-	sm: 'px-4 py-2 text-sm',
-	md: 'px-6 py-3 text-base',
-	lg: 'px-8 py-4 text-lg'
+	sm: 'btn-sm',
+	md: 'btn-md',
+	lg: 'btn-lg'
 };
 
 const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
 ---
 
-<button class={classes}>
+<button 
+	class={classes}
+	aria-label={ariaLabel}
+	disabled={disabled}
+>
 	<slot />
 </button>

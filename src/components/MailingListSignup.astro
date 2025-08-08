@@ -1,90 +1,99 @@
 ---
-import Form from './ui/form.astro';
-import Input from './ui/input.astro';
+import Symbol from './ui/Symbol.astro';
 ---
 
-<section id="signup" class="py-20 color-combo-red-creme">
+<section id="signup" class="py-20 bg-background text-foreground">
   <div class="container mx-auto px-4 sm:px-6 lg:px-8">
     <div class="max-w-2xl mx-auto text-center">
       <!-- Section Header -->
       <div class="mb-12">
+        <!-- Prominent Symbol -->
+        <div class="flex justify-center mb-6">
+          <Symbol name="growth" size="xl" className="opacity-90" />
+        </div>
+        
         <h2 class="font-primary-semibold text-scale-3 sm:text-scale-4 text-foreground mb-6 tracking-tight leading-tight">
           Stay Connected
         </h2>
-        <p class="font-primary-regular text-lg sm:text-xl text-muted-foreground">
+        <p class="font-primary-regular text-lg sm:text-xl text-base-content/70">
           Be the first to know when we open our doors. Join our mailing list for exclusive updates, early access, and wellness tips.
         </p>
       </div>
       
       <!-- Signup Form -->
-      <div class="bg-card border border-border rounded-lg p-8 shadow-lg">
-        <Form class="space-y-6">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label for="firstName" class="block font-primary-semibold text-sm text-foreground mb-2">
-                First Name
+      <div class="card bg-base-100 shadow-xl p-8">
+        <div class="card-body p-0">
+          <form class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="form-control">
+                <label for="firstName" class="label">
+                  <span class="label-text font-primary-semibold">First Name</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="firstName" 
+                  name="firstName" 
+                  placeholder="Your first name" 
+                  required 
+                  class="input input-bordered"
+                />
+              </div>
+              <div class="form-control">
+                <label for="lastName" class="label">
+                  <span class="label-text font-primary-semibold">Last Name</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="lastName" 
+                  name="lastName" 
+                  placeholder="Your last name" 
+                  required 
+                  class="input input-bordered"
+                />
+              </div>
+            </div>
+            
+            <div class="form-control">
+              <label for="email" class="label">
+                <span class="label-text font-primary-semibold">Email Address</span>
               </label>
-              <Input 
-                type="text" 
-                id="firstName" 
-                name="firstName" 
-                placeholder="Your first name" 
+              <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                placeholder="your.email@example.com" 
                 required 
-                class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                class="input input-bordered"
               />
             </div>
-            <div>
-              <label for="lastName" class="block font-primary-semibold text-sm text-foreground mb-2">
-                Last Name
+            
+            <div class="form-control">
+              <label class="label cursor-pointer">
+                <span class="label-text font-primary-regular text-sm">
+                  I'd like to receive wellness tips and updates about Pyre's opening. You can unsubscribe at any time.
+                </span>
+                <input 
+                  type="checkbox" 
+                  id="newsletter" 
+                  name="newsletter" 
+                  aria-describedby="newsletter-description"
+                  class="checkbox checkbox-primary"
+                />
               </label>
-              <Input 
-                type="text" 
-                id="lastName" 
-                name="lastName" 
-                placeholder="Your last name" 
-                required 
-                class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              />
+              <div id="newsletter-description" class="sr-only">
+                Check this box to receive email updates about Pyre's opening and wellness tips
+              </div>
             </div>
-          </div>
-          
-          <div>
-            <label for="email" class="block font-primary-semibold text-sm text-foreground mb-2">
-              Email Address
-            </label>
-            <Input 
-              type="email" 
-              id="email" 
-              name="email" 
-              placeholder="your.email@example.com" 
-              required 
-              class="focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            />
-          </div>
-          
-          <div class="flex items-start space-x-3">
-            <input 
-              type="checkbox" 
-              id="newsletter" 
-              name="newsletter" 
-              aria-describedby="newsletter-description"
-              class="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            />
-            <label for="newsletter" class="font-primary-regular text-sm text-muted-foreground">
-              I'd like to receive wellness tips and updates about Pyre's opening. You can unsubscribe at any time.
-            </label>
-            <div id="newsletter-description" class="sr-only">
-              Check this box to receive email updates about Pyre's opening and wellness tips
-            </div>
-          </div>
-          
-          <button 
-            type="submit" 
-            class="w-full bg-primary text-primary-foreground font-primary-semibold py-4 px-8 rounded-lg hover:bg-primary/90 transition-colors duration-200 text-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-          >
-            Join the Waitlist
-          </button>
-        </Form>
+            
+            <button 
+              type="submit" 
+              class="btn btn-primary btn-lg w-full font-primary-semibold text-lg"
+            >
+              Join the Waitlist
+            </button>
+          </form>
+        </div>
+      </div>
         
         <!-- Success/Error Messages (Hidden by default) -->
         <div id="success-message" class="hidden mt-4 p-4 bg-green-50 border border-green-200 rounded-lg" role="alert" aria-live="polite">
@@ -108,7 +117,7 @@ import Input from './ui/input.astro';
       
       <!-- Additional Info -->
       <div class="mt-8">
-        <p class="font-primary-regular text-sm text-muted-foreground">
+        <p class="font-primary-regular text-sm text-base-content/70">
           We respect your privacy. Your information will never be shared with third parties.
         </p>
       </div>

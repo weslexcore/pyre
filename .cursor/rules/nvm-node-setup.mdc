@@ -1,0 +1,83 @@
+<rule>
+name: nvm_node_setup
+description: Ensure Node.js is managed by nvm before running dev/build commands and when Node version errors occur
+
+filters:
+  # Trigger before common dev/build commands
+  - type: event
+    pattern: "terminal_pre_run"
+  - type: content
+    pattern: "\\byarn (dev|build|preview|start|lint)\\b"
+
+actions:
+  - type: suggest
+    message: |
+      Before running dev/build commands, initialize nvm and use the project's Node version.
+
+      Recommended setup (safe to paste in terminal):
+      ```sh
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+      if [ -f .nvmrc ]; then
+        nvm install --silent
+        nvm use --silent
+      else
+        # fallback if no .nvmrc; prefer latest LTS
+        nvm install --lts --silent
+        nvm use --lts --silent
+      fi
+      corepack enable >/dev/null 2>&1 || true
+      ```
+
+examples:
+  - input: |
+      yarn dev
+    output: |
+      Initializes nvm and selects the requested Node version before running the command.
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>
+
+<rule>
+name: nvm_on_node_version_error
+description: Detect Node version errors and suggest running nvm automatically
+
+filters:
+  # Detect common Node.js version errors from tools
+  - type: event
+    pattern: "terminal_error"
+  - type: content
+    pattern: "Node\.js v.* is not supported|Please upgrade Node\.js|command not found: astro|ERR_OSSL|SyntaxError: Unexpected token 'export'"
+
+actions:
+  - type: suggest
+    message: |
+      It looks like there's a Node.js environment/version issue. Initialize nvm and select the correct version, then retry your command.
+
+      ```sh
+      export NVM_DIR="$HOME/.nvm"
+      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+      if [ -f .nvmrc ]; then
+        nvm install --silent
+        nvm use --silent
+      else
+        nvm install --lts --silent
+        nvm use --lts --silent
+      fi
+      corepack enable >/dev/null 2>&1 || true
+      ```
+
+examples:
+  - input: |
+      Node.js v18.19.0 is not supported by Astro!
+    output: |
+      Suggests running the nvm initialization block and then rerunning the previous command with yarn.
+
+metadata:
+  priority: high
+  version: 1.0
+</rule>

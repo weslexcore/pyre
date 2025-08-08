@@ -4,6 +4,39 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* DaisyUI Theme Configuration for Pyre Brand */
+@theme {
+  /* Pyre Design System - 2-Color Rule Implementation */
+  --color-primary: var(--pyre-red);
+  --color-primary-content: var(--pyre-creme);
+  --color-secondary: var(--pyre-blue);
+  --color-secondary-content: var(--pyre-creme);
+  --color-accent: var(--pyre-black);
+  --color-accent-content: var(--pyre-creme);
+  --color-neutral: var(--pyre-creme);
+  --color-neutral-content: var(--pyre-black);
+  --color-base-100: var(--pyre-creme);
+  --color-base-200: oklch(0.96 0.01 60);
+  --color-base-300: oklch(0.92 0.01 60);
+  --color-base-content: var(--pyre-black);
+  
+  /* Component-specific theme variables - Following 2-color rule */
+  --btn-primary: var(--pyre-red);
+  --btn-primary-content: var(--pyre-creme);
+  --btn-secondary: var(--pyre-blue);
+  --btn-secondary-content: var(--pyre-creme);
+  --btn-outline: var(--pyre-black);
+  --btn-outline-content: var(--pyre-creme);
+  
+  --input-bg: var(--pyre-creme);
+  --input-border: oklch(0.92 0.01 60);
+  --input-text: var(--pyre-black);
+  
+  --card-bg: var(--pyre-creme);
+  --card-border: oklch(0.92 0.01 60);
+  --card-text: var(--pyre-black);
+}
+
 /* Pyre Brand Fonts */
 @font-face {
   font-family: 'PPNeueMontreal-Regular';
@@ -83,20 +116,12 @@
   --pyre-red: oklch(0.65 0.18 25); /* rgb(241, 88, 54) */
   --pyre-blue: oklch(0.35 0.12 220); /* rgb(36, 90, 130) */
   
-  /* Design system color combinations */
-  --button-primary-bg: var(--pyre-red);
-  --button-primary-text: var(--pyre-creme);
-  --button-secondary-bg: var(--pyre-blue);
-  --button-secondary-text: var(--pyre-creme);
-  --button-outline-border: var(--pyre-black);
-  --button-outline-text: var(--pyre-black);
+  /* Pyre Design System - 2-Color Rule */
+  /* Primary: Pyre Red + Pyre Creme for CTAs */
+  /* Secondary: Pyre Blue + Pyre Creme for secondary actions */
+  /* Outline: Pyre Black + Pyre Creme for subtle actions */
   
-  /* Button utility classes */
-  --btn-primary: bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary;
-  --btn-secondary: bg-secondary text-secondary-foreground hover:bg-secondary/90 focus:ring-secondary;
-  --btn-outline: border-2 border-button-outline-border text-button-outline-text hover:bg-muted focus:ring-primary;
-  
-  /* Base Colors */
+  /* Base Colors - Following Pyre Design System 2-Color Rule */
   --background: var(--pyre-creme);
   --foreground: var(--pyre-black);
   --card: var(--pyre-creme);
@@ -109,7 +134,7 @@
   --secondary-foreground: var(--pyre-creme);
   --muted: oklch(0.96 0.01 60);
   --muted-foreground: oklch(0.55 0.01 60);
-  --accent: var(--pyre-blue);
+  --accent: var(--pyre-black);
   --accent-foreground: var(--pyre-creme);
   --destructive: var(--pyre-red);
   --border: oklch(0.92 0.01 60);
@@ -211,25 +236,56 @@
   .kern-loose { letter-spacing: 0.02em; }
   .kern-variable { letter-spacing: 0.01em; }
   
-  /* Color Combination Utilities */
-  .color-combo-black-creme {
-    color: var(--pyre-black);
-    background-color: var(--pyre-creme);
+  /* Design System Color Combinations - Use with DaisyUI theme variables */
+  /* Follow the 2-color rule: no more than 2 colors from the palette together */
+  /* Default: Pyre Black + Pyre Creme (background + foreground) */
+  /* Accent: Pyre Red for CTAs and important actions */
+  /* Secondary: Pyre Blue for secondary actions and links */
+  
+  /* Symbol Sizing Classes - Large and Prominent by Default */
+  .symbol-sm {
+    width: 80px;
+    height: 80px;
   }
   
-  .color-combo-blue-creme {
-    color: var(--pyre-blue);
-    background-color: var(--pyre-creme);
+  .symbol-md {
+    width: 120px;
+    height: 120px;
   }
   
-  .color-combo-red-black {
-    color: var(--pyre-red);
-    background-color: var(--pyre-black);
+  .symbol-lg {
+    width: 160px;
+    height: 160px;
   }
   
-  .color-combo-red-creme {
-    color: var(--pyre-red);
-    background-color: var(--pyre-creme);
+  .symbol-xl {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .symbol-xxl {
+    width: 240px;
+    height: 240px;
+  }
+  
+  .symbol-prominent {
+    width: 280px;
+    height: 280px;
+    transition: transform 0.3s ease;
+  }
+  
+  .symbol-prominent:hover {
+    transform: scale(1.05);
+  }
+  
+  /* Symbol hover effects */
+  .symbol-hover {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  
+  .symbol-hover:hover {
+    transform: scale(1.1);
+    opacity: 0.9;
   }
   
   /* Smooth scrolling */

@@ -81,15 +81,15 @@ export function getHighContrastClass(): string {
   return 'text-dramatic font-semibold tracking-tight leading-tight';
 }
 
-// Color combination utilities
-export function getColorComboClass(combo: 'black-creme' | 'blue-creme' | 'red-black' | 'red-creme'): string {
-  const comboMap = {
-    'black-creme': 'color-combo-black-creme',
-    'blue-creme': 'color-combo-blue-creme',
-    'red-black': 'color-combo-red-black',
-    'red-creme': 'color-combo-red-creme',
-  };
-  return comboMap[combo];
+// Design system color utilities - Following 2-color rule
+export function getDesignSystemColors(primary: 'background' | 'foreground', secondary?: 'primary' | 'secondary' | 'accent'): string {
+  const baseClasses = `bg-${primary} text-${primary === 'background' ? 'foreground' : 'background'}`;
+  
+  if (secondary) {
+    return `${baseClasses} ${secondary === 'primary' ? 'text-primary' : secondary === 'secondary' ? 'text-secondary' : 'text-accent'}`;
+  }
+  
+  return baseClasses;
 }
 
 // Responsive utilities

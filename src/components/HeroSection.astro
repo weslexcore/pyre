@@ -1,9 +1,10 @@
 ---
 import { Image } from 'astro:assets';
-// Component for hero section with design system implementation
+import Symbol from './ui/Symbol.astro';
+// Component for hero section with design system implementation and prominent symbols
 ---
 
-<section class="relative min-h-screen flex items-center justify-center overflow-hidden color-combo-black-creme">
+<section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-background text-foreground" role="banner" aria-labelledby="hero-heading">
   <!-- Background Image -->
   <div class="absolute inset-0 z-0">
     <Image 
@@ -19,7 +20,7 @@ import { Image } from 'astro:assets';
   
   <!-- Content -->
   <div class="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-    <!-- Logo -->
+    <!-- Logo
     <div class="mb-8">
       <Image 
         src="/logos/gray/logo_with_text.png" 
@@ -30,37 +31,50 @@ import { Image } from 'astro:assets';
         loading="eager"
       />
     </div>
-    
-    <!-- Main Announcement -->
-    <div class="max-w-4xl mx-auto mb-12">
-      <h1 class="font-primary-semibold text-scale-3 sm:text-scale-4 md:text-scale-5 lg:text-scale-6 text-foreground mb-6 leading-tight tracking-tight">
-        <span class="text-primary">Self care, together.</span>
-        <span class="block text-scale-2">Coming to Richmond</span>
-      </h1>
-      
-      
-      <p class="font-primary-regular text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-        Experience the ancient traditions of sauna and cold therapy in a modern, welcoming space designed for your health and wellness journey.
-      </p>
+     -->
+    <!-- Main Announcement with Prominent Symbols -->
+    <div class="max-w-6xl mx-auto mb-12">
+      <div class="grid grid-cols-6 gap-8 lg:gap-12 items-center">
+        <!-- Prominent Symbols -->
+        <div class="flex justify-center col-span-1 lg:justify-end space-x-4">
+          <Symbol name="sauna" prominent={true} className="opacity-90" />
+        </div>
+        
+        <!-- Text Content -->
+        <div class="text-center col-span-4 lg:text-left">
+          <h1 id="hero-heading" class="font-primary-semibold text-scale-3 sm:text-scale-4 md:text-scale-5 lg:text-scale-6 text-foreground mb-6 leading-tight tracking-tight">
+            <span class="text-primary">Self care, together.</span>
+            <span class="block text-scale-2">Coming to Richmond</span>
+          </h1>
+          
+          <p class="font-primary-regular text-lg sm:text-xl md:text-2xl text-base-content/70 max-w-3xl mx-auto lg:mx-0 leading-relaxed">
+            Experience the ancient traditions of sauna and cold therapy in a modern, welcoming space designed for your health and wellness journey.
+          </p>
+        </div>
+
+        <div class="flex justify-center col-span-1 lg:justify-end space-x-4">
+          <Symbol name="wellness" prominent={true} className="opacity-90" />
+        </div>
+      </div>
     </div>
     
     <!-- Features Preview -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-12 max-w-4xl mx-auto">
       <div class="text-center">
         <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">2</div>
-        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Traditional Saunas</div>
+        <div class="font-primary-regular text-sm sm:text-base text-base-content/70">Traditional Saunas</div>
       </div>
       <div class="text-center">
         <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">1</div>
-        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Cold Plunge</div>
+        <div class="font-primary-regular text-sm sm:text-base text-base-content/70">Cold Plunge</div>
       </div>
       <div class="text-center">
         <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">1</div>
-        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Hot Pool</div>
+        <div class="font-primary-regular text-sm sm:text-base text-base-content/70">Hot Pool</div>
       </div>
       <div class="text-center">
         <div class="font-mono-bold text-2xl sm:text-3xl text-primary mb-2">∞</div>
-        <div class="font-primary-regular text-sm sm:text-base text-muted-foreground">Wellness</div>
+        <div class="font-primary-regular text-sm sm:text-base text-base-content/70">Wellness</div>
       </div>
     </div>
     
@@ -68,7 +82,8 @@ import { Image } from 'astro:assets';
     <div class="mb-8">
       <a 
         href="#signup" 
-        class="inline-flex items-center justify-center px-8 py-4 bg-primary text-primary-foreground font-primary-semibold text-lg rounded-lg hover:bg-primary/90 transition-colors duration-200 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+        class="btn btn-primary btn-lg font-primary-semibold text-lg shadow-lg hover:shadow-xl"
+        aria-label="Join the waitlist for Pyre Sauna + Cold Plunge"
       >
         Join the Waitlist
       </a>
