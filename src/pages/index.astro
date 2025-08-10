@@ -1,18 +1,70 @@
 ---
-import Layout from '../layouts/main.astro';
-import HeroSection from '../components/HeroSection.astro';
-import AboutSection from '../components/AboutSection.astro';
-import ServicesShowcase from '../components/ServicesShowcase.astro';
-import MailingListSignup from '../components/MailingListSignup.astro';
-import Footer from '../components/Footer.astro';
+import Layout from "../layouts/main.astro";
 ---
 
 <Layout>
+	<header class="nav-transparent">
+		<div class="container flex items-center py-4">
+			<a href="/" aria-label="Pyre Sauna home" class="inline-flex">
+				<img
+					src="/logos/creme/logo_with_text.png"
+					alt="Pyre Sauna + Cold Plunge"
+					class="h-8 w-auto"
+					loading="eager"
+					decoding="sync"
+				/>
+			</a>
+		</div>
+	</header>
+
 	<main>
-		<HeroSection />
-		<AboutSection />
-		<ServicesShowcase />
-		<MailingListSignup />
-		<Footer />
+		<section class="relative min-h-[100dvh] overflow-clip">
+			<div
+				class="absolute inset-0 bg-cover bg-center"
+				style="background-image: url('/images/hero.png');"
+				aria-hidden="true"
+			>
+			</div>
+			<div class="hero-overlay" aria-hidden="true"></div>
+
+			<div
+				class="relative z-10 min-h-[100dvh] flex flex-col justify-between"
+			>
+				<!-- Top line -->
+				<div class="container pt-24 text-center">
+					<p
+						class="font-primary-semibold text-scale-4 kern-tight uppercase text-white"
+					>
+						The Bathhouse, Reimagined
+					</p>
+				</div>
+
+				<!-- Center copy + CTA -->
+				<div class="container">
+					<div class="hero-row text-white">
+						<p class="font-primary-semibold text-scale-3 hero-side-left">Self-care.</p>
+						<img
+							src="/logos/creme/logo.png"
+							alt="Pyre Sauna logo"
+							width="577"
+							height="576"
+							class="h-[clamp(160px,20vw,320px)] w-auto"
+							loading="eager"
+							decoding="async"
+						/>
+						<p class="font-primary-semibold text-scale-3 hero-side-right">Together.</p>
+					</div>
+				</div>
+
+				<!-- Bottom line -->
+				<div class="container pb-10">
+					<p
+						class="font-primary-semibold text-scale-4 kern-tight uppercase text-white text-center"
+					>
+						Richmond VA + Spring 2026
+					</p>
+				</div>
+			</div>
+		</section>
 	</main>
 </Layout>

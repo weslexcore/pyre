@@ -16,7 +16,6 @@ export const fontWeights = {
 
 // Golden Ratio Type Scale (1:1.618)
 const goldenRatio = 1.618;
-const baseSize = 16; // 1rem = 16px
 
 export const fontSizes = {
   // Base scale using golden ratio

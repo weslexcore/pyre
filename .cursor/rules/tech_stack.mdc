@@ -113,7 +113,7 @@ src/
 - Keep React components focused on interactivity
 
 ### Styling
-- Use Tailwind CSS classes for styling
+- Use DaisyUI CSS classes for styling
 - Follow mobile-first responsive design
 - Use global.css for custom styles
 - Leverage Astro's scoped styles when needed
@@ -129,7 +129,7 @@ src/
 - Follow the daisyUI design patterns and conventions
 
 ## Environment Setup
-- **ALWAYS use Node.js version 22** as specified in `.nvmrc`
+- **ALWAYS use Node.js version** specified in `.nvmrc`
 - Run `nvm use` to automatically switch to the correct Node.js version
 - Ensure all dependencies are installed: `yarn install`
 - Configure Tailwind CSS properly
@@ -151,10 +151,9 @@ src/
 - Follow daisyUI's component patterns and styling conventions
 
 ## Node.js Version Management
-- **CRITICAL**: This project requires Node.js version 22 as specified in `.nvmrc`
+- **CRITICAL**: This project requires Node.js version specified in `.nvmrc`
 - **ALWAYS run `nvm use`** when starting development to ensure correct Node.js version
 - **NEVER use a different Node.js version** - this will cause build failures and compatibility issues
-- If you don't have Node.js 22 installed, run `nvm install 22` first
-- Verify the correct version is active with `node --version` (should show v22.x.x)
+- If you don't have Node.js version installed, run `nvm install` first
+- Verify the correct version is active with `node --version`
 - The `.nvmrc` file ensures consistent Node.js versions across all development environments
-- Astro 5.12.8 requires Node.js >=18.20.8, but this project specifically uses Node.js 22 for optimal compatibility

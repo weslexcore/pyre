@@ -1,3 +1,21 @@
+---
+description: "NVM + Node setup: ensure correct Node via nvm/corepack for dev/build and on version errors"
+globs:
+  - "package.json"
+  - ".nvmrc"
+  - ".tool-versions"
+  - ".node-version"
+  - ".cursor/**/*"
+alwaysApply: false
+triggers:
+  - "node"
+  - "nvm"
+  - "yarn"
+  - "npm"
+  - "pnpm"
+  - "astro"
+---
+
 <rule>
 name: nvm_node_setup
 description: Ensure Node.js is managed by nvm before running dev/build commands and when Node version errors occur
@@ -7,27 +25,49 @@ filters:
   - type: event
     pattern: "terminal_pre_run"
   - type: content
-    pattern: "\\byarn (dev|build|preview|start|lint)\\b"
+    pattern: "\\b((yarn|pnpm)\\s+(dev|build|preview|start|lint)|npm\\s+run\\s+(dev|build|preview|start|lint)|npx\\s+astro\\s+(dev|build|preview)|astro\\s+(dev|build|preview))\\b"
 
 actions:
   - type: suggest
     message: |
       Before running dev/build commands, initialize nvm and use the project's Node version.
 
-      Recommended setup (safe to paste in terminal):
+      Intelligent setup (safe to paste in terminal):
       ```sh
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-      if [ -f .nvmrc ]; then
-        nvm install --silent
-        nvm use --silent
-      else
-        # fallback if no .nvmrc; prefer latest LTS
-        nvm install --lts --silent
-        nvm use --lts --silent
+      set -euo pipefail
+      # Load nvm if available (macOS/Homebrew default path); otherwise try standard install path
+      if ! command -v nvm >/dev/null 2>&1; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && . "/opt/homebrew/opt/nvm/nvm.sh"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
       fi
+
+      if ! command -v nvm >/dev/null 2>&1; then
+        echo "nvm not found. Install nvm first (macOS: brew install nvm; see https://github.com/nvm-sh/nvm)."
+        exit 1
+      fi
+
+      # Choose version from .nvmrc if present (use last non-empty line), else use LTS
+      if [ -f .nvmrc ]; then
+        wanted="$(grep -Eo '^[^#].*' .nvmrc | tail -n 1 | tr -d 'v' | xargs)"
+        if [ -n "${wanted}" ]; then
+          nvm install "${wanted}" --silent >/dev/null 2>&1 || nvm install "${wanted}" >/dev/null 2>&1
+          nvm use "${wanted}" --silent >/dev/null 2>&1 || nvm use "${wanted}"
+        else
+          nvm install --lts --silent >/dev/null 2>&1 || nvm install --lts >/dev/null 2>&1
+          nvm use --lts --silent >/dev/null 2>&1 || nvm use --lts
+        fi
+      else
+        nvm install --lts --silent >/dev/null 2>&1 || nvm install --lts >/dev/null 2>&1
+        nvm use --lts --silent >/dev/null 2>&1 || nvm use --lts
+      fi
+
+      # Enable Corepack so Yarn uses the version from packageManager in package.json
       corepack enable >/dev/null 2>&1 || true
+
+      echo "Using Node $(node -v)"
+      command -v yarn >/dev/null 2>&1 && yarn -v || true
       ```
 
 examples:
@@ -38,7 +78,7 @@ examples:
 
 metadata:
   priority: high
-  version: 1.0
+  version: 1.2
 </rule>
 
 <rule>
@@ -50,7 +90,7 @@ filters:
   - type: event
     pattern: "terminal_error"
   - type: content
-    pattern: "Node\.js v.* is not supported|Please upgrade Node\.js|command not found: astro|ERR_OSSL|SyntaxError: Unexpected token 'export'"
+    pattern: "Node\.js v.* is not supported|Please upgrade Node\.js|Engines\\s+\\"node\\"|Expected version|use nvm|nvm: command not found|command not found: astro|ERR_OSSL|SyntaxError: Unexpected token 'export'"
 
 actions:
   - type: suggest
@@ -58,17 +98,35 @@ actions:
       It looks like there's a Node.js environment/version issue. Initialize nvm and select the correct version, then retry your command.
 
       ```sh
-      export NVM_DIR="$HOME/.nvm"
-      [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-      [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-      if [ -f .nvmrc ]; then
-        nvm install --silent
-        nvm use --silent
-      else
-        nvm install --lts --silent
-        nvm use --lts --silent
+      set -euo pipefail
+      if ! command -v nvm >/dev/null 2>&1; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && . "/opt/homebrew/opt/nvm/nvm.sh"
+        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+        [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
       fi
+
+      if ! command -v nvm >/dev/null 2>&1; then
+        echo "nvm not found. Install nvm first (macOS: brew install nvm; see https://github.com/nvm-sh/nvm)."
+        exit 1
+      fi
+
+      if [ -f .nvmrc ]; then
+        wanted="$(grep -Eo '^[^#].*' .nvmrc | tail -n 1 | tr -d 'v' | xargs)"
+        if [ -n "${wanted}" ]; then
+          nvm install "${wanted}" --silent >/dev/null 2>&1 || nvm install "${wanted}" >/dev/null 2>&1
+          nvm use "${wanted}" --silent >/dev/null 2>&1 || nvm use "${wanted}"
+        else
+          nvm install --lts --silent >/dev/null 2>&1 || nvm install --lts >/dev/null 2>&1
+          nvm use --lts --silent >/dev/null 2>&1 || nvm use --lts
+        fi
+      else
+        nvm install --lts --silent >/dev/null 2>&1 || nvm install --lts >/dev/null 2>&1
+        nvm use --lts --silent >/dev/null 2>&1 || nvm use --lts
+      fi
+
       corepack enable >/dev/null 2>&1 || true
+      echo "Using Node $(node -v)"
       ```
 
 examples:
@@ -79,5 +137,5 @@ examples:
 
 metadata:
   priority: high
-  version: 1.0
+  version: 1.2
 </rule>

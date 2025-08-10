@@ -284,8 +284,16 @@
   }
   
   .symbol-hover:hover {
-    transform: scale(1.1);
+    transform: scale(1.05);
     opacity: 0.9;
+  }
+
+  /* Repeating logo pattern on dark background */
+  .bg-repeating-logo {
+    background-color: var(--foreground);
+    background-image: url('/logos/repeating_background.png');
+    background-repeat: repeat;
+    background-size: 180px 180px;
   }
   
   /* Smooth scrolling */
@@ -353,5 +361,56 @@
   a:focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+  }
+}
+
+/* Utilities for hero and navbar */
+@layer utilities {
+  .nav-transparent {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--pyre-black) 35%, transparent 65%) 0%,
+      color-mix(in oklch, var(--pyre-black) 55%, transparent 45%) 40%,
+      color-mix(in oklch, var(--pyre-black) 75%, transparent 25%) 100%
+    );
+    opacity: 0.9;
+  }
+
+  /* Hero three-column centering row */
+  .hero-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: 1rem;
+    justify-items: center;
+  }
+
+  /* Ensure side copy sits near the logo while keeping center perfectly centered */
+  .hero-side-left { justify-self: end; color: var(--pyre-creme); }
+  .hero-side-right { justify-self: start; color: var(--pyre-creme); }
+
+  @media (max-width: 640px) {
+    .hero-row {
+      grid-template-columns: 1fr;
+      row-gap: 0.75rem;
+      text-align: center;
+    }
+    .hero-side-left,
+    .hero-side-right {
+      justify-self: center;
+      font-size: clamp(1.125rem, 5vw, 1.5rem);
+    }
   }
 }
