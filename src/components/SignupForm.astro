@@ -1,0 +1,89 @@
+---
+import Button from './Button.astro';
+const subscribed = Astro.url.searchParams.get('subscribed') === '1';
+---
+
+<section id="signup" class="bg-[var(--card)] text-[color:var(--card-foreground)]">
+  <div class="container py-12 sm:py-16">
+    <div class="mx-auto max-w-2xl">
+      <h2 class="font-primary-semibold tracking-[-0.02em] text-[clamp(1.25rem,4vw,1.618rem)]">Stay in the loop</h2>
+      <p class="mt-2">Sign up for our newsletter and stay updated on opening and introductory offers.</p>
+      <p class="text-sm text-[oklch(0.55_0.01_60)]">We will only send essential info and tangible offers.</p>
+
+      {subscribed && (
+        <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">
+          Thanks for subscribing!
+        </div>
+      )}
+
+      <form class="mt-6 flex flex-col gap-3 sm:flex-row" method="POST" action="/api/subscribe" novalidate>
+        <div class="flex-1 min-w-0">
+          <label for="email" class="block text-sm font-primary-semibold">Email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            inputmode="email"
+            autocomplete="email"
+            class="mt-1 w-full rounded-md border border-[color:var(--input)] bg-[var(--input-bg)] px-3 py-2 text-[color:var(--input-text)] focus:outline-[color:var(--ring)]"
+          />
+          <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[color:var(--destructive)]"></p>
+        </div>
+        <div class="sm:self-end">
+          <Button type="submit" variant="primary" size="md">Join the mailing list</Button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const form = document.querySelector('#signup form');
+    if (form) {
+      form.addEventListener('submit', async (event) => {
+        const emailInput = form.querySelector('#email');
+        const errorEl = form.querySelector('#email-error');
+        if (!(emailInput instanceof HTMLInputElement) || !(errorEl instanceof HTMLElement)) {
+          return;
+        }
+        errorEl.textContent = '';
+        const email = emailInput.value.trim();
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailValid) {
+          event.preventDefault();
+          errorEl.textContent = 'Please enter a valid email.';
+          emailInput.focus();
+          return;
+        }
+        if (window.fetch) {
+          event.preventDefault();
+          const submitBtn = form.querySelector('button');
+          if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = true;
+          try {
+            const res = await fetch('/api/subscribe', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ email })
+            });
+            const isJson = res.headers.get('content-type')?.includes('application/json');
+            const data = isJson ? await res.json() : null;
+            if (res.ok) {
+              emailInput.value = '';
+              errorEl.setAttribute('role', 'status');
+              errorEl.style.color = '';
+              errorEl.textContent = 'Thanks for subscribing!';
+            } else if (res.status === 400 && data && data.error) {
+              errorEl.textContent = data.error;
+            } else {
+              errorEl.textContent = 'Something went wrong. Please try again later.';
+            }
+          } finally {
+            if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = false;
+          }
+        }
+      });
+    }
+  </script>
+</section>
+
+

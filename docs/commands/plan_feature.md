@@ -14,6 +14,6 @@ This is strictly a technical requirements document that should:
 
 If the user's requirements are unclear, especially after researching the relevant files, you may ask up to 5 clarifying questions before writing the plan. If you do so, incorporate the user's answers into the plan.
 
-Prioritize being concise and precise. Make the plan as tight as possible without losing any of the critical details from the user's requirements.
+Prioritize being concise and precise. Make the plan as tight as possible without losing any of the critical details from the user's requirements. Do not write any code or make changes to any files outside of the plan.
 
 Write the plan into an docs/features/<N>_PLAN.md file with the next available feature number (starting with 0001)

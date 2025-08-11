@@ -6,7 +6,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "format": "prettier --plugin-search-dir=. --write ."
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.3",
@@ -22,6 +23,15 @@
   },
   "packageManager": "yarn@4.2.0+sha512.d891585ead2659f2b237baf44d3243433e334f3207b8aba83fac0b81ee60b9c52e93149115782ae9f672eaf2136ebc49cdddcbf53d3e6b67c425701765e3a918",
   "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-astro": "^0.14.1",
+    "prettier-plugin-tailwindcss": "^0.6.9",
     "tw-animate-css": "^1.3.6"
+  },
+  "prettier": {
+    "plugins": [
+      "prettier-plugin-astro",
+      "prettier-plugin-tailwindcss"
+    ]
   }
 }

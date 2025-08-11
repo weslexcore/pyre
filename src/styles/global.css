@@ -216,25 +216,7 @@
     font-weight: 700;
   }
   
-  /* Golden Ratio Type Scale Utilities */
-  .text-scale-1 { font-size: 1rem; }
-  .text-scale-2 { font-size: 1.618rem; }
-  .text-scale-3 { font-size: 2.618rem; }
-  .text-scale-4 { font-size: 4.236rem; }
-  .text-scale-5 { font-size: 6.854rem; }
-  .text-scale-6 { font-size: 11.09rem; }
-  
-  /* High Contrast Typography */
-  .text-dramatic {
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-  }
-  
-  /* Kerning Utilities */
-  .kern-tight { letter-spacing: -0.02em; }
-  .kern-loose { letter-spacing: 0.02em; }
-  .kern-variable { letter-spacing: 0.01em; }
+  /* Removed project-specific typography helpers in favor of Tailwind utilities */
   
   /* Design System Color Combinations - Use with DaisyUI theme variables */
   /* Follow the 2-color rule: no more than 2 colors from the palette together */
@@ -242,53 +224,11 @@
   /* Accent: Pyre Red for CTAs and important actions */
   /* Secondary: Pyre Blue for secondary actions and links */
   
-  /* Symbol Sizing Classes - Large and Prominent by Default */
-  .symbol-sm {
-    width: 80px;
-    height: 80px;
-  }
+  /* Removed symbol sizing utility classes in favor of Tailwind classes */
   
-  .symbol-md {
-    width: 120px;
-    height: 120px;
-  }
-  
-  .symbol-lg {
-    width: 160px;
-    height: 160px;
-  }
-  
-  .symbol-xl {
-    width: 200px;
-    height: 200px;
-  }
-  
-  .symbol-xxl {
-    width: 240px;
-    height: 240px;
-  }
-  
-  .symbol-prominent {
-    width: 280px;
-    height: 280px;
-    transition: transform 0.3s ease;
-  }
-  
-  .symbol-prominent:hover {
-    transform: scale(1.05);
-  }
-  
-  /* Symbol hover effects */
-  .symbol-hover {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-  }
-  
-  .symbol-hover:hover {
-    transform: scale(1.05);
-    opacity: 0.9;
-  }
+  /* Removed hover effect utility classes in favor of Tailwind utilities */
 
-  /* Repeating logo pattern on dark background */
+  /* Keep brand repeating background as a global helper if needed */
   .bg-repeating-logo {
     background-color: var(--foreground);
     background-image: url('/logos/repeating_background.png');
@@ -301,54 +241,9 @@
     scroll-behavior: smooth;
   }
   
-  /* Custom animations */
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  /* Remove custom animation in favor of Tailwind or plugin-provided animations */
   
-  .animate-fade-in-up {
-    animation: fadeInUp 0.6s ease-out;
-  }
-  
-  /* Responsive container */
-  .container {
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  
-  @media (min-width: 640px) {
-    .container {
-      max-width: 640px;
-    }
-  }
-  
-  @media (min-width: 768px) {
-    .container {
-      max-width: 768px;
-    }
-  }
-  
-  @media (min-width: 1024px) {
-    .container {
-      max-width: 1024px;
-    }
-  }
-  
-  @media (min-width: 1280px) {
-    .container {
-      max-width: 1280px;
-    }
-  }
+  /* Removed custom container. Use Tailwind's container or utility composition */
   
   /* Focus styles for accessibility */
   *:focus {
@@ -364,53 +259,4 @@
   }
 }
 
-/* Utilities for hero and navbar */
-@layer utilities {
-  .nav-transparent {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    background: transparent;
-    backdrop-filter: none;
-  }
-
-  .hero-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to bottom,
-      color-mix(in oklch, var(--pyre-black) 35%, transparent 65%) 0%,
-      color-mix(in oklch, var(--pyre-black) 55%, transparent 45%) 40%,
-      color-mix(in oklch, var(--pyre-black) 75%, transparent 25%) 100%
-    );
-    opacity: 0.9;
-  }
-
-  /* Hero three-column centering row */
-  .hero-row {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    column-gap: 1rem;
-    justify-items: center;
-  }
-
-  /* Ensure side copy sits near the logo while keeping center perfectly centered */
-  .hero-side-left { justify-self: end; color: var(--pyre-creme); }
-  .hero-side-right { justify-self: start; color: var(--pyre-creme); }
-
-  @media (max-width: 640px) {
-    .hero-row {
-      grid-template-columns: 1fr;
-      row-gap: 0.75rem;
-      text-align: center;
-    }
-    .hero-side-left,
-    .hero-side-right {
-      justify-self: center;
-      font-size: clamp(1.125rem, 5vw, 1.5rem);
-    }
-  }
-}
+/* Removed element-specific hero utilities in favor of Tailwind utilities inline */
