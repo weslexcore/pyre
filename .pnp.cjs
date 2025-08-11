@@ -33,7 +33,6 @@ const RAW_RUNTIME_STATE =
           ["@types/react", "npm:19.1.9"],\
           ["@types/react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.7"],\
           ["astro", "npm:5.12.8"],\
-          ["daisyui", "npm:5.0.50"],\
           ["prettier", "npm:3.6.2"],\
           ["prettier-plugin-astro", "npm:0.14.1"],\
           ["prettier-plugin-tailwindcss", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:0.6.14"],\
@@ -2028,7 +2027,6 @@ const RAW_RUNTIME_STATE =
           ["@types/react", "npm:19.1.9"],\
           ["@types/react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.7"],\
           ["astro", "npm:5.12.8"],\
-          ["daisyui", "npm:5.0.50"],\
           ["prettier", "npm:3.6.2"],\
           ["prettier-plugin-astro", "npm:0.14.1"],\
           ["prettier-plugin-tailwindcss", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:0.6.14"],\
@@ -2444,15 +2442,6 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "../../../../../.yarn/berry/cache/csstype-npm-3.1.3-e9a1c85013-10c0.zip/node_modules/csstype/",\
         "packageDependencies": [\
           ["csstype", "npm:3.1.3"]\
-        ],\
-        "linkType": "HARD"\
-      }]\
-    ]],\
-    ["daisyui", [\
-      ["npm:5.0.50", {\
-        "packageLocation": "../../../../../.yarn/berry/cache/daisyui-npm-5.0.50-ade8b72246-10c0.zip/node_modules/daisyui/",\
-        "packageDependencies": [\
-          ["daisyui", "npm:5.0.50"]\
         ],\
         "linkType": "HARD"\
       }]\

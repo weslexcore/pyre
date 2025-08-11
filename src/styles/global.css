@@ -1,41 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@plugin "daisyui";
 
 @custom-variant dark (&:is(.dark *));
 
-/* DaisyUI Theme Configuration for Pyre Brand */
-@theme {
-  /* Pyre Design System - 2-Color Rule Implementation */
-  --color-primary: var(--pyre-red);
-  --color-primary-content: var(--pyre-creme);
-  --color-secondary: var(--pyre-blue);
-  --color-secondary-content: var(--pyre-creme);
-  --color-accent: var(--pyre-black);
-  --color-accent-content: var(--pyre-creme);
-  --color-neutral: var(--pyre-creme);
-  --color-neutral-content: var(--pyre-black);
-  --color-base-100: var(--pyre-creme);
-  --color-base-200: oklch(0.96 0.01 60);
-  --color-base-300: oklch(0.92 0.01 60);
-  --color-base-content: var(--pyre-black);
-  
-  /* Component-specific theme variables - Following 2-color rule */
-  --btn-primary: var(--pyre-red);
-  --btn-primary-content: var(--pyre-creme);
-  --btn-secondary: var(--pyre-blue);
-  --btn-secondary-content: var(--pyre-creme);
-  --btn-outline: var(--pyre-black);
-  --btn-outline-content: var(--pyre-creme);
-  
-  --input-bg: var(--pyre-creme);
-  --input-border: oklch(0.92 0.01 60);
-  --input-text: var(--pyre-black);
-  
-  --card-bg: var(--pyre-creme);
-  --card-border: oklch(0.92 0.01 60);
-  --card-text: var(--pyre-black);
-}
+/* Removed DaisyUI plugin and theme variables */
 
 /* Pyre Brand Fonts */
 @font-face {
@@ -218,11 +186,7 @@
   
   /* Removed project-specific typography helpers in favor of Tailwind utilities */
   
-  /* Design System Color Combinations - Use with DaisyUI theme variables */
-  /* Follow the 2-color rule: no more than 2 colors from the palette together */
-  /* Default: Pyre Black + Pyre Creme (background + foreground) */
-  /* Accent: Pyre Red for CTAs and important actions */
-  /* Secondary: Pyre Blue for secondary actions and links */
+  /* Design System Color Combinations - 2-color rule */
   
   /* Removed symbol sizing utility classes in favor of Tailwind classes */
   

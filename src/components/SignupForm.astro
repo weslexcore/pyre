@@ -26,7 +26,7 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
             required
             inputmode="email"
             autocomplete="email"
-            class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--input-bg)] px-3 py-2 text-[var(--input-text)] focus:outline-[var(--ring)]"
+            class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] focus:outline-[var(--ring)]"
           />
           <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
         </div>
