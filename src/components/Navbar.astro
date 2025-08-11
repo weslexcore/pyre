@@ -1,0 +1,80 @@
+---
+import Button from './Button.astro';
+---
+
+<header
+  data-component="navbar"
+  class="fixed inset-x-0 top-0 z-50 bg-transparent transition-colors duration-300 motion-reduce:transition-none"
+>
+  <div class="mx-auto w-full px-4 flex items-center justify-between gap-4 py-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
+    <a href="/" aria-label="Pyre Sauna home" class="inline-flex">
+      <img
+        src="/logos/creme/logo_with_text.png"
+        alt="Pyre Sauna + Cold Plunge"
+        class="h-8 w-auto"
+        loading="eager"
+        decoding="sync"
+      />
+    </a>
+    <div class="ml-auto">
+      <Button href="#signup" variant="outline" size="sm" ariaLabel="Join the mailing list">Join the mailing list</Button>
+    </div>
+  </div>
+</header>
+
+<script is:inline>
+  (function () {
+    const SCROLLED_CLASSES = ['bg-black', 'backdrop-blur', 'shadow'];
+
+    function applyScrolledState(navbar, isScrolled) {
+      if (!navbar) return;
+      if (isScrolled) {
+        navbar.classList.remove('bg-transparent');
+        navbar.classList.add(...SCROLLED_CLASSES);
+      } else {
+        navbar.classList.remove(...SCROLLED_CLASSES);
+        navbar.classList.add('bg-transparent');
+      }
+    }
+
+    function setup() {
+      const navbar = document.querySelector('[data-component="navbar"]');
+      const sentinel = document.getElementById('nav-sentinel');
+
+      if (!navbar) return;
+
+      if (sentinel) {
+        const observer = new IntersectionObserver((entries) => {
+          const entry = entries[0];
+          applyScrolledState(navbar, !entry.isIntersecting);
+        }, { root: null, threshold: 0 });
+        observer.observe(sentinel);
+        // Initialize state synchronously in case the observer callback hasn't fired yet
+        // If sentinel is outside the viewport at load, reflect scrolled state
+        applyScrolledState(navbar, window.scrollY > 0);
+      } else {
+        // Fallback: scroll listener
+        let ticking = false;
+        function onScroll() {
+          if (!ticking) {
+            window.requestAnimationFrame(() => {
+              applyScrolledState(navbar, window.scrollY > 0);
+              ticking = false;
+            });
+            ticking = true;
+          }
+        }
+        applyScrolledState(navbar, window.scrollY > 0);
+        window.addEventListener('scroll', onScroll, { passive: true });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setup, { once: true });
+    } else {
+      setup();
+    }
+  })();
+</script>
+
+
