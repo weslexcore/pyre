@@ -194,10 +194,10 @@
 
   /* Keep brand repeating background as a global helper if needed */
   .bg-repeating-logo {
-    background-color: var(--foreground);
+    background-color: transparent;
     background-image: url('/logos/repeating_background.png');
     background-repeat: repeat;
-    background-size: 180px 180px;
+    background-size: 240px 240px;
   }
   
   /* Smooth scrolling */
