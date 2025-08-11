@@ -31,10 +31,10 @@ const sizeClasses =
 
 const variantClasses =
   variant === 'secondary'
-    ? 'bg-[var(--secondary)] text-[color:var(--secondary-foreground)] hover:opacity-90'
+    ? 'bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90'
     : variant === 'outline'
-    ? 'border-2 border-[color:var(--primary-foreground)] text-[color:var(--primary-foreground)] bg-transparent hover:bg-[var(--accent)] hover:text-[color:var(--accent-foreground)]'
-    : 'bg-[var(--primary)] text-[color:var(--primary-foreground)] hover:opacity-90';
+    ? 'border-2 border-[var(--primary-foreground)] text-[var(--primary-foreground)] bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]'
+    : 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90';
 
 const allClasses = [baseClasses.join(' '), sizeClasses, variantClasses, extraClass]
   .filter(Boolean)

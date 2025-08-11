@@ -3,7 +3,7 @@ import Button from './Button.astro';
 const subscribed = Astro.url.searchParams.get('subscribed') === '1';
 ---
 
-<section id="signup" class="bg-[var(--card)] text-[color:var(--card-foreground)]">
+<section id="signup" class="bg-[var(--card)] text-[var(--card-foreground)]">
   <div class="container py-12 sm:py-16">
     <div class="mx-auto max-w-2xl">
       <h2 class="font-primary-semibold tracking-[-0.02em] text-[clamp(1.25rem,4vw,1.618rem)]">Stay in the loop</h2>
@@ -26,9 +26,9 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
             required
             inputmode="email"
             autocomplete="email"
-            class="mt-1 w-full rounded-md border border-[color:var(--input)] bg-[var(--input-bg)] px-3 py-2 text-[color:var(--input-text)] focus:outline-[color:var(--ring)]"
+            class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--input-bg)] px-3 py-2 text-[var(--input-text)] focus:outline-[var(--ring)]"
           />
-          <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[color:var(--destructive)]"></p>
+          <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
         </div>
         <div class="sm:self-end">
           <Button type="submit" variant="primary" size="md">Join the mailing list</Button>
