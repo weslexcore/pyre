@@ -3,6 +3,7 @@ import Button from './Button.astro';
 const subscribed = Astro.url.searchParams.get('subscribed') === '1';
 ---
 
+<div id="waitlist" aria-hidden="true" class="h-0"></div>
 <section id="signup" class="bg-[var(--card)] text-[var(--card-foreground)]">
   <div class="container py-12 sm:py-16">
     <div class="mx-auto max-w-2xl">

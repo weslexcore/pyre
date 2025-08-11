@@ -1,4 +1,5 @@
 ---
+import Button from './Button.astro';
 ---
 
 <section aria-labelledby="story-heading" class="relative bg-[var(--background)] text-[var(--foreground)]">
@@ -51,6 +52,17 @@
                 </p>
                 <p class="font-primary-semibold">Here, meaningful change begins, one restorative experience at a time.</p>
               </div>
+              <div class="mt-6 sm:mt-8">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  href="#signup"
+                  ariaLabel="Join the waitlist — jump to signup form"
+                  class="w-full sm:w-auto"
+                >
+                  Join the Waitlist
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -58,5 +70,39 @@
     </div>
   </div>
 </section>
+
+<script>
+  const section = document.querySelector('section[aria-labelledby="story-heading"]');
+  const cta = section?.querySelector('a[href="#signup"]');
+  if (cta) {
+    cta.addEventListener('click', () => {
+      try {
+        const w = window as any;
+        if (typeof w.plausible === 'function') {
+          w.plausible('cta_waitlist_story_click');
+        } else if (typeof w.gtag === 'function') {
+          w.gtag('event', 'cta_waitlist_story_click');
+        } else if (Array.isArray(w.dataLayer)) {
+          w.dataLayer.push({ event: 'cta_waitlist_story_click' });
+        } else {
+          window.dispatchEvent(new CustomEvent('cta_waitlist_story_click'));
+        }
+      } catch {}
+
+      const focusEmail = () => {
+        const emailInput = document.getElementById('email');
+        if (emailInput && typeof emailInput.focus === 'function') {
+          try {
+            emailInput.focus({ preventScroll: true });
+          } catch {
+            emailInput.focus();
+          }
+        }
+      };
+
+      setTimeout(focusEmail, 400);
+    });
+  }
+</script>
 
 
