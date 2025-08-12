@@ -71,7 +71,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   
   /* Pyre Custom Fonts */
-  --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; */
   --font-mono: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 

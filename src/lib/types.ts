@@ -12,7 +12,7 @@ export interface ButtonProps {
   variant: 'primary' | 'secondary' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
-  children: React.ReactNode;
+  children: unknown;
   onClick?: () => void;
   type?: 'button' | 'submit' | 'reset';
 }
@@ -71,3 +71,137 @@ export interface DesignSystemConfig {
     xl: string;
   };
 } 
+
+// ------------------------------------------------------------
+// Marketing site content config types
+// ------------------------------------------------------------
+
+export interface ImageRef {
+  src: string;
+  alt?: string;
+  ariaLabel?: string;
+}
+
+export interface LinkRef {
+  label: string;
+  href: string;
+  ariaLabel?: string;
+}
+
+export interface ActionRef {
+  label: string;
+  href: string;
+  ariaLabel?: string;
+}
+
+export interface HeroContent {
+  images: {
+    centerLogo: ImageRef;
+    background: ImageRef;
+  };
+  elements: {
+    heroText: string;
+    subText: string;
+    bottomLine: string;
+    leftWord: string;
+    rightWord: string;
+  };
+  actions?: {
+    primary?: ActionRef;
+  };
+}
+
+export interface NavbarContent {
+  images: {
+    brandMark: ImageRef;
+  };
+  elements: {
+    ariaLabel: string;
+    links?: Array<LinkRef>;
+  };
+  actions?: {
+    primary?: ActionRef;
+  };
+}
+
+export interface StoryContent {
+  images: {
+    background: ImageRef;
+    symbol?: ImageRef;
+  };
+  elements: {
+    title: string;
+    body: string[];
+    emphasisList?: string[];
+  };
+  actions?: {
+    primary?: ActionRef;
+  };
+}
+
+export interface ExperiencesItem {
+  icon?: ImageRef;
+  title: string;
+  description: string;
+  bullets?: string[];
+  link?: LinkRef;
+  linkText?: string;
+}
+
+export interface ExperiencesContent {
+  elements: {
+    title: string;
+    items: Array<ExperiencesItem>;
+  };
+}
+
+export interface BreakSectionContent {
+  images: {
+    background?: ImageRef;
+  };
+  elements: {
+    headingTop: string;
+    words: string[];
+    buttonLabel: string;
+    intervalMs?: number;
+  };
+  actions?: {
+    primary?: ActionRef;
+  };
+}
+
+export interface SignupFormContent {
+  images: {
+    background: ImageRef;
+    panel: ImageRef;
+    symbol?: ImageRef;
+  };
+  elements: {
+    title: string;
+    subtitle: string;
+    emailLabel: string;
+    submitLabel: string;
+    successMessage: string;
+    errorMessage: string;
+  };
+  metadata?: {
+    subscribedParam?: string;
+  };
+}
+
+export interface FooterContent {
+  images: {
+    brandMark?: ImageRef;
+  };
+  elements: {
+    hoursHeading: string;
+    hoursText: string;
+    locationHeading: string;
+    locationText: string;
+    contactHeading: string;
+  };
+  actions?: {
+    contactEmail?: string;
+    instagram?: LinkRef;
+  };
+}

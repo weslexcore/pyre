@@ -10,8 +10,8 @@ import footerConfig from "../lib/footer";
       <!-- Brand -->
       <div class="md:col-span-1">
         <img
-          src="/logos/creme/logo.png"
-          alt="Pyre Sauna + Cold Plunge logo"
+          src={footerConfig.images.brandMark?.src}
+          alt={footerConfig.images.brandMark?.alt}
           width="800"
           height="220"
           class="h-[clamp(100px,10vw,100px)] w-auto" 
@@ -22,31 +22,31 @@ import footerConfig from "../lib/footer";
 
       <!-- Hours -->
       <div>
-        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">Hours</h2>
-        <p class="text-base">Coming Soon</p>
+        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">{footerConfig.elements.hoursHeading}</h2>
+        <p class="text-base">{footerConfig.elements.hoursText}</p>
       </div>
 
       <!-- Location -->
       <div>
-        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">Location</h2>
-        <p class="text-base">Coming Soon</p>
+        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">{footerConfig.elements.locationHeading}</h2>
+        <p class="text-base">{footerConfig.elements.locationText}</p>
       </div>
 
       <!-- Contact & Social -->
       <div class="">
-        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">Contact</h2>
+        <h2 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">{footerConfig.elements.contactHeading}</h2>
         <p class="text-base mb-4">
           <a
-            href={`mailto:${footerConfig.email}`}
+            href={`mailto:${footerConfig.actions?.contactEmail}`}
             class="underline underline-offset-4 hover:no-underline focus:no-underline"
-          >{footerConfig.email}</a>
+          >{footerConfig.actions?.contactEmail}</a>
         </p>
         <div class="flex items-center gap-3">
           <a
-            href={footerConfig.instagram.url}
+            href={footerConfig.actions?.instagram?.href}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label={footerConfig.instagram.ariaLabel}
+            aria-label={footerConfig.actions?.instagram?.ariaLabel}
             class="inline-flex items-center gap-2 underline underline-offset-4 hover:no-underline focus:no-underline"
           >
             <svg
@@ -58,7 +58,7 @@ import footerConfig from "../lib/footer";
             >
               <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7zm11 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2.1A2.9 2.9 0 1 0 12 15.9 2.9 2.9 0 0 0 12 9.1z"/>
             </svg>
-            <span>{footerConfig.instagram.label}</span>
+            <span>{footerConfig.actions?.instagram?.label}</span>
           </a>
         </div>
       </div>

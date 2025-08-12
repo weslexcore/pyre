@@ -1,0 +1,14 @@
+---
+description: Copy configs: Enforce storing all marketing site copy in `src/lib` section config files; components import from there.
+globs: src/components/**/*.astro, src/lib/**/*.ts
+alwaysApply: false
+---
+
+When adding or editing copy for a section, write text and labels into the corresponding `src/lib/<section>.ts` file. Avoid hardcoding copy in components.
+
+Maintain the consistent types in `src/lib/types.ts` (images, elements, optional actions/metadata).
+
+Include `alt`/`ariaLabel` in configs where applicable.
+
+For new sections, create a new `src/lib/<section>.ts` and define a `<Section>Content` interface.
+

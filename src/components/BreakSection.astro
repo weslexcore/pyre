@@ -1,23 +1,15 @@
 ---
 import Button from './Button.astro';
+import breakSection from '../lib/breakSection';
 
-const {
-  words = ['RECONNECT', 'DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'],
-  intervalMs = 2000,
-  ctaHref = '#signup'
-} = Astro.props as {
-  words?: string[];
-  intervalMs?: number;
-  ctaHref?: string;
-};
 ---
 
 <section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)]">
   <!-- Background image layer with subtle opacity -->
   <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
     <img
-      src="/images/giant_clouds.jpeg"
-      alt=""
+      src={breakSection.images.background?.src}
+      alt={breakSection.images.background?.alt ?? ''}
       loading="lazy"
       decoding="async"
       class="h-full w-full object-cover object-center opacity-"
@@ -32,21 +24,20 @@ const {
         id="break-heading"
         class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]"
       >
-        PYRE IS A SPACE TO
+        {breakSection.elements.headingTop}
       </h2>
-      <h2 class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]"><span id="break-rotating-word" aria-live="polite" aria-atomic="true" class="underline">RECONNECT</span></h2>
+      <h2 class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]"><span id="break-rotating-word" aria-live="polite" aria-atomic="true" class="underline">{breakSection.elements.words[0]}</span></h2>
 
       <div class="mt-8">
-        <Button variant="primary" size="md" href={ctaHref}>SPEND TIME WITH US</Button>
+        <Button variant="primary" size="md" href={'#signup'}>{breakSection.elements.buttonLabel}</Button>
       </div>
     </div>
   </div>
-
-  <!-- Inline JSON data for client script -->
-  <script type="application/json" id="break-data">{JSON.stringify({ words, intervalMs })}</script>
-
   <script>
-    (function () {
+
+  const words = ['RECONNECT', 'BE PRESENT', 'CULTIVATE JOY','DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'];
+  const intervalMs = 2000;
+  (function () {
       const rotatingSpan = document.getElementById('break-rotating-word');
       if (!(rotatingSpan instanceof HTMLElement)) return;
 
@@ -55,16 +46,17 @@ const {
       rotatingSpan.style.opacity = '1';
 
       const dataEl = document.getElementById('break-data');
-      // Parse the JSON data for words and interval
-      let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 2000 };
-      if (dataEl && dataEl.textContent) {
-        try {
-          parsed = JSON.parse(dataEl.textContent);
-        } catch (e) {}
-      }
+    //   const parsed= JSON.parse(dataEl.textContent)
+    //   Parse the JSON data for words and interval 
+    //   let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 2000 };
+    //   if (dataEl && dataEl.textContent) {
+    //     try {
+    //       parsed = JSON.parse(dataEl.textContent);
+    //     } catch (e) {}
+    //   }
       // Insert blank as first word for the "blank" state
-      const WORDS = Array.isArray(parsed.words) ? [...parsed.words] : [""];
-      const INTERVAL_MS = typeof parsed.intervalMs === 'number' ? parsed.intervalMs : 2000;
+      const WORDS = words
+      const INTERVAL_MS = intervalMs
 
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       let currentIndex = 0;

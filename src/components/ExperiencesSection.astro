@@ -1,57 +1,19 @@
 ---
-const experiences = [
-  {
-    title: 'SOCIAL',
-    symbolSrc: '/symbols/connection-symbol.png',
-    symbolAlt: 'Symbol representing connection and community',
-    description: '50 person Scandinavian sauna, large hot pool, teas and tonics, lounge seating',
-    bullets: [
-      'Cultivating connection',
-      'Encouraging understanding',
-      'Enjoying Life',
-    ],
-    link: '/social',
-    linkText: 'Join us for social connection',
-  },
-  {
-    title: 'MEDITATIVE',
-    symbolSrc: '/symbols/harmony-symbol.png',
-    symbolAlt: 'Symbol representing calm and balance',
-    description: 'A 20 person sauna, 20 person cold plunge, space for breathwork + bodywork',
-    bullets: [
-      'Disconnecting from technology',
-      'Finding meaning',
-    ],
-    link: '/meditative',
-    linkText: 'Go inward',
-  },
-  {
-    title: 'GUIDED',
-    symbolSrc: '/symbols/transformation-symbol.png',
-    symbolAlt: 'Symbol representing growth and transformation',
-    description: 'Guided classes that blend the thermic cycle (sauna, cold bathing, and resting) with meditation, breathwork, sound baths and more',
-    bullets: [
-      'Prioritizing one’s health',
-      'Self-care',
-    ],
-    link: '/classes',
-    linkText: 'View Experiences',
-  },
-];
+import experiences from '../lib/experiences';
 ---
 
 <section aria-labelledby="experiences-heading" class="relative bg-[var(--pyre-creme)] text-[var(--foreground)]">
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
-    <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8">EXPERIENCES</h2>
+    <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8">{experiences.elements.title}</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-      {experiences.map((experience) => (
+      {experiences.elements.items.map((experience) => (
         <article class="rounded-md border border-[var(--border)] bg-[var(--pyre-creme)] p-6 sm:p-8" aria-labelledby={`experience-${experience.title.toLowerCase()}-title`}>
           <div class="flex flex-col items-start gap-4">
             <div class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24">
               <img
-                src={experience.symbolSrc}
-                alt={experience.symbolAlt}
+                src={experience.icon?.src}
+                alt={experience.icon?.alt}
                 width="120"
                 height="120"
                 loading="lazy"
@@ -72,7 +34,7 @@ const experiences = [
             <div class="flex">
               <div class="flex-1"></div>
               <a
-                href={experience.link}
+                href={experience.link?.href}
                 class="font-primary-semibold tracking-[-0.02em] uppercase text-[var(--pyre-red)] text-center"
               >
                 {experience.linkText} &gt;

@@ -1,6 +1,7 @@
 ---
 import Button from './Button.astro';
-const subscribed = Astro.url.searchParams.get('subscribed') === '1';
+import signupForm from '../lib/signupForm';
+const subscribed = Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
 ---
 
 <div id="waitlist" aria-hidden="true" class="h-0"></div>
@@ -8,7 +9,7 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
 <section id="signup" aria-labelledby="signup-heading" class="relative text-[var(--card-foreground)] w-full">
   <div
     class="absolute inset-0 bg-cover bg-center z-[-1] pointer-events-none"
-    style="background-image: url('/images/orbs.jpeg');"
+    style={`background-image: url('${signupForm.images.background.src}');`}
     aria-hidden="true"
   />
   <div class="absolute inset-0 bg-[rgba(0,0,0,0.2)] z-[-1] pointer-events-none" aria-hidden="true" />
@@ -19,8 +20,8 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
       <div class="order-1 md:order-2 md:col-span-6 relative">
         <div class="h-[45vh] md:h-full w-full overflow-clip">
           <img
-            src="/images/heads_with_flowers.jpeg"
-            alt="A hand holding red flowers"
+            src={signupForm.images.panel.src}
+            alt={signupForm.images.panel.alt}
             width="1600"
             height="1067"
             loading="lazy"
@@ -38,29 +39,23 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
               class="bg-[var(--pyre-red)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
             >
               <img
-                src="/symbols/connection-symbol.png"
-                alt="Connection symbol"
+                src={signupForm.images.symbol?.src}
+                alt={signupForm.images.symbol?.alt}
                 decoding="async"
                 class="w-full h-full object-contain"
               />
             </div>
             <div class="text-[var(--pyre-creme)]">
-              <h2 id="signup-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-3">
-                SIGN UP
-              </h2>
-              <p class="text-base leading-relaxed">
-                Join our mailing list to hear about pre-opening events, news and specials
-              </p>
+              <h2 id="signup-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-3">{signupForm.elements.title}</h2>
+              <p class="font-mono-bold leading-relaxed">{signupForm.elements.subtitle}</p>
 
               {subscribed && (
-                <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">
-                  Thanks for subscribing!
-                </div>
+                <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">{signupForm.elements.successMessage}</div>
               )}
 
               <form class="mt-6 flex flex-col gap-3 sm:flex-row" method="POST" action="/api/subscribe" novalidate>
                 <div class="flex-1 min-w-0">
-                  <label for="email" class="block text-sm font-primary-semibold">Email address</label>
+                  <label for="email" class="block text-sm font-primary-semibold font-mono-bold">{signupForm.elements.emailLabel}</label>
                   <input
                     id="email"
                     name="email"
@@ -73,7 +68,7 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
                   <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
                 </div>
                 <div class="sm:self-end">
-                  <Button type="submit" variant="primary" size="md">Join the mailing list</Button>
+                  <Button type="submit" variant="primary" size="md">{signupForm.elements.submitLabel}</Button>
                 </div>
               </form>
             </div>
