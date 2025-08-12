@@ -3,7 +3,7 @@ import Button from './Button.astro';
 
 const {
   words = ['RECONNECT', 'DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'],
-  intervalMs = 3000,
+  intervalMs = 2000,
   ctaHref = '#signup'
 } = Astro.props as {
   words?: string[];
@@ -56,7 +56,7 @@ const {
 
       const dataEl = document.getElementById('break-data');
       // Parse the JSON data for words and interval
-      let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 3000 };
+      let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 2000 };
       if (dataEl && dataEl.textContent) {
         try {
           parsed = JSON.parse(dataEl.textContent);
@@ -64,7 +64,7 @@ const {
       }
       // Insert blank as first word for the "blank" state
       const WORDS = Array.isArray(parsed.words) ? [...parsed.words] : [""];
-      const INTERVAL_MS = typeof parsed.intervalMs === 'number' ? parsed.intervalMs : 3000;
+      const INTERVAL_MS = typeof parsed.intervalMs === 'number' ? parsed.intervalMs : 2000;
 
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       let currentIndex = 0;
