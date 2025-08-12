@@ -10,7 +10,7 @@ export default defineConfig({
   // For GitHub Pages project sites, ensure assets work under subpath
   // Override with env vars if deploying to root: ASTRO_BASE="/" and optionally set ASTRO_SITE
   site: process.env.ASTRO_SITE,
-  base: process.env.ASTRO_BASE ?? '/',
+  base: process.env.ASTRO_BASE ?? '/pyre',
   vite: {
       plugins: [tailwindcss()],
 	},
