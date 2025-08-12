@@ -2,7 +2,7 @@
 import Button from './Button.astro';
 ---
 
-<section aria-labelledby="story-heading" class="relative bg-[var(--background)] text-[var(--foreground)]">
+<section aria-labelledby="story-heading" class="relative bg-[var(--pyre-creme)] text-[var(--foreground)]">
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 min-h-[100dvh] items-stretch">
       <!-- Left: Image -->
@@ -23,11 +23,11 @@ import Button from './Button.astro';
       </div>
 
       <!-- Right: Text -->
-      <div class="md:col-span-6 flex items-center py-8 md:py-0">
-        <div class="max-w-[75ch]">
+      <div class="md:col-span-6 flex items-center py-8 md:py-0 bg-[var(--pyre-creme)]">
+        <div class="max-w-[75ch] bg-[var(--pyre-creme)]">
           <div class="flex items-start gap-4 mb-6 sm:mb-8">
             <div
-              class="bg-[var(--pyre-black)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
+              class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
             >
               <img
                 src="/symbols/sauna-symbol.png"
@@ -36,21 +36,26 @@ import Button from './Button.astro';
                 class="w-2/3 h-2/3 object-contain"
               />
             </div>
-            <div>
+            <div >
               <h2 id="story-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[4.236rem] sm:text-[4.618rem] leading-[1.1] mb-4">
                 RITUALS FOR MODERN LIFE
               </h2>
               <div class="space-y-4 text-base leading-relaxed">
                 <p>
-                  At Pyre, we're reimagining the ancient traditions of saunas and cold baths for a modern era.
+                  Pyre is a space that can be experienced alone or together. A space that serves as a balancing force to modern life’s demands and stressors. Pyre is a space to reconnect to what really matters:
                 </p>
+                <ul class="list-none pl-0 space-y-1">
+                  <li class="font-primary-semibold text-center">Yourself</li>
+                  <li class="font-primary-semibold text-center">Your Community</li>
+                  <li class="font-primary-semibold text-center">The Present Moment</li>
+                </ul>
                 <p>
-                  For thousands of years, these healing practices have brought communities together, fostering deep connections while providing restorative experiences for both body and mind. This environment is designed to cultivate joy and meaningful connection, whether you're seeking quiet personal reflection or want to explore a unique social setting.
+                  Centered around healing practices that have been around for thousands of years, we’ve re-imagined European bathhouse culture for Richmond. 
+    
+                  </p>
+                  <p>A space where you can take a quiet moment alone in our silent sauna, where you can connect with friends and strangers in our social lounge. Where you can relieve anxiety in our cold pool. Where you can take guided classes that pair sauna and cold bathing with breathwork, meditation, expression, sound, and many other modalities with the goal of helping us all heal. When you leave Pyre you will feel better than when you walked in. This is a new way to connect. </p>
+                  <span class="" >Come experience change for yourself.</p>
                 </p>
-                <p>
-                  It's an experience that aims to prioritize your health and help you reconnect with what truly matters, so you'll leave feeling better than when you walked in. 
-                </p>
-                <p class="font-primary-semibold">Here, meaningful change begins, one restorative experience at a time.</p>
               </div>
               <div class="mt-6 sm:mt-8">
                 <Button
