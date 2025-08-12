@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
 const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey." } = Astro.props;
 ---
 
@@ -34,5 +35,6 @@ const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A well
         <Navbar />
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
 		<slot />
+		<Footer />
 	</body>
 </html>
