@@ -1,0 +1,132 @@
+---
+import Button from './Button.astro';
+
+const {
+  words = ['RECONNECT', 'DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'],
+  intervalMs = 3000,
+  ctaHref = '#signup'
+} = Astro.props as {
+  words?: string[];
+  intervalMs?: number;
+  ctaHref?: string;
+};
+---
+
+<section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)]">
+  <!-- Background image layer with subtle opacity -->
+  <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
+    <img
+      src="/images/giant_clouds.jpeg"
+      alt=""
+      loading="lazy"
+      decoding="async"
+      class="h-full w-full object-cover object-center opacity-"
+    />
+    <!-- Contrast overlay -->
+    <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
+  </div>
+
+  <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-16 sm:py-24">
+    <div class="flex flex-col items-center text-center">
+      <h2
+        id="break-heading"
+        class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]"
+      >
+        PYRE IS A SPACE TO <span id="break-rotating-word" aria-live="polite" aria-atomic="true" class="underline">RECONNECT</span>
+      </h2>
+
+      <div class="mt-8">
+        <Button variant="primary" size="md" href={ctaHref}>SPEND TIME WITH US</Button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline JSON data for client script -->
+  <script type="application/json" id="break-data">{JSON.stringify({ words, intervalMs })}</script>
+
+  <script>
+    (function () {
+      const rotatingSpan = document.getElementById('break-rotating-word');
+      if (!(rotatingSpan instanceof HTMLElement)) return;
+
+      // Add fade transition styles to the span
+      rotatingSpan.style.transition = 'opacity 350ms cubic-bezier(0.4,0,0.2,1)';
+      rotatingSpan.style.opacity = '1';
+
+      const dataEl = document.getElementById('break-data');
+      // Parse the JSON data for words and interval
+      let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 3000 };
+      if (dataEl && dataEl.textContent) {
+        try {
+          parsed = JSON.parse(dataEl.textContent);
+        } catch (e) {}
+      }
+      // Insert blank as first word for the "blank" state
+      const WORDS = Array.isArray(parsed.words) ? [...parsed.words] : [""];
+      const INTERVAL_MS = typeof parsed.intervalMs === 'number' ? parsed.intervalMs : 3000;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let currentIndex = 0;
+      let timerId = null;
+      const FADE_DURATION = 350; // ms, must match transition above
+
+      // Helper to set word with fade out/in
+      function fadeToWord(nextWord) {
+        // Fade out
+        rotatingSpan.style.opacity = '0';
+        setTimeout(() => {
+          rotatingSpan.textContent = nextWord;
+          // Fade in
+          rotatingSpan.style.opacity = '1';
+        }, FADE_DURATION);
+      }
+
+      const updateWord = (fade = false) => {
+        const next = WORDS[currentIndex] ?? '';
+        if (fade) {
+          fadeToWord(next);
+        } else {
+          rotatingSpan.textContent = next;
+          rotatingSpan.style.opacity = '1';
+        }
+      };
+
+      const start = () => {
+        if (timerId !== null) return;
+        timerId = window.setInterval(() => {
+          // Fade out, then update, then fade in
+          currentIndex = (currentIndex + 1) % WORDS.length;
+          updateWord(true);
+        }, INTERVAL_MS);
+      };
+
+      const stop = () => {
+        if (timerId !== null) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+      };
+
+      // Initial render
+      updateWord(false);
+
+      if (!prefersReducedMotion && WORDS.length > 1) {
+        start();
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            stop();
+          } else {
+            start();
+          }
+        });
+      }
+
+      window.addEventListener('beforeunload', () => {
+        stop();
+      });
+    })();
+  </script>
+</section>
+
+
