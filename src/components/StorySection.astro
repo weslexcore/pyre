@@ -1,87 +1,80 @@
 ---
+// @ts-nocheck
 import Button from './Button.astro';
 import story from '../lib/story';
+import { Image } from 'astro:assets';
 const base = import.meta.env.BASE_URL ?? '/';
 const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
 ---
 
-<section aria-labelledby="story-heading" class="relative bg-[var(--pyre-creme)] text-[var(--foreground)]">
+<section aria-labelledby="story-heading" class=" flex flex-col overflow-hidden">
+  <!-- Top repeating logo border -->
   <div aria-hidden="true" class="bg-repeating-logo bg-center h-16 w-full" />
-  <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 min-h-[100dvh] items-stretch">
-      <!-- Image: On mobile, order-1 (above text); on desktop, order-1 (left) -->
-      <div class="md:col-span-6 relative order-1 md:order-1 pt-8 md:pt-0">
-        <!-- Full-bleed vertical pattern strip to the left gutter on desktop -->
-        <div aria-hidden="true" class="hidden md:block absolute inset-y-0 left-[calc(50%-50vw)] right-[100%] bg-repeating-logo bg-center" />
-        <div class="h-[55vh] md:h-full w-full overflow-clip relative">
-          <img
-            src={withBase(story.images.background.src)}
-            alt={story.images.background.alt}
-            width="1280"
-            height="1920"
-            loading="lazy"
-            decoding="async"
-            class="h-full w-full object-cover object-center"
-          />
-          <!-- Mobile-only centered overlay symbol, larger on mobile -->
-          <div class="absolute inset-0 flex items-center justify-center md:hidden pointer-events-none">
-            <div class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32">
-              <img
-                src={withBase(story.images.symbol?.src ?? '')}
-                alt={story.images.symbol?.alt}
-                decoding="async"
-                class="w-full h-full object-contain"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Text: On mobile, order-2 (below image); on desktop, order-2 (right) -->
-      <div class="md:col-span-6 flex items-center py-8 md:py-0 bg-[var(--pyre-creme)] order-2 md:order-2">
-        <div class="max-w-[75ch] bg-[var(--pyre-creme)]">
-          <div class="md:flex md:items-start md:gap-4 mb-6 sm:mb-8">
-            <div
-              class="hidden md:flex bg-[var(--pyre-blue)] rounded-full items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
-            >
-              <img
-                src={withBase(story.images.symbol?.src ?? '')}
-                alt={story.images.symbol?.alt}
-                decoding="async"
-                class="w-full h-full object-contain"
-              />
+  <!-- Content wrapper fills remaining height between borders -->
+  <div class="relative flex-1 min-h-0 sm:pt-20 pb-10 sm:pb-20">
+    <!-- Full-bleed background image -->
+    <div
+      class="absolute inset-0 bg-cover bg-center"
+      style="background-image: url(/images/sauna_ladle.jpeg); opacity: 0.8;"
+      aria-hidden="true"
+    />
+    <!-- Contrast overlay -->
+    <div class="absolute inset-0 bg-[rgba(0,0,0,0.4)]" aria-hidden="true" />
+
+    <!-- Foreground content -->
+    <div class="relative z-10 h-full flex items-center justify-center">
+      <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
+        <div class="grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 text-[var(--pyre-creme)]">
+          <!-- Swoosh symbol -->
+          <div class="flex justify-center md:justify-start">
+            <Image
+              src={withBase('/symbols/swoosh.png')}
+              alt=""
+              aria-hidden="true"
+              width="800"
+              height="200"
+              loading="lazy"
+              decoding="async"
+              class="w-50 md:w-100 h-auto"
+            />
+          </div>
+
+          <!-- Text + CTA -->
+          <div>
+            <h2 id="story-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-4">
+              {story.elements.title}
+            </h2>
+            <div class="space-y-4 text-base leading-relaxed">
+              {story.elements.body.map((paragraph) => (
+                <p>{paragraph}</p>
+              ))}
+              {story.elements.emphasisList && (
+                <ul class="list-none pl-0 space-y-1">
+                  {story.elements.emphasisList.map((item) => (
+                    <li class="font-primary-semibold text-center">{item}</li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div >
-              <h2 id="story-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-4">{story.elements.title}</h2>
-              <div class="space-y-4 text-base leading-relaxed">
-                {story.elements.body.map((paragraph) => (
-                  <p>{paragraph}</p>
-                ))}
-                {story.elements.emphasisList && (
-                  <ul class="list-none pl-0 space-y-1">
-                    {story.elements.emphasisList.map((item) => (
-                      <li class="font-primary-semibold text-center">{item}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div class="mt-6 sm:mt-8">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  href={story.actions?.primary?.href}
-                  ariaLabel={story.actions?.primary?.ariaLabel}
-                  class="w-full sm:w-auto"
-                >
-                  {story.actions?.primary?.label}
-                </Button>
-              </div>
+            <div class="mt-6 sm:mt-8">
+              <Button
+                variant="primary"
+                size="lg"
+                href={story.actions?.primary?.href}
+                ariaLabel={story.actions?.primary?.ariaLabel}
+                class="w-full sm:w-auto"
+              >
+                {story.actions?.primary?.label}
+              </Button>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Bottom repeating logo border -->
   <div aria-hidden="true" class="bg-repeating-logo bg-center h-16 w-full" />
 </section>
 
