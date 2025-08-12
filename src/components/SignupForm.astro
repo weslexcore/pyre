@@ -1,16 +1,16 @@
 ---
 import Button from './Button.astro';
 import signupForm from '../lib/signupForm';
+import { Image } from 'astro:assets';
 const subscribed = Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
-const base = import.meta.env.BASE_URL ?? '/';
-const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
+import { withBase } from '../lib/paths';
 ---
 
 <div id="waitlist" aria-hidden="true" class="h-0"></div>
 <div id="signup-wrapper" class="signup-wrapper">
 <section id="signup" aria-labelledby="signup-heading" class="relative text-[var(--card-foreground)] w-full">
   <div class="absolute inset-0 z-[-1] pointer-events-none" aria-hidden="true">
-    <img src={withBase(signupForm.images.background.src)} alt={signupForm.images.background.alt} class="h-full w-full object-cover object-center" loading="lazy" decoding="async" />
+    <Image src={withBase(signupForm.images.background.src)} alt={signupForm.images.background.alt} width="1600" height="1067" class="h-full w-full object-cover object-center" loading="lazy" decoding="async" />
   </div>
   <div class="absolute inset-0 bg-[rgba(0,0,0,0.2)] z-[-1] pointer-events-none" aria-hidden="true" />
 
@@ -19,7 +19,7 @@ const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
       <!-- Image Panel: first on mobile, right on desktop -->
       <div class="order-1 md:order-2 md:col-span-6 relative">
         <div class="h-[45vh] md:h-full w-full overflow-clip">
-          <img
+          <Image
             src={withBase(signupForm.images.panel.src)}
             alt={signupForm.images.panel.alt}
             width="1600"
@@ -38,9 +38,11 @@ const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
             <div
               class="bg-[var(--pyre-red)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
             >
-              <img
+              <Image
                 src={withBase(signupForm.images.symbol?.src ?? '')}
                 alt={signupForm.images.symbol?.alt}
+                width="120"
+                height="120"
                 decoding="async"
                 class="w-full h-full object-contain"
               />

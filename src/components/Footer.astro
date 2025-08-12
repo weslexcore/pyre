@@ -1,7 +1,7 @@
 ---
 import footerConfig from "../lib/footer";
-const base = import.meta.env.BASE_URL ?? '/';
-const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
+import { withBase } from "../lib/paths";
+import { Image } from "astro:assets";
 ---
 
 <footer role="contentinfo" class="relative bg-repeating-logo text-[var(--pyre-creme)]">
@@ -11,7 +11,7 @@ const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
     <div class="grid grid-cols-1 gap-8 md:grid-cols-4">
       <!-- Brand -->
       <div class="md:col-span-1">
-        <img
+        <Image
           src={withBase(footerConfig.images.brandMark?.src ?? '')}
           alt={footerConfig.images.brandMark?.alt}
           width="800"

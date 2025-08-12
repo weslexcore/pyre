@@ -2,22 +2,26 @@
 
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
-
+import { loadEnv } from 'vite';
 import react from '@astrojs/react';
+
+// Manually load .env files using Vite's loadEnv helper
+const mode = process.env.NODE_ENV || 'development';
+const {PUBLIC_ASTRO_BASE, PUBLIC_ASTRO_SITE} = loadEnv(mode, process.cwd(), '');
 
 // https://astro.build/config
 export default defineConfig({
   // For GitHub Pages project sites, ensure assets work under subpath
-  // Override with env vars if deploying to root: ASTRO_BASE="/" and optionally set ASTRO_SITE
-  site: process.env.ASTRO_SITE,
+  // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set ASTRO_SITE
+  site: PUBLIC_ASTRO_SITE,
   base: (() => {
-    const envBase = process.env.ASTRO_BASE;
-    if (!envBase || envBase === '') return '/';
+    const envBase = PUBLIC_ASTRO_BASE;
+    if (!envBase || envBase === '') return '/pyre/';
     return envBase.endsWith('/') ? envBase : `${envBase}/`;
   })(),
   vite: {
-      plugins: [tailwindcss()],
-	},
+    plugins: [tailwindcss()],
+  },
 
   integrations: [react()],
   

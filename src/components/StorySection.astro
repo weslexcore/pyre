@@ -3,8 +3,7 @@
 import Button from './Button.astro';
 import story from '../lib/story';
 import { Image } from 'astro:assets';
-const base = import.meta.env.BASE_URL ?? '/';
-const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
+import { withBase } from '../lib/paths';
 ---
 
 <section aria-labelledby="story-heading" class=" flex flex-col overflow-hidden">
@@ -16,7 +15,7 @@ const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
     <!-- Full-bleed background image -->
     <div
       class="absolute inset-0 bg-cover bg-center"
-      style="background-image: url(/images/sauna_ladle.jpeg); opacity: 0.8;"
+      style={`background-image: url(${withBase(story.images.background.src)}); opacity: 0.8;`}
       aria-hidden="true"
     />
     <!-- Contrast overlay -->

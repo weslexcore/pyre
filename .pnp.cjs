@@ -39,7 +39,8 @@ const RAW_RUNTIME_STATE =
           ["react", "npm:19.1.1"],\
           ["react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.1"],\
           ["tailwindcss", "npm:4.1.11"],\
-          ["tw-animate-css", "npm:1.3.6"]\
+          ["tw-animate-css", "npm:1.3.6"],\
+          ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -1540,7 +1541,7 @@ const RAW_RUNTIME_STATE =
           ["@tailwindcss/oxide", "npm:4.1.11"],\
           ["@types/vite", null],\
           ["tailwindcss", "npm:4.1.11"],\
-          ["vite", null]\
+          ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"]\
         ],\
         "packagePeers": [\
           "@types/vite",\
@@ -2033,7 +2034,8 @@ const RAW_RUNTIME_STATE =
           ["react", "npm:19.1.1"],\
           ["react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.1"],\
           ["tailwindcss", "npm:4.1.11"],\
-          ["tw-animate-css", "npm:1.3.6"]\
+          ["tw-animate-css", "npm:1.3.6"],\
+          ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -6310,10 +6312,75 @@ const RAW_RUNTIME_STATE =
         ],\
         "linkType": "SOFT"\
       }],\
+      ["npm:7.1.2", {\
+        "packageLocation": "../../../../../.yarn/berry/cache/vite-npm-7.1.2-6c08b5f7c7-10c0.zip/node_modules/vite/",\
+        "packageDependencies": [\
+          ["vite", "npm:7.1.2"]\
+        ],\
+        "linkType": "SOFT"\
+      }],\
       ["virtual:8d8da8dbabc2f459559876136920b2ba06bc5341a9d82e17233de211969a1bf286cfd9934007b206084eaf71e46351e75ca155c1a2b518357824d3ce701805eb#npm:6.3.5", {\
         "packageLocation": "./.yarn/__virtual__/vite-virtual-1f0c51f452/6/.yarn/berry/cache/vite-npm-6.3.5-244c1b4d55-10c0.zip/node_modules/vite/",\
         "packageDependencies": [\
           ["vite", "virtual:8d8da8dbabc2f459559876136920b2ba06bc5341a9d82e17233de211969a1bf286cfd9934007b206084eaf71e46351e75ca155c1a2b518357824d3ce701805eb#npm:6.3.5"],\
+          ["@types/jiti", null],\
+          ["@types/less", null],\
+          ["@types/lightningcss", null],\
+          ["@types/node", null],\
+          ["@types/sass", null],\
+          ["@types/sass-embedded", null],\
+          ["@types/stylus", null],\
+          ["@types/sugarss", null],\
+          ["@types/terser", null],\
+          ["@types/tsx", null],\
+          ["@types/yaml", null],\
+          ["esbuild", "npm:0.25.8"],\
+          ["fdir", "virtual:d4e4bcf80e67f9de0540c123c7c4882e34dce6a8ba807a0a834f267f9132ee6bd264e69a49c6203aa89877ed3a5a5d633bfa002384881be452cc3a2d2fbcce0b#npm:6.4.6"],\
+          ["fsevents", "patch:fsevents@npm%3A2.3.3#optional!builtin<compat/fsevents>::version=2.3.3&hash=df0bf1"],\
+          ["jiti", null],\
+          ["less", null],\
+          ["lightningcss", null],\
+          ["picomatch", "npm:4.0.3"],\
+          ["postcss", "npm:8.5.6"],\
+          ["rollup", "npm:4.46.2"],\
+          ["sass", null],\
+          ["sass-embedded", null],\
+          ["stylus", null],\
+          ["sugarss", null],\
+          ["terser", null],\
+          ["tinyglobby", "npm:0.2.14"],\
+          ["tsx", null],\
+          ["yaml", null]\
+        ],\
+        "packagePeers": [\
+          "@types/jiti",\
+          "@types/less",\
+          "@types/lightningcss",\
+          "@types/node",\
+          "@types/sass-embedded",\
+          "@types/sass",\
+          "@types/stylus",\
+          "@types/sugarss",\
+          "@types/terser",\
+          "@types/tsx",\
+          "@types/yaml",\
+          "jiti",\
+          "less",\
+          "lightningcss",\
+          "sass-embedded",\
+          "sass",\
+          "stylus",\
+          "sugarss",\
+          "terser",\
+          "tsx",\
+          "yaml"\
+        ],\
+        "linkType": "HARD"\
+      }],\
+      ["virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2", {\
+        "packageLocation": "./.yarn/__virtual__/vite-virtual-3d000e57bc/6/.yarn/berry/cache/vite-npm-7.1.2-6c08b5f7c7-10c0.zip/node_modules/vite/",\
+        "packageDependencies": [\
+          ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"],\
           ["@types/jiti", null],\
           ["@types/less", null],\
           ["@types/lightningcss", null],\

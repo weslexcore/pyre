@@ -1,6 +1,8 @@
 ---
 import Button from './Button.astro';
 import breakSection from '../lib/breakSection';
+import { withBase } from '../lib/paths';
+import { Image } from 'astro:assets';
 
 ---
 
@@ -11,9 +13,11 @@ import breakSection from '../lib/breakSection';
 >
   <!-- Background image layer with subtle opacity -->
   <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
-    <img
-      src={breakSection.images.background?.src}
+    <Image
+      src={withBase(breakSection.images.background?.src ?? '')}
       alt={breakSection.images.background?.alt ?? ''}
+      width="1600"
+      height="1067"
       loading="lazy"
       decoding="async"
       class="h-full w-full object-cover object-center"

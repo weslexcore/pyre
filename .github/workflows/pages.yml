@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build-and-deploy:
     env:
-      ASTRO_BASE: /pyre/
+      PUBLIC_ASTRO_BASE: /pyre/
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

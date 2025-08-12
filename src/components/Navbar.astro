@@ -1,8 +1,8 @@
 ---
 import Button from './Button.astro';
 import navbar from '../lib/navbar';
-const base = import.meta.env.BASE_URL ?? '/';
-const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
+import { withBase } from '../lib/paths';
+import { Image } from 'astro:assets';
 ---
 
 <header
@@ -11,9 +11,11 @@ const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
 >
   <div class="mx-auto w-full px-4 flex items-center justify-between gap-4 py-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
     <a href={withBase('/')} aria-label={navbar.elements.ariaLabel} class="inline-flex">
-      <img
+      <Image
         src={withBase(navbar.images.brandMark.src)}
         alt={navbar.images.brandMark.alt}
+        width="512"
+        height="128"
         class="h-8 md:h-12 w-auto"
         loading="eager"
         decoding="sync"
