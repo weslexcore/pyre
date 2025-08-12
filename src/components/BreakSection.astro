@@ -4,7 +4,11 @@ import breakSection from '../lib/breakSection';
 
 ---
 
-<section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)]">
+<section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)] ">
+<section
+  aria-labelledby="break-heading"
+  class="relative text-[var(--pyre-creme)]"
+>
   <!-- Background image layer with subtle opacity -->
   <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
     <img
@@ -12,7 +16,7 @@ import breakSection from '../lib/breakSection';
       alt={breakSection.images.background?.alt ?? ''}
       loading="lazy"
       decoding="async"
-      class="h-full w-full object-cover object-center opacity-"
+      class="h-full w-full object-cover object-center"
     />
     <!-- Contrast overlay -->
     <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
@@ -26,7 +30,9 @@ import breakSection from '../lib/breakSection';
       >
         {breakSection.elements.headingTop}
       </h2>
-      <h2 class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]"><span id="break-rotating-word" aria-live="polite" aria-atomic="true" class="underline">{breakSection.elements.words[0]}</span></h2>
+      <h2 class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]">
+        <span id="break-rotating-word" aria-live="polite" aria-atomic="true" class="underline">{breakSection.elements.words[0]}</span>
+      </h2>
 
       <div class="mt-8">
         <Button variant="primary" size="md" href={'#signup'}>{breakSection.elements.buttonLabel}</Button>
@@ -34,92 +40,80 @@ import breakSection from '../lib/breakSection';
     </div>
   </div>
   <script>
+    const words = ['RECONNECT', 'BE PRESENT', 'CULTIVATE JOY','DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'];
+    const intervalMs = 2000;
+    (function () {
+        const rotatingSpan = document.getElementById('break-rotating-word');
+        if (!(rotatingSpan instanceof HTMLElement)) return;
 
-  const words = ['RECONNECT', 'BE PRESENT', 'CULTIVATE JOY','DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'];
-  const intervalMs = 2000;
-  (function () {
-      const rotatingSpan = document.getElementById('break-rotating-word');
-      if (!(rotatingSpan instanceof HTMLElement)) return;
+        // Add fade transition styles to the span
+        rotatingSpan.style.transition = 'opacity 350ms cubic-bezier(0.4,0,0.2,1)';
+        rotatingSpan.style.opacity = '1';
 
-      // Add fade transition styles to the span
-      rotatingSpan.style.transition = 'opacity 350ms cubic-bezier(0.4,0,0.2,1)';
-      rotatingSpan.style.opacity = '1';
+        const WORDS = words;
+        const INTERVAL_MS = intervalMs;
 
-      const dataEl = document.getElementById('break-data');
-    //   const parsed= JSON.parse(dataEl.textContent)
-    //   Parse the JSON data for words and interval 
-    //   let parsed = { words: ['RECONNECT', 'DISCONNECT', 'BREATHE', 'HEAL'], intervalMs: 2000 };
-    //   if (dataEl && dataEl.textContent) {
-    //     try {
-    //       parsed = JSON.parse(dataEl.textContent);
-    //     } catch (e) {}
-    //   }
-      // Insert blank as first word for the "blank" state
-      const WORDS = words
-      const INTERVAL_MS = intervalMs
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let currentIndex = 0;
+        let timerId = null;
+        const FADE_DURATION = 350; // ms, must match transition above
 
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let currentIndex = 0;
-      let timerId = null;
-      const FADE_DURATION = 350; // ms, must match transition above
-
-      // Helper to set word with fade out/in
-      function fadeToWord(nextWord) {
-        // Fade out
-        rotatingSpan.style.opacity = '0';
-        setTimeout(() => {
-          rotatingSpan.textContent = nextWord;
-          // Fade in
-          rotatingSpan.style.opacity = '1';
-        }, FADE_DURATION);
-      }
-
-      const updateWord = (fade = false) => {
-        const next = WORDS[currentIndex] ?? '';
-        if (fade) {
-          fadeToWord(next);
-        } else {
-          rotatingSpan.textContent = next;
-          rotatingSpan.style.opacity = '1';
+        // Helper to set word with fade out/in
+        function fadeToWord(nextWord) {
+          // Fade out
+          rotatingSpan.style.opacity = '0';
+          setTimeout(() => {
+            rotatingSpan.textContent = nextWord;
+            // Fade in
+            rotatingSpan.style.opacity = '1';
+          }, FADE_DURATION);
         }
-      };
 
-      const start = () => {
-        if (timerId !== null) return;
-        timerId = window.setInterval(() => {
-          // Fade out, then update, then fade in
-          currentIndex = (currentIndex + 1) % WORDS.length;
-          updateWord(true);
-        }, INTERVAL_MS);
-      };
-
-      const stop = () => {
-        if (timerId !== null) {
-          clearInterval(timerId);
-          timerId = null;
-        }
-      };
-
-      // Initial render
-      updateWord(false);
-
-      if (!prefersReducedMotion && WORDS.length > 1) {
-        start();
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden) {
-            stop();
+        const updateWord = (fade = false) => {
+          const next = WORDS[currentIndex] ?? '';
+          if (fade) {
+            fadeToWord(next);
           } else {
-            start();
+            rotatingSpan.textContent = next;
+            rotatingSpan.style.opacity = '1';
           }
-        });
-      }
+        };
 
-      window.addEventListener('beforeunload', () => {
-        stop();
-      });
-    })();
+        const start = () => {
+          if (timerId !== null) return;
+          timerId = window.setInterval(() => {
+            // Fade out, then update, then fade in
+            currentIndex = (currentIndex + 1) % WORDS.length;
+            updateWord(true);
+          }, INTERVAL_MS);
+        };
+
+        const stop = () => {
+          if (timerId !== null) {
+            clearInterval(timerId);
+            timerId = null;
+          }
+        };
+
+        // Initial render
+        updateWord(false);
+
+        if (!prefersReducedMotion && WORDS.length > 1) {
+          start();
+
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+              stop();
+            } else {
+              start();
+            }
+          });
+        }
+
+        window.addEventListener('beforeunload', () => {
+          stop();
+        });
+      })();
   </script>
 </section>
-
 

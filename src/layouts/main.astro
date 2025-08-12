@@ -3,33 +3,37 @@ import '../styles/global.css';
 import Navbar from '../components/Navbar.astro';
 import Footer from '../components/Footer.astro';
 const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey." } = Astro.props;
+const base = import.meta.env.BASE_URL ?? '/';
+const faviconHref = new URL(`${base}logos/gray/logo.png`, Astro.site ?? 'http://localhost/').pathname;
+const socialImagePath = `${base}logos/gray/full_logo_text_with_subtitle.png`;
+const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).toString() : socialImagePath;
 ---
 
-<html lang="en">
+<html lang="en" style={`--asset-base: ${base}`}> 
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="icon" type="image/png" href="/logos/gray/logo.png" />
+    <link rel="icon" type="image/png" href={faviconHref} />
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content="website" />
-		<meta property="og:url" content="https://pyresauna.com/" />
+    <meta property="og:url" content={Astro.site ? Astro.site.toString() : undefined} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
-		<meta property="og:image" content="/logos/gray/full_logo_text_with_subtitle.png" />
+    <meta property="og:image" content={absoluteSocialImage} />
 		
 		<!-- Twitter -->
 		<meta property="twitter:card" content="summary_large_image" />
-		<meta property="twitter:url" content="https://pyresauna.com/" />
+    <meta property="twitter:url" content={Astro.site ? Astro.site.toString() : undefined} />
 		<meta property="twitter:title" content={title} />
 		<meta property="twitter:description" content={description} />
-		<meta property="twitter:image" content="/logos/gray/full_logo_text_with_subtitle.png" />
+    <meta property="twitter:image" content={absoluteSocialImage} />
 		
 		<!-- Preload critical fonts -->
-		<link rel="preload" href="/fonts/PPNeueMontreal-SemiBold.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href="/fonts/PPNeueMontreal-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={`${base}fonts/PPNeueMontreal-SemiBold.woff2`} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={`${base}fonts/PPNeueMontreal-Regular.woff2`} as="font" type="font/woff2" crossorigin />
 	</head>
     <body>
         <Navbar />

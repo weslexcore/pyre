@@ -1,6 +1,8 @@
 ---
 import Button from './Button.astro';
 import navbar from '../lib/navbar';
+const base = import.meta.env.BASE_URL ?? '/';
+const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
 ---
 
 <header
@@ -8,9 +10,9 @@ import navbar from '../lib/navbar';
   class="fixed inset-x-0 top-0 z-50 bg-transparent transition-colors duration-300 motion-reduce:transition-none"
 >
   <div class="mx-auto w-full px-4 flex items-center justify-between gap-4 py-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
-    <a href="/" aria-label={navbar.elements.ariaLabel} class="inline-flex">
+    <a href={withBase('/')} aria-label={navbar.elements.ariaLabel} class="inline-flex">
       <img
-        src={navbar.images.brandMark.src}
+        src={withBase(navbar.images.brandMark.src)}
         alt={navbar.images.brandMark.alt}
         class="h-8 md:h-12 w-auto"
         loading="eager"

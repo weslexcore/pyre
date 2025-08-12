@@ -1,5 +1,5 @@
 {
-  "extends": "astro/tsconfigs/strict",
+  
   "include": [
     ".astro/types.d.ts",
     "**/*"
@@ -11,7 +11,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "baseUrl": ".",
-    "types": ["astro/client-image"],
+    "types": [],
     "paths": {
       "@/*": [
         "./src/*"

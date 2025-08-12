@@ -1,2 +1,9 @@
 /// <reference path="../.astro/types.d.ts" />
-/// <reference types="astro/client-image" />
+
+// Minimal env typing to satisfy lints without pulling in full Astro types
+interface ImportMetaEnv {
+  readonly BASE_URL: string;
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

@@ -1,5 +1,7 @@
 ---
 import footerConfig from "../lib/footer";
+const base = import.meta.env.BASE_URL ?? '/';
+const withBase = (path: string) => `${base}${path.replace(/^\//, '')}`;
 ---
 
 <footer role="contentinfo" class="relative bg-repeating-logo text-[var(--pyre-creme)]">
@@ -10,7 +12,7 @@ import footerConfig from "../lib/footer";
       <!-- Brand -->
       <div class="md:col-span-1">
         <img
-          src={footerConfig.images.brandMark?.src}
+          src={withBase(footerConfig.images.brandMark?.src ?? '')}
           alt={footerConfig.images.brandMark?.alt}
           width="800"
           height="220"
