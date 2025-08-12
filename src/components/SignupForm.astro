@@ -4,37 +4,81 @@ const subscribed = Astro.url.searchParams.get('subscribed') === '1';
 ---
 
 <div id="waitlist" aria-hidden="true" class="h-0"></div>
-<section id="signup" class="bg-[var(--card)] text-[var(--card-foreground)]">
-  <div class="container py-12 sm:py-16">
-    <div class="mx-auto max-w-2xl">
-      <h2 class="font-primary-semibold tracking-[-0.02em] text-[clamp(1.25rem,4vw,1.618rem)]">Stay in the loop</h2>
-      <p class="mt-2">Sign up for our newsletter and stay updated on opening and introductory offers.</p>
-      <p class="text-sm text-[oklch(0.55_0.01_60)]">We will only send essential info and tangible offers.</p>
+<section id="signup" aria-labelledby="signup-heading" class="relative text-[var(--card-foreground)]">
+  <div
+    class="absolute inset-0 bg-cover bg-center z-[-1]"
+    style="background-image: url('/images/orbs.jpeg');"
+    aria-hidden="true"
+  />
+  <div class="absolute inset-0 bg-[rgba(0,0,0,0.2))]" aria-hidden="true" />
 
-      {subscribed && (
-        <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">
-          Thanks for subscribing!
-        </div>
-      )}
-
-      <form class="mt-6 flex flex-col gap-3 sm:flex-row" method="POST" action="/api/subscribe" novalidate>
-        <div class="flex-1 min-w-0">
-          <label for="email" class="block text-sm font-primary-semibold">Email address</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            inputmode="email"
-            autocomplete="email"
-            class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] focus:outline-[var(--ring)]"
+  <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-12 sm:py-16">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch">
+      <!-- Image Panel: first on mobile, right on desktop -->
+      <div class="order-1 md:order-2 md:col-span-6 relative">
+        <div class="h-[45vh] md:h-full w-full overflow-clip">
+          <img
+            src="/images/heads_with_flowers.jpeg"
+            alt="A hand holding red flowers"
+            width="1600"
+            height="1067"
+            loading="lazy"
+            decoding="async"
+            class="h-full w-full object-cover object-center"
           />
-          <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
         </div>
-        <div class="sm:self-end">
-          <Button type="submit" variant="primary" size="md">Join the mailing list</Button>
+      </div>
+
+      <!-- Content: left on desktop, second on mobile -->
+      <div class="order-2 md:order-1 md:col-span-6 flex items-center py-4 md:py-0">
+        <div class="w-full max-w-[75ch]">
+          <div class="flex items-start gap-4 mb-6 sm:mb-8">
+            <div
+              class="bg-[var(--pyre-red)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
+            >
+              <img
+                src="/symbols/connection-symbol.png"
+                alt="Connection symbol"
+                decoding="async"
+                class="w-full h-full object-contain"
+              />
+            </div>
+            <div class="text-[var(--pyre-creme)]">
+              <h2 id="signup-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[4.236rem] sm:text-[4.618rem] leading-[1.1] mb-3">
+                SIGN UP
+              </h2>
+              <p class="text-base leading-relaxed">
+                Join our mailing list to hear about pre-opening events, news and specials
+              </p>
+
+              {subscribed && (
+                <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">
+                  Thanks for subscribing!
+                </div>
+              )}
+
+              <form class="mt-6 flex flex-col gap-3 sm:flex-row" method="POST" action="/api/subscribe" novalidate>
+                <div class="flex-1 min-w-0">
+                  <label for="email" class="block text-sm font-primary-semibold">Email address</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    inputmode="email"
+                    autocomplete="email"
+                    class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] focus:outline-[var(--ring)]"
+                  />
+                  <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
+                </div>
+                <div class="sm:self-end">
+                  <Button type="submit" variant="primary" size="md">Join the mailing list</Button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 
