@@ -7,4 +7,4 @@ Please create a product brief based on the description that the user provides. Y
 
 Keep the brief very concise and to the point just to give enough context to understand the bigger picture. !IMPORTANT - Do not write any code or modify any files outside of the brief!
 
-Write the document into into an docs/briefs/<N>_BRIEF.md file with the next available feature number (starting with 0001)
+Write the document into into an docs/briefs/<N>_SHORT_DESCRIPTION_BRIEF.md file with the next available feature number (starting with 0001)
