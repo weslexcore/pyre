@@ -55,18 +55,20 @@ import { withBase } from '../lib/paths';
                 <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">{signupForm.elements.successMessage}</div>
               )}
 
-              <form class="mt-6 flex flex-col gap-3 sm:flex-row md:items-center" method="POST" action="/api/subscribe" novalidate>
+              <form class="mt-6 flex flex-col gap-3 sm:flex-row md:items-center" method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName}>
                 <div class="flex-1 min-w-0 relative">
                   <label for="email" class="block text-sm font-primary-semibold font-mono-bold md:sr-only">{signupForm.elements.emailLabel}</label>
                   <input
                     id="email"
-                    name="email"
+                    name="EMAIL"
                     type="email"
                     required
                     inputmode="email"
                     autocomplete="email"
                     class="mt-1 md:mt-0 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-base text-[var(--foreground)] focus:outline-[var(--ring)] pointer-events-auto cursor-text md:h-12"
                   />
+                  <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+                  <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
                   <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)] md:absolute md:top-full md:left-0 md:mt-1"></p>
                 </div>
                 <div>
@@ -81,7 +83,7 @@ import { withBase } from '../lib/paths';
   </div>
 
   <script>
-    const form = document.querySelector('#signup form');
+    const form = document.querySelector('#signup form') as HTMLFormElement | null;
     if (form) {
       form.addEventListener('submit', async (event) => {
         const emailInput = form.querySelector('#email');
@@ -98,31 +100,78 @@ import { withBase } from '../lib/paths';
           emailInput.focus();
           return;
         }
-        if (window.fetch) {
+        // Honeypot check: if filled, drop submission silently
+        const honeypotName = form.getAttribute('data-honeypot');
+        const honeypotInput = honeypotName ? form.querySelector('input[name="'+ honeypotName +'"]') : null;
+        if (honeypotInput && honeypotInput instanceof HTMLInputElement && honeypotInput.value.trim() !== '') {
           event.preventDefault();
-          const submitBtn = form.querySelector('button');
-          if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = true;
-          try {
-            const res = await fetch('/api/subscribe', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ email })
-            });
-            const isJson = res.headers.get('content-type')?.includes('application/json');
-            const data = isJson ? await res.json() : null;
-            if (res.ok) {
+          return;
+        }
+
+        // Progressive enhancement: JSONP to Mailchimp
+        event.preventDefault();
+        const submitBtn = form.querySelector('button');
+        if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = true;
+        try {
+          const action = form.getAttribute('action') || '';
+          const url = new URL(action);
+          // Build post-json URL
+          url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+          const params = new URLSearchParams(url.search);
+          params.set('u', params.get('u') || '');
+          params.set('id', params.get('id') || '');
+          if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
+          params.set('EMAIL', email);
+          const tagInput = form.querySelector('input[name="tags"]');
+          if (tagInput && tagInput instanceof HTMLInputElement && tagInput.value) {
+            params.set('tags', tagInput.value);
+          }
+          const callbackName = '__mc_cb_'+Math.random().toString(36).slice(2);
+          params.set('c', callbackName);
+          const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          const script = document.createElement('script');
+          script.src = jsonpUrl;
+          script.async = true;
+
+          function cleanup() {
+            try { delete window[callbackName]; } catch (e) {}
+            if (script.parentNode) script.parentNode.removeChild(script);
+          }
+
+          window[callbackName] = function(response) {
+            cleanup();
+            if (response && response.result === 'success') {
               emailInput.value = '';
               errorEl.setAttribute('role', 'status');
               errorEl.style.color = '';
               errorEl.textContent = 'Thanks for subscribing!';
-            } else if (res.status === 400 && data && data.error) {
-              errorEl.textContent = data.error;
+              const urlObj = new URL(window.location.href);
+              urlObj.searchParams.set('subscribed', '1');
+              window.history.replaceState({}, '', urlObj.toString());
+            } else if (response && response.msg) {
+              errorEl.removeAttribute('role');
+              errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
             } else {
+              errorEl.removeAttribute('role');
               errorEl.textContent = 'Something went wrong. Please try again later.';
             }
-          } finally {
             if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = false;
-          }
+          };
+
+          script.addEventListener('error', () => {
+            cleanup();
+            if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = false;
+            // On failure, fall back to native POST by submitting normally
+            if (form) form.submit();
+          }, { once: true });
+
+          document.body.appendChild(script);
+        } catch (e) {
+          if (submitBtn instanceof HTMLButtonElement) submitBtn.disabled = false;
+          // Fall back to native submit
+          if (form) form.submit();
         }
       });
     }

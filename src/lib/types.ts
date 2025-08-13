@@ -150,6 +150,7 @@ export interface ExperiencesItem {
 
 export interface ExperiencesContent {
   elements: {
+    // backgroundVideoId: string;
     title: string;
     items: Array<ExperiencesItem>;
   };
@@ -183,6 +184,15 @@ export interface SignupFormContent {
     submitLabel: string;
     successMessage: string;
     errorMessage: string;
+  };
+  mailchimp: {
+    action: string;
+    audienceU: string;
+    audienceId: string;
+    fId: string;
+    tagId: string;
+    honeypotFieldName: string;
+    postJson?: string;
   };
   metadata?: {
     subscribedParam?: string;
