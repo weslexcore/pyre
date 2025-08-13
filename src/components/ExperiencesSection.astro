@@ -10,7 +10,7 @@ import { withBase } from '../lib/paths';
     <video
       id="experiences-bg-video"
       class="w-full h-full object-cover opacity-90"
-      src={withBase('/videos/running_water.MOV')}
+      src={withBase('/videos/candles.mp4')}
       autoplay
       muted
       loop
@@ -21,11 +21,11 @@ import { withBase } from '../lib/paths';
   </div>
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
-    <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8">{experiences.elements.title}</h2>
+    <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8 text-[var(--pyre-creme)]">{experiences.elements.title}</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
       {experiences.elements.items.map((experience) => (
-        <article class="rounded-md border border-[var(--border)] bg-[var(--pyre-creme)] p-6 sm:p-8" aria-labelledby={`experience-${experience.title.toLowerCase()}-title`}>
+        <article class="bg-[var(--pyre-black)]/75 text-[var(--pyre-creme)] p-6 sm:p-8" aria-labelledby={`experience-${experience.title.toLowerCase()}-title`}>
           <div class="flex flex-col items-start gap-4">
             <div class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24">
               <Image
@@ -65,13 +65,11 @@ import { withBase } from '../lib/paths';
   <script>
     const video = document.getElementById('experiences-bg-video');
     if (video instanceof HTMLVideoElement) {
-
-      console.log('video', video);
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
       const applyPlaybackPrefs = () => {
         try {
-          video.playbackRate = 0.1;
+          video.playbackRate = 0.5;
         } catch {}
         if (mediaQuery.matches) {
           try { video.pause(); } catch {}
@@ -104,5 +102,3 @@ import { withBase } from '../lib/paths';
     }
   </script>
 </section>
-
-

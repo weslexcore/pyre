@@ -2,9 +2,11 @@
 import footerConfig from "../lib/footer";
 import { withBase } from "../lib/paths";
 import { Image } from "astro:assets";
+import RepeatingLogoBackground from "./RepeatingLogoBackground.astro";
 ---
 
-<footer role="contentinfo" class="relative bg-repeating-logo text-[var(--pyre-creme)]">
+<footer role="contentinfo" class="relative text-[var(--pyre-creme)]">
+  <RepeatingLogoBackground aria-hidden="true" class="absolute inset-0" positionClass="bg-center" />
   <div class="absolute inset-0 bg-[var(--pyre-black)] opacity-90" aria-hidden="true"></div>
 
   <div class="relative z-10 mx-auto w-full px-4 py-12 sm:py-16 md:py-20 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">

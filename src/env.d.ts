@@ -17,4 +17,11 @@ interface ImportMeta {
 // Minimal declaration to satisfy editor/linter for astro:assets Image component usage
 declare module 'astro:assets' {
   export const Image: any;
+  export const getImage: any;
+}
+
+// Minimal declarations for static asset imports used by astro:assets pipeline
+declare module '*.png' {
+  const metadata: any;
+  export default metadata;
 }

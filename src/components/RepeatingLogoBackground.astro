@@ -1,0 +1,36 @@
+---
+import { getImage } from 'astro:assets';
+import tile from '../assets/logos/repeating_background.png';
+
+export interface Props {
+  tileSizePx?: number;
+  positionClass?: string;
+  class?: string;
+  [key: string]: any;
+}
+
+const {
+  tileSizePx = 240,
+  positionClass = 'bg-center',
+  class: className = '',
+  ...restProps
+} = Astro.props as Props;
+
+const pngImage = await getImage({
+  src: tile,
+  width: tileSizePx,
+  height: tileSizePx,
+  format: 'png',
+  quality: 90
+});
+
+const backgroundImageCss = `url(${pngImage.src})`;
+---
+
+<div
+  class={`bg-repeat ${positionClass} ${className}`}
+  style={`background-image: ${backgroundImageCss}; background-size: ${tileSizePx}px ${tileSizePx}px;`}
+  {...restProps}
+/>
+
+ 

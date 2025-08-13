@@ -1,6 +1,7 @@
 ---
 // @ts-nocheck
 import Button from './Button.astro';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 import story from '../lib/story';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
@@ -8,7 +9,7 @@ import { withBase } from '../lib/paths';
 
 <section aria-labelledby="story-heading" class=" flex flex-col overflow-hidden">
   <!-- Top repeating logo border -->
-  <div aria-hidden="true" class="bg-repeating-logo bg-center h-16 w-full" />
+  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full" positionClass="bg-center" />
 
   <!-- Content wrapper fills remaining height between borders -->
   <div class="relative flex-1 min-h-0 sm:pt-20 pb-10 sm:pb-20">
@@ -74,7 +75,7 @@ import { withBase } from '../lib/paths';
   </div>
 
   <!-- Bottom repeating logo border -->
-  <div aria-hidden="true" class="bg-repeating-logo bg-center h-16 w-full" />
+  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full" positionClass="bg-center" />
 </section>
 
 <script>

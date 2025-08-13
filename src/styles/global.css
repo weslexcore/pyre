@@ -189,15 +189,6 @@
   /* Removed symbol sizing utility classes in favor of Tailwind classes */
   
   /* Removed hover effect utility classes in favor of Tailwind utilities */
-
-  /* Keep brand repeating background as a global helper if needed */
-  .bg-repeating-logo {
-    background-color: transparent;
-    background-image: url(/logos/repeating_background.png);
-    background-repeat: repeat;
-    background-size: 240px 240px;
-  }
-  
   /* Smooth scrolling */
   html {
     scroll-behavior: smooth;

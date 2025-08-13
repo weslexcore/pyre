@@ -38,6 +38,7 @@ const RAW_RUNTIME_STATE =
           ["prettier-plugin-tailwindcss", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:0.6.14"],\
           ["react", "npm:19.1.1"],\
           ["react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.1"],\
+          ["sharp", "npm:0.33.5"],\
           ["tailwindcss", "npm:4.1.11"],\
           ["tw-animate-css", "npm:1.3.6"],\
           ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"]\
@@ -2033,6 +2034,7 @@ const RAW_RUNTIME_STATE =
           ["prettier-plugin-tailwindcss", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:0.6.14"],\
           ["react", "npm:19.1.1"],\
           ["react-dom", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:19.1.1"],\
+          ["sharp", "npm:0.33.5"],\
           ["tailwindcss", "npm:4.1.11"],\
           ["tw-animate-css", "npm:1.3.6"],\
           ["vite", "virtual:fe90982132bb1f06b55cb3fe245492ed80ec3c79d56c35f827d96837517638f7d5e7785db57facfd71f1973f437993147d60a85e970211114a6f477c4b270715#npm:7.1.2"]\
