@@ -57,7 +57,6 @@ import { Image } from 'astro:assets';
         const WORDS = words;
         const INTERVAL_MS = intervalMs;
 
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         let currentIndex = 0;
         let timerId = null;
         const FADE_DURATION = 350; // ms, must match transition above
@@ -102,7 +101,7 @@ import { Image } from 'astro:assets';
         // Initial render
         updateWord(false);
 
-        if (!prefersReducedMotion && WORDS.length > 1) {
+        if (WORDS.length > 1) {
           start();
 
           document.addEventListener('visibilitychange', () => {
