@@ -14,7 +14,7 @@ const footerConfig: FooterContent = {
   actions: {
     contactEmail: 'hi@pyresauna.com',
     instagram: {
-      href: 'https://instagram.com/pyresauna',
+      href: 'https://instagram.com/pyre_sauna',
       label: 'Instagram',
       ariaLabel: 'Pyre Sauna on Instagram',
     },
