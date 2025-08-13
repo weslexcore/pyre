@@ -6,8 +6,8 @@
 /* Pyre Brand Fonts */
 @font-face {
   font-family: 'PPNeueMontreal-Regular';
-  src: url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff2) format('woff2'),
-       url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
+  src: url(fonts/PPNeueMontreal-Regular.woff2) format('woff2'),
+       url(fonts/PPNeueMontreal-Regular.woff) format('woff');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -15,8 +15,8 @@
 
 @font-face {
   font-family: 'PPNeueMontreal-SemiBold';
-  src: url(var(--asset-base)fonts/PPNeueMontreal-SemiBold.woff2) format('woff2'),
-       url(var(--asset-base)fonts/PPNeueMontreal-SemiBold.woff) format('woff');
+  src: url(fonts/PPNeueMontreal-SemiBold.woff2) format('woff2'),
+       url(fonts/PPNeueMontreal-SemiBold.woff) format('woff');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -24,8 +24,8 @@
 
 @font-face {
   font-family: 'PPFraktionMono-Bold';
-  src: url(var(--asset-base)fonts/PPFraktionMono-Bold.woff2) format('woff2'),
-       url(var(--asset-base)fonts/PPFraktionMono-Bold.woff) format('woff');
+  src: url(fonts/PPFraktionMono-Bold.woff2) format('woff2'),
+       url(fonts/PPFraktionMono-Bold.woff) format('woff');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -193,7 +193,7 @@
   /* Keep brand repeating background as a global helper if needed */
   .bg-repeating-logo {
     background-color: transparent;
-    background-image: url(logos/repeating_background.png);
+    background-image: url(/logos/repeating_background.png);
     background-repeat: repeat;
     background-size: 240px 240px;
   }

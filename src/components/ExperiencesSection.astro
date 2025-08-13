@@ -4,7 +4,22 @@ import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
 ---
 
-<section aria-labelledby="experiences-heading" class="relative bg-[var(--pyre-creme)] text-[var(--foreground)]">
+<section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
+  <!-- Background video wrapper -->
+  <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
+    <video
+      id="experiences-bg-video"
+      class="w-full h-full object-cover opacity-90"
+      src={withBase('/videos/running_water.MOV')}
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="metadata"
+      aria-hidden="true"
+    ></video>
+  </div>
+
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
     <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8">{experiences.elements.title}</h2>
 
@@ -47,6 +62,45 @@ import { withBase } from '../lib/paths';
       ))}
     </div>
   </div>
+  <!-- <script>
+    const video = document.getElementById('experiences-bg-video');
+    if (video instanceof HTMLVideoElement) {
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      const applyPlaybackPrefs = () => {
+        try {
+          video.playbackRate = 0.5;
+        } catch {}
+        if (mediaQuery.matches) {
+          try { video.pause(); } catch {}
+        }
+      };
+
+      const onLoaded = () => {
+        applyPlaybackPrefs();
+      };
+
+      if (video.readyState >= 1) {
+        onLoaded();
+      } else {
+        video.addEventListener('loadedmetadata', onLoaded, { once: true });
+      }
+
+      // Optional: pause/play based on visibility to save resources
+      try {
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting && !mediaQuery.matches) {
+              video.play().catch(() => {});
+            } else {
+              video.pause();
+            }
+          }
+        }, { threshold: 0.1 });
+        observer.observe(video);
+      } catch {}
+    }
+  </script> -->
 </section>
 
 

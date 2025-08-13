@@ -13,3 +13,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Minimal declaration to satisfy editor/linter for astro:assets Image component usage
+declare module 'astro:assets' {
+  export const Image: any;
+}
