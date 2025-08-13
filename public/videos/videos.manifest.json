@@ -1,6 +1,6 @@
 {
   "pipelineVersion": "1.0.0",
-  "generatedAt": "2025-08-13T18:42:56.531Z",
+  "generatedAt": "2025-08-13T19:22:06.421Z",
   "sources": [
     {
       "id": "candles",
@@ -99,6 +99,50 @@
       ],
       "poster": {
         "url": "/videos/running_water.320b8c70cecf541e.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "sparks",
+      "sourcePath": "/videos/sparks.mp4",
+      "contentHash": "b22f2e8a95d7d052",
+      "width": 1280,
+      "height": 720,
+      "durationSec": 8,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/sparks.b22f2e8a95d7d052.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/sparks.b22f2e8a95d7d052.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/sparks.b22f2e8a95d7d052.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/sparks.b22f2e8a95d7d052.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/sparks.b22f2e8a95d7d052.poster.jpg",
         "width": 0,
         "height": 0,
         "type": "image/jpeg"
