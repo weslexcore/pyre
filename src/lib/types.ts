@@ -205,3 +205,41 @@ export interface FooterContent {
     instagram?: LinkRef;
   };
 }
+
+// ------------------------------------------------------------
+// Video optimization manifest types
+// ------------------------------------------------------------
+
+export interface VideoPoster {
+  url: string;
+  width: number;
+  height: number;
+  type: string; // e.g., 'image/jpeg' | 'image/webp'
+}
+
+export interface VideoVariant {
+  format: 'mp4' | 'webm' | 'av1';
+  codec: string;
+  width: number;
+  height: number;
+  bitrateKbps?: number;
+  url: string; // public URL path under BASE_URL
+}
+
+export interface VideoSourceEntry {
+  id: string; // derived from basename
+  sourcePath: string; // original public path, e.g., '/videos/running_water.MOV'
+  contentHash: string; // sha256 of bytes + settings signature
+  width: number;
+  height: number;
+  durationSec: number;
+  variants: Array<VideoVariant>;
+  poster?: VideoPoster;
+  preview?: { url: string; durationSec: number };
+}
+
+export interface VideoManifest {
+  pipelineVersion: string;
+  generatedAt: string; // ISO timestamp
+  sources: Array<VideoSourceEntry>;
+}

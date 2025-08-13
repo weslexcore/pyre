@@ -7,17 +7,28 @@ import { withBase } from '../lib/paths';
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
   <!-- Background video wrapper -->
   <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
-    <video
-      id="experiences-bg-video"
-      class="w-full h-full object-cover opacity-90"
-      src={withBase('/videos/candles.mp4')}
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="metadata"
-      aria-hidden="true"
-    ></video>
+    {
+      /* Use manifest-driven multi-source video; fallback to existing mp4 if manifest missing */
+    }
+    {
+      /* @ts-ignore - Astro template usage */
+    }
+    <Fragment>
+      <video
+        id="experiences-bg-video"
+        class="w-full h-full object-cover"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="metadata"
+        aria-hidden="true"
+        poster={withBase('/videos/candles.1e2ff5d557370980.poster.jpg')}
+      >
+        <source src={withBase('/videos/candles.1e2ff5d557370980.720p.webm')} type="video/webm" />
+        <source src={withBase('/videos/candles.1e2ff5d557370980.720p.mp4')} type="video/mp4" />
+      </video>
+    </Fragment>
   </div>
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
@@ -63,42 +74,54 @@ import { withBase } from '../lib/paths';
     </div>
   </div>
   <script>
-    const video = document.getElementById('experiences-bg-video');
-    if (video instanceof HTMLVideoElement) {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    (async () => {
+      const video = document.getElementById('experiences-bg-video');
+      if (!(video instanceof HTMLVideoElement)) return;
 
+      try {
+        const res = await fetch(import.meta.env.BASE_URL + 'videos/videos.manifest.json', { cache: 'no-cache' });
+        if (res.ok) {
+          const manifest = await res.json();
+          const entry = manifest.sources?.find((s) => s.id.includes('candles'));
+          if (entry) {
+            // Rebuild sources: prefer WebM then MP4
+            while (video.firstChild) video.removeChild(video.firstChild);
+            if (entry.poster?.url) video.poster = import.meta.env.BASE_URL + entry.poster.url.replace(/^\//, '');
+            const ordered = [
+              ...entry.variants.filter((v) => v.format === 'webm').sort((a,b)=>b.height-a.height),
+              ...entry.variants.filter((v) => v.format === 'mp4').sort((a,b)=>b.height-a.height),
+            ];
+            for (const v of ordered) {
+              const s = document.createElement('source');
+              s.src = import.meta.env.BASE_URL + v.url.replace(/^\//, '');
+              s.type = v.format === 'webm' ? 'video/webm' : 'video/mp4';
+              video.appendChild(s);
+            }
+            // In case the browser doesn't select automatically
+            try { await video.load(); } catch {}
+          }
+        }
+      } catch {}
+
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       const applyPlaybackPrefs = () => {
-        try {
-          video.playbackRate = 0.5;
-        } catch {}
+        try { video.playbackRate = 0.5; } catch {}
         if (mediaQuery.matches) {
           try { video.pause(); } catch {}
         }
       };
-
-      const onLoaded = () => {
-        applyPlaybackPrefs();
-      };
-
-      if (video.readyState >= 1) {
-        onLoaded();
-      } else {
-        video.addEventListener('loadedmetadata', onLoaded, { once: true });
-      }
-
-      // Optional: pause/play based on visibility to save resources
+      const onLoaded = () => applyPlaybackPrefs();
+      if (video.readyState >= 1) onLoaded();
+      else video.addEventListener('loadedmetadata', onLoaded, { once: true });
       try {
         const observer = new IntersectionObserver((entries) => {
           for (const entry of entries) {
-            if (entry.isIntersecting && !mediaQuery.matches) {
-              video.play().catch(() => {});
-            } else {
-              video.pause();
-            }
+            if (entry.isIntersecting && !mediaQuery.matches) video.play().catch(() => {});
+            else video.pause();
           }
         }, { threshold: 0.1 });
         observer.observe(video);
       } catch {}
-    }
+    })();
   </script>
 </section>

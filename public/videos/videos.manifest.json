@@ -1,0 +1,108 @@
+{
+  "pipelineVersion": "1.0.0",
+  "generatedAt": "2025-08-13T18:42:56.531Z",
+  "sources": [
+    {
+      "id": "candles",
+      "sourcePath": "/videos/candles.mp4",
+      "contentHash": "1e2ff5d557370980",
+      "width": 1280,
+      "height": 720,
+      "durationSec": 4.715983,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/candles.1e2ff5d557370980.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/candles.1e2ff5d557370980.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/candles.1e2ff5d557370980.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/candles.1e2ff5d557370980.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/candles.1e2ff5d557370980.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "running_water",
+      "sourcePath": "/videos/running_water.MOV",
+      "contentHash": "320b8c70cecf541e",
+      "width": 1080,
+      "height": 1920,
+      "durationSec": 11.533333,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/running_water.320b8c70cecf541e.1080p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/running_water.320b8c70cecf541e.1080p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/running_water.320b8c70cecf541e.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/running_water.320b8c70cecf541e.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/running_water.320b8c70cecf541e.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/running_water.320b8c70cecf541e.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/running_water.320b8c70cecf541e.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    }
+  ]
+}

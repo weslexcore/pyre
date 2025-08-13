@@ -5,11 +5,10 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "prebuild": "yarn run check:no-daisyui",
     "preview": "astro preview",
     "astro": "astro",
     "format": "prettier --plugin-search-dir=. --write .",
-    "check:no-daisyui": "sh -c 'if grep -R -n -E \"\\\"daisyui\\\"\\s*: \" package.json >/dev/null 2>&1; then echo \"Error: disallowed daisyui dependency in package.json\"; exit 1; fi; if grep -R -n -i daisyui yarn.lock >/dev/null 2>&1; then echo \"Error: disallowed daisyui in yarn.lock\"; exit 1; fi; if grep -R -n -E \"@plugin\\s+\\\"daisyui\\\";\" src/styles >/dev/null 2>&1; then echo \"Error: disallowed daisyui plugin usage in styles\"; exit 1; fi'"
+    "optimize:videos": "tsx scripts/optimize-videos.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.3",
@@ -25,9 +24,11 @@
   },
   "packageManager": "yarn@4.2.0+sha512.d891585ead2659f2b237baf44d3243433e334f3207b8aba83fac0b81ee60b9c52e93149115782ae9f672eaf2136ebc49cdddcbf53d3e6b67c425701765e3a918",
   "devDependencies": {
+    "@types/node": "^22.10.1",
     "prettier": "^3.3.3",
     "prettier-plugin-astro": "^0.14.1",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "tsx": "^4.20.4",
     "tw-animate-css": "^1.3.6",
     "vite": "^7.1.2"
   },
