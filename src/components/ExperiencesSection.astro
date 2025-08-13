@@ -2,7 +2,6 @@
 import experiences from '../lib/experiences';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
-import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 ---
 
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
@@ -17,7 +16,7 @@ import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
     <Fragment>
       <video
         id="experiences-bg-video"
-        class="w-full h-full object-cover"
+        class="w-full h-full object-cover blur-sm"
         autoplay
         muted
         loop
