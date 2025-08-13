@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": "nvm use && astro dev",
+    "dev": "astro dev",
     "build": "astro build",
     "prebuild": "yarn run check:no-daisyui",
     "preview": "astro preview",
