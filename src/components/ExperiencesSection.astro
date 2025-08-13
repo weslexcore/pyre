@@ -48,7 +48,7 @@ import { withBase } from '../lib/paths';
                 <li>{bullet}</li>
               ))}
             </ul>
-            <div class="flex">
+            {/* <div class="flex">
               <div class="flex-1"></div>
               <a
                 href={experience.link?.href}
@@ -56,20 +56,22 @@ import { withBase } from '../lib/paths';
               >
                 {experience.linkText} &gt;
               </a>
-            </div>
+            </div> */}
           </div>
         </article>
       ))}
     </div>
   </div>
-  <!-- <script>
+  <script>
     const video = document.getElementById('experiences-bg-video');
     if (video instanceof HTMLVideoElement) {
+
+      console.log('video', video);
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
       const applyPlaybackPrefs = () => {
         try {
-          video.playbackRate = 0.5;
+          video.playbackRate = 0.1;
         } catch {}
         if (mediaQuery.matches) {
           try { video.pause(); } catch {}
@@ -100,7 +102,7 @@ import { withBase } from '../lib/paths';
         observer.observe(video);
       } catch {}
     }
-  </script> -->
+  </script>
 </section>
 
 
