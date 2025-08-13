@@ -2,11 +2,12 @@
 import experiences from '../lib/experiences';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 ---
 
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
   <!-- Background video wrapper -->
-  <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none border-b-20 border-b-[var(--pyre-blue)]">
+  <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
     {
       /* Use manifest-driven multi-source video; fallback to existing mp4 if manifest missing */
     }
@@ -124,4 +125,5 @@ import { withBase } from '../lib/paths';
       } catch {}
     })();
   </script>
+    <!-- <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full bg-[var(--pyre-red)]" positionClass="bg-center" /> -->
 </section>
