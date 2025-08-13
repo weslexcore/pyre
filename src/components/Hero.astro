@@ -13,7 +13,7 @@ import { Image } from "astro:assets";
   <div class="relative z-10 min-h-[100dvh] flex flex-col justify-between">
     <!-- Top line -->
     <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl pt-24 text-left">
-      <p class="font-primary-semibold text-[clamp(3rem,5vw,4rem)] tracking-[-0.02em] uppercase text-[var(--pyre-creme)]">{hero.elements.heroText}</p>
+      <p class="font-primary-semibold text-[clamp(3rem,5vw,4rem)] tracking-[-0.02em] leading-none uppercase text-[var(--pyre-creme)]">{hero.elements.heroText}</p>
     </div>
 
     <!-- Center copy + logo -->
@@ -25,7 +25,7 @@ import { Image } from "astro:assets";
           alt={hero.images.centerLogo.alt}
           width="577"
           height="576"
-          class="h-[clamp(150px,30vw,200px)] w-auto mx-auto"
+          class="h-[clamp(175px,30vw,200px)] w-auto mx-auto"
           loading="eager"
           decoding="async"
         />
@@ -35,7 +35,7 @@ import { Image } from "astro:assets";
 
     <!-- Bottom line -->
     <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl pb-10">
-      <p class="font-primary-semibold text-[clamp(2.5rem,5vw,3.5rem)] tracking-[-0.02em] uppercase text-[var(--pyre-creme)] text-right">{hero.elements.bottomLine}</p>
+      <p class="font-primary-semibold text-[clamp(2.5rem,5vw,3.5rem)] tracking-[-0.02em] uppercase text-[var(--pyre-creme)] leading-none text-right">{hero.elements.bottomLine}</p>
     </div>
   </div>
 </section>
