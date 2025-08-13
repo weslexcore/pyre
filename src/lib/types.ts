@@ -86,6 +86,7 @@ export interface LinkRef {
   label: string;
   href: string;
   ariaLabel?: string;
+  icon?: string;
 }
 
 export interface ActionRef {
@@ -209,11 +210,18 @@ export interface FooterContent {
     locationHeading: string;
     locationText: string;
     contactHeading: string;
+    copyright: string;
   };
   actions?: {
     contactEmail?: string;
     instagram?: LinkRef;
   };
+  groups?: Array<FooterNavGroup>;
+}
+
+export interface FooterNavGroup {
+  title: string;
+  links: Array<LinkRef>;
 }
 
 // ------------------------------------------------------------

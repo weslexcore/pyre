@@ -7,7 +7,7 @@
 @font-face {
   font-family: 'PPNeueMontreal-Regular';
   src: url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff2) format('woff2'),
-       url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
+url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
   font-weight: 400;
   font-style: normal;
   font-display: swap;

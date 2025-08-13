@@ -10,7 +10,7 @@ const socialImagePath = `${base}${SOCIAL_IMAGE_PATH}`;
 const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).toString() : socialImagePath;
 ---
 
-<html lang="en" style={`--asset-base: ${base}`}> 
+<html lang="en" style={`--asset-base: ${base}; --font-regular-woff2: '${base}fonts/PPNeueMontreal-Regular.woff2'; --font-regular-woff: '${base}fonts/PPNeueMontreal-Regular.woff'; --font-semibold-woff2: '${base}fonts/PPNeueMontreal-SemiBold.woff2'; --font-semibold-woff: '${base}fonts/PPNeueMontreal-SemiBold.woff'; --font-mono-woff2: '${base}fonts/PPFraktionMono-Bold.woff2'; --font-mono-woff: '${base}fonts/PPFraktionMono-Bold.woff'`}> 
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
