@@ -55,9 +55,9 @@ import { withBase } from '../lib/paths';
                 <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">{signupForm.elements.successMessage}</div>
               )}
 
-              <form class="mt-6 flex flex-col gap-3 sm:flex-row" method="POST" action="/api/subscribe" novalidate>
-                <div class="flex-1 min-w-0">
-                  <label for="email" class="block text-sm font-primary-semibold font-mono-bold">{signupForm.elements.emailLabel}</label>
+              <form class="mt-6 flex flex-col gap-3 sm:flex-row md:items-center" method="POST" action="/api/subscribe" novalidate>
+                <div class="flex-1 min-w-0 relative">
+                  <label for="email" class="block text-sm font-primary-semibold font-mono-bold md:sr-only">{signupForm.elements.emailLabel}</label>
                   <input
                     id="email"
                     name="email"
@@ -65,12 +65,12 @@ import { withBase } from '../lib/paths';
                     required
                     inputmode="email"
                     autocomplete="email"
-                    class="mt-1 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-[var(--foreground)] focus:outline-[var(--ring)] pointer-events-auto cursor-text"
+                    class="mt-1 md:mt-0 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-base text-[var(--foreground)] focus:outline-[var(--ring)] pointer-events-auto cursor-text md:h-12"
                   />
-                  <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
+                  <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)] md:absolute md:top-full md:left-0 md:mt-1"></p>
                 </div>
-                <div class="sm:self-end">
-                  <Button type="submit" variant="primary" size="md">{signupForm.elements.submitLabel}</Button>
+                <div>
+                  <Button type="submit" variant="primary" size="md" class="md:h-12">{signupForm.elements.submitLabel}</Button>
                 </div>
               </form>
             </div>
