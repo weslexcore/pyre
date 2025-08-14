@@ -5,9 +5,8 @@
 
 /* Pyre Brand Fonts */
 @font-face {
-  font-family: 'PPNeueMontreal-Regular';
-  src: url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff2) format('woff2'),
-url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
+  font-family: 'PPNeueMontreal-Mono';
+  src: url(var(--asset-base)fonts/PPNeueMontreal-Mono.otf) format('otf');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -69,7 +68,7 @@ url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
   --color-sidebar-ring: var(--sidebar-ring);
   
   /* Pyre Custom Fonts */
-  --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: 'PPNeueMontreal-Mono', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
