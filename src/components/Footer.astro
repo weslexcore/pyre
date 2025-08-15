@@ -18,9 +18,9 @@ function isMailto(href: string): boolean {
   <div class="absolute inset-0 bg-[var(--pyre-black)] opacity-90" aria-hidden="true"></div>
 
   <div class="relative z-10 mx-auto w-full px-4 py-12 sm:py-16 md:py-20 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
-    <div class="flex flex-col lg:flex-row lg:items-start lg:gap-16">
+    <div class="flex flex-col lg:flex-row lg:items-start">
       <!-- Brand -->
-      <div class="mb-8 lg:mb-0 lg:mr-12 lg:flex-shrink-0 lg:w-[clamp(200px,20vw,300px)] flex items-start">
+      <a href={withBase('/')} class="mb-8 lg:mb-0 lg:mr-12 lg:flex-shrink-0 lg:w-[clamp(200px,20vw,300px)] flex items-start" aria-label="Go to homepage">
         <Image
           src={logo}
           alt="Pyre Sauna logo"
@@ -30,7 +30,7 @@ function isMailto(href: string): boolean {
           loading="lazy"
           decoding="async"
         />
-      </div>
+      </a>
       <!-- Footer Content -->
       <div class="flex-1 grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-4">
         {footerConfig.groups && footerConfig.groups.length > 0 && (
