@@ -1,9 +1,6 @@
 import type { FooterContent } from './types';
 
 const footerConfig: FooterContent = {
-  images: {
-    brandMark: { src: '/logos/creme/logo.png', alt: 'Pyre Sauna + Cold Plunge logo' },
-  },
   elements: {
     hoursHeading: 'Hours',
     hoursText: 'Coming Soon',

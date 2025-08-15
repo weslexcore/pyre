@@ -1,12 +1,11 @@
 ---
-import Button from './Button.astro';
 import breakSection from '../lib/breakSection';
-import { withBase } from '../lib/paths';
 import { Image } from 'astro:assets';
+import backgroundImage from '@/assets/images/giant_clouds.jpeg';
 
 ---
 
-<section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)] ">
+<!-- <section aria-labelledby="break-heading" class="relative text-[var(--pyre-creme)] "> -->
 <section
   aria-labelledby="break-heading"
   class="relative text-[var(--pyre-creme)]"
@@ -14,8 +13,8 @@ import { Image } from 'astro:assets';
   <!-- Background image layer with subtle opacity -->
   <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
     <Image
-      src={withBase(breakSection.images.background?.src ?? '')}
-      alt={breakSection.images.background?.alt ?? ''}
+      src={backgroundImage}
+      alt={"Sky full of clouds"}
       width="1600"
       height="1067"
       loading="lazy"
@@ -37,10 +36,6 @@ import { Image } from 'astro:assets';
       <h2 class="font-primary-semibold text-[var(--pyre-creme)] tracking-[-0.02em] uppercase text-[clamp(2rem,6vw,4.618rem)] leading-[1.1] max-w-[75ch]">
         <span id="break-rotating-word" aria-live="polite" aria-atomic="true">{breakSection.elements.words[0]}</span>
       </h2>
-
-      <!-- <div class="mt-8">
-        <Button variant="primary" size="md" href={'#signup'}>{breakSection.elements.buttonLabel}</Button>
-      </div> -->
     </div>
   </div>
   <script>

@@ -5,6 +5,8 @@ import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 import story from '../lib/story';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
+import storyImage from '../assets/images/sauna_ladle_multiexposure.jpeg';
+import swoosh from '../assets/symbols/swoosh.png';
 ---
 
 <section aria-labelledby="story-heading" class=" flex flex-col overflow-hidden">
@@ -16,7 +18,7 @@ import { withBase } from '../lib/paths';
     <!-- Full-bleed background image -->
     <div
       class="absolute inset-0 bg-cover bg-center"
-      style={`background-image: url(${withBase(story.images.background.src)}); opacity: 0.8;`}
+      style={`background-image: url(${storyImage.src}); opacity: 0.8;`}
       aria-hidden="true"
     />
     <!-- Contrast overlay -->
@@ -29,7 +31,7 @@ import { withBase } from '../lib/paths';
           <!-- Swoosh symbol -->
           <div class="flex justify-center md:justify-start">
             <Image
-              src={withBase('/symbols/swoosh.png')}
+              src={swoosh}
               alt=""
               aria-hidden="true"
               width="800"
@@ -75,7 +77,7 @@ import { withBase } from '../lib/paths';
   </div>
 
   <!-- Bottom repeating logo border -->
-  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full" positionClass="bg-center" />
+  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full bg-[var(--pyre-creme)] z-10" positionClass="bg-center" />
 </section>
 
 <script>

@@ -6,10 +6,7 @@ const experiences: ExperiencesContent = {
     items: [
       {
         title: 'SOCIAL',
-        icon: {
-          src: '/symbols/connection-symbol.png',
-          alt: 'Symbol representing connection and community',
-        },
+        icon: 'connection',
         description: '50 person Scandinavian sauna, large hot pool, teas and tonics, lounge seating',
         bullets: ['Cultivating connection', 'Encouraging understanding', 'Enjoying Life'],
         link: { href: '/social', label: 'Join us for social connection' },
@@ -17,10 +14,7 @@ const experiences: ExperiencesContent = {
       },
       {
         title: 'MEDITATIVE',
-        icon: {
-          src: '/symbols/harmony-symbol.png',
-          alt: 'Symbol representing calm and balance',
-        },
+        icon: 'harmony',
         description: 'A 20 person sauna, 20 person cold plunge, space for breathwork + bodywork',
         bullets: ['Disconnecting from technology', 'Finding meaning'],
         link: { href: '/meditative', label: 'Go inward' },
@@ -28,10 +22,7 @@ const experiences: ExperiencesContent = {
       },
       {
         title: 'GUIDED',
-        icon: {
-          src: '/symbols/transformation-symbol.png',
-          alt: 'Symbol representing growth and transformation',
-        },
+        icon: 'transformation',
         description:
           'Guided classes that blend the thermic cycle (sauna, cold bathing, and resting) with meditation, breathwork, sound baths and more',
         bullets: ['Prioritizing one’s health', 'Self-care'],

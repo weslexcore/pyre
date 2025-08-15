@@ -96,10 +96,6 @@ export interface ActionRef {
 }
 
 export interface HeroContent {
-  images: {
-    centerLogo: ImageRef;
-    background: ImageRef;
-  };
   elements: {
     heroText: string;
     subText: string;
@@ -126,10 +122,6 @@ export interface NavbarContent {
 }
 
 export interface StoryContent {
-  images: {
-    background: ImageRef;
-    symbol?: ImageRef;
-  };
   elements: {
     title: string;
     body: string[];
@@ -141,7 +133,7 @@ export interface StoryContent {
 }
 
 export interface ExperiencesItem {
-  icon?: ImageRef;
+  icon?: string;
   title: string;
   description: string;
   bullets?: string[];
@@ -158,9 +150,6 @@ export interface ExperiencesContent {
 }
 
 export interface BreakSectionContent {
-  images: {
-    background?: ImageRef;
-  };
   elements: {
     headingTop: string;
     words: string[];
@@ -173,11 +162,6 @@ export interface BreakSectionContent {
 }
 
 export interface SignupFormContent {
-  images: {
-    background: ImageRef;
-    panel: ImageRef;
-    symbol?: ImageRef;
-  };
   elements: {
     title: string;
     subtitle: string;
@@ -201,9 +185,6 @@ export interface SignupFormContent {
 }
 
 export interface FooterContent {
-  images: {
-    brandMark?: ImageRef;
-  };
   elements: {
     hoursHeading: string;
     hoursText: string;

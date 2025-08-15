@@ -1,9 +1,6 @@
 import type { BreakSectionContent } from './types';
 
 const breakSection: BreakSectionContent = {
-  images: {
-    background: { src: '/images/giant_clouds.jpeg', alt: '' },
-  },
   elements: {
     headingTop: 'PYRE IS A SPACE TO',
     words: ['RECONNECT', 'DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'],

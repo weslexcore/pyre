@@ -3,6 +3,7 @@ import footerConfig from "../lib/footer";
 import { withBase } from "../lib/paths";
 import { Image } from "astro:assets";
 import RepeatingLogoBackground from "./RepeatingLogoBackground.astro";
+import logo from '../assets/logos/creme/logo.png';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');
@@ -22,8 +23,8 @@ function isMailto(href: string): boolean {
       <!-- Brand -->
       <div class="mb-8 lg:mb-0 lg:mr-12 lg:flex-shrink-0 lg:w-[clamp(200px,20vw,300px)] flex items-start">
         <Image
-          src={withBase(footerConfig.images.brandMark?.src ?? '')}
-          alt={footerConfig.images.brandMark?.alt}
+          src={logo}
+          alt="Pyre Sauna logo"
           width="800"
           height="220"
           class="h-[clamp(100px,10vw,100px)] w-auto" 

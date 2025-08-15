@@ -2,6 +2,15 @@
 import experiences from '../lib/experiences';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
+import connectionSymbol from '../assets/symbols/connection-symbol.png';
+import harmonySymbol from '../assets/symbols/harmony-symbol.png';
+import transformationSymbol from '../assets/symbols/transformation-symbol.png';
+
+const symbols = {
+  connection: connectionSymbol,
+  harmony: harmonySymbol,
+  transformation: transformationSymbol,
+};
 ---
 
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
@@ -13,7 +22,7 @@ import { withBase } from '../lib/paths';
     {
       /* @ts-ignore - Astro template usage */
     }
-    <Fragment>
+    <Fragment class="">
       <video
         id="experiences-bg-video"
         class="w-full h-full object-cover"
@@ -40,8 +49,8 @@ import { withBase } from '../lib/paths';
           <div class="flex flex-col items-start gap-4">
             <div class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24">
               <Image
-                src={withBase(experience.icon?.src ?? '')}
-                alt={experience.icon?.alt}
+                src={symbols[experience.icon as keyof typeof symbols]}
+                alt={experience.icon ?? ''}
                 width="120"
                 height="120"
                 loading="lazy"

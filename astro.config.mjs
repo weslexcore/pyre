@@ -5,6 +5,8 @@ import { defineConfig } from 'astro/config';
 import { loadEnv } from 'vite';
 import react from '@astrojs/react';
 
+import sitemap from '@astrojs/sitemap';
+
 // Manually load .env files using Vite's loadEnv helper
 const mode = process.env.NODE_ENV || 'development';
 const {PUBLIC_ASTRO_BASE, PUBLIC_ASTRO_SITE} = loadEnv(mode, process.cwd(), '');
@@ -23,7 +25,7 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
 
-  integrations: [react()],
+  integrations: [react(), sitemap()],
   
   // Image optimization configuration
   image: {

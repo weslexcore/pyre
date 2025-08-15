@@ -1,13 +1,6 @@
 import type { StoryContent } from './types';
 
 const story: StoryContent = {
-  images: {
-    background: {
-      src: '/images/sauna_ladle_multiexposure.jpeg',
-      alt: 'Multi-exposure photograph of a wooden sauna ladle evoking ritual and heat.',
-    },
-    symbol: { src: '/symbols/sauna-symbol.png', alt: 'Sauna symbol' },
-  },
   elements: {
     title: 'RITUALS FOR MODERN LIFE',
     // emphasisList: ['Yourself', 'Your Community', 'The Present Moment'],

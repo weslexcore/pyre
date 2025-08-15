@@ -1,12 +1,13 @@
 ---
 import hero from "../lib/hero";
-import { withBase } from "../lib/paths";
 import { Image } from "astro:assets";
+import logo from '../assets/logos/creme/logo.png';
+import heroImage from '../assets/images/hero.png';
 ---
 
 <section class="relative min-h-[100dvh] overflow-clip">
   <div class="absolute inset-0" aria-hidden="true">
-    <Image src={withBase(hero.images.background.src)} alt={hero.images.background.alt} width="1920" height="1080" class="h-full w-full object-cover object-center" loading="eager" decoding="async" />
+    <Image src={heroImage} alt={"Multiple exposures of flowers and sauna ladle"} width="1920" height="1080" class="h-full w-full object-cover object-center" loading="eager" decoding="async" />
   </div>
   <div class="absolute inset-0 bg-[rgba(0,0,0,0.2)]" aria-hidden="true" />
 
@@ -21,8 +22,8 @@ import { Image } from "astro:assets";
       <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4 text-[var(--pyre-creme)] sm:text-left text-center">
         <p class="font-primary-semibold tracking-[-0.02em] text-[clamp(2rem,5vw,3rem)] sm:justify-self-end uppercase">{hero.elements.leftWord}</p>
         <Image
-          src={withBase(hero.images.centerLogo.src)}
-          alt={hero.images.centerLogo.alt}
+          src={logo}
+          alt={"Pyre Sauna"}
           width="577"
           height="576"
           class="h-[clamp(175px,30vw,200px)] w-auto mx-auto"

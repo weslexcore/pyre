@@ -14,8 +14,16 @@ url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
 }
 
 @font-face {
+  font-family: 'Eckmannpsych-Small';
+  src: url(var(--asset-base)fonts/Eckmannpsych-Small.otf);
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'PPNeueMontreal-Mono';
-  src: url(var(--asset-base)fonts/PPNeueMontreal-Mono.otf) format('otf');
+  src: url(var(--asset-base)fonts/PPNeueMontreal-Mono.otf);
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -77,9 +85,10 @@ url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
   --color-sidebar-ring: var(--sidebar-ring);
   
   /* Pyre Custom Fonts */
+  --font-logo: 'Eckmannpsych-Small';
   --font-mono: 'PPNeueMontreal-Mono', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-mono-bold: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 :root {
@@ -185,9 +194,19 @@ url(var(--asset-base)fonts/PPNeueMontreal-Regular.woff) format('woff');
     font-family: var(--font-sans);
     font-weight: 600;
   }
+
+  .font-logo {
+    font-family: var(--font-logo);
+    font-weight: 400;
+  }
   
+  .font-copy-mono {
+    font-family: var(--font-copy-mono);
+    font-weight: 400;
+  }
+
   .font-mono-bold {
-    font-family: var(--font-mono);
+    font-family: var(--font-mono-bold);
     font-weight: 700;
   }
   
