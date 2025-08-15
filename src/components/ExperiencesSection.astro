@@ -5,6 +5,7 @@ import { withBase } from '../lib/paths';
 import connectionSymbol from '../assets/symbols/connection-symbol.png';
 import harmonySymbol from '../assets/symbols/harmony-symbol.png';
 import transformationSymbol from '../assets/symbols/transformation-symbol.png';
+import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
 
 const symbols = {
   connection: connectionSymbol,
@@ -14,7 +15,7 @@ const symbols = {
 ---
 
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
-  <!-- Background video wrapper -->
+  <!-- Background video wrapper
   <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
     {
       /* Use manifest-driven multi-source video; fallback to existing mp4 if manifest missing */
@@ -22,7 +23,7 @@ const symbols = {
     {
       /* @ts-ignore - Astro template usage */
     }
-    <Fragment class="">
+    <!-- <Fragment>
       <video
         id="experiences-bg-video"
         class="w-full h-full object-cover"
@@ -38,6 +39,20 @@ const symbols = {
         <source src={withBase('/videos/candles.1e2ff5d557370980.720p.mp4')} type="video/mp4" />
       </video>
     </Fragment>
+  </div> -->
+
+  <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
+    <Image
+      src={backgroundImage}
+      alt={"Bucket with red flowers"}
+      width="5152"
+      height="7728"
+      loading="lazy"
+      decoding="async"
+      class="h-full w-full object-cover object-center"
+    />
+    <!-- Contrast overlay -->
+    <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
   </div>
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">

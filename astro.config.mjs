@@ -16,11 +16,7 @@ export default defineConfig({
   // For GitHub Pages project sites, ensure assets work under subpath
   // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set ASTRO_SITE
   site: PUBLIC_ASTRO_SITE,
-  base: (() => {
-    const envBase = PUBLIC_ASTRO_BASE;
-    if (!envBase || envBase === '') return '/pyre/';
-    return envBase.endsWith('/') ? envBase : `${envBase}/`;
-  })(),
+  base: PUBLIC_ASTRO_BASE,
   vite: {
     plugins: [tailwindcss()],
   },

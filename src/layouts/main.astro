@@ -8,9 +8,10 @@ const base = import.meta.env.BASE_URL ?? '/';
 const faviconHref = new URL(`${base}logos/gray/logo.png`, Astro.site ?? 'http://localhost/').pathname;
 const socialImagePath = `${base}${SOCIAL_IMAGE_PATH}`;
 const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).toString() : socialImagePath;
+
 ---
 
-<html lang="en" style={`--asset-base: ${base}; --font-regular-woff2: '${base}fonts/PPNeueMontreal-Regular.woff2'; --font-regular-woff: '${base}fonts/PPNeueMontreal-Regular.woff'; --font-semibold-woff2: '${base}fonts/PPNeueMontreal-SemiBold.woff2'; --font-semibold-woff: '${base}fonts/PPNeueMontreal-SemiBold.woff'; --font-mono-woff2: '${base}fonts/PPFraktionMono-Bold.woff2'; --font-mono-woff: '${base}fonts/PPFraktionMono-Bold.woff'`}> 
+<html lang="en" style={`--asset-base: ${base};`}> 
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -36,9 +37,6 @@ const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).to
     <meta property="twitter:image" content={absoluteSocialImage} />
     <meta property="twitter:image:alt" content={SOCIAL_IMAGE_ALT} />
 		
-		<!-- Preload critical fonts -->
-    <link rel="preload" href={`${base}fonts/PPNeueMontreal-SemiBold.woff2`} as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href={`${base}fonts/PPNeueMontreal-Regular.woff2`} as="font" type="font/woff2" crossorigin />
 	</head>
     <body class="min-h-screen flex flex-col">
         <Navbar />

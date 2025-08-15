@@ -47,7 +47,7 @@ import logo from '../assets/logos/creme/logo_with_text.png';
 
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
-      const isLandingPage = window.location.pathname === '/pyre/';
+      const isLandingPage = window.location.pathname === '/pyre';
       if (!navbar) return;
       if (!isLandingPage) {
         applyScrolledState(navbar, true);
