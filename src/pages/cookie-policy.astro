@@ -1,11 +1,44 @@
 ---
 import Layout from "../layouts/main.astro";
+import { cookiePolicy } from "../lib/policies";
+
+const pageTitle = `${cookiePolicy.title} | Pyre Sauna`;
+const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.[0] ?? "";
 ---
 
-<Layout>
+<Layout title={pageTitle} description={description}>
 	<main class="mx-auto max-w-screen-md px-4 py-16">
-		<h1 class="font-primary-semibold text-3xl md:text-4xl">Cookie Policy</h1>
-		<p class="mt-4 text-base">Coming soon.</p>
+		<h1 class="font-primary-semibold text-3xl md:text-4xl">{cookiePolicy.title}</h1>
+		{ cookiePolicy.effectiveDate || cookiePolicy.lastUpdated ? (
+			<p class="mt-2 text-sm text-gray-600">
+				{cookiePolicy.effectiveDate ? `Effective Date: ${cookiePolicy.effectiveDate}` : null}
+				{cookiePolicy.effectiveDate && cookiePolicy.lastUpdated ? ' · ' : null}
+				{cookiePolicy.lastUpdated ? `Last updated: ${cookiePolicy.lastUpdated}` : null}
+			</p>
+		) : null }
+
+		{ cookiePolicy.intro ? (
+			<p class="mt-6 text-base leading-7">{cookiePolicy.intro}</p>
+		) : null }
+
+		{cookiePolicy.sections.map((section) => (
+			<section class="mt-10">
+				<h2 class="font-primary-semibold text-2xl">{section.heading}</h2>
+				{section.paragraphs?.map((p) => (
+					<p class="mt-4 text-base leading-7">{p}</p>
+				))}
+				{section.lists?.map((list) => (
+					<div class="mt-6">
+						{list.title ? <h3 class="font-primary-semibold text-xl">{list.title}</h3> : null}
+						<ul class="mt-2 list-disc pl-6 space-y-2">
+							{list.items.map((item) => (
+								<li class="text-base leading-7">{item.text}</li>
+							))}
+						</ul>
+					</div>
+				))}
+			</section>
+		))}
 	</main>
 </Layout>
 

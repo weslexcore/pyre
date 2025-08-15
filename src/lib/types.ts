@@ -242,3 +242,30 @@ export interface VideoManifest {
   generatedAt: string; // ISO timestamp
   sources: Array<VideoSourceEntry>;
 }
+
+// ------------------------------------------------------------
+// Legal policy content config types
+// ------------------------------------------------------------
+
+export interface PolicyListItem {
+  text: string;
+}
+
+export interface PolicyList {
+  title?: string;
+  items: Array<PolicyListItem>;
+}
+
+export interface PolicySection {
+  heading: string;
+  paragraphs?: Array<string>;
+  lists?: Array<PolicyList>;
+}
+
+export interface PolicyDocument {
+  title: string;
+  effectiveDate?: string;
+  lastUpdated?: string;
+  intro?: string;
+  sections: Array<PolicySection>;
+}
