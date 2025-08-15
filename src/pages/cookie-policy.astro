@@ -1,12 +1,28 @@
 ---
 import Layout from "../layouts/main.astro";
 import { cookiePolicy } from "../lib/policies";
+import { Image } from "astro:assets";
+import skyField from "../assets/images/sky_field.jpeg";
 
 const pageTitle = `${cookiePolicy.title} | Pyre Sauna`;
 const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.[0] ?? "";
 ---
 
 <Layout title={pageTitle} description={description}>
+	{cookiePolicy.headerImage && (
+		<div class="w-full max-h-[45dvh] overflow-hidden">
+			<Image 
+				src={skyField} 
+				alt={cookiePolicy.headerImage.alt || "Cookie Policy header"} 
+				width={1920}
+				height={1080}
+				class="w-full h-full max-h-[45dvh] object-cover" 
+				loading="eager"
+				decoding="async"
+			/>
+		</div>
+	)}
+	
 	<main class="mx-auto max-w-screen-md px-4 py-16">
 		<h1 class="font-primary-semibold text-3xl md:text-4xl">{cookiePolicy.title}</h1>
 		{ cookiePolicy.effectiveDate || cookiePolicy.lastUpdated ? (
@@ -41,5 +57,3 @@ const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.
 		))}
 	</main>
 </Layout>
-
-

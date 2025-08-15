@@ -4,6 +4,11 @@ export const privacyPolicy: PolicyDocument = {
   title: 'Privacy Policy',
   effectiveDate: '08.15.2025',
   lastUpdated: '08.15.2025',
+  headerImage: {
+    src: '/src/assets/images/cyano_sweat_logo.jpg',
+    alt: 'Pyre sauna logo with cyan accent',
+    ariaLabel: 'Privacy Policy header image'
+  },
   intro:
     'Pyre LLC ("we," "us," or "our") operates the pyresauna.com website (the "Service"). This Privacy Policy informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data. By using our Service, you agree to the collection and use of information in accordance with this policy.',
   sections: [
@@ -154,6 +159,11 @@ export const cookiePolicy: PolicyDocument = {
   title: 'Cookie Policy',
   effectiveDate: '08.15.2025',
   lastUpdated: '08.15.2025',
+  headerImage: {
+    src: '/src/assets/images/sky_field.jpeg',
+    alt: 'Sky and field landscape',
+    ariaLabel: 'Cookie Policy header image'
+  },
   intro:
     'Cookies are small text files that are stored on your device when you visit our website. They help us provide you with a better experience by remembering your preferences and understanding how you use our site.',
   sections: [
@@ -264,6 +274,11 @@ export const termsOfService: PolicyDocument = {
   title: 'Terms of Service',
   effectiveDate: '08.15.2025',
   lastUpdated: '08.15.2025',
+  headerImage: {
+    src: '/src/assets/images/red_flowers_in_hand.jpeg',
+    alt: 'Red flowers held in hand',
+    ariaLabel: 'Terms of Service header image'
+  },
   sections: [
     {
       heading: 'Acceptance of Terms',

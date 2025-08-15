@@ -1,30 +1,32 @@
-# Legal Pages Header Images Brief
+# Legal Pages Header Images
 
 ## Project Overview
-Add header images to the Privacy Policy, Cookie Policy, and Terms of Service pages to enhance visual appeal and maintain consistency with the overall site design. The images should span the full width of the page and be integrated into the existing configuration system.
+Add full-width header images to the Privacy Policy, Cookie Policy, and Terms of Service pages to enhance visual appeal and maintain consistency with the site's design aesthetic. The images should span the full width of the page and use images from the available assets that haven't been used elsewhere.
 
 ## Target Audience
-- Website visitors accessing legal documentation
-- Users seeking transparency about data handling and service terms
-- Legal compliance requirements
+- Users visiting legal pages for information about privacy, cookies, and terms
+- Maintains visual consistency with the overall site design
+- Enhances user experience on otherwise text-heavy pages
 
 ## Primary Benefits / Features
-- **Visual Enhancement**: Adds professional visual appeal to legal pages
-- **Brand Consistency**: Maintains design language across all site pages
-- **User Experience**: Makes legal pages more engaging and less intimidating
-- **Full-Width Display**: Images span the complete width of the page for maximum impact
-- **Configuration-Based**: Uses existing policy configuration system for maintainability
+- **Visual Enhancement**: Adds visual interest to legal pages that are primarily text-based
+- **Brand Consistency**: Maintains the site's aesthetic with carefully selected imagery
+- **Full-Width Design**: Images span the entire page width for maximum visual impact
+- **Asset Utilization**: Makes use of existing high-quality images that haven't been used elsewhere
 
 ## High-Level Tech/Architecture
-- **Configuration Extension**: Extend `src/lib/policies.ts` to include header image properties
-- **Type System**: Update `PolicyDocument` interface in `src/lib/types.ts` to support header images
-- **Component Integration**: Modify legal page components to render header images
-- **Image Assets**: Add appropriate header images to `src/assets/images/` directory
-- **Responsive Design**: Ensure images work across all device sizes
-- **Accessibility**: Include proper alt text and ARIA labels for screen readers
+- **Configuration-Driven**: Add header image configuration to existing `src/lib/policies.ts` file
+- **Component Structure**: Modify the three legal page components (`privacy-policy.astro`, `cookie-policy.astro`, `terms-of-service.astro`) to include header images
+- **Image Selection**: Use available images from `src/assets/images/` that haven't been used elsewhere:
+  - `cyano_sweat_logo.jpg` - for Privacy Policy
+  - `sky_field.jpeg` - for Cookie Policy  
+  - `red_flowers_in_hand.jpeg` - for Terms of Service
+- **Responsive Design**: Ensure images work well across all device sizes
+- **Performance**: Optimize images for web delivery
 
-## Implementation Notes
-- Follow existing copy configuration patterns from `012-copy-configs` rule
-- Use consistent image naming convention for legal page headers
-- Ensure images are optimized for web performance
-- Maintain existing policy content structure while adding visual elements
+## Implementation Details
+- Extend the `PolicyDocument` type in `src/lib/types.ts` to include optional `headerImage` property
+- Update the policy configurations in `src/lib/policies.ts` to include header image paths
+- Modify the legal page components to render the header images above the content
+- Ensure proper image optimization and responsive behavior
+- Maintain existing content structure and styling

@@ -267,5 +267,6 @@ export interface PolicyDocument {
   effectiveDate?: string;
   lastUpdated?: string;
   intro?: string;
+  headerImage?: ImageRef;
   sections: Array<PolicySection>;
 }
