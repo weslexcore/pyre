@@ -15,16 +15,17 @@ const footerConfig: FooterContent = {
       title: "Contact",
       links: [
         {
-          label: 'hi@pyresauna.com',
-          href: 'mailto:hi@pyresauna.com',
-          ariaLabel: 'Email hi@pyresauna.com',
-        },
-        {
           href: 'https://instagram.com/pyre_sauna',
           label: 'Instagram',
           ariaLabel: 'Pyre Sauna on Instagram',
           icon: 'instagram',
         },
+        {
+          label: 'hi@pyresauna.com',
+          href: 'mailto:hi@pyresauna.com',
+          ariaLabel: 'Email hi@pyresauna.com',
+        },
+  
       ]
     },
     {

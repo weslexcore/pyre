@@ -2,7 +2,7 @@ import type { BreakSectionContent } from './types';
 
 const breakSection: BreakSectionContent = {
   elements: {
-    headingTop: 'PYRE IS A SPACE TO',
+    headingTop: 'IS A SPACE TO',
     words: ['RECONNECT', 'DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'],
     buttonLabel: 'SPEND TIME WITH US',
     intervalMs: 2000,
