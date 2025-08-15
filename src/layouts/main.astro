@@ -40,10 +40,12 @@ const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).to
     <link rel="preload" href={`${base}fonts/PPNeueMontreal-SemiBold.woff2`} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={`${base}fonts/PPNeueMontreal-Regular.woff2`} as="font" type="font/woff2" crossorigin />
 	</head>
-    <body>
+    <body class="min-h-screen flex flex-col">
         <Navbar />
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
-		<slot />
+		<main class="flex-1">
+			<slot />
+		</main>
 		<Footer />
 	</body>
 </html>

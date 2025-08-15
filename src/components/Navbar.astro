@@ -3,7 +3,7 @@ import Button from './Button.astro';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import { Image } from 'astro:assets';
-import logo from '../assets/logos/creme/logo.png';
+import logo from '../assets/logos/creme/logo_with_text.png';
 ---
 
 <header
@@ -29,6 +29,8 @@ import logo from '../assets/logos/creme/logo.png';
 </header>
 
 <script is:inline>
+
+
   (function () {
     const SCROLLED_CLASSES = ['bg-black', 'backdrop-blur', 'shadow'];
 
@@ -45,6 +47,12 @@ import logo from '../assets/logos/creme/logo.png';
 
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
+      const isLandingPage = window.location.pathname === '/pyre/';
+      if (!navbar) return;
+      if (!isLandingPage) {
+        applyScrolledState(navbar, true);
+        return;
+      }
       const sentinel = document.getElementById('nav-sentinel');
 
       if (!navbar) return;
@@ -82,5 +90,3 @@ import logo from '../assets/logos/creme/logo.png';
     }
   })();
 </script>
-
-
