@@ -11,13 +11,13 @@
     "optimize:videos": "tsx scripts/optimize-videos.ts"
   },
   "dependencies": {
-    "@astrojs/mdx": "^4.3.3",
+    "@astrojs/mdx": "4.3.4",
     "@astrojs/react": "^4.3.0",
-    "@astrojs/sitemap": "^3.5.0",
+    "@astrojs/sitemap": "3.5.1",
     "@tailwindcss/vite": "^4.1.3",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
-    "astro": "^5.12.8",
+    "astro": "5.13.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "sharp": "^0.33.5",
