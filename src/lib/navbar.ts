@@ -1,4 +1,5 @@
 import type { NavbarContent } from './types';
+import { withBase } from './paths';
 
 const navbar: NavbarContent = {
   images: {
@@ -10,7 +11,7 @@ const navbar: NavbarContent = {
   actions: {
     primary: {
       label: 'Join the mailing list',
-      href: '#signup',
+      href: withBase('/#signup'),
       ariaLabel: 'Join the mailing list',
     },
   },
