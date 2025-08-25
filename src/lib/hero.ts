@@ -4,7 +4,7 @@ const hero: HeroContent = {
   elements: {
     heroText: 'THE BATHHOUSE, REIMAGINED',
     subText: '',
-    bottomLine: 'RICHMOND, VA + SPRING 2026',
+    bottomLine: 'RICHMOND, VA + COMING SOON',
     leftWord: 'Self-care.',
     rightWord: 'Together.',
   },
