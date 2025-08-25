@@ -25,33 +25,34 @@ const footerConfig: FooterContent = {
           href: 'mailto:hi@pyresauna.com',
           ariaLabel: 'Email hi@pyresauna.com',
         },
+        // { label: 'Contact Us', href: '/contact' },
   
       ]
     },
-    {
-      title: 'Press',
-      links: [
-        {
-          label: 'Press & News',
-          href: 'mailto:press@pyresauna.com?subject=Press%20Inquiry%20-%20Pyre%20Sauna',
-          ariaLabel: 'Email press@pyresauna.com for press inquiries',
-        },
-      ],
-    },
-    {
-      title: 'Support',
-      links: [
-        { label: 'Contact Us', href: '/contact' },
-        { label: 'FAQs', href: '/faqs' },
-        { label: 'Health & Safety', href: '/health-and-safety' },
-      ],
-    },
-    {
-      title: 'Company',
-      links: [
-        { label: 'Our Mission', href: '/mission' },
-      ],
-    },
+    // {
+    //   title: 'Press',
+    //   links: [
+    //     {
+    //       label: 'Press & News',
+    //       href: 'mailto:press@pyresauna.com?subject=Press%20Inquiry%20-%20Pyre%20Sauna',
+    //       ariaLabel: 'Email press@pyresauna.com for press inquiries',
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: 'Support',
+    //   links: [
+        
+    //     // { label: 'FAQs', href: '/faqs' },
+    //     // { label: 'Health & Safety', href: '/health-and-safety' },
+    //   ],
+    // },
+    // {
+    //   title: 'Company',
+    //   links: [
+    //     { label: 'Our Mission', href: '/mission' },
+    //   ],
+    // },
     {
       title: 'Legal',
       links: [
