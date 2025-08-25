@@ -43,12 +43,12 @@ function isMailto(href: string): boolean {
                     const href = link.href;
                     const ariaLabel = link.ariaLabel ?? (isMailto(href) ? `Email ${href.replace('mailto:', '')}` : undefined);
                     const isExternal = isExternalLink(href);
-                    const isEmail = isMailto(href);
-                    const finalHref = isExternal || isEmail ? href : withBase(href);
+                    // const isEmail = isMailto(href);
+                    // const finalHref =  href : withBase(href);
                     return (
                       <li>
                         <a
-                          href={finalHref}
+                          href={href}
                           aria-label={ariaLabel}
                           target={isExternal ? '_blank' : undefined}
                           rel={isExternal ? 'noopener noreferrer' : undefined}

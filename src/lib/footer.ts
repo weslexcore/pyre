@@ -1,4 +1,5 @@
 import type { FooterContent } from './types';
+import { withBase } from './paths';
 
 const footerConfig: FooterContent = {
   elements: {
@@ -56,9 +57,9 @@ const footerConfig: FooterContent = {
     {
       title: 'Legal',
       links: [
-        { label: 'Privacy Policy', href: '/privacy-policy' },
-        { label: 'Cookie Policy', href: '/cookie-policy' },
-        { label: 'Terms of Service', href: '/terms-of-service' },
+        { label: 'Privacy Policy', href: withBase('/privacy-policy') },
+        { label: 'Cookie Policy', href: withBase('/cookie-policy') },
+        { label: 'Terms of Service', href: withBase('/terms-of-service') },
       ],
     },
   ],

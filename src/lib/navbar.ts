@@ -11,7 +11,7 @@ const navbar: NavbarContent = {
   actions: {
     primary: {
       label: 'Join the mailing list',
-      href: withBase('/#signup'),
+      href: withBase('#signup'),
       ariaLabel: 'Join the mailing list',
     },
   },
