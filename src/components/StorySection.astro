@@ -27,9 +27,9 @@ import swoosh from '../assets/symbols/swoosh.png';
     <!-- Foreground content -->
     <div class="relative z-10 h-full flex items-center justify-center">
       <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
-        <div class="grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 text-[var(--pyre-creme)]">
+        <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] items-center gap-6 lg:gap-10 text-[var(--pyre-creme)]">
           <!-- Swoosh symbol -->
-          <div class="flex justify-center md:justify-start">
+          <div class="flex justify-center lg:justify-start">
             <Image
               src={swoosh}
               alt=""
@@ -38,7 +38,7 @@ import swoosh from '../assets/symbols/swoosh.png';
               height="200"
               loading="lazy"
               decoding="async"
-              class="w-50 md:w-100 h-auto"
+              class="w-50 sm:w-80 lg:w-120 h-auto"
             />
           </div>
 
@@ -59,7 +59,7 @@ import swoosh from '../assets/symbols/swoosh.png';
                 </ul>
               )}
             </div>
-            <div class="mt-10 sm:mt-8">
+            <div class="mt-10">
               <Button
                 variant="primary"
                 size="lg"
