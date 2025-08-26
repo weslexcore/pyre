@@ -5,7 +5,8 @@ import { withBase } from '../lib/paths';
 import connectionSymbol from '../assets/symbols/connection-symbol.png';
 import harmonySymbol from '../assets/symbols/harmony-symbol.png';
 import transformationSymbol from '../assets/symbols/transformation-symbol.png';
-import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
+// import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
+// import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
 
 const symbols = {
   connection: connectionSymbol,
@@ -13,17 +14,11 @@ const symbols = {
   transformation: transformationSymbol,
 };
 ---
-
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
-  <!-- Background video wrapper
+
+  <!-- Background video wrapper -->
   <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
-    {
-      /* Use manifest-driven multi-source video; fallback to existing mp4 if manifest missing */
-    }
-    {
-      /* @ts-ignore - Astro template usage */
-    }
-    <!-- <Fragment>
+    <Fragment>
       <video
         id="experiences-bg-video"
         class="w-full h-full object-cover"
@@ -33,15 +28,17 @@ const symbols = {
         playsinline
         preload="metadata"
         aria-hidden="true"
-        poster={withBase('/videos/candles.1e2ff5d557370980.poster.jpg')}
+        poster={withBase('/videos/running_water.320b8c70cecf541e.poster.jpg')}
       >
-        <source src={withBase('/videos/candles.1e2ff5d557370980.720p.webm')} type="video/webm" />
-        <source src={withBase('/videos/candles.1e2ff5d557370980.720p.mp4')} type="video/mp4" />
+        <source src={withBase('/videos/running_water.320b8c70cecf541e.720p.webm')} type="video/webm" />
+        <source src={withBase('/videos/running_water.320b8c70cecf541e.720p.mp4')} type="video/mp4" />
       </video>
     </Fragment>
-  </div> -->
+    <!-- Contrast overlay -->
+    <div class="absolute inset-0 bg-[var(--pyre-black)]/50"></div>
+  </div>
 
-  <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
+  <!-- <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
     <Image
       src={backgroundImage}
       alt={"Bucket with red flowers"}
@@ -50,10 +47,10 @@ const symbols = {
       loading="lazy"
       decoding="async"
       class="h-full w-full object-cover object-center"
-    />
+    /> -->
     <!-- Contrast overlay -->
-    <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
-  </div>
+    <!-- <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
+  </div> -->
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
     <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[1.1] mb-6 sm:mb-8 text-[var(--pyre-creme)]">{experiences.elements.title}</h2>
@@ -129,7 +126,7 @@ const symbols = {
 
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       const applyPlaybackPrefs = () => {
-        try { video.playbackRate = 0.5; } catch {}
+        try { video.playbackRate = 0.4; } catch {}
         if (mediaQuery.matches) {
           try { video.pause(); } catch {}
         }
@@ -148,5 +145,4 @@ const symbols = {
       } catch {}
     })();
   </script>
-    <!-- <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full bg-[var(--pyre-red)]" positionClass="bg-center" /> -->
 </section>
