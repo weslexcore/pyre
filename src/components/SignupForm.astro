@@ -152,6 +152,20 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
               const urlObj = new URL(window.location.href);
               urlObj.searchParams.set('subscribed', '1');
               window.history.replaceState({}, '', urlObj.toString());
+              
+              // Create PostHog person and capture signup event
+              if ((window as any).posthog) {
+                (window as any).posthog.identify(email);
+                (window as any).posthog.people.set({
+                  email: email,
+                  signup_source: 'mailing_list',
+                  signup_date: new Date().toISOString()
+                });
+                (window as any).posthog.capture('Mailing List Signup', {
+                  email: email,
+                  source: 'website_form'
+                });
+              }
             } else if (response && response.msg) {
               errorEl.removeAttribute('role');
               errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
@@ -223,7 +237,7 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
       return hash === '#signup' || searchParams.get('signup') === '1';
     }
     
-    function applyCentering(shouldCenter) {
+    function applyCentering(shouldCenter: boolean) {
       const wrapper = document.getElementById('signup-wrapper');
       if (!wrapper) return;
       
