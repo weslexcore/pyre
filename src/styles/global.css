@@ -7,7 +7,8 @@
 @font-face {
   font-family: 'PPNeueMontreal-Regular';
   src: url(/pyre/fonts/PPNeueMontreal-Regular.woff2) format('woff2'),
-url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff');
+       url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff'),
+       url(/pyre/fonts/PPNeueMontreal-Regular.ttf) format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -15,7 +16,10 @@ url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff');
 
 @font-face {
   font-family: 'Eckmannpsych-Small';
-  src: url(/pyre/fonts/Eckmannpsych-Small.otf) format('opentype');
+  src:      url(/pyre/fonts/Eckmannpsych-Small.woff2) format('woff2'),
+  url(/pyre/fonts/Eckmannpsych-Small.woff) format('woff'),
+  url(/pyre/fonts/Eckmannpsych-Small.ttf) format('truetype');
+  
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -23,7 +27,9 @@ url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff');
 
 @font-face {
   font-family: 'PPNeueMontreal-Mono';
-  src: url(/pyre/fonts/PPNeueMontreal-Mono.otf) format('opentype');
+  src: url(/pyre/fonts/PPNeueMontreal-Mono.woff2) format('woff2'),
+       url(/pyre/fonts/PPNeueMontreal-Mono.woff) format('woff'),
+       url(/pyre/fonts/PPNeueMontreal-Mono.ttf) format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -32,7 +38,8 @@ url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff');
 @font-face {
   font-family: 'PPNeueMontreal-SemiBold';
   src: url(/pyre/fonts/PPNeueMontreal-SemiBold.woff2) format('woff2'),
-       url(/pyre/fonts/PPNeueMontreal-SemiBold.woff) format('woff');
+       url(/pyre/fonts/PPNeueMontreal-SemiBold.woff) format('woff'),
+       url(/pyre/fonts/PPNeueMontreal-SemiBold.ttf) format('truetype');
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -41,7 +48,8 @@ url(/pyre/fonts/PPNeueMontreal-Regular.woff) format('woff');
 @font-face {
   font-family: 'PPFraktionMono-Bold';
   src: url(/pyre/fonts/PPFraktionMono-Bold.woff2) format('woff2'),
-       url(/pyre/fonts/PPFraktionMono-Bold.woff) format('woff');
+       url(/pyre/fonts/PPFraktionMono-Bold.woff) format('woff'),
+       url(/pyre/fonts/PPFraktionMono-Bold.ttf) format('truetype');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
