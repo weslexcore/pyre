@@ -248,12 +248,31 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
       }
     }
     
+    function isMobileDevice() {
+      // Check for touch capability and mobile user agents
+      const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const mobileUserAgent = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const smallScreen = window.innerWidth <= 768; // Tailwind md breakpoint
+      
+      return hasTouch && (mobileUserAgent || smallScreen);
+    }
+    
     function focusAndSelectEmail() {
       try {
         const emailInput = document.getElementById('email');
         if (emailInput && emailInput instanceof HTMLInputElement) {
           emailInput.focus();
           emailInput.select();
+          
+          // On mobile, ensure keyboard appears by triggering focus again if needed
+          if (isMobileDevice()) {
+            // Small delay to ensure mobile keyboard appears
+            setTimeout(() => {
+              if (document.activeElement !== emailInput) {
+                emailInput.focus();
+              }
+            }, 100);
+          }
         }
       } catch (error) {
         // Graceful fallback - silently handle any focus errors
