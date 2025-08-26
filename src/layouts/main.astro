@@ -4,9 +4,10 @@ import Navbar from '../components/Navbar.astro';
 import Footer from '../components/Footer.astro';
 import PostHog from '../components/posthog.astro';
 import { SOCIAL_IMAGE_PATH, SOCIAL_IMAGE_ALT, SOCIAL_IMAGE_WIDTH, SOCIAL_IMAGE_HEIGHT } from '../lib/seo';
+import faviconImage from '../assets/logos/gray/logo.png';
 const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey." } = Astro.props;
 const base = import.meta.env.BASE_URL ?? '/';
-const faviconHref = new URL(`${base}logos/gray/logo.png`, Astro.site ?? 'http://localhost/').pathname;
+const faviconHref = faviconImage.src;
 const socialImagePath = `${base}${SOCIAL_IMAGE_PATH}`;
 const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).toString() : socialImagePath;
 
