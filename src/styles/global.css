@@ -193,29 +193,25 @@
   }
   
   /* Pyre Typography Utilities */
-  .font-primary-regular {
-    font-family: var(--font-sans);
-    font-weight: 400;
-  }
   
   .font-primary-semibold {
     font-family: var(--font-sans);
-    font-weight: 600;
+    /* font-weight: 600; */
   }
 
   .font-logo {
     font-family: var(--font-logo);
-    font-weight: 400;
+    /* font-weight: 400; */
   }
   
   .font-copy-mono {
     font-family: var(--font-mono);
-    font-weight: 400;
+    /* font-weight: 400; */
   }
 
   .font-mono-bold {
     font-family: var(--font-mono-bold);
-    font-weight: 700;
+    /* font-weight: 700; */
   }
   
   /* Removed project-specific typography helpers in favor of Tailwind utilities */
