@@ -24,8 +24,8 @@ const experiences: ExperiencesContent = {
         title: 'SPECIAL EVENTS',
         icon: 'transformation',
         description:
-          'Pairing different modalities with Sauna and Cold Bathing',
-        bullets: ['Guided Classes: Breath Work, Meditation, Movement', 'Social Evenings: “Soft Clubbing” DJ sets, Social Priming Activities, Social Tonics and N/A Cocktails', 'Sound Baths, Drumming, Poetry Reading, Art, Etc.'],
+          'Sauna and Cold Bathing paired with',
+        bullets: ['Breath Work, Meditation, Movement', 'Social Evenings: DJ sets, Social Tonics and N/A Cocktails', 'Sound Baths, Drumming, Poetry Reading, Art, Etc.'],
         link: { href: '/classes', label: 'View Experiences' },
         linkText: 'View Experiences',
       },
