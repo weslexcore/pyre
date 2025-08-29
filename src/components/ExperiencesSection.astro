@@ -2,9 +2,10 @@
 import experiences from '../lib/experiences';
 import { Image } from 'astro:assets';
 import { withBase } from '../lib/paths';
-import connectionSymbol from '../assets/symbols/connection-symbol.png';
-import harmonySymbol from '../assets/symbols/harmony-symbol.png';
-import transformationSymbol from '../assets/symbols/transformation-symbol.png';
+import connectionSymbol from '../assets/symbols/healing-symbol.png';
+import harmonySymbol from '../assets/symbols/sauna-symbol.png';
+import transformationSymbol from '../assets/symbols/growth-symbol.png';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 // import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 // import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
 
@@ -15,6 +16,8 @@ const symbols = {
 };
 ---
 <section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
+  <!-- Top repeating logo border -->
+  <!-- <RepeatingLogoBackground aria-hidden="true" class="h-10 w-full bg-[var(--pyre-creme)]/20" positionClass="bg-center" /> -->
 
   <!-- Background video wrapper -->
   <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">

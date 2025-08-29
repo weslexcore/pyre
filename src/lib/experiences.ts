@@ -2,7 +2,7 @@ import type { ExperiencesContent } from './types';
 
 const experiences: ExperiencesContent = {
   elements: {
-    title: 'EXPERIENCES',
+    title: 'OFFERINGS',
     items: [
       {
         title: 'SAUNA',
