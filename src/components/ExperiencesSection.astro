@@ -1,13 +1,13 @@
 ---
 import experiences from '../lib/experiences';
 import { Image } from 'astro:assets';
-import { withBase } from '../lib/paths';
 import connectionSymbol from '../assets/symbols/healing-symbol.png';
 import harmonySymbol from '../assets/symbols/sauna-symbol.png';
 import transformationSymbol from '../assets/symbols/growth-symbol.png';
 import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 // import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 // import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
+import florals from '../assets/images/florals.png';
 
 const symbols = {
   connection: connectionSymbol,
@@ -15,7 +15,16 @@ const symbols = {
   transformation: transformationSymbol,
 };
 ---
-<section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)] bg-[var(--pyre-black)]" >
+<section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)] overflow-hidden" >
+  <Image
+    src={florals}
+    alt=""
+    aria-hidden="true"
+    decoding="async"
+    loading="lazy"
+    sizes="100vw"
+    class="absolute inset-0 -z-10 w-full h-full object-cover pointer-events-none select-none"
+  />
  
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
