@@ -5,6 +5,8 @@ import Footer from '../components/Footer.astro';
 import PostHog from '../components/posthog.astro';
 import { SOCIAL_IMAGE_PATH, SOCIAL_IMAGE_ALT, SOCIAL_IMAGE_WIDTH, SOCIAL_IMAGE_HEIGHT } from '../lib/seo';
 import faviconImage from '../assets/logos/gray/logo.png';
+import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
+import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
 const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey." } = Astro.props;
 const base = import.meta.env.BASE_URL ?? '/';
 const faviconHref = faviconImage.src;
@@ -38,6 +40,8 @@ const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).to
 		<meta property="twitter:description" content={description} />
     <meta property="twitter:image" content={absoluteSocialImage} />
     <meta property="twitter:image:alt" content={SOCIAL_IMAGE_ALT} />
+		<link rel="preload" as="font" href={fontRegularWoff2.src} type="font/woff2" crossorigin />
+		<link rel="preload" as="font" href={fontSemiBoldWoff2.src} type="font/woff2" crossorigin />
 	<PostHog />		
 	</head>
     <body class="min-h-screen flex flex-col">
