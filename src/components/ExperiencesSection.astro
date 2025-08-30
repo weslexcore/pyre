@@ -15,45 +15,8 @@ const symbols = {
   transformation: transformationSymbol,
 };
 ---
-<section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)]">
-  <!-- Top repeating logo border -->
-  <!-- <RepeatingLogoBackground aria-hidden="true" class="h-10 w-full bg-[var(--pyre-creme)]/20" positionClass="bg-center" /> -->
-
-  <!-- Background video wrapper -->
-  <div class="absolute inset-0 z-[-10] overflow-hidden pointer-events-none">
-    <Fragment>
-      <video
-        id="experiences-bg-video"
-        class="w-full h-full object-cover"
-        autoplay
-        muted
-        loop
-        playsinline
-        preload="metadata"
-        aria-hidden="true"
-        poster={withBase('/videos/running_water.320b8c70cecf541e.poster.jpg')}
-      >
-        <source src={withBase('/videos/running_water.320b8c70cecf541e.720p.webm')} type="video/webm" />
-        <source src={withBase('/videos/running_water.320b8c70cecf541e.720p.mp4')} type="video/mp4" />
-      </video>
-    </Fragment>
-    <!-- Contrast overlay -->
-    <div class="absolute inset-0 bg-[var(--pyre-blue)]/50"></div>
-  </div>
-
-  <!-- <div class="absolute inset-0 z-[-1] overflow-hidden" aria-hidden="true">
-    <Image
-      src={backgroundImage}
-      alt={"Bucket with red flowers"}
-      width="5152"
-      height="7728"
-      loading="lazy"
-      decoding="async"
-      class="h-full w-full object-cover object-center"
-    /> -->
-    <!-- Contrast overlay -->
-    <!-- <div class="absolute inset-0 bg-[rgba(0,0,0,0.25)]"></div>
-  </div> -->
+<section aria-labelledby="experiences-heading" class="relative text-[var(--foreground)] bg-[var(--pyre-black)]" >
+ 
 
   <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl py-10 sm:py-12">
     <h2 id="experiences-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,5vw,4rem)] leading-[.9] mb-6 sm:mb-8 text-[var(--pyre-creme)]">{experiences.elements.title}</h2>
@@ -80,11 +43,12 @@ const symbols = {
 
             <p class="text-base leading-relaxed">{experience.description}</p>
 
-            <ul class="list-disc pl-6 space-y-2 max-w-[75ch]">
+            <p>{experience.bullets.join(', ')}</p>
+            {/* <ul class="list-disc pl-6 space-y-2 max-w-[75ch]">
               {experience.bullets.map((bullet) => (
                 <li>{bullet}</li>
               ))}
-            </ul>
+            </ul> */}
             {/* <div class="flex">
               <div class="flex-1"></div>
               <a
