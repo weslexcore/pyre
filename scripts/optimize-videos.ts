@@ -5,10 +5,10 @@
   - Requires ffmpeg and ffprobe on PATH.
 */
 
-import { promises as fs } from 'fs';
-import path from 'path';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 const projectRoot = process.cwd();
 const publicDir = path.join(projectRoot, 'public');
@@ -47,7 +47,11 @@ const sourceExtensions = ['.mov', '.mp4', '.m4v', '.webm', '.mkv'];
 const supportedFormats = ['mp4', 'webm'] as const;
 const targetHeights = [1080, 720, 480];
 
-function execFile(cmd: string, args: string[], cwd?: string): Promise<{ stdout: string; stderr: string; code: number }> {
+function execFile(
+  cmd: string,
+  args: string[],
+  cwd?: string
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -131,40 +135,75 @@ function computeHash(buffer: Buffer, signature: string): string {
   return h.digest('hex').slice(0, 16);
 }
 
-async function ffprobeMeta(file: string): Promise<{ width: number; height: number; durationSec: number; fps: number }> {
-  const { stdout, code, stderr } = await execFile('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,avg_frame_rate', '-show_format', '-of', 'json', file]);
+async function ffprobeMeta(
+  file: string
+): Promise<{ width: number; height: number; durationSec: number; fps: number }> {
+  const { stdout, code, stderr } = await execFile('ffprobe', [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=width,height,avg_frame_rate',
+    '-show_format',
+    '-of',
+    'json',
+    file,
+  ]);
   if (code !== 0) throw new Error('ffprobe failed: ' + stderr);
   const data = JSON.parse(stdout);
   const stream = data.streams?.[0] ?? {};
   const fmt = data.format ?? {};
-  const [num, den] = String(stream.avg_frame_rate || '0/1').split('/').map((n: string) => Number(n));
+  const [num, den] = String(stream.avg_frame_rate || '0/1')
+    .split('/')
+    .map((n: string) => Number(n));
   const fps = den ? num / den : 0;
   const durationSec = fmt.duration ? Number(fmt.duration) : 0;
   return { width: Number(stream.width ?? 0), height: Number(stream.height ?? 0), durationSec, fps };
 }
 
-async function encodeVariant(src: string, outFile: string, height: number, fps: number, format: 'mp4' | 'webm'): Promise<void> {
+async function encodeVariant(
+  src: string,
+  outFile: string,
+  height: number,
+  fps: number,
+  format: 'mp4' | 'webm'
+): Promise<void> {
   const gop = Math.max(2, Math.round(2 * (fps || 30)));
   const args: string[] = ['-y', '-i', src, '-an'];
   if (format === 'mp4') {
     args.push(
-      '-c:v', 'libx264',
-      '-profile:v', 'high',
-      '-preset', 'medium',
-      '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
-      '-crf', '22',
-      '-g', String(gop),
-      '-keyint_min', String(gop)
+      '-c:v',
+      'libx264',
+      '-profile:v',
+      'high',
+      '-preset',
+      'medium',
+      '-pix_fmt',
+      'yuv420p',
+      '-movflags',
+      '+faststart',
+      '-crf',
+      '22',
+      '-g',
+      String(gop),
+      '-keyint_min',
+      String(gop)
     );
   } else {
     args.push(
-      '-c:v', 'libvpx-vp9',
-      '-b:v', '0',
-      '-crf', '33',
-      '-row-mt', '1',
-      '-pix_fmt', 'yuv420p',
-      '-g', String(gop)
+      '-c:v',
+      'libvpx-vp9',
+      '-b:v',
+      '0',
+      '-crf',
+      '33',
+      '-row-mt',
+      '1',
+      '-pix_fmt',
+      'yuv420p',
+      '-g',
+      String(gop)
     );
   }
   args.push('-vf', `scale=-2:${height}`);
@@ -175,16 +214,37 @@ async function encodeVariant(src: string, outFile: string, height: number, fps: 
 
 async function extractPoster(src: string, outFile: string, durationSec: number): Promise<void> {
   const t = Math.max(0, Math.round(durationSec * 0.5));
-  const args = ['-y', '-ss', String(t), '-i', src, '-frames:v', '1', '-vf', "scale='min(1280,iw)':'-2'", '-q:v', '2', outFile];
+  const args = [
+    '-y',
+    '-ss',
+    String(t),
+    '-i',
+    src,
+    '-frames:v',
+    '1',
+    '-vf',
+    "scale='min(1280,iw)':'-2'",
+    '-q:v',
+    '2',
+    outFile,
+  ];
   const { code, stderr } = await execFile('ffmpeg', args);
   if (code !== 0) throw new Error('ffmpeg poster failed: ' + stderr);
 }
 
 async function pathExists(p: string): Promise<boolean> {
-  try { await fs.access(p); return true; } catch { return false; }
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-async function processSource(file: string, prev: VideoSourceEntry | null): Promise<VideoSourceEntry> {
+async function processSource(
+  file: string,
+  prev: VideoSourceEntry | null
+): Promise<VideoSourceEntry> {
   const relPublicPath = '/' + path.relative(publicDir, file).replace(/\\/g, '/');
   const basename = path.basename(file).replace(/\.[^.]+$/, '');
   const id = deriveId(file);
@@ -204,7 +264,13 @@ async function processSource(file: string, prev: VideoSourceEntry | null): Promi
       const outName = `${basename}.${contentHash}.${h}p.${fmt}`;
       const outDisk = path.join(videosDir, outName);
       const outUrl = `/videos/${outName}`;
-      outputs.push({ format: fmt, codec: fmt === 'mp4' ? 'h264' : 'vp9', width: -1, height: h, url: outUrl });
+      outputs.push({
+        format: fmt,
+        codec: fmt === 'mp4' ? 'h264' : 'vp9',
+        width: -1,
+        height: h,
+        url: outUrl,
+      });
       const needEncode = !(await pathExists(outDisk));
       if (needEncode || (prev && prev.contentHash !== contentHash)) {
         ensureOutputs.push(encodeVariant(file, outDisk, h, meta.fps, fmt));
@@ -223,7 +289,12 @@ async function processSource(file: string, prev: VideoSourceEntry | null): Promi
   // Probe one variant to fill width/height if needed
   for (const v of outputs) {
     const vPath = path.join(publicDir, v.url.replace(/^\//, ''));
-    const vMeta = await ffprobeMeta(vPath).catch(() => ({ width: 0, height: v.height, durationSec: 0, fps: 0 }));
+    const vMeta = await ffprobeMeta(vPath).catch(() => ({
+      width: 0,
+      height: v.height,
+      durationSec: 0,
+      fps: 0,
+    }));
     v.width = vMeta.width || Math.round((meta.width / meta.height) * v.height);
   }
 
@@ -235,7 +306,7 @@ async function processSource(file: string, prev: VideoSourceEntry | null): Promi
     height: meta.height,
     durationSec: meta.durationSec,
     variants: outputs,
-    poster: { url: posterUrl, width: 0, height: 0, type: 'image/jpeg' }
+    poster: { url: posterUrl, width: 0, height: 0, type: 'image/jpeg' },
   };
   return entry;
 }
@@ -255,7 +326,11 @@ async function main(): Promise<void> {
   }
 
   await safeMkdirp(videosDir);
-  const prev = (await readJsonIfExists<VideoManifest>(manifestPath)) ?? { pipelineVersion, generatedAt: new Date().toISOString(), sources: [] };
+  const prev = (await readJsonIfExists<VideoManifest>(manifestPath)) ?? {
+    pipelineVersion,
+    generatedAt: new Date().toISOString(),
+    sources: [],
+  };
   const sources = await listSourceFiles();
 
   const newEntries: VideoSourceEntry[] = [];
@@ -269,7 +344,7 @@ async function main(): Promise<void> {
   const manifest: VideoManifest = {
     pipelineVersion,
     generatedAt: new Date().toISOString(),
-    sources: newEntries
+    sources: newEntries,
   };
   await writeManifest(manifest);
   console.log(`Video manifest written: ${path.relative(projectRoot, manifestPath)}`);
@@ -279,5 +354,3 @@ main().catch((err) => {
   console.error('[optimize-videos] Error:', err);
   process.exit(1);
 });
-
-

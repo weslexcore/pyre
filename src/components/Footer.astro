@@ -1,9 +1,9 @@
 ---
-import footerConfig from "../lib/footer";
-import { withBase } from "../lib/paths";
-import { Image } from "astro:assets";
-import RepeatingLogoBackground from "./RepeatingLogoBackground.astro";
+import { Image } from 'astro:assets';
 import logo from '../assets/logos/creme/logo.png';
+import footerConfig from '../lib/footer';
+import { withBase } from '../lib/paths';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');

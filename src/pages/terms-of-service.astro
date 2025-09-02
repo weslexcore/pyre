@@ -1,11 +1,11 @@
 ---
-import Layout from "../layouts/main.astro";
-import { termsOfService } from "../lib/policies";
-import { Image } from "astro:assets";
-import redFlowersInHand from "../assets/images/red_flowers_in_hand.jpeg";
+import { Image } from 'astro:assets';
+import redFlowersInHand from '../assets/images/red_flowers_in_hand.jpeg';
+import Layout from '../layouts/main.astro';
+import { termsOfService } from '../lib/policies';
 
 const pageTitle = `${termsOfService.title} | Pyre Sauna`;
-const description = termsOfService.intro ?? termsOfService.sections[0]?.paragraphs?.[0] ?? "";
+const description = termsOfService.intro ?? termsOfService.sections[0]?.paragraphs?.[0] ?? '';
 ---
 
 <Layout title={pageTitle} description={description}>

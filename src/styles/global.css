@@ -5,46 +5,51 @@
 
 /* Pyre Brand Fonts */
 @font-face {
-  font-family: 'PPNeueMontreal-Regular';
-  src: url('../assets/fonts/PPNeueMontreal-Regular.woff2') format('woff2'),
-       url('../assets/fonts/PPNeueMontreal-Regular.woff') format('woff');
+  font-family: "PPNeueMontreal-Regular";
+  src:
+    url("../assets/fonts/PPNeueMontreal-Regular.woff2") format("woff2"),
+    url("../assets/fonts/PPNeueMontreal-Regular.woff") format("woff");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Eckmannpsych-Small';
-  src:      url('../assets/fonts/Eckmannpsych-Small.woff2') format('woff2'),
-  url('../assets/fonts/Eckmannpsych-Small.woff') format('woff');
-  
+  font-family: "Eckmannpsych-Small";
+  src:
+    url("../assets/fonts/Eckmannpsych-Small.woff2") format("woff2"),
+    url("../assets/fonts/Eckmannpsych-Small.woff") format("woff");
+
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'PPNeueMontreal-Mono';
-  src: url('../assets/fonts/PPNeueMontreal-Mono.woff2') format('woff2'),
-       url('../assets/fonts/PPNeueMontreal-Mono.woff') format('woff');
+  font-family: "PPNeueMontreal-Mono";
+  src:
+    url("../assets/fonts/PPNeueMontreal-Mono.woff2") format("woff2"),
+    url("../assets/fonts/PPNeueMontreal-Mono.woff") format("woff");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'PPNeueMontreal-SemiBold';
-  src: url('../assets/fonts/PPNeueMontreal-SemiBold.woff2') format('woff2'),
-       url('../assets/fonts/PPNeueMontreal-SemiBold.woff') format('woff');
+  font-family: "PPNeueMontreal-SemiBold";
+  src:
+    url("../assets/fonts/PPNeueMontreal-SemiBold.woff2") format("woff2"),
+    url("../assets/fonts/PPNeueMontreal-SemiBold.woff") format("woff");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'PPFraktionMono-Bold';
-  src: url('../assets/fonts/PPFraktionMono-Bold.woff2') format('woff2'),
-       url('../assets/fonts/PPFraktionMono-Bold.woff') format('woff');
+  font-family: "PPFraktionMono-Bold";
+  src:
+    url("../assets/fonts/PPFraktionMono-Bold.woff2") format("woff2"),
+    url("../assets/fonts/PPFraktionMono-Bold.woff") format("woff");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -86,28 +91,36 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  
+
   /* Pyre Custom Fonts */
-  --font-logo: 'Eckmannpsych-Small', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'PPNeueMontreal-Mono', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-sans: 'PPNeueMontreal-Regular', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono-bold: 'PPFraktionMono-Bold', ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-logo:
+    "Eckmannpsych-Small", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono:
+    "PPNeueMontreal-Mono", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-sans:
+    "PPNeueMontreal-Regular", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono-bold:
+    "PPFraktionMono-Bold", ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono",
+    Menlo, monospace;
 }
 
 :root {
   --radius: 0.625rem;
-  
+
   /* Pyre Brand Colors - RGB to OKLCH Conversion */
   --pyre-black: oklch(0.2509 0.0111 99.35); /* #23221c */
   --pyre-creme: oklch(0.959 0.0115 84.58); /* #f5f1e9 */
   --pyre-red: oklch(0.65 0.18 25); /* rgb(241, 88, 54) */
   --pyre-blue: oklch(0.35 0.12 220); /* rgb(36, 90, 130) */
-  
+
   /* Pyre Design System - 2-Color Rule */
   /* Primary: Pyre Red + Pyre Creme for CTAs */
   /* Secondary: Pyre Blue + Pyre Creme for secondary actions */
   /* Outline: Pyre Black + Pyre Creme for subtle actions */
-  
+
   /* Base Colors - Following Pyre Design System 2-Color Rule */
   --background: var(--pyre-creme);
   --foreground: var(--pyre-black);
@@ -168,7 +181,7 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.216 0.006 56.043);
   --sidebar-foreground: var(--pyre-creme);
-  --sidebar-primary: var(--pyre-red)
+  --sidebar-primary: var(--pyre-red);
   --sidebar-primary-foreground: var(--pyre-black);
   --sidebar-accent: var(--pyre-blue);
   --sidebar-accent-foreground: var(--pyre-creme);
@@ -186,9 +199,9 @@
     font-weight: 400;
     line-height: 1.6;
   }
-  
+
   /* Pyre Typography Utilities */
-  
+
   .font-primary-semibold {
     font-family: var(--font-sans);
     /* font-weight: 600; */
@@ -198,7 +211,7 @@
     font-family: var(--font-logo);
     /* font-weight: 400; */
   }
-  
+
   .font-copy-mono {
     font-family: var(--font-mono);
     /* font-weight: 400; */
@@ -208,29 +221,29 @@
     font-family: var(--font-mono-bold);
     /* font-weight: 700; */
   }
-  
+
   /* Removed project-specific typography helpers in favor of Tailwind utilities */
-  
+
   /* Design System Color Combinations - 2-color rule */
-  
+
   /* Removed symbol sizing utility classes in favor of Tailwind classes */
-  
+
   /* Removed hover effect utility classes in favor of Tailwind utilities */
   /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
   }
-  
+
   /* Remove custom animation in favor of Tailwind or plugin-provided animations */
-  
+
   /* Removed custom container. Use Tailwind's container or utility composition */
-  
+
   /* Focus styles for accessibility */
   *:focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
-  
+
   /* Button focus styles */
   button:focus,
   a:focus {

@@ -70,7 +70,7 @@ export interface DesignSystemConfig {
     lg: string;
     xl: string;
   };
-} 
+}
 
 // ------------------------------------------------------------
 // Marketing site content config types

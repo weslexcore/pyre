@@ -1,11 +1,11 @@
 ---
-import Layout from "../layouts/main.astro";
-import { cookiePolicy } from "../lib/policies";
-import { Image } from "astro:assets";
-import skyField from "../assets/images/sky_field.jpeg";
+import { Image } from 'astro:assets';
+import skyField from '../assets/images/sky_field.jpeg';
+import Layout from '../layouts/main.astro';
+import { cookiePolicy } from '../lib/policies';
 
 const pageTitle = `${cookiePolicy.title} | Pyre Sauna`;
-const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.[0] ?? "";
+const description = cookiePolicy.intro ?? cookiePolicy.sections[0]?.paragraphs?.[0] ?? '';
 ---
 
 <Layout title={pageTitle} description={description}>

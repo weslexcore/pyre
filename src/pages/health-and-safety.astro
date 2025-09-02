@@ -1,11 +1,11 @@
 ---
-import Layout from "../layouts/main.astro";
-import { healthSafety } from "../lib/healthSafety";
-import { Image } from "astro:assets";
-import saunaLadle from "../assets/images/sauna_ladle.jpeg";
+import { Image } from 'astro:assets';
+import saunaLadle from '../assets/images/sauna_ladle.jpeg';
+import Layout from '../layouts/main.astro';
+import { healthSafety } from '../lib/healthSafety';
 
 const pageTitle = `${healthSafety.title} | Pyre Sauna`;
-const description = healthSafety.intro ?? healthSafety.sections[0]?.paragraphs?.[0] ?? "";
+const description = healthSafety.intro ?? healthSafety.sections[0]?.paragraphs?.[0] ?? '';
 ---
 
 <Layout title={pageTitle} description={description}>

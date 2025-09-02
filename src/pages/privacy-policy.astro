@@ -1,11 +1,11 @@
 ---
-import Layout from "../layouts/main.astro";
-import { privacyPolicy } from "../lib/policies";
-import { Image } from "astro:assets";
-import cyanoSweatLogo from "../assets/images/cyano_sweat_logo.jpg";
+import { Image } from 'astro:assets';
+import cyanoSweatLogo from '../assets/images/cyano_sweat_logo.jpg';
+import Layout from '../layouts/main.astro';
+import { privacyPolicy } from '../lib/policies';
 
 const pageTitle = `${privacyPolicy.title} | Pyre Sauna`;
-const description = privacyPolicy.intro ?? privacyPolicy.sections[0]?.paragraphs?.[0] ?? "";
+const description = privacyPolicy.intro ?? privacyPolicy.sections[0]?.paragraphs?.[0] ?? '';
 ---
 
 <Layout title={pageTitle} description={description}>

@@ -32,7 +32,7 @@ export const fontSizes = {
   '7xl': '4.5rem', // 72px
   '8xl': '6rem', // 96px
   '9xl': '8rem', // 128px
-  
+
   // Golden ratio scale (base * 1.618^n)
   'scale-1': '1rem', // base
   'scale-2': '1.618rem', // base * 1.618^1
@@ -54,21 +54,21 @@ export const typography = {
     primary: 'var(--font-sans)',
     mono: 'var(--font-mono)',
   },
-  
+
   // Font weight utilities
   fontWeight: {
     regular: 400,
     semibold: 600,
     bold: 700,
   },
-  
+
   // Line height utilities
   lineHeight: {
     tight: 1.2,
     normal: 1.6,
     relaxed: 1.8,
   },
-  
+
   // Letter spacing (kerning) utilities
   letterSpacing: {
     tight: '-0.02em',
@@ -94,7 +94,7 @@ export function calculateKerning(fontFamily: string, fontSize: number): number {
 
 // Golden ratio type scale calculation
 export function calculateTypeScale(baseSize: number, scale: number): number {
-  return baseSize * Math.pow(goldenRatio, scale);
+  return baseSize * goldenRatio ** scale;
 }
 
 // Typography class generators
@@ -103,17 +103,17 @@ export function generateTypographyClasses() {
     // Font family classes
     'font-primary': `font-family: ${typography.fontFamily.primary}`,
     'font-mono': `font-family: ${typography.fontFamily.mono}`,
-    
+
     // Font weight classes
     'font-regular': `font-weight: ${typography.fontWeight.regular}`,
     'font-semibold': `font-weight: ${typography.fontWeight.semibold}`,
     'font-bold': `font-weight: ${typography.fontWeight.bold}`,
-    
+
     // Line height classes
     'leading-tight': `line-height: ${typography.lineHeight.tight}`,
     'leading-normal': `line-height: ${typography.lineHeight.normal}`,
     'leading-relaxed': `line-height: ${typography.lineHeight.relaxed}`,
-    
+
     // Letter spacing classes
     'tracking-tight': `letter-spacing: ${typography.letterSpacing.tight}`,
     'tracking-normal': `letter-spacing: ${typography.letterSpacing.normal}`,
@@ -130,7 +130,7 @@ export const dramaticTypography = {
     letterSpacing: typography.letterSpacing.tight,
     lineHeight: typography.lineHeight.tight,
   },
-  
+
   // Hero typography
   'text-hero': {
     fontSize: fontSizes['scale-4'],
@@ -138,7 +138,7 @@ export const dramaticTypography = {
     letterSpacing: typography.letterSpacing.tight,
     lineHeight: typography.lineHeight.tight,
   },
-  
+
   // Display typography
   'text-display': {
     fontSize: fontSizes['scale-5'],
@@ -146,4 +146,4 @@ export const dramaticTypography = {
     letterSpacing: typography.letterSpacing.tight,
     lineHeight: typography.lineHeight.tight,
   },
-} as const; 
+} as const;

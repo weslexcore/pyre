@@ -1,18 +1,28 @@
 ---
 import '../styles/global.css';
-import Navbar from '../components/Navbar.astro';
-import Footer from '../components/Footer.astro';
-import PostHog from '../components/posthog.astro';
-import { SOCIAL_IMAGE_PATH, SOCIAL_IMAGE_ALT, SOCIAL_IMAGE_WIDTH, SOCIAL_IMAGE_HEIGHT } from '../lib/seo';
-import faviconImage from '../assets/logos/gray/logo.png';
 import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
-const { title = "Pyre Sauna + Cold Plunge | Richmond, VA", description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey." } = Astro.props;
+import faviconImage from '../assets/logos/gray/logo.png';
+import Footer from '../components/Footer.astro';
+import Navbar from '../components/Navbar.astro';
+import PostHog from '../components/posthog.astro';
+import {
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_IMAGE_HEIGHT,
+  SOCIAL_IMAGE_PATH,
+  SOCIAL_IMAGE_WIDTH,
+} from '../lib/seo';
+
+const {
+  title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
+  description = 'A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.',
+} = Astro.props;
 const base = import.meta.env.BASE_URL ?? '/';
 const faviconHref = faviconImage.src;
 const socialImagePath = `${base}${SOCIAL_IMAGE_PATH}`;
-const absoluteSocialImage = Astro.site ? new URL(socialImagePath, Astro.site).toString() : socialImagePath;
-
+const absoluteSocialImage = Astro.site
+  ? new URL(socialImagePath, Astro.site).toString()
+  : socialImagePath;
 ---
 
 <html lang="en" style={`--asset-base: ${base};`}> 

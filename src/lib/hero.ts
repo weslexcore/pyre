@@ -11,5 +11,3 @@ const hero: HeroContent = {
 };
 
 export default hero;
-
-

@@ -1,5 +1,5 @@
-import type { NavbarContent } from './types';
 import { withBase } from './paths';
+import type { NavbarContent } from './types';
 
 const navbar: NavbarContent = {
   images: {
@@ -18,5 +18,3 @@ const navbar: NavbarContent = {
 };
 
 export default navbar;
-
-

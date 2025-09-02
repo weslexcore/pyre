@@ -8,10 +8,12 @@ const breakSection: BreakSectionContent = {
     intervalMs: 2000,
   },
   actions: {
-    primary: { label: 'Spend time with us', href: '#signup', ariaLabel: 'Spend time with us — jump to signup form' },
+    primary: {
+      label: 'Spend time with us',
+      href: '#signup',
+      ariaLabel: 'Spend time with us — jump to signup form',
+    },
   },
 };
 
 export default breakSection;
-
-

@@ -1,5 +1,5 @@
-import type { FooterContent } from './types';
 import { withBase } from './paths';
+import type { FooterContent } from './types';
 
 const footerConfig: FooterContent = {
   elements: {
@@ -13,7 +13,7 @@ const footerConfig: FooterContent = {
 
   groups: [
     {
-      title: "Contact",
+      title: 'Contact',
       links: [
         {
           href: 'https://instagram.com/pyre_sauna',
@@ -27,8 +27,7 @@ const footerConfig: FooterContent = {
           ariaLabel: 'Email hi@pyresauna.com',
         },
         // { label: 'Contact Us', href: '/contact' },
-  
-      ]
+      ],
     },
     // {
     //   title: 'Press',
@@ -43,7 +42,7 @@ const footerConfig: FooterContent = {
     // {
     //   title: 'Support',
     //   links: [
-        
+
     //     // { label: 'FAQs', href: '/faqs' },
     //     // { label: 'Health & Safety', href: '/health-and-safety' },
     //   ],
@@ -66,5 +65,3 @@ const footerConfig: FooterContent = {
 };
 
 export default footerConfig;
-
-

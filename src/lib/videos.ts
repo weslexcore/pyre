@@ -7,7 +7,7 @@ function loadManifestSafely(): VideoManifest | null {
   try {
     // Vite/Astro will copy from public/ at the root of the site
     const path = '/videos/videos.manifest.json';
-    // @ts-ignore - Importing JSON at runtime; at build, this is served as a static asset.
+    // @ts-expect-error - Importing JSON at runtime; at build, this is served as a static asset.
     return undefined as unknown as VideoManifest; // Placeholder for type-only import
   } catch {
     return null;
@@ -59,5 +59,3 @@ export function getOrderedSources(entry: VideoSourceEntry): Array<VideoVariant> 
   const sortDesc = (a: VideoVariant, b: VideoVariant) => b.height - a.height;
   return [...byFormat('webm').sort(sortDesc), ...byFormat('mp4').sort(sortDesc)];
 }
-
-

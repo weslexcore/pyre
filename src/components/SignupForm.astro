@@ -1,10 +1,13 @@
 ---
-import Button from './Button.astro';
-import signupForm from '../lib/signupForm';
 import { Image } from 'astro:assets';
-const subscribed = Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
-import signupFormBackground from '@/assets/images/orbs.jpeg';
+import signupForm from '../lib/signupForm';
+import Button from './Button.astro';
+
+const subscribed =
+  Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
+
 import signupFormPanel from '@/assets/images/heads_with_flowers.jpeg';
+import signupFormBackground from '@/assets/images/orbs.jpeg';
 import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
 ---
 

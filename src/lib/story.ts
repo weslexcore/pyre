@@ -6,12 +6,12 @@ const story: StoryContent = {
     // emphasisList: ['Yourself', 'Your Community', 'The Present Moment'],
     body: [
       'Centered around healing practices that have been around for thousands of years, we’ve re-imagined European bathhouse culture for Richmond.',
-      "Pyre is a space that can be experienced alone or together. A space that serves as a balancing force to modern life’s demands and stressors. ",
-      "Pyre is a space to reconnect to what really matters - yourself, your community, and the present moment.",
+      'Pyre is a space that can be experienced alone or together. A space that serves as a balancing force to modern life’s demands and stressors. ',
+      'Pyre is a space to reconnect to what really matters - yourself, your community, and the present moment.',
       // 'Yourself',
-      // 'Your Community', 
+      // 'Your Community',
       // 'The Present Moment',
-     
+
       // 'A space where you can take a quiet moment alone in our silent sauna, where you can connect with friends and strangers in our social lounge. Where you can relieve anxiety in our cold pool. Where you can take guided classes that pair sauna and cold bathing with breathwork, meditation, expression, sound, and many other modalities with the goal of helping us all heal. ',
       'Create a new habit.',
       'Make time to connect.',
@@ -32,5 +32,3 @@ const story: StoryContent = {
 };
 
 export default story;
-
-
