@@ -1,0 +1,276 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Optimized CloudFormation template for Astro static website using S3 and CloudFront with modern security and performance features.
+
+Parameters:
+  DomainName:
+    Description: The domain name to host the static content (e.g., pyresauna.com)
+    Type: String
+    AllowedPattern: ^[a-z0-9.-]+$
+    ConstraintDescription: Must be a valid domain name in lowercase
+  HostedZoneId:
+    Description: (Optional) The Route 53 Hosted Zone ID for the domain. Leave empty if not using Route 53.
+    Type: String
+    Default: ""
+  AlertEmail:
+    Description: Email address for CloudWatch alerts and notifications
+    Type: String
+    Default: ""
+
+Resources:
+  # S3 Bucket for Website Hosting with encryption
+  WebsiteS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DomainName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  # Modern CloudFront Origin Access Control (replaces OAI)
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${DomainName}-OAC"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Bucket Policy to only allow access from CloudFront OAC
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: CloudFrontDistribution
+    Properties:
+      Bucket: !Ref WebsiteS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${DomainName}/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+
+  # ACM SSL Certificate for CloudFront with WWW support
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub "www.${DomainName}"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub "www.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+
+  # Security Headers Policy for CloudFront
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${AWS::StackName}-security-headers"
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: false
+          ContentTypeOptions:
+            Override: false
+          FrameOptions:
+            FrameOption: DENY
+            Override: false
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: false
+
+  # CloudFront Distribution optimized for Astro with modern features
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt WebsiteS3Bucket.RegionalDomainName
+            Id: S3Origin
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !Ref CloudFrontOriginAccessControl
+        DefaultRootObject: index.html
+        Enabled: true
+        PriceClass: PriceClass_100  # US/Europe only for cost optimization
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # AWS Managed CachingOptimized
+          OriginRequestPolicyId: "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"  # AWS Managed CORS-S3Origin
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          Compress: true
+        CacheBehaviors:
+          - PathPattern: "/_astro/*"
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # Long cache for assets
+            Compress: true
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+        ViewerCertificate:
+          AcmCertificateArn: !Ref SSLCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Aliases:
+          - !Ref DomainName
+          - !Sub "www.${DomainName}"
+
+  # Route 53 DNS Record for root domain
+  Route53RecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: UseRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: "Z2FDTNDATAQYW2"  # CloudFront HostedZoneId
+
+  # Route 53 DNS Record for WWW subdomain
+  Route53WWWRecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: UseRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "www.${DomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: "Z2FDTNDATAQYW2"
+
+  # CloudWatch Alarm for 4xx errors
+  CloudFront4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlertEmail
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-CloudFront-4xx-Errors"
+      AlarmDescription: "High 4xx error rate on CloudFront distribution"
+      MetricName: 4xxErrorRate
+      Namespace: AWS/CloudFront
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # CloudWatch Alarm for 5xx errors  
+  CloudFront5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlertEmail
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-CloudFront-5xx-Errors"
+      AlarmDescription: "High 5xx error rate on CloudFront distribution"
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # SNS Topic for alerts
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlertEmail
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-alerts"
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+Conditions:
+  UseRoute53: !Not [ !Equals [ !Ref HostedZoneId, "" ] ]
+  HasAlertEmail: !Not [ !Equals [ !Ref AlertEmail, "" ] ]
+
+Outputs:
+  # Primary website URL
+  WebsiteURL:
+    Value: !Sub "https://${DomainName}"
+    Description: The primary website URL
+    
+  # CloudFront distribution domain (for debugging)
+  CloudFrontURL:
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+    Description: CloudFront distribution domain name
+  
+  # S3 Bucket Name
+  S3BucketName:
+    Value: !Ref WebsiteS3Bucket
+    Description: S3 bucket name for uploading files
+
+  # CloudFront Distribution ID (for cache invalidation)
+  DistributionId:
+    Value: !Ref CloudFrontDistribution
+    Description: CloudFront distribution ID for cache invalidation
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
+
+  # SSL Certificate ARN
+  CertificateArn:
+    Value: !Ref SSLCertificate
+    Description: ACM SSL certificate ARN
+
+  # Security Headers Policy ID
+  SecurityHeadersPolicyId:
+    Value: !Ref SecurityHeadersPolicy
+    Description: CloudFront security headers policy ID
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityHeadersPolicy"
+
+  # SNS Topic ARN (if alerts configured)
+  AlertTopicArn:
+    Condition: HasAlertEmail
+    Value: !Ref SNSTopic
+    Description: SNS topic ARN for alerts
