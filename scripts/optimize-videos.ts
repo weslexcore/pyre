@@ -5,10 +5,10 @@
   - Requires ffmpeg and ffprobe on PATH.
 */
 
-import { spawn } from 'child_process';
-import { createHash } from 'crypto';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 const projectRoot = process.cwd();
 const publicDir = path.join(projectRoot, 'public');
@@ -56,8 +56,12 @@ function execFile(
     const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => (stdout += d.toString()));
-    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.stdout.on('data', (d) => {
+      stdout += d.toString();
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d.toString();
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ stdout, stderr, code: code ?? 0 }));
   });
@@ -78,7 +82,7 @@ async function ensurePrereqs(): Promise<boolean> {
       console.error(message);
       return false;
     } else {
-      console.warn(message + ' Skipping optimization.');
+      console.warn(`${message} Skipping optimization.`);
       return false;
     }
   }
@@ -150,7 +154,7 @@ async function ffprobeMeta(
     'json',
     file,
   ]);
-  if (code !== 0) throw new Error('ffprobe failed: ' + stderr);
+  if (code !== 0) throw new Error(`ffprobe failed: ${stderr}`);
   const data = JSON.parse(stdout);
   const stream = data.streams?.[0] ?? {};
   const fmt = data.format ?? {};
@@ -209,7 +213,7 @@ async function encodeVariant(
   args.push('-vf', `scale=-2:${height}`);
   args.push(outFile);
   const { code, stderr } = await execFile('ffmpeg', args);
-  if (code !== 0) throw new Error('ffmpeg failed: ' + stderr);
+  if (code !== 0) throw new Error(`ffmpeg failed: ${stderr}`);
 }
 
 async function extractPoster(src: string, outFile: string, durationSec: number): Promise<void> {
@@ -229,7 +233,7 @@ async function extractPoster(src: string, outFile: string, durationSec: number):
     outFile,
   ];
   const { code, stderr } = await execFile('ffmpeg', args);
-  if (code !== 0) throw new Error('ffmpeg poster failed: ' + stderr);
+  if (code !== 0) throw new Error(`ffmpeg poster failed: ${stderr}`);
 }
 
 async function pathExists(p: string): Promise<boolean> {
@@ -245,7 +249,7 @@ async function processSource(
   file: string,
   prev: VideoSourceEntry | null
 ): Promise<VideoSourceEntry> {
-  const relPublicPath = '/' + path.relative(publicDir, file).replace(/\\/g, '/');
+  const relPublicPath = `/${path.relative(publicDir, file).replace(/\\/g, '/')}`;
   const basename = path.basename(file).replace(/\.[^.]+$/, '');
   const id = deriveId(file);
   const inputBytes = await fs.readFile(file);
@@ -313,7 +317,7 @@ async function processSource(
 
 async function writeManifest(manifest: VideoManifest): Promise<void> {
   await safeMkdirp(videosDir);
-  const tmp = manifestPath + '.tmp';
+  const tmp = `${manifestPath}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(manifest, null, 2));
   await fs.rename(tmp, manifestPath);
 }

@@ -3,11 +3,11 @@ import type { VideoManifest, VideoSourceEntry, VideoVariant } from './types';
 
 // The manifest is emitted to public/videos/videos.manifest.json by the optimizer.
 // During dev/build it is statically served from the public directory.
-function loadManifestSafely(): VideoManifest | null {
+function _loadManifestSafely(): VideoManifest | null {
   try {
     // Vite/Astro will copy from public/ at the root of the site
-    const path = '/videos/videos.manifest.json';
-    // @ts-expect-error - Importing JSON at runtime; at build, this is served as a static asset.
+    const _path = '/videos/videos.manifest.json';
+   
     return undefined as unknown as VideoManifest; // Placeholder for type-only import
   } catch {
     return null;
