@@ -15,8 +15,8 @@ const experiences: ExperiencesContent = {
       {
         title: 'COLD BATHING',
         icon: 'harmony',
-        description: 'Nurture your capacity to feel.',
-        bullets: ['Experience a moment of stillness while exploring resilience. Increase dopamine, lower inflammation, and improve your immune system in just a few minutes. '],
+        description: 'A moment of stillness.',
+        bullets: ['Nurture your capacity to feel while exploring resilience. Increase dopamine, lower inflammation, and improve your immune system in just a few minutes. '],
         link: { href: '/meditative', label: 'Go inward' },
         linkText: 'Go inward',
       },
