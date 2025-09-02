@@ -19,7 +19,7 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
   <div class="w-full px-4 py-12 sm:py-16">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch w-full">
       <!-- Image Panel: first on mobile, right on desktop -->
-      <div class="order-1 md:order-2 md:col-span-6 relative">
+      <div class="order-1 md:order-2 md:col-span-6 relative mr-4 md:mr-8">
         <div class="h-[45vh] md:h-full w-full overflow-clip">
           <Image
             src={signupFormPanel}
@@ -34,9 +34,9 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
       </div>
 
       <!-- Content: left on desktop, second on mobile -->
-      <div class="order-2 md:order-1 md:col-span-6 flex items-center py-4 md:py-0">
-        <div class="w-full max-w-[75ch]">
-          <div class="flex items-start gap-4 mb-6 sm:mb-8">
+      <div class="order-2 md:order-1 md:col-span-6 flex items-center justify-center py-4 md:py-0">
+        <div class="w-full max-w-[75ch] text-center">
+          <div class="flex flex-col items-center gap-4 mb-6 sm:mb-8">
             <div
               class="bg-[var(--pyre-red)] rounded-full flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 flex-shrink-0"
             >
@@ -59,7 +59,7 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
 
               <form class="mt-6 flex flex-col gap-3 " method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName}>
                 <div class="flex-1 min-w-0 relative w-full">
-                  <label for="email" class="block text-sm font-primary-semibold font-mono-bold md:sr-only">{signupForm.elements.emailLabel}</label>
+                  <label for="email" class="block text-sm font-primary-semibold font-mono-bold text-left md:sr-only">{signupForm.elements.emailLabel}</label>
                   <input
                     id="email"
                     name="EMAIL"
