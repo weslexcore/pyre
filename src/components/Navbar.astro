@@ -4,6 +4,8 @@ import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import { Image } from 'astro:assets';
 import logo from '../assets/logos/creme/logo_with_text.png';
+
+const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 ---
 
 <header
@@ -28,9 +30,7 @@ import logo from '../assets/logos/creme/logo_with_text.png';
   </div>
 </header>
 
-<script is:inline>
-
-
+<script is:inline define:vars={{ basePath }}>
   (function () {
     const SCROLLED_CLASSES = ['bg-black', 'backdrop-blur', 'shadow'];
 
@@ -47,7 +47,7 @@ import logo from '../assets/logos/creme/logo_with_text.png';
 
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
-      const isLandingPage = window.location.pathname === ('/pyre') || window.location.pathname === ('/pyre/');
+      const isLandingPage = window.location.pathname === basePath;
       if (!navbar) return;
       if (!isLandingPage) {
         applyScrolledState(navbar, true);
