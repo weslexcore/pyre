@@ -2337,6 +2337,7 @@ const RAW_RUNTIME_STATE =
           ["@types/node", "npm:22.17.1"],\
           ["@types/react", "npm:19.1.9"],\
           ["@types/react-dom", "virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#npm:19.1.7"],\
+          ["@vercel/speed-insights", "virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#npm:1.2.0"],\
           ["astro", "npm:5.13.3"],\
           ["react", "npm:19.1.1"],\
           ["react-dom", "virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#npm:19.1.1"],\
@@ -6130,6 +6131,48 @@ const RAW_RUNTIME_STATE =
           "@types/next",\
           "@types/react",\
           "@types/remix-run__react",\
+          "@types/svelte",\
+          "@types/sveltejs__kit",\
+          "@types/vue-router",\
+          "@types/vue",\
+          "next",\
+          "react",\
+          "svelte",\
+          "vue-router",\
+          "vue"\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@vercel/speed-insights", [\
+      ["npm:1.2.0", {\
+        "packageLocation": "./.yarn/unplugged/@vercel-speed-insights-virtual-b781149737/node_modules/@vercel/speed-insights/",\
+        "packageDependencies": [\
+          ["@vercel/speed-insights", "npm:1.2.0"]\
+        ],\
+        "linkType": "SOFT"\
+      }],\
+      ["virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#npm:1.2.0", {\
+        "packageLocation": "./.yarn/unplugged/@vercel-speed-insights-virtual-b781149737/node_modules/@vercel/speed-insights/",\
+        "packageDependencies": [\
+          ["@sveltejs/kit", null],\
+          ["@types/next", null],\
+          ["@types/react", "npm:19.1.9"],\
+          ["@types/svelte", null],\
+          ["@types/sveltejs__kit", null],\
+          ["@types/vue", null],\
+          ["@types/vue-router", null],\
+          ["@vercel/speed-insights", "virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#npm:1.2.0"],\
+          ["next", null],\
+          ["react", "npm:19.1.1"],\
+          ["svelte", null],\
+          ["vue", null],\
+          ["vue-router", null]\
+        ],\
+        "packagePeers": [\
+          "@sveltejs/kit",\
+          "@types/next",\
+          "@types/react",\
           "@types/svelte",\
           "@types/sveltejs__kit",\
           "@types/vue-router",\

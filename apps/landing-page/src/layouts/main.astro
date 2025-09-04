@@ -12,6 +12,7 @@ import {
   SOCIAL_IMAGE_PATH,
   SOCIAL_IMAGE_WIDTH,
 } from '../lib/seo';
+import  SpeedInsights  from "@vercel/speed-insights/astro"	
 
 const {
   title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
@@ -61,5 +62,6 @@ const absoluteSocialImage = Astro.site
 			<slot />
 		</main>
 		<Footer />
+		<SpeedInsights />
 	</body>
 </html>
