@@ -1,0 +1,238 @@
+
+# Pyre Symbol Usage Guide
+
+## Symbol Assignments
+
+### Current Symbol Files
+- `sauna-symbol.png` - Sauna and heat therapy services
+- `community-symbol.png` - Community building and group activities
+- `wellness-symbol.png` - General wellness and health services
+- `healing-symbol.png` - Healing and therapeutic services
+- `ritual-symbol.png` - Ritual and ceremonial practices
+- `transformation-symbol.png` - Personal transformation and growth
+- `connection-symbol.png` - Connection and relationship building
+- `growth-symbol.png` - Personal development and growth
+- `harmony-symbol.png` - Balance and harmony services
+
+## Usage Guidelines
+
+### Design Principles
+- **Large and Visible**: Symbols should be large and very visible as primary visual elements
+- **Bold Presence**: Use symbols as prominent visual statements, not subtle accents
+- **High-Contrast Aesthetic**: Ensure symbols complement the high-contrast aesthetic
+- **Visual Impact**: Symbols should create strong visual impact and draw attention
+- **Typography Integration**: Consider symbol placement in relation to typography and color usage
+
+### Implementation
+- **File Path**: `/public/symbols/`
+- **Format**: PNG with transparency
+- **Sizing**: Use large sizes by default for maximum visibility and impact
+- **Placement**: Position symbols as prominent visual elements that command attention
+
+### Color Usage with Symbols
+- Follow the "no more than 2 colors together" rule
+- Symbols should work with the established color combinations:
+  - Pyre Black + Pyre Creme
+  - Pyre Blue + Pyre Creme
+  - Pyre Red + Pyre Black/Creme
+
+### Responsive Considerations
+- Ensure symbols remain large and visible across all breakpoints
+- Maintain strong visual impact on mobile devices
+- Prioritize symbol visibility over other design elements
+
+## Best Practices
+1. **Large and Visible**: Always prioritize large, visible symbol presentation
+2. **Context**: Ensure symbols are contextually appropriate while maintaining prominence
+3. **Accessibility**: Provide alt text for screen readers
+4. **Performance**: Optimize symbol file sizes for web use
+5. **Brand Alignment**: Ensure symbols align with Pyre's brand personality
+6. **Visual Dominance**: Let symbols be the primary visual focus in their sections
+
+## Technical Implementation
+
+### Using the Symbol Component
+```astro
+---
+import Symbol from './ui/Symbol.astro';
+---
+
+<!-- Available symbols: sauna, community, connection, growth, harmony, healing, ritual, transformation, wellness -->
+<!-- Default to large sizes for maximum visibility -->
+<Symbol name="sauna" size="xl" className="symbol-prominent" />
+<Symbol name="wellness" size="xl" />
+<Symbol name="healing" size="lg" />
+```
+
+### Direct Image Usage
+```html
+<!-- Example usage in Astro components -->
+<img 
+  src="/symbols/sauna-symbol.png" 
+  alt="Sauna therapy symbol" 
+  class="symbol-large"
+/>
+```
+
+### CSS Styling
+```css
+/* Symbol styling - Large and visible by default */
+.symbol-large {
+  width: 120px;
+  height: 120px;
+  opacity: 1;
+  transition: transform 0.3s ease;
+}
+
+.symbol-large:hover {
+  transform: scale(1.05);
+}
+
+.symbol-prominent {
+  width: 160px;
+  height: 160px;
+  opacity: 1;
+  transition: transform 0.3s ease;
+}
+
+.symbol-prominent:hover {
+  transform: scale(1.05);
+}
+
+/* Responsive symbol sizing - Large sizes by default */
+.symbol-sm {
+  width: 80px;
+  height: 80px;
+}
+
+.symbol-md {
+  width: 120px;
+  height: 120px;
+}
+
+.symbol-lg {
+  width: 160px;
+  height: 160px;
+}
+
+.symbol-xl {
+  width: 200px;
+  height: 200px;
+}
+
+.symbol-xxl {
+  width: 240px;
+  height: 240px;
+}
+```
+
+## Symbol Placement Guidelines
+
+### Hero Sections
+- Use extra-large symbols (xl/xxl size) for maximum visual impact
+- Position symbols as the primary visual focus alongside headline text
+- Make symbols the dominant visual element in hero sections
+
+### Service Cards
+- Use large symbols (lg/xl size) for service identification
+- Position symbols prominently above service titles
+- Make symbols the main visual element of each service card
+
+### Navigation Elements
+- Use medium-large symbols (md/lg size) for navigation
+- Ensure symbols are clearly visible and not overshadowed by text
+- Use symbols as primary visual indicators
+
+### Footer and Sidebar
+- Use large symbols (lg size) for accent elements
+- Position symbols prominently to enhance content visibility
+- Maintain brand consistency while ensuring symbols are clearly visible
+
+## Accessibility Requirements
+
+### Alt Text Guidelines
+- Provide descriptive alt text for all symbols
+- Include the service or concept the symbol represents
+- Keep alt text concise but informative
+
+```html
+<!-- Good alt text examples -->
+<img src="/symbols/sauna-symbol.png" alt="Sauna therapy symbol" />
+<img src="/symbols/community-symbol.png" alt="Community building symbol" />
+<img src="/symbols/healing-symbol.png" alt="Healing and wellness symbol" />
+```
+
+### Screen Reader Considerations
+- Symbols should enhance understanding, not replace text
+- Ensure symbols have proper semantic meaning
+- Test with screen readers to verify accessibility
+
+## Performance Optimization
+
+### File Size Guidelines
+- Keep symbol files under 20KB when possible (increased for larger symbols)
+- Use PNG format for transparency support
+- Consider WebP format for modern browsers
+- Optimize images for web delivery
+
+### Loading Strategies
+- Use lazy loading for symbols below the fold
+- Preload critical symbols used in hero sections
+- Consider using CSS sprites for multiple symbols
+
+## Common Mistakes to Avoid
+
+1. ❌ Using symbols that are too small or subtle
+2. ❌ Treating symbols as secondary accent elements
+3. ❌ Missing alt text for accessibility
+4. ❌ Using symbols that don't align with brand personality
+5. ❌ Not making symbols prominent enough in their context
+6. ❌ Not considering responsive behavior for large symbols
+7. ❌ Using symbols that conflict with color combinations
+8. ❌ Underestimating the visual impact symbols should have
+
+## Implementation Checklist
+
+### When Adding Symbols to Components
+- [ ] Choose appropriate symbol for the service/context
+- [ ] Use large sizing by default for maximum visibility
+- [ ] Add descriptive alt text
+- [ ] Ensure proper color contrast
+- [ ] Test responsive behavior for large symbols
+- [ ] Verify accessibility compliance
+- [ ] Optimize file size if using direct images
+- [ ] Follow brand alignment guidelines
+- [ ] Ensure symbols are the primary visual focus
+
+### When Creating New Symbol Placements
+- [ ] Review existing symbol usage patterns
+- [ ] Ensure symbols are large and prominently displayed
+- [ ] Test across all breakpoints for visibility
+- [ ] Verify visual hierarchy with symbols as primary elements
+- [ ] Check color combination compliance
+- [ ] Validate accessibility requirements
+- [ ] Confirm symbols command appropriate visual attention
+
+
+7. ❌ Using symbols that conflict with color combinations
+
+## Implementation Checklist
+
+### When Adding Symbols to Components
+- [ ] Choose appropriate symbol for the service/context
+- [ ] Use consistent sizing within the component type
+- [ ] Add descriptive alt text
+- [ ] Ensure proper color contrast
+- [ ] Test responsive behavior
+- [ ] Verify accessibility compliance
+- [ ] Optimize file size if using direct images
+- [ ] Follow brand alignment guidelines
+
+### When Creating New Symbol Placements
+- [ ] Review existing symbol usage patterns
+- [ ] Ensure consistency with established guidelines
+- [ ] Test across all breakpoints
+- [ ] Verify visual hierarchy
+- [ ] Check color combination compliance
+- [ ] Validate accessibility requirements
+

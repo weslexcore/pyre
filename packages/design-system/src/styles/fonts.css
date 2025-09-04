@@ -1,0 +1,51 @@
+/* Pyre Brand Fonts */
+@font-face {
+  font-family: "PPNeueMontreal-Regular";
+  src:
+    url("../../assets/fonts/PPNeueMontreal-Regular.woff2") format("woff2"),
+    url("../../assets/fonts/PPNeueMontreal-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Eckmannpsych-Small";
+  src:
+    url("../../assets/fonts/Eckmannpsych-Small.woff2") format("woff2"),
+    url("../../assets/fonts/Eckmannpsych-Small.woff") format("woff");
+
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "PPNeueMontreal-Mono";
+  src:
+    url("../../assets/fonts/PPNeueMontreal-Mono.woff2") format("woff2"),
+    url("../../assets/fonts/PPNeueMontreal-Mono.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "PPNeueMontreal-SemiBold";
+  src:
+    url("../../assets/fonts/PPNeueMontreal-SemiBold.woff2") format("woff2"),
+    url("../../assets/fonts/PPNeueMontreal-SemiBold.woff") format("woff");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "PPFraktionMono-Bold";
+  src:
+    url("../../assets/fonts/PPFraktionMono-Bold.woff2") format("woff2"),
+    url("../../assets/fonts/PPFraktionMono-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

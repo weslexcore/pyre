@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "DomainName",
+    "ParameterValue": "pyresauna.com"
+  },
+  {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "Z034372731Z1SQAFBMECN"
+  },
+  {
+    "ParameterKey": "AlertEmail",
+    "ParameterValue": "developer@pyresauna.com"
+  }
+]

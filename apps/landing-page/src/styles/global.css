@@ -1,0 +1,11 @@
+/* Import Tailwind CSS */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Import Pyre Design System Styles */
+@import "@pyre/design-system/styles/globals.css";
+
+/* Custom Tailwind variants for Astro */
+@custom-variant dark (&:is(.dark *));
+
+/* Additional app-specific styles can be added here */

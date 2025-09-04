@@ -1,0 +1,59 @@
+---
+import { Image } from 'astro:assets';
+import cyanoSweatLogo from '../assets/images/cyano_sweat_logo.jpg';
+import Layout from '../layouts/main.astro';
+import { privacyPolicy } from '../lib/policies';
+
+const pageTitle = `${privacyPolicy.title} | Pyre Sauna`;
+const description = privacyPolicy.intro ?? privacyPolicy.sections[0]?.paragraphs?.[0] ?? '';
+---
+
+<Layout title={pageTitle} description={description}>
+	{privacyPolicy.headerImage && (
+		<div class="w-full max-h-[45dvh] overflow-hidden">
+			<Image 
+				src={cyanoSweatLogo} 
+				alt={privacyPolicy.headerImage.alt || "Privacy Policy header"} 
+				width={1920}
+				height={1080}
+				class="w-full h-full max-h-[45dvh] object-cover" 
+				loading="eager"
+				decoding="async"
+			/>
+		</div>
+	)}
+	
+	<main class="mx-auto max-w-screen-md px-4 py-16">
+		<h1 class="font-primary-semibold text-3xl md:text-4xl">{privacyPolicy.title}</h1>
+		{ privacyPolicy.effectiveDate || privacyPolicy.lastUpdated ? (
+			<p class="mt-2 text-sm text-gray-600">
+				{privacyPolicy.effectiveDate ? `Effective Date: ${privacyPolicy.effectiveDate}` : null}
+				{privacyPolicy.effectiveDate && privacyPolicy.lastUpdated ? ' · ' : null}
+				{privacyPolicy.lastUpdated ? `Last updated: ${privacyPolicy.lastUpdated}` : null}
+			</p>
+		) : null }
+
+		{ privacyPolicy.intro ? (
+			<p class="mt-6 text-base leading-7">{privacyPolicy.intro}</p>
+		) : null }
+
+		{privacyPolicy.sections.map((section) => (
+			<section class="mt-10">
+				<h2 class="font-primary-semibold text-2xl">{section.heading}</h2>
+				{section.paragraphs?.map((p) => (
+					<p class="mt-4 text-base leading-7">{p}</p>
+				))}
+				{section.lists?.map((list) => (
+					<div class="mt-6">
+						{list.title ? <h3 class="font-primary-semibold text-xl">{list.title}</h3> : null}
+						<ul class="mt-2 list-disc pl-6 space-y-2">
+							{list.items.map((item) => (
+								<li class="text-base leading-7">{item.text}</li>
+							))}
+						</ul>
+					</div>
+				))}
+			</section>
+		))}
+	</main>
+</Layout>

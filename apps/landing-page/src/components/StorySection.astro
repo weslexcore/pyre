@@ -1,0 +1,116 @@
+---
+import { Image } from 'astro:assets';
+import storyImage from '../assets/images/sauna_ladle_multiexposure.jpeg';
+import swoosh from '../assets/symbols/swoosh.png';
+import { withBase } from '../lib/paths';
+import story from '../lib/story';
+// @ts-nocheck
+import Button from './Button.astro';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
+---
+
+<section aria-labelledby="story-heading" class=" flex flex-col overflow-hidden">
+  <!-- Top repeating logo border -->
+  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full bg-[var(--pyre-creme)]" positionClass="bg-center" />
+
+  <!-- Content wrapper fills remaining height between borders -->
+  <div class="relative flex-1 min-h-0 sm:pt-20 pb-10 sm:pb-20">
+    <!-- Full-bleed background image -->
+    <div
+      class="absolute inset-0 bg-cover bg-center"
+      style={`background-image: url(${storyImage.src}); opacity: 0.8;`}
+      aria-hidden="true"
+    />
+    <!-- Contrast overlay -->
+    <div class="absolute inset-0 bg-[rgba(0,0,0,0.4)]" aria-hidden="true" />
+
+    <!-- Foreground content -->
+    <div class="relative z-10 h-full flex items-center justify-center">
+      <div class="mx-auto w-full px-4 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
+        <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] items-center gap-6 lg:gap-10 text-[var(--pyre-creme)]">
+          <!-- Swoosh symbol -->
+          <div class="flex justify-center lg:justify-start">
+            <Image
+              src={swoosh}
+              alt=""
+              aria-hidden="true"
+              width="800"
+              height="200"
+              loading="lazy"
+              decoding="async"
+              class="w-50 sm:w-80 lg:w-120 h-auto"
+              data-fade-on-scroll
+            />
+          </div>
+
+          <!-- Text + CTA -->
+          <div>
+            <h2 id="story-heading" class="font-primary-semibold tracking-[-0.02em] uppercase text-[clamp(3.5rem,7vw,7rem)] leading-[.9] mb-4">
+              {story.elements.title}
+            </h2>
+            <div class="space-y-4 text-base leading-relaxed">
+              {story.elements.body.map((paragraph) => (
+                <p>{paragraph}</p>
+              ))}
+              {story.elements.emphasisList && (
+                <ul class="list-none pl-0 space-y-1">
+                  {story.elements.emphasisList.map((item) => (
+                    <li class="font-primary-semibold text-center">{item}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div class="mt-10">
+              <Button
+                variant="primary"
+                size="lg"
+                href={story.actions?.primary?.href}
+                ariaLabel={story.actions?.primary?.ariaLabel}
+                class="w-full sm:w-auto"
+              >
+                {story.actions?.primary?.label}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom repeating logo border -->
+  <RepeatingLogoBackground aria-hidden="true" class="h-16 w-full z-10" positionClass="bg-center" />
+</section>
+
+<script>
+  const section = document.querySelector('section[aria-labelledby="story-heading"]');
+  const cta = section?.querySelector('a[href="#signup"]');
+  if (cta) {
+    cta.addEventListener('click', () => {
+      try {
+        const w = window as any;
+        if (typeof w.plausible === 'function') {
+          w.plausible('cta_waitlist_story_click');
+        } else if (typeof w.gtag === 'function') {
+          w.gtag('event', 'cta_waitlist_story_click');
+        } else if (Array.isArray(w.dataLayer)) {
+          w.dataLayer.push({ event: 'cta_waitlist_story_click' });
+        } else {
+          window.dispatchEvent(new CustomEvent('cta_waitlist_story_click'));
+        }
+      } catch {}
+
+      const focusEmail = () => {
+        const emailInput = document.getElementById('email');
+        if (emailInput && typeof emailInput.focus === 'function') {
+          try {
+            emailInput.focus({ preventScroll: true });
+          } catch {
+            emailInput.focus();
+          }
+        }
+      };
+
+      setTimeout(focusEmail, 400);
+    });
+  }
+</script>

@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
+import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
+import faviconImage from '../assets/logos/red/logo.png';
+import Footer from '../components/Footer.astro';
+import Navbar from '../components/Navbar.astro';
+import PostHog from '../components/posthog.astro';
+import {
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_IMAGE_HEIGHT,
+  SOCIAL_IMAGE_PATH,
+  SOCIAL_IMAGE_WIDTH,
+} from '../lib/seo';
+
+const {
+  title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
+  description = 'A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.',
+} = Astro.props;
+const base = import.meta.env.BASE_URL ?? '/';
+const faviconHref = faviconImage.src;
+const socialImagePath = `${base}${SOCIAL_IMAGE_PATH}`;
+const absoluteSocialImage = Astro.site
+  ? new URL(socialImagePath, Astro.site).toString()
+  : socialImagePath;
+---
+
+<html lang="en" style={`--asset-base: ${base};`}> 
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href={faviconHref} />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+    <meta property="og:url" content={Astro.site ? Astro.site.toString() : undefined} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+    <meta property="og:image" content={absoluteSocialImage} />
+    <meta property="og:image:width" content={String(SOCIAL_IMAGE_WIDTH)} />
+    <meta property="og:image:height" content={String(SOCIAL_IMAGE_HEIGHT)} />
+    <meta property="og:image:alt" content={SOCIAL_IMAGE_ALT} />
+		
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content={Astro.site ? Astro.site.toString() : undefined} />
+		<meta property="twitter:title" content={title} />
+		<meta property="twitter:description" content={description} />
+    <meta property="twitter:image" content={absoluteSocialImage} />
+    <meta property="twitter:image:alt" content={SOCIAL_IMAGE_ALT} />
+		<link rel="preload" as="font" href={fontRegularWoff2.src} type="font/woff2" crossorigin />
+		<link rel="preload" as="font" href={fontSemiBoldWoff2.src} type="font/woff2" crossorigin />
+	<PostHog />		
+	</head>
+    <body class="min-h-screen flex flex-col">
+        <Navbar />
+        <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
+		<main class="flex-1">
+			<slot />
+		</main>
+		<Footer />
+	</body>
+</html>

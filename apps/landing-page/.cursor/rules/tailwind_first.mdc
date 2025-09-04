@@ -1,0 +1,7 @@
+---
+alwaysApply: false
+description: How to use tailwind css for all application styling
+---
+
+Always use TailwindCSS utility classes on elements. Avoid introducing new custom classes and avoid using @apply unless a utility cannot express the requirement. Global CSS must be limited to resets, fonts, CSS variables/theme tokens, and rare, shared primitives. Prefer arbitrary values (e.g., text-[clamp(...)] or bg-[...]) when exact values are needed. Prefer focus-visible and outline utilities for accessibility. Ensure Prettier with prettier-plugin-tailwindcss is enabled so class lists are sorted automatically.
+Always use TailwindCSS utility classes on elements. Avoid introducing new custom classes and avoid using @apply unless a utility cannot express the requirement. Global CSS must be limited to resets, fonts, CSS variables/theme tokens, and rare, shared primitives. Prefer arbitrary values (e.g., text-[clamp(...)] or bg-[...]) when exact values are needed. Prefer focus-visible and outline utilities for accessibility. Ensure Prettier with prettier-plugin-tailwindcss is enabled so class lists are sorted automatically.

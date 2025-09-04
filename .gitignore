@@ -108,3 +108,7 @@ bower_components
 .nuxt
 out
 storybook-static
+.DS_Store
+node_modules
+*.local.*
+.turbo
