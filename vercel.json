@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "turbo run build --filter=@pyre/landing-page",
+  "installCommand": "yarn install",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet ."
+}
