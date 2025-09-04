@@ -1,15 +1,5 @@
 import type { Config } from 'tailwindcss';
 
-// Import design system preset
-let pyrePreset;
-try {
-  pyrePreset = require('@pyre/design-system/tailwind').pyrePreset;
-} catch (e) {
-  // Fallback to default configuration if import fails
-  console.warn('Could not load @pyre/design-system preset, using default config');
-  pyrePreset = {};
-}
-
 /** @type {import('tailwindcss').Config} */
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],

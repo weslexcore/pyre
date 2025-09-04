@@ -1951,7 +1951,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pyre/booking-system@workspace:apps/booking-system"
   dependencies:
-    "@pyre/design-system": "workspace:*"
     "@radix-ui/react-collapsible": "npm:^1.1.2"
     "@radix-ui/react-dialog": "npm:^1.1.4"
     "@radix-ui/react-dropdown-menu": "npm:^2.1.4"

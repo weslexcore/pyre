@@ -32,7 +32,7 @@ const RAW_RUNTIME_STATE =
   "pnpZipBackend": "libzip",\
   "fallbackExclusionList": [\
     ["@pyre/booking-system", ["workspace:apps/booking-system"]],\
-    ["@pyre/design-system", ["virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#workspace:packages/design-system", "virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#workspace:packages/design-system", "workspace:packages/design-system"]],\
+    ["@pyre/design-system", ["virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#workspace:packages/design-system", "workspace:packages/design-system"]],\
     ["@pyre/landing-page", ["workspace:apps/landing-page"]],\
     ["@pyre/monorepo", ["workspace:."]]\
   ],\
@@ -2232,7 +2232,6 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "./apps/booking-system/",\
         "packageDependencies": [\
           ["@pyre/booking-system", "workspace:apps/booking-system"],\
-          ["@pyre/design-system", "virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#workspace:packages/design-system"],\
           ["@radix-ui/react-collapsible", "virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#npm:1.1.12"],\
           ["@radix-ui/react-dialog", "virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#npm:1.1.15"],\
           ["@radix-ui/react-dropdown-menu", "virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#npm:2.1.16"],\
@@ -2283,21 +2282,6 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["@pyre/design-system", [\
-      ["virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#workspace:packages/design-system", {\
-        "packageLocation": "./.yarn/__virtual__/@pyre-design-system-virtual-04dfafaa3d/1/packages/design-system/",\
-        "packageDependencies": [\
-          ["@pyre/design-system", "virtual:1a02d90fe04ddefd24d6fda90f8dbf19cffe3e8e5d8fa77aa3f37ee58123249f120b3481714aff606684fa93ab23fc36e90982be134f54cea5b258e4016b7d04#workspace:packages/design-system"],\
-          ["@types/node", "npm:22.17.1"],\
-          ["@types/tailwindcss", null],\
-          ["tailwindcss", "npm:3.4.17"],\
-          ["typescript", "patch:typescript@npm%3A5.9.2#optional!builtin<compat/typescript>::version=5.9.2&hash=5786d5"]\
-        ],\
-        "packagePeers": [\
-          "@types/tailwindcss",\
-          "tailwindcss"\
-        ],\
-        "linkType": "SOFT"\
-      }],\
       ["virtual:45a0429a2ac331f4664f96c971957bc2af28772f2181c9b5047a49ed1eb090b4968810c1e40adbfbdeecfd75fd4826c73624e7511a08d936b495fa188e18f2fb#workspace:packages/design-system", {\
         "packageLocation": "./.yarn/__virtual__/@pyre-design-system-virtual-94f5e800fe/1/packages/design-system/",\
         "packageDependencies": [\
