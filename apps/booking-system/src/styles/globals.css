@@ -1,0 +1,38 @@
+/* Import Pyre Design System Styles */
+@import "@pyre/design-system/styles/globals.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* App-specific overrides */
+  
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+  
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+  
+  * {
+    @apply border-border min-w-0;
+  }
+  
+  html, body {
+    @apply h-full;
+  }
+  
+  body {
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+  
+  /* Update heading styles to use Pyre typography */
+  h1 {
+    @apply font-logo font-bold text-4xl lg:text-6xl;
+    @apply bg-clip-text drop-shadow-[0_0_15px_rgba(0,0,0,1)];
+    @apply lg:text-transparent lg:bg-gradient-to-br;
+    @apply from-pyre-creme to-pyre-blue;
+  }
+}
