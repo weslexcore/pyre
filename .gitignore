@@ -112,3 +112,4 @@ storybook-static
 node_modules
 *.local.*
 .turbo
+.vercel
