@@ -8,13 +8,13 @@ import { loadEnv } from 'vite';
 
 // Manually load .env files using Vite's loadEnv helper
 const mode = process.env.NODE_ENV || 'development';
-const { PUBLIC_ASTRO_BASE, PUBLIC_ASTRO_SITE } = loadEnv(mode, process.cwd(), '');
+const { PUBLIC_ASTRO_BASE, VERCEL_PROJECT_PRODUCTION_URL } = loadEnv(mode, process.cwd(), '');
 
 // https://astro.build/config
 export default defineConfig({
   // For GitHub Pages project sites, ensure assets work under subpath
-  // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set ASTRO_SITE
-  site: PUBLIC_ASTRO_SITE,
+  // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set VERCEL_PROJECT_PRODUCTION_URL
+  site: VERCEL_PROJECT_PRODUCTION_URL,
   base: PUBLIC_ASTRO_BASE,
   vite: {
     plugins: [tailwindcss()],

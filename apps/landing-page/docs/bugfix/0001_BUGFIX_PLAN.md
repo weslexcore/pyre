@@ -69,12 +69,12 @@ Public images and symbols fail to load when the site is deployed under a non-roo
    - Update `@font-face` `src:` URLs in `src/styles/global.css` to reference the new relative asset locations so Vite/Astro rewrite the URLs with the configured base.
    - Confirm the two `<link rel="preload" ...>` tags in `src/layouts/main.astro` still resolve correctly (update paths if needed).
 6. Configuration and environment:
-   - Confirm `astro.config.mjs` continues to derive `base` from `PUBLIC_ASTRO_BASE` and `site` from `PUBLIC_ASTRO_SITE`.
+   - Confirm `astro.config.mjs` continues to derive `base` from `PUBLIC_ASTRO_BASE` and `site` from `VERCEL_PROJECT_PRODUCTION_URL`.
    - Ensure `src/env.d.ts` retains `readonly BASE_URL: string` so TypeScript understands `import.meta.env.BASE_URL`.
 
 ### Test / verification plan
 - Local dev: run with and without `PUBLIC_ASTRO_BASE` to ensure no regressions.
-- Production build: `PUBLIC_ASTRO_BASE=/pyre/ PUBLIC_ASTRO_SITE="https://<user>.github.io"` → `astro build && astro preview`.
+- Production build: `PUBLIC_ASTRO_BASE=/pyre/ VERCEL_PROJECT_PRODUCTION_URL="https://<user>.github.io"` → `astro build && astro preview`.
   - Verify all images, symbols, logos, and fonts load (no 404s).
   - Inspect rendered HTML/CSS: ensure background images use base-aware URLs.
   - Check Open Graph/Twitter images resolve to absolute URLs.

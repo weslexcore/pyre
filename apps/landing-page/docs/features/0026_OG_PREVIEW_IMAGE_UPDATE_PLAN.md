@@ -22,7 +22,7 @@ Update the site-wide default Open Graph and Twitter Card preview image so links 
     - `SOCIAL_IMAGE_HEIGHT = 630`
 
 - `astro.config.mjs`
-  - No functional change needed; confirm `site` is wired to `PUBLIC_ASTRO_SITE` as already configured so absolute URLs can be generated in production builds.
+  - No functional change needed; confirm `site` is wired to `VERCEL_PROJECT_PRODUCTION_URL` as already configured so absolute URLs can be generated in production builds.
 
 ## Step-by-step implementation details
 1. In `src/lib/seo.ts` (new), export constants for the image path, alt text, and dimensions. This ensures a single source of truth and supports future reuse.
@@ -49,7 +49,7 @@ Update the site-wide default Open Graph and Twitter Card preview image so links 
 - Base path handling: keep `import.meta.env.BASE_URL` in the constructed relative path so the app works under subpaths (e.g., GitHub Pages project site).
 
 ## Validation
-- Local: `astro build && astro preview` then inspect the rendered `<head>` to confirm OG and Twitter tags expose the absolute URL when `PUBLIC_ASTRO_SITE` is set, or a base-aware relative URL locally.
+- Local: `astro build && astro preview` then inspect the rendered `<head>` to confirm OG and Twitter tags expose the absolute URL when `VERCEL_PROJECT_PRODUCTION_URL` is set, or a base-aware relative URL locally.
 - Platform debuggers:
   - Facebook Sharing Debugger: scrape to refresh cache and verify image/alt/dimensions.
   - X/Twitter Card Validator: verify `summary_large_image` uses the correct asset.

@@ -1,0 +1,7 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "buildCommand": "cd ../ && turbo run build --filter=@pyre/landing-page",
+    "installCommand": "cd ../ && yarn install",
+    "outputDirectory": "dist",
+    "framework": "astro"
+}
