@@ -12,12 +12,18 @@ export default async function AdminLayout({
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) {
-    redirect('/auth/login');
+    redirect('/');
   }
 
-  // In production, you would check if the user has admin privileges here
-  // For now, we'll allow any authenticated user to access admin
-  // You could check user metadata, a database role, or JWT claims
+  const { data: userData } = await supabase
+    .from('auth.users')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+  
+  if (!userData?.is_super_admin) {
+    redirect('/');
+  }
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

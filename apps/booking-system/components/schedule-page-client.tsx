@@ -48,7 +48,7 @@ export function SchedulePageClient() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 min-h-screen">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold tracking-tight">Session Schedule</h1>
@@ -67,7 +67,7 @@ export function SchedulePageClient() {
           </Button>
         </div>
         <p className="text-muted-foreground">
-          Discover and book your next sauna and cold plunge session
+          Discover and book your next session
         </p>
       </div>
 
