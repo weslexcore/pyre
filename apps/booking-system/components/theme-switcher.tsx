@@ -8,7 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Laptop, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
@@ -44,7 +44,7 @@ const ThemeSwitcher = () => {
               className={"text-muted-foreground"}
             />
           ) : (
-            <Laptop
+            <Sun
               key="system"
               size={ICON_SIZE}
               className={"text-muted-foreground"}
@@ -66,7 +66,7 @@ const ThemeSwitcher = () => {
             <span>Dark</span>
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem className="flex gap-2" value="system">
-            <Laptop size={ICON_SIZE} className="text-muted-foreground" />{" "}
+            <Moon size={ICON_SIZE} className="text-muted-foreground" />{" "}
             <span>System</span>
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
