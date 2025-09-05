@@ -3,6 +3,8 @@ import { getLocations } from "@/lib/supabase/queries";
 import { LocationsManagement } from "@/components/admin/locations-management";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+export const dynamic = 'force-dynamic';
+
 export default async function LocationsAdminPage() {
   return (
     <div className="container mx-auto px-4 py-8">
