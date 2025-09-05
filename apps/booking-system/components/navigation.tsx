@@ -38,14 +38,14 @@ export async function Navigation() {
           <div className="hidden md:flex items-center space-x-8">
             <Link
               href="/"
-              className="text-sm font-sans font-medium hover:text-foreground/80 transition-colors"
+              className="text-sm font-mono-bold font-medium hover:text-foreground/80 transition-colors"
             >
-              Schedule
+              SCHEDULE
             </Link>
             {isAdmin && (
               <Link
                 href="/admin"
-                className="text-sm font-sans font-medium hover:text-foreground/80 transition-colors"
+                className="text-sm font-mono-bold font-medium hover:text-foreground/80 transition-colors"
               >
                 Admin
               </Link>

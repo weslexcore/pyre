@@ -28,7 +28,17 @@ export async function getOfferingsInfinite(
   let query = supabase
     .from('offerings')
     .select(`
-      *,
+      id,
+      date,
+      time,
+      session_type,
+      location_id,
+      cost,
+      total_slots,
+      available_slots,
+      description,
+      created_at,
+      updated_at,
       location:locations(*)
     `, { count: 'exact' });
   
@@ -69,7 +79,7 @@ export async function getOfferingsInfinite(
   if (error) throw error;
   
   return {
-    data: data as Offering[],
+    data: (data || []) as unknown as Offering[],
     count: count || 0,
     hasMore: count ? (from + pageSize) < count : false,
     nextPage: page + 1

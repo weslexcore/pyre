@@ -16,6 +16,7 @@ export interface Offering {
   cost: number;
   total_slots: number;
   available_slots: number;
+  description?: string;
   created_at: string;
   updated_at: string;
   location?: Location;

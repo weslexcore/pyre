@@ -153,7 +153,11 @@ export function SchedulePageClient() {
       {/* Infinite Scroll Schedule */}
       <ScheduleInfinite 
         filters={filters}
-        showBookingButton={false} // Will enable once we have booking flow
+        onBooking={(offeringId) => {
+          // TODO: Implement booking flow
+          console.log('Booking session:', offeringId);
+          alert('Booking functionality will be implemented soon!');
+        }}
       />
     </div>
   );

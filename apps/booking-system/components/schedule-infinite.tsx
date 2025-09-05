@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
 import { Offering } from "@/lib/database.types";
 import { getOfferingsInfinite, OfferingFilters } from "@/lib/supabase/client-queries";
+import { SessionDetailsModal } from "@/components/session-details-modal";
+import { truncateToLines } from "@/lib/utils";
 
 interface ScheduleInfiniteProps {
   onBooking?: (offeringId: string) => void;
@@ -15,12 +17,22 @@ interface ScheduleInfiniteProps {
   filters?: OfferingFilters;
 }
 
+interface BookingState {
+  isBooking: boolean;
+  bookingOfferingId?: string;
+}
+
 export function ScheduleInfinite({ 
   onBooking, 
-  showBookingButton = false,
+  showBookingButton = true, // Default to true to show booking buttons
   filters = {}
 }: ScheduleInfiniteProps) {
   const [pageSize] = useState(14); // ~2 weeks of data per load
+  const [selectedOffering, setSelectedOffering] = useState<Offering | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [bookingState, setBookingState] = useState<BookingState>({
+    isBooking: false
+  });
 
   const {
     data,
@@ -88,6 +100,38 @@ export function ScheduleInfinite({
   const isAlmostFull = (offering: Offering) => 
     offering.available_slots <= Math.ceil(offering.total_slots * 0.2) && offering.available_slots > 0;
 
+  const handleCardClick = (offering: Offering) => {
+    setSelectedOffering(offering);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedOffering(null);
+  };
+
+  const handleBookSession = async (offeringId: string) => {
+    setBookingState({
+      isBooking: true,
+      bookingOfferingId: offeringId
+    });
+
+    try {
+      if (onBooking) {
+        await onBooking(offeringId);
+      }
+      // Close modal on successful booking
+      handleCloseModal();
+    } catch (error) {
+      console.error('Booking failed:', error);
+      // Handle booking error (could show toast notification here)
+    } finally {
+      setBookingState({
+        isBooking: false
+      });
+    }
+  };
+
   if (isLoading) {
     return <ScheduleInfiniteLoading />;
   }
@@ -131,13 +175,14 @@ export function ScheduleInfinite({
                 .map((offering) => (
                   <Card 
                     key={offering.id} 
-                    className={`transition-all hover:shadow-md ${
-                      isFullyBooked(offering) ? 'opacity-60' : ''
+                    className={`transition-all hover:shadow-md cursor-pointer ${
+                      isFullyBooked(offering) ? 'opacity-60' : 'hover:shadow-lg'
                     }`}
+                    onClick={() => handleCardClick(offering)}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
-                        <CardTitle className="text-base">
+                        <CardTitle className="text-base font-mono-bold">
                           {formatTime(offering.time)}
                         </CardTitle>
                         <Badge 
@@ -150,16 +195,19 @@ export function ScheduleInfinite({
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm text-muted-foreground font-sans">
                           📍 {offering.location?.name}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {offering.location?.address}
-                        </div>
+                        {/* Show truncated description instead of address */}
+                        {offering.description && (
+                          <div className="text-sm text-muted-foreground font-sans whitespace-pre-line">
+                            {truncateToLines(offering.description, 2)}
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex items-center justify-between">
-                        <div className="text-lg font-semibold">
+                        <div className="text-lg font-semibold font-mono-bold">
                           ${offering.cost.toFixed(2)}
                         </div>
                         <div className="text-sm">
@@ -170,20 +218,29 @@ export function ScheduleInfinite({
                               Only {offering.available_slots} left
                             </Badge>
                           ) : (
-                            <span className="text-muted-foreground">
+                            <span className="text-muted-foreground font-sans">
                               {offering.available_slots} of {offering.total_slots} available
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {showBookingButton && onBooking && (
+                      {showBookingButton && (
                         <Button 
-                          onClick={() => onBooking(offering.id)}
-                          disabled={isFullyBooked(offering)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click when button is clicked
+                            handleBookSession(offering.id);
+                          }}
+                          disabled={isFullyBooked(offering) || (bookingState.isBooking && bookingState.bookingOfferingId === offering.id)}
                           className="w-full"
                         >
-                          {isFullyBooked(offering) ? 'Fully Booked' : 'Book Session'}
+                          {bookingState.isBooking && bookingState.bookingOfferingId === offering.id ? (
+                            'Booking...'
+                          ) : isFullyBooked(offering) ? (
+                            'Fully Booked'
+                          ) : (
+                            'Book Session'
+                          )}
                         </Button>
                       )}
                     </CardContent>
@@ -216,6 +273,15 @@ export function ScheduleInfinite({
           </Button>
         </div>
       )}
+
+      {/* Session Details Modal */}
+      <SessionDetailsModal
+        offering={selectedOffering}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onBook={onBooking ? handleBookSession : undefined}
+        isBooking={bookingState.isBooking && bookingState.bookingOfferingId === selectedOffering?.id}
+      />
     </div>
   );
 }
