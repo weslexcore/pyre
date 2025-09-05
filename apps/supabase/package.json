@@ -1,0 +1,26 @@
+{
+  "name": "@pyre/supabase",
+  "version": "1.0.0",
+  "description": "Supabase configuration and migrations for Pyre booking system",
+  "scripts": {
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "status": "supabase status",
+    "reset": "supabase db reset",
+    "migrate": "supabase migration new",
+    "migration:up": "supabase migration up",
+    "migration:repair": "supabase migration repair",
+    "db:diff": "supabase db diff",
+    "db:push": "supabase db push",
+    "db:pull": "supabase db pull",
+    "seed": "supabase seed",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "supabase functions deploy",
+    "gen:types": "supabase gen types typescript --local > ../apps/booking-system/lib/database.types.ts",
+    "link": "supabase link",
+    "login": "supabase login"
+  },
+  "devDependencies": {
+    "supabase": "^1.200.3"
+  }
+}

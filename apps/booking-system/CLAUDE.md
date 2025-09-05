@@ -45,7 +45,7 @@ This is a Next.js 15 application using the App Router with Supabase authenticati
 
 ### Environment Variables Required
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY` - Supabase anon key
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anon key
 
 ### Styling Approach
 - Tailwind CSS with custom CSS variables

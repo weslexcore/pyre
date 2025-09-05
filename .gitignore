@@ -43,3 +43,6 @@ next-env.d.ts
 **/.turbo/*
 
 .yarn/install-state.gz
+
+apps/supabase/.temp/**
+apps/supabase/.branches
