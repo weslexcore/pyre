@@ -13,7 +13,7 @@ DECLARE
     westover_hills_id UUID;
 BEGIN
     -- Get location IDs
-    SELECT id INTO garden_id FROM public.locations WHERE name = 'Garden';
+    SELECT id INTO garden_id FROM public.locations WHERE name = 'The Garden';
     SELECT id INTO westover_hills_id FROM public.locations WHERE name = 'Westover Hills';
 
     -- Insert sample offerings for the next 30 days
