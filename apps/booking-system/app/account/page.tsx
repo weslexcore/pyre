@@ -41,8 +41,7 @@ export default async function AccountPage() {
     return bd - ad;
   });
 
-  const initialName = (user.user_metadata as any)?.full_name ?? null;
-
+  const initialName = (user.user_metadata as unknown as { full_name: string })?.full_name ?? null;
   return (
     <main className="min-h-screen flex flex-col items-center">
       <div className="flex-1 flex flex-col gap-10 w-full max-w-5xl p-5">
