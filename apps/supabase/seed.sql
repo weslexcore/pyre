@@ -3,7 +3,7 @@
 
 -- Insert sample locations
 INSERT INTO public.locations (name, address, active) VALUES 
-    ('Garden', '1100 Wittleone Dr. Richmond, VA 20301', true),
+    ('The Garden', '1100 Wittleone Dr. Richmond, VA 20301', true),
     ('Westover Hills', '10203 Westover Hills Blvd, Richmond, VA 23233', true); -- Active location for testing
 
 -- Get location IDs for reference

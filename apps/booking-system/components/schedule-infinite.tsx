@@ -196,7 +196,7 @@ export function ScheduleInfinite({
                     <CardContent className="space-y-3">
                       <div className="space-y-2">
                         <div className="text-sm text-muted-foreground font-sans">
-                          📍 {offering.location?.name}
+                          @ {offering.location?.name}
                         </div>
                         {/* Show truncated description instead of address */}
                         {offering.description && (
