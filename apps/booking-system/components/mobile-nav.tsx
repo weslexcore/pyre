@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeSwitcher } from "./theme-switcher";
 import { LogoutButton } from "./logout-button";
 
 export function MobileNav({ isAdmin, isLoggedIn }: { isAdmin: boolean; isLoggedIn: boolean }) {
