@@ -32,6 +32,7 @@ export async function getOfferingsInfinite(
       date,
       time,
       session_type,
+      duration_minutes,
       location_id,
       cost,
       total_slots,

@@ -5,7 +5,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Clock } from "lucide-react";
 import { Offering } from "@/lib/database.types";
 import { getOfferingsInfinite, OfferingFilters } from "@/lib/supabase/client-queries";
 import { SessionDetailsModal } from "@/components/session-details-modal";
@@ -191,6 +191,10 @@ export function ScheduleInfinite({
                         >
                           {offering.session_type}
                         </Badge>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{offering.duration_minutes ?? 90} min</span>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">

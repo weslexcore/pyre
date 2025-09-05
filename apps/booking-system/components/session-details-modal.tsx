@@ -88,6 +88,9 @@ export function SessionDetailsModal({
                 <div className="text-lg font-semibold text-primary">
                   {formatTime(offering.time)}
                 </div>
+                <div className="text-sm text-muted-foreground font-sans">
+                  {offering.duration_minutes ?? 90} minutes
+                </div>
               </div>
             </div>
           </div>
