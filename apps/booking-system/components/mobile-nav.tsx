@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "./theme-switcher";
+import { LogoutButton } from "./logout-button";
 
-export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
+export function MobileNav({ isAdmin, isLoggedIn }: { isAdmin: boolean; isLoggedIn: boolean }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const isSchedulePage = pathname === "/" || pathname?.startsWith("/schedule");
@@ -54,15 +55,28 @@ export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
               </Link>
             )}
             <div className="border-t border-border my-2"></div>
-            <div className="px-4 py-2">
-              <Link
-                href="/auth/login"
-                className="block text-sm font-medium hover:text-foreground/80 transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Sign in
-              </Link>
-            </div>
+            {isLoggedIn ? (
+              <div className="px-4 py-2 space-y-2">
+                <Link
+                  href="/account"
+                  className="block text-sm font-medium hover:text-foreground/80 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Account
+                </Link>
+                <LogoutButton />
+              </div>
+            ) : (
+              <div className="px-4 py-2">
+                <Link
+                  href="/auth/login"
+                  className="block text-sm font-medium hover:text-foreground/80 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Sign in
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

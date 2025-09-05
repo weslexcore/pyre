@@ -58,7 +58,7 @@ export async function Navigation() {
           {/* Mobile menu */}
           <div className="md:hidden flex">
             <ThemeSwitcher />
-            <MobileNav isAdmin={isAdmin} />
+            <MobileNav isAdmin={isAdmin} isLoggedIn={!!user} />
           </div>
         </div>
       </div>
