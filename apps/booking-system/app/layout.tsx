@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Pyre Sauna + Cold Plunge",
   description: "Schedule and manage your bookings with Pyre",
+  icons: {
+    icon: "/assets/logos/pyre-logo.png",
+    shortcut: "/assets/logos/pyre-logo.png",
+    apple: "/assets/logos/pyre-logo.png",
+  },
 };
 
 const geistSans = Geist({
