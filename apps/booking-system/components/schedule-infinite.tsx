@@ -155,7 +155,7 @@ export function ScheduleInfinite({
   if (Object.keys(groupedOfferings).length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground">No upcoming sessions available.</p>
+        <p className="text-muted-foreground">NO UPCOMING SESSIONS AVAILABLE.</p>
       </div>
     );
   }
@@ -237,9 +237,9 @@ export function ScheduleInfinite({
                           {bookingState.isBooking && bookingState.bookingOfferingId === offering.id ? (
                             'Booking...'
                           ) : isFullyBooked(offering) ? (
-                            'Fully Booked'
+                            'FULLY BOOKED'
                           ) : (
-                            'Book Session'
+                            'BOOK'
                           )}
                         </Button>
                       )}

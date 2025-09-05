@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const isSchedulePage = pathname === "/" || pathname?.startsWith("/schedule");
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -31,13 +34,15 @@ export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
       {isMobileMenuOpen && (
         <div className="absolute right-0 top-full mt-2 w-48 bg-background border border-border rounded-md shadow-lg z-50">
           <div className="py-2">
-            <Link
-              href="/"
-              className="block px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Schedule
-            </Link>
+            {!isSchedulePage && (
+              <Link
+                href="/"
+                className="block px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Schedule
+              </Link>
+            )}
 {isAdmin && (
               <Link
                 href="/admin"

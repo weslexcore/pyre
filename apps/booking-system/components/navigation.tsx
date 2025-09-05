@@ -5,6 +5,7 @@ import { hasEnvVars } from "@/lib/utils";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { MobileNav } from "@/components/mobile-nav";
 import { createClient } from "@/lib/supabase/server";
+import { ScheduleLink } from "@/components/schedule-link";
 
 export async function Navigation() {
   const supabase = await createClient();
@@ -36,12 +37,7 @@ export async function Navigation() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link
-              href="/"
-              className="text-sm font-mono-bold font-medium hover:text-foreground/80 transition-colors"
-            >
-              SCHEDULE
-            </Link>
+            <ScheduleLink />
             {isAdmin && (
               <Link
                 href="/admin"
