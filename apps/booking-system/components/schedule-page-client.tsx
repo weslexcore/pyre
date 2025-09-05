@@ -51,7 +51,7 @@ export function SchedulePageClient() {
     <div className="container mx-auto px-4 py-8 min-h-screen">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-bold tracking-tight">Session Schedule</h1>
+          <h1 className="text-3xl font-sans font-bold tracking-tight">SESSION SCHEDULE</h1>
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
@@ -66,7 +66,7 @@ export function SchedulePageClient() {
             )}
           </Button>
         </div>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground font-sans">
           Discover and book your next session
         </p>
       </div>
@@ -76,7 +76,7 @@ export function SchedulePageClient() {
         <Card className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Filter Sessions</CardTitle>
+              <CardTitle className="text-lg font-sans">Filter Sessions</CardTitle>
               {hasActiveFilters && (
                 <Button
                   variant="ghost"

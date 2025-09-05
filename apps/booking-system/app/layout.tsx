@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Navigation } from "@/components/navigation";
@@ -20,10 +20,83 @@ export const metadata: Metadata = {
   },
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Pyre Brand Fonts
+const pyreLogo = localFont({
+  src: [
+    {
+      path: "../public/assets/fonts/Eckmannpsych-Small.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/Eckmannpsych-Small.woff",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-pyre-logo",
   display: "swap",
-  subsets: ["latin"],
+});
+
+const pyreMono = localFont({
+  src: [
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-Mono.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-Mono.woff",
+      weight: "400",
+      style: "normal",
+    },
+  ],
+  variable: "--font-pyre-mono",
+  display: "swap",
+});
+
+const pyreSans = localFont({
+  src: [
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-Regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-Regular.woff",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-SemiBold.woff2",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/PPNeueMontreal-SemiBold.woff",
+      weight: "600",
+      style: "normal",
+    },
+  ],
+  variable: "--font-pyre-sans",
+  display: "swap",
+});
+
+const pyreMonoBold = localFont({
+  src: [
+    {
+      path: "../public/assets/fonts/PPFraktionMono-Bold.woff2",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../public/assets/fonts/PPFraktionMono-Bold.woff",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-pyre-mono-bold",
+  display: "swap",
 });
 
 export default function RootLayout({
@@ -33,7 +106,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+      <body className={`${pyreMono.variable} ${pyreLogo.variable} ${pyreSans.variable} ${pyreMonoBold.variable} font-mono antialiased`}>
         <QueryProvider>
           <ThemeProvider
             attribute="class"
