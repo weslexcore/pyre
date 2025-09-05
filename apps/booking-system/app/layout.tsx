@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Navigation } from "@/components/navigation";
+import { SupabaseAuthListener } from "@/components/supabase-listener";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -105,7 +106,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={`${pyreMono.variable} ${pyreLogo.variable} ${pyreSans.variable} ${pyreMonoBold.variable} font-mono antialiased`}>
         <QueryProvider>
           <ThemeProvider
@@ -115,6 +116,8 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <div className="min-h-screen flex flex-col">
+              {/* Keep this mounted so auth state changes refresh server components */}
+              <SupabaseAuthListener />
               <Navigation />
               <main className="flex-1">
                 {children}

@@ -26,3 +26,8 @@ export function formatMultilineText(text: string | undefined): string {
   if (!text) return '';
   return text;
 }
+
+// Small promise-based delay helper for sequencing UI updates
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

@@ -5,13 +5,12 @@ import { LogoutButton } from "./logout-button";
 
 export async function AuthButton() {
   const supabase = await createClient();
-
-  // You can also use getUser() which will be slower.
+  // Prefer claims for SSR correctness; derive userId from sub
   const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims ?? null;
+  const userId = (claims as { sub?: string } | null)?.sub ?? null;
 
-  const user = data?.claims;
-
-  return user ? (
+  return userId ? (
     <div className="flex items-center gap-4">
       <Button asChild size="lg" variant={"outline"} className="font-mono-bold">
         <Link

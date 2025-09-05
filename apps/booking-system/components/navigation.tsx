@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 import Image from "next/image";
 import { AuthButton } from "@/components/auth-button";
 import { hasEnvVars } from "@/lib/utils";
@@ -9,15 +10,20 @@ import { ScheduleLink } from "@/components/schedule-link";
 import { ThemeSwitcher } from "./theme-switcher";
 
 export async function Navigation() {
+  // Ensure this server component is never cached
+  noStore();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Use getClaims for reliability in SSR
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
+  const userId = (user as { sub?: string } | null)?.sub ?? null;
   
   let isAdmin = false;
-  if (user) {
+  if (userId) {
     const { data: userData } = await supabase
       .from('auth.users')
       .select('is_super_admin')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
     isAdmin = userData?.is_super_admin || false;
   }
@@ -58,7 +64,7 @@ export async function Navigation() {
           {/* Mobile menu */}
           <div className="md:hidden flex">
             <ThemeSwitcher />
-            <MobileNav isAdmin={isAdmin} isLoggedIn={!!user} />
+            <MobileNav isAdmin={isAdmin} isLoggedIn={!!userId} />
           </div>
         </div>
       </div>

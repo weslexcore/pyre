@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useId } from "react";
+import { sleep } from "@/lib/utils";
 
 export function LoginForm({
   className,
@@ -25,6 +26,8 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const emailId = useId();
+  const passwordId = useId();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +41,13 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/account");
+      // Allow time for client session to settle
+      await sleep(200);
+      // Navigate first so middleware can sync cookies on the target route
+      router.replace("/account");
+      // Then refresh to ensure server components re-render with new cookies
+      await sleep(120);
+      router.refresh();
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -60,9 +68,9 @@ export function LoginForm({
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor={emailId}>Email</Label>
                 <Input
-                  id="email"
+                  id={emailId}
                   type="email"
                   placeholder="m@example.com"
                   required
@@ -72,7 +80,7 @@ export function LoginForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor={passwordId}>Password</Label>
                   <Link
                     href="/auth/forgot-password"
                     className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
@@ -81,7 +89,7 @@ export function LoginForm({
                   </Link>
                 </div>
                 <Input
-                  id="password"
+                  id={passwordId}
                   type="password"
                   required
                   value={password}
