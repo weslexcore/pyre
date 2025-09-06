@@ -7,7 +7,7 @@ function _loadManifestSafely(): VideoManifest | null {
   try {
     // Vite/Astro will copy from public/ at the root of the site
     const _path = '/videos/videos.manifest.json';
-   
+
     return undefined as unknown as VideoManifest; // Placeholder for type-only import
   } catch {
     return null;
