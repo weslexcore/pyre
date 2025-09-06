@@ -59,17 +59,19 @@ export function MobileNav({
                 Admin
               </Link>
             )}
-            <Link
-              href="/account"
-              className="block text-sm font-medium hover:text-foreground/80 transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Account
-            </Link>
+            {isLoggedIn && (
+              <Link
+                href="/account"
+                className="block px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Account
+              </Link>
+            )}
             <div className="border-t border-border my-2"></div>
             {isLoggedIn ? (
               <div className="px-4 py-2 space-y-2">
-                <LogoutButton />
+                <LogoutButton onAfter={() => setIsMobileMenuOpen(false)} />
               </div>
             ) : (
               <div className="px-4 py-2">
