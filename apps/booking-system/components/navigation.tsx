@@ -30,7 +30,7 @@ export async function Navigation() {
   return (
     <nav className="w-full border-b border-b-foreground/10">
       <div className="mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="relative flex justify-between items-center h-16">
           {/* Logo */}
             <Link href="/" className="flex items-center space-x-2">
               <Image
@@ -43,7 +43,7 @@ export async function Navigation() {
             </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-8 absolute left-1/2 -translate-x-1/2">
             <ScheduleLink />
             {isAdmin && (
               <Link
