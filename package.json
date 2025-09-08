@@ -15,7 +15,20 @@
     "format": "turbo run format",
     "check": "turbo run check",
     "check:fix": "turbo run check:fix",
-    "type-check": "turbo run type-check"
+    "type-check": "turbo run type-check",
+    "dev:booking": "turbo run dev --filter=@pyre/booking-system",
+    "dev:landing": "turbo run dev --filter=@pyre/landing-page",
+    "dev:supabase": "turbo run start --filter=@pyre/supabase",
+    "build:booking": "turbo run build --filter=@pyre/booking-system",
+    "build:landing": "turbo run build --filter=@pyre/landing-page",
+    "lint:booking": "turbo run lint --filter=@pyre/booking-system",
+    "lint:landing": "turbo run lint --filter=@pyre/landing-page",
+    "format:booking": "turbo run format --filter=@pyre/booking-system",
+    "format:landing": "turbo run format --filter=@pyre/landing-page",
+    "check:booking": "turbo run check --filter=@pyre/booking-system",
+    "check:landing": "turbo run check --filter=@pyre/landing-page",
+    "type-check:booking": "turbo run type-check --filter=@pyre/booking-system",
+    "type-check:landing": "turbo run type-check --filter=@pyre/landing-page"
   },
   "devDependencies": {
     "turbo": "^2.4.5"
