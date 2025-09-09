@@ -179,6 +179,16 @@ export interface SignupFormContent {
     honeypotFieldName: string;
     postJson?: string;
   };
+  antiSpam: {
+    honeypotFields: {
+      website: string;
+      phone: string;
+      confirmEmail: string;
+    };
+    timestampField: string;
+    minSubmissionTime: number; // seconds
+    trackInteractions: boolean;
+  };
   metadata?: {
     subscribedParam?: string;
   };

@@ -18,6 +18,16 @@ const signupForm: SignupFormContent = {
     tagId: '3034577',
     honeypotFieldName: 'b_daa865d22ae34a68a2959418a_2c14391071',
   },
+  antiSpam: {
+    honeypotFields: {
+      website: 'website_url',
+      phone: 'phone_number', 
+      confirmEmail: 'email_confirm',
+    },
+    timestampField: 'form_timestamp',
+    minSubmissionTime: 3, // seconds
+    trackInteractions: true,
+  },
   metadata: {
     subscribedParam: 'subscribed',
   },

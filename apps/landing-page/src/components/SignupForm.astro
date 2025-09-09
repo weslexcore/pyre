@@ -60,7 +60,7 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
                 <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">{signupForm.elements.successMessage}</div>
               )}
 
-              <form class="mt-6 flex flex-col gap-3 " method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName}>
+              <form class="mt-6 flex flex-col gap-3 " method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName} data-antispam={JSON.stringify(signupForm.antiSpam)}>
                 <div class="flex-1 min-w-0 relative w-full">
                   <label for="email" class="block text-sm font-primary-semibold font-mono-bold text-left md:sr-only">{signupForm.elements.emailLabel}</label>
                   <input
@@ -73,7 +73,14 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
                     class="mt-1 md:mt-0 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-2 text-base text-[var(--foreground)] focus:outline-[var(--ring)] pointer-events-auto cursor-text md:h-12"
                   />
                   <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+                  <!-- Original honeypot -->
                   <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+                  <!-- Enhanced honeypot fields -->
+                  <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" placeholder="Website" />
+                  <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" placeholder="Phone" />
+                  <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" placeholder="Confirm Email" />
+                  <!-- Timestamp tracking -->
+                  <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
                   <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
                 </div>
                 <div>
@@ -91,6 +98,34 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
   <script>
     const form = document.querySelector('#signup form') as HTMLFormElement | null;
     if (form) {
+      // Initialize timestamp and interaction tracking
+      const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+      const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+      let formStartTime = Date.now();
+      let hasInteracted = false;
+      let mouseMoved = false;
+      
+      // Set initial timestamp
+      if (timestampField) {
+        timestampField.value = formStartTime.toString();
+      }
+      
+      // Track user interactions
+      if (antiSpamConfig.trackInteractions) {
+        // Track mouse movement
+        document.addEventListener('mousemove', () => {
+          mouseMoved = true;
+        }, { once: true, passive: true });
+        
+        // Track form interactions
+        form.addEventListener('focusin', () => {
+          hasInteracted = true;
+        }, { passive: true });
+        
+        form.addEventListener('input', () => {
+          hasInteracted = true;
+        }, { passive: true });
+      }
       form.addEventListener('submit', async (event) => {
         const emailInput = form.querySelector('#email');
         const errorEl = form.querySelector('#email-error');
@@ -111,10 +146,44 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
           emailInput.focus();
           return;
         }
-        // Honeypot check: if filled, drop submission silently
+        // Enhanced anti-spam validation
+        const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+        
+        // Original honeypot check
         const honeypotName = form.getAttribute('data-honeypot');
         const honeypotInput = honeypotName ? form.querySelector('input[name="'+ honeypotName +'"]') : null;
         if (honeypotInput && honeypotInput instanceof HTMLInputElement && honeypotInput.value.trim() !== '') {
+          event.preventDefault();
+          return;
+        }
+        
+        // Enhanced honeypot fields check
+        const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+        const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+        const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
+        
+        if ((websiteInput && websiteInput.value.trim() !== '') ||
+            (phoneInput && phoneInput.value.trim() !== '') ||
+            (confirmEmailInput && confirmEmailInput.value.trim() !== '')) {
+          event.preventDefault();
+          return;
+        }
+        
+        // Timestamp validation
+        const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+        if (timestampInput) {
+          const submissionTime = Date.now();
+          const formStartTime = parseInt(timestampInput.value) || submissionTime;
+          const elapsedSeconds = (submissionTime - formStartTime) / 1000;
+          
+          if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
+            event.preventDefault();
+            return;
+          }
+        }
+        
+        // Interaction validation (if enabled)
+        if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
           event.preventDefault();
           return;
         }
