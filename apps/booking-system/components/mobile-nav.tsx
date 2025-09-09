@@ -1,22 +1,16 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { LogoutButton } from "./logout-button";
+import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Menu, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { LogoutButton } from './logout-button';
 
-export function MobileNav({
-  isAdmin,
-  isLoggedIn,
-}: {
-  isAdmin: boolean;
-  isLoggedIn: boolean;
-}) {
+export function MobileNav({ isAdmin, isLoggedIn }: { isAdmin: boolean; isLoggedIn: boolean }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const isSchedulePage = pathname === "/" || pathname?.startsWith("/schedule");
+  const isSchedulePage = pathname === '/' || pathname?.startsWith('/schedule');
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -30,11 +24,7 @@ export function MobileNav({
         onClick={toggleMobileMenu}
         aria-label="Toggle navigation menu"
       >
-        {isMobileMenuOpen ? (
-          <X className="h-5 w-5" />
-        ) : (
-          <Menu className="h-5 w-5" />
-        )}
+        {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </Button>
 
       {/* Mobile Navigation Menu */}

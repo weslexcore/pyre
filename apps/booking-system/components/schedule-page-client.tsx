@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { ScheduleInfinite } from "@/components/schedule-infinite";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { getActiveLocations, getSessionTypes } from "@/lib/supabase/client-queries";
-import { Filter, X } from "lucide-react";
+import { useState } from 'react';
+import { ScheduleInfinite } from '@/components/schedule-infinite';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { useQuery } from '@tanstack/react-query';
+import { getActiveLocations, getSessionTypes } from '@/lib/supabase/client-queries';
+import { Filter, X } from 'lucide-react';
 
 export function SchedulePageClient() {
   const [showFilters, setShowFilters] = useState(false);
@@ -16,7 +16,7 @@ export function SchedulePageClient() {
     locationId: '',
     sessionType: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
   });
 
   // Fetch filter options
@@ -32,19 +32,19 @@ export function SchedulePageClient() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const hasActiveFilters = Object.values(filters).some(value => value !== '');
+  const hasActiveFilters = Object.values(filters).some((value) => value !== '');
 
   const clearFilters = () => {
     setFilters({
       locationId: '',
       sessionType: '',
       dateFrom: '',
-      dateTo: ''
+      dateTo: '',
     });
   };
 
   const updateFilter = (key: keyof typeof filters, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -61,14 +61,12 @@ export function SchedulePageClient() {
             Filters
             {hasActiveFilters && (
               <span className="ml-1 bg-primary text-primary-foreground rounded-full text-xs px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center">
-                {Object.values(filters).filter(v => v !== '').length}
+                {Object.values(filters).filter((v) => v !== '').length}
               </span>
             )}
           </Button>
         </div>
-        <p className="text-muted-foreground font-sans">
-          Discover and book your next session
-        </p>
+        <p className="text-muted-foreground font-sans">Discover and book your next session</p>
       </div>
 
       {/* Filters Card */}
@@ -101,14 +99,14 @@ export function SchedulePageClient() {
                   onChange={(e) => updateFilter('locationId', e.target.value)}
                 >
                   <option value="">All Locations</option>
-                  {locations.map(location => (
+                  {locations.map((location) => (
                     <option key={location.id} value={location.id}>
                       {location.name}
                     </option>
                   ))}
                 </select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="session-type-filter">Session Type</Label>
                 <select
@@ -118,12 +116,14 @@ export function SchedulePageClient() {
                   onChange={(e) => updateFilter('sessionType', e.target.value)}
                 >
                   <option value="">All Types</option>
-                  {sessionTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
+                  {sessionTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
                   ))}
                 </select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="date-from-filter">From Date</Label>
                 <Input
@@ -134,7 +134,7 @@ export function SchedulePageClient() {
                   min={new Date().toISOString().split('T')[0]}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="date-to-filter">To Date</Label>
                 <Input
@@ -151,7 +151,7 @@ export function SchedulePageClient() {
       )}
 
       {/* Infinite Scroll Schedule */}
-      <ScheduleInfinite 
+      <ScheduleInfinite
         filters={filters}
         onBooking={(offeringId) => {
           // TODO: Implement booking flow

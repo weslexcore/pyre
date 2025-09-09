@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Location } from "@/lib/database.types";
-import { Plus, Edit2, Trash2, Save, X } from "lucide-react";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import type { Location } from '@/lib/database.types';
+import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 
 interface LocationsManagementProps {
   initialLocations: Location[];
@@ -27,7 +27,7 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
   const [formData, setFormData] = useState<LocationForm>({
     name: '',
     address: '',
-    active: true
+    active: true,
   });
   const [loading, setLoading] = useState(false);
 
@@ -47,7 +47,7 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
     setFormData({
       name: location.name,
       address: location.address,
-      active: location.active
+      active: location.active,
     });
   };
 
@@ -62,18 +62,20 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
           id: `temp-${Date.now()}`,
           ...formData,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         };
         setLocations([...locations, newLocation]);
       } else if (editingId) {
         // In a real app, this would call an API route that uses the server queries
         console.log('Updating location:', editingId, formData);
         // For now, just simulate updating in local state
-        setLocations(locations.map(loc => 
-          loc.id === editingId 
-            ? { ...loc, ...formData, updated_at: new Date().toISOString() }
-            : loc
-        ));
+        setLocations(
+          locations.map((loc) =>
+            loc.id === editingId
+              ? { ...loc, ...formData, updated_at: new Date().toISOString() }
+              : loc
+          )
+        );
       }
       resetForm();
     } catch (error) {
@@ -94,7 +96,7 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
       // In a real app, this would call an API route that uses the server queries
       console.log('Deleting location:', id);
       // For now, just simulate deletion from local state
-      setLocations(locations.filter(loc => loc.id !== id));
+      setLocations(locations.filter((loc) => loc.id !== id));
     } catch (error) {
       console.error('Error deleting location:', error);
       // In a real app, you'd show an error toast here
@@ -118,9 +120,7 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
       {(isAdding || editingId) && (
         <Card className="border-primary">
           <CardHeader>
-            <CardTitle>
-              {isAdding ? 'Add New Location' : 'Edit Location'}
-            </CardTitle>
+            <CardTitle>{isAdding ? 'Add New Location' : 'Edit Location'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -143,12 +143,12 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
                 />
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="active"
                 checked={formData.active}
-                onCheckedChange={(checked) => 
+                onCheckedChange={(checked) =>
                   setFormData({ ...formData, active: checked as boolean })
                 }
               />
@@ -158,20 +158,11 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
             </div>
 
             <div className="flex gap-2">
-              <Button 
-                onClick={handleSave} 
-                disabled={!isFormValid || loading}
-                className="flex-1"
-              >
+              <Button onClick={handleSave} disabled={!isFormValid || loading} className="flex-1">
                 <Save className="h-4 w-4 mr-2" />
                 {loading ? 'Saving...' : 'Save'}
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={resetForm}
-                disabled={loading}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={resetForm} disabled={loading} className="flex-1">
                 <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
@@ -189,14 +180,17 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
           </Card>
         ) : (
           locations.map((location) => (
-            <Card key={location.id} className={editingId === location.id ? 'ring-2 ring-primary' : ''}>
+            <Card
+              key={location.id}
+              className={editingId === location.id ? 'ring-2 ring-primary' : ''}
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{location.name}</h3>
-                      <Badge variant={location.active ? "default" : "secondary"}>
-                        {location.active ? "Active" : "Inactive"}
+                      <Badge variant={location.active ? 'default' : 'secondary'}>
+                        {location.active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{location.address}</p>
@@ -207,7 +201,7 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
                       )}
                     </p>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
@@ -235,7 +229,10 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
       </div>
 
       <div className="text-sm text-muted-foreground border-t pt-4">
-        <p><strong>Note:</strong> This is a demo interface. In production, these operations would be connected to proper API endpoints.</p>
+        <p>
+          <strong>Note:</strong> This is a demo interface. In production, these operations would be
+          connected to proper API endpoints.
+        </p>
         <p>• Active locations are visible to customers in the schedule</p>
         <p>• Inactive locations are hidden but preserved for historical data</p>
         <p>• Deleting a location will also remove all associated offerings</p>

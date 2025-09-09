@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 /**
  * Listens to Supabase auth state changes and refreshes the router so that
@@ -14,7 +14,7 @@ export function SupabaseAuthListener() {
   useEffect(() => {
     const supabase = createClient();
     const { data } = supabase.auth.onAuthStateChange(() => {
-      console.log("Supabase auth state changed");
+      console.log('Supabase auth state changed');
       // Refresh RSC payload so server components pick up new cookies/session
       router.refresh();
     });

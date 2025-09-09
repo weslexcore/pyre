@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.astro"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.next"]
   },
   "formatter": {
     "enabled": true,

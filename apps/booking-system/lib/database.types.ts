@@ -40,5 +40,8 @@ export type UpdateLocation = Partial<InsertLocation>;
 export type InsertOffering = Omit<Offering, 'id' | 'created_at' | 'updated_at' | 'location'>;
 export type UpdateOffering = Partial<InsertOffering>;
 
-export type InsertBooking = Omit<Booking, 'id' | 'created_at' | 'updated_at' | 'booking_date' | 'offering'>;
+export type InsertBooking = Omit<
+  Booking,
+  'id' | 'created_at' | 'updated_at' | 'booking_date' | 'offering'
+>;
 export type UpdateBooking = Partial<Omit<InsertBooking, 'user_id' | 'offering_id'>>;

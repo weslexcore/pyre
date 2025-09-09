@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export function AccountForm({
   initialEmail,
@@ -15,7 +15,7 @@ export function AccountForm({
   initialName?: string | null;
 }) {
   const [email, setEmail] = useState(initialEmail);
-  const [name, setName] = useState(initialName ?? "");
+  const [name, setName] = useState(initialName ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +32,9 @@ export function AccountForm({
         data: { full_name: name },
       });
       if (error) throw error;
-      setMessage("Account updated. Check your inbox if you changed email.");
+      setMessage('Account updated. Check your inbox if you changed email.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update account.");
+      setError(err instanceof Error ? err.message : 'Failed to update account.');
     } finally {
       setIsSaving(false);
     }
@@ -72,7 +72,7 @@ export function AccountForm({
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3">
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save changes"}
+              {isSaving ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </form>
@@ -80,4 +80,3 @@ export function AccountForm({
     </Card>
   );
 }
-

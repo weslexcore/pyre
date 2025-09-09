@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, Users, TrendingUp } from "lucide-react";
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { MapPin, Calendar, Users, TrendingUp } from 'lucide-react';
 
 export default function AdminDashboard() {
   return (
@@ -21,9 +21,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">4</div>
-            <p className="text-xs text-muted-foreground">
-              +1 from last month
-            </p>
+            <p className="text-xs text-muted-foreground">+1 from last month</p>
           </CardContent>
         </Card>
 
@@ -34,9 +32,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">142</div>
-            <p className="text-xs text-muted-foreground">
-              +12% from last week
-            </p>
+            <p className="text-xs text-muted-foreground">+12% from last week</p>
           </CardContent>
         </Card>
 
@@ -47,9 +43,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">1,284</div>
-            <p className="text-xs text-muted-foreground">
-              +8% from last month
-            </p>
+            <p className="text-xs text-muted-foreground">+8% from last month</p>
           </CardContent>
         </Card>
 
@@ -60,9 +54,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">$18,247</div>
-            <p className="text-xs text-muted-foreground">
-              +22% from last month
-            </p>
+            <p className="text-xs text-muted-foreground">+22% from last month</p>
           </CardContent>
         </Card>
       </div>
@@ -80,9 +72,7 @@ export default function AdminDashboard() {
               Add, edit, and manage your business locations. Control visibility and update details.
             </p>
             <Button asChild className="w-full">
-              <Link href="/admin/locations">
-                Manage Locations
-              </Link>
+              <Link href="/admin/locations">Manage Locations</Link>
             </Button>
           </CardContent>
         </Card>
@@ -96,12 +86,11 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Create and manage session offerings. Set times, prices, and capacity for your services.
+              Create and manage session offerings. Set times, prices, and capacity for your
+              services.
             </p>
             <Button asChild className="w-full">
-              <Link href="/admin/offerings">
-                Manage Offerings
-              </Link>
+              <Link href="/admin/offerings">Manage Offerings</Link>
             </Button>
           </CardContent>
         </Card>
@@ -118,9 +107,7 @@ export default function AdminDashboard() {
               See what your customers see when they browse available sessions.
             </p>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/schedule">
-                View Schedule
-              </Link>
+              <Link href="/schedule">View Schedule</Link>
             </Button>
           </CardContent>
         </Card>
@@ -129,15 +116,29 @@ export default function AdminDashboard() {
       <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
         <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Getting Started</h3>
         <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-          <p>1. <strong>Set up locations:</strong> Add your business locations and mark them as active</p>
-          <p>2. <strong>Create offerings:</strong> Add session times and pricing for each location</p>
-          <p>3. <strong>Monitor bookings:</strong> Track customer reservations and manage capacity</p>
-          <p>4. <strong>Adjust as needed:</strong> Update times, prices, and availability based on demand</p>
+          <p>
+            1. <strong>Set up locations:</strong> Add your business locations and mark them as
+            active
+          </p>
+          <p>
+            2. <strong>Create offerings:</strong> Add session times and pricing for each location
+          </p>
+          <p>
+            3. <strong>Monitor bookings:</strong> Track customer reservations and manage capacity
+          </p>
+          <p>
+            4. <strong>Adjust as needed:</strong> Update times, prices, and availability based on
+            demand
+          </p>
         </div>
       </div>
 
       <div className="mt-6 text-sm text-muted-foreground">
-        <p><strong>Note:</strong> This is a demo admin interface. In production, admin access would be restricted to authorized users only, and all data operations would be connected to secure API endpoints with proper validation and error handling.</p>
+        <p>
+          <strong>Note:</strong> This is a demo admin interface. In production, admin access would
+          be restricted to authorized users only, and all data operations would be connected to
+          secure API endpoints with proper validation and error handling.
+        </p>
       </div>
     </div>
   );

@@ -1,16 +1,11 @@
-"use client";
+'use client';
 
-import { Offering } from "@/lib/database.types";
-import { formatMultilineText } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { MapPin, Clock, Users, DollarSign } from "lucide-react";
+import type { Offering } from '@/lib/database.types';
+import { formatMultilineText } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MapPin, Clock, Users, DollarSign } from 'lucide-react';
 
 interface SessionDetailsModalProps {
   offering: Offering | null;
@@ -20,12 +15,12 @@ interface SessionDetailsModalProps {
   isBooking?: boolean;
 }
 
-export function SessionDetailsModal({ 
-  offering, 
-  isOpen, 
-  onClose, 
+export function SessionDetailsModal({
+  offering,
+  isOpen,
+  onClose,
   onBook,
-  isBooking = false
+  isBooking = false,
 }: SessionDetailsModalProps) {
   if (!offering) return null;
 
@@ -43,7 +38,7 @@ export function SessionDetailsModal({
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -61,7 +56,9 @@ export function SessionDetailsModal({
   };
 
   const isFullyBooked = offering.available_slots === 0;
-  const isAlmostFull = offering.available_slots <= Math.ceil(offering.total_slots * 0.2) && offering.available_slots > 0;
+  const isAlmostFull =
+    offering.available_slots <= Math.ceil(offering.total_slots * 0.2) &&
+    offering.available_slots > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -69,10 +66,7 @@ export function SessionDetailsModal({
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="font-sans text-xl">Session Details</DialogTitle>
-            <Badge 
-              variant="outline" 
-              className={getSessionTypeColor(offering.session_type)}
-            >
+            <Badge variant="outline" className={getSessionTypeColor(offering.session_type)}>
               {offering.session_type}
             </Badge>
           </div>
@@ -123,9 +117,7 @@ export function SessionDetailsModal({
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <span className="font-sans">Price</span>
               </div>
-              <span className="text-lg font-semibold">
-                ${offering.cost.toFixed(2)}
-              </span>
+              <span className="text-lg font-semibold">${offering.cost.toFixed(2)}</span>
             </div>
 
             <div className="flex items-center justify-between">
@@ -137,9 +129,7 @@ export function SessionDetailsModal({
                 {isFullyBooked ? (
                   <Badge variant="destructive">Fully Booked</Badge>
                 ) : isAlmostFull ? (
-                  <Badge variant="secondary">
-                    Only {offering.available_slots} left
-                  </Badge>
+                  <Badge variant="secondary">Only {offering.available_slots} left</Badge>
                 ) : (
                   <span className="text-sm text-muted-foreground font-sans">
                     {offering.available_slots} of {offering.total_slots} available
@@ -151,19 +141,17 @@ export function SessionDetailsModal({
 
           {/* Book Session Button */}
           {onBook && (
-            <Button 
+            <Button
               onClick={() => onBook(offering.id)}
               disabled={isFullyBooked || isBooking}
               className="w-full"
               size="lg"
             >
-              {isBooking ? (
-                'Booking...'
-              ) : isFullyBooked ? (
-                'Session Fully Booked'
-              ) : (
-                'Book This Session'
-              )}
+              {isBooking
+                ? 'Booking...'
+                : isFullyBooked
+                  ? 'Session Fully Booked'
+                  : 'Book This Session'}
             </Button>
           )}
         </div>

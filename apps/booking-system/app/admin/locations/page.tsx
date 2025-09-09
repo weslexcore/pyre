@@ -1,7 +1,7 @@
-import { Suspense } from "react";
-import { getLocations } from "@/lib/supabase/queries";
-import { LocationsManagement } from "@/components/admin/locations-management";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Suspense } from 'react';
+import { getLocations } from '@/lib/supabase/queries';
+import { LocationsManagement } from '@/components/admin/locations-management';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +51,7 @@ function LocationsLoading() {
         <div className="h-8 bg-muted rounded w-32 animate-pulse" />
         <div className="h-10 bg-muted rounded w-28 animate-pulse" />
       </div>
-      
+
       <div className="space-y-4">
         {[1, 2, 3].map((item) => (
           <Card key={item} className="animate-pulse">

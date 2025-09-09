@@ -1,13 +1,13 @@
-import Link from "next/link";
-import { unstable_noStore as noStore } from "next/cache";
-import Image from "next/image";
-import { AuthButton } from "@/components/auth-button";
-import { hasEnvVars } from "@/lib/utils";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { MobileNav } from "@/components/mobile-nav";
-import { createClient } from "@/lib/supabase/server";
-import { ScheduleLink } from "@/components/schedule-link";
-import { ThemeSwitcher } from "./theme-switcher";
+import Link from 'next/link';
+import { unstable_noStore as noStore } from 'next/cache';
+import Image from 'next/image';
+import { AuthButton } from '@/components/auth-button';
+import { hasEnvVars } from '@/lib/utils';
+import { EnvVarWarning } from '@/components/env-var-warning';
+import { MobileNav } from '@/components/mobile-nav';
+import { createClient } from '@/lib/supabase/server';
+import { ScheduleLink } from '@/components/schedule-link';
+import { ThemeSwitcher } from './theme-switcher';
 
 export async function Navigation() {
   // Ensure this server component is never cached
@@ -17,7 +17,7 @@ export async function Navigation() {
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ?? null;
   const userId = (user as { sub?: string } | null)?.sub ?? null;
-  
+
   let isAdmin = false;
   if (userId) {
     const { data: userData } = await supabase
@@ -32,15 +32,15 @@ export async function Navigation() {
       <div className="mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative flex justify-between items-center h-16">
           {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2">
-              <Image
-                src="/assets/logos/pyre-logo.png"
-                alt="Pyre"
-                width={32}
-                height={32}
-                className="w-8 h-8"
-              />
-            </Link>
+          <Link href="/" className="flex items-center space-x-2">
+            <Image
+              src="/assets/logos/pyre-logo.png"
+              alt="Pyre"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+            />
+          </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8 absolute left-1/2 -translate-x-1/2">
@@ -54,7 +54,7 @@ export async function Navigation() {
               </Link>
             )}
           </div>
-    
+
           {/* Auth Button - Desktop */}
           <div className="hidden md:flex items-center gap-2">
             <ThemeSwitcher />

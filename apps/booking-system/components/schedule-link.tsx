@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export function ScheduleLink() {
   const pathname = usePathname();
-  const isSchedulePage = pathname === "/" || pathname?.startsWith("/schedule");
+  const isSchedulePage = pathname === '/' || pathname?.startsWith('/schedule');
 
   if (isSchedulePage) return null;
 
@@ -18,4 +18,3 @@ export function ScheduleLink() {
     </Link>
   );
 }
-
