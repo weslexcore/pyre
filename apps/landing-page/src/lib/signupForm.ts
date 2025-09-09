@@ -21,7 +21,7 @@ const signupForm: SignupFormContent = {
   antiSpam: {
     honeypotFields: {
       website: 'website_url',
-      phone: 'phone_number', 
+      phone: 'phone_number',
       confirmEmail: 'email_confirm',
     },
     timestampField: 'form_timestamp',
