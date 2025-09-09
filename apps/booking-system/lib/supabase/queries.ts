@@ -10,6 +10,7 @@ import type {
   InsertBooking,
   UpdateBooking,
 } from '../database.types';
+import { isProfileComplete, getProfileFromUser, getMissingProfileFields, getFullName } from '../utils/profile';
 
 // Location queries
 export async function getLocations(activeOnly: boolean = true) {
@@ -267,4 +268,218 @@ export async function getUserBookingForOffering(userId: string, offeringId: stri
   }
 
   return data as Booking | null;
+}
+
+// User profile queries for server-side use
+
+/**
+ * Get current authenticated user (server-side)
+ */
+export async function getCurrentUser() {
+  const supabase = await createClient();
+  
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error) throw error;
+  return user;
+}
+
+/**
+ * Check if current user's profile is complete (server-side)
+ */
+export async function isCurrentUserProfileComplete(): Promise<boolean> {
+  try {
+    const user = await getCurrentUser();
+    return isProfileComplete(user);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if current user's email is confirmed (server-side)
+ */
+export async function isCurrentUserEmailConfirmed(): Promise<boolean> {
+  try {
+    const user = await getCurrentUser();
+    return !!user?.email_confirmed_at;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get current user's profile data (server-side)
+ */
+export async function getCurrentUserProfile() {
+  const user = await getCurrentUser();
+  return getProfileFromUser(user);
+}
+
+/**
+ * Check if current user is admin (server-side)
+ */
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  try {
+    const user = await getCurrentUser();
+    return user?.user_metadata?.is_super_admin === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get current user's missing profile fields (server-side)
+ */
+export async function getCurrentUserMissingFields() {
+  try {
+    const user = await getCurrentUser();
+    return getMissingProfileFields(user);
+  } catch {
+    return ['first_name', 'last_name', 'date_of_birth']; // Return all required fields if error
+  }
+}
+
+/**
+ * Check if current user can access protected features (server-side)
+ */
+export async function canCurrentUserAccessProtectedFeatures(): Promise<boolean> {
+  try {
+    const user = await getCurrentUser();
+    const isEmailConfirmed = !!user?.email_confirmed_at;
+    const profileComplete = isProfileComplete(user);
+    return isEmailConfirmed && profileComplete;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get current user's profile completion status (server-side)
+ */
+export async function getCurrentUserProfileCompletionStatus() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return {
+        isAuthenticated: false,
+        isEmailConfirmed: false,
+        isProfileComplete: false,
+        canAccessProtectedFeatures: false,
+        nextStep: 'login' as const,
+        missingFields: ['first_name', 'last_name', 'date_of_birth'],
+      };
+    }
+
+    const isEmailConfirmed = !!user.email_confirmed_at;
+    const isComplete = isProfileComplete(user);
+    const missingFields = getMissingProfileFields(user);
+    const canAccessProtectedFeatures = isEmailConfirmed && isComplete;
+
+    let nextStep: 'confirm_email' | 'complete_profile' | 'all_complete';
+    if (!isEmailConfirmed) {
+      nextStep = 'confirm_email';
+    } else if (!isComplete) {
+      nextStep = 'complete_profile';
+    } else {
+      nextStep = 'all_complete';
+    }
+
+    return {
+      isAuthenticated: true,
+      isEmailConfirmed,
+      isProfileComplete: isComplete,
+      canAccessProtectedFeatures,
+      nextStep,
+      missingFields,
+      profile: getProfileFromUser(user),
+      fullName: getFullName(user),
+    };
+  } catch {
+    return {
+      isAuthenticated: false,
+      isEmailConfirmed: false,
+      isProfileComplete: false,
+      canAccessProtectedFeatures: false,
+      nextStep: 'login' as const,
+      missingFields: ['first_name', 'last_name', 'date_of_birth'],
+    };
+  }
+}
+
+/**
+ * Validate user access to specific route (server-side)
+ * Returns true if user can access the route, false otherwise
+ */
+export async function validateUserRouteAccess(routePath: string): Promise<{
+  canAccess: boolean;
+  redirectTo?: string;
+  reason?: string;
+}> {
+  try {
+    const status = await getCurrentUserProfileCompletionStatus();
+    
+    // Public routes - always accessible
+    const publicPaths = ['/', '/schedule', '/auth', '/unauthorized'];
+    const isPublicPath = publicPaths.some(path => 
+      routePath === path || routePath.startsWith(path + '/')
+    );
+    
+    if (isPublicPath) {
+      return { canAccess: true };
+    }
+
+    // Require authentication for all non-public routes
+    if (!status.isAuthenticated) {
+      return { 
+        canAccess: false, 
+        redirectTo: '/auth/login',
+        reason: 'authentication_required'
+      };
+    }
+
+    // Routes that require email confirmation and profile completion
+    const protectedPaths = ['/account', '/protected', '/admin', '/booking'];
+    const requiresFullCompletion = protectedPaths.some(path =>
+      routePath.startsWith(path)
+    );
+
+    if (requiresFullCompletion) {
+      if (!status.isEmailConfirmed) {
+        return {
+          canAccess: false,
+          redirectTo: '/unauthorized?reason=email_confirmation_required',
+          reason: 'email_confirmation_required'
+        };
+      }
+      
+      if (!status.isProfileComplete) {
+        return {
+          canAccess: false,
+          redirectTo: '/complete-profile',
+          reason: 'profile_completion_required'
+        };
+      }
+    }
+
+    // Admin routes require admin privileges
+    if (routePath.startsWith('/admin')) {
+      const isAdmin = await isCurrentUserAdmin();
+      if (!isAdmin) {
+        return {
+          canAccess: false,
+          redirectTo: '/unauthorized',
+          reason: 'admin_required'
+        };
+      }
+    }
+
+    return { canAccess: true };
+  } catch {
+    return { 
+      canAccess: false, 
+      redirectTo: '/auth/login',
+      reason: 'error'
+    };
+  }
 }

@@ -1,9 +1,8 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { getUserBookings } from '@/lib/supabase/queries';
 import { AccountForm } from '@/components/account-form';
 import { UpdatePasswordForm } from '@/components/update-password-form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { requireProfileCompletion } from '@/lib/utils/route-protection';
 
 function toDateTime(date?: string, time?: string): Date | null {
   if (!date || !time) return null;
@@ -16,13 +15,14 @@ function toDateTime(date?: string, time?: string): Date | null {
 }
 
 export default async function AccountPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/auth/login');
-
-  const bookings = await getUserBookings(user.id);
+  // Require profile completion for account access
+  await requireProfileCompletion();
+  
+  // Get the current user after protection check
+  const { getCurrentUser } = await import('@/lib/supabase/queries');
+  const user = await getCurrentUser();
+  
+  const bookings = await getUserBookings(user?.id || '');
 
   const now = new Date();
   const upcoming = bookings
@@ -47,12 +47,11 @@ export default async function AccountPage() {
       return bd - ad;
     });
 
-  const initialName = (user.user_metadata as unknown as { full_name: string })?.full_name ?? null;
   return (
     <main className="min-h-screen flex flex-col items-center">
       <div className="flex-1 flex flex-col gap-10 w-full max-w-5xl p-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <AccountForm initialEmail={user.email ?? ''} initialName={initialName} />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <AccountForm />
           <UpdatePasswordForm />
         </div>
 

@@ -31,17 +31,38 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/account`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent('/complete-profile')}`,
         },
       });
-      if (error) throw error;
-      router.push('/auth/sign-up-success');
+      
+      if (error) {
+        throw error;
+      }
+
+      // If signup was successful (user created but needs email confirmation)
+      if (data?.user && !data?.user?.email_confirmed_at) {
+        router.push(`/auth/sign-up-success?email=${encodeURIComponent(email)}`);
+      } else if (data?.user?.email_confirmed_at) {
+        // If email is already confirmed (shouldn't happen in normal flow), redirect to complete profile
+        router.push('/complete-profile');
+      }
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      if (error instanceof Error) {
+        // Handle specific Supabase errors more gracefully
+        if (error.message.includes('already registered')) {
+          setError('An account with this email already exists. Please try logging in instead.');
+        } else if (error.message.includes('Password should be at least')) {
+          setError('Password should be at least 6 characters long.');
+        } else {
+          setError(error.message);
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

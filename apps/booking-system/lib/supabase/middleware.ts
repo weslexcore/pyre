@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { hasEnvVars } from '../utils';
+import { isProfileComplete } from '../utils/profile';
+import { getRouteAccessInfo, ROUTE_PROTECTION } from '../utils/route-protection';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -45,17 +47,48 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== '/' &&
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    !request.nextUrl.pathname.startsWith('/schedule')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  // Get the full user data to access email_confirmed_at
+  const { data: { user: fullUser } } = await supabase.auth.getUser();
+  
+  // Get route access requirements based on configuration
+  const routeInfo = getRouteAccessInfo(request.nextUrl.pathname);
+  
+  // Public routes - no protection needed
+  if (routeInfo.isPublic) {
+    return supabaseResponse;
+  }
+
+  // All non-public routes require authentication
+  if (!user && routeInfo.requiresAuth) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/login';
     return NextResponse.redirect(url);
+  }
+
+  // Routes requiring email confirmation
+  if (user && fullUser && routeInfo.requiresEmailConfirmation && !fullUser.email_confirmed_at) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/unauthorized';
+    url.searchParams.set('reason', 'email_confirmation_required');
+    return NextResponse.redirect(url);
+  }
+
+  // Routes requiring profile completion
+  if (user && fullUser && routeInfo.requiresProfileCompletion && !isProfileComplete(fullUser)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/complete-profile';
+    return NextResponse.redirect(url);
+  }
+
+  // Admin routes require special handling
+  if (user && fullUser && routeInfo.requiresAdminAccess) {
+    const isAdmin = fullUser?.user_metadata?.is_super_admin === true;
+    if (!isAdmin) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/unauthorized';
+      url.searchParams.set('reason', 'admin_required');
+      return NextResponse.redirect(url);
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

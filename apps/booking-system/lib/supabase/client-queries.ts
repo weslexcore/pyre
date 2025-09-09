@@ -2,6 +2,8 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import type { Offering } from '../database.types';
+import type { ProfileData } from '../utils/profile';
+import { createProfileMetadata } from '../utils/profile';
 
 function createPublicBrowserClient() {
   return createBrowserClient(
@@ -111,6 +113,64 @@ export async function getActiveLocations() {
     .eq('active', true)
     .order('name');
 
+  if (error) throw error;
+  return data;
+}
+
+// Profile management functions
+
+/**
+ * Update user profile data in metadata
+ */
+export async function updateUserProfile(profileData: Partial<ProfileData>) {
+  const supabase = createPublicBrowserClient();
+  
+  const metadata = createProfileMetadata(profileData);
+  
+  const { data, error } = await supabase.auth.updateUser({
+    data: metadata
+  });
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get current user with profile data
+ */
+export async function getCurrentUser() {
+  const supabase = createPublicBrowserClient();
+  
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error) throw error;
+  return user;
+}
+
+/**
+ * Update user email
+ */
+export async function updateUserEmail(email: string) {
+  const supabase = createPublicBrowserClient();
+  
+  const { data, error } = await supabase.auth.updateUser({
+    email
+  });
+  
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Update user password
+ */
+export async function updateUserPassword(password: string) {
+  const supabase = createPublicBrowserClient();
+  
+  const { data, error } = await supabase.auth.updateUser({
+    password
+  });
+  
   if (error) throw error;
   return data;
 }

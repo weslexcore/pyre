@@ -2,8 +2,11 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapPin, Calendar, Users, TrendingUp } from 'lucide-react';
+import { requireAdmin } from '@/lib/utils/route-protection';
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  // Require admin access with full profile completion
+  await requireAdmin();
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">

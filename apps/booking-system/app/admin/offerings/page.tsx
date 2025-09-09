@@ -2,10 +2,13 @@ import { Suspense } from 'react';
 import { getOfferings, getLocations } from '@/lib/supabase/queries';
 import { OfferingsManagement } from '@/components/admin/offerings-management';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { requireAdmin } from '@/lib/utils/route-protection';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OfferingsAdminPage() {
+  // Require admin access with full profile completion
+  await requireAdmin();
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
