@@ -7,4 +7,9 @@ Please do a thorough code review:
 4. Look for any over-engineering or files getting too large and needing refactoring
 5. Look for any weird syntax or style that doesn't match other parts of the codebase
 
-Document your findings in docs/features/<N>_SHORT_DESCRIPTION_REVIEW.md unless a different file name is specified.
+
+## Output
+
+- **Format:** Markdown (`.md`)
+- **Location:** `/docs/features/`
+- **Filename:** `<N>-SHORT_DESCRIPTION_REVIEW.md` file with the same number and description as the PRD + Tasks file. 
