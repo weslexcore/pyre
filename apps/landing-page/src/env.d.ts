@@ -9,9 +9,33 @@ declare module '*.astro' {
 // Minimal env typing to satisfy lints without pulling in full Astro types
 interface ImportMetaEnv {
   readonly BASE_URL: string;
+  readonly PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: string;
+  readonly CLOUDFLARE_TURNSTILE_SECRET_KEY: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+// Cloudflare Turnstile type declarations
+interface TurnstileRenderOptions {
+  sitekey: string;
+  theme?: 'light' | 'dark' | 'auto';
+  size?: 'normal' | 'compact';
+  callback?: (token: string) => void;
+  'error-callback'?: () => void;
+  'expired-callback'?: () => void;
+}
+
+interface Turnstile {
+  render(container: string | HTMLElement, options: TurnstileRenderOptions): string;
+  reset(widgetId?: string): void;
+  remove(widgetId?: string): void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: Turnstile;
+  }
 }
 
 // Minimal declaration to satisfy editor/linter for astro:assets Image component usage

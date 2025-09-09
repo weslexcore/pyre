@@ -28,6 +28,11 @@ const signupForm: SignupFormContent = {
     minSubmissionTime: 3, // seconds
     trackInteractions: true,
   },
+  turnstile: {
+    siteKey: import.meta.env.PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || '',
+    theme: 'auto',
+    size: 'normal',
+  },
   metadata: {
     subscribedParam: 'subscribed',
   },

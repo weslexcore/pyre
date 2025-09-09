@@ -11,6 +11,8 @@ import signupFormBackground from '@/assets/images/orbs.jpeg';
 import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
 ---
 
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
+
 <div id="waitlist" aria-hidden="true" class="h-0"></div>
 <div id="signup-wrapper" class="signup-wrapper">
 <section id="signup" aria-labelledby="signup-heading" class="relative text-[var(--card-foreground)] w-full">
@@ -60,7 +62,7 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
                 <div role="status" class="mt-4 rounded-md border p-3 bg-[oklch(0.96_0.01_60)]">{signupForm.elements.successMessage}</div>
               )}
 
-              <form class="mt-6 flex flex-col gap-3 " method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName} data-antispam={JSON.stringify(signupForm.antiSpam)}>
+              <form class="mt-6 flex flex-col gap-3 " method="POST" action={signupForm.mailchimp.action} novalidate data-honeypot={signupForm.mailchimp.honeypotFieldName} data-antispam={JSON.stringify(signupForm.antiSpam)} data-turnstile={JSON.stringify(signupForm.turnstile)}>
                 <div class="flex-1 min-w-0 relative w-full">
                   <label for="email" class="block text-sm font-primary-semibold font-mono-bold text-left md:sr-only">{signupForm.elements.emailLabel}</label>
                   <input
@@ -81,8 +83,12 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
                   <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" placeholder="Confirm Email" />
                   <!-- Timestamp tracking -->
                   <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
+                  <!-- Turnstile token -->
+                  <input type="hidden" name="cf-turnstile-response" value="" id="turnstile-token" />
                   <p id="email-error" aria-live="polite" class="mt-1 text-sm text-[var(--destructive)]"></p>
                 </div>
+                <!-- Turnstile widget -->
+                <div id="turnstile-container" class="flex justify-center"></div>
                 <div>
                   <Button type="submit" variant="primary" size="md" class="md:h-12">{signupForm.elements.submitLabel}</Button>
                 </div>
@@ -100,16 +106,57 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
     if (form) {
       // Initialize timestamp and interaction tracking
       const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+      const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
       const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
       let formStartTime = Date.now();
       let hasInteracted = false;
       let mouseMoved = false;
+      let turnstileToken = '';
       
       // Set initial timestamp
       if (timestampField) {
         timestampField.value = formStartTime.toString();
       }
       
+      // Initialize Turnstile widget
+      function initTurnstile() {
+        if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey) {
+          (window as any).turnstile.render('#turnstile-container', {
+            sitekey: turnstileConfig.siteKey,
+            theme: turnstileConfig.theme || 'auto',
+            size: turnstileConfig.size || 'normal',
+            callback: function(token) {
+              turnstileToken = token;
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) {
+                tokenInput.value = token;
+              }
+            },
+            'error-callback': function() {
+              turnstileToken = '';
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) {
+                tokenInput.value = '';
+              }
+            },
+            'expired-callback': function() {
+              turnstileToken = '';
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) {
+                tokenInput.value = '';
+              }
+            }
+          });
+        }
+      }
+
+      // Wait for Turnstile to load, then initialize
+      if (typeof (window as any).turnstile !== 'undefined') {
+        initTurnstile();
+      } else {
+        window.addEventListener('load', initTurnstile);
+      }
+
       // Track user interactions
       if (antiSpamConfig.trackInteractions) {
         // Track mouse movement
@@ -186,6 +233,44 @@ import signupFormSymbol from '@/assets/symbols/connection-symbol.png';
         if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
           event.preventDefault();
           return;
+        }
+
+        // Turnstile validation
+        if (turnstileConfig.siteKey && !turnstileToken) {
+          event.preventDefault();
+          errorEl.textContent = 'Please complete the security check.';
+          return;
+        }
+
+        // Verify Turnstile token with server
+        if (turnstileToken) {
+          try {
+            const verifyResponse = await fetch('/api/verify-turnstile', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ token: turnstileToken }),
+            });
+
+            const verifyResult = await verifyResponse.json();
+            
+            if (!verifyResult.success) {
+              event.preventDefault();
+              errorEl.textContent = 'Security verification failed. Please try again.';
+              // Reset Turnstile widget
+              if (typeof (window as any).turnstile !== 'undefined') {
+                (window as any).turnstile.reset();
+              }
+              turnstileToken = '';
+              return;
+            }
+          } catch (verifyError) {
+            event.preventDefault();
+            errorEl.textContent = 'Security verification failed. Please try again.';
+            console.error('Turnstile verification error:', verifyError);
+            return;
+          }
         }
 
         // Progressive enhancement: JSONP to Mailchimp

@@ -189,6 +189,11 @@ export interface SignupFormContent {
     minSubmissionTime: number; // seconds
     trackInteractions: boolean;
   };
+  turnstile: {
+    siteKey: string;
+    theme?: 'light' | 'dark' | 'auto';
+    size?: 'normal' | 'compact';
+  };
   metadata?: {
     subscribedParam?: string;
   };
