@@ -9,6 +9,7 @@ Guidelines for implementing a feature and managing task lists in markdown files 
    
   3. Once all the subtasks are marked completed and tests have passed, continue to the next parent task.
 - Stop after each sub‑task and wait for the user's go‑ahead.
+- At the end of all tasks, all `yarn lint:fix`, `yarn format` and `yarn build` commands must be run and pass for the relevant project
 
 ## Task List Maintenance
 
