@@ -91,7 +91,7 @@ export function CompleteProfileForm({
 
       toast.success('Profile completed successfully!');
       router.push('/schedule');
-    } catch (error) {
+    } catch {
       // Error handling is done in the hook via toast
     } finally {
       setIsSubmitting(false);
@@ -233,7 +233,7 @@ export function CompleteProfileForm({
                   onClick={handleSkipForNow}
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
-                  Skip for now, I'll complete this later
+                  Skip for now, I&apos;ll complete this later
                 </Button>
               </div>
             </div>

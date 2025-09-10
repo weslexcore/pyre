@@ -30,11 +30,11 @@ export function useProfile() {
     retry: false,
   });
 
-  const profile = getProfileFromUser(user);
-  const isComplete = isProfileComplete(user);
-  const missingFields = getMissingProfileFields(user);
+  const profile = getProfileFromUser(user ?? null);
+  const isComplete = isProfileComplete(user ?? null);
+  const missingFields = getMissingProfileFields(user ?? null);
   const isEmailConfirmed = !!user?.email_confirmed_at;
-  const fullName = getFullName(user);
+  const fullName = getFullName(user ?? null);
 
   // Update profile mutation
   const updateProfile = useMutation({

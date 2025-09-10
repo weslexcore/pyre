@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { hasEnvVars } from '../utils';
 import { isProfileComplete } from '../utils/profile';
-import { getRouteAccessInfo, ROUTE_PROTECTION } from '../utils/route-protection';
+import { getRouteAccessInfo } from '../utils/route-protection';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({

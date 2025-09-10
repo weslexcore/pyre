@@ -90,7 +90,7 @@ export function AccountForm() {
       setErrors({});
       // The form will automatically update with the new values from the hook
       // after a successful mutation due to React Query's cache invalidation
-    } catch (_error) {
+    } catch {
       // Error handling is done in the hook
     } finally {
       setIsUpdatingProfile(false);

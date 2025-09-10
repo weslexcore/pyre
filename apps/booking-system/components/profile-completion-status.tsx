@@ -173,7 +173,7 @@ export function ProfileCompletionStatus({
  * Simple inline status indicator
  */
 export function ProfileCompletionIndicator() {
-  const { canAccessProtectedFeatures, nextStep, statusMessage } = useProfileCompletion();
+  const { canAccessProtectedFeatures, statusMessage } = useProfileCompletion();
 
   if (canAccessProtectedFeatures) {
     return (

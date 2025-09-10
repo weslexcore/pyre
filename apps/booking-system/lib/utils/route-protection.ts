@@ -202,15 +202,15 @@ export function getRouteAccessInfo(pathname: string) {
     protectionLevel,
     isPublic: protectionLevel === ROUTE_PROTECTION.PUBLIC,
     requiresAuth: protectionLevel !== ROUTE_PROTECTION.PUBLIC,
-    requiresEmailConfirmation: [
+    requiresEmailConfirmation: ([
       ROUTE_PROTECTION.EMAIL_CONFIRMED,
       ROUTE_PROTECTION.PROFILE_COMPLETE,
       ROUTE_PROTECTION.ADMIN_ONLY,
-    ].includes(protectionLevel),
-    requiresProfileCompletion: [
+    ] as RouteProtectionLevel[]).includes(protectionLevel),
+    requiresProfileCompletion: ([
       ROUTE_PROTECTION.PROFILE_COMPLETE,
       ROUTE_PROTECTION.ADMIN_ONLY,
-    ].includes(protectionLevel),
+    ] as RouteProtectionLevel[]).includes(protectionLevel),
     requiresAdminAccess: protectionLevel === ROUTE_PROTECTION.ADMIN_ONLY,
   };
 }

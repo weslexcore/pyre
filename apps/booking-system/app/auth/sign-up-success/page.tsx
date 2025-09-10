@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { Mail, Clock, RefreshCw } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function Page() {
+function SignUpSuccessContent() {
   const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [cooldownTime, setCooldownTime] = useState(0);
@@ -53,7 +53,7 @@ export default function Page() {
         setResendMessage('Confirmation email resent! Please check your inbox and spam folder.');
         setCooldownTime(60); // 60 second cooldown
       }
-    } catch (error) {
+    } catch {
       setResendMessage('An unexpected error occurred. Please try again.');
     } finally {
       setIsResending(false);
@@ -138,5 +138,30 @@ export default function Page() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense 
+      fallback={
+        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+          <div className="w-full max-w-md">
+            <div className="flex flex-col gap-6">
+              <Card>
+                <CardHeader className="text-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <Mail className="h-6 w-6 text-primary animate-pulse" />
+                  </div>
+                  <CardTitle className="text-2xl">Loading...</CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <SignUpSuccessContent />
+    </Suspense>
   );
 }

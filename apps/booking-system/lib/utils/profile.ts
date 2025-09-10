@@ -48,8 +48,8 @@ export function getProfileFromUser(user: User | null): ProfileData {
 /**
  * Create metadata object for updating user profile
  */
-export function createProfileMetadata(profileData: Partial<ProfileData>): Record<string, any> {
-  const metadata: Record<string, any> = {};
+export function createProfileMetadata(profileData: Partial<ProfileData>): Record<string, string | undefined | object> {
+  const metadata: Record<string, string | undefined | object> = {};
 
   if (profileData.first_name !== undefined) {
     metadata.first_name = profileData.first_name;
@@ -69,7 +69,7 @@ export function createProfileMetadata(profileData: Partial<ProfileData>): Record
 
   if (profileData.preferences !== undefined) {
     metadata.preferences = {
-      ...(metadata.preferences || {}),
+      ...(typeof metadata.preferences === 'object' ? metadata.preferences : {}),
       ...profileData.preferences,
     };
   }

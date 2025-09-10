@@ -36,7 +36,7 @@ export function ConditionalAccess({
   fallback = null,
   showLoading = true,
 }: ConditionalAccessProps) {
-  const { user, isEmailConfirmed, isComplete, canAccessProtectedFeatures } = useProfileCompletion();
+  const { user, isEmailConfirmed, isComplete } = useProfileCompletion();
 
   // Show loading state if requested and user data is still loading
   if (showLoading && user === undefined) {
@@ -72,7 +72,7 @@ export function ConditionalAccess({
     }
   })();
 
-  return meetsRequirements ? <>{children}</> : <>{fallback}</>;
+  return meetsRequirements ? children : fallback;
 }
 
 /**

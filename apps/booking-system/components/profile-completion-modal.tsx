@@ -127,7 +127,7 @@ export function ProfileCompletionModal({
 
   return (
     <Dialog open={open} onOpenChange={dismissible ? onOpenChange : undefined}>
-      <DialogContent className="sm:max-w-md" closable={dismissible}>
+      <DialogContent className="sm:max-w-md" showCloseButton={dismissible}>
         <DialogHeader>
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
             <AlertTriangle className="h-6 w-6 text-orange-600" />
