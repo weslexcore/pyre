@@ -17,11 +17,11 @@ function toDateTime(date?: string, time?: string): Date | null {
 export default async function AccountPage() {
   // Require profile completion for account access
   await requireProfileCompletion();
-  
+
   // Get the current user after protection check
   const { getCurrentUser } = await import('@/lib/supabase/queries');
   const user = await getCurrentUser();
-  
+
   const bookings = await getUserBookings(user?.id || '');
 
   const now = new Date();

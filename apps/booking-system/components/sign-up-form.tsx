@@ -38,7 +38,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
           emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent('/complete-profile')}`,
         },
       });
-      
+
       if (error) {
         throw error;
       }

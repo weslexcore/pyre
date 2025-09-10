@@ -54,19 +54,19 @@ export function createProfileMetadata(profileData: Partial<ProfileData>): Record
   if (profileData.first_name !== undefined) {
     metadata.first_name = profileData.first_name;
   }
-  
+
   if (profileData.last_name !== undefined) {
     metadata.last_name = profileData.last_name;
   }
-  
+
   if (profileData.date_of_birth !== undefined) {
     metadata.date_of_birth = profileData.date_of_birth;
   }
-  
+
   if (profileData.phone !== undefined) {
     metadata.phone = profileData.phone;
   }
-  
+
   if (profileData.preferences !== undefined) {
     metadata.preferences = {
       ...(metadata.preferences || {}),
@@ -82,23 +82,15 @@ export function createProfileMetadata(profileData: Partial<ProfileData>): Record
  */
 export function isProfileComplete(user: User | null): boolean {
   const profile = getProfileFromUser(user);
-  
-  return !!(
-    profile.first_name &&
-    profile.last_name &&
-    profile.date_of_birth
-  );
+
+  return !!(profile.first_name && profile.last_name && profile.date_of_birth);
 }
 
 /**
  * Check if profile has all required fields completed (with explicit data)
  */
 export function isProfileDataComplete(profileData: ProfileData): boolean {
-  return !!(
-    profileData.first_name &&
-    profileData.last_name &&
-    profileData.date_of_birth
-  );
+  return !!(profileData.first_name && profileData.last_name && profileData.date_of_birth);
 }
 
 /**
@@ -135,7 +127,7 @@ export function getFullName(user: User | null): string {
  */
 export function formatDateOfBirth(dateString: string | undefined): string {
   if (!dateString) return '';
-  
+
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -179,7 +171,10 @@ export function validateDateOfBirth(dateString: string): { valid: boolean; error
 /**
  * Validate profile data
  */
-export function validateProfileData(data: Partial<ProfileData>): { valid: boolean; errors: Record<string, string> } {
+export function validateProfileData(data: Partial<ProfileData>): {
+  valid: boolean;
+  errors: Record<string, string>;
+} {
   const errors: Record<string, string> = {};
 
   // Validate first name
@@ -214,14 +209,14 @@ export function validateProfileData(data: Partial<ProfileData>): { valid: boolea
 
   // Validate phone (optional)
   if (data.phone !== undefined && data.phone.trim()) {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    if (!phoneRegex.test(data.phone.replace(/[\s\-\(\)]/g, ''))) {
+    const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
+    if (!phoneRegex.test(data.phone.replace(/[\s\-()]/g, ''))) {
       errors.phone = 'Please enter a valid phone number';
     }
   }
 
   return {
     valid: Object.keys(errors).length === 0,
-    errors
+    errors,
   };
 }

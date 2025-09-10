@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { ProfileCompletionModal, useProfileCompletionModal } from './profile-completion-modal';
 import { useProfileCompletion } from '@/hooks/use-profile';
 
@@ -29,7 +29,7 @@ interface ProfileCompletionGuardProps {
 /**
  * A wrapper component that automatically shows the profile completion modal
  * when users try to access features requiring profile completion.
- * 
+ *
  * Usage:
  * ```tsx
  * <ProfileCompletionGuard requireFullCompletion>
@@ -48,9 +48,7 @@ export function ProfileCompletionGuard({
   const { isOpen, showModal, closeModal } = useProfileCompletionModal();
 
   // Determine if requirements are met based on the requirement level
-  const requirementsMet = requireFullCompletion 
-    ? canAccessProtectedFeatures 
-    : isEmailConfirmed;
+  const requirementsMet = requireFullCompletion ? canAccessProtectedFeatures : isEmailConfirmed;
 
   useEffect(() => {
     if (requirementsMet && onRequirementsMet) {
@@ -76,7 +74,9 @@ export function ProfileCompletionGuard({
         open={isOpen}
         onOpenChange={closeModal}
         dismissible={dismissible}
-        description={blockingMessage || 'Please complete the required steps to access this feature.'}
+        description={
+          blockingMessage || 'Please complete the required steps to access this feature.'
+        }
         onProfileComplete={onRequirementsMet}
       />
     </>
@@ -103,6 +103,6 @@ export function withProfileCompletionGuard<P extends object>(
   };
 
   WrappedComponent.displayName = `withProfileCompletionGuard(${Component.displayName || Component.name})`;
-  
+
   return WrappedComponent;
 }

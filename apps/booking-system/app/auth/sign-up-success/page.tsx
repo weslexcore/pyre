@@ -31,7 +31,7 @@ export default function Page() {
 
     setIsResending(true);
     setResendMessage(null);
-    
+
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resend({
@@ -71,17 +71,17 @@ export default function Page() {
               </div>
               <CardTitle className="text-2xl">Check your email</CardTitle>
               <CardDescription>
-                We&apos;ve sent a confirmation link to{email && (
-                  <span className="block font-medium text-foreground mt-1">{email}</span>
-                )}
+                We&apos;ve sent a confirmation link to
+                {email && <span className="block font-medium text-foreground mt-1">{email}</span>}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="text-center space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Click the link in your email to confirm your account and complete your profile setup.
+                  Click the link in your email to confirm your account and complete your profile
+                  setup.
                 </p>
-                
+
                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>The confirmation link will expire in 24 hours</span>
@@ -98,11 +98,13 @@ export default function Page() {
               </div>
 
               {resendMessage && (
-                <div className={`p-3 rounded-lg text-sm ${
-                  resendMessage.includes('resent') || resendMessage.includes('sent')
-                    ? 'bg-green-50 text-green-800 border border-green-200'
-                    : 'bg-red-50 text-red-800 border border-red-200'
-                }`}>
+                <div
+                  className={`p-3 rounded-lg text-sm ${
+                    resendMessage.includes('resent') || resendMessage.includes('sent')
+                      ? 'bg-green-50 text-green-800 border border-green-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
                   {resendMessage}
                 </div>
               )}
@@ -115,17 +117,16 @@ export default function Page() {
                   className="w-full"
                 >
                   {isResending && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-                  {cooldownTime > 0 
+                  {cooldownTime > 0
                     ? `Resend in ${cooldownTime}s`
-                    : isResending 
-                      ? 'Sending...' 
-                      : 'Resend confirmation email'
-                  }
+                    : isResending
+                      ? 'Sending...'
+                      : 'Resend confirmation email'}
                 </Button>
 
                 <div className="text-center">
-                  <Link 
-                    href="/auth/login" 
+                  <Link
+                    href="/auth/login"
                     className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline"
                   >
                     Back to login

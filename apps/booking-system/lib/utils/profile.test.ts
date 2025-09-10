@@ -1,8 +1,4 @@
-import { 
-  createProfileMetadata,
-  validateProfileData,
-  isProfileDataComplete,
-} from './profile';
+import { createProfileMetadata, validateProfileData, isProfileDataComplete } from './profile';
 
 describe('profile utils', () => {
   test('createProfileMetadata builds partial metadata safely', () => {
@@ -67,9 +63,6 @@ describe('profile utils', () => {
     expect(
       isProfileDataComplete({ first_name: 'A', last_name: 'B', date_of_birth: '2000-01-01' })
     ).toBe(true);
-    expect(
-      isProfileDataComplete({ first_name: 'A', last_name: 'B' })
-    ).toBe(false);
+    expect(isProfileDataComplete({ first_name: 'A', last_name: 'B' })).toBe(false);
   });
 });
-

@@ -12,7 +12,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { User, ArrowRight, Shield } from 'lucide-react';
 
-export function CompleteProfileForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+export function CompleteProfileForm({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<'div'>) {
   const { user, profile, updateProfile, isLoadingUser } = useProfile();
   const router = useRouter();
 
@@ -21,10 +24,10 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Track if form has been initialized
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -46,7 +49,13 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
 
   // Redirect if profile is already complete
   useEffect(() => {
-    if (!isLoadingUser && user && profile?.first_name && profile?.last_name && profile?.date_of_birth) {
+    if (
+      !isLoadingUser &&
+      user &&
+      profile?.first_name &&
+      profile?.last_name &&
+      profile?.date_of_birth
+    ) {
       router.push('/schedule');
     }
   }, [user, profile, isLoadingUser, router]);
@@ -65,21 +74,21 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       toast.error('Please fix the errors below');
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       await updateProfile.mutateAsync({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         date_of_birth: dateOfBirth,
       });
-      
+
       toast.success('Profile completed successfully!');
       router.push('/schedule');
     } catch (error) {
@@ -134,9 +143,7 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
             <User className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-2xl">Complete Your Profile</CardTitle>
-          <CardDescription>
-            Just a few details to get you started with Pyre
-          </CardDescription>
+          <CardDescription>Just a few details to get you started with Pyre</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
@@ -154,11 +161,9 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
                     onChange={(e) => setFirstName(e.target.value)}
                     className={errors.first_name ? 'border-red-500' : ''}
                   />
-                  {errors.first_name && (
-                    <p className="text-sm text-red-500">{errors.first_name}</p>
-                  )}
+                  {errors.first_name && <p className="text-sm text-red-500">{errors.first_name}</p>}
                 </div>
-                
+
                 <div className="grid gap-2">
                   <Label htmlFor={lastNameId}>Last Name *</Label>
                   <Input
@@ -170,9 +175,7 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
                     onChange={(e) => setLastName(e.target.value)}
                     className={errors.last_name ? 'border-red-500' : ''}
                   />
-                  {errors.last_name && (
-                    <p className="text-sm text-red-500">{errors.last_name}</p>
-                  )}
+                  {errors.last_name && <p className="text-sm text-red-500">{errors.last_name}</p>}
                 </div>
               </div>
 
@@ -199,16 +202,17 @@ export function CompleteProfileForm({ className, ...props }: React.ComponentProp
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1">Privacy Notice</p>
                     <p>
-                      Your personal information is securely stored and will only be used to personalize your sauna experience and comply with safety requirements.
+                      Your personal information is securely stored and will only be used to
+                      personalize your sauna experience and comply with safety requirements.
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Submit Button */}
-              <Button 
-                type="submit" 
-                className="w-full" 
+              <Button
+                type="submit"
+                className="w-full"
                 disabled={isSubmitting || updateProfile.isPending}
               >
                 {isSubmitting || updateProfile.isPending ? (

@@ -48,11 +48,13 @@ export async function updateSession(request: NextRequest) {
   const user = data?.claims;
 
   // Get the full user data to access email_confirmed_at
-  const { data: { user: fullUser } } = await supabase.auth.getUser();
-  
+  const {
+    data: { user: fullUser },
+  } = await supabase.auth.getUser();
+
   // Get route access requirements based on configuration
   const routeInfo = getRouteAccessInfo(request.nextUrl.pathname);
-  
+
   // Public routes - no protection needed
   if (routeInfo.isPublic) {
     return supabaseResponse;

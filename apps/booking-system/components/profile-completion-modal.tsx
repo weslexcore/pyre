@@ -64,7 +64,7 @@ export function ProfileCompletionModal({
     canAccessProtectedFeatures,
     nextStep,
     statusMessage,
-    missingFields
+    missingFields,
   } = useProfileCompletion();
 
   // Auto-close modal when profile becomes complete
@@ -93,7 +93,7 @@ export function ProfileCompletionModal({
     if (isCompleted) {
       return <CheckCircle className="h-5 w-5 text-green-500" />;
     }
-    
+
     switch (step) {
       case 'confirm_email':
         return <Mail className="h-5 w-5 text-orange-500" />;
@@ -132,9 +132,7 @@ export function ProfileCompletionModal({
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
             <AlertTriangle className="h-6 w-6 text-orange-600" />
           </div>
-          <DialogTitle className="text-center">
-            {title || 'Complete Your Profile'}
-          </DialogTitle>
+          <DialogTitle className="text-center">{title || 'Complete Your Profile'}</DialogTitle>
           <DialogDescription className="text-center">
             {description || 'Please complete the required steps to access this feature.'}
           </DialogDescription>
@@ -178,9 +176,7 @@ export function ProfileCompletionModal({
                     </p>
                     {!isComplete && missingFields.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Missing: {missingFields.map(field => 
-                          field.replace(/_/g, ' ')
-                        ).join(', ')}
+                        Missing: {missingFields.map((field) => field.replace(/_/g, ' ')).join(', ')}
                       </p>
                     )}
                   </div>
@@ -216,15 +212,11 @@ export function ProfileCompletionModal({
           {/* Secondary Actions */}
           <div className="flex w-full space-x-2">
             {dismissible && (
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
                 Continue Without Completing
               </Button>
             )}
-            
+
             <Link href="/schedule" className="flex-1">
               <Button variant="ghost" className="w-full">
                 Browse Schedule

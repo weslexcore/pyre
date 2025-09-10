@@ -28,17 +28,17 @@ export default function UnauthorizedPage() {
               {isEmailConfirmationRequired ? 'Email Confirmation Required' : 'Access Denied'}
             </CardTitle>
             <CardDescription>
-              {isEmailConfirmationRequired 
+              {isEmailConfirmationRequired
                 ? 'Please confirm your email address to continue'
-                : 'You do not have permission to access this page'
-              }
+                : 'You do not have permission to access this page'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {isEmailConfirmationRequired ? (
               <div className="text-center space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  To access your account and protected features, you need to confirm your email address first.
+                  To access your account and protected features, you need to confirm your email
+                  address first.
                 </p>
                 <div className="space-y-3">
                   <p className="text-sm font-medium">What to do next:</p>

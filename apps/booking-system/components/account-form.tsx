@@ -12,22 +12,22 @@ import { toast } from 'sonner';
 
 export function AccountForm() {
   const { user, profile, updateProfile, isLoadingUser } = useProfile();
-  
+
   // Form state
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [phone, setPhone] = useState('');
-  
+
   // Track if form has been initialized
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Form state
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [emailChanged, setEmailChanged] = useState(false);
-  
+
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -71,14 +71,14 @@ export function AccountForm() {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       toast.error('Please fix the errors below');
       return;
     }
 
     setIsUpdatingProfile(true);
-    
+
     try {
       await updateProfile.mutateAsync({
         first_name: firstName.trim(),
@@ -86,7 +86,7 @@ export function AccountForm() {
         date_of_birth: dateOfBirth,
         phone: phone.trim() || undefined,
       });
-      
+
       setErrors({});
       // The form will automatically update with the new values from the hook
       // after a successful mutation due to React Query's cache invalidation
@@ -99,9 +99,9 @@ export function AccountForm() {
 
   const handleUpdateEmail = async () => {
     if (!emailChanged || !email.trim()) return;
-    
+
     setIsUpdatingEmail(true);
-    
+
     try {
       await updateUserEmail(email.trim());
       toast.success('Email update initiated. Check your inbox for confirmation.');
@@ -158,7 +158,7 @@ export function AccountForm() {
           {/* Profile Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Personal Information</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor={firstNameId}>First Name *</Label>
@@ -170,11 +170,9 @@ export function AccountForm() {
                   onChange={(e) => setFirstName(e.target.value)}
                   className={errors.first_name ? 'border-red-500' : ''}
                 />
-                {errors.first_name && (
-                  <p className="text-sm text-red-500">{errors.first_name}</p>
-                )}
+                {errors.first_name && <p className="text-sm text-red-500">{errors.first_name}</p>}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor={lastNameId}>Last Name *</Label>
                 <Input
@@ -185,12 +183,10 @@ export function AccountForm() {
                   onChange={(e) => setLastName(e.target.value)}
                   className={errors.last_name ? 'border-red-500' : ''}
                 />
-                {errors.last_name && (
-                  <p className="text-sm text-red-500">{errors.last_name}</p>
-                )}
+                {errors.last_name && <p className="text-sm text-red-500">{errors.last_name}</p>}
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor={dateOfBirthId}>Date of Birth *</Label>
               <Input
@@ -204,7 +200,7 @@ export function AccountForm() {
                 <p className="text-sm text-red-500">{errors.date_of_birth}</p>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor={phoneId}>Phone Number (Optional)</Label>
               <Input
@@ -215,16 +211,14 @@ export function AccountForm() {
                 onChange={(e) => setPhone(e.target.value)}
                 className={errors.phone ? 'border-red-500' : ''}
               />
-              {errors.phone && (
-                <p className="text-sm text-red-500">{errors.phone}</p>
-              )}
+              {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
             </div>
           </div>
 
           {/* Email Section */}
           <div className="space-y-4 border-t pt-6">
             <h3 className="text-lg font-medium">Email Address</h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor={emailId}>Email *</Label>
               <div className="flex gap-2">
@@ -256,17 +250,12 @@ export function AccountForm() {
 
           {/* Submit Button */}
           <div className="flex gap-3 pt-4">
-            <Button 
-              type="submit" 
-              disabled={isUpdatingProfile || updateProfile.isPending}
-            >
+            <Button type="submit" disabled={isUpdatingProfile || updateProfile.isPending}>
               {isUpdatingProfile || updateProfile.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
-          
-          <p className="text-xs text-muted-foreground">
-            * Required fields for profile completion
-          </p>
+
+          <p className="text-xs text-muted-foreground">* Required fields for profile completion</p>
         </form>
       </CardContent>
     </Card>

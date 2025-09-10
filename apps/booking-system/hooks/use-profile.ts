@@ -2,13 +2,13 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCurrentUser, updateUserProfile } from '@/lib/supabase/client-queries';
-import { 
-  getProfileFromUser, 
-  isProfileComplete, 
+import {
+  getProfileFromUser,
+  isProfileComplete,
   getMissingProfileFields,
   validateProfileData,
   getFullName,
-  type ProfileData 
+  type ProfileData,
 } from '@/lib/utils/profile';
 import { toast } from 'sonner';
 
@@ -23,7 +23,7 @@ export function useProfile() {
     data: user,
     isLoading: isLoadingUser,
     error: userError,
-    refetch: refetchUser
+    refetch: refetchUser,
   } = useQuery({
     queryKey: ['user'],
     queryFn: getCurrentUser,
@@ -62,8 +62,8 @@ export function useProfile() {
   // Get profile completion percentage
   const getCompletionPercentage = () => {
     const requiredFields = ['first_name', 'last_name', 'date_of_birth'];
-    const completedFields = requiredFields.filter(field => 
-      profile[field as keyof ProfileData]
+    const completedFields = requiredFields.filter(
+      (field) => profile[field as keyof ProfileData]
     ).length;
     return Math.round((completedFields / requiredFields.length) * 100);
   };
@@ -118,7 +118,7 @@ export function useProfileCompletion() {
   // Get user-friendly message for current status
   const getStatusMessage = () => {
     const nextStep = getNextStep();
-    
+
     switch (nextStep) {
       case 'login':
         return 'Please sign in to continue';

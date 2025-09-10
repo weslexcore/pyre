@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useProfileCompletion } from '@/hooks/use-profile';
 import { ROUTE_PROTECTION, type RouteProtectionLevel } from '@/lib/utils/route-protection';
 
@@ -22,7 +22,7 @@ interface ConditionalAccessProps {
 
 /**
  * Conditionally render content based on user's authentication and profile status
- * 
+ *
  * Usage:
  * ```tsx
  * <ConditionalAccess requireLevel={ROUTE_PROTECTION.PROFILE_COMPLETE}>
@@ -36,12 +36,7 @@ export function ConditionalAccess({
   fallback = null,
   showLoading = true,
 }: ConditionalAccessProps) {
-  const {
-    user,
-    isEmailConfirmed,
-    isComplete,
-    canAccessProtectedFeatures,
-  } = useProfileCompletion();
+  const { user, isEmailConfirmed, isComplete, canAccessProtectedFeatures } = useProfileCompletion();
 
   // Show loading state if requested and user data is still loading
   if (showLoading && user === undefined) {
@@ -57,19 +52,21 @@ export function ConditionalAccess({
     switch (requireLevel) {
       case ROUTE_PROTECTION.PUBLIC:
         return true;
-      
+
       case ROUTE_PROTECTION.AUTH_REQUIRED:
         return !!user;
-      
+
       case ROUTE_PROTECTION.EMAIL_CONFIRMED:
         return !!user && isEmailConfirmed;
-      
+
       case ROUTE_PROTECTION.PROFILE_COMPLETE:
         return !!user && isEmailConfirmed && isComplete;
-      
+
       case ROUTE_PROTECTION.ADMIN_ONLY:
-        return !!user && isEmailConfirmed && isComplete && user?.user_metadata?.is_super_admin === true;
-      
+        return (
+          !!user && isEmailConfirmed && isComplete && user?.user_metadata?.is_super_admin === true
+        );
+
       default:
         return false;
     }
@@ -95,7 +92,7 @@ export function withConditionalAccess<P extends object>(
   };
 
   WrappedComponent.displayName = `withConditionalAccess(${Component.displayName || Component.name})`;
-  
+
   return WrappedComponent;
 }
 
@@ -104,24 +101,24 @@ export function withConditionalAccess<P extends object>(
  */
 export function useAccessLevel() {
   const { user, isEmailConfirmed, isComplete } = useProfileCompletion();
-  
+
   const getAccessLevel = (): RouteProtectionLevel => {
     if (!user) {
       return ROUTE_PROTECTION.PUBLIC;
     }
-    
+
     if (user.user_metadata?.is_super_admin === true && isEmailConfirmed && isComplete) {
       return ROUTE_PROTECTION.ADMIN_ONLY;
     }
-    
+
     if (isEmailConfirmed && isComplete) {
       return ROUTE_PROTECTION.PROFILE_COMPLETE;
     }
-    
+
     if (isEmailConfirmed) {
       return ROUTE_PROTECTION.EMAIL_CONFIRMED;
     }
-    
+
     return ROUTE_PROTECTION.AUTH_REQUIRED;
   };
 
@@ -137,10 +134,10 @@ export function useAccessLevel() {
         ROUTE_PROTECTION.PROFILE_COMPLETE,
         ROUTE_PROTECTION.ADMIN_ONLY,
       ];
-      
+
       const userLevelIndex = levels.indexOf(accessLevel);
       const requiredLevelIndex = levels.indexOf(requiredLevel);
-      
+
       return userLevelIndex >= requiredLevelIndex;
     },
     user,

@@ -1,5 +1,8 @@
 import { redirect } from 'next/navigation';
-import { validateUserRouteAccess, getCurrentUserProfileCompletionStatus } from '@/lib/supabase/queries';
+import {
+  validateUserRouteAccess,
+  getCurrentUserProfileCompletionStatus,
+} from '@/lib/supabase/queries';
 
 /**
  * Server component utility to protect routes with automatic redirects
@@ -7,11 +10,11 @@ import { validateUserRouteAccess, getCurrentUserProfileCompletionStatus } from '
  */
 export async function requireAuth(routePath: string = '/protected') {
   const access = await validateUserRouteAccess(routePath);
-  
+
   if (!access.canAccess && access.redirectTo) {
     redirect(access.redirectTo);
   }
-  
+
   return access;
 }
 
@@ -21,15 +24,15 @@ export async function requireAuth(routePath: string = '/protected') {
  */
 export async function requireEmailConfirmation() {
   const status = await getCurrentUserProfileCompletionStatus();
-  
+
   if (!status.isAuthenticated) {
     redirect('/auth/login');
   }
-  
+
   if (!status.isEmailConfirmed) {
     redirect('/unauthorized?reason=email_confirmation_required');
   }
-  
+
   return status;
 }
 
@@ -39,19 +42,19 @@ export async function requireEmailConfirmation() {
  */
 export async function requireProfileCompletion() {
   const status = await getCurrentUserProfileCompletionStatus();
-  
+
   if (!status.isAuthenticated) {
     redirect('/auth/login');
   }
-  
+
   if (!status.isEmailConfirmed) {
     redirect('/unauthorized?reason=email_confirmation_required');
   }
-  
+
   if (!status.isProfileComplete) {
     redirect('/complete-profile');
   }
-  
+
   return status;
 }
 
@@ -62,11 +65,11 @@ export async function requireProfileCompletion() {
 export async function requireAdmin() {
   const status = await requireProfileCompletion();
   const access = await validateUserRouteAccess('/admin');
-  
+
   if (!access.canAccess && access.redirectTo) {
     redirect(access.redirectTo);
   }
-  
+
   return { ...status, access };
 }
 
@@ -96,12 +99,12 @@ export async function getOptionalAuth() {
 export const ROUTE_PROTECTION = {
   PUBLIC: 'public',
   AUTH_REQUIRED: 'auth_required',
-  EMAIL_CONFIRMED: 'email_confirmed', 
+  EMAIL_CONFIRMED: 'email_confirmed',
   PROFILE_COMPLETE: 'profile_complete',
   ADMIN_ONLY: 'admin_only',
 } as const;
 
-export type RouteProtectionLevel = typeof ROUTE_PROTECTION[keyof typeof ROUTE_PROTECTION];
+export type RouteProtectionLevel = (typeof ROUTE_PROTECTION)[keyof typeof ROUTE_PROTECTION];
 
 /**
  * Route configuration mapping paths to protection levels
@@ -158,26 +161,23 @@ export function getRouteProtectionLevel(pathname: string): RouteProtectionLevel 
 /**
  * Apply route protection based on protection level
  */
-export async function applyRouteProtection(
-  level: RouteProtectionLevel,
-  routePath?: string
-) {
+export async function applyRouteProtection(level: RouteProtectionLevel, routePath?: string) {
   switch (level) {
     case ROUTE_PROTECTION.PUBLIC:
       return await getOptionalAuth();
-    
+
     case ROUTE_PROTECTION.AUTH_REQUIRED:
       return await requireAuth(routePath);
-    
+
     case ROUTE_PROTECTION.EMAIL_CONFIRMED:
       return await requireEmailConfirmation();
-    
+
     case ROUTE_PROTECTION.PROFILE_COMPLETE:
       return await requireProfileCompletion();
-    
+
     case ROUTE_PROTECTION.ADMIN_ONLY:
       return await requireAdmin();
-    
+
     default:
       return await getOptionalAuth();
   }
@@ -197,7 +197,7 @@ export async function protectRoute(pathname: string) {
  */
 export function getRouteAccessInfo(pathname: string) {
   const protectionLevel = getRouteProtectionLevel(pathname);
-  
+
   return {
     protectionLevel,
     isPublic: protectionLevel === ROUTE_PROTECTION.PUBLIC,

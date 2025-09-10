@@ -13,10 +13,10 @@ interface ProfileCompletionStatusProps {
   className?: string;
 }
 
-export function ProfileCompletionStatus({ 
-  showCard = true, 
+export function ProfileCompletionStatus({
+  showCard = true,
   showProgress = true,
-  className 
+  className,
 }: ProfileCompletionStatusProps) {
   const {
     isEmailConfirmed,
@@ -24,7 +24,7 @@ export function ProfileCompletionStatus({
     canAccessProtectedFeatures,
     nextStep,
     statusMessage,
-    missingFields
+    missingFields,
   } = useProfileCompletion();
 
   if (canAccessProtectedFeatures) {
@@ -132,9 +132,7 @@ export function ProfileCompletionStatus({
               </p>
               {!isComplete && missingFields.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Missing: {missingFields.map(field => 
-                    field.replace(/_/g, ' ')
-                  ).join(', ')}
+                  Missing: {missingFields.map((field) => field.replace(/_/g, ' ')).join(', ')}
                 </p>
               )}
             </div>
@@ -155,11 +153,7 @@ export function ProfileCompletionStatus({
           {getStepIcon(nextStep)}
           <p className="text-sm text-muted-foreground">{statusMessage}</p>
         </div>
-        {nextStep !== 'all_complete' && (
-          <div className="mt-2">
-            {getStepButton(nextStep)}
-          </div>
-        )}
+        {nextStep !== 'all_complete' && <div className="mt-2">{getStepButton(nextStep)}</div>}
       </div>
     </div>
   );
@@ -167,9 +161,7 @@ export function ProfileCompletionStatus({
   if (showCard) {
     return (
       <Card className={className}>
-        <CardContent className="p-4">
-          {content}
-        </CardContent>
+        <CardContent className="p-4">{content}</CardContent>
       </Card>
     );
   }

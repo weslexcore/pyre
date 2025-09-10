@@ -10,7 +10,12 @@ import type {
   InsertBooking,
   UpdateBooking,
 } from '../database.types';
-import { isProfileComplete, getProfileFromUser, getMissingProfileFields, getFullName } from '../utils/profile';
+import {
+  isProfileComplete,
+  getProfileFromUser,
+  getMissingProfileFields,
+  getFullName,
+} from '../utils/profile';
 
 // Location queries
 export async function getLocations(activeOnly: boolean = true) {
@@ -277,9 +282,12 @@ export async function getUserBookingForOffering(userId: string, offeringId: stri
  */
 export async function getCurrentUser() {
   const supabase = await createClient();
-  
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (error) throw error;
   return user;
 }
@@ -418,46 +426,44 @@ export async function validateUserRouteAccess(routePath: string): Promise<{
 }> {
   try {
     const status = await getCurrentUserProfileCompletionStatus();
-    
+
     // Public routes - always accessible
     const publicPaths = ['/', '/schedule', '/auth', '/unauthorized'];
-    const isPublicPath = publicPaths.some(path => 
-      routePath === path || routePath.startsWith(path + '/')
+    const isPublicPath = publicPaths.some(
+      (path) => routePath === path || routePath.startsWith(path + '/')
     );
-    
+
     if (isPublicPath) {
       return { canAccess: true };
     }
 
     // Require authentication for all non-public routes
     if (!status.isAuthenticated) {
-      return { 
-        canAccess: false, 
+      return {
+        canAccess: false,
         redirectTo: '/auth/login',
-        reason: 'authentication_required'
+        reason: 'authentication_required',
       };
     }
 
     // Routes that require email confirmation and profile completion
     const protectedPaths = ['/account', '/protected', '/admin', '/booking'];
-    const requiresFullCompletion = protectedPaths.some(path =>
-      routePath.startsWith(path)
-    );
+    const requiresFullCompletion = protectedPaths.some((path) => routePath.startsWith(path));
 
     if (requiresFullCompletion) {
       if (!status.isEmailConfirmed) {
         return {
           canAccess: false,
           redirectTo: '/unauthorized?reason=email_confirmation_required',
-          reason: 'email_confirmation_required'
+          reason: 'email_confirmation_required',
         };
       }
-      
+
       if (!status.isProfileComplete) {
         return {
           canAccess: false,
           redirectTo: '/complete-profile',
-          reason: 'profile_completion_required'
+          reason: 'profile_completion_required',
         };
       }
     }
@@ -469,17 +475,17 @@ export async function validateUserRouteAccess(routePath: string): Promise<{
         return {
           canAccess: false,
           redirectTo: '/unauthorized',
-          reason: 'admin_required'
+          reason: 'admin_required',
         };
       }
     }
 
     return { canAccess: true };
   } catch {
-    return { 
-      canAccess: false, 
+    return {
+      canAccess: false,
       redirectTo: '/auth/login',
-      reason: 'error'
+      reason: 'error',
     };
   }
 }

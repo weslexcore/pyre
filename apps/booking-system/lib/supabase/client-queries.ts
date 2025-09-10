@@ -124,13 +124,13 @@ export async function getActiveLocations() {
  */
 export async function updateUserProfile(profileData: Partial<ProfileData>) {
   const supabase = createPublicBrowserClient();
-  
+
   const metadata = createProfileMetadata(profileData);
-  
+
   const { data, error } = await supabase.auth.updateUser({
-    data: metadata
+    data: metadata,
   });
-  
+
   if (error) throw error;
   return data;
 }
@@ -140,9 +140,12 @@ export async function updateUserProfile(profileData: Partial<ProfileData>) {
  */
 export async function getCurrentUser() {
   const supabase = createPublicBrowserClient();
-  
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (error) throw error;
   return user;
 }
@@ -152,11 +155,11 @@ export async function getCurrentUser() {
  */
 export async function updateUserEmail(email: string) {
   const supabase = createPublicBrowserClient();
-  
+
   const { data, error } = await supabase.auth.updateUser({
-    email
+    email,
   });
-  
+
   if (error) throw error;
   return data;
 }
@@ -166,11 +169,11 @@ export async function updateUserEmail(email: string) {
  */
 export async function updateUserPassword(password: string) {
   const supabase = createPublicBrowserClient();
-  
+
   const { data, error } = await supabase.auth.updateUser({
-    password
+    password,
   });
-  
+
   if (error) throw error;
   return data;
 }
