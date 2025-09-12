@@ -59,8 +59,30 @@ export class BrowserCompatibilityTester {
     }
   ): Promise<void> {
     if (this.hasCookieStore()) {
-      // @ts-expect-error: cookieStore is not in TypeScript lib yet in some setups
-      await window.cookieStore.set({ name, value, ...init });
+      type CookieInitCompat = {
+        name: string;
+        value: string;
+        path?: string;
+        domain?: string;
+        secure?: boolean;
+        sameSite?: 'lax' | 'strict' | 'none';
+        expires?: number | null;
+      };
+      const cookieInit: CookieInitCompat = {
+        name,
+        value,
+        ...(() => {
+          const out: Omit<CookieInitCompat, 'name' | 'value'> = {};
+          if (init?.path) out.path = init.path;
+          if (init?.domain) out.domain = init.domain;
+          if (init?.secure !== undefined) out.secure = init.secure;
+          if (init?.sameSite) out.sameSite = init.sameSite;
+          if (init?.expires instanceof Date) out.expires = init.expires.getTime();
+          else if (typeof init?.expires === 'number') out.expires = init.expires;
+          return out;
+        })(),
+      };
+      await window.cookieStore.set(cookieInit);
       return;
     }
     const parts: string[] = [`${name}=${encodeURIComponent(value)}`];
@@ -80,7 +102,6 @@ export class BrowserCompatibilityTester {
 
   private async getCookie(name: string): Promise<string | null> {
     if (this.hasCookieStore()) {
-      // @ts-expect-error: cookieStore is not in TypeScript lib yet in some setups
       const item = await window.cookieStore.get(name);
       return item?.value ?? null;
     }
@@ -97,7 +118,6 @@ export class BrowserCompatibilityTester {
     init?: { path?: string; domain?: string }
   ): Promise<void> {
     if (this.hasCookieStore()) {
-      // @ts-expect-error: cookieStore is not in TypeScript lib yet in some setups
       await window.cookieStore.delete({ name, ...init });
       return;
     }

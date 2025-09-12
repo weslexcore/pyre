@@ -63,14 +63,18 @@ export function createClient() {
               const expires = finalOptions.maxAge
                 ? Date.now() + finalOptions.maxAge * 1000
                 : undefined;
-              // @ts-expect-error: cookieStore may not be in TS lib in all setups
+              const sameSite =
+                finalOptions.sameSite === true
+                  ? 'strict'
+                  : finalOptions.sameSite
+                  ? (finalOptions.sameSite.toLowerCase() as 'lax' | 'strict' | 'none')
+                  : undefined;
               window.cookieStore.set({
                 name,
                 value: encodeURIComponent(value),
                 domain: finalOptions.domain,
                 path: finalOptions.path,
-                secure: finalOptions.secure,
-                sameSite: finalOptions.sameSite?.toLowerCase(),
+                sameSite,
                 expires,
               });
             } else {

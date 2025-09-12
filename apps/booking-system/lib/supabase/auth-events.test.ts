@@ -7,7 +7,7 @@ jest.mock('./client', () => {
     createClient: () => ({
       auth: {
         getSession: async () => ({ data: { session: null }, error: null }),
-        onAuthStateChange: (_cb: (e: unknown, s: unknown) => void) => ({
+        onAuthStateChange: () => ({
           data: { subscription: { unsubscribe: jest.fn() } },
         }),
       },

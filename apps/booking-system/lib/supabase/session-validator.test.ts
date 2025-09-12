@@ -37,9 +37,8 @@ jest.mock('./session-persistence-validator', () => ({
 
 import { sessionValidator } from './session-validator';
 import type { Session } from '@supabase/supabase-js';
-// Pull mocks
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const clientModule = require('./client');
+// Pull mocks (ESM import to satisfy lint rules)
+import * as clientModule from './client';
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   const now = Math.floor(Date.now() / 1000) + 3600;
