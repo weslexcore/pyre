@@ -9,6 +9,12 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-const eslintConfig = [...compat.extends('next/core-web-vitals', 'next/typescript')];
+const eslintConfig = [
+  // Ignore test files from linting (especially during Next build)
+  {
+    ignores: ['**/*.test.*', '**/*.spec.*', '**/__tests__/**'],
+  },
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+];
 
 export default eslintConfig;
