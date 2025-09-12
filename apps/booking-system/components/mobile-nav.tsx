@@ -1,16 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LogoutButton } from './logout-button';
+import { useAuthState } from '@/hooks/use-auth-state';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
-export function MobileNav({ isAdmin, isLoggedIn }: { isAdmin: boolean; isLoggedIn: boolean }) {
+export function MobileNav({
+  isAdmin: serverIsAdmin,
+  isLoggedIn: serverIsLoggedIn,
+}: {
+  isAdmin: boolean;
+  isLoggedIn: boolean;
+}) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const isSchedulePage = pathname === '/' || pathname?.startsWith('/schedule');
+
+  // Use real-time auth state for optimistic updates
+  const { isAuthenticated, user, isLoading } = useAuthState();
+  const [isAdmin, setIsAdmin] = useState(serverIsAdmin);
+  const [isLoggedIn, setIsLoggedIn] = useState(serverIsLoggedIn);
+
+  // Optimistically update auth state based on client state
+  useEffect(() => {
+    if (!isLoading) {
+      setIsLoggedIn(isAuthenticated);
+
+      // Check if user is admin based on user metadata
+      if (user?.user_metadata?.is_super_admin) {
+        setIsAdmin(true);
+      } else if (!isAuthenticated) {
+        setIsAdmin(false);
+      }
+      // Keep server admin state if client doesn't have metadata
+    }
+  }, [isAuthenticated, user, isLoading]);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -59,7 +87,14 @@ export function MobileNav({ isAdmin, isLoggedIn }: { isAdmin: boolean; isLoggedI
               </Link>
             )}
             <div className="border-t border-border my-2"></div>
-            {isLoggedIn ? (
+
+            {/* Auth section with loading state */}
+            {isLoading ? (
+              <div className="px-4 py-2 flex items-center gap-2 text-sm text-muted-foreground">
+                <LoadingSpinner size="sm" />
+                Loading...
+              </div>
+            ) : isLoggedIn ? (
               <div className="px-4 py-2 space-y-2">
                 <LogoutButton onAfter={() => setIsMobileMenuOpen(false)} />
               </div>

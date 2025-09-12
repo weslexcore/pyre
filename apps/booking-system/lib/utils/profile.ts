@@ -48,7 +48,9 @@ export function getProfileFromUser(user: User | null): ProfileData {
 /**
  * Create metadata object for updating user profile
  */
-export function createProfileMetadata(profileData: Partial<ProfileData>): Record<string, string | undefined | object> {
+export function createProfileMetadata(
+  profileData: Partial<ProfileData>
+): Record<string, string | undefined | object> {
   const metadata: Record<string, string | undefined | object> = {};
 
   if (profileData.first_name !== undefined) {
@@ -153,7 +155,7 @@ export function validateDateOfBirth(dateString: string): { valid: boolean; error
     const today = new Date();
 
     // Check if date is valid
-    if (isNaN(date.getTime())) {
+    if (Number.isNaN(date.getTime())) {
       return { valid: false, error: 'Invalid date format' };
     }
 
@@ -208,7 +210,7 @@ export function validateProfileData(data: Partial<ProfileData>): {
   }
 
   // Validate phone (optional)
-  if (data.phone !== undefined && data.phone.trim()) {
+  if (data.phone?.trim()) {
     const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
     if (!phoneRegex.test(data.phone.replace(/[\s\-()]/g, ''))) {
       errors.phone = 'Please enter a valid phone number';

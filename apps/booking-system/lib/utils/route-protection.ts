@@ -149,7 +149,7 @@ export function getRouteProtectionLevel(pathname: string): RouteProtectionLevel 
 
   // Check for prefix matches (e.g., /admin/locations matches /admin)
   for (const [routePath, level] of Object.entries(ROUTE_PROTECTION_CONFIG)) {
-    if (pathname.startsWith(routePath + '/') || pathname.startsWith(routePath)) {
+    if (pathname.startsWith(`${routePath}/`) || pathname.startsWith(routePath)) {
       return level;
     }
   }
@@ -202,15 +202,16 @@ export function getRouteAccessInfo(pathname: string) {
     protectionLevel,
     isPublic: protectionLevel === ROUTE_PROTECTION.PUBLIC,
     requiresAuth: protectionLevel !== ROUTE_PROTECTION.PUBLIC,
-    requiresEmailConfirmation: ([
-      ROUTE_PROTECTION.EMAIL_CONFIRMED,
-      ROUTE_PROTECTION.PROFILE_COMPLETE,
-      ROUTE_PROTECTION.ADMIN_ONLY,
-    ] as RouteProtectionLevel[]).includes(protectionLevel),
-    requiresProfileCompletion: ([
-      ROUTE_PROTECTION.PROFILE_COMPLETE,
-      ROUTE_PROTECTION.ADMIN_ONLY,
-    ] as RouteProtectionLevel[]).includes(protectionLevel),
+    requiresEmailConfirmation: (
+      [
+        ROUTE_PROTECTION.EMAIL_CONFIRMED,
+        ROUTE_PROTECTION.PROFILE_COMPLETE,
+        ROUTE_PROTECTION.ADMIN_ONLY,
+      ] as RouteProtectionLevel[]
+    ).includes(protectionLevel),
+    requiresProfileCompletion: (
+      [ROUTE_PROTECTION.PROFILE_COMPLETE, ROUTE_PROTECTION.ADMIN_ONLY] as RouteProtectionLevel[]
+    ).includes(protectionLevel),
     requiresAdminAccess: protectionLevel === ROUTE_PROTECTION.ADMIN_ONLY,
   };
 }

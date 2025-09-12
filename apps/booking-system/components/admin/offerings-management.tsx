@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,15 @@ interface OfferingForm {
 const SESSION_TYPES = ['Social', 'Silent', 'Guided'];
 
 export function OfferingsManagement({ initialOfferings, locations }: OfferingsManagementProps) {
+  const filterLocationId = useId();
+  const filterSessionTypeId = useId();
+  const filterDateFromId = useId();
+  const dateId = useId();
+  const timeId = useId();
+  const sessionTypeId = useId();
+  const locationId = useId();
+  const costId = useId();
+  const totalSlotsId = useId();
   const [offerings, setOfferings] = useState<Offering[]>(initialOfferings);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -182,7 +191,7 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
 
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours);
+    const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
@@ -239,9 +248,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <Label htmlFor="location-filter">Location</Label>
+            <Label htmlFor={filterLocationId}>Location</Label>
             <select
-              id="location-filter"
+              id={filterLocationId}
               className="w-full p-2 border rounded-md"
               value={filter.location}
               onChange={(e) => setFilter({ ...filter, location: e.target.value })}
@@ -256,9 +265,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
           </div>
 
           <div>
-            <Label htmlFor="session-type-filter">Session Type</Label>
+            <Label htmlFor={filterSessionTypeId}>Session Type</Label>
             <select
-              id="session-type-filter"
+              id={filterSessionTypeId}
               className="w-full p-2 border rounded-md"
               value={filter.sessionType}
               onChange={(e) => setFilter({ ...filter, sessionType: e.target.value })}
@@ -273,9 +282,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
           </div>
 
           <div>
-            <Label htmlFor="date-from-filter">Date From</Label>
+            <Label htmlFor={filterDateFromId}>Date From</Label>
             <Input
-              id="date-from-filter"
+              id={filterDateFromId}
               type="date"
               value={filter.dateFrom}
               onChange={(e) => setFilter({ ...filter, dateFrom: e.target.value })}
@@ -292,18 +301,18 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="date">Date *</Label>
+                <Label htmlFor={dateId}>Date *</Label>
                 <Input
-                  id="date"
+                  id={dateId}
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="time">Time *</Label>
+                <Label htmlFor={timeId}>Time *</Label>
                 <Input
-                  id="time"
+                  id={timeId}
                   type="time"
                   value={formData.time}
                   onChange={(e) => setFormData({ ...formData, time: e.target.value })}
@@ -313,9 +322,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="session-type">Session Type *</Label>
+                <Label htmlFor={sessionTypeId}>Session Type *</Label>
                 <select
-                  id="session-type"
+                  id={sessionTypeId}
                   className="w-full p-2 border rounded-md"
                   value={formData.session_type}
                   onChange={(e) => setFormData({ ...formData, session_type: e.target.value })}
@@ -328,9 +337,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="location">Location *</Label>
+                <Label htmlFor={locationId}>Location *</Label>
                 <select
-                  id="location"
+                  id={locationId}
                   className="w-full p-2 border rounded-md"
                   value={formData.location_id}
                   onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
@@ -347,9 +356,9 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cost">Cost ($) *</Label>
+                <Label htmlFor={costId}>Cost ($) *</Label>
                 <Input
-                  id="cost"
+                  id={costId}
                   type="number"
                   step="0.01"
                   min="0"
@@ -360,14 +369,14 @@ export function OfferingsManagement({ initialOfferings, locations }: OfferingsMa
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="total-slots">Total Slots *</Label>
+                <Label htmlFor={totalSlotsId}>Total Slots *</Label>
                 <Input
-                  id="total-slots"
+                  id={totalSlotsId}
                   type="number"
                   min="1"
                   value={formData.total_slots}
                   onChange={(e) =>
-                    setFormData({ ...formData, total_slots: parseInt(e.target.value) || 1 })
+                    setFormData({ ...formData, total_slots: parseInt(e.target.value, 10) || 1 })
                   }
                 />
               </div>

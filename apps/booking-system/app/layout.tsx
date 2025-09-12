@@ -2,8 +2,11 @@ import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import { ThemeProvider } from 'next-themes';
 import { QueryProvider } from '@/components/providers/query-provider';
+import { AuthTransitionProvider } from '@/components/providers/auth-transition-provider';
+import { ToastProvider } from '@/components/providers/toast-provider';
 import { Navigation } from '@/components/navigation';
 import { SupabaseAuthListener } from '@/components/supabase-listener';
+import { AuthTransitionOverlay } from '@/components/auth-transition-overlay';
 import './globals.css';
 
 const defaultUrl = process.env.VERCEL_URL
@@ -111,19 +114,23 @@ export default function RootLayout({
         className={`${pyreMono.variable} ${pyreLogo.variable} ${pyreSans.variable} ${pyreMonoBold.variable} font-mono antialiased`}
       >
         <QueryProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <div className="min-h-screen flex flex-col">
-              {/* Keep this mounted so auth state changes refresh server components */}
-              <SupabaseAuthListener />
-              <Navigation />
-              <main className="flex-1">{children}</main>
-            </div>
-          </ThemeProvider>
+          <AuthTransitionProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <div className="min-h-screen flex flex-col">
+                {/* Keep this mounted so auth state changes refresh server components */}
+                <SupabaseAuthListener />
+                <AuthTransitionOverlay />
+                <Navigation />
+                <main className="flex-1">{children}</main>
+                <ToastProvider />
+              </div>
+            </ThemeProvider>
+          </AuthTransitionProvider>
         </QueryProvider>
       </body>
     </html>

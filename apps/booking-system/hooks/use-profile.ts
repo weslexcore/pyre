@@ -56,7 +56,7 @@ export function useProfile() {
 
   // Check if specific fields are missing
   const isFieldMissing = (field: keyof ProfileData) => {
-    return missingFields.includes(field as any);
+    return (missingFields as Array<keyof ProfileData>).includes(field);
   };
 
   // Get profile completion percentage

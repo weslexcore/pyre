@@ -13,20 +13,12 @@ export async function Navigation() {
   // Ensure this server component is never cached
   noStore();
   const supabase = await createClient();
-  // Use getClaims for reliability in SSR
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const user = claimsData?.claims ?? null;
-  const userId = (user as { sub?: string } | null)?.sub ?? null;
-
-  let isAdmin = false;
-  if (userId) {
-    const { data: userData } = await supabase
-      .from('auth.users')
-      .select('is_super_admin')
-      .eq('id', userId)
-      .single();
-    isAdmin = userData?.is_super_admin || false;
-  }
+  // Prefer server-side user for metadata; middleware keeps session fresh
+  const {
+    data: { user: fullUser },
+  } = await supabase.auth.getUser();
+  const userId = fullUser?.id ?? null;
+  const isAdmin = fullUser?.user_metadata?.is_super_admin === true;
   return (
     <nav className="w-full border-b border-b-foreground/10">
       <div className="mx-auto px-4 sm:px-6 lg:px-8">

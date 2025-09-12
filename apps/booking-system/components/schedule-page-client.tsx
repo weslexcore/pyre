@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ScheduleInfinite } from '@/components/schedule-infinite';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,10 @@ import { getActiveLocations, getSessionTypes } from '@/lib/supabase/client-queri
 import { Filter, X } from 'lucide-react';
 
 export function SchedulePageClient() {
+  const locationFilterId = useId();
+  const sessionTypeFilterId = useId();
+  const dateFromId = useId();
+  const dateToId = useId();
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     locationId: '',
@@ -91,9 +95,9 @@ export function SchedulePageClient() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="location-filter">Location</Label>
+                <Label htmlFor={locationFilterId}>Location</Label>
                 <select
-                  id="location-filter"
+                  id={locationFilterId}
                   className="w-full p-2 border rounded-md"
                   value={filters.locationId}
                   onChange={(e) => updateFilter('locationId', e.target.value)}
@@ -108,9 +112,9 @@ export function SchedulePageClient() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="session-type-filter">Session Type</Label>
+                <Label htmlFor={sessionTypeFilterId}>Session Type</Label>
                 <select
-                  id="session-type-filter"
+                  id={sessionTypeFilterId}
                   className="w-full p-2 border rounded-md"
                   value={filters.sessionType}
                   onChange={(e) => updateFilter('sessionType', e.target.value)}
@@ -125,9 +129,9 @@ export function SchedulePageClient() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="date-from-filter">From Date</Label>
+                <Label htmlFor={dateFromId}>From Date</Label>
                 <Input
-                  id="date-from-filter"
+                  id={dateFromId}
                   type="date"
                   value={filters.dateFrom}
                   onChange={(e) => updateFilter('dateFrom', e.target.value)}
@@ -136,9 +140,9 @@ export function SchedulePageClient() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="date-to-filter">To Date</Label>
+                <Label htmlFor={dateToId}>To Date</Label>
                 <Input
-                  id="date-to-filter"
+                  id={dateToId}
                   type="date"
                   value={filters.dateTo}
                   onChange={(e) => updateFilter('dateTo', e.target.value)}

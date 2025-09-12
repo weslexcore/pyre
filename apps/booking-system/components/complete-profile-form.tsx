@@ -143,7 +143,7 @@ export function CompleteProfileForm({
             <User className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-2xl">Complete Your Profile</CardTitle>
-          <CardDescription>Just a few details to get you started with Pyre</CardDescription>
+          <CardDescription>Just a few details to get started</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
@@ -202,8 +202,8 @@ export function CompleteProfileForm({
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1">Privacy Notice</p>
                     <p>
-                      Your personal information is securely stored and will only be used to
-                      personalize your sauna experience and comply with safety requirements.
+                      Your personal information is securely stored and is only used for reservations
+                      and scheduling.
                     </p>
                   </div>
                 </div>

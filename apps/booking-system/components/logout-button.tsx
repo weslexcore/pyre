@@ -1,35 +1,63 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { sleep } from '@/lib/utils';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useAuthState } from '@/hooks/use-auth-state';
 
 export function LogoutButton({ onAfter }: { onAfter?: () => void }) {
   const router = useRouter();
+  const { isAuthenticated } = useAuthState();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutMessage, setLogoutMessage] = useState<string>('');
+
+  useEffect(() => {
+    if (isLoggingOut && !isAuthenticated) {
+      const handleSuccessfulLogout = async () => {
+        try {
+          setLogoutMessage('Redirecting...');
+
+          // Rely on RSC refresh triggered by SupabaseAuthListener
+          router.replace('/auth/login');
+          onAfter?.();
+        } catch (error) {
+          console.warn('Logout validation warning:', error);
+          // Still proceed with logout even if validation fails
+          setLogoutMessage('Redirecting...');
+
+          router.replace('/auth/login');
+          onAfter?.();
+        } finally {
+          setIsLoggingOut(false);
+          setLogoutMessage('');
+        }
+      };
+
+      handleSuccessfulLogout();
+    }
+  }, [isAuthenticated, isLoggingOut, router, onAfter]);
 
   const logout = async () => {
+    setIsLoggingOut(true);
+    setLogoutMessage('Signing out...');
+
     const supabase = createClient();
     await supabase.auth.signOut();
-
-    // Small delay to ensure auth cookies clear before re-render
-    await sleep(200);
-
-    // Ensure server components re-render with no user
-    router.refresh();
-
-    // Optional tiny delay to avoid race during navigation
-    await sleep(100);
-
-    router.push('/auth/login');
-
-    // Allow callers (e.g., mobile nav) to close UI
-    onAfter?.();
+    // Auth state change will be handled by useEffect above
   };
 
   return (
-    <Button onClick={logout} className="font-mono-bold">
-      LOGOUT
+    <Button onClick={logout} className="font-mono-bold" disabled={isLoggingOut}>
+      {isLoggingOut ? (
+        <div className="flex items-center gap-2">
+          <LoadingSpinner size="sm" />
+          {logoutMessage || 'LOGGING OUT'}
+        </div>
+      ) : (
+        'LOGOUT'
+      )}
     </Button>
   );
 }

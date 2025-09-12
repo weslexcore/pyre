@@ -8,9 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const emailId = useId();
+  const passwordId = useId();
+  const repeatPasswordId = useId();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
@@ -79,9 +82,9 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor={emailId}>Email</Label>
                 <Input
-                  id="email"
+                  id={emailId}
                   type="email"
                   placeholder="m@example.com"
                   required
@@ -91,10 +94,10 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor={passwordId}>Password</Label>
                 </div>
                 <Input
-                  id="password"
+                  id={passwordId}
                   type="password"
                   required
                   value={password}
@@ -103,10 +106,10 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="repeat-password">Repeat Password</Label>
+                  <Label htmlFor={repeatPasswordId}>Repeat Password</Label>
                 </div>
                 <Input
-                  id="repeat-password"
+                  id={repeatPasswordId}
                   type="password"
                   required
                   value={repeatPassword}

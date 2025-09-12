@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getOptimizedCookieOptions } from './cookie-config';
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a
@@ -19,9 +20,18 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            const cookieOptions = getOptimizedCookieOptions();
+
+            cookiesToSet.forEach(({ name, value, options = {} }) => {
+              const finalOptions = {
+                ...cookieOptions,
+                ...options,
+                // Ensure httpOnly is properly set for server-side cookies
+                httpOnly: options.httpOnly ?? cookieOptions.httpOnly ?? false,
+              };
+
+              cookieStore.set(name, value, finalOptions);
+            });
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

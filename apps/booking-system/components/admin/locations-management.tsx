@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,9 @@ interface LocationForm {
 }
 
 export function LocationsManagement({ initialLocations }: LocationsManagementProps) {
+  const nameId = useId();
+  const addressId = useId();
+  const activeId = useId();
   const [locations, setLocations] = useState<Location[]>(initialLocations);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -125,18 +128,18 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor={nameId}>Name *</Label>
                 <Input
-                  id="name"
+                  id={nameId}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Downtown Wellness Center"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Address *</Label>
+                <Label htmlFor={addressId}>Address *</Label>
                 <Input
-                  id="address"
+                  id={addressId}
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="123 Main St, City, State 12345"
@@ -146,13 +149,13 @@ export function LocationsManagement({ initialLocations }: LocationsManagementPro
 
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="active"
+                id={activeId}
                 checked={formData.active}
                 onCheckedChange={(checked) =>
                   setFormData({ ...formData, active: checked as boolean })
                 }
               />
-              <Label htmlFor="active" className="text-sm">
+              <Label htmlFor={activeId} className="text-sm">
                 Active (visible to customers)
               </Label>
             </div>

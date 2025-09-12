@@ -8,23 +8,58 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useId } from 'react';
-import { sleep } from '@/lib/utils';
+import { useState, useId, useEffect } from 'react';
+import { useAuthState } from '@/hooks/use-auth-state';
+import { sessionValidator } from '@/lib/supabase/session-validator';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
   const router = useRouter();
   const emailId = useId();
   const passwordId = useId();
+  const { isAuthenticated } = useAuthState();
+
+  useEffect(() => {
+    if (isAuthenticated && isLoading) {
+      const handleSuccessfulAuth = async () => {
+        try {
+          setLoadingMessage('Validating session...');
+
+          // Validate session before navigation
+          const validation = await sessionValidator.validateSession({ requireAuth: true });
+
+          if (validation.isValid) {
+            setLoadingMessage('Redirecting to your account...');
+            router.replace('/account');
+          } else {
+            const errorMessage = 'Authentication validation failed. Please try again.';
+            setError(errorMessage);
+            setLoadingMessage('');
+          }
+        } catch {
+          const errorMessage = 'Session validation error. Please try again.';
+          setError(errorMessage);
+          setLoadingMessage('');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      handleSuccessfulAuth();
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
+    setLoadingMessage('Signing in...');
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -32,17 +67,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         password,
       });
       if (error) throw error;
-      // Allow time for client session to settle
-      await sleep(200);
-      // Navigate first so middleware can sync cookies on the target route
-      router.replace('/account');
-      // Then refresh to ensure server components re-render with new cookies
-      await sleep(120);
-      router.refresh();
+
+      setLoadingMessage('Authentication successful...');
+      // Auth state change will be handled by useEffect above
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    } finally {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setError(errorMessage);
       setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -86,8 +118,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
+              {loadingMessage && (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <LoadingSpinner size="sm" />
+                  {loadingMessage}
+                </div>
+              )}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : 'Login'}
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <LoadingSpinner size="sm" />
+                    {loadingMessage || 'Logging in...'}
+                  </div>
+                ) : (
+                  'Login'
+                )}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">

@@ -18,7 +18,7 @@ export function truncateToLines(text: string | undefined, maxLines: number = 2):
     return text;
   }
 
-  return lines.slice(0, maxLines).join('\n') + '...';
+  return `${lines.slice(0, maxLines).join('\n')}...`;
 }
 
 export function formatMultilineText(text: string | undefined): string {

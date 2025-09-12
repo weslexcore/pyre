@@ -430,7 +430,7 @@ export async function validateUserRouteAccess(routePath: string): Promise<{
     // Public routes - always accessible
     const publicPaths = ['/', '/schedule', '/auth', '/unauthorized'];
     const isPublicPath = publicPaths.some(
-      (path) => routePath === path || routePath.startsWith(path + '/')
+      (path) => routePath === path || routePath.startsWith(`${path}/`)
     );
 
     if (isPublicPath) {
