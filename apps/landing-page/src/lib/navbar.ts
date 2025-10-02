@@ -7,6 +7,13 @@ const navbar: NavbarContent = {
   },
   elements: {
     ariaLabel: 'Pyre Sauna Home',
+    links: [
+      {
+        label: 'Blog',
+        href: withBase('/blog'),
+        ariaLabel: 'Read our blog',
+      },
+    ],
   },
   actions: {
     primary: {

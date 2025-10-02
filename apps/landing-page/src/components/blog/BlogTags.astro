@@ -1,0 +1,38 @@
+---
+interface Props {
+  tags: string[];
+  variant?: 'default' | 'large';
+  clickable?: boolean;
+}
+
+const { tags, variant = 'default', clickable = true } = Astro.props;
+
+const baseClasses = 'rounded-md font-mono font-bold uppercase tracking-wide transition-colors';
+const sizeClasses = variant === 'large' ? 'px-4 py-2 text-sm' : 'px-3 py-1 text-xs';
+const colorClasses = clickable
+  ? 'bg-[rgb(36,90,130)] text-[rgb(250,248,236)] hover:bg-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2'
+  : 'bg-[rgb(36,90,130)]/10 text-[rgb(36,90,130)]';
+
+const tagClasses = `${baseClasses} ${sizeClasses} ${colorClasses}`;
+---
+
+<div class="flex flex-wrap gap-2" role="list" aria-label="Post tags">
+  {tags.map((tag) => (
+    <span role="listitem">
+      {clickable ? (
+        <a
+          href={`/blog?tag=${encodeURIComponent(tag)}`}
+          class={tagClasses}
+          aria-label={`View posts tagged with ${tag}`}
+        >
+          {tag}
+        </a>
+      ) : (
+        <span class={tagClasses}>
+          {tag}
+        </span>
+      )}
+    </span>
+  ))}
+</div>
+

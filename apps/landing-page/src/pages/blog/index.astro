@@ -1,0 +1,335 @@
+---
+import { getCollection } from 'astro:content';
+import MainLayout from '@/layouts/main.astro';
+import BlogPostCard from '@/components/blog/BlogPostCard.astro';
+import BlogSearch from '@/components/blog/BlogSearch.astro';
+import BlogTagFilter from '@/components/blog/BlogTagFilter.astro';
+import { calculateReadingTime } from '@/lib/reading-time';
+import { BLOG_CONFIG } from '@/lib/blog-config';
+import type { BlogPostCard as BlogPostCardType, TagWithCount } from '@/lib/types';
+
+// Fetch all blog posts
+const allPosts = await getCollection('blog', ({ data }) => {
+  // Filter out draft posts
+  return data.draft !== true;
+});
+
+// Sort posts in reverse chronological order (newest first)
+const sortedPosts = allPosts.sort((a, b) => {
+  return b.data.date.getTime() - a.data.date.getTime();
+});
+
+// Process posts for display
+const posts: BlogPostCardType[] = sortedPosts.map((post) => ({
+  slug: post.slug,
+  title: post.data.title,
+  description: post.data.description,
+  date: post.data.date,
+  author: post.data.author,
+  tags: post.data.tags,
+  image: post.data.image
+    ? typeof post.data.image === 'string'
+      ? post.data.image
+      : post.data.image.src
+    : undefined,
+  readingTime: calculateReadingTime(post.body),
+}));
+
+// Calculate tag counts
+const tagCounts = new Map<string, number>();
+posts.forEach((post) => {
+  post.tags.forEach((tag) => {
+    tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+  });
+});
+
+// Convert to array and sort by count (descending), then alphabetically
+const tags: TagWithCount[] = Array.from(tagCounts.entries())
+  .map(([name, count]) => ({ name, count }))
+  .sort((a, b) => {
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+// SEO metadata
+const title = 'Blog - Pyre';
+const description =
+  'Explore articles about sauna wellness, health benefits, and the Pyre community.';
+---
+
+<MainLayout title={title} description={description}>
+  <div class="min-h-screen bg-[rgb(250,248,236)] pb-16 pt-24 md:pt-32">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <header class="mb-12">
+      
+        <p class="font-sans text-xl leading-relaxed text-[rgb(38,37,37)]/70">
+          Insights on sauna wellness, health benefits, and community
+        </p>
+      </header>
+
+      <!-- Search and Filter Section -->
+      <div class="mb-12 space-y-6">
+        <!-- Search -->
+        <BlogSearch />
+
+        <!-- Tag Filters -->
+        {tags.length > 0 && (
+          <BlogTagFilter tags={tags} />
+        )}
+      </div>
+
+      <!-- Posts List -->
+      <div id="posts-container" class="mb-12">
+        <div id="posts-grid" class="flex flex-col gap-8">
+          {posts.map((post, index) => (
+            <div 
+              class="blog-post-card" 
+              data-slug={post.slug}
+              data-tags={JSON.stringify(post.tags)}
+              data-searchable={JSON.stringify({
+                title: post.title.toLowerCase(),
+                description: post.description.toLowerCase(),
+                tags: post.tags.map(t => t.toLowerCase())
+              })}
+              data-index={index}
+              style={index >= BLOG_CONFIG.postsPerPage ? 'display: none;' : ''}
+            >
+              <BlogPostCard post={post} />
+            </div>
+          ))}
+        </div>
+
+        <!-- Loading indicator for infinite scroll -->
+        <div id="loading-indicator" class="mt-8 hidden text-center">
+          <div class="inline-flex items-center gap-3 font-mono text-sm text-[rgb(38,37,37)]/70">
+            <svg class="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading more posts...
+          </div>
+        </div>
+
+        <!-- Infinite scroll sentinel -->
+        <div id="scroll-sentinel" class="h-4"></div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center">
+        <div class="mx-auto max-w-md space-y-4">
+          <svg
+            class="mx-auto h-24 w-24 text-[rgb(38,37,37)]/20"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <h2 class="font-sans text-2xl font-semibold text-[rgb(38,37,37)]">
+            No posts found
+          </h2>
+          <p class="font-sans text-base text-[rgb(38,37,37)]/70">
+            Try adjusting your search or filters to find what you're looking for.
+          </p>
+          <button
+            id="reset-filters-btn"
+            class="inline-flex items-center gap-2 rounded-md bg-[rgb(36,90,130)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[rgb(250,248,236)] transition-colors hover:bg-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      </div>
+
+      <!-- No posts message (for brand new blog) -->
+      {posts.length === 0 && (
+        <div class="text-center">
+          <div class="mx-auto max-w-md space-y-4">
+            <h2 class="font-sans text-2xl font-semibold text-[rgb(38,37,37)]">
+              Coming Soon
+            </h2>
+            <p class="font-sans text-base text-[rgb(38,37,37)]/70">
+              We're working on creating great content for you. Check back soon!
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</MainLayout>
+
+<script>
+  import { BLOG_CONFIG } from '@/lib/blog-config';
+
+  // Get all card elements
+  const postsGrid = document.getElementById('posts-grid');
+  const allCards = postsGrid ? Array.from(postsGrid.querySelectorAll('.blog-post-card')) : [];
+
+  // State
+  let displayedCount = BLOG_CONFIG.postsPerPage;
+  let currentSearchQuery = '';
+  let currentTagFilters: string[] = [];
+
+  // Elements
+  const postsContainer = document.getElementById('posts-container');
+  const emptyState = document.getElementById('empty-state');
+  const loadingIndicator = document.getElementById('loading-indicator');
+  const scrollSentinel = document.getElementById('scroll-sentinel');
+  const resetFiltersBtn = document.getElementById('reset-filters-btn');
+
+  // Filter and display posts
+  function renderPosts() {
+    if (!postsContainer || !emptyState) return;
+
+    // Get filtered cards
+    const filteredCards = allCards.filter((card) => {
+      const searchable = JSON.parse(card.getAttribute('data-searchable') || '{}');
+      const cardTags = JSON.parse(card.getAttribute('data-tags') || '[]');
+
+      // Apply search filter
+      if (currentSearchQuery) {
+        const query = currentSearchQuery.toLowerCase();
+        const matchesSearch = 
+          searchable.title.includes(query) ||
+          searchable.description.includes(query) ||
+          searchable.tags.some((tag: string) => tag.includes(query));
+        
+        if (!matchesSearch) return false;
+      }
+
+      // Apply tag filters
+      if (currentTagFilters.length > 0) {
+        const matchesTags = currentTagFilters.every((filterTag) => 
+          cardTags.includes(filterTag)
+        );
+        if (!matchesTags) return false;
+      }
+
+      return true;
+    });
+
+    // Show/hide cards based on filters and pagination
+    allCards.forEach((card, index) => {
+      const isFiltered = filteredCards.includes(card);
+      const cardIndex = filteredCards.indexOf(card);
+      const shouldShow = isFiltered && cardIndex < displayedCount;
+      
+      (card as HTMLElement).style.display = shouldShow ? '' : 'none';
+    });
+
+    // Show/hide empty state
+    if (filteredCards.length === 0) {
+      postsContainer.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+    } else {
+      postsContainer.classList.remove('hidden');
+      emptyState.classList.add('hidden');
+    }
+
+    // Dispatch results count event
+    window.dispatchEvent(
+      new CustomEvent('blog-search-results', {
+        detail: { count: filteredCards.length },
+      })
+    );
+  }
+
+  // Apply filters and search
+  function applyFilters() {
+    displayedCount = BLOG_CONFIG.postsPerPage;
+    renderPosts();
+  }
+
+  // Handle search
+  window.addEventListener('blog-search', ((e: CustomEvent) => {
+    currentSearchQuery = e.detail.query;
+    applyFilters();
+  }) as EventListener);
+
+  // Handle tag filtering
+  window.addEventListener('blog-tag-filter', ((e: CustomEvent) => {
+    currentTagFilters = e.detail.tags;
+    applyFilters();
+  }) as EventListener);
+
+  // Handle reset filters
+  resetFiltersBtn?.addEventListener('click', () => {
+    currentSearchQuery = '';
+    currentTagFilters = [];
+    
+    // Reset search input
+    const searchInput = document.getElementById('blog-search') as HTMLInputElement;
+    if (searchInput) {
+      searchInput.value = '';
+    }
+
+    // Clear tag filters
+    window.dispatchEvent(new CustomEvent('clear-tag-filters'));
+    
+    applyFilters();
+  });
+
+  // Infinite scroll with Intersection Observer
+  if (scrollSentinel) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            // Count currently filtered and visible cards
+            const filteredCards = allCards.filter((card) => {
+              const searchable = JSON.parse(card.getAttribute('data-searchable') || '{}');
+              const cardTags = JSON.parse(card.getAttribute('data-tags') || '[]');
+
+              if (currentSearchQuery) {
+                const query = currentSearchQuery.toLowerCase();
+                const matchesSearch = 
+                  searchable.title.includes(query) ||
+                  searchable.description.includes(query) ||
+                  searchable.tags.some((tag: string) => tag.includes(query));
+                if (!matchesSearch) return false;
+              }
+
+              if (currentTagFilters.length > 0) {
+                const matchesTags = currentTagFilters.every((filterTag) => 
+                  cardTags.includes(filterTag)
+                );
+                if (!matchesTags) return false;
+              }
+
+              return true;
+            });
+
+            if (displayedCount < filteredCards.length) {
+              // Show loading indicator
+              loadingIndicator?.classList.remove('hidden');
+
+              // Simulate loading delay for better UX
+              setTimeout(() => {
+                displayedCount += BLOG_CONFIG.postsPerPage;
+                renderPosts();
+                loadingIndicator?.classList.add('hidden');
+              }, 500);
+            }
+          }
+        });
+      },
+      {
+        rootMargin: '100px',
+      }
+    );
+
+    observer.observe(scrollSentinel);
+  }
+
+  // Initial render
+  renderPosts();
+</script>
+

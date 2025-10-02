@@ -1,0 +1,99 @@
+---
+interface Props {
+  placeholder?: string;
+}
+
+const { placeholder = 'Search blog posts...' } = Astro.props;
+---
+
+<div class="relative w-full">
+  <label for="blog-search" class="sr-only">Search blog posts</label>
+  <div class="relative">
+    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+      <svg
+        class="h-5 w-5 text-[rgb(38,37,37)]/50"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="2"
+        stroke="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+        ></path>
+      </svg>
+    </div>
+    <input
+      type="text"
+      id="blog-search"
+      name="search"
+      placeholder={placeholder}
+      class="w-full rounded-[var(--radius)] border-2 border-[rgb(38,37,37)]/20 bg-[rgb(250,248,236)] py-3 pl-12 pr-4 font-sans text-base text-[rgb(38,37,37)] placeholder:text-[rgb(38,37,37)]/50 transition-colors focus:border-[rgb(36,90,130)] focus:outline-none focus:ring-2 focus:ring-[rgb(36,90,130)] focus:ring-offset-2"
+      aria-label="Search blog posts"
+      autocomplete="off"
+    />
+  </div>
+  
+  <!-- Search results count (hidden by default, shown via JS) -->
+  <div id="search-results-count" class="mt-2 hidden font-mono text-sm text-[rgb(38,37,37)]/70">
+    <span id="results-count">0</span> results found
+  </div>
+</div>
+
+<script>
+  // Debounce function
+  function debounce<T extends (...args: any[]) => void>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    return function executedFunction(...args: Parameters<T>) {
+      const later = () => {
+        timeout = null;
+        func(...args);
+      };
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Search functionality
+  const searchInput = document.getElementById('blog-search') as HTMLInputElement;
+  const searchResultsCount = document.getElementById('search-results-count');
+  const resultsCount = document.getElementById('results-count');
+
+  if (searchInput) {
+    const handleSearch = debounce((e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const query = target.value.toLowerCase().trim();
+
+      // Dispatch custom event for search
+      window.dispatchEvent(
+        new CustomEvent('blog-search', {
+          detail: { query },
+        })
+      );
+    }, 300);
+
+    searchInput.addEventListener('input', handleSearch);
+  }
+
+  // Listen for search result updates
+  window.addEventListener('blog-search-results', ((e: CustomEvent) => {
+    const count = e.detail.count;
+    if (resultsCount && searchResultsCount) {
+      resultsCount.textContent = count.toString();
+      if (count !== null) {
+        searchResultsCount.classList.remove('hidden');
+      } else {
+        searchResultsCount.classList.add('hidden');
+      }
+    }
+  }) as EventListener);
+</script>
+

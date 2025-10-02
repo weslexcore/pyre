@@ -27,6 +27,9 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || "/";
     
     <!-- Desktop navigation -->
     <div class="hidden md:flex items-center gap-3">
+      {navbar.elements.links && navbar.elements.links.map((link) => (
+        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="book-cta" data-placement="header">{link.label}</Button>
+      ))}
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="header">{navbar.actions?.secondary?.label}</Button>
       <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel}>{navbar.actions?.primary?.label}</Button>
     </div>

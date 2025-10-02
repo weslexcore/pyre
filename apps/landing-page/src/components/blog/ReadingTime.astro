@@ -1,0 +1,35 @@
+---
+import { formatReadingTime } from '@/lib/reading-time';
+
+interface Props {
+  minutes: number;
+  variant?: 'default' | 'large';
+}
+
+const { minutes, variant = 'default' } = Astro.props;
+const formattedTime = formatReadingTime(minutes);
+
+const textClasses = variant === 'large' ? 'font-mono text-base font-bold' : 'font-mono text-sm';
+---
+
+<div class="inline-flex items-center gap-2 text-[rgb(38,37,37)]/70">
+  <svg
+    class={variant === 'large' ? 'h-5 w-5' : 'h-4 w-4'}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke-width="2"
+    stroke="currentColor"
+    aria-hidden="true"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+  <span class={textClasses}>
+    {formattedTime}
+  </span>
+</div>
+

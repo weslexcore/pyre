@@ -23,6 +23,16 @@ const footerConfig: FooterContent = {
       ],
     },
     {
+      title: 'Resources',
+      links: [
+        {
+          label: 'Blog',
+          href: withBase('/blog'),
+          ariaLabel: 'Read our blog',
+        },
+      ],
+    },
+    {
       title: 'Contact',
       links: [
         {

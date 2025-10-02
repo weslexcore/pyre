@@ -15,16 +15,37 @@ import {
 } from '../lib/seo';
 // Removed SpeedInsights component usage; use inline script instead
 
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  ogType?: 'website' | 'article';
+  article?: {
+    publishedTime?: string;
+    author?: string;
+    tags?: string[];
+  };
+}
+
 const {
   title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
   description = 'A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.',
+  ogImage,
+  ogType = 'website',
+  article,
 } = Astro.props;
+
 const base = import.meta.env.BASE_URL ?? '/';
 const faviconHref = faviconImage.src;
-const socialImageSrc = SOCIAL_IMAGE.src;
+
+// Use custom OG image if provided, otherwise use default
+const socialImageSrc = ogImage || SOCIAL_IMAGE.src;
 const absoluteSocialImage = Astro.site
   ? new URL(socialImageSrc, Astro.site).toString()
   : socialImageSrc;
+
+// Generate canonical URL
+const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 ---
 
 <html lang="en" style={`--asset-base: ${base};`}> 
@@ -35,23 +56,66 @@ const absoluteSocialImage = Astro.site
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		
+		<!-- Canonical URL -->
+		<link rel="canonical" href={canonicalURL} />
+		
 		<!-- Open Graph / Facebook -->
-		<meta property="og:type" content="website" />
-    <meta property="og:url" content={Astro.site ? Astro.site.toString() : undefined} />
+		<meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonicalURL} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
     <meta property="og:image" content={absoluteSocialImage} />
     <meta property="og:image:width" content={String(SOCIAL_IMAGE_WIDTH)} />
     <meta property="og:image:height" content={String(SOCIAL_IMAGE_HEIGHT)} />
-    <meta property="og:image:alt" content={SOCIAL_IMAGE_ALT} />
+    <meta property="og:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
+		
+		<!-- Article-specific Open Graph tags -->
+		{ogType === 'article' && article && (
+			<>
+				{article.publishedTime && <meta property="article:published_time" content={article.publishedTime} />}
+				{article.author && <meta property="article:author" content={article.author} />}
+				{article.tags && article.tags.map((tag) => (
+					<meta property="article:tag" content={tag} />
+				))}
+			</>
+		)}
 		
 		<!-- Twitter -->
 		<meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content={Astro.site ? Astro.site.toString() : undefined} />
+    <meta property="twitter:url" content={canonicalURL} />
 		<meta property="twitter:title" content={title} />
 		<meta property="twitter:description" content={description} />
     <meta property="twitter:image" content={absoluteSocialImage} />
-    <meta property="twitter:image:alt" content={SOCIAL_IMAGE_ALT} />
+    <meta property="twitter:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
+		
+		<!-- JSON-LD Structured Data for Articles -->
+		{ogType === 'article' && article && (
+			<script type="application/ld+json" set:html={JSON.stringify({
+				'@context': 'https://schema.org',
+				'@type': 'Article',
+				headline: title,
+				description: description,
+				image: absoluteSocialImage,
+				datePublished: article.publishedTime,
+				author: {
+					'@type': 'Person',
+					name: article.author,
+				},
+				publisher: {
+					'@type': 'Organization',
+					name: 'Pyre',
+					logo: {
+						'@type': 'ImageObject',
+						url: Astro.site ? new URL('/logos/gray/logo.png', Astro.site).toString() : '/logos/gray/logo.png',
+					},
+				},
+				mainEntityOfPage: {
+					'@type': 'WebPage',
+					'@id': canonicalURL,
+				},
+				keywords: article.tags?.join(', '),
+			})} />
+		)}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
 	<PostHog />

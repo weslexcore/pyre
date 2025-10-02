@@ -1,0 +1,336 @@
+---
+import { Image } from 'astro:assets';
+import MainLayout from './main.astro';
+import BlogTags from '@/components/blog/BlogTags.astro';
+import ReadingTime from '@/components/blog/ReadingTime.astro';
+import RelatedPosts from '@/components/blog/RelatedPosts.astro';
+import ShareButtons from '@/components/blog/ShareButtons.astro';
+import type { BlogPost } from '@/lib/types';
+
+interface Props {
+  post: BlogPost;
+  relatedPosts: BlogPost[];
+  readingTime: number;
+}
+
+const { post, relatedPosts, readingTime } = Astro.props;
+const { title, description, date, author, tags, image } = post.data;
+
+// Format date
+const formattedDate = date.toLocaleDateString('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+// Get full URL for sharing
+const fullUrl = new URL(Astro.url.pathname, Astro.site).toString();
+
+// SEO metadata
+// Handle ImageMetadata or string for ogImage
+const ogImageSrc = image
+  ? typeof image === 'string'
+    ? image
+    : image.src
+  : '/logos/gray/full_logo_text_with_subtitle.png';
+
+// Article metadata for SEO
+const articleMetadata = {
+  publishedTime: date.toISOString(),
+  author,
+  tags,
+};
+---
+
+<MainLayout 
+  title={`${title} - Pyre Blog`} 
+  description={description}
+  ogImage={ogImageSrc}
+  ogType="article"
+  article={articleMetadata}
+>
+  <article class="min-h-screen bg-[rgb(250,248,236)] pb-16 pt-24 md:pt-32">
+    <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      <!-- Back to blog link -->
+      <nav class="mb-8">
+        <a
+          href="/blog"
+          class="inline-flex items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide text-[rgb(36,90,130)] transition-colors hover:text-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+        >
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Blog
+        </a>
+      </nav>
+
+      <!-- Post Header -->
+      <header class="mb-12 space-y-6">
+        <!-- Tags -->
+        <div>
+          <BlogTags tags={tags} clickable={true} />
+        </div>
+
+        <!-- Title -->
+        <h1 class="font-sans text-4xl font-semibold leading-tight tracking-[-0.02em] text-[rgb(38,37,37)] md:text-5xl lg:text-6xl">
+          {title}
+        </h1>
+
+        <!-- Description -->
+        <p class="font-sans text-xl leading-relaxed text-[rgb(38,37,37)]/70">
+          {description}
+        </p>
+
+        <!-- Meta info -->
+        <div class="flex flex-wrap items-center gap-4 border-b border-t border-[rgb(38,37,37)]/10 py-4 font-mono text-sm text-[rgb(38,37,37)]/70">
+          <div class="flex items-center gap-2">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span class="font-bold">{author}</span>
+          </div>
+          <span aria-hidden="true">•</span>
+          <time datetime={date.toISOString()}>
+            {formattedDate}
+          </time>
+          <span aria-hidden="true">•</span>
+          <ReadingTime minutes={readingTime} />
+        </div>
+      </header>
+
+      <!-- Featured Image -->
+      {image && (
+        <div class="mb-12">
+          <Image
+            src={image}
+            alt={title}
+            width={1200}
+            height={675}
+            class="w-full rounded-[var(--radius)] object-cover"
+          />
+        </div>
+      )}
+
+      <!-- Post Content -->
+      <div class="prose prose-lg mx-auto mb-16 max-w-none">
+        <slot />
+      </div>
+
+      <!-- Share Buttons -->
+      <div class="mb-16 border-t border-[rgb(38,37,37)]/10 pt-8">
+        <ShareButtons title={title} description={description} url={fullUrl} />
+      </div>
+
+      <!-- Related Posts -->
+      {relatedPosts.length > 0 && (
+        <RelatedPosts posts={relatedPosts} />
+      )}
+    </div>
+  </article>
+</MainLayout>
+
+<style is:global>
+  /* Blog post content styling */
+  .prose {
+    color: rgb(38, 37, 37);
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.75;
+  }
+
+  /* Headings */
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: rgb(38, 37, 37);
+    margin-top: 2em;
+    margin-bottom: 1em;
+    line-height: 1.3;
+  }
+
+  .prose h2 {
+    font-size: 2rem;
+    margin-top: 2.5em;
+  }
+
+  .prose h3 {
+    font-size: 1.5rem;
+  }
+
+  .prose h4 {
+    font-size: 1.25rem;
+  }
+
+  /* Paragraphs */
+  .prose p {
+    margin-bottom: 1.5em;
+    max-width: 65ch; /* Optimal line length for readability */
+  }
+
+  /* Links */
+  .prose a {
+    color: rgb(36, 90, 130);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    transition: color 0.2s ease;
+  }
+
+  .prose a:hover {
+    color: rgb(241, 88, 54);
+  }
+
+  .prose a:focus-visible {
+    outline: 2px solid rgb(36, 90, 130);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Lists */
+  .prose ul,
+  .prose ol {
+    margin-bottom: 1.5em;
+    padding-left: 1.5em;
+  }
+
+  .prose li {
+    margin-bottom: 0.5em;
+  }
+
+  .prose ul > li {
+    list-style-type: disc;
+  }
+
+  .prose ol > li {
+    list-style-type: decimal;
+  }
+
+  .prose ul ul,
+  .prose ol ul {
+    list-style-type: circle;
+  }
+
+  /* Blockquotes */
+  .prose blockquote {
+    border-left: 4px solid rgb(241, 88, 54);
+    padding-left: 1.5em;
+    margin: 2em 0;
+    font-style: italic;
+    color: rgb(38, 37, 37);
+    background: rgba(241, 88, 54, 0.05);
+    padding: 1em 1.5em;
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+
+  .prose blockquote p {
+    margin-bottom: 0.5em;
+  }
+
+  /* Code */
+  .prose code {
+    font-family: var(--font-mono), 'Courier New', monospace;
+    font-weight: 700;
+    background: rgba(38, 37, 37, 0.05);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: rgb(38, 37, 37);
+  }
+
+  .prose pre {
+    background: rgb(38, 37, 37);
+    color: rgb(250, 248, 236);
+    padding: 1.5em;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    margin: 2em 0;
+    font-family: var(--font-mono), 'Courier New', monospace;
+    line-height: 1.6;
+  }
+
+  .prose pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-size: 0.875em;
+  }
+
+  /* Tables */
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2em 0;
+    font-size: 0.9em;
+  }
+
+  .prose th,
+  .prose td {
+    border: 1px solid rgba(38, 37, 37, 0.2);
+    padding: 0.75em 1em;
+    text-align: left;
+  }
+
+  .prose th {
+    background: rgba(36, 90, 130, 0.1);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    letter-spacing: 0.05em;
+  }
+
+  .prose tr:nth-child(even) {
+    background: rgba(38, 37, 37, 0.02);
+  }
+
+  /* Images */
+  .prose img {
+    border-radius: var(--radius);
+    margin: 2em 0;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Horizontal rules */
+  .prose hr {
+    border: none;
+    border-top: 2px solid rgba(38, 37, 37, 0.1);
+    margin: 3em 0;
+  }
+
+  /* Strong and emphasis */
+  .prose strong {
+    font-weight: 600;
+    color: rgb(38, 37, 37);
+  }
+
+  .prose em {
+    font-style: italic;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .prose h2 {
+      font-size: 1.75rem;
+    }
+
+    .prose h3 {
+      font-size: 1.375rem;
+    }
+
+    .prose p {
+      max-width: 100%;
+    }
+
+    .prose pre {
+      padding: 1em;
+      font-size: 0.875em;
+    }
+  }
+</style>
+

@@ -1,0 +1,84 @@
+---
+import { Image } from 'astro:assets';
+import type { BlogPost } from '@/lib/types';
+import { calculateReadingTime, formatReadingTime } from '@/lib/reading-time';
+
+interface Props {
+  posts: BlogPost[];
+}
+
+const { posts } = Astro.props;
+
+// If no related posts, don't render anything
+if (!posts || posts.length === 0) {
+  return null;
+}
+---
+
+<section class="mt-16 border-t border-[rgb(38,37,37)]/10 pt-16">
+  <h2 class="mb-8 font-sans text-3xl font-semibold tracking-[-0.02em] text-[rgb(38,37,37)]">
+    Related Posts
+  </h2>
+
+  <div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+    {posts.map(async (post) => {
+      const { Content } = await post.render();
+      const readingTime = calculateReadingTime(post.body);
+      const formattedDate = post.data.date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      return (
+        <article class="group flex flex-col">
+          {/* Image */}
+          {post.data.image ? (
+            <a href={`/blog/${post.slug}`} class="relative mb-4 aspect-[16/9] overflow-hidden rounded-[var(--radius)]">
+              <Image
+                src={post.data.image}
+                alt={post.data.title}
+                width={600}
+                height={338}
+                class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+            </a>
+          ) : (
+            <div class="relative mb-4 aspect-[16/9] overflow-hidden rounded-[var(--radius)] bg-gradient-to-br from-[rgb(36,90,130)] to-[rgb(241,88,54)]">
+              <div class="flex h-full items-center justify-center">
+                <span class="font-sans text-2xl font-semibold tracking-[-0.02em] text-[rgb(250,248,236)]">
+                  Pyre
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Content */}
+          <div class="flex flex-1 flex-col">
+            <h3 class="mb-2">
+              <a
+                href={`/blog/${post.slug}`}
+                class="font-sans text-xl font-semibold leading-tight tracking-[-0.02em] text-[rgb(38,37,37)] transition-colors group-hover:text-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+              >
+                {post.data.title}
+              </a>
+            </h3>
+
+            <p class="mb-4 flex-1 font-sans text-sm leading-relaxed text-[rgb(38,37,37)]/70">
+              {post.data.description}
+            </p>
+
+            {/* Meta */}
+            <div class="flex flex-wrap items-center gap-3 font-mono text-xs text-[rgb(38,37,37)]/60">
+              <time datetime={post.data.date.toISOString()}>{formattedDate}</time>
+              <span aria-hidden="true">•</span>
+              <span>{formatReadingTime(readingTime)}</span>
+            </div>
+          </div>
+        </article>
+      );
+    })}
+  </div>
+</section>
+

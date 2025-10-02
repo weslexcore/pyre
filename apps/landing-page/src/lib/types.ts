@@ -297,3 +297,16 @@ export interface PolicyDocument {
   headerImage?: ImageRef;
   sections: Array<PolicySection>;
 }
+
+// ------------------------------------------------------------
+// Blog types
+// ------------------------------------------------------------
+
+export type {
+  BlogPost,
+  BlogPostData,
+  ProcessedBlogPost,
+  BlogPostCard,
+  BlogFilters,
+  TagWithCount,
+} from './blog-types';

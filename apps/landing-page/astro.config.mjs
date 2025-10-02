@@ -1,5 +1,6 @@
 // @ts-nocheck
 
+import mdx from '@astrojs/mdx';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import vercel from '@astrojs/vercel';
@@ -28,7 +29,7 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
 
-  integrations: [react(), sitemap()],
+  integrations: [mdx(), react(), sitemap()],
 
   output: 'static', // Use static output for free Vercel plan
   adapter: vercel({
