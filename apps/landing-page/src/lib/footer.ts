@@ -13,6 +13,16 @@ const footerConfig: FooterContent = {
 
   groups: [
     {
+      title: 'Sessions',
+      links: [
+        {
+          label: 'Book a session',
+          href: withBase('/book'),
+          ariaLabel: 'Book now',
+        },
+      ],
+    },
+    {
       title: 'Contact',
       links: [
         {

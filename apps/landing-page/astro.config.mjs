@@ -2,6 +2,7 @@
 
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
+import vercel from '@astrojs/vercel';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { loadEnv } from 'vite';
@@ -21,6 +22,9 @@ export default defineConfig({
   },
 
   integrations: [react(), sitemap()],
+
+  output: 'server',
+  adapter: vercel(),
 
   // Image optimization configuration
   image: {

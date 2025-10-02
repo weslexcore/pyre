@@ -14,6 +14,11 @@ const navbar: NavbarContent = {
       href: withBase('#signup'),
       ariaLabel: 'Join the mailing list',
     },
+    secondary: {
+      label: 'Book a session',
+      href: withBase('/book'),
+      ariaLabel: 'Book now',
+    },
   },
 };
 

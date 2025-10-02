@@ -3,6 +3,7 @@ import '../styles/global.css';
 import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
 import faviconImage from '../assets/logos/red/logo.png';
+import BookingTracking from '../components/BookingTracking.astro';
 import Footer from '../components/Footer.astro';
 import Navbar from '../components/Navbar.astro';
 import PostHog from '../components/posthog.astro';
@@ -53,7 +54,8 @@ const absoluteSocialImage = Astro.site
     <meta property="twitter:image:alt" content={SOCIAL_IMAGE_ALT} />
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
-	<PostHog />		
+	<PostHog />
+	<BookingTracking />
 		<script type="module" is:inline>
 			import { injectSpeedInsights } from '@vercel/speed-insights';
 			injectSpeedInsights();

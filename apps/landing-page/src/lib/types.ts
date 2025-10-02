@@ -118,6 +118,7 @@ export interface NavbarContent {
   };
   actions?: {
     primary?: ActionRef;
+    secondary?: ActionRef;
   };
 }
 
@@ -218,6 +219,17 @@ export interface FooterContent {
 export interface FooterNavGroup {
   title: string;
   links: Array<LinkRef>;
+}
+
+// ------------------------------------------------------------
+// Booking configuration types
+// ------------------------------------------------------------
+
+export interface BookingContent {
+  label: string;
+  bookingBaseUrl: string;
+  utmSource: string;
+  ariaLabel: string;
 }
 
 // ------------------------------------------------------------

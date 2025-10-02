@@ -43,8 +43,8 @@ function isMailto(href: string): boolean {
                     const href = link.href;
                     const ariaLabel = link.ariaLabel ?? (isMailto(href) ? `Email ${href.replace('mailto:', '')}` : undefined);
                     const isExternal = isExternalLink(href);
-                    // const isEmail = isMailto(href);
-                    // const finalHref =  href : withBase(href);
+                    const isBookLink = link.label.includes('Book') || link.href.includes('/book');
+      
                     return (
                       <li>
                         <a
@@ -52,7 +52,8 @@ function isMailto(href: string): boolean {
                           aria-label={ariaLabel}
                           target={isExternal ? '_blank' : undefined}
                           rel={isExternal ? 'noopener noreferrer' : undefined}
-                          class="underline underline-offset-4 hover:no-underline focus:no-underline"
+                          class={`underline underline-offset-4 hover:no-underline focus:no-underline ${isBookLink ? 'book-cta' : ''}`}
+                          data-placement={isBookLink ? 'footer' : undefined}
                         >
                           {link.label}
                         </a>
