@@ -62,6 +62,9 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || "/";
     class="md:hidden bg-black border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
+      {navbar.elements.links && navbar.elements.links.map((link) => (
+        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="w-full">{link.label}</Button>
+      ))}
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
       <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full">{navbar.actions?.primary?.label}</Button>
     </div>
@@ -111,9 +114,11 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || "/";
           // Slide menu up
           mobileMenu.classList.remove('max-h-96', 'opacity-100');
           mobileMenu.classList.add('max-h-0', 'opacity-0');
-          // Restore appropriate background based on scroll position
+          // Restore appropriate background based on page and scroll position
+          const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
           const isScrolled = window.scrollY > 0;
-          applyScrolledState(navbar, isScrolled);
+          // Only allow transparent on landing page at top
+          applyScrolledState(navbar, !isLandingPage || isScrolled);
           // Animate icon transition - show hamburger, hide close
           hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
           hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
@@ -140,42 +145,44 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || "/";
 
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
-      const isLandingPage = window.location.pathname === basePath;
+      const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
       if (!navbar) return;
+      
+      // Initialize navbar state immediately
+      const initiallyScrolled = window.scrollY > 0;
+      
       if (!isLandingPage) {
+        // Non-landing pages: always show black navbar
         applyScrolledState(navbar, true);
-        return;
-      }
-      const sentinel = document.getElementById('nav-sentinel');
-
-      if (!navbar) return;
-
-      if (sentinel) {
-        const observer = new IntersectionObserver((entries) => {
-          const entry = entries[0];
-          applyScrolledState(navbar, !entry.isIntersecting);
-        }, { root: null, threshold: 0 });
-        observer.observe(sentinel);
-        // Initialize state synchronously in case the observer callback hasn't fired yet
-        // If sentinel is outside the viewport at load, reflect scrolled state
-        applyScrolledState(navbar, window.scrollY > 0);
       } else {
-        // Fallback: scroll listener
-        let ticking = false;
-        function onScroll() {
-          if (!ticking) {
-            window.requestAnimationFrame(() => {
-              applyScrolledState(navbar, window.scrollY > 0);
-              ticking = false;
-            });
-            ticking = true;
+        // Landing page: transparent only at top, black when scrolled
+        applyScrolledState(navbar, initiallyScrolled);
+        
+        const sentinel = document.getElementById('nav-sentinel');
+
+        if (sentinel) {
+          const observer = new IntersectionObserver((entries) => {
+            const entry = entries[0];
+            applyScrolledState(navbar, !entry.isIntersecting);
+          }, { root: null, threshold: 0 });
+          observer.observe(sentinel);
+        } else {
+          // Fallback: scroll listener
+          let ticking = false;
+          function onScroll() {
+            if (!ticking) {
+              window.requestAnimationFrame(() => {
+                applyScrolledState(navbar, window.scrollY > 0);
+                ticking = false;
+              });
+              ticking = true;
+            }
           }
+          window.addEventListener('scroll', onScroll, { passive: true });
         }
-        applyScrolledState(navbar, window.scrollY > 0);
-        window.addEventListener('scroll', onScroll, { passive: true });
       }
 
-      // Setup mobile menu
+      // Setup mobile menu - always run this regardless of page
       setupMobileMenu();
     }
 
