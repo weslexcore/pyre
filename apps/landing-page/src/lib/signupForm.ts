@@ -3,7 +3,7 @@ import type { SignupFormContent } from './types';
 const signupForm: SignupFormContent = {
   elements: {
     title: 'SIGN UP',
-    subtitle: 'JOIN OUR MAILING LIST TO HEAR ABOUT PRE-OPENING EVENTS, NEWS AND SPECIALS',
+    subtitle: 'JOIN OUR MAILING LIST TO HEAR ABOUT EVENTS, NEWS AND SPECIALS',
     emailLabel: 'EMAIL',
     submitLabel: 'Join the mailing list',
     successMessage: 'Thanks for subscribing!',

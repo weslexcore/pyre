@@ -13,13 +13,14 @@ const env = loadEnv(mode, process.cwd(), '');
 
 // Provide fallback values for local development
 const PUBLIC_ASTRO_BASE = env.PUBLIC_ASTRO_BASE || '/';
-const VERCEL_PROJECT_PRODUCTION_URL = env.VERCEL_PROJECT_PRODUCTION_URL || env.VERCEL_URL || 'localhost:4321';
+const VERCEL_PROJECT_PRODUCTION_URL =
+  env.VERCEL_PROJECT_PRODUCTION_URL || env.VERCEL_URL || 'localhost:4321';
 
 // https://astro.build/config
 export default defineConfig({
   // For GitHub Pages project sites, ensure assets work under subpath
   // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set VERCEL_PROJECT_PRODUCTION_URL
-  site: VERCEL_PROJECT_PRODUCTION_URL.includes('localhost') 
+  site: VERCEL_PROJECT_PRODUCTION_URL.includes('localhost')
     ? `http://${VERCEL_PROJECT_PRODUCTION_URL}`
     : `https://${VERCEL_PROJECT_PRODUCTION_URL}`,
   base: PUBLIC_ASTRO_BASE,

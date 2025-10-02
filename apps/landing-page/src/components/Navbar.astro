@@ -1,11 +1,11 @@
 ---
-import { Image } from 'astro:assets';
-import logo from '../assets/logos/creme/logo_with_text.png';
-import navbar from '../lib/navbar';
-import { withBase } from '../lib/paths';
-import Button from './Button.astro';
+import { Image } from "astro:assets";
+import logo from "../assets/logos/creme/logo_with_text.png";
+import navbar from "../lib/navbar";
+import { withBase } from "../lib/paths";
+import Button from "./Button.astro";
 
-const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
+const basePath = import.meta.env.PUBLIC_ASTRO_BASE || "/";
 ---
 
 <header
@@ -30,26 +30,33 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="header">{navbar.actions?.secondary?.label}</Button>
       <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel}>{navbar.actions?.primary?.label}</Button>
     </div>
-
+    <div class="md:hidden flex items-center gap-3">
+    <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="mobile_nav">Book</Button>
     <!-- Mobile menu button -->
     <button
       id="mobile-menu-button"
       aria-label="Toggle mobile menu"
       aria-expanded="false"
       aria-controls="mobile-menu"
-      class="md:hidden inline-flex items-center justify-center p-2 text-[var(--primary-foreground)] hover:bg-[var(--accent)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+      class="md:hidden inline-flex items-center justify-center p-2 text-[var(--primary-foreground)] hover:bg-[var(--accent)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] relative"
     >
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Hamburger icon -->
+      <svg id="hamburger-icon" class="w-6 h-6 transition-all duration-300 ease-in-out opacity-100 scale-100 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
       </svg>
+      <!-- Close icon -->
+      <svg id="close-icon" class="w-6 h-6 absolute transition-all duration-300 ease-in-out opacity-0 scale-0 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+      </svg>
     </button>
+  </div>
   </div>
 
   <!-- Mobile menu -->
   <nav
     id="mobile-menu"
     aria-label="Mobile navigation"
-    class="md:hidden hidden bg-black border-t border-[var(--border)]"
+    class="md:hidden bg-black border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
@@ -76,25 +83,54 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
     function setupMobileMenu() {
       const menuButton = document.getElementById('mobile-menu-button');
       const mobileMenu = document.getElementById('mobile-menu');
+      const navbar = document.querySelector('[data-component="navbar"]');
+      const hamburgerIcon = document.getElementById('hamburger-icon');
+      const closeIcon = document.getElementById('close-icon');
       
-      if (!menuButton || !mobileMenu) return;
+      if (!menuButton || !mobileMenu || !navbar || !hamburgerIcon || !closeIcon) return;
+
+      function toggleMenu(shouldOpen) {
+        menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        
+        if (shouldOpen) {
+          // Force black background when menu is open
+          navbar.classList.remove('bg-transparent');
+          navbar.classList.add('bg-black');
+          // Slide menu down
+          mobileMenu.classList.remove('max-h-0', 'opacity-0');
+          mobileMenu.classList.add('max-h-96', 'opacity-100');
+          // Animate icon transition - hide hamburger, show close
+          hamburgerIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
+          hamburgerIcon.classList.add('opacity-0', 'scale-0', '-rotate-90');
+          closeIcon.classList.remove('opacity-0', 'scale-0', 'rotate-90');
+          closeIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
+        } else {
+          // Slide menu up
+          mobileMenu.classList.remove('max-h-96', 'opacity-100');
+          mobileMenu.classList.add('max-h-0', 'opacity-0');
+          // Restore appropriate background based on scroll position
+          const isScrolled = window.scrollY > 0;
+          applyScrolledState(navbar, isScrolled);
+          // Animate icon transition - show hamburger, hide close
+          hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
+          hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
+          closeIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
+          closeIcon.classList.add('opacity-0', 'scale-0', 'rotate-90');
+        }
+      }
 
       menuButton.addEventListener('click', () => {
         const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
-        menuButton.setAttribute('aria-expanded', !isExpanded ? 'true' : 'false');
-        
-        if (isExpanded) {
-          mobileMenu.classList.add('hidden');
-        } else {
-          mobileMenu.classList.remove('hidden');
-        }
+        toggleMenu(!isExpanded);
       });
 
       // Close menu when clicking outside
       document.addEventListener('click', (event) => {
         if (!menuButton.contains(event.target) && !mobileMenu.contains(event.target)) {
-          menuButton.setAttribute('aria-expanded', 'false');
-          mobileMenu.classList.add('hidden');
+          const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
+          if (isExpanded) {
+            toggleMenu(false);
+          }
         }
       });
     }

@@ -24,9 +24,9 @@ const story: StoryContent = {
   },
   actions: {
     primary: {
-      label: 'Join the Waitlist',
+      label: 'Join the mailing list',
       href: '#signup',
-      ariaLabel: 'Join the waitlist — jump to signup form',
+      ariaLabel: 'Join the mailing list — jump to signup form',
     },
   },
 };
