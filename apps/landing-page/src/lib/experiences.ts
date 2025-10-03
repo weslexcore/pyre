@@ -9,7 +9,7 @@ const experiences: ExperiencesContent = {
         icon: 'connection',
         description: 'A moment of ease.',
         bullets: [
-          'Melt away daily anxieties and make space to reconnect. Improve blood flow, sleep better, make a new friend. You’ll feel better than when you walked in. ',
+          "Melt away daily anxieties and make space to reconnect. Improve blood flow, sleep better, make a new friend. You'll feel better than when you walked in.",
         ],
         link: { href: '/sauna', label: 'Join us for a sauna' },
         linkText: 'Join us for a sauna',
@@ -35,6 +35,13 @@ const experiences: ExperiencesContent = {
         linkText: 'View Experiences',
       },
     ],
+  },
+  actions: {
+    primary: {
+      label: 'Book a session',
+      href: '/book',
+      ariaLabel: 'Book a session now',
+    },
   },
 };
 

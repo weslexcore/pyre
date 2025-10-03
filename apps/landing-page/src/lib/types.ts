@@ -148,6 +148,9 @@ export interface ExperiencesContent {
     title: string;
     items: Array<ExperiencesItem>;
   };
+  actions?: {
+    primary?: ActionRef;
+  };
 }
 
 export interface BreakSectionContent {

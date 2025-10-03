@@ -6,6 +6,7 @@ const {
   type = 'submit',
   ariaLabel,
   class: extraClass = '',
+  ...restProps
 } = Astro.props as {
   variant?: 'primary' | 'secondary' | 'outline';
   size?: 'sm' | 'md' | 'lg';
@@ -13,6 +14,7 @@ const {
   type?: 'button' | 'submit';
   ariaLabel?: string;
   class?: string;
+  [key: string]: any;
 };
 
 const baseClasses = [
@@ -42,11 +44,11 @@ const allClasses = [baseClasses.join(' '), sizeClasses, variantClasses, extraCla
 ---
 
 {href ? (
-  <a href={href} aria-label={ariaLabel} class={allClasses}>
+  <a href={href} aria-label={ariaLabel} class={allClasses} {...restProps}>
     <slot />
   </a>
  ) : (
-  <button type={type} aria-label={ariaLabel} class={allClasses}>
+  <button type={type} aria-label={ariaLabel} class={allClasses} {...restProps}>
     <slot />
   </button>
  )}

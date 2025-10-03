@@ -1,5 +1,6 @@
 ---
 import { Image } from 'astro:assets';
+import Button from './Button.astro';
 // import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 // import backgroundImage from '../assets/images/bucket_with_red_flowers.jpg';
 import florals from '../assets/images/florals.png';
@@ -7,7 +8,6 @@ import transformationSymbol from '../assets/symbols/growth-symbol.png';
 import connectionSymbol from '../assets/symbols/healing-symbol.png';
 import harmonySymbol from '../assets/symbols/sauna-symbol.png';
 import experiences from '../lib/experiences';
-import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 
 const symbols = {
   connection: connectionSymbol,
@@ -71,6 +71,20 @@ const symbols = {
         </article>
       ))}
     </div>
+    {experiences.actions?.primary && (
+      <div class="mt-10 sm:mt-12 flex justify-center">
+        <Button
+          href={experiences.actions.primary.href}
+          variant="primary"
+          size="lg"
+          ariaLabel={experiences.actions.primary.ariaLabel}
+          class="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          data-placement="offerings-section"
+        >
+          {experiences.actions.primary.label}
+        </Button>
+      </div>
+    )}
   </div>
   <script>
     (async () => {
