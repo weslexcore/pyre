@@ -132,3 +132,30 @@ When you step into our sauna, you're not just participating in a community — y
 
 The traditions may vary in their specific practices, but the core truth remains universal: together, in the heat, we remember what it means to be fully, vulnerably, gloriously human.
 
+---
+
+## Ready to Experience It Yourself?
+
+Join us at Pyre and become part of this ancient tradition of communal wellness and connection.
+
+<div style="display: flex; flex-direction: column; gap: 1rem; align-items: center; margin: 2rem 0;">
+  <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+    <a href="/book" style="display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 0.375rem; padding: 0.75rem 1.5rem; font-size: 1rem; background: rgb(241, 88, 54); color: white; text-decoration: none; transition: opacity 0.15s;">Book a Session</a>
+    <a href="/#signup" style="display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 0.375rem; padding: 0.75rem 1.5rem; font-size: 1rem; border: 2px solid rgb(36, 90, 130); color: rgb(36, 90, 130); background: transparent; text-decoration: none; transition: all 0.15s;">Join Our Mailing List</a>
+  </div>
+</div>
+
+<style>
+@media (min-width: 768px) {
+  .prose > div > div {
+    flex-direction: row !important;
+    justify-content: center;
+    max-width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+</style>
+
+---
+

@@ -5,6 +5,7 @@ import BlogTags from '@/components/blog/BlogTags.astro';
 import ReadingTime from '@/components/blog/ReadingTime.astro';
 import RelatedPosts from '@/components/blog/RelatedPosts.astro';
 import ShareButtons from '@/components/blog/ShareButtons.astro';
+import TableOfContents from '@/components/TableOfContents.astro';
 import type { BlogPost } from '@/lib/types';
 
 interface Props {
@@ -51,7 +52,19 @@ const articleMetadata = {
   article={articleMetadata}
 >
   <article class="min-h-screen bg-[rgb(250,248,236)] pb-16 pt-24 md:pt-32">
-    <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+    <!-- Table of Contents -->
+    <TableOfContents
+      config={{
+        showProgress: true,
+        smoothScroll: true,
+        minHeaders: 2,
+        includeLevels: [2],
+        scrollOffset: 120
+      }}
+      class="toc-blog-post"
+    />
+
+    <div class="blog-content-container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
       <!-- Back to blog link -->
       <nav class="mb-8">
         <a
@@ -131,6 +144,77 @@ const articleMetadata = {
 </MainLayout>
 
 <style is:global>
+  /* Table of Contents styling for blog posts */
+  .toc-blog-post .toc-nav {
+    background: rgba(250, 248, 236, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(38, 37, 37, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(38, 37, 37, 0.1);
+    z-index: 1000;
+    top: 12rem !important; /* Position below header and aligned with content */
+    max-height: calc(100vh - 14rem) !important; /* Account for header height and padding */
+    left: calc(50% - 45rem) !important; /* Position farther to the left of content area */
+  }
+
+  .toc-blog-post .toc-toggle {
+    background: rgba(250, 248, 236, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(38, 37, 37, 0.1);
+    color: rgb(38, 37, 37);
+    box-shadow: 0 4px 12px rgba(38, 37, 37, 0.15);
+  }
+
+  .toc-blog-post .toc-toggle:hover {
+    background: rgba(36, 90, 130, 0.1);
+    border-color: rgb(36, 90, 130);
+  }
+
+  .toc-blog-post .toc-mobile-panel {
+    background: rgba(250, 248, 236, 0.98);
+    backdrop-filter: blur(12px);
+    border-color: rgba(38, 37, 37, 0.1);
+  }
+
+  .toc-blog-post .toc-item a {
+    color: rgb(38, 37, 37);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .toc-blog-post .toc-item a:hover {
+    background: rgba(36, 90, 130, 0.1);
+    color: rgb(36, 90, 130);
+  }
+
+  .toc-blog-post .toc-item.active a {
+    background: rgba(241, 88, 54, 0.1);
+    color: rgb(241, 88, 54);
+    font-weight: 600;
+  }
+
+  .toc-blog-post .toc-progress-bar {
+    background: linear-gradient(90deg, rgb(36, 90, 130), rgb(241, 88, 54));
+  }
+
+  .toc-blog-post h3 {
+    color: rgb(38, 37, 37);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* Hide TOC on smaller screens where desktop layout doesn't work */
+  @media (max-width: 1280px) {
+    .toc-blog-post .toc-nav {
+      display: none;
+    }
+  }
+
+  /* No additional content spacing needed since TOC is positioned relative to content */
+
   /* Blog post content styling */
   .prose {
     color: rgb(38, 37, 37);
