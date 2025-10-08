@@ -48,21 +48,7 @@ if (!show) {
       aria-hidden="true"
       data-toc-accordion-content
     >
-      <div class="px-4 py-3 bg-[rgb(250,248,236)]/98 backdrop-blur-[12px] border-x border-b border-[rgb(38,37,37)]/10 rounded-b-lg">
-        <!-- Mobile Progress Bar -->
-        <div class="mb-3 hidden" data-show-progress>
-          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-            <div
-              class="bg-gradient-to-r from-[rgb(36,90,130)] to-[rgb(241,88,54)] h-2 rounded-full transition-all duration-300 ease-out"
-              style="width: 0%"
-              data-progress-bar
-            ></div>
-          </div>
-          <div class="text-xs text-[rgb(38,37,37)]/70 mt-1" data-progress-text>
-            0% complete
-          </div>
-        </div>
-
+      <div class="px-4 py-3 bg-[rgb(250,248,236)]/98 backdrop-blur-[12px] border-x border-b border-[rgb(38,37,37)]/10 rounded-b-lg max-h-[60vh] overflow-y-auto">
         <ul class="space-y-1" role="list" aria-label="Table of contents navigation" data-toc-list>
           <!-- TOC items will be populated by JavaScript -->
           <li class="text-sm text-gray-500 dark:text-gray-400 animate-pulse" aria-live="polite">
@@ -148,7 +134,7 @@ if (!show) {
 
   /* Mobile accordion states */
   #toc-mobile-content.open {
-    max-height: 400px;
+    max-height: 70vh;
   }
 
   button[data-toc-accordion-toggle][aria-expanded="true"] svg[data-toc-accordion-icon] {
