@@ -1,0 +1,126 @@
+---
+interface Props {
+  heading?: string;
+  body?: string;
+  primaryHref?: string;
+  primaryLabel?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+}
+
+const {
+  heading = 'Ready to Experience It Yourself?',
+  body = 'Join us at Pyre and become part of this ancient tradition of communal wellness and connection.',
+  primaryHref = '/book',
+  primaryLabel = 'Book a Session',
+  secondaryHref = '/#signup',
+  secondaryLabel = 'Join Our Mailing List',
+} = Astro.props satisfies Props;
+---
+
+<section class="pyre-blog-cta">
+  <h2>{heading}</h2>
+  {body && <p>{body}</p>}
+  <div class="pyre-blog-cta__buttons">
+    <a class="pyre-blog-cta__primary" href={primaryHref}>
+      {primaryLabel}
+    </a>
+    {secondaryLabel && (
+      <a class="pyre-blog-cta__secondary" href={secondaryHref}>
+        {secondaryLabel}
+      </a>
+    )}
+  </div>
+</section>
+
+<style>
+  .pyre-blog-cta {
+    margin: 3rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    text-align: center;
+  }
+
+  .pyre-blog-cta h2 {
+    font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 600;
+    font-size: 2rem;
+    letter-spacing: -0.02em;
+    color: rgb(38, 37, 37);
+    margin: 0;
+  }
+
+  .pyre-blog-cta p {
+    max-width: 42ch;
+    margin: 0;
+    color: rgb(38, 37, 37);
+    font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.75;
+  }
+
+  .pyre-blog-cta__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    align-items: center;
+  }
+
+  .pyre-blog-cta__primary,
+  .pyre-blog-cta__secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, 'Roboto Mono', Menlo, monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 0.375rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: all 0.15s ease-in-out;
+    min-width: 15rem;
+  }
+
+  .pyre-blog-cta__primary {
+    background: rgb(241, 88, 54);
+    color: white;
+  }
+
+  .pyre-blog-cta__primary:hover,
+  .pyre-blog-cta__primary:focus-visible {
+    opacity: 0.9;
+  }
+
+  .pyre-blog-cta__secondary {
+    border: 2px solid rgb(36, 90, 130);
+    color: rgb(36, 90, 130);
+    background: transparent;
+  }
+
+  .pyre-blog-cta__secondary:hover,
+  .pyre-blog-cta__secondary:focus-visible {
+    background: rgba(36, 90, 130, 0.08);
+  }
+
+  .pyre-blog-cta__primary:focus-visible,
+  .pyre-blog-cta__secondary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  @media (min-width: 768px) {
+    .pyre-blog-cta__buttons {
+      flex-direction: row;
+      justify-content: center;
+      width: auto;
+    }
+
+    .pyre-blog-cta {
+      gap: 2rem;
+    }
+  }
+</style>
