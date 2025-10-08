@@ -256,3 +256,4 @@ Landing page uses:
 - Generate database types: `yarn workspace @pyre/supabase gen:types`
 - Ensure type safety across all workspaces
 - Where possible, use tailwind css classes instead of css to style elements.
+- use nvm to select the proper node version
