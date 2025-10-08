@@ -10,6 +10,7 @@ import {
   getCurrentActiveHeader,
   calculateReadingProgress,
   scrollToHeader,
+  calculateScrollOffset,
   DEFAULT_TOC_CONFIG,
 } from '../lib/toc-utils';
 
@@ -56,8 +57,11 @@ export default class TOCScrollTracker {
   private setupIntersectionObserver() {
     if (!window.IntersectionObserver || this.headers.length === 0) return;
 
+    // Use dynamic scroll offset for accurate mobile/desktop detection
+    const dynamicOffset = calculateScrollOffset();
+
     const options = {
-      rootMargin: `-${this.config.scrollOffset}px 0px -60% 0px`,
+      rootMargin: `-${dynamicOffset}px 0px -60% 0px`,
       threshold: 0.1,
     };
 
@@ -260,8 +264,8 @@ export default class TOCScrollTracker {
       text.textContent = `${progress}% complete`;
     });
 
-    // Update active section based on current scroll position
-    const activeId = getCurrentActiveHeader(this.headers, this.config.scrollOffset);
+    // Update active section based on current scroll position using dynamic offset
+    const activeId = getCurrentActiveHeader(this.headers);
     if (activeId) {
       this.updateActiveSection(activeId);
     }
@@ -292,7 +296,8 @@ export default class TOCScrollTracker {
       // Enable smooth scrolling temporarily
       document.documentElement.classList.add('smooth-scroll');
 
-      await scrollToHeader(headerId, this.config.scrollOffset);
+      // Use dynamic scroll offset for accurate mobile/desktop navigation
+      await scrollToHeader(headerId);
 
       // Remove smooth scroll class after navigation
       setTimeout(() => {
@@ -307,8 +312,10 @@ export default class TOCScrollTracker {
     } else {
       const element = document.getElementById(headerId);
       if (element) {
+        // Use dynamic scroll offset for accurate mobile/desktop navigation
+        const dynamicOffset = calculateScrollOffset();
         const rect = element.getBoundingClientRect();
-        const targetTop = rect.top + window.pageYOffset - this.config.scrollOffset;
+        const targetTop = rect.top + window.pageYOffset - dynamicOffset;
         window.scrollTo(0, targetTop);
 
         // Update active section after scroll

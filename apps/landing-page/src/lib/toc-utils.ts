@@ -5,6 +5,53 @@
 import type { TOCHeader, TOCSection, TOCConfig } from './toc-types';
 
 /**
+ * Detects if the current viewport is mobile (< 1024px)
+ * Matches the lg: breakpoint used in Tailwind CSS
+ */
+export function isMobileViewport(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth < 1024;
+}
+
+/**
+ * Measures the actual height of the fixed navbar element
+ * Returns measured height or falls back to estimated values
+ */
+export function getNavbarHeight(): number {
+  if (typeof window === 'undefined') return 80; // SSR fallback
+
+  const navbar = document.querySelector('[data-component="navbar"]');
+  if (navbar) {
+    const height = navbar.getBoundingClientRect().height;
+    return height;
+  }
+
+  // Fallback: Estimate based on viewport size
+  // Mobile (< 768px): h-8 class = ~32px + padding ~32px = ~64px total
+  // Desktop (>= 768px): h-12 class = ~48px + padding ~32px = ~80px total
+  return window.innerWidth < 768 ? 64 : 80;
+}
+
+/**
+ * Calculates the dynamic scroll offset based on viewport size and fixed element heights
+ * On mobile (< 1024px): Uses measured navbar height + extra padding
+ * On desktop (>= 1024px): Uses measured navbar height + extra padding
+ */
+export function calculateScrollOffset(): number {
+  if (typeof window === 'undefined') return 120; // SSR fallback
+
+  const navbarHeight = getNavbarHeight();
+  const isMobile = isMobileViewport();
+
+  // Add extra padding for visual comfort
+  // Mobile needs significantly more space to ensure headers are clearly visible
+  // Testing shows mobile needs ~80px extra, desktop needs ~40px extra
+  const extraPadding = isMobile ? 80 : 40;
+
+  return navbarHeight + extraPadding;
+}
+
+/**
  * Generates a URL-safe anchor ID from header text
  */
 export function generateAnchorId(text: string): string {
@@ -159,12 +206,13 @@ export function flattenTOCTree(tree: TOCSection[]): TOCSection[] {
 
 /**
  * Gets the currently visible header based on scroll position
+ * Uses dynamic scroll offset calculation for mobile/desktop
  */
-export function getCurrentActiveHeader(
-  headers: TOCHeader[],
-  scrollOffset: number = 100
-): string | null {
+export function getCurrentActiveHeader(headers: TOCHeader[], scrollOffset?: number): string | null {
   if (headers.length === 0) return null;
+
+  // Use dynamic offset if not explicitly provided
+  const offset = scrollOffset !== undefined ? scrollOffset : calculateScrollOffset();
 
   const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
   const viewportHeight = window.innerHeight;
@@ -178,13 +226,13 @@ export function getCurrentActiveHeader(
     const absoluteTop = rect.top + scrollTop;
 
     // Check if header is above the scroll offset line
-    if (absoluteTop <= scrollTop + scrollOffset) {
+    if (absoluteTop <= scrollTop + offset) {
       return header.id;
     }
   }
 
   // If no header is above the offset, return the first one if we're near the top
-  if (scrollTop < scrollOffset && headers[0]) {
+  if (scrollTop < offset && headers[0]) {
     return headers[0].id;
   }
 
@@ -206,8 +254,9 @@ export function calculateReadingProgress(): number {
 
 /**
  * Smoothly scrolls to a target element
+ * Uses dynamic scroll offset calculation for mobile/desktop
  */
-export function scrollToHeader(headerId: string, offset: number = 100): Promise<void> {
+export function scrollToHeader(headerId: string, offset?: number): Promise<void> {
   return new Promise((resolve) => {
     const element = document.getElementById(headerId);
     if (!element) {
@@ -215,8 +264,11 @@ export function scrollToHeader(headerId: string, offset: number = 100): Promise<
       return;
     }
 
+    // Use dynamic offset if not explicitly provided
+    const scrollOffset = offset !== undefined ? offset : calculateScrollOffset();
+
     const rect = element.getBoundingClientRect();
-    const targetTop = rect.top + window.pageYOffset - offset;
+    const targetTop = rect.top + window.pageYOffset - scrollOffset;
 
     window.scrollTo({
       top: targetTop,
