@@ -104,49 +104,25 @@ export default class TOCScrollTracker {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Mobile toggle functionality
-    const toggleBtn = this.container.querySelector('[data-toc-toggle]');
-    const closeBtn = this.container.querySelector('[data-toc-close]');
-    const backdrop = this.container.querySelector('[data-toc-backdrop]');
-    const mobilePanel = this.container.querySelector('[data-toc-mobile-panel]');
+    // Mobile accordion functionality
+    const accordionToggle = this.container.querySelector('[data-toc-accordion-toggle]');
+    const accordionContent = this.container.querySelector('[data-toc-accordion-content]');
 
-    const openMobilePanel = () => {
-      mobilePanel?.classList.add('open');
-      backdrop?.classList.add('open');
-      document.body.style.overflow = 'hidden';
+    const toggleAccordion = () => {
+      const isExpanded = accordionToggle?.getAttribute('aria-expanded') === 'true';
 
-      // Update ARIA attributes
-      toggleBtn?.setAttribute('aria-expanded', 'true');
-      mobilePanel?.setAttribute('aria-hidden', 'false');
-
-      // Focus the close button for keyboard accessibility
-      const closeButton = mobilePanel?.querySelector('[data-toc-close]') as HTMLElement;
-      closeButton?.focus();
-    };
-
-    const closeMobilePanel = () => {
-      mobilePanel?.classList.remove('open');
-      backdrop?.classList.remove('open');
-      document.body.style.overflow = '';
-
-      // Update ARIA attributes
-      toggleBtn?.setAttribute('aria-expanded', 'false');
-      mobilePanel?.setAttribute('aria-hidden', 'true');
-
-      // Return focus to toggle button
-      toggleBtn?.focus();
-    };
-
-    toggleBtn?.addEventListener('click', openMobilePanel);
-    closeBtn?.addEventListener('click', closeMobilePanel);
-    backdrop?.addEventListener('click', closeMobilePanel);
-
-    // Handle escape key
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && mobilePanel?.classList.contains('open')) {
-        closeMobilePanel();
+      if (isExpanded) {
+        accordionContent?.classList.remove('open');
+        accordionToggle?.setAttribute('aria-expanded', 'false');
+        accordionContent?.setAttribute('aria-hidden', 'true');
+      } else {
+        accordionContent?.classList.add('open');
+        accordionToggle?.setAttribute('aria-expanded', 'true');
+        accordionContent?.setAttribute('aria-hidden', 'false');
       }
-    });
+    };
+
+    accordionToggle?.addEventListener('click', toggleAccordion);
 
     // TOC item click handlers
     this.container.addEventListener('click', (e) => {
@@ -160,9 +136,9 @@ export default class TOCScrollTracker {
       this.isUserScrolling = true;
       this.navigateToSection(headerId);
 
-      // Close mobile panel after navigation
-      if (window.innerWidth < 1024) {
-        closeMobilePanel();
+      // Close mobile accordion after navigation (optional)
+      if (window.innerWidth < 1024 && accordionContent?.classList.contains('open')) {
+        toggleAccordion();
       }
     });
 
@@ -179,9 +155,9 @@ export default class TOCScrollTracker {
         this.isUserScrolling = true;
         this.navigateToSection(headerId);
 
-        // Close mobile panel after navigation
-        if (window.innerWidth < 1024) {
-          closeMobilePanel();
+        // Close mobile accordion after navigation (optional)
+        if (window.innerWidth < 1024 && accordionContent?.classList.contains('open')) {
+          toggleAccordion();
         }
       }
     });
@@ -212,11 +188,11 @@ export default class TOCScrollTracker {
         const hasChildren = section.children.length > 0;
 
         let html = `
-        <li class="toc-item level-${header.level}" data-level="${header.level}" role="listitem">
+        <li class="toc-item level-${header.level} transition-all duration-200 ${header.level === 3 ? 'ml-4' : ''} ${header.level === 4 ? 'ml-8' : ''} ${header.level === 5 ? 'ml-12' : ''} ${header.level === 6 ? 'ml-16' : ''}" data-level="${header.level}" role="listitem">
           <a
             href="#${header.id}"
             data-toc-item="${header.id}"
-            class="toc-link"
+            class="block py-1 px-2 text-sm text-[rgb(38,37,37)] dark:text-gray-400 rounded transition-all duration-200 no-underline hover:bg-[rgb(36,90,130)]/10 hover:text-[rgb(36,90,130)] hover:translate-x-0.5 font-sans leading-[1.4]"
             title="Navigate to: ${header.text}"
             role="link"
             tabindex="0"
@@ -236,26 +212,36 @@ export default class TOCScrollTracker {
   }
 
   private updateActiveSection(activeId: string) {
-    // Remove active class from all items
-    const tocItems = this.container.querySelectorAll('.toc-item');
-    tocItems.forEach((item) => {
-      item.classList.remove('active');
-    });
-
-    // Add active class to current item
-    const activeItems = this.container.querySelectorAll(`[data-toc-item="${activeId}"]`);
-    activeItems.forEach((item) => {
-      const tocItem = item.closest('.toc-item');
-      tocItem?.classList.add('active');
-    });
-
-    // Update ARIA current
-    const tocLinks = this.container.querySelectorAll('[data-toc-item]');
-    tocLinks.forEach((link) => {
+    // Remove active styles from all items and update ARIA
+    const allLinks = this.container.querySelectorAll('[data-toc-item]');
+    allLinks.forEach((link) => {
+      link.classList.remove(
+        'text-[rgb(241,88,54)]',
+        'dark:text-[rgb(251,146,60)]',
+        'bg-[rgb(241,88,54)]/10',
+        'font-semibold',
+        'border-l-[3px]',
+        'border-[rgb(241,88,54)]',
+        'pl-[calc(0.5rem-3px)]'
+      );
+      link.classList.add('pl-2');
       link.removeAttribute('aria-current');
     });
-    activeItems.forEach((item) => {
-      item.setAttribute('aria-current', 'true');
+
+    // Add active styles to current item
+    const activeLinks = this.container.querySelectorAll(`[data-toc-item="${activeId}"]`);
+    activeLinks.forEach((link) => {
+      link.classList.remove('pl-2');
+      link.classList.add(
+        'text-[rgb(241,88,54)]',
+        'dark:text-[rgb(251,146,60)]',
+        'bg-[rgb(241,88,54)]/10',
+        'font-semibold',
+        'border-l-[3px]',
+        'border-[rgb(241,88,54)]',
+        'pl-[calc(0.5rem-3px)]'
+      );
+      link.setAttribute('aria-current', 'true');
     });
   }
 

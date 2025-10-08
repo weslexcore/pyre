@@ -23,45 +23,78 @@ if (!show) {
 }
 ---
 
-<aside class={`toc-container ${className}`} data-toc-config={JSON.stringify(config)}>
-  <!-- Mobile Toggle Button -->
-  <button
-    class="toc-toggle lg:hidden fixed top-4 right-4 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-full p-3 border border-gray-200 dark:border-gray-700"
-    aria-label="Toggle Table of Contents"
-    aria-expanded="false"
-    aria-controls="toc-mobile-panel"
-    type="button"
-    data-toc-toggle
-  >
-    <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-    <span class="sr-only">Toggle table of contents</span>
-  </button>
+<div class={`toc-container ${className}`} data-toc-config={JSON.stringify(config)}>
+  <!-- Mobile Accordion -->
+  <aside class="lg:hidden" data-toc-mobile-accordion>
+    <button
+      class="w-full flex items-center justify-between px-4 py-3 bg-[rgb(250,248,236)]/95 backdrop-blur-[10px] border border-[rgb(38,37,37)]/10 rounded-lg transition-colors hover:bg-[rgb(36,90,130)]/5 hover:border-[rgb(36,90,130)]/30 shadow-[0_2px_8px_rgba(38,37,37,0.1)] text-[rgb(38,37,37)]"
+      aria-label="Toggle Table of Contents"
+      aria-expanded="false"
+      aria-controls="toc-mobile-content"
+      type="button"
+      data-toc-accordion-toggle
+    >
+      <h3 class="text-sm font-semibold uppercase tracking-wide font-sans">
+        Contents
+      </h3>
+      <svg class="w-5 h-5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-toc-accordion-icon>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
+    <div
+      id="toc-mobile-content"
+      class="overflow-hidden transition-all duration-300 ease-in-out max-h-0"
+      aria-hidden="true"
+      data-toc-accordion-content
+    >
+      <div class="px-4 py-3 bg-[rgb(250,248,236)]/98 backdrop-blur-[12px] border-x border-b border-[rgb(38,37,37)]/10 rounded-b-lg">
+        <!-- Mobile Progress Bar -->
+        <div class="mb-3 hidden" data-show-progress>
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div
+              class="bg-gradient-to-r from-[rgb(36,90,130)] to-[rgb(241,88,54)] h-2 rounded-full transition-all duration-300 ease-out"
+              style="width: 0%"
+              data-progress-bar
+            ></div>
+          </div>
+          <div class="text-xs text-[rgb(38,37,37)]/70 mt-1" data-progress-text>
+            0% complete
+          </div>
+        </div>
+
+        <ul class="space-y-1" role="list" aria-label="Table of contents navigation" data-toc-list>
+          <!-- TOC items will be populated by JavaScript -->
+          <li class="text-sm text-gray-500 dark:text-gray-400 animate-pulse" aria-live="polite">
+            Loading table of contents...
+          </li>
+        </ul>
+      </div>
+    </div>
+  </aside>
 
   <!-- Desktop Sidebar -->
   <nav
-    class="toc-nav hidden lg:block fixed left-8 top-48 w-64 max-h-[60vh] overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4"
+    class="hidden lg:block fixed left-8 top-48 w-64 max-h-[60vh] overflow-y-auto bg-[rgb(250,248,236)]/95 backdrop-blur-[10px] border border-[rgb(38,37,37)]/10 rounded-xl shadow-[0_10px_25px_rgba(38,37,37,0.1)] p-4 z-[1000] [scrollbar-width:thin] [scrollbar-color:rgb(156,163,175)_rgb(243,244,246)]"
     aria-label="Table of Contents"
   >
-    <div class="toc-header mb-4">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wide">
+    <div class="mb-4">
+      <h3 class="text-sm font-semibold text-[rgb(38,37,37)] uppercase tracking-wide font-sans">
         Contents
       </h3>
-      
     </div>
 
-    <ul class="toc-list space-y-1" role="list" aria-label="Table of contents navigation" data-toc-list>
+    <ul class="space-y-1" role="list" aria-label="Table of contents navigation" data-toc-list>
       <!-- TOC items will be populated by JavaScript -->
-      <li class="toc-loading text-sm text-gray-500 dark:text-gray-400" aria-live="polite">
+      <li class="text-sm text-gray-500 dark:text-gray-400 animate-pulse" aria-live="polite">
         Loading table of contents...
       </li>
     </ul>
     <!-- Progress Bar -->
-    <div class="toc-progress-container mt-2 hidden" data-show-progress>
+    <div class="mt-2 hidden" data-show-progress>
       <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1" role="progressbar" aria-labelledby="reading-progress-label">
         <div
-          class="toc-progress-bar bg-blue-600 h-1 rounded-full transition-all duration-300 ease-out"
+          class="bg-gradient-to-r from-[rgb(36,90,130)] to-[rgb(241,88,54)] h-1 rounded-full transition-all duration-300 ease-out"
           style="width: 0%"
           data-progress-bar
           aria-valuenow="0"
@@ -69,211 +102,57 @@ if (!show) {
           aria-valuemax="100"
         ></div>
       </div>
-      <div id="reading-progress-label" class="text-xs text-gray-500 dark:text-gray-400 mt-1" data-progress-text>
+      <div id="reading-progress-label" class="text-xs text-[rgb(38,37,37)]/70 mt-1" data-progress-text>
         0% complete
       </div>
     </div>
   </nav>
-
-  <!-- Mobile Panel -->
-  <div
-    id="toc-mobile-panel"
-    class="toc-mobile-panel lg:hidden fixed inset-x-0 top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-lg transform -translate-y-full transition-transform duration-300 ease-in-out z-40"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="toc-mobile-title"
-    aria-hidden="true"
-    data-toc-mobile-panel
-  >
-    <div class="max-w-4xl mx-auto p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h3 id="toc-mobile-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Table of Contents
-        </h3>
-        <button
-          class="toc-close-btn p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          aria-label="Close Table of Contents"
-          type="button"
-          data-toc-close
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <span class="sr-only">Close</span>
-        </button>
-      </div>
-
-      <!-- Mobile Progress Bar -->
-      <div class="toc-progress-container mb-4 hidden" data-show-progress>
-        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            class="toc-progress-bar bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-            style="width: 0%"
-            data-progress-bar
-          ></div>
-        </div>
-        <div class="text-sm text-gray-600 dark:text-gray-400 mt-2" data-progress-text>
-          0% complete
-        </div>
-      </div>
-
-      <ul class="toc-list space-y-2 max-h-60 overflow-y-auto" role="list" aria-label="Table of contents navigation" data-toc-list>
-        <!-- TOC items will be populated by JavaScript -->
-        <li class="toc-loading text-sm text-gray-500 dark:text-gray-400" aria-live="polite">
-          Loading table of contents...
-        </li>
-      </ul>
-    </div>
-    
-  </div>
-
-  <!-- Backdrop for mobile panel -->
-  <div
-    class="toc-backdrop lg:hidden fixed inset-0 bg-black bg-opacity-50 opacity-0 pointer-events-none transition-opacity duration-300 ease-in-out z-30"
-    data-toc-backdrop
-  ></div>
-</aside>
+</div>
 
 <style>
-  .toc-container {
-    /* Ensure proper z-indexing */
-    --toc-z-index: 1000;
-  }
-
-  .toc-nav {
-    /* Custom scrollbar for desktop */
-    scrollbar-width: thin;
-    scrollbar-color: #9ca3af #f3f4f6;
-  }
-
-  .toc-nav::-webkit-scrollbar {
+  /* Custom scrollbar for desktop - can't be done purely with Tailwind */
+  nav[aria-label="Table of Contents"]::-webkit-scrollbar {
     width: 6px;
   }
 
-  .toc-nav::-webkit-scrollbar-track {
+  nav[aria-label="Table of Contents"]::-webkit-scrollbar-track {
     background: #f3f4f6;
     border-radius: 3px;
   }
 
-  .toc-nav::-webkit-scrollbar-thumb {
+  nav[aria-label="Table of Contents"]::-webkit-scrollbar-thumb {
     background: #9ca3af;
     border-radius: 3px;
   }
 
-  .toc-nav::-webkit-scrollbar-thumb:hover {
+  nav[aria-label="Table of Contents"]::-webkit-scrollbar-thumb:hover {
     background: #6b7280;
   }
 
   /* Dark mode scrollbar */
   @media (prefers-color-scheme: dark) {
-    .toc-nav {
-      scrollbar-color: #4b5563 #1f2937;
-    }
-
-    .toc-nav::-webkit-scrollbar-track {
+    nav[aria-label="Table of Contents"]::-webkit-scrollbar-track {
       background: #1f2937;
     }
 
-    .toc-nav::-webkit-scrollbar-thumb {
+    nav[aria-label="Table of Contents"]::-webkit-scrollbar-thumb {
       background: #4b5563;
     }
 
-    .toc-nav::-webkit-scrollbar-thumb:hover {
+    nav[aria-label="Table of Contents"]::-webkit-scrollbar-thumb:hover {
       background: #6b7280;
     }
   }
 
-  /* TOC item styles */
-  .toc-item {
-    transition: all 0.2s ease-in-out;
+  /* TOC item styles - handled by JavaScript-added Tailwind classes */
+
+  /* Mobile accordion states */
+  #toc-mobile-content.open {
+    max-height: 400px;
   }
 
-  .toc-item a {
-    display: block;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    color: #6b7280;
-    border-radius: 0.25rem;
-    transition: all 0.2s ease;
-    text-decoration: none;
-  }
-
-  .toc-item a:hover {
-    background: rgba(36, 90, 130, 0.1); /* Pyre blue with opacity */
-    color: rgb(36, 90, 130); /* Pyre blue */
-    transform: translateX(2px);
-  }
-
-  .toc-item.active a {
-    color: rgb(241, 88, 54); /* Pyre red for active state */
-    background: rgba(241, 88, 54, 0.1);
-    font-weight: 600;
-    border-left: 3px solid rgb(241, 88, 54);
-    padding-left: calc(0.5rem - 3px);
-  }
-
-  /* Mobile touch states */
-  @media (hover: none) and (pointer: coarse) {
-    .toc-item a:active {
-      background: rgba(36, 90, 130, 0.15);
-      transform: scale(0.98);
-      transition: all 0.1s ease;
-    }
-
-    .toc-toggle:active {
-      transform: scale(0.95);
-      transition: transform 0.1s ease;
-    }
-
-    .toc-close-btn:active {
-      transform: scale(0.95);
-      transition: transform 0.1s ease;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .toc-item a {
-      color: #9ca3af;
-    }
-
-    .toc-item a:hover {
-      background: rgba(36, 90, 130, 0.2);
-      color: rgb(59, 130, 246); /* Lighter blue for dark mode */
-      transform: translateX(2px);
-    }
-
-    .toc-item.active a {
-      color: rgb(251, 146, 60); /* Lighter orange for dark mode */
-      background: rgba(251, 146, 60, 0.1);
-      border-left-color: rgb(251, 146, 60);
-    }
-  }
-
-  /* Nested item indentation */
-  .toc-item.level-3 a {
-    margin-left: 1rem;
-  }
-
-  .toc-item.level-4 a {
-    margin-left: 2rem;
-  }
-
-  .toc-item.level-5 a {
-    margin-left: 3rem;
-  }
-
-  .toc-item.level-6 a {
-    margin-left: 4rem;
-  }
-
-  /* Mobile panel states */
-  .toc-mobile-panel.open {
-    transform: translateY(0);
-  }
-
-  .toc-backdrop.open {
-    opacity: 1;
-    pointer-events: auto;
+  button[data-toc-accordion-toggle][aria-expanded="true"] svg[data-toc-accordion-icon] {
+    transform: rotate(180deg);
   }
 
   /* Smooth scroll behavior */
@@ -281,52 +160,11 @@ if (!show) {
     scroll-behavior: smooth;
   }
 
-  /* Focus styles for accessibility - using Pyre brand colors */
-  .toc-toggle:focus,
-  .toc-close-btn:focus,
-  .toc-item a:focus {
-    outline: 2px solid rgb(36, 90, 130); /* Pyre blue */
-    outline-offset: 2px;
-    transition: outline 0.2s ease;
-  }
-
-  .toc-toggle:focus-visible,
-  .toc-close-btn:focus-visible,
+  /* Focus styles for accessibility */
+  button[data-toc-accordion-toggle]:focus-visible,
   .toc-item a:focus-visible {
     outline: 2px solid rgb(36, 90, 130);
     outline-offset: 2px;
-  }
-
-  /* Animation for progress bar */
-  .toc-progress-bar {
-    transition: width 0.3s ease-out;
-  }
-
-  /* Loading state */
-  .toc-loading {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Screen reader only class */
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
   }
 </style>
 

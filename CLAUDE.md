@@ -255,3 +255,4 @@ Landing page uses:
 - Run TypeScript checks: `yarn type-check`
 - Generate database types: `yarn workspace @pyre/supabase gen:types`
 - Ensure type safety across all workspaces
+- Where possible, use tailwind css classes instead of css to style elements.
