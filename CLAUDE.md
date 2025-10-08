@@ -233,7 +233,7 @@ Landing page uses:
 - Include comprehensive comments in migration files
 
 ### Tech Stack Guidelines
-- Use Node.js 22 specified in `.nvmrc`
+- Use Node.js 22 specified in `.nvmrc`. Use `nvm use` to set proper node version.
 - Follow Astro's zero-JS by default philosophy for landing page
 - Leverage Next.js App Router patterns for booking system
 - Create proper TypeScript interfaces and types
