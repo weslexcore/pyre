@@ -31,7 +31,12 @@
     "type-check:landing": "turbo run type-check --filter=@pyre/landing-page"
   },
   "devDependencies": {
-    "turbo": "^2.4.5"
+    "turbo": "^2.5.8"
+  },
+  "resolutions": {
+    "@vercel/routing-utils": "5.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "license": "Apache-2.0"
 }
