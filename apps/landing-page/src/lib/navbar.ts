@@ -29,7 +29,7 @@ const navbar: NavbarContent = {
     social: {
       instagram: {
         label: 'Instagram',
-        href: 'https://www.instagram.com/pyresauna/',
+        href: 'https://www.instagram.com/pyre_sauna/',
         ariaLabel: 'Follow us on Instagram',
       },
     },
