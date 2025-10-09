@@ -26,6 +26,13 @@ const navbar: NavbarContent = {
       href: withBase('/book'),
       ariaLabel: 'Book now',
     },
+    social: {
+      instagram: {
+        label: 'Instagram',
+        href: 'https://www.instagram.com/pyresauna/',
+        ariaLabel: 'Follow us on Instagram',
+      },
+    },
   },
 };
 

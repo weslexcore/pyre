@@ -27,11 +27,26 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
     
     <!-- Desktop navigation -->
     <div class="hidden md:flex items-center gap-3">
-      {navbar.elements.links && navbar.elements.links.map((link) => (
-        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="book-cta" data-placement="header">{link.label}</Button>
-      ))}
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="header">{navbar.actions?.secondary?.label}</Button>
       <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel}>{navbar.actions?.primary?.label}</Button>
+
+      <!-- Desktop menu button -->
+      <button
+        id="desktop-menu-button"
+        aria-label="Toggle desktop menu"
+        aria-expanded="false"
+        aria-controls="desktop-dropdown"
+        class="hidden md:inline-flex items-center justify-center p-2 text-[var(--primary-foreground)] hover:bg-[var(--accent)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] relative"
+      >
+        <!-- Hamburger icon -->
+        <svg id="desktop-hamburger-icon" class="w-6 h-6 transition-all duration-300 ease-in-out opacity-100 scale-100 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+        <!-- Close icon -->
+        <svg id="desktop-close-icon" class="w-6 h-6 absolute transition-all duration-300 ease-in-out opacity-0 scale-0 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
     </div>
     <div class="md:hidden flex items-center gap-3">
     <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="mobile_nav">Book</Button>
@@ -62,11 +77,52 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
     class="md:hidden bg-black border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
+      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
+      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full">{navbar.actions?.primary?.label}</Button>
       {navbar.elements.links && navbar.elements.links.map((link) => (
         <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="w-full">{link.label}</Button>
       ))}
-      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
-      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full">{navbar.actions?.primary?.label}</Button>
+      {navbar.actions?.social?.instagram && (
+        <Button
+          href={navbar.actions.social.instagram.href}
+          variant="secondary"
+          size="sm"
+          ariaLabel={navbar.actions.social.instagram.ariaLabel}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="w-full"
+        >
+          {navbar.actions.social.instagram.label}
+        </Button>
+      )}
+    </div>
+  </nav>
+
+  <!-- Desktop dropdown menu -->
+  <nav
+    id="desktop-dropdown"
+    aria-label="Desktop dropdown navigation"
+    class="hidden md:block absolute top-full right-4 mt-2 w-64 bg-black border border-[var(--border)] rounded-md shadow-lg overflow-hidden transition-all duration-300 ease-in-out opacity-0 -translate-y-2 max-h-0"
+  >
+    <div class="px-4 py-4 flex flex-col gap-3">
+      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta desktop-dropdown-link" data-placement="desktop_dropdown">{navbar.actions?.secondary?.label}</Button>
+      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full desktop-dropdown-link">{navbar.actions?.primary?.label}</Button>
+      {navbar.elements.links && navbar.elements.links.map((link) => (
+        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="w-full desktop-dropdown-link">{link.label}</Button>
+      ))}
+      {navbar.actions?.social?.instagram && (
+        <Button
+          href={navbar.actions.social.instagram.href}
+          variant="secondary"
+          size="sm"
+          ariaLabel={navbar.actions.social.instagram.ariaLabel}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="w-full desktop-dropdown-link"
+        >
+          {navbar.actions.social.instagram.label}
+        </Button>
+      )}
     </div>
   </nav>
 </header>
@@ -92,12 +148,12 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
       const navbar = document.querySelector('[data-component="navbar"]');
       const hamburgerIcon = document.getElementById('hamburger-icon');
       const closeIcon = document.getElementById('close-icon');
-      
+
       if (!menuButton || !mobileMenu || !navbar || !hamburgerIcon || !closeIcon) return;
 
       function toggleMenu(shouldOpen) {
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-        
+
         if (shouldOpen) {
           // Force black background when menu is open
           navbar.classList.remove('bg-transparent');
@@ -143,6 +199,63 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
       });
     }
 
+    function setupDesktopDropdown() {
+      const menuButton = document.getElementById('desktop-menu-button');
+      const dropdown = document.getElementById('desktop-dropdown');
+      const hamburgerIcon = document.getElementById('desktop-hamburger-icon');
+      const closeIcon = document.getElementById('desktop-close-icon');
+
+      if (!menuButton || !dropdown || !hamburgerIcon || !closeIcon) return;
+
+      function toggleDropdown(shouldOpen) {
+        menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+        if (shouldOpen) {
+          // Show dropdown with animation
+          dropdown.classList.remove('opacity-0', '-translate-y-2', 'max-h-0');
+          dropdown.classList.add('opacity-100', 'translate-y-0', 'max-h-96');
+          // Animate icon transition - hide hamburger, show close
+          hamburgerIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
+          hamburgerIcon.classList.add('opacity-0', 'scale-0', '-rotate-90');
+          closeIcon.classList.remove('opacity-0', 'scale-0', 'rotate-90');
+          closeIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
+        } else {
+          // Hide dropdown with animation
+          dropdown.classList.remove('opacity-100', 'translate-y-0', 'max-h-96');
+          dropdown.classList.add('opacity-0', '-translate-y-2', 'max-h-0');
+          // Animate icon transition - show hamburger, hide close
+          hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
+          hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
+          closeIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
+          closeIcon.classList.add('opacity-0', 'scale-0', 'rotate-90');
+        }
+      }
+
+      // Toggle dropdown on button click
+      menuButton.addEventListener('click', () => {
+        const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
+        toggleDropdown(!isExpanded);
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (event) => {
+        if (!menuButton.contains(event.target) && !dropdown.contains(event.target)) {
+          const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
+          if (isExpanded) {
+            toggleDropdown(false);
+          }
+        }
+      });
+
+      // Close dropdown when clicking any link inside
+      const dropdownLinks = dropdown.querySelectorAll('.desktop-dropdown-link');
+      dropdownLinks.forEach((link) => {
+        link.addEventListener('click', () => {
+          toggleDropdown(false);
+        });
+      });
+    }
+
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
       const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
@@ -184,6 +297,9 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 
       // Setup mobile menu - always run this regardless of page
       setupMobileMenu();
+
+      // Setup desktop dropdown menu
+      setupDesktopDropdown();
     }
 
     if (document.readyState === 'loading') {
