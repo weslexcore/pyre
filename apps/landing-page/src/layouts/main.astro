@@ -4,6 +4,7 @@ import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
 import faviconImage from '../assets/logos/red/logo.png';
 import BookingTracking from '../components/BookingTracking.astro';
+import EventTracking from '../components/EventTracking.astro';
 import Footer from '../components/Footer.astro';
 import Navbar from '../components/Navbar.astro';
 import PostHog from '../components/posthog.astro';
@@ -121,6 +122,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
 	<PostHog />
 	<BookingTracking />
+	<EventTracking />
 		<script type="module">
 			import { injectSpeedInsights } from '@vercel/speed-insights';
 			injectSpeedInsights();
