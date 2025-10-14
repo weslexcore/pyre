@@ -4,7 +4,7 @@
 // ============================================
 // CONFIGURATION - ADJUST THIS VALUE
 // ============================================
-const WEEKS_TO_SCRAPE = 12; // Set how many weeks back you want to scrape
+const WEEKS_TO_SCRAPE = 52; // Set how many weeks back you want to scrape
 // ============================================
 
 async function scrapeMarianaSessions() {
