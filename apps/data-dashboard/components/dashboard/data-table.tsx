@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { SessionRecord } from "@/lib/data";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,140 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { clearSortState, loadSortState, saveSortState } from "@/lib/session-sort";
+import {
+  buildMultiSortComparator,
+  createDefaultMultiSortState,
+  MultiSortState,
+  normalizeSortStack,
+  resolvePrimarySort,
+  SORT_DEFINITIONS,
+  SortColumn,
+  SortDirection,
+  SortPriority,
+  sanitizeSortStack,
+  sortStacksEqual,
+} from "@/lib/multi-sort";
+import { SortPanel } from "./sort-panel";
+import { cn } from "@/lib/utils";
+
+function createDatasetSignature(records: SessionRecord[]): string {
+  if (records.length === 0) {
+    return "empty";
+  }
+  let minTimestamp = records[0].timestamp;
+  let maxTimestamp = records[0].timestamp;
+  const sources = new Set<string>();
+
+  for (const record of records) {
+    sources.add(record.source ?? "");
+    if (record.timestamp < minTimestamp) {
+      minTimestamp = record.timestamp;
+    }
+    if (record.timestamp > maxTimestamp) {
+      maxTimestamp = record.timestamp;
+    }
+  }
+
+  const sourcesKey = Array.from(sources).sort().join("|");
+  return [records.length, minTimestamp, maxTimestamp, sourcesKey].join(":");
+}
+
+type SortableHeaderProps = {
+  children: ReactNode;
+  column: SortColumn;
+  align?: "left" | "right";
+  isActive: boolean;
+  direction?: SortDirection;
+  priority?: number | null;
+  priorityDirection?: SortDirection;
+  priorityLabel?: string | null;
+  onSort: (column: SortColumn) => void;
+};
+
+function SortableHeader({
+  children,
+  column,
+  align = "left",
+  isActive,
+  direction,
+  priority,
+  priorityDirection,
+  onSort,
+}: SortableHeaderProps) {
+  const Icon =
+    direction === "asc"
+      ? ArrowUp
+      : direction === "desc"
+        ? ArrowDown
+        : ArrowUpDown;
+  const labelText =
+    typeof children === "string" ? children.trim() : "column";
+  const statusSegments: string[] = [];
+  if (priority) {
+    statusSegments.push(`priority ${priority}`);
+  }
+  if (isActive) {
+    statusSegments.push(direction === "asc" ? "ascending" : "descending");
+  }
+  const statusText =
+    statusSegments.length > 0 ? statusSegments.join(", ") : "not sorted";
+
+  return (
+    <TableHead
+      aria-sort={
+        isActive
+          ? direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      className={cn(
+        align === "right" && "text-right",
+        isActive && "bg-muted/40",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={cn(
+          "group flex w-full items-center gap-1 rounded-sm px-1 py-1 text-left font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+          align === "right" ? "justify-end text-right" : "justify-start",
+          isActive
+            ? "text-foreground"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        aria-pressed={isActive}
+        aria-label={`Sort by ${labelText} (${statusText})`}
+        title={`Sort by ${labelText} (${statusText})`}
+      >
+        <span className="flex items-center gap-1 truncate">
+          {priority ? (
+            <Badge
+              variant={isActive ? "default" : "secondary"}
+              className={cn(
+                "h-5 w-5 shrink-0 justify-center rounded-full p-0 text-xs font-medium",
+                !isActive && "bg-muted text-muted-foreground",
+              )}
+              aria-hidden="true"
+            >
+              {priority}
+            </Badge>
+          ) : null}
+          <span className="truncate">{children}</span>
+        </span>
+        <span className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground transition-colors group-hover:text-foreground">
+          <Icon className="h-3.5 w-3.5 transition-transform" />
+        </span>
+      </button>
+      {priority && priorityDirection ? (
+        <span className="mt-1 block text-xs font-medium text-muted-foreground sm:hidden">
+          Priority {priority} · {priorityDirection === "asc" ? "Asc" : "Desc"}
+        </span>
+      ) : null}
+    </TableHead>
+  );
+}
 
 type FilterState = {
   global: string;
@@ -52,13 +187,24 @@ const DEFAULT_FILTERS: FilterState = {
   cumulativeBookingsMin: "",
 };
 
-const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 300, 500, 1000];
 
 export function DataTable({ data }: { data: SessionRecord[] }) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
   const [page, setPage] = useState(0);
-
+  const [sortStack, setSortStack] = useState<MultiSortState>(() =>
+    createDefaultMultiSortState(),
+  );
+  const [isSortPanelOpen, setIsSortPanelOpen] = useState(false);
+  const datasetSignature = useMemo(
+    () => createDatasetSignature(data),
+    [data],
+  );
+  const sortableColumns = useMemo(
+    () => Object.values(SORT_DEFINITIONS),
+    [],
+  );
   const numericFilters = useMemo(
     () => ({
       booked: Number(filters.bookedMin) || undefined,
@@ -214,12 +360,74 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
     });
   }, [data, filters, numericFilters]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+
+  const sanitizedSortStack = useMemo(
+    () => sanitizeSortStack(sortStack),
+    [sortStack],
+  );
+  const normalizedSortStack = useMemo(
+    () => normalizeSortStack(sortStack),
+    [sortStack],
+  );
+
+  const priorityMap = useMemo(() => {
+    const map = new Map<SortColumn, { index: number; direction: SortDirection }>();
+    normalizedSortStack.forEach((entry, index) => {
+      map.set(entry.column, {
+        index,
+        direction: entry.direction,
+      });
+    });
+    return map;
+  }, [normalizedSortStack]);
+
+  const sortedData = useMemo(() => {
+    const comparator = buildMultiSortComparator(sortStack);
+    return [...filteredData].sort(comparator);
+  }, [filteredData, sortStack]);
+
+  const primarySort = useMemo(
+    () => resolvePrimarySort(sortStack),
+    [sortStack],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
   const currentPage = Math.min(page, totalPages - 1);
   const visibleRows = useMemo(() => {
     const start = currentPage * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
+    return sortedData.slice(start, start + pageSize);
+  }, [sortedData, currentPage, pageSize]);
+
+  useEffect(() => {
+    const defaultStack = createDefaultMultiSortState();
+
+    if (data.length === 0) {
+      setSortStack((previous) =>
+        sortStacksEqual(previous, defaultStack) ? previous : defaultStack,
+      );
+      clearSortState();
+      return;
+    }
+
+    const storedStack = loadSortState(datasetSignature);
+    if (storedStack) {
+      setSortStack((previous) =>
+        sortStacksEqual(previous, storedStack) ? previous : [...storedStack],
+      );
+      return;
+    }
+
+    setSortStack((previous) =>
+      sortStacksEqual(previous, defaultStack) ? previous : defaultStack,
+    );
+  }, [data.length, datasetSignature]);
+
+  useEffect(() => {
+    if (data.length === 0) {
+      return;
+    }
+    saveSortState(datasetSignature, sortStack);
+  }, [data.length, datasetSignature, sortStack]);
 
   function updateFilter<Key extends keyof FilterState>(key: Key, value: FilterState[Key]) {
     setPage(0);
@@ -228,12 +436,86 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
 
   function resetFilters() {
     setFilters(DEFAULT_FILTERS);
+    setSortStack(createDefaultMultiSortState());
     setPage(0);
   }
 
+  function handleSort(column: SortColumn) {
+    const definition = SORT_DEFINITIONS[column] ?? SORT_DEFINITIONS.date;
+    setSortStack((previous) => {
+      const sanitized = sanitizeSortStack(previous);
+      const existingIndex = sanitized.findIndex(
+        (entry) => entry.column === column,
+      );
+
+      if (existingIndex === 0) {
+        const current = sanitized[0];
+        const nextDirection = current.direction === "asc" ? "desc" : "asc";
+        const next = [...sanitized];
+        next[0] = {
+          column,
+          direction: nextDirection,
+        };
+        return next;
+      }
+
+      const existingDirection =
+        existingIndex >= 0
+          ? sanitized[existingIndex]?.direction
+          : definition.defaultDirection;
+
+      const filtered = sanitized.filter((entry) => entry.column !== column);
+
+      return [
+        {
+          column,
+          direction:
+            existingDirection === "asc" || existingDirection === "desc"
+              ? existingDirection
+              : definition.defaultDirection,
+        },
+        ...filtered,
+      ];
+    });
+    setPage(0);
+  }
+
+  function handleSortPanelApply(nextStack: SortPriority[]) {
+    setSortStack(nextStack);
+    setPage(0);
+  }
+
+  const [primaryEntry] = sortStack;
+  const activeSort = primaryEntry ?? primarySort;
+  const activeColumn = activeSort.column;
+  const activeDirection = activeSort.direction;
+  // const normalizedSortStack = useMemo(
+  //   () => normalizeSortStack(sortStack),
+  //   [sortStack],
+  // );
+
+  // const priorityMap = useMemo(() => {
+  //   const map = new Map<SortColumn, { index: number; direction: SortDirection }>();
+  //   normalizedSortStack.forEach((entry, index) => {
+  //     map.set(entry.column, {
+  //       index,
+  //       direction: entry.direction,
+  //     });
+  //   });
+  //   return map;
+  // }, [normalizedSortStack]);
+
   return (
-    <div className="space-y-6">
-      <Card>
+    <>
+      <SortPanel
+        open={isSortPanelOpen}
+        onOpenChange={setIsSortPanelOpen}
+        columns={sortableColumns}
+        sortStack={sanitizedSortStack}
+        onApply={handleSortPanelApply}
+      />
+      <div className="space-y-6">
+        <Card>
         <CardHeader>
           <CardTitle>Session Explorer</CardTitle>
           <CardDescription>
@@ -381,7 +663,7 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
               Reset filters
             </Button>
             <div className="text-sm text-muted-foreground">
-              Showing {visibleRows.length} of {filteredData.length} filtered sessions (total {data.length}).
+              Showing {visibleRows.length} of {sortedData.length} filtered sessions (total {data.length}).
             </div>
           </div>
         </CardContent>
@@ -394,6 +676,15 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
             <CardDescription>All CSV sources in a single, filterable table.</CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSortPanelOpen(true)}
+              className="whitespace-nowrap"
+            >
+              <ArrowUpDown className="mr-2 h-4 w-4" />
+              Sort columns
+            </Button>
             <Select
               value={String(pageSize)}
               onValueChange={(value) => {
@@ -419,19 +710,45 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Source</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Session</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Instructor</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead className="text-right">Booked</TableHead>
-                <TableHead className="text-right">Spots</TableHead>
-                <TableHead className="text-right">Avail.</TableHead>
-                <TableHead className="text-right">Fill rate</TableHead>
-                <TableHead className="text-right">Cumulative</TableHead>
+                {(
+                  [
+                    { column: "source" as const, label: "Source", align: "left" },
+                    { column: "date" as const, label: "Date", align: "left" },
+                    { column: "time" as const, label: "Time", align: "left" },
+                    { column: "location" as const, label: "Location", align: "left" },
+                    { column: "sessionName" as const, label: "Session", align: "left" },
+                    { column: "sessionType" as const, label: "Type", align: "left" },
+                    { column: "instructor" as const, label: "Instructor", align: "left" },
+                    { column: "room" as const, label: "Room", align: "left" },
+                    { column: "booked" as const, label: "Booked", align: "right" },
+                    { column: "totalSpots" as const, label: "Spots", align: "right" },
+                    { column: "spotsAvailable" as const, label: "Avail.", align: "right" },
+                    { column: "fillRate" as const, label: "Fill rate", align: "right" },
+                    { column: "cumulativeBookings" as const, label: "Cumulative", align: "right" },
+                  ] satisfies Array<{ column: SortColumn; label: string; align: "left" | "right" }>
+                ).map(({ column, label, align }) => {
+                  const priorityInfo = priorityMap.get(column);
+                  const priorityBadge = priorityInfo
+                    ? priorityInfo.index + 1
+                    : null;
+                  const isActive = !!priorityInfo;
+                  const direction = priorityInfo?.direction;
+
+                  return (
+                    <SortableHeader
+                      key={column}
+                      column={column}
+                      align={align}
+                      isActive={isActive}
+                      direction={direction}
+                      priority={priorityBadge}
+                      priorityDirection={priorityInfo?.direction}
+                      onSort={handleSort}
+                    >
+                      {label}
+                    </SortableHeader>
+                  );
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -443,7 +760,7 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
                 </TableRow>
               ) : (
                 visibleRows.map((record) => (
-                  <TableRow key={record.id}>
+                  <TableRow key={record.id} data-record-id={record.id}>
                     <TableCell>{record.source}</TableCell>
                     <TableCell>{record.date}</TableCell>
                     <TableCell>{record.time}</TableCell>
@@ -503,5 +820,6 @@ export function DataTable({ data }: { data: SessionRecord[] }) {
         </div>
       </Card>
     </div>
+  </>
   );
 }
