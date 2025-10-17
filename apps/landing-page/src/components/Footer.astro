@@ -63,10 +63,33 @@ function isMailto(href: string): boolean {
                 </ul>
               </nav>
             ))}
+           
           </div>
         )}
       </div>
+      
     </div>
+    {footerConfig.certification && (
+      <div>
+        <a
+          href={footerConfig.certification.link}
+          aria-label={footerConfig.certification.ariaLabel}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-block hover:opacity-80 transition-opacity focus:outline-2 focus:outline-[var(--pyre-creme)] focus:outline-offset-2"
+        >
+          <img
+            src={footerConfig.certification.image.src}
+            alt={footerConfig.certification.image.alt || footerConfig.certification.title}
+            width="150"
+            height="150"
+            class="h-auto"
+            loading="lazy"
+            decoding="async"
+          />
+        </a>
+      </div>
+    )}
     <div class="mt-10 pt-4 text-xs text-[var(--pyre-creme)]/80">
       {footerConfig.elements.copyright}
     </div>

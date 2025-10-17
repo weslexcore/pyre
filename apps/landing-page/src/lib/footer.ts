@@ -1,5 +1,6 @@
 import { withBase } from './paths';
 import type { FooterContent } from './types';
+import saunaMasterCert from '../assets/logos/sauna_master_cert.png';
 
 const footerConfig: FooterContent = {
   elements: {
@@ -82,6 +83,15 @@ const footerConfig: FooterContent = {
       ],
     },
   ],
+  certification: {
+    image: {
+      src: saunaMasterCert.src,
+      alt: 'Deutsche Sauna-Akademie Certified Sauna Master',
+    },
+    title: 'Deutsche Sauna-Akademie Certified Sauna Master',
+    link: 'https://saunameister.de/',
+    ariaLabel: 'Visit Deutsche Sauna-Akademie - Certified Sauna Master credential',
+  },
 };
 
 export default footerConfig;

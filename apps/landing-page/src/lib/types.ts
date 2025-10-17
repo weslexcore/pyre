@@ -206,6 +206,13 @@ export interface SignupFormContent {
   };
 }
 
+export interface CertificationBadge {
+  image: ImageRef;
+  title: string;
+  link: string;
+  ariaLabel: string;
+}
+
 export interface FooterContent {
   elements: {
     hoursHeading: string;
@@ -220,6 +227,7 @@ export interface FooterContent {
     instagram?: LinkRef;
   };
   groups?: Array<FooterNavGroup>;
+  certification?: CertificationBadge;
 }
 
 export interface FooterNavGroup {
