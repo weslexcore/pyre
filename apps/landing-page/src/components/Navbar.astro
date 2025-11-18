@@ -10,7 +10,7 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 
 <header
   data-component="navbar"
-  class="fixed inset-x-0 top-0 z-50 bg-transparent transition-colors duration-300 motion-reduce:transition-none"
+  class="fixed inset-x-0 top-0 z-50 bg-[var(--pyre-black)] transition-colors duration-300 motion-reduce:transition-none"
 >
   <div class="w-full px-4 flex items-center justify-between gap-4 py-4">
     <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex">
@@ -74,7 +74,7 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
   <nav
     id="mobile-menu"
     aria-label="Mobile navigation"
-    class="md:hidden bg-black border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
+    class="md:hidden bg-[var(--pyre-black)] border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
@@ -102,7 +102,7 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
   <nav
     id="desktop-dropdown"
     aria-label="Desktop dropdown navigation"
-    class="hidden md:block absolute top-full right-4 mt-2 w-64 bg-black border border-[var(--border)] rounded-md shadow-lg overflow-hidden transition-all duration-300 ease-in-out opacity-0 -translate-y-2 max-h-0"
+    class="hidden md:block absolute top-full right-4 mt-2 w-64 bg-[var(--pyre-black)] border border-[var(--border)] rounded-md shadow-lg overflow-hidden transition-all duration-300 ease-in-out opacity-0 -translate-y-2 max-h-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
       <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta desktop-dropdown-link" data-placement="desktop_dropdown">{navbar.actions?.secondary?.label}</Button>
@@ -129,16 +129,14 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 
 <script is:inline define:vars={{ basePath }}>
   (function () {
-    const SCROLLED_CLASSES = ['bg-black', 'backdrop-blur', 'shadow'];
+    const SCROLLED_CLASSES = ['backdrop-blur', 'shadow'];
 
     function applyScrolledState(navbar, isScrolled) {
       if (!navbar) return;
       if (isScrolled) {
-        navbar.classList.remove('bg-transparent');
         navbar.classList.add(...SCROLLED_CLASSES);
       } else {
         navbar.classList.remove(...SCROLLED_CLASSES);
-        navbar.classList.add('bg-transparent');
       }
     }
 
@@ -155,9 +153,6 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
 
         if (shouldOpen) {
-          // Force black background when menu is open
-          navbar.classList.remove('bg-transparent');
-          navbar.classList.add('bg-black');
           // Slide menu down
           mobileMenu.classList.remove('max-h-0', 'opacity-0');
           mobileMenu.classList.add('max-h-96', 'opacity-100');
@@ -170,11 +165,6 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
           // Slide menu up
           mobileMenu.classList.remove('max-h-96', 'opacity-100');
           mobileMenu.classList.add('max-h-0', 'opacity-0');
-          // Restore appropriate background based on page and scroll position
-          const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
-          const isScrolled = window.scrollY > 0;
-          // Only allow transparent on landing page at top
-          applyScrolledState(navbar, !isLandingPage || isScrolled);
           // Animate icon transition - show hamburger, hide close
           hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
           hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
@@ -258,44 +248,34 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 
     function setup() {
       const navbar = document.querySelector('[data-component="navbar"]');
-      const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
       if (!navbar) return;
       
-      // Initialize navbar state immediately
-      const initiallyScrolled = window.scrollY > 0;
-      
-      if (!isLandingPage) {
-        // Non-landing pages: always show black navbar
-        applyScrolledState(navbar, true);
+      // Add scroll effects (blur, shadow)
+      const sentinel = document.getElementById('nav-sentinel');
+      if (sentinel) {
+        const observer = new IntersectionObserver((entries) => {
+          const entry = entries[0];
+          applyScrolledState(navbar, !entry.isIntersecting);
+        }, { root: null, threshold: 0 });
+        observer.observe(sentinel);
       } else {
-        // Landing page: transparent only at top, black when scrolled
-        applyScrolledState(navbar, initiallyScrolled);
-        
-        const sentinel = document.getElementById('nav-sentinel');
-
-        if (sentinel) {
-          const observer = new IntersectionObserver((entries) => {
-            const entry = entries[0];
-            applyScrolledState(navbar, !entry.isIntersecting);
-          }, { root: null, threshold: 0 });
-          observer.observe(sentinel);
-        } else {
-          // Fallback: scroll listener
-          let ticking = false;
-          function onScroll() {
-            if (!ticking) {
-              window.requestAnimationFrame(() => {
-                applyScrolledState(navbar, window.scrollY > 0);
-                ticking = false;
-              });
-              ticking = true;
-            }
+        // Fallback: scroll listener
+        let ticking = false;
+        function onScroll() {
+          if (!ticking) {
+            window.requestAnimationFrame(() => {
+              applyScrolledState(navbar, window.scrollY > 0);
+              ticking = false;
+            });
+            ticking = true;
           }
-          window.addEventListener('scroll', onScroll, { passive: true });
         }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        // Apply initial state
+        applyScrolledState(navbar, window.scrollY > 0);
       }
 
-      // Setup mobile menu - always run this regardless of page
+      // Setup mobile menu
       setupMobileMenu();
 
       // Setup desktop dropdown menu
