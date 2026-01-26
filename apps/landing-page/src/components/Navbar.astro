@@ -8,7 +8,8 @@ import Button from './Button.astro';
 
 <header
   data-component="navbar"
-  class="fixed inset-x-0 top-0 z-50 bg-[var(--pyre-black)] transition-colors duration-300 motion-reduce:transition-none"
+  data-at-top="true"
+  class="fixed inset-x-0 top-0 z-50 bg-transparent data-[at-top=false]:bg-[var(--pyre-black)] transition-colors duration-300 motion-reduce:transition-none"
 >
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
@@ -25,7 +26,7 @@ import Button from './Button.astro';
     </a>
 
     <!-- Desktop navigation links -->
-    <nav class="hidden lg:flex items-center gap-6" aria-label="Main navigation">
+    <nav class="hidden lg:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4" aria-label="Main navigation">
       {navbar.elements.links && navbar.elements.links.map((link) => (
         <a
           href={link.href}
@@ -170,10 +171,38 @@ import Button from './Button.astro';
       });
     }
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', setupMobileMenu, { once: true });
-    } else {
+    function setupScrollBehavior() {
+      const header = document.querySelector('[data-component="navbar"]');
+      if (!header) return;
+
+      let ticking = false;
+
+      function updateNavbar() {
+        const atTop = window.scrollY <= 10;
+        header.setAttribute('data-at-top', atTop ? 'true' : 'false');
+        ticking = false;
+      }
+
+      window.addEventListener('scroll', () => {
+        if (!ticking) {
+          requestAnimationFrame(updateNavbar);
+          ticking = true;
+        }
+      }, { passive: true });
+
+      // Set initial state
+      updateNavbar();
+    }
+
+    function init() {
       setupMobileMenu();
+      setupScrollBehavior();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+      init();
     }
   })();
 </script>

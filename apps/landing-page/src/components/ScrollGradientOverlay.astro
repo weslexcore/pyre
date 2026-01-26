@@ -1,0 +1,180 @@
+---
+/**
+ * ScrollGradientOverlay - Animated gradient overlay with time-based animation
+ *
+ * Creates a dynamic color gradient that shifts over time (20 second cycle).
+ *
+ * Variants:
+ * - hero-mobile: Fixed, fills screen but sits below hero image (z-5)
+ * - hero-desktop: Fixed, covers left 40% of viewport (hero background area)
+ * - footer: Absolute positioned, fills footer container
+ */
+
+interface Props {
+  variant: 'hero-mobile' | 'hero-desktop' | 'footer';
+}
+
+const { variant } = Astro.props;
+
+const variantClasses = {
+  'hero-mobile': 'fixed inset-0 z-[5]',
+  'hero-desktop': 'fixed top-0 left-0 w-[40%] h-screen z-[5]',
+  'footer': 'absolute inset-0 z-0',
+};
+---
+
+<div
+  class:list={[
+    'scroll-gradient-overlay pointer-events-none',
+    variantClasses[variant],
+  ]}
+  aria-hidden="true"
+  data-scroll-gradient
+  data-variant={variant}
+></div>
+
+<style>
+  @keyframes gradient-drift {
+    0%, 100% {
+      --anim-progress: 0;
+    }
+    50% {
+      --anim-progress: 1;
+    }
+  }
+
+  @property --anim-progress {
+    syntax: '<number>';
+    initial-value: 0;
+    inherits: false;
+  }
+
+  .scroll-gradient-overlay {
+    animation: gradient-drift 15s ease-in-out infinite;
+
+    /* Multiple layered gradients for depth - all colors move with animation */
+    background:
+      /* Pyre Red - warm glow moving right and down */
+      radial-gradient(
+        ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
+        oklch(0.65 0.18 25 / 0.4) 0%,
+        transparent 55%
+      ),
+      /* Pyre Blue (deep) - moves from right to left */
+      radial-gradient(
+        ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
+        oklch(0.35 0.15 220 / 0.6) 0%,
+        transparent 55%
+      ),
+      /* Pyre Sky (lighter blue) - drifts up from bottom left */
+      radial-gradient(
+        ellipse 85% 65% at calc(15% + var(--anim-progress) * 35%) calc(90% - var(--anim-progress) * 50%),
+        oklch(0.62 0.12 230 / 0.55) 0%,
+        transparent 55%
+      ),
+      /* Pyre Gold - sweeps diagonally across */
+      radial-gradient(
+        ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
+        oklch(0.78 0.15 85 / 0.55) 0%,
+        transparent 55%
+      ),
+      /* Secondary Gold - moves opposite direction */
+      radial-gradient(
+        ellipse 75% 60% at calc(80% - var(--anim-progress) * 50%) calc(25% + var(--anim-progress) * 45%),
+        oklch(0.78 0.15 85 / 0.5) 0%,
+        transparent 50%
+      ),
+      /* Secondary Blue - subtle accent moving vertically */
+      radial-gradient(
+        ellipse 70% 55% at calc(50% + var(--anim-progress) * 25%) calc(10% + var(--anim-progress) * 60%),
+        oklch(0.45 0.16 220 / 0.5) 0%,
+        transparent 50%
+      ),
+      /* Pyre Sage - organic undertone drifting */
+      radial-gradient(
+        ellipse 75% 50% at calc(30% + var(--anim-progress) * 40%) calc(70% - var(--anim-progress) * 25%),
+        oklch(0.65 0.06 130 / 0.25) 0%,
+        transparent 50%
+      );
+
+    /* Default blend mode for footer and mobile (works over images with varied colors) */
+    mix-blend-mode: soft-light;
+
+    /* Smooth fade for visibility changes */
+    transition: opacity 0.3s ease-out;
+  }
+
+  /* Desktop hero needs screen blend to show on black background */
+  .scroll-gradient-overlay[data-variant="hero-desktop"] {
+    mix-blend-mode: screen;
+    opacity: 0.2; /* Subtle effect to match footer/mobile appearance */
+  }
+
+  /* Mobile hero uses soft-light (works over image with varied colors) */
+  .scroll-gradient-overlay[data-variant="hero-mobile"] {
+    mix-blend-mode: soft-light;
+  }
+
+  /* Accessibility: Pause animation for reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .scroll-gradient-overlay {
+      animation: none;
+      --anim-progress: 0.5;
+    }
+  }
+</style>
+
+<script>
+  // Handle visibility based on scroll position (no longer driving animation)
+  const overlays = document.querySelectorAll('[data-scroll-gradient]');
+  // Select the main page footer (direct child of body) to avoid selecting hidden mobile footer
+  const footer = document.querySelector('body > footer');
+
+  // Check if footer is actually visible (not display: none)
+  const isFooterVisible = () => {
+    if (!footer) return false;
+    return footer.offsetParent !== null || getComputedStyle(footer).display !== 'none';
+  };
+
+  if (overlays.length > 0) {
+    let rafId: number | null = null;
+
+    const updateVisibility = () => {
+      // Calculate if we've scrolled past the hero section (roughly first viewport)
+      const scrolledPastHero = window.scrollY > window.innerHeight * 0.8;
+
+      // Calculate if footer is coming into view (only if visible)
+      const footerTop = isFooterVisible() ? footer!.getBoundingClientRect().top : Infinity;
+      const footerApproaching = footerTop < window.innerHeight;
+
+      overlays.forEach((overlay) => {
+        const el = overlay as HTMLElement;
+
+        // Hide hero-mobile variant once scrolled past hero area
+        if (el.dataset.variant === 'hero-mobile') {
+          el.style.opacity = scrolledPastHero ? '0' : '1';
+        }
+
+        // Hide hero-desktop variant when footer approaches
+        // Use '' to let CSS opacity (0.7) take over when visible
+        if (el.dataset.variant === 'hero-desktop') {
+          el.style.opacity = footerApproaching ? '0' : '';
+        }
+      });
+      rafId = null;
+    };
+
+    // Check for reduced motion preference
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!prefersReducedMotion) {
+      window.addEventListener('scroll', () => {
+        if (rafId) return;
+        rafId = requestAnimationFrame(updateVisibility);
+      }, { passive: true });
+
+      // Initial update
+      updateVisibility();
+    }
+  }
+</script>

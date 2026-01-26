@@ -21,6 +21,7 @@ import SessionPricing from '../components/SessionPricing.astro';
 import SignupForm from '../components/SignupForm.astro';
 import SignupFormCompact from '../components/SignupFormCompact.astro';
 import Layout from '../layouts/main.astro';
+import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
 ---
 
 <Layout>
@@ -36,8 +37,11 @@ import Layout from '../layouts/main.astro';
         <HeroCarousel />
       </div>
 
+      <!-- Animated gradient overlay (z-15) - fixed, fades as content scrolls -->
+      <ScrollGradientOverlay variant="hero-mobile" />
+
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
-      <div class="relative z-20 px-4 pt-4 pb-4">
+      <div class="relative z-20 px-4 pt-4 pb-4 -mt-[50dvh]">
         <!-- <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/> -->
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <AboutSection />
@@ -74,6 +78,9 @@ import Layout from '../layouts/main.astro';
       <!-- Fixed background layer (z-0) -->
       <HeroBackground />
 
+      <!-- Animated gradient overlay on hero background (left 40%) -->
+      <ScrollGradientOverlay variant="hero-desktop" />
+
       <!-- Scrolling cards layer - positioned on right 60% only -->
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
         <div class="px-6 pb-6">
@@ -81,27 +88,27 @@ import Layout from '../layouts/main.astro';
           <SectionCard stackIndex={0}>
             <AboutContent />
           </SectionCard>
-          <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="wave" animate="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={1}>
             <BenefitsContent />
           </SectionCard>
-          <SectionDivider variant="blob" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="blob" animate="reveal" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={2}>
             <SessionContent />
           </SectionCard>
-          <SectionDivider variant="zigzag" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="zigzag" animate="reveal" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={3}>
             <MembershipContent />
           </SectionCard>
-          <SectionDivider variant="squiggle" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="squiggle" animate="reveal" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={4}>
             <EventsContent />
           </SectionCard>
-          <SectionDivider variant="torn" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="torn" animate="reveal" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={5}>
             <FAQContent />
           </SectionCard>
-          <SectionDivider variant="wave" flip animate="wave" class="my-8 mx-auto w-72"/>
+          <SectionDivider variant="wave" flip animate="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={6}>
             <SignupFormCompact />
           </SectionCard>

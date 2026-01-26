@@ -5,6 +5,7 @@ import footerConfig from '../lib/footer';
 import location from '../lib/location';
 import { withBase } from '../lib/paths';
 import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
+import ScrollGradientOverlay from './ScrollGradientOverlay.astro';
 import SectionDivider from './SectionDivider.astro';
 
 function isExternalLink(href: string): boolean {
@@ -19,6 +20,9 @@ function isMailto(href: string): boolean {
 <footer role="contentinfo" class="relative w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-hidden">
   <!-- Repeating logo background pattern -->
   <RepeatingLogoBackground class="absolute inset-0 " />
+
+  <!-- Animated gradient overlay -->
+  <ScrollGradientOverlay variant="footer" />
 
   <!-- Content layer (above background) -->
   <div class="relative z-10">

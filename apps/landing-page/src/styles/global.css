@@ -302,7 +302,7 @@
     var(--pyre-blue),
     var(--pyre-red)
   );
-  animation: gradient-rotate 2s linear infinite;
+  animation: gradient-rotate 20s linear infinite;
 }
 
 .btn-cta-animated::after {
