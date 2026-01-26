@@ -4,9 +4,10 @@ interface Props {
   class?: string;
   ariaLabel?: string;
   stackIndex?: number;
+  'data-section'?: string;
 }
 
-const { id, class: className, ariaLabel, stackIndex } = Astro.props;
+const { id, class: className, ariaLabel, stackIndex, 'data-section': dataSection } = Astro.props;
 
 // Calculate sticky positioning for stacking effect
 // Each card sticks 20px lower than the previous, creating a stacked appearance
@@ -17,6 +18,7 @@ const zIndex = isSticky ? 10 + stackIndex : undefined;
 
 <div
   id={id}
+  data-section={dataSection}
   class:list={[
     'section-card',
     'bg-[var(--pyre-black)] text-[var(--pyre-creme)]',

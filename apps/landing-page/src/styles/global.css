@@ -242,6 +242,20 @@
     scroll-behavior: smooth;
   }
 
+  /* Offset for fixed navbar when scrolling to anchors */
+  #about,
+  #membership,
+  #events,
+  #faq,
+  #signup,
+  [data-section="about"],
+  [data-section="membership"],
+  [data-section="events"],
+  [data-section="faq"],
+  [data-section="signup"] {
+    scroll-margin-top: 5rem; /* 80px to account for fixed navbar */
+  }
+
   /* Mobile: Black background for overscroll bounce effect */
   @media (max-width: 1023px) {
     html,

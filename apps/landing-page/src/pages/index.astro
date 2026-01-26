@@ -1,7 +1,7 @@
 ---
 import TexturedCard from '@/components/TexturedCard.astro';
 import AboutContent from '../components/AboutContent.astro';
-import AboutSection from '../components/AboutSection.astro';
+import AboutMobileSection from '../components/AboutMobileSection.astro';
 import BenefitsContent from '../components/BenefitsContent.astro';
 import BenefitsSection from '../components/BenefitsSection.astro';
 import EventsContent from '../components/EventsContent.astro';
@@ -43,8 +43,8 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 -mt-[50dvh]">
         <!-- <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/> -->
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
-          <AboutSection />
+        <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
+          <AboutMobileSection />
         </div>
         <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
@@ -57,19 +57,19 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" />
         <div class="h-4"></div>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" />
-        <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <MembershipPricing />
         </div>
         <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
+        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
           <EventsSection />
         </div>
         <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <FAQAccordion />
         </div>
         <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
+        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
           <SignupForm />
         </div>
       </div>
@@ -87,7 +87,7 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
         <div class="px-6 pb-6">
           <!-- <SectionDivider variant="wave" animate="wave" /> -->
-          <SectionCard stackIndex={0} class="btn-cta-animated">
+          <SectionCard stackIndex={0} class="btn-cta-animated" data-section="about">
             <AboutContent />
           </SectionCard>
           <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
@@ -101,19 +101,19 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" />
           <div class="h-4"></div>
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" />
-          <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg ">
+          <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg " data-section="membership">
             <MembershipContent />
           </SectionCard>
           <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={4} class="btn-cta-animated">
+          <SectionCard stackIndex={4} class="btn-cta-animated" data-section="events">
             <EventsContent />
           </SectionCard>
           <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={5}>
+          <SectionCard stackIndex={5} data-section="faq">
             <FAQContent />
           </SectionCard>
           <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={6} class="btn-cta-animated">
+          <SectionCard stackIndex={6} class="btn-cta-animated" data-section="signup">
             <SignupFormCompact />
           </SectionCard>
         </div>
@@ -134,3 +134,88 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
     mask-repeat: no-repeat;
   }
 </style>
+
+<script>
+  // Handle smooth scrolling for anchor links based on viewport
+  // On desktop (lg+), scroll to data-section elements instead of IDs
+  function initSmoothScroll() {
+    const lgBreakpoint = 1024;
+
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      // Match any anchor with a hash in the href (handles /#about, /pyre/#about, #about)
+      const anchor = target.closest('a[href*="#"]') as HTMLAnchorElement | null;
+
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      // Extract the hash portion
+      const hashIndex = href.indexOf('#');
+      if (hashIndex === -1) return;
+
+      const hash = href.slice(hashIndex);
+      if (hash === '#') return;
+
+      const sectionId = hash.slice(1); // Remove the #
+      const isDesktop = window.innerWidth >= lgBreakpoint;
+
+      let targetElement: Element | null = null;
+
+      if (isDesktop) {
+        // On desktop, find element with data-section attribute
+        targetElement = document.querySelector(`[data-section="${sectionId}"]`);
+      }
+
+      // Fall back to ID if data-section not found or on mobile
+      if (!targetElement) {
+        targetElement = document.getElementById(sectionId);
+      }
+
+      if (targetElement) {
+        e.preventDefault();
+        targetElement.scrollIntoView({ behavior: 'smooth' });
+        // Update URL hash without jumping
+        history.pushState(null, '', hash);
+      }
+    });
+
+    // Handle direct URL navigation with hash
+    function scrollToHashTarget() {
+      const hash = window.location.hash;
+      if (!hash) return;
+
+      const sectionId = hash.slice(1);
+      const isDesktop = window.innerWidth >= lgBreakpoint;
+
+      let targetElement: Element | null = null;
+
+      if (isDesktop) {
+        targetElement = document.querySelector(`[data-section="${sectionId}"]`);
+      }
+
+      if (!targetElement) {
+        targetElement = document.getElementById(sectionId);
+      }
+
+      if (targetElement) {
+        // Small delay to ensure layout is complete
+        setTimeout(() => {
+          targetElement!.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+
+    // Run on page load if there's a hash
+    if (window.location.hash) {
+      scrollToHashTarget();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
+  } else {
+    initSmoothScroll();
+  }
+</script>

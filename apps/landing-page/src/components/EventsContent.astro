@@ -1,9 +1,11 @@
 ---
-import events from '../lib/events';
+import { getEventsContent } from '../lib/events';
 import Button from './Button.astro';
+
+const events = await getEventsContent();
 ---
 
-<div id="events" aria-labelledby="events-heading">
+<div aria-labelledby="events-heading">
   <div class="text-center mb-8">
     <h2
       id="events-heading"
@@ -16,56 +18,83 @@ import Button from './Button.astro';
     )}
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    {events.items.map((event) => (
-      <article
-        class="event-card border border-current/20 rounded-lg overflow-hidden bg-[var(--pyre-black)] transition-all duration-300 hover:border-current/40"
-      >
-        <div class="p-4">
-          <div class="mb-3">
-            <span class="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
-              {event.date}
-            </span>
-          </div>
+  <!-- Horizontal scrolling events carousel -->
+  <div class="events-content-wrapper relative">
+    <!-- Left scroll arrow -->
+    <button
+      type="button"
+      class="events-content-arrow events-content-arrow-left absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-[var(--pyre-black)] border border-current/20 rounded-full shadow-lg opacity-0 pointer-events-none transition-all duration-300 hover:border-current/40 hover:scale-110"
+      aria-label="Scroll left"
+    >
+      <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
 
-          <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">
-            {event.title}
-          </h3>
+    <!-- Right scroll arrow -->
+    <button
+      type="button"
+      class="events-content-arrow events-content-arrow-right absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-[var(--pyre-black)] border border-current/20 rounded-full shadow-lg opacity-0 pointer-events-none transition-all duration-300 hover:border-current/40 hover:scale-110"
+      aria-label="Scroll right"
+    >
+      <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
 
-          <p class="text-sm opacity-70 mb-3 line-clamp-2">
-            {event.description}
-          </p>
+    <div class="events-content-container -mx-4 px-4 md:-mx-6 md:px-6">
+      <div class="events-content-scroll flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-hide">
+        {events.items.map((event) => (
+          <article
+            class="event-card flex-shrink-0 w-[280px] md:w-[300px] snap-start border border-current/20 rounded-lg overflow-hidden bg-[var(--pyre-black)] transition-all duration-300 hover:border-current/40"
+          >
+            <div class="p-4">
+              <div class="mb-3">
+                <span class="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
+                  {event.date}
+                </span>
+              </div>
 
-          <div class="space-y-1 text-sm opacity-70 mb-3">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{event.time}</span>
+              <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">
+                {event.title}
+              </h3>
+
+              <p class="text-sm opacity-70 mb-3 line-clamp-2">
+                {event.description}
+              </p>
+
+              <div class="space-y-1 text-sm opacity-70 mb-3">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{event.time}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{event.location}</span>
+                </div>
+              </div>
+
+              {event.cta && (
+                <Button
+                  href={event.cta.href}
+                  variant="outline"
+                  size="sm"
+                  ariaLabel={event.cta.ariaLabel}
+                  class="w-full"
+                >
+                  {event.cta.label}
+                </Button>
+              )}
             </div>
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span>{event.location}</span>
-            </div>
-          </div>
-
-          {event.cta && (
-            <Button
-              href={event.cta.href}
-              variant="outline"
-              size="sm"
-              ariaLabel={event.cta.ariaLabel}
-              class="w-full"
-            >
-              {event.cta.label}
-            </Button>
-          )}
-        </div>
-      </article>
-    ))}
+          </article>
+        ))}
+      </div>
+    </div>
   </div>
 
   {events.viewAllCta && (
@@ -89,4 +118,95 @@ import Button from './Button.astro';
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .events-content-wrapper {
+    position: relative;
+  }
+
+  .events-content-arrow {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.2s ease;
+  }
+
+  .events-content-arrow.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .events-content-arrow-left {
+    left: -0.5rem;
+  }
+
+  .events-content-arrow-right {
+    right: -0.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .events-content-arrow-left {
+      left: -1rem;
+    }
+
+    .events-content-arrow-right {
+      right: -1rem;
+    }
+  }
 </style>
+
+<script>
+  function initEventsContentCarousel() {
+    const wrapper = document.querySelector('.events-content-wrapper');
+    if (!wrapper) return;
+
+    const scrollContainer = wrapper.querySelector('.events-content-scroll');
+    const leftArrow = wrapper.querySelector('.events-content-arrow-left');
+    const rightArrow = wrapper.querySelector('.events-content-arrow-right');
+
+    if (!scrollContainer || !leftArrow || !rightArrow) return;
+
+    function updateArrows() {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
+      const isAtStart = scrollLeft <= 10;
+      const isAtEnd = scrollLeft + clientWidth >= scrollWidth - 10;
+
+      leftArrow.classList.toggle('visible', !isAtStart);
+      rightArrow.classList.toggle('visible', !isAtEnd);
+    }
+
+    function scrollBy(direction: number) {
+      const cardWidth = 300 + 16; // card width + gap
+      scrollContainer.scrollBy({
+        left: direction * cardWidth,
+        behavior: 'smooth'
+      });
+    }
+
+    leftArrow.addEventListener('click', () => scrollBy(-1));
+    rightArrow.addEventListener('click', () => scrollBy(1));
+    scrollContainer.addEventListener('scroll', updateArrows, { passive: true });
+
+    // Initial check
+    updateArrows();
+
+    // Recheck on resize
+    window.addEventListener('resize', updateArrows, { passive: true });
+  }
+
+  // Run on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initEventsContentCarousel);
+  } else {
+    initEventsContentCarousel();
+  }
+
+  // Support Astro view transitions
+  document.addEventListener('astro:page-load', initEventsContentCarousel);
+</script>

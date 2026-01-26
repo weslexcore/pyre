@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly BASE_URL: string;
   readonly PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: string;
   readonly CLOUDFLARE_TURNSTILE_SECRET_KEY: string;
+  readonly MOMENCE_HOST_ID: string;
+  readonly MOMENCE_API_TOKEN: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
