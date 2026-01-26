@@ -121,6 +121,13 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
   // Use image1 if available, otherwise fall back to image2
   const imageUrl = event.image1 || event.image2;
 
+  // Show "Join Waitlist" when event is full
+  const isFull = event.spotsRemaining === 0;
+  const ctaLabel = isFull ? 'Join Waitlist' : 'Reserve Spot';
+  const ctaAriaLabel = isFull
+    ? `Join waitlist for ${event.title}`
+    : `Reserve spot for ${event.title}`;
+
   return {
     id: String(event.id),
     title: event.title,
@@ -135,9 +142,9 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
         }
       : undefined,
     cta: {
-      label: 'Reserve Spot',
+      label: ctaLabel,
       href: event.link,
-      ariaLabel: `Reserve spot for ${event.title}`,
+      ariaLabel: ctaAriaLabel,
     },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
     spotsRemaining: event.spotsRemaining,
