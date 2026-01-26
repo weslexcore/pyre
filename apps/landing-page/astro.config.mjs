@@ -31,7 +31,7 @@ export default defineConfig({
 
   integrations: [mdx(), react(), sitemap()],
 
-  output: 'hybrid', // Hybrid mode: static pages by default, server-side API routes with prerender=false
+  output: 'server', // Server mode: pages SSR by default, use `export const prerender = true` for static pages
   adapter: vercel({
     imageService: false, // Disable Vercel image optimization (not available on free plan)
     webAnalytics: {

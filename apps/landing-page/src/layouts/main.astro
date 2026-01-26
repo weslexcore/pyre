@@ -132,21 +132,29 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 			injectSpeedInsights();
 		</script>
 		<script>
-			// Disable browser's automatic scroll restoration - we handle it ourselves
+			// Disable browser's automatic scroll restoration
 			if ('scrollRestoration' in history) {
 				history.scrollRestoration = 'manual';
 			}
 
-			// Handle scroll to hash
+			// Handle scroll to hash using window.scrollTo for more control
 			function scrollToTarget(hash: string) {
 				try {
 					const target = document.querySelector(hash);
 					if (target) {
-						target.scrollIntoView({ behavior: 'instant' });
+						const rect = target.getBoundingClientRect();
+						const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+						const targetY = rect.top + scrollTop;
+
+						console.log('[scroll] Found target, scrolling to:', hash, 'targetY:', targetY);
+						window.scrollTo(0, targetY);
+						console.log('[scroll] After scrollTo, current scrollY:', window.scrollY);
 						return true;
+					} else {
+						console.log('[scroll] Target not found:', hash);
 					}
-				} catch {
-					// Invalid selector, ignore
+				} catch (e) {
+					console.log('[scroll] Error:', e);
 				}
 				return false;
 			}
@@ -159,26 +167,21 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 				const e = event as any;
 				const url = new URL(e.to);
 				pendingHash = url.hash || null;
+				console.log('[scroll] astro:before-preparation, hash:', pendingHash);
 			});
 
-			// Before swap, scroll to top so the new page starts at top
-			// (View Transitions will animate from current scroll position otherwise)
-			document.addEventListener('astro:before-swap', () => {
-				if (pendingHash) {
-					// We'll scroll to hash after swap, start at top for clean transition
-					window.scrollTo({ top: 0, behavior: 'instant' });
-				}
-			});
-
-			// After DOM swap (new page is in DOM), scroll to target
 			document.addEventListener('astro:after-swap', () => {
+				console.log('[scroll] astro:after-swap, pendingHash:', pendingHash, 'location.hash:', window.location.hash);
+			});
+
+			// After page fully loads, scroll to target
+			document.addEventListener('astro:page-load', () => {
 				const hash = pendingHash || window.location.hash;
+				console.log('[scroll] astro:page-load, hash:', hash);
 				pendingHash = null;
 
 				if (hash) {
 					scrollToTarget(hash);
-				} else {
-					window.scrollTo({ top: 0, behavior: 'instant' });
 				}
 			});
 		</script>
