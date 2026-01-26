@@ -20,7 +20,7 @@ import SectionDivider from './SectionDivider.astro';
         <p class="text-xs md:text-sm opacity-60 mt-2 italic">{sessions.note}</p>
       )}
     </div>
-    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true}/>
+    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true} scrollAware={true}/>
 
     <div class="space-y-4 lg:space-y-3">
       {sessions.items.map((item) => (

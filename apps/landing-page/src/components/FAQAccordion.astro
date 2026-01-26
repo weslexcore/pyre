@@ -12,7 +12,7 @@ import SectionDivider from './SectionDivider.astro';
       {faqs.title}
     </h2>
 
-    <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
+    <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
     <div class="faq-list space-y-4">
       {faqs.items.map((faq, index) => (

@@ -11,7 +11,7 @@ import SectionDivider from './SectionDivider.astro';
     {faqs.title}
   </h2>
 
-  <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
+  <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
   <div class="faq-list-desktop space-y-3 max-w-3xl mx-auto">
     {faqs.items.map((faq, index) => (

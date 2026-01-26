@@ -28,7 +28,7 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
         {about.title}
       </h2>
 
-      <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="hidden lg:block w-48 my-4 mx-auto"/>
+      <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="hidden lg:block w-48 my-4 mx-auto" scrollAware={true}/>
 
       <div class="space-y-3 lg:space-y-4 text-sm lg:text-base leading-relaxed">
         {about.body.map((paragraph) => (

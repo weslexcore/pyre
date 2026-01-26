@@ -5,6 +5,7 @@ interface Props {
   revealAnimation?: 'draw' | 'fade' | 'scale' | 'none';
   visibleAnimation?: 'wave' | 'pulse' | 'none';
   animate?: 'wave' | 'reveal' | 'none';  // deprecated, for backwards compat
+  scrollAware?: boolean;  // Enable scroll-direction-aware reveal/hide
   class?: string;
 }
 
@@ -14,6 +15,7 @@ const {
   revealAnimation: revealAnimationProp,
   visibleAnimation: visibleAnimationProp,
   animate,
+  scrollAware = false,
   class: className = ''
 } = Astro.props;
 
@@ -46,6 +48,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
   data-reveal-animation={revealAnimation}
   data-visible-animation={visibleAnimation}
   data-animate={animate}
+  data-scroll-aware={scrollAware ? 'true' : undefined}
 >
   {variant === 'wave' && (
     <svg
@@ -244,6 +247,33 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
   .visible-pulse:not(.reveal-draw):not(.reveal-fade):not(.reveal-scale) .divider-svg {
     animation: divider-pulse 2s ease-in-out infinite;
   }
+
+  /* ========================================
+     SCROLL-AWARE: Scroll-linked animations
+     Progress tied directly to scroll position
+     ======================================== */
+
+  /* Disable CSS transitions for scroll-aware - JS controls the values directly */
+  .reveal-draw[data-scroll-aware="true"] .divider-path {
+    transition: none;
+  }
+
+  .reveal-fade[data-scroll-aware="true"] .divider-svg {
+    transition: none;
+  }
+
+  .reveal-scale[data-scroll-aware="true"] .divider-svg {
+    transition: none;
+  }
+
+  /* Reduced motion: instant state changes */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal-draw[data-scroll-aware="true"] .divider-path,
+    .reveal-fade[data-scroll-aware="true"] .divider-svg,
+    .reveal-scale[data-scroll-aware="true"] .divider-svg {
+      transition: none;
+    }
+  }
 </style>
 
 <script>
@@ -305,7 +335,97 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
     );
 
     animatedDividers.forEach((divider) => {
-      observer.observe(divider);
+      // Skip scroll-aware dividers - they have their own observer
+      if ((divider as HTMLElement).dataset.scrollAware !== 'true') {
+        observer.observe(divider);
+      }
     });
+  }
+
+  // ========================================
+  // SCROLL-AWARE DIVIDERS
+  // Animation progress tied to scroll position
+  // ========================================
+
+  const scrollAwareDividers = document.querySelectorAll(
+    '.section-divider[data-scroll-aware="true"]'
+  );
+
+  if (scrollAwareDividers.length > 0) {
+    const STROKE_LENGTH = 3000; // Matches stroke-dasharray in CSS
+
+    // Calculate scroll progress for an element (0 = not visible, 1 = fully revealed)
+    const getScrollProgress = (element: HTMLElement): number => {
+      const rect = element.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+
+      // Start animating when element enters viewport (bottom of element at bottom of viewport)
+      // Complete when element is ~30% up from the bottom of the viewport
+      const startPoint = viewportHeight; // element just entering
+      const endPoint = viewportHeight * 0.3; // element 30% up from bottom
+
+      // Use the top of the element for calculation
+      const elementTop = rect.top;
+
+      if (elementTop >= startPoint) {
+        return 0; // Not yet visible
+      }
+      if (elementTop <= endPoint) {
+        return 1; // Fully revealed
+      }
+
+      // Linear interpolation between start and end
+      return (startPoint - elementTop) / (startPoint - endPoint);
+    };
+
+    // Apply animation based on progress
+    const applyScrollProgress = (divider: HTMLElement, progress: number) => {
+      const revealType = divider.dataset.revealAnimation || 'none';
+      const visibleType = divider.dataset.visibleAnimation || 'none';
+      const path = divider.querySelector('.divider-path') as SVGPathElement | null;
+      const svg = divider.querySelector('.divider-svg') as SVGElement | null;
+
+      // Apply reveal animation based on type
+      if (revealType === 'draw' && path) {
+        // Draw: stroke-dashoffset goes from 3000 (hidden) to 0 (visible)
+        const offset = STROKE_LENGTH * (1 - progress);
+        path.style.strokeDashoffset = `${offset}`;
+      } else if (revealType === 'fade' && svg) {
+        // Fade: opacity goes from 0 to 1
+        svg.style.opacity = `${progress}`;
+      } else if (revealType === 'scale' && svg) {
+        // Scale: scaleX goes from 0 to 1
+        svg.style.transform = `scaleX(${progress})`;
+      }
+
+      // Handle visible animation (wave/pulse) - only when fully revealed
+      if (progress >= 1 && visibleType !== 'none') {
+        divider.classList.add('is-visible', 'is-revealed');
+      } else {
+        divider.classList.remove('is-visible', 'is-revealed');
+      }
+    };
+
+    // Update all scroll-aware dividers
+    let ticking = false;
+    const updateScrollAwareDividers = () => {
+      scrollAwareDividers.forEach((divider) => {
+        const element = divider as HTMLElement;
+        const progress = getScrollProgress(element);
+        applyScrollProgress(element, progress);
+      });
+      ticking = false;
+    };
+
+    // Throttle with RAF
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(updateScrollAwareDividers);
+        ticking = true;
+      }
+    }, { passive: true });
+
+    // Initial calculation on load
+    updateScrollAwareDividers();
   }
 </script>

@@ -21,7 +21,7 @@ const subscribed =
       {signupForm.elements.title}
     </h2>
     <p class="text-lg opacity-80">{signupForm.elements.subtitle}</p>
-    <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
+    <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}  />
 
     {subscribed && (
       <div role="status" class="mb-6 rounded-md border border-green-700/30 bg-green-800/20 p-4 text-sm">

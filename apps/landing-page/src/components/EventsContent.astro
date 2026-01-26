@@ -17,7 +17,7 @@ const events = await getEventsContent();
     {events.subtitle && (
       <p class="text-base opacity-80">{events.subtitle}</p>
     )}
-    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true}/>
+    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true} scrollAware={true}/>
   </div>
 
   <!-- Horizontal scrolling events carousel -->
