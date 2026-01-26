@@ -15,6 +15,7 @@ import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipContent from '../components/MembershipContent.astro';
 import MembershipPricing from '../components/MembershipPricing.astro';
 import SectionCard from '../components/SectionCard.astro';
+import SectionDivider from '../components/SectionDivider.astro';
 import SessionContent from '../components/SessionContent.astro';
 import SessionPricing from '../components/SessionPricing.astro';
 import SignupForm from '../components/SignupForm.astro';
@@ -35,26 +36,33 @@ import Layout from '../layouts/main.astro';
       </div>
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
-      <div class="relative z-20 space-y-4 px-4 pt-4 pb-4">
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+      <div class="relative z-20 px-4 pt-4 pb-4">
+        <!-- <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/> -->
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <AboutSection />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <BenefitsSection />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="blob" animate="reveal" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <SessionPricing />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="zigzag" animate="reveal" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <MembershipPricing />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="squiggle" animate="reveal" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <EventsSection />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="torn" animate="reveal" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <FAQAccordion />
         </div>
-        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+        <SectionDivider variant="wave" flip animate="wave" />
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <SignupForm />
         </div>
       </div>
@@ -67,45 +75,36 @@ import Layout from '../layouts/main.astro';
 
       <!-- Scrolling cards layer - positioned on right 60% only -->
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
-        <div class="space-y-6 px-6 pb-6">
-          <!-- Row 1: About + Benefits (stacked in single column) -->
-          <div class="space-y-6">
-            <SectionCard>
-              <AboutContent />
-            </SectionCard>
-            <SectionCard>
-              <BenefitsContent />
-            </SectionCard>
-          </div>
-
-          <!-- Row 2: Sessions + Memberships (stacked) -->
-          <div class="space-y-6">
-            <SectionCard>
-              <SessionContent />
-            </SectionCard>
-            <SectionCard>
-              <MembershipContent />
-            </SectionCard>
-          </div>
-
-          <!-- Events -->
-          <SectionCard>
+        <div class="px-6 pb-6">
+          <!-- <SectionDivider variant="wave" animate="wave" /> -->
+          <SectionCard stackIndex={0}>
+            <AboutContent />
+          </SectionCard>
+          <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={1}>
+            <BenefitsContent />
+          </SectionCard>
+          <SectionDivider variant="blob" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={2}>
+            <SessionContent />
+          </SectionCard>
+          <SectionDivider variant="zigzag" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={3}>
+            <MembershipContent />
+          </SectionCard>
+          <SectionDivider variant="squiggle" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={4}>
             <EventsContent />
           </SectionCard>
-
-          <!-- FAQ -->
-          <SectionCard>
+          <SectionDivider variant="torn" animate="reveal" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={5}>
             <FAQContent />
           </SectionCard>
-
-          <!-- Signup Form -->
-          <SectionCard>
+          <SectionDivider variant="wave" flip animate="wave" class="my-8 mx-auto w-72"/>
+          <SectionCard stackIndex={6}>
             <SignupFormCompact />
           </SectionCard>
         </div>
-
-        <!-- Footer (full width of the 60% column) -->
-        <Footer />
       </div>
     </div>
   </main>

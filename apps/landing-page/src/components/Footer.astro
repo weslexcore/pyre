@@ -5,6 +5,7 @@ import footerConfig from '../lib/footer';
 import location from '../lib/location';
 import { withBase } from '../lib/paths';
 import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
+import SectionDivider from './SectionDivider.astro';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');
@@ -17,18 +18,20 @@ function isMailto(href: string): boolean {
 
 <footer role="contentinfo" class="relative w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-hidden">
   <!-- Repeating logo background pattern -->
-  <RepeatingLogoBackground class="absolute inset-0 opacity-[0.05]" />
+  <RepeatingLogoBackground class="absolute inset-0 " />
 
   <!-- Content layer (above background) -->
   <div class="relative z-10">
   <!-- Tagline Section -->
   {location.tagline && (
-    <div class="border-b border-[var(--pyre-creme)]/10 py-10 md:py-16 px-4 text-center">
+    <div class="py-10 md:py-16 px-4 text-center">
       <p class="font-primary-semibold text-[clamp(2rem,5vw,4rem)] tracking-[-0.02em] uppercase">
         {location.tagline}
       </p>
     </div>
   )}
+
+  <SectionDivider variant="wave" flip animate="wave" />
 
   <div class="mx-auto w-full px-4 py-12 sm:py-16 md:py-20 max-w-6xl">
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8">
