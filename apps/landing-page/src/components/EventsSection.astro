@@ -1,13 +1,14 @@
 ---
-import { getEventsContent } from '../lib/events';
-import Button from './Button.astro';
+import { getEventsContent } from "../lib/events";
+import Button from "./Button.astro";
+import SectionDivider from "./SectionDivider.astro";
 
 const events = await getEventsContent();
 ---
 
 <section aria-labelledby="events-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
   <div class="max-w-6xl mx-auto">
-    <div class="text-center mb-12">
+    <div class="text-center">
       <h2
         id="events-heading"
         class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
@@ -19,6 +20,7 @@ const events = await getEventsContent();
       )}
     </div>
 
+    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
     <!-- Horizontal scrolling events carousel -->
     <div class="events-wrapper relative">
       <!-- Left scroll arrow -->

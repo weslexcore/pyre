@@ -1,0 +1,97 @@
+---
+import membership from '../lib/membership';
+import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
+
+const maxMobileFeatures = 3;
+---
+
+<section id="membership" aria-labelledby="membership-heading" class="py-8 md:py-24 lg:py-0 px-4 lg:px-0">
+  <div class="max-w-6xl mx-auto lg:max-w-none">
+    <div class="text-center mb-6 md:mb-12 lg:mb-4">
+      <h2
+        id="membership-heading"
+        class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] lg:text-[clamp(1.5rem,2.5vw,2rem)] tracking-[-0.02em] uppercase mb-2 md:mb-4 lg:mb-2"
+      >
+        {membership.title}
+      </h2>
+      {membership.subtitle && (
+        <p class="text-base md:text-lg lg:text-sm opacity-80">{membership.subtitle}</p>
+      )}
+      {membership.note && (
+        <p class="text-xs md:text-sm opacity-60 mt-2 italic">{membership.note}</p>
+      )}
+      
+    </div>
+    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
+
+    <div class="grid grid-cols-2 gap-3 md:gap-6 lg:gap-3 max-w-3xl mx-auto lg:max-w-none">
+      {membership.tiers.map((tier) => (
+        <div
+          class={`pricing-card relative flex flex-col p-4 md:p-6 lg:p-3 border rounded-lg transition-all duration-300 ${
+            tier.popular
+              ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 md:scale-105 lg:scale-100 shadow-lg lg:shadow-none'
+              : 'border-current/20 hover:border-current/40'
+          }`}
+        >
+          {tier.popular && (
+            <div class="absolute -top-2.5 md:-top-3 lg:-top-2.5 left-1/2 lg:left-3 -translate-x-1/2 lg:translate-x-0 px-2 md:px-3 lg:px-2 py-0.5 md:py-1 lg:py-0.5 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs lg:text-[10px] font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap">
+              <span class="lg:hidden">Most Popular</span>
+              <span class="hidden lg:inline">Popular</span>
+            </div>
+          )}
+
+          <div class="mb-3 md:mb-6 lg:mb-2">
+            <h3 class="font-mono-bold text-sm md:text-xl lg:text-base uppercase tracking-wide mb-1 md:mb-2 lg:mb-0">
+              {tier.name}
+            </h3>
+            <p class="text-xs md:text-sm lg:hidden opacity-70 line-clamp-2">{tier.description}</p>
+          </div>
+
+          <div class="mb-3 md:mb-6 lg:mb-2 flex items-baseline lg:justify-between">
+            <div>
+              <span class={`font-primary-semibold text-2xl md:text-[clamp(2.5rem,5vw,3.5rem)] lg:text-xl leading-none ${tier.popular ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                ${tier.price}
+              </span>
+              <span class="text-xs md:text-sm lg:text-xs opacity-70">{tier.period}</span>
+            </div>
+          </div>
+
+          {/* Mobile/tablet: show limited features in list */}
+          <ul class="space-y-2 mb-4 flex-grow lg:hidden">
+            {tier.features.slice(0, maxMobileFeatures).map((feature) => (
+              <li class={`flex items-start gap-2 ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-xs">{feature.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: horizontal compact feature list */}
+          <ul class="hidden lg:flex flex-wrap gap-x-3 gap-y-1 mb-3">
+            {tier.features.slice(0, maxMobileFeatures).map((feature) => (
+              <li class={`flex items-center gap-1.5 text-xs ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : 'opacity-80'}`}>
+                <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{feature.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <Button
+            href={tier.cta.href}
+            variant={tier.popular ? 'primary' : 'outline'}
+            size="sm"
+            ariaLabel={tier.cta.ariaLabel}
+            class="w-full text-xs md:text-base lg:text-xs"
+          >
+            {tier.cta.label}
+          </Button>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -121,6 +121,7 @@
   --pyre-red: oklch(0.65 0.18 25); /* #F15836 */
   --pyre-blue: oklch(0.35 0.12 220); /* #245A82 */
   --pyre-gold: oklch(0.78 0.12 85); /* #C9A855 */
+  --pyre-muted-gold: oklch(0.72 0.08 85); /* Muted version of gold - lower chroma */
   --pyre-sage: oklch(0.65 0.06 130); /* #8A9A7B */
   --pyre-sky: oklch(0.62 0.10 230); /* #5B8FB9 */
 
@@ -338,4 +339,52 @@
 /* Hover: Speed up animation */
 .btn-cta-animated:hover::before {
   animation-duration: 3s;
+}
+
+/* Animated Gradient Border for Card Containers */
+.card-cta-animated {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--pyre-red); /* Fallback for gradient gaps at corners */
+}
+
+/* Only apply animation on lg+ screens where rounded corners are visible */
+/* @media (min-width: 1024px) { */
+  .card-cta-animated::before {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    left: -50%;
+    top: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      from 0deg,
+      var(--pyre-red),
+      var(--pyre-gold),
+      var(--pyre-sage),
+      var(--pyre-sky),
+      var(--pyre-blue),
+      var(--pyre-red)
+    );
+    animation: gradient-rotate 25s linear infinite;
+  }
+
+  .card-cta-animated::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: 4px;
+    background: var(--pyre-black);
+    border-radius: calc(0.5rem - 4px);
+  }
+/* } */
+
+/* Accessibility: Respect reduced motion for card animation */
+@media (prefers-reduced-motion: reduce) {
+  .card-cta-animated::before {
+    animation: none;
+  }
 }

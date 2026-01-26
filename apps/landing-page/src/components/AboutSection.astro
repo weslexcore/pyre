@@ -2,11 +2,12 @@
 import { Image } from 'astro:assets';
 import about from '../lib/about';
 import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
 import warmSauna from '../assets/images/warm_sauna.jpg';
 ---
 
-<section aria-labelledby="about-heading" class="py-12 md:py-16 px-4">
-  <div class="max-w-3xl mx-auto grid grid-cols-[1fr_1.5fr] gap-6 items-start">
+<section id="about" aria-labelledby="about-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0">
+  <div class="max-w-3xl mx-auto lg:max-w-none grid grid-cols-[1fr_1.5fr] gap-6 lg:gap-8 items-start">
     <!-- Image column -->
     <div class="aspect-[3/4] overflow-hidden rounded-lg">
       <Image
@@ -22,12 +23,14 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
     <div>
       <h2
         id="about-heading"
-        class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-4"
+        class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] lg:text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-4"
       >
         {about.title}
       </h2>
 
-      <div class="space-y-3 text-sm leading-relaxed">
+      <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="hidden lg:block w-48 my-4 mx-auto"/>
+
+      <div class="space-y-3 lg:space-y-4 text-sm lg:text-base leading-relaxed">
         {about.body.map((paragraph) => (
           <p>{paragraph}</p>
         ))}
@@ -35,7 +38,7 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
         {about.expandedBody && about.expandedBody.length > 0 && (
           <div
             id="about-expanded"
-            class="about-expanded space-y-3 overflow-hidden transition-all duration-500 ease-out"
+            class="about-expanded space-y-3 lg:space-y-4 overflow-hidden transition-all duration-500 ease-out"
             style="max-height: 0; opacity: 0;"
           >
             {about.expandedBody.map((paragraph) => (
@@ -49,7 +52,7 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
         <button
           type="button"
           id="about-toggle"
-          class="mt-4 font-mono-bold text-xs uppercase tracking-wide underline underline-offset-4 hover:no-underline focus:no-underline transition-colors"
+          class="mt-4 font-mono-bold text-xs lg:text-sm uppercase tracking-wide underline underline-offset-4 hover:no-underline focus:no-underline transition-colors"
           aria-expanded="false"
           aria-controls="about-expanded"
         >
@@ -58,11 +61,12 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
       )}
 
       {about.cta && (
-        <div class="mt-4">
+        <div class="mt-4 lg:mt-6">
           <Button
             href={about.cta.href}
             variant="outline"
             size="sm"
+            class="lg:!py-2 lg:!px-4"
             ariaLabel={about.cta.ariaLabel}
           >
             {about.cta.label}
@@ -84,13 +88,11 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
       const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
 
       if (isExpanded) {
-        // Collapse
         expanded.style.maxHeight = '0';
         expanded.style.opacity = '0';
         toggle.setAttribute('aria-expanded', 'false');
         toggle.textContent = 'Read more';
       } else {
-        // Expand
         expanded.style.maxHeight = expanded.scrollHeight + 'px';
         expanded.style.opacity = '1';
         toggle.setAttribute('aria-expanded', 'true');

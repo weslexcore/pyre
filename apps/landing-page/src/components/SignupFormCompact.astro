@@ -1,6 +1,7 @@
 ---
 import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
 
 const subscribed =
   Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
@@ -19,7 +20,8 @@ const subscribed =
     >
       {signupForm.elements.title}
     </h2>
-    <p class="text-base opacity-80 mb-6">{signupForm.elements.subtitle}</p>
+    <p class="text-base opacity-80">{signupForm.elements.subtitle}</p>
+    <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
 
     {subscribed && (
       <div role="status" class="mb-4 rounded-md border border-green-700/30 bg-green-800/20 p-3 text-sm">

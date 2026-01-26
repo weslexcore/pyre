@@ -1,0 +1,77 @@
+---
+import sessions from '../lib/sessions';
+import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
+---
+
+<section id="sessions" aria-labelledby="sessions-heading" class="py-16 md:py-24 lg:py-0 px-4 lg:px-0">
+  <div class="max-w-3xl mx-auto lg:max-w-none">
+    <div class="text-center mb-6 lg:mb-6">
+      <h2
+        id="sessions-heading"
+        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] lg:text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3 lg:mb-3"
+      >
+        {sessions.title}
+      </h2>
+      {sessions.subtitle && (
+        <p class="text-lg lg:text-base opacity-80">{sessions.subtitle}</p>
+      )}
+      {sessions.note && (
+        <p class="text-xs md:text-sm opacity-60 mt-2 italic">{sessions.note}</p>
+      )}
+    </div>
+    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true}/>
+
+    <div class="space-y-4 lg:space-y-3">
+      {sessions.items.map((item) => (
+        <div
+          class={`session-item flex items-center justify-between p-5 lg:p-4 border rounded-lg transition-all duration-300 ${
+            item.highlighted
+              ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
+              : 'border-current/20 hover:border-current/40'
+          }`}
+        >
+          <div>
+            <h3 class={`font-mono-bold text-lg lg:text-base uppercase tracking-wide ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+              {item.name}
+            </h3>
+            <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class={`font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+              ${item.price}
+            </div>
+            {item.href && (
+              <a
+                href={item.href}
+                class={`px-4 py-2 text-sm font-mono-bold uppercase tracking-wide rounded transition-all duration-300 ${
+                  item.highlighted
+                    ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'
+                    : 'bg-current/10 hover:bg-current/20 border border-current/30'
+                }`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Buy
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- {sessions.cta && (
+      <div class="mt-8 lg:mt-6 text-center lg:text-left">
+        <Button
+          href={sessions.cta.href}
+          variant="primary"
+          size="lg"
+          class="lg:!py-2.5 lg:!px-5 lg:!text-sm"
+          ariaLabel={sessions.cta.ariaLabel}
+        >
+          {sessions.cta.label}
+        </Button>
+      </div>
+    )} -->
+  </div>
+</section>

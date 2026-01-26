@@ -1,15 +1,18 @@
 ---
 import faqs from '../lib/faqs';
+import SectionDivider from './SectionDivider.astro';
 ---
 
 <section aria-labelledby="faq-heading" class="py-16 md:py-24 px-4">
   <div class="max-w-3xl mx-auto">
     <h2
       id="faq-heading"
-      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-12 text-center"
+      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase text-center"
     >
       {faqs.title}
     </h2>
+
+    <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4"/>
 
     <div class="faq-list space-y-4">
       {faqs.items.map((faq, index) => (

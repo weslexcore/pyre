@@ -1,6 +1,7 @@
 ---
 import { getEventsContent } from '../lib/events';
 import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
 
 const events = await getEventsContent();
 ---
@@ -16,6 +17,7 @@ const events = await getEventsContent();
     {events.subtitle && (
       <p class="text-base opacity-80">{events.subtitle}</p>
     )}
+    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true}/>
   </div>
 
   <!-- Horizontal scrolling events carousel -->
