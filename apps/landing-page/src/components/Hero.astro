@@ -10,10 +10,10 @@ import HeroCarousel from './HeroCarousel.astro';
   <div class="flex flex-col justify-between p-6 md:p-10 min-h-[80dvh]">
     <!-- Location Name -->
     <div class="pt-16">
-      <h1 class="font-primary-semibold text-[clamp(4rem,10vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase">
+      <h1 class="font-logo text-[clamp(4rem,10vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase text-[var(--pyre-creme)]">
         {location.name}
       </h1>
-      <p class="text-base md:text-lg text-[var(--pyre-sage)]">{location.neighborhood}</p>
+      <p class="text-base md:text-lg text-[var(--pyre-gold)]">{location.neighborhood}</p>
     </div>
 
     <!-- Tagline -->
@@ -71,9 +71,10 @@ import HeroCarousel from './HeroCarousel.astro';
     <!-- Left: Location Info -->
     <div class="flex flex-col justify-between p-12">
       <div class="pt-20">
-        <h1 class="font-primary-semibold text-[clamp(4rem,10vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase">
+        <h1 class="font-logo text-[clamp(4rem,10vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase text-[var(--pyre-creme)]">
           {location.name}
         </h1>
+        <p class="text-base md:text-lg text-[var(--pyre-gold)]">{location.neighborhood}</p>
       </div>
 
       <div>
