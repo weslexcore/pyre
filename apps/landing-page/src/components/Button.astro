@@ -8,7 +8,7 @@ const {
   class: extraClass = '',
   ...restProps
 } = Astro.props as {
-  variant?: 'primary' | 'secondary' | 'outline';
+  variant?: 'primary' | 'secondary' | 'outline' | 'cta';
   size?: 'sm' | 'md' | 'lg';
   href?: string;
   type?: 'button' | 'submit';
@@ -32,11 +32,13 @@ const sizeClasses =
       : 'px-4 py-2 text-base';
 
 const variantClasses =
-  variant === 'secondary'
-    ? 'border-2 border-transparent bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90'
-    : variant === 'outline'
-      ? 'border-2 border-[var(--primary-foreground)] text-[var(--primary-foreground)] bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]'
-      : 'border-2 border-transparent bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90';
+  variant === 'cta'
+    ? 'btn-cta-animated text-[var(--pyre-creme)]'
+    : variant === 'secondary'
+      ? 'border-2 border-transparent bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90'
+      : variant === 'outline'
+        ? 'border-2 border-[var(--primary-foreground)] text-[var(--primary-foreground)] bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]'
+        : 'border-2 border-transparent bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90';
 
 const allClasses = [baseClasses.join(' '), sizeClasses, variantClasses, extraClass]
   .filter(Boolean)

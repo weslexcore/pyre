@@ -32,7 +32,7 @@ import Layout from '../layouts/main.astro';
       <Hero />
 
       <!-- Layer 2: Sticky image (z-10) - starts at 80dvh, scrolls up and locks at top -->
-      <div class="sticky top-0 z-10 h-[100dvh]">
+      <div class="sticky top-0 z-10 h-[100dvh] hero-wave-mask">
         <HeroCarousel />
       </div>
 
@@ -115,3 +115,16 @@ import Layout from '../layouts/main.astro';
     <Footer />
   </div>
 </Layout>
+
+<style>
+  /* Wavy top edge mask for mobile hero image */
+  .hero-wave-mask {
+    --wave-svg: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' preserveAspectRatio='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,3 C12.5,1 25,5 37.5,3 C50,1 62.5,5 75,3 C87.5,1 100,5 100,3 L100,100 L0,100 Z' fill='white'/%3E%3C/svg%3E");
+    -webkit-mask-image: var(--wave-svg);
+    mask-image: var(--wave-svg);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+</style>

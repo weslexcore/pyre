@@ -269,3 +269,59 @@
 }
 
 /* Removed element-specific hero utilities in favor of Tailwind utilities inline */
+
+/* Animated Gradient Border for CTA Button */
+@keyframes gradient-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.btn-cta-animated {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--pyre-black);
+  border: none;
+  isolation: isolate;
+}
+
+.btn-cta-animated::before {
+  content: '';
+  position: absolute;
+  z-index: -2;
+  left: -50%;
+  top: -150%;
+  width: 200%;
+  height: 400%;
+  background: conic-gradient(
+    from 0deg,
+    var(--pyre-red),
+    var(--pyre-gold),
+    var(--pyre-sage),
+    var(--pyre-sky),
+    var(--pyre-blue),
+    var(--pyre-red)
+  );
+  animation: gradient-rotate 2s linear infinite;
+}
+
+.btn-cta-animated::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 2px;
+  background: var(--pyre-black);
+  border-radius: calc(var(--radius) - 2px);
+}
+
+/* Accessibility: Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .btn-cta-animated::before {
+    animation: none;
+  }
+}
+
+/* Hover: Speed up animation */
+.btn-cta-animated:hover::before {
+  animation-duration: 3s;
+}

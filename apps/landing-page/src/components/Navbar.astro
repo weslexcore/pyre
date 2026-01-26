@@ -41,7 +41,7 @@ import Button from './Button.astro';
     <div class="hidden md:flex items-center gap-3">
       <Button
         href={navbar.actions?.secondary?.href}
-        variant="primary"
+        variant="cta"
         size="sm"
         ariaLabel={navbar.actions?.secondary?.ariaLabel}
         class="book-cta"
@@ -50,6 +50,19 @@ import Button from './Button.astro';
         {navbar.actions?.secondary?.label}
       </Button>
     </div>
+
+    <!-- Mobile CTA + menu button -->
+    <div class="flex md:hidden items-center gap-2">
+      <Button
+        href={navbar.actions?.secondary?.href}
+        variant="cta"
+        size="sm"
+        ariaLabel={navbar.actions?.secondary?.ariaLabel}
+        class="book-cta"
+        data-placement="header_mobile"
+      >
+        {navbar.actions?.secondary?.label}
+      </Button>
 
     <!-- Mobile menu button -->
     <button
@@ -68,6 +81,7 @@ import Button from './Button.astro';
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
       </svg>
     </button>
+    </div>
   </div>
 
   <!-- Mobile menu -->
@@ -89,7 +103,7 @@ import Button from './Button.astro';
       <div class="pt-3 border-t border-[var(--pyre-creme)]/10">
         <Button
           href={navbar.actions?.secondary?.href}
-          variant="primary"
+          variant="cta"
           size="sm"
           ariaLabel={navbar.actions?.secondary?.ariaLabel}
           class="w-full book-cta"
