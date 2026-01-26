@@ -132,12 +132,17 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 			injectSpeedInsights();
 		</script>
 		<script>
-			// Handle scroll to hash after view transitions
+			// Disable browser's automatic scroll restoration - we handle it ourselves
+			if ('scrollRestoration' in history) {
+				history.scrollRestoration = 'manual';
+			}
+
+			// Handle scroll to hash
 			function scrollToTarget(hash: string) {
 				try {
 					const target = document.querySelector(hash);
 					if (target) {
-						target.scrollIntoView({ behavior: 'smooth' });
+						target.scrollIntoView({ behavior: 'instant' });
 						return true;
 					}
 				} catch {
@@ -146,41 +151,34 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 				return false;
 			}
 
-			// Track pending hash navigation
+			// Track pending hash
 			let pendingHash: string | null = null;
 
-			// Before view transition starts, store the target hash
+			// Before view transition starts, store the hash
 			document.addEventListener('astro:before-preparation', (event) => {
-				const url = new URL((event as any).to);
+				const e = event as any;
+				const url = new URL(e.to);
 				pendingHash = url.hash || null;
 			});
 
-			// After DOM swap, immediately scroll to position (before animation starts)
-			// This sets the scroll position before View Transitions animates
-			document.addEventListener('astro:after-swap', () => {
-				const hash = pendingHash || window.location.hash;
-				if (hash) {
-					try {
-						const target = document.querySelector(hash);
-						if (target) {
-							// Instant scroll to position before animation
-							target.scrollIntoView({ behavior: 'instant' });
-						}
-					} catch {
-						// Invalid selector
-					}
+			// Before swap, scroll to top so the new page starts at top
+			// (View Transitions will animate from current scroll position otherwise)
+			document.addEventListener('astro:before-swap', () => {
+				if (pendingHash) {
+					// We'll scroll to hash after swap, start at top for clean transition
+					window.scrollTo({ top: 0, behavior: 'instant' });
 				}
 			});
 
-			// After page load completes, do smooth scroll if needed (handles any adjustments)
-			document.addEventListener('astro:page-load', () => {
+			// After DOM swap (new page is in DOM), scroll to target
+			document.addEventListener('astro:after-swap', () => {
 				const hash = pendingHash || window.location.hash;
 				pendingHash = null;
 
 				if (hash) {
-					// Small delay then smooth scroll to final position
-					// This handles cases where instant scroll was slightly off
-					setTimeout(() => scrollToTarget(hash), 50);
+					scrollToTarget(hash);
+				} else {
+					window.scrollTo({ top: 0, behavior: 'instant' });
 				}
 			});
 		</script>
