@@ -1,7 +1,7 @@
 import type { EventsContent } from './types';
-import { getEventsContentFromMomence } from './momence';
 
-// Fallback events used when Momence API is unavailable
+// Static fallback events content for SSG/SEO and loading states
+// Events are fetched at runtime via /api/events endpoint
 const fallbackEvents: EventsContent = {
   title: 'Upcoming Events',
   subtitle: 'Join our community gatherings',
@@ -13,13 +13,7 @@ const fallbackEvents: EventsContent = {
   },
 };
 
-/**
- * Async function to get events content
- * Fetches from Momence API at build time, falls back to static events on error
- */
-export async function getEventsContent(): Promise<EventsContent> {
-  return getEventsContentFromMomence(fallbackEvents);
-}
-
-// Default export for backward compatibility
 export default fallbackEvents;
+
+// Named export for backward compatibility
+export { fallbackEvents };

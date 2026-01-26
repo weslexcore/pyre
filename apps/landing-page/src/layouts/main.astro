@@ -1,4 +1,5 @@
 ---
+import { ViewTransitions } from "astro:transitions";
 import "../styles/global.css";
 import fontRegularWoff2 from "../assets/fonts/PPNeueMontreal-Regular.woff2";
 import fontSemiBoldWoff2 from "../assets/fonts/PPNeueMontreal-SemiBold.woff2";
@@ -124,10 +125,64 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		)}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
+		<ViewTransitions />
 		<PostHog />
 		<script type="module">
 			import { injectSpeedInsights } from '@vercel/speed-insights';
 			injectSpeedInsights();
+		</script>
+		<script>
+			// Handle scroll to hash after view transitions
+			function scrollToTarget(hash: string) {
+				try {
+					const target = document.querySelector(hash);
+					if (target) {
+						target.scrollIntoView({ behavior: 'smooth' });
+						return true;
+					}
+				} catch {
+					// Invalid selector, ignore
+				}
+				return false;
+			}
+
+			// Track pending hash navigation
+			let pendingHash: string | null = null;
+
+			// Before view transition starts, store the target hash
+			document.addEventListener('astro:before-preparation', (event) => {
+				const url = new URL((event as any).to);
+				pendingHash = url.hash || null;
+			});
+
+			// After DOM swap, immediately scroll to position (before animation starts)
+			// This sets the scroll position before View Transitions animates
+			document.addEventListener('astro:after-swap', () => {
+				const hash = pendingHash || window.location.hash;
+				if (hash) {
+					try {
+						const target = document.querySelector(hash);
+						if (target) {
+							// Instant scroll to position before animation
+							target.scrollIntoView({ behavior: 'instant' });
+						}
+					} catch {
+						// Invalid selector
+					}
+				}
+			});
+
+			// After page load completes, do smooth scroll if needed (handles any adjustments)
+			document.addEventListener('astro:page-load', () => {
+				const hash = pendingHash || window.location.hash;
+				pendingHash = null;
+
+				if (hash) {
+					// Small delay then smooth scroll to final position
+					// This handles cases where instant scroll was slightly off
+					setTimeout(() => scrollToTarget(hash), 50);
+				}
+			});
 		</script>
 	</head>
     <body class="min-h-screen flex flex-col">

@@ -125,56 +125,74 @@ const variantClasses = {
 </style>
 
 <script>
-  // Handle visibility based on scroll position (no longer driving animation)
-  const overlays = document.querySelectorAll('[data-scroll-gradient]');
-  // Select the main page footer (direct child of body) to avoid selecting hidden mobile footer
-  const footer = document.querySelector('body > footer');
+  (function() {
+    let cleanup: (() => void) | null = null;
 
-  // Check if footer is actually visible (not display: none)
-  const isFooterVisible = () => {
-    if (!footer) return false;
-    return footer.offsetParent !== null || getComputedStyle(footer).display !== 'none';
-  };
+    function initScrollGradient() {
+      // Clean up previous listeners
+      if (cleanup) {
+        cleanup();
+      }
 
-  if (overlays.length > 0) {
-    let rafId: number | null = null;
+      const overlays = document.querySelectorAll('[data-scroll-gradient]');
+      const footer = document.querySelector('body > footer');
 
-    const updateVisibility = () => {
-      // Calculate if we've scrolled past the hero section (roughly first viewport)
-      const scrolledPastHero = window.scrollY > window.innerHeight * 0.8;
+      const isFooterVisible = () => {
+        if (!footer) return false;
+        return footer.offsetParent !== null || getComputedStyle(footer).display !== 'none';
+      };
 
-      // Calculate if footer is coming into view (only if visible)
-      const footerTop = isFooterVisible() ? footer!.getBoundingClientRect().top : Infinity;
-      const footerApproaching = footerTop < window.innerHeight;
+      if (overlays.length > 0) {
+        let rafId: number | null = null;
 
-      overlays.forEach((overlay) => {
-        const el = overlay as HTMLElement;
+        const updateVisibility = () => {
+          const scrolledPastHero = window.scrollY > window.innerHeight * 0.8;
+          const footerTop = isFooterVisible() ? footer!.getBoundingClientRect().top : Infinity;
+          const footerApproaching = footerTop < window.innerHeight;
 
-        // Hide hero-mobile variant once scrolled past hero area
-        if (el.dataset.variant === 'hero-mobile') {
-          el.style.opacity = scrolledPastHero ? '0' : '.3';
+          overlays.forEach((overlay) => {
+            const el = overlay as HTMLElement;
+
+            if (el.dataset.variant === 'hero-mobile') {
+              el.style.opacity = scrolledPastHero ? '0' : '.3';
+            }
+
+            if (el.dataset.variant === 'hero-desktop') {
+              el.style.opacity = footerApproaching ? '0' : '';
+            }
+          });
+          rafId = null;
+        };
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (!prefersReducedMotion) {
+          const handleScroll = () => {
+            if (rafId) return;
+            rafId = requestAnimationFrame(updateVisibility);
+          };
+
+          window.addEventListener('scroll', handleScroll, { passive: true });
+          updateVisibility();
+
+          cleanup = () => {
+            window.removeEventListener('scroll', handleScroll);
+          };
+        } else {
+          cleanup = () => {};
         }
-
-        // Hide hero-desktop variant when footer approaches
-        // Use '' to let CSS opacity (0.7) take over when visible
-        if (el.dataset.variant === 'hero-desktop') {
-          el.style.opacity = footerApproaching ? '0' : '';
-        }
-      });
-      rafId = null;
-    };
-
-    // Check for reduced motion preference
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    if (!prefersReducedMotion) {
-      window.addEventListener('scroll', () => {
-        if (rafId) return;
-        rafId = requestAnimationFrame(updateVisibility);
-      }, { passive: true });
-
-      // Initial update
-      updateVisibility();
+      } else {
+        cleanup = () => {};
+      }
     }
-  }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initScrollGradient, { once: true });
+    } else {
+      initScrollGradient();
+    }
+
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', initScrollGradient);
+  })();
 </script>

@@ -39,13 +39,22 @@ import breakSection from '../lib/breakSection';
     </div>
   </div>
   <script>
-    const words = ['RECONNECT', 'BE PRESENT', 'CULTIVATE JOY','DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'];
-    const intervalMs = 2000;
     (function () {
-        const rotatingSpan = document.getElementById('break-rotating-word');
-        if (!(rotatingSpan instanceof HTMLElement)) return;
+      const words = ['RECONNECT', 'BE PRESENT', 'CULTIVATE JOY','DISCONNECT', 'MAKE A FRIEND', 'BREATHE', 'HEAL'];
+      const intervalMs = 2000;
+      let cleanup: (() => void) | null = null;
 
-        // Add fade transition styles to the span
+      function initBreakSection() {
+        if (cleanup) {
+          cleanup();
+        }
+
+        const rotatingSpan = document.getElementById('break-rotating-word');
+        if (!(rotatingSpan instanceof HTMLElement)) {
+          cleanup = () => {};
+          return;
+        }
+
         rotatingSpan.style.transition = 'opacity 350ms cubic-bezier(0.4,0,0.2,1)';
         rotatingSpan.style.opacity = '1';
 
@@ -53,16 +62,13 @@ import breakSection from '../lib/breakSection';
         const INTERVAL_MS = intervalMs;
 
         let currentIndex = 0;
-        let timerId = null;
-        const FADE_DURATION = 350; // ms, must match transition above
+        let timerId: number | null = null;
+        const FADE_DURATION = 350;
 
-        // Helper to set word with fade out/in
-        function fadeToWord(nextWord) {
-          // Fade out
+        function fadeToWord(nextWord: string) {
           rotatingSpan.style.opacity = '0';
           setTimeout(() => {
             rotatingSpan.textContent = nextWord;
-            // Fade in
             rotatingSpan.style.opacity = '1';
           }, FADE_DURATION);
         }
@@ -80,7 +86,6 @@ import breakSection from '../lib/breakSection';
         const start = () => {
           if (timerId !== null) return;
           timerId = window.setInterval(() => {
-            // Fade out, then update, then fade in
             currentIndex = (currentIndex + 1) % WORDS.length;
             updateWord(true);
           }, INTERVAL_MS);
@@ -93,25 +98,43 @@ import breakSection from '../lib/breakSection';
           }
         };
 
-        // Initial render
         updateWord(false);
+
+        const handleVisibilityChange = () => {
+          if (document.hidden) {
+            stop();
+          } else {
+            start();
+          }
+        };
+
+        const handleBeforeUnload = () => {
+          stop();
+        };
 
         if (WORDS.length > 1) {
           start();
-
-          document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-              stop();
-            } else {
-              start();
-            }
-          });
+          document.addEventListener('visibilitychange', handleVisibilityChange);
         }
 
-        window.addEventListener('beforeunload', () => {
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        cleanup = () => {
           stop();
-        });
-      })();
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBreakSection, { once: true });
+      } else {
+        initBreakSection();
+      }
+
+      // Re-initialize after view transitions
+      document.addEventListener('astro:page-load', initBreakSection);
+    })();
   </script>
 </section>
 

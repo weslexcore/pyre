@@ -1,0 +1,248 @@
+// React carousel component for dynamically loaded events
+// Used as an Astro island with client:load directive
+
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { useEvents } from '@/hooks/useEvents';
+import type { EventItem } from '@/lib/types';
+
+type CarouselVariant = 'default' | 'compact';
+
+interface EventsCarouselProps {
+  fallback?: EventItem[];
+  variant?: CarouselVariant;
+}
+
+const variantStyles = {
+  default: {
+    card: 'w-[280px] md:w-[320px] bg-[var(--background)]',
+    arrow: 'bg-[var(--background)]',
+    container: '-mx-4 px-4 md:-mx-8 md:px-8',
+    gap: 'gap-4 md:gap-6',
+    cardWidth: 320 + 24,
+  },
+  compact: {
+    card: 'w-[280px] md:w-[300px] bg-[var(--pyre-black)]',
+    arrow: 'bg-[var(--pyre-black)]',
+    container: '-mx-4 px-4 md:-mx-6 md:px-6',
+    gap: 'gap-4',
+    cardWidth: 300 + 16,
+  },
+};
+
+function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant }) {
+  const styles = variantStyles[variant];
+  return (
+    <div className={`flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse`}>
+      <div className="p-5">
+        <div className="mb-4">
+          <div className="h-6 w-24 bg-current/10 rounded" />
+        </div>
+        <div className="h-6 w-full bg-current/10 rounded mb-2" />
+        <div className="h-4 w-3/4 bg-current/10 rounded mb-4" />
+        <div className="space-y-2 mb-4">
+          <div className="h-4 w-32 bg-current/10 rounded" />
+          <div className="h-4 w-28 bg-current/10 rounded" />
+        </div>
+        <div className="h-10 w-full bg-current/10 rounded" />
+      </div>
+    </div>
+  );
+}
+
+function EventCard({ event, variant = 'default' }: { event: EventItem; variant?: CarouselVariant }) {
+  const styles = variantStyles[variant];
+  return (
+    <article className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}>
+      <div className="p-5">
+        <div className="mb-4">
+          <span className="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
+            {event.date}
+          </span>
+        </div>
+
+        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">
+          {event.title}
+        </h3>
+
+        <p className="text-sm opacity-70 mb-4 line-clamp-2">{event.description}</p>
+
+        <div className="space-y-1 text-sm opacity-70 mb-4">
+          <div className="flex items-center gap-2">
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>{event.time}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            <span>{event.location}</span>
+          </div>
+        </div>
+
+        {event.cta && (
+          <a
+            href={event.cta.href}
+            aria-label={event.cta.ariaLabel}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+          >
+            {event.cta.label}
+          </a>
+        )}
+      </div>
+    </article>
+  );
+}
+
+export default function EventsCarousel({ fallback = [], variant = 'default' }: EventsCarouselProps) {
+  const { events, loading } = useEvents(fallback);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const styles = variantStyles[variant];
+
+  const updateArrows = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = container;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+  }, []);
+
+  const scroll = useCallback((direction: number) => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    container.scrollBy({
+      left: direction * styles.cardWidth,
+      behavior: 'smooth',
+    });
+  }, [styles.cardWidth]);
+
+  useEffect(() => {
+    updateArrows();
+    window.addEventListener('resize', updateArrows, { passive: true });
+    return () => window.removeEventListener('resize', updateArrows);
+  }, [updateArrows]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: events triggers arrow update when loaded
+  useEffect(() => {
+    updateArrows();
+  }, [events, updateArrows]);
+
+  const displayEvents = events.length > 0 ? events : fallback;
+
+  return (
+    <div className="events-wrapper relative">
+      {/* Left scroll arrow */}
+      <button
+        type="button"
+        onClick={() => scroll(-1)}
+        className={`absolute left-0 md:-left-6 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center ${styles.arrow} border border-current/20 rounded-full shadow-lg transition-all duration-300 hover:border-current/40 hover:scale-110 ${
+          canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-label="Scroll left"
+      >
+        <svg
+          className="w-5 h-5 md:w-6 md:h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+      </button>
+
+      {/* Right scroll arrow */}
+      <button
+        type="button"
+        onClick={() => scroll(1)}
+        className={`absolute right-0 md:-right-6 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center ${styles.arrow} border border-current/20 rounded-full shadow-lg transition-all duration-300 hover:border-current/40 hover:scale-110 ${
+          canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-label="Scroll right"
+      >
+        <svg
+          className="w-5 h-5 md:w-6 md:h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
+      </button>
+
+      <div className={`events-container ${styles.container}`}>
+        <div
+          ref={scrollRef}
+          onScroll={updateArrows}
+          className={`events-scroll flex ${styles.gap} overflow-x-auto snap-x snap-mandatory pb-4`}
+          style={{
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {loading
+            ? // Show skeletons while loading
+              Array.from({ length: 4 }).map((_, i) => (
+                <EventCardSkeleton key={`skeleton-${i}`} variant={variant} />
+              ))
+            : // Show events
+              displayEvents.map((event) => (
+                <EventCard key={event.id} event={event} variant={variant} />
+              ))}
+        </div>
+      </div>
+
+      <style>{`
+        .events-scroll::-webkit-scrollbar {
+          display: none;
+        }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
+    </div>
+  );
+}

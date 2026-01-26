@@ -61,52 +61,75 @@ import SectionDivider from './SectionDivider.astro';
 </style>
 
 <script>
-  function initFAQAccordion() {
-    const faqItems = document.querySelectorAll('.faq-item');
+  (function() {
+    let cleanup: (() => void) | null = null;
 
-    faqItems.forEach((item) => {
-      const trigger = item.querySelector('.faq-trigger') as HTMLButtonElement;
-      const content = item.querySelector('.faq-content') as HTMLElement;
+    function initFAQAccordion() {
+      // Clean up previous listeners
+      if (cleanup) {
+        cleanup();
+      }
 
-      if (!trigger || !content) return;
+      const faqItems = document.querySelectorAll('.faq-item');
+      const listeners: Array<{ el: Element; type: string; fn: EventListener }> = [];
 
-      trigger.addEventListener('click', () => {
-        const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+      faqItems.forEach((item) => {
+        const trigger = item.querySelector('.faq-trigger') as HTMLButtonElement;
+        const content = item.querySelector('.faq-content') as HTMLElement;
 
-        // Close all other items
-        faqItems.forEach((otherItem) => {
-          const otherTrigger = otherItem.querySelector('.faq-trigger') as HTMLButtonElement;
-          const otherContent = otherItem.querySelector('.faq-content') as HTMLElement;
+        if (!trigger || !content) return;
 
-          if (otherTrigger && otherContent && otherItem !== item) {
-            otherTrigger.setAttribute('aria-expanded', 'false');
-            otherContent.style.maxHeight = '0';
+        const handleClick = () => {
+          const isExpanded = trigger.getAttribute('aria-expanded') === 'true';
+
+          // Close all other items
+          faqItems.forEach((otherItem) => {
+            const otherTrigger = otherItem.querySelector('.faq-trigger') as HTMLButtonElement;
+            const otherContent = otherItem.querySelector('.faq-content') as HTMLElement;
+
+            if (otherTrigger && otherContent && otherItem !== item) {
+              otherTrigger.setAttribute('aria-expanded', 'false');
+              otherContent.style.maxHeight = '0';
+            }
+          });
+
+          // Toggle current item
+          if (isExpanded) {
+            trigger.setAttribute('aria-expanded', 'false');
+            content.style.maxHeight = '0';
+          } else {
+            trigger.setAttribute('aria-expanded', 'true');
+            content.style.maxHeight = content.scrollHeight + 'px';
           }
+        };
+
+        const handleKeydown = (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            trigger.click();
+          }
+        };
+
+        trigger.addEventListener('click', handleClick);
+        trigger.addEventListener('keydown', handleKeydown as EventListener);
+        listeners.push({ el: trigger, type: 'click', fn: handleClick });
+        listeners.push({ el: trigger, type: 'keydown', fn: handleKeydown as EventListener });
+      });
+
+      cleanup = () => {
+        listeners.forEach(({ el, type, fn }) => {
+          el.removeEventListener(type, fn);
         });
+      };
+    }
 
-        // Toggle current item
-        if (isExpanded) {
-          trigger.setAttribute('aria-expanded', 'false');
-          content.style.maxHeight = '0';
-        } else {
-          trigger.setAttribute('aria-expanded', 'true');
-          content.style.maxHeight = content.scrollHeight + 'px';
-        }
-      });
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initFAQAccordion, { once: true });
+    } else {
+      initFAQAccordion();
+    }
 
-      // Keyboard navigation
-      trigger.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          trigger.click();
-        }
-      });
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initFAQAccordion, { once: true });
-  } else {
-    initFAQAccordion();
-  }
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', initFAQAccordion);
+  })();
 </script>

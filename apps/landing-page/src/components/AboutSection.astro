@@ -78,32 +78,51 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
 </section>
 
 <script>
-  function initAboutToggle() {
-    const toggle = document.getElementById('about-toggle');
-    const expanded = document.getElementById('about-expanded');
+  (function() {
+    let cleanup: (() => void) | null = null;
 
-    if (!toggle || !expanded) return;
-
-    toggle.addEventListener('click', () => {
-      const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-
-      if (isExpanded) {
-        expanded.style.maxHeight = '0';
-        expanded.style.opacity = '0';
-        toggle.setAttribute('aria-expanded', 'false');
-        toggle.textContent = 'Read more';
-      } else {
-        expanded.style.maxHeight = expanded.scrollHeight + 'px';
-        expanded.style.opacity = '1';
-        toggle.setAttribute('aria-expanded', 'true');
-        toggle.textContent = 'Read less';
+    function initAboutToggle() {
+      if (cleanup) {
+        cleanup();
       }
-    });
-  }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAboutToggle, { once: true });
-  } else {
-    initAboutToggle();
-  }
+      const toggle = document.getElementById('about-toggle');
+      const expanded = document.getElementById('about-expanded');
+
+      if (!toggle || !expanded) {
+        cleanup = () => {};
+        return;
+      }
+
+      const handleClick = () => {
+        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+          expanded.style.maxHeight = '0';
+          expanded.style.opacity = '0';
+          toggle.setAttribute('aria-expanded', 'false');
+          toggle.textContent = 'Read more';
+        } else {
+          expanded.style.maxHeight = expanded.scrollHeight + 'px';
+          expanded.style.opacity = '1';
+          toggle.setAttribute('aria-expanded', 'true');
+          toggle.textContent = 'Read less';
+        }
+      };
+
+      toggle.addEventListener('click', handleClick);
+      cleanup = () => {
+        toggle.removeEventListener('click', handleClick);
+      };
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAboutToggle, { once: true });
+    } else {
+      initAboutToggle();
+    }
+
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', initAboutToggle);
+  })();
 </script>

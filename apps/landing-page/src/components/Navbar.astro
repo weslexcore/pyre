@@ -257,13 +257,16 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 
 <script>
   (function () {
+    // Track cleanup functions for event listeners
+    let cleanup: (() => void) | null = null;
+
     function setupMobileMenu() {
       const menuButton = document.getElementById('mobile-menu-button');
       const mobileMenu = document.getElementById('mobile-menu');
       const hamburgerIcon = document.getElementById('hamburger-icon');
       const closeIcon = document.getElementById('close-icon');
 
-      if (!menuButton || !mobileMenu || !hamburgerIcon || !closeIcon) return;
+      if (!menuButton || !mobileMenu || !hamburgerIcon || !closeIcon) return () => {};
 
       function toggleMenu(shouldOpen: boolean) {
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
@@ -285,34 +288,46 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
         }
       }
 
-      menuButton.addEventListener('click', () => {
+      const handleMenuClick = () => {
         const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
         toggleMenu(!isExpanded);
-      });
+      };
 
-      // Close menu when clicking outside
-      document.addEventListener('click', (event) => {
+      const handleOutsideClick = (event: MouseEvent) => {
         if (!menuButton.contains(event.target as Node) && !mobileMenu.contains(event.target as Node)) {
           const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
           if (isExpanded) {
             toggleMenu(false);
           }
         }
-      });
+      };
 
-      // Close menu when clicking a link
+      const handleLinkClick = () => {
+        toggleMenu(false);
+      };
+
+      menuButton.addEventListener('click', handleMenuClick);
+      document.addEventListener('click', handleOutsideClick);
+
       const menuLinks = mobileMenu.querySelectorAll('a');
       menuLinks.forEach((link) => {
-        link.addEventListener('click', () => {
-          toggleMenu(false);
-        });
+        link.addEventListener('click', handleLinkClick);
       });
+
+      // Return cleanup function
+      return () => {
+        menuButton.removeEventListener('click', handleMenuClick);
+        document.removeEventListener('click', handleOutsideClick);
+        menuLinks.forEach((link) => {
+          link.removeEventListener('click', handleLinkClick);
+        });
+      };
     }
 
     function setupScrollBehavior() {
       const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
       const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
-      if (!header) return;
+      if (!header) return () => {};
 
       const transparentNav = header.dataset.transparentNav === 'true';
       let ticking = false;
@@ -321,10 +336,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
         const atTop = window.scrollY <= 10;
         header.setAttribute('data-at-top', atTop ? 'true' : 'false');
 
-        // Update mobile gradient visibility
         if (mobileGradient) {
-          // On transparent nav pages: show gradient only when scrolled (when dark bg is visible)
-          // On other pages: always show gradient (dark bg is always present)
           const showGradient = !transparentNav || !atTop;
           mobileGradient.style.opacity = showGradient ? '0.2' : '0';
         }
@@ -332,26 +344,45 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
         ticking = false;
       }
 
-      window.addEventListener('scroll', () => {
+      const handleScroll = () => {
         if (!ticking) {
           requestAnimationFrame(updateNavbar);
           ticking = true;
         }
-      }, { passive: true });
+      };
 
-      // Set initial state
+      window.addEventListener('scroll', handleScroll, { passive: true });
       updateNavbar();
+
+      // Return cleanup function
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+      };
     }
 
     function init() {
-      setupMobileMenu();
-      setupScrollBehavior();
+      // Clean up previous listeners before setting up new ones
+      if (cleanup) {
+        cleanup();
+      }
+
+      const cleanupMenu = setupMobileMenu();
+      const cleanupScroll = setupScrollBehavior();
+
+      cleanup = () => {
+        cleanupMenu();
+        cleanupScroll();
+      };
     }
 
+    // Run on initial page load
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init, { once: true });
     } else {
       init();
     }
+
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', init);
   })();
 </script>

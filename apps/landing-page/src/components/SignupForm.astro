@@ -74,216 +74,267 @@ const subscribed =
 </section>
 
 <script>
-  const form = document.querySelector('.signup-form') as HTMLFormElement | null;
-  if (form) {
-    const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
-    const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
-    const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
-    let formStartTime = Date.now();
-    let hasInteracted = false;
-    let mouseMoved = false;
-    let turnstileToken = '';
+  (function() {
+    let cleanup: (() => void) | null = null;
+    let turnstileWidgetId: string | null = null;
 
-    if (timestampField) {
-      timestampField.value = formStartTime.toString();
-    }
+    function initSignupForm() {
+      // Clean up previous listeners
+      if (cleanup) {
+        cleanup();
+      }
 
-    function initTurnstile() {
-      if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey) {
-        (window as any).turnstile.render('#turnstile-container', {
-          sitekey: turnstileConfig.siteKey,
-          theme: turnstileConfig.theme || 'auto',
-          size: turnstileConfig.size || 'normal',
-          callback: function(token: string) {
-            turnstileToken = token;
-            const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-            if (tokenInput) tokenInput.value = token;
-          },
-          'error-callback': function() {
-            turnstileToken = '';
-            const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-            if (tokenInput) tokenInput.value = '';
-          },
-          'expired-callback': function() {
-            turnstileToken = '';
-            const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-            if (tokenInput) tokenInput.value = '';
-          }
+      const form = document.querySelector('.signup-form') as HTMLFormElement | null;
+      if (!form) {
+        cleanup = () => {};
+        return;
+      }
+
+      const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+      const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
+      const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+      let formStartTime = Date.now();
+      let hasInteracted = false;
+      let mouseMoved = false;
+      let turnstileToken = '';
+      const cleanupFns: Array<() => void> = [];
+
+      if (timestampField) {
+        timestampField.value = formStartTime.toString();
+      }
+
+      function initTurnstile() {
+        const container = document.getElementById('turnstile-container');
+        if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey && container) {
+          // Clear container before rendering
+          container.innerHTML = '';
+          turnstileWidgetId = (window as any).turnstile.render(container, {
+            sitekey: turnstileConfig.siteKey,
+            theme: turnstileConfig.theme || 'auto',
+            size: turnstileConfig.size || 'normal',
+            callback: function(token: string) {
+              turnstileToken = token;
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) tokenInput.value = token;
+            },
+            'error-callback': function() {
+              turnstileToken = '';
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) tokenInput.value = '';
+            },
+            'expired-callback': function() {
+              turnstileToken = '';
+              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
+              if (tokenInput) tokenInput.value = '';
+            }
+          });
+        }
+      }
+
+      const handleLoad = () => initTurnstile();
+
+      if (typeof (window as any).turnstile !== 'undefined') {
+        initTurnstile();
+      } else {
+        window.addEventListener('load', handleLoad);
+        cleanupFns.push(() => window.removeEventListener('load', handleLoad));
+      }
+
+      const handleMouseMove = () => { mouseMoved = true; };
+      const handleFocusIn = () => { hasInteracted = true; };
+      const handleInput = () => { hasInteracted = true; };
+
+      if (antiSpamConfig.trackInteractions) {
+        document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+        form.addEventListener('focusin', handleFocusIn, { passive: true });
+        form.addEventListener('input', handleInput, { passive: true });
+        cleanupFns.push(() => {
+          document.removeEventListener('mousemove', handleMouseMove);
+          form.removeEventListener('focusin', handleFocusIn);
+          form.removeEventListener('input', handleInput);
         });
       }
-    }
 
-    if (typeof (window as any).turnstile !== 'undefined') {
-      initTurnstile();
-    } else {
-      window.addEventListener('load', initTurnstile);
-    }
+      const handleSubmit = async (event: SubmitEvent) => {
+        const emailInput = form.querySelector('#signup-email') as HTMLInputElement;
+        const errorEl = document.getElementById('signup-error');
+        const successEl = document.getElementById('signup-success');
 
-    if (antiSpamConfig.trackInteractions) {
-      document.addEventListener('mousemove', () => { mouseMoved = true; }, { once: true, passive: true });
-      form.addEventListener('focusin', () => { hasInteracted = true; }, { passive: true });
-      form.addEventListener('input', () => { hasInteracted = true; }, { passive: true });
-    }
+        if (!emailInput || !errorEl) return;
 
-    form.addEventListener('submit', async (event) => {
-      const emailInput = form.querySelector('#signup-email') as HTMLInputElement;
-      const errorEl = document.getElementById('signup-error');
-      const successEl = document.getElementById('signup-success');
+        errorEl.textContent = '';
+        if (successEl) {
+          successEl.textContent = '';
+          successEl.classList.add('hidden');
+        }
 
-      if (!emailInput || !errorEl) return;
+        const email = emailInput.value.trim();
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-      errorEl.textContent = '';
-      if (successEl) {
-        successEl.textContent = '';
-        successEl.classList.add('hidden');
-      }
+        if (!emailValid) {
+          event.preventDefault();
+          errorEl.textContent = 'Please enter a valid email.';
+          emailInput.focus();
+          return;
+        }
 
-      const email = emailInput.value.trim();
-      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-      if (!emailValid) {
-        event.preventDefault();
-        errorEl.textContent = 'Please enter a valid email.';
-        emailInput.focus();
-        return;
-      }
-
-      // Honeypot checks
-      const honeypotName = form.getAttribute('data-honeypot');
-      const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
-      if (honeypotInput && honeypotInput.value.trim() !== '') {
-        event.preventDefault();
-        return;
-      }
-
-      const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
-      const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
-      const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
-
-      if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
-        event.preventDefault();
-        return;
-      }
-
-      // Timestamp validation
-      const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
-      if (timestampInput) {
-        const submissionTime = Date.now();
-        const startTime = parseInt(timestampInput.value) || submissionTime;
-        const elapsedSeconds = (submissionTime - startTime) / 1000;
-        if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
+        const honeypotName = form.getAttribute('data-honeypot');
+        const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
+        if (honeypotInput && honeypotInput.value.trim() !== '') {
           event.preventDefault();
           return;
         }
-      }
 
-      if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
-        event.preventDefault();
-        return;
-      }
+        const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+        const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+        const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
 
-      if (turnstileConfig.siteKey && !turnstileToken) {
-        event.preventDefault();
-        errorEl.textContent = 'Please complete the security check.';
-        return;
-      }
+        if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
+          event.preventDefault();
+          return;
+        }
 
-      if (turnstileToken) {
-        try {
-          const verifyResponse = await fetch('/api/verify-turnstile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: turnstileToken }),
-          });
-          const verifyResult = await verifyResponse.json();
-          if (!verifyResult.success) {
+        const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+        if (timestampInput) {
+          const submissionTime = Date.now();
+          const startTime = parseInt(timestampInput.value) || submissionTime;
+          const elapsedSeconds = (submissionTime - startTime) / 1000;
+          if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
             event.preventDefault();
-            errorEl.textContent = 'Security verification failed. Please try again.';
-            if (typeof (window as any).turnstile !== 'undefined') {
-              (window as any).turnstile.reset();
-            }
-            turnstileToken = '';
             return;
           }
-        } catch {
+        }
+
+        if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
           event.preventDefault();
-          errorEl.textContent = 'Security verification failed. Please try again.';
           return;
         }
-      }
 
-      // JSONP submission
-      event.preventDefault();
-      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-      if (submitBtn) submitBtn.disabled = true;
-
-      try {
-        const action = form.getAttribute('action') || '';
-        const url = new URL(action);
-        url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
-        const params = new URLSearchParams(url.search);
-        params.set('u', params.get('u') || '');
-        params.set('id', params.get('id') || '');
-        if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
-        params.set('EMAIL', email);
-        const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
-        if (tagInput?.value) params.set('tags', tagInput.value);
-        const callbackName = '__mc_cb_' + Math.random().toString(36).slice(2);
-        params.set('c', callbackName);
-        const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
-
-        const script = document.createElement('script');
-        script.src = jsonpUrl;
-        script.async = true;
-
-        function cleanup() {
-          try { delete (window as any)[callbackName]; } catch {}
-          if (script.parentNode) script.parentNode.removeChild(script);
+        if (turnstileConfig.siteKey && !turnstileToken) {
+          event.preventDefault();
+          errorEl.textContent = 'Please complete the security check.';
+          return;
         }
 
-        (window as any)[callbackName] = function(response: any) {
-          cleanup();
-          if (response?.result === 'success') {
-            emailInput.value = '';
-            errorEl.textContent = '';
-            if (successEl) {
-              successEl.textContent = 'Thanks for subscribing!';
-              successEl.classList.remove('hidden');
+        if (turnstileToken) {
+          try {
+            const verifyResponse = await fetch('/api/verify-turnstile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: turnstileToken }),
+            });
+            const verifyResult = await verifyResponse.json();
+            if (!verifyResult.success) {
+              event.preventDefault();
+              errorEl.textContent = 'Security verification failed. Please try again.';
+              if (typeof (window as any).turnstile !== 'undefined') {
+                (window as any).turnstile.reset();
+              }
+              turnstileToken = '';
+              return;
             }
-            const urlObj = new URL(window.location.href);
-            urlObj.searchParams.set('subscribed', '1');
-            window.history.replaceState({}, '', urlObj.toString());
-
-            if ((window as any).posthog) {
-              (window as any).posthog.identify(email);
-              (window as any).posthog.people.set({
-                email: email,
-                signup_source: 'mailing_list',
-                signup_date: new Date().toISOString()
-              });
-              (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
-            }
-          } else if (response?.msg) {
-            if (successEl) successEl.classList.add('hidden');
-            errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
-          } else {
-            if (successEl) successEl.classList.add('hidden');
-            errorEl.textContent = 'Something went wrong. Please try again later.';
+          } catch {
+            event.preventDefault();
+            errorEl.textContent = 'Security verification failed. Please try again.';
+            return;
           }
-          if (submitBtn) submitBtn.disabled = false;
-        };
+        }
 
-        script.addEventListener('error', () => {
-          cleanup();
+        event.preventDefault();
+        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+          const action = form.getAttribute('action') || '';
+          const url = new URL(action);
+          url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+          const params = new URLSearchParams(url.search);
+          params.set('u', params.get('u') || '');
+          params.set('id', params.get('id') || '');
+          if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
+          params.set('EMAIL', email);
+          const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
+          if (tagInput?.value) params.set('tags', tagInput.value);
+          const callbackName = '__mc_cb_' + Math.random().toString(36).slice(2);
+          params.set('c', callbackName);
+          const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+          const script = document.createElement('script');
+          script.src = jsonpUrl;
+          script.async = true;
+
+          function scriptCleanup() {
+            try { delete (window as any)[callbackName]; } catch {}
+            if (script.parentNode) script.parentNode.removeChild(script);
+          }
+
+          (window as any)[callbackName] = function(response: any) {
+            scriptCleanup();
+            if (response?.result === 'success') {
+              emailInput.value = '';
+              errorEl.textContent = '';
+              if (successEl) {
+                successEl.textContent = 'Thanks for subscribing!';
+                successEl.classList.remove('hidden');
+              }
+              const urlObj = new URL(window.location.href);
+              urlObj.searchParams.set('subscribed', '1');
+              window.history.replaceState({}, '', urlObj.toString());
+
+              if ((window as any).posthog) {
+                (window as any).posthog.identify(email);
+                (window as any).posthog.people.set({
+                  email: email,
+                  signup_source: 'mailing_list',
+                  signup_date: new Date().toISOString()
+                });
+                (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
+              }
+            } else if (response?.msg) {
+              if (successEl) successEl.classList.add('hidden');
+              errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
+            } else {
+              if (successEl) successEl.classList.add('hidden');
+              errorEl.textContent = 'Something went wrong. Please try again later.';
+            }
+            if (submitBtn) submitBtn.disabled = false;
+          };
+
+          script.addEventListener('error', () => {
+            scriptCleanup();
+            if (submitBtn) submitBtn.disabled = false;
+            form.submit();
+          }, { once: true });
+
+          document.body.appendChild(script);
+        } catch {
           if (submitBtn) submitBtn.disabled = false;
           form.submit();
-        }, { once: true });
+        }
+      };
 
-        document.body.appendChild(script);
-      } catch {
-        if (submitBtn) submitBtn.disabled = false;
-        form.submit();
-      }
-    });
-  }
+      form.addEventListener('submit', handleSubmit);
+      cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
+
+      cleanup = () => {
+        // Remove Turnstile widget if exists
+        if (turnstileWidgetId && typeof (window as any).turnstile?.remove === 'function') {
+          try {
+            (window as any).turnstile.remove(turnstileWidgetId);
+          } catch {}
+        }
+        turnstileWidgetId = null;
+        cleanupFns.forEach(fn => fn());
+      };
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSignupForm, { once: true });
+    } else {
+      initSignupForm();
+    }
+
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', initSignupForm);
+  })();
 </script>

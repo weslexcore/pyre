@@ -31,7 +31,7 @@ export default defineConfig({
 
   integrations: [mdx(), react(), sitemap()],
 
-  output: 'static', // Use static output for free Vercel plan
+  output: 'server', // Server mode with prerender=true default, allowing SSR API routes
   adapter: vercel({
     imageService: false, // Disable Vercel image optimization (not available on free plan)
     webAnalytics: {

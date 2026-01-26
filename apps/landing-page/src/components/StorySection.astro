@@ -82,35 +82,62 @@ import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 </section>
 
 <script>
-  const section = document.querySelector('section[aria-labelledby="story-heading"]');
-  const cta = section?.querySelector('a[href="#signup"]');
-  if (cta) {
-    cta.addEventListener('click', () => {
-      try {
-        const w = window as any;
-        if (typeof w.plausible === 'function') {
-          w.plausible('cta_waitlist_story_click');
-        } else if (typeof w.gtag === 'function') {
-          w.gtag('event', 'cta_waitlist_story_click');
-        } else if (Array.isArray(w.dataLayer)) {
-          w.dataLayer.push({ event: 'cta_waitlist_story_click' });
-        } else {
-          window.dispatchEvent(new CustomEvent('cta_waitlist_story_click'));
-        }
-      } catch {}
+  (function() {
+    let cleanup: (() => void) | null = null;
 
-      const focusEmail = () => {
-        const emailInput = document.getElementById('email');
-        if (emailInput && typeof emailInput.focus === 'function') {
+    function initStorySection() {
+      if (cleanup) {
+        cleanup();
+      }
+
+      const section = document.querySelector('section[aria-labelledby="story-heading"]');
+      const cta = section?.querySelector('a[href="#signup"]');
+
+      if (cta) {
+        const handleClick = () => {
           try {
-            emailInput.focus({ preventScroll: true });
-          } catch {
-            emailInput.focus();
-          }
-        }
-      };
+            const w = window as any;
+            if (typeof w.plausible === 'function') {
+              w.plausible('cta_waitlist_story_click');
+            } else if (typeof w.gtag === 'function') {
+              w.gtag('event', 'cta_waitlist_story_click');
+            } else if (Array.isArray(w.dataLayer)) {
+              w.dataLayer.push({ event: 'cta_waitlist_story_click' });
+            } else {
+              window.dispatchEvent(new CustomEvent('cta_waitlist_story_click'));
+            }
+          } catch {}
 
-      setTimeout(focusEmail, 400);
-    });
-  }
+          const focusEmail = () => {
+            const emailInput = document.getElementById('email');
+            if (emailInput && typeof emailInput.focus === 'function') {
+              try {
+                emailInput.focus({ preventScroll: true });
+              } catch {
+                emailInput.focus();
+              }
+            }
+          };
+
+          setTimeout(focusEmail, 400);
+        };
+
+        cta.addEventListener('click', handleClick);
+        cleanup = () => {
+          cta.removeEventListener('click', handleClick);
+        };
+      } else {
+        cleanup = () => {};
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initStorySection, { once: true });
+    } else {
+      initStorySection();
+    }
+
+    // Re-initialize after view transitions
+    document.addEventListener('astro:page-load', initStorySection);
+  })();
 </script>
