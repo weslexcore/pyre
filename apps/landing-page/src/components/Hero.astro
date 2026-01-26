@@ -4,9 +4,10 @@ import HeroCarousel from './HeroCarousel.astro';
 ---
 
 <!-- Mobile: Fixed text layer (z-0) - stays in place while scrolling -->
-<div class="fixed inset-x-0 top-0 z-0 min-h-[100dvh] bg-[var(--pyre-black)] text-[var(--pyre-creme)] lg:hidden">
-  <div id="nav-sentinel" class="absolute top-0 left-0 w-full h-1 lg:hidden" aria-hidden="true"></div>
-  <div class="flex flex-col justify-between p-6 md:p-10 min-h-[100dvh]">
+<!-- Extended above viewport to prevent white showing during overscroll bounce -->
+<div class="fixed inset-x-0 -top-[20dvh] z-0 min-h-[100dvh] pt-[20dvh] bg-[var(--pyre-black)] text-[var(--pyre-creme)] lg:hidden">
+  <div id="nav-sentinel" class="absolute top-[20dvh] left-0 w-full h-1 lg:hidden" aria-hidden="true"></div>
+  <div class="flex flex-col justify-between p-6 md:p-10 min-h-[80dvh]">
     <!-- Location Name -->
     <div class="pt-16">
       <h1 class="font-primary-semibold text-[clamp(4rem,10vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase">
@@ -59,7 +60,7 @@ import HeroCarousel from './HeroCarousel.astro';
 </div>
 
 <!-- Mobile: Spacer for fixed text positioning -->
-<div class="h-[100dvh] lg:hidden" aria-hidden="true"></div>
+<div class="h-[80dvh] lg:hidden" aria-hidden="true"></div>
 
 <!-- Desktop: Original Hero layout -->
 <section class="relative min-h-[100dvh] bg-[var(--pyre-black)] text-[var(--pyre-creme)] hidden lg:block">

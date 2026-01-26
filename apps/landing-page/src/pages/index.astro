@@ -26,11 +26,12 @@ import Layout from '../layouts/main.astro';
 <Layout>
   <main class="dark">
     <!-- Mobile: three-layer scroll effect -->
-    <div class="lg:hidden">
+    <!-- Black background prevents white showing during overscroll bounce -->
+    <div class="lg:hidden bg-[var(--pyre-black)]">
       <!-- Layer 1: Fixed text (z-0) + spacer - rendered by Hero component -->
       <Hero />
 
-      <!-- Layer 2: Sticky image (z-10) - scrolls up, locks at top when reached -->
+      <!-- Layer 2: Sticky image (z-10) - starts at 80dvh, scrolls up and locks at top -->
       <div class="sticky top-0 z-10 h-[100dvh]">
         <HeroCarousel />
       </div>

@@ -242,6 +242,14 @@
     scroll-behavior: smooth;
   }
 
+  /* Mobile: Black background for overscroll bounce effect */
+  @media (max-width: 1023px) {
+    html,
+    body {
+      background-color: var(--pyre-black);
+    }
+  }
+
   /* Remove custom animation in favor of Tailwind or plugin-provided animations */
 
   /* Removed custom container. Use Tailwind's container or utility composition */
