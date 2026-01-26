@@ -1,0 +1,46 @@
+---
+import benefits from '../lib/benefits';
+import Button from './Button.astro';
+---
+
+<section id="benefits" aria-labelledby="benefits-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
+  <div class="max-w-5xl mx-auto">
+    <div class="text-center mb-12">
+      <h2
+        id="benefits-heading"
+        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+      >
+        {benefits.title}
+      </h2>
+      {benefits.subtitle && (
+        <p class="text-lg opacity-80">{benefits.subtitle}</p>
+      )}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {benefits.items.map((benefit) => (
+        <div class="benefit-card p-6 border border-current/10 rounded-lg">
+          <h3 class="font-mono-bold text-lg uppercase tracking-wide mb-3">
+            {benefit.title}
+          </h3>
+          <p class="leading-relaxed opacity-80">
+            {benefit.description}
+          </p>
+        </div>
+      ))}
+    </div>
+
+    {benefits.cta && (
+      <div class="mt-12 text-center">
+        <Button
+          href={benefits.cta.href}
+          variant="primary"
+          size="lg"
+          ariaLabel={benefits.cta.ariaLabel}
+        >
+          {benefits.cta.label}
+        </Button>
+      </div>
+    )}
+  </div>
+</section>

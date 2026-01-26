@@ -1,0 +1,105 @@
+---
+import events from '../lib/events';
+import Button from './Button.astro';
+---
+
+<section id="events" aria-labelledby="events-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-12">
+      <h2
+        id="events-heading"
+        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+      >
+        {events.title}
+      </h2>
+      {events.subtitle && (
+        <p class="text-lg opacity-80">{events.subtitle}</p>
+      )}
+    </div>
+
+    <!-- Mobile: horizontal scroll, Desktop: grid -->
+    <div class="events-container -mx-4 px-4 md:mx-0 md:px-0">
+      <div class="events-scroll flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-6 md:overflow-visible md:pb-0 scrollbar-hide">
+        {events.items.map((event) => (
+          <article
+            class="event-card flex-shrink-0 w-[280px] md:w-auto snap-start border border-current/20 rounded-lg overflow-hidden bg-[var(--background)] transition-all duration-300 hover:border-current/40 hover:shadow-lg"
+          >
+            <div class="p-5">
+              <div class="mb-4">
+                <span class="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)]/10 text-[var(--pyre-red)] rounded">
+                  {event.date}
+                </span>
+              </div>
+
+              <h3 class="font-mono-bold text-lg uppercase tracking-wide mb-2">
+                {event.title}
+              </h3>
+
+              <p class="text-sm opacity-70 mb-4 line-clamp-2">
+                {event.description}
+              </p>
+
+              <div class="space-y-1 text-sm opacity-70 mb-4">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{event.time}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{event.location}</span>
+                </div>
+              </div>
+
+              {event.cta && (
+                <Button
+                  href={event.cta.href}
+                  variant="outline"
+                  size="sm"
+                  ariaLabel={event.cta.ariaLabel}
+                  class="w-full"
+                >
+                  {event.cta.label}
+                </Button>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+
+    {events.viewAllCta && (
+      <div class="mt-10 text-center">
+        <Button
+          href={events.viewAllCta.href}
+          variant="outline"
+          size="md"
+          ariaLabel={events.viewAllCta.ariaLabel}
+        >
+          {events.viewAllCta.label}
+        </Button>
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

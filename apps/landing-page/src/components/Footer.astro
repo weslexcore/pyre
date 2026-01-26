@@ -2,8 +2,8 @@
 import { Image } from 'astro:assets';
 import logo from '../assets/logos/creme/logo.png';
 import footerConfig from '../lib/footer';
+import location from '../lib/location';
 import { withBase } from '../lib/paths';
-import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');
@@ -13,85 +13,134 @@ function isMailto(href: string): boolean {
   return href.startsWith('mailto:');
 }
 ---
-<footer role="contentinfo" class="relative w-full mt-auto text-[var(--pyre-creme)] border-t-[var(--pyre-black)] border-t-8">
-  <RepeatingLogoBackground aria-hidden="true" class="absolute inset-0" positionClass="bg-center" />
-  <div class="absolute inset-0 bg-[var(--pyre-black)] opacity-90" aria-hidden="true"></div>
 
-  <div class="relative z-10 mx-auto w-full px-4 py-12 sm:py-16 md:py-20 sm:max-w-screen-sm md:max-w-screen-md lg:max-w-screen-lg xl:max-w-screen-xl">
-    <div class="flex flex-col lg:flex-row lg:items-start">
-      <!-- Brand -->
-      <a href={withBase('/')} class="mb-8 lg:mb-0 lg:flex-shrink-0 lg:w-[clamp(200px,20vw,300px)] flex" aria-label="Go to homepage">
-        <Image
-          src={logo}
-          alt="Pyre Sauna logo"
-          width="800"
-          height="220"
-          class="h-[clamp(100px,10vw,100px)] w-auto" 
-          loading="lazy"
-          decoding="async"
-        />
-      </a>
-      <!-- Footer Content -->
-      <div class="flex-1 grid grid-cols-2 gap-8 md:grid-cols-3 lg:grid-cols-3">
-        {footerConfig.groups && footerConfig.groups.length > 0 && (
-          <div class="col-span-2 md:col-span-3 lg:col-span-3 grid grid-cols-2 gap-8 md:grid-cols-3">
-            {footerConfig.groups.map((group) => (
-              <nav aria-label={`Footer - ${group.title}`}>
-                <h3 class="font-primary-semibold uppercase tracking-wide text-sm mb-2">{group.title}</h3>
-                <ul class="space-y-2">
-                  {group.links.map((link) => {
-                    const href = link.href;
-                    const ariaLabel = link.ariaLabel ?? (isMailto(href) ? `Email ${href.replace('mailto:', '')}` : undefined);
-                    const isExternal = isExternalLink(href);
-                    const isBookLink = link.label.includes('Book') || link.href.includes('/book');
-      
-                    return (
-                      <li>
-                        <a
-                          href={href}
-                          aria-label={ariaLabel}
-                          target={isExternal ? '_blank' : undefined}
-                          rel={isExternal ? 'noopener noreferrer' : undefined}
-                          class={`underline underline-offset-4 hover:no-underline focus:no-underline ${isBookLink ? 'book-cta' : ''}`}
-                          data-placement={isBookLink ? 'footer' : undefined}
-                        >
-                          {link.label}
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
-            ))}
-           
-          </div>
-        )}
-      </div>
-      
+<footer role="contentinfo" class="relative w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+  <!-- Tagline Section -->
+  {location.tagline && (
+    <div class="border-b border-[var(--pyre-creme)]/10 py-10 md:py-16 px-4 text-center">
+      <p class="font-primary-semibold text-[clamp(2rem,5vw,4rem)] tracking-[-0.02em] uppercase">
+        {location.tagline}
+      </p>
     </div>
-    {footerConfig.certification && (
-      <div>
-        <a
-          href={footerConfig.certification.link}
-          aria-label={footerConfig.certification.ariaLabel}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-block hover:opacity-80 transition-opacity focus:outline-2 focus:outline-[var(--pyre-creme)] focus:outline-offset-2"
-        >
-          <img
-            src={footerConfig.certification.image.src}
-            alt={footerConfig.certification.image.alt || footerConfig.certification.title}
-            width="150"
-            height="150"
-            class="h-auto"
+  )}
+
+  <div class="mx-auto w-full px-4 py-12 sm:py-16 md:py-20 max-w-6xl">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8">
+      <!-- Brand & Contact -->
+      <div class="lg:col-span-1">
+        <a href={withBase('/')} class="inline-block mb-6" aria-label="Go to homepage">
+          <Image
+            src={logo}
+            alt="Pyre Sauna logo"
+            width="800"
+            height="220"
+            class="h-20 w-auto"
             loading="lazy"
             decoding="async"
           />
         </a>
+        <div class="space-y-3 text-sm">
+          <p>{location.address}</p>
+          <p>
+            <a href={`tel:${location.phone.replace(/[^0-9+]/g, '')}`} class="hover:underline underline-offset-4">
+              {location.phone}
+            </a>
+          </p>
+          <p>
+            <a href={location.instagramUrl} target="_blank" rel="noopener noreferrer" class="hover:underline underline-offset-4">
+              {location.instagram}
+            </a>
+          </p>
+        </div>
       </div>
-    )}
-    <div class="mt-10 pt-4 text-xs text-[var(--pyre-creme)]/80">
-      {footerConfig.elements.copyright}
+
+      <!-- Hours -->
+      <div class="lg:col-span-1">
+        <h3 class="font-mono-bold uppercase tracking-wide text-sm mb-4">Hours</h3>
+        <div class="space-y-1 text-sm">
+          {location.hours.map((h) => (
+            <div class="flex justify-between max-w-[200px]">
+              <span class="opacity-70">{h.day}</span>
+              <span>{h.open} - {h.close}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Navigation Groups -->
+      {footerConfig.groups && footerConfig.groups.length > 0 && (
+        footerConfig.groups.slice(0, 2).map((group) => (
+          <nav aria-label={`Footer - ${group.title}`}>
+            <h3 class="font-mono-bold uppercase tracking-wide text-sm mb-4">{group.title}</h3>
+            <ul class="space-y-2 text-sm">
+              {group.links.map((link) => {
+                const href = link.href;
+                const ariaLabel = link.ariaLabel ?? (isMailto(href) ? `Email ${href.replace('mailto:', '')}` : undefined);
+                const isExternal = isExternalLink(href);
+                const isBookLink = link.label.includes('Book') || link.href.includes('/book');
+
+                return (
+                  <li>
+                    <a
+                      href={href}
+                      aria-label={ariaLabel}
+                      target={isExternal ? '_blank' : undefined}
+                      rel={isExternal ? 'noopener noreferrer' : undefined}
+                      class={`hover:underline underline-offset-4 opacity-80 hover:opacity-100 ${isBookLink ? 'book-cta' : ''}`}
+                      data-placement={isBookLink ? 'footer' : undefined}
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        ))
+      )}
+    </div>
+
+    <!-- Certification & Legal -->
+    <div class="mt-12 pt-8 border-t border-[var(--pyre-creme)]/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div class="flex flex-wrap items-center gap-6">
+        {footerConfig.certification && (
+          <a
+            href={footerConfig.certification.link}
+            aria-label={footerConfig.certification.ariaLabel}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-block hover:opacity-80 transition-opacity"
+          >
+            <img
+              src={footerConfig.certification.image.src}
+              alt={footerConfig.certification.image.alt || footerConfig.certification.title}
+              width="60"
+              height="60"
+              class="h-14 w-auto"
+              loading="lazy"
+              decoding="async"
+            />
+          </a>
+        )}
+
+        <!-- Legal links -->
+        {footerConfig.groups && footerConfig.groups.find(g => g.title === 'Legal') && (
+          <div class="flex flex-wrap items-center gap-4 text-xs opacity-60">
+            {footerConfig.groups.find(g => g.title === 'Legal')?.links.map((link, index) => (
+              <>
+                {index > 0 && <span>|</span>}
+                <a href={link.href} class="hover:opacity-100 hover:underline underline-offset-2">
+                  {link.label}
+                </a>
+              </>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div class="text-xs opacity-60">
+        {footerConfig.elements.copyright}
+      </div>
     </div>
   </div>
 </footer>

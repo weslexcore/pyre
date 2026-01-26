@@ -313,6 +313,131 @@ export interface PolicyDocument {
 }
 
 // ------------------------------------------------------------
+// Location content types
+// ------------------------------------------------------------
+
+export interface DayHours {
+  day: string;
+  open: string;
+  close: string;
+}
+
+export interface LocationContent {
+  name: string;
+  neighborhood: string;
+  address: string;
+  phone: string;
+  email?: string;
+  instagram: string;
+  instagramUrl: string;
+  hours: DayHours[];
+  tagline?: string;
+}
+
+// ------------------------------------------------------------
+// FAQ content types
+// ------------------------------------------------------------
+
+export interface FAQItem {
+  question: string;
+  answer: string;
+}
+
+export interface FAQContent {
+  title: string;
+  items: FAQItem[];
+}
+
+// ------------------------------------------------------------
+// Membership pricing types
+// ------------------------------------------------------------
+
+export interface MembershipFeature {
+  text: string;
+  highlighted?: boolean;
+}
+
+export interface DropSession {
+  id: string;
+  name: string;
+  price: number;
+  duration: string;
+  description: string;
+  cta: ActionRef;
+}
+
+export interface MembershipTier {
+  id: string;
+  name: string;
+  price: number;
+  period: string;
+  description: string;
+  features: MembershipFeature[];
+  cta: ActionRef;
+  popular?: boolean;
+}
+
+export interface MembershipContent {
+  title: string;
+  subtitle?: string;
+  tiers: MembershipTier[];
+  dropIn?: {
+    title: string;
+    sessions: DropSession[];
+  };
+}
+
+// ------------------------------------------------------------
+// Events content types
+// ------------------------------------------------------------
+
+export interface EventItem {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  image?: ImageRef;
+  cta?: ActionRef;
+}
+
+export interface EventsContent {
+  title: string;
+  subtitle?: string;
+  items: EventItem[];
+  viewAllCta?: ActionRef;
+}
+
+// ------------------------------------------------------------
+// About section types
+// ------------------------------------------------------------
+
+export interface AboutContent {
+  title: string;
+  body: string[];
+  expandedBody?: string[];
+  cta?: ActionRef;
+}
+
+// ------------------------------------------------------------
+// Benefits section types
+// ------------------------------------------------------------
+
+export interface BenefitItem {
+  title: string;
+  description: string;
+  icon?: string;
+}
+
+export interface BenefitsContent {
+  title: string;
+  subtitle?: string;
+  items: BenefitItem[];
+  cta?: ActionRef;
+}
+
+// ------------------------------------------------------------
 // Blog types
 // ------------------------------------------------------------
 

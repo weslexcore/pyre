@@ -1,0 +1,32 @@
+---
+import { Image } from 'astro:assets';
+
+// Import hero image
+import tiled from '../assets/backgrounds/tiled.jpeg';
+
+---
+<!-- <div class="relative h-full w-full overflow-hidden">
+  <div class="flex h-full snap-x snap-mandatory overflow-x-auto scrollbar-hide">
+      <div class=" flex-shrink-0 w-full h-full snap-center"> -->
+        <Image
+          src={tiled}
+          alt="Tiled background"
+          width={1200}
+          height={800}
+          class="h-full w-full object-cover"
+          loading="eager"
+          decoding="sync"
+        />
+      <!-- </div>
+  </div>
+</div> -->
+
+<style>
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+</style>

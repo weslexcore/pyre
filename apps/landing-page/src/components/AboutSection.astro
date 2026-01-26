@@ -1,0 +1,91 @@
+---
+import about from '../lib/about';
+import Button from './Button.astro';
+---
+
+<section id="about" aria-labelledby="about-heading" class="py-16 md:py-24 px-4">
+  <div class="max-w-3xl mx-auto">
+    <h2
+      id="about-heading"
+      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-8"
+    >
+      {about.title}
+    </h2>
+
+    <div class="space-y-4 text-lg leading-relaxed">
+      {about.body.map((paragraph) => (
+        <p>{paragraph}</p>
+      ))}
+
+      {about.expandedBody && about.expandedBody.length > 0 && (
+        <div
+          id="about-expanded"
+          class="about-expanded space-y-4 overflow-hidden transition-all duration-500 ease-out"
+          style="max-height: 0; opacity: 0;"
+        >
+          {about.expandedBody.map((paragraph) => (
+            <p>{paragraph}</p>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {about.expandedBody && about.expandedBody.length > 0 && (
+      <button
+        type="button"
+        id="about-toggle"
+        class="mt-6 font-mono-bold text-sm uppercase tracking-wide underline underline-offset-4 hover:no-underline focus:no-underline transition-colors"
+        aria-expanded="false"
+        aria-controls="about-expanded"
+      >
+        Read more
+      </button>
+    )}
+
+    {about.cta && (
+      <div class="mt-8">
+        <Button
+          href={about.cta.href}
+          variant="outline"
+          size="md"
+          ariaLabel={about.cta.ariaLabel}
+        >
+          {about.cta.label}
+        </Button>
+      </div>
+    )}
+  </div>
+</section>
+
+<script>
+  function initAboutToggle() {
+    const toggle = document.getElementById('about-toggle');
+    const expanded = document.getElementById('about-expanded');
+
+    if (!toggle || !expanded) return;
+
+    toggle.addEventListener('click', () => {
+      const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+
+      if (isExpanded) {
+        // Collapse
+        expanded.style.maxHeight = '0';
+        expanded.style.opacity = '0';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.textContent = 'Read more';
+      } else {
+        // Expand
+        expanded.style.maxHeight = expanded.scrollHeight + 'px';
+        expanded.style.opacity = '1';
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.textContent = 'Read less';
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAboutToggle, { once: true });
+  } else {
+    initAboutToggle();
+  }
+</script>

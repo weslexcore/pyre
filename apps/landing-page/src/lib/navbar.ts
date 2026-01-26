@@ -9,6 +9,26 @@ const navbar: NavbarContent = {
     ariaLabel: 'Pyre Sauna Home',
     links: [
       {
+        label: 'About',
+        href: withBase('#about'),
+        ariaLabel: 'Learn about Pyre',
+      },
+      {
+        label: 'Membership',
+        href: withBase('#membership'),
+        ariaLabel: 'View membership options',
+      },
+      {
+        label: 'Events',
+        href: withBase('#events'),
+        ariaLabel: 'View upcoming events',
+      },
+      {
+        label: 'FAQ',
+        href: withBase('#faq'),
+        ariaLabel: 'Frequently asked questions',
+      },
+      {
         label: 'Blog',
         href: withBase('/blog'),
         ariaLabel: 'Read our blog',
@@ -17,12 +37,12 @@ const navbar: NavbarContent = {
   },
   actions: {
     primary: {
-      label: 'Join the mailing list',
+      label: 'Join Mailing List',
       href: withBase('#signup'),
       ariaLabel: 'Join the mailing list',
     },
     secondary: {
-      label: 'Book a session',
+      label: 'Book',
       href: withBase('/book'),
       ariaLabel: 'Book now',
     },

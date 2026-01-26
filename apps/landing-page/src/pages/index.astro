@@ -1,18 +1,22 @@
 ---
-import BreakSection from '../components/BreakSection.astro';
-import ExperiencesSection from '../components/ExperiencesSection.astro';
+import AboutSection from '../components/AboutSection.astro';
+import BenefitsSection from '../components/BenefitsSection.astro';
+import EventsSection from '../components/EventsSection.astro';
+import FAQAccordion from '../components/FAQAccordion.astro';
 import Hero from '../components/Hero.astro';
+import MembershipPricing from '../components/MembershipPricing.astro';
 import SignupForm from '../components/SignupForm.astro';
-import StorySection from '../components/StorySection.astro';
 import Layout from '../layouts/main.astro';
 ---
 
 <Layout>
-	<main>
-		<Hero />
-		<StorySection />
-		<ExperiencesSection />
-		<BreakSection />
-		<SignupForm />
-	</main>
+  <main class="dark">
+    <Hero />
+    <AboutSection />
+    <BenefitsSection />
+    <FAQAccordion />
+    <MembershipPricing />
+    <SignupForm />
+    <EventsSection />
+  </main>
 </Layout>

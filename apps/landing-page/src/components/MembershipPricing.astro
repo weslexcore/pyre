@@ -1,0 +1,73 @@
+---
+import membership from '../lib/membership';
+import Button from './Button.astro';
+---
+
+<section id="membership" aria-labelledby="membership-heading" class="py-16 md:py-24 px-4">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-12">
+      <h2
+        id="membership-heading"
+        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+      >
+        {membership.title}
+      </h2>
+      {membership.subtitle && (
+        <p class="text-lg opacity-80">{membership.subtitle}</p>
+      )}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+      {membership.tiers.map((tier) => (
+        <div
+          class={`pricing-card relative flex flex-col p-6 lg:p-8 border rounded-lg transition-all duration-300 ${
+            tier.popular
+              ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/5 scale-105 shadow-lg'
+              : 'border-current/20 hover:border-current/40'
+          }`}
+        >
+          {tier.popular && (
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-gold)] text-[var(--pyre-black)] text-xs font-mono-bold uppercase tracking-wide rounded-full">
+              Most Popular
+            </div>
+          )}
+
+          <div class="mb-6">
+            <h3 class="font-mono-bold text-xl uppercase tracking-wide mb-2">
+              {tier.name}
+            </h3>
+            <p class="text-sm opacity-70">{tier.description}</p>
+          </div>
+
+          <div class="mb-6">
+            <span class={`font-primary-semibold text-[clamp(2.5rem,5vw,3.5rem)] leading-none ${tier.popular ? 'text-[var(--pyre-gold)]' : ''}`}>
+              ${tier.price}
+            </span>
+            <span class="text-sm opacity-70">{tier.period}</span>
+          </div>
+
+          <ul class="space-y-3 mb-8 flex-grow">
+            {tier.features.map((feature) => (
+              <li class={`flex items-start gap-3 ${feature.highlighted ? 'text-[var(--pyre-gold)]' : ''}`}>
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-sm">{feature.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <Button
+            href={tier.cta.href}
+            variant={tier.popular ? 'primary' : 'outline'}
+            size="md"
+            ariaLabel={tier.cta.ariaLabel}
+            class="w-full"
+          >
+            {tier.cta.label}
+          </Button>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

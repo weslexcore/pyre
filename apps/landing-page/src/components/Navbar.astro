@@ -4,59 +4,60 @@ import logo from '../assets/logos/creme/logo_with_text.png';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
-
-const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 ---
 
 <header
   data-component="navbar"
-  class="fixed inset-x-0 top-0 z-50 bg-transparent transition-colors duration-300 motion-reduce:transition-none"
+  class="fixed inset-x-0 top-0 z-50 bg-[var(--pyre-black)] transition-colors duration-300 motion-reduce:transition-none"
 >
-  <div class="w-full px-4 flex items-center justify-between gap-4 py-4">
-    <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex">
+  <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
+    <!-- Logo -->
+    <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex flex-shrink-0">
       <Image
         src={logo}
-        alt={"Pyre Sauna logo"}
+        alt="Pyre Sauna logo"
         width="512"
         height="128"
-        class="h-8 md:h-12 w-auto"
+        class="h-8 md:h-10 w-auto"
         loading="eager"
         decoding="sync"
       />
     </a>
-    
-    <!-- Desktop navigation -->
-    <div class="hidden md:flex items-center gap-3">
-      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="header">{navbar.actions?.secondary?.label}</Button>
-      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel}>{navbar.actions?.primary?.label}</Button>
 
-      <!-- Desktop menu button -->
-      <button
-        id="desktop-menu-button"
-        aria-label="Toggle desktop menu"
-        aria-expanded="false"
-        aria-controls="desktop-dropdown"
-        class="hidden md:inline-flex items-center justify-center p-2 text-[var(--primary-foreground)] hover:bg-[var(--accent)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] relative"
+    <!-- Desktop navigation links -->
+    <nav class="hidden lg:flex items-center gap-6" aria-label="Main navigation">
+      {navbar.elements.links && navbar.elements.links.map((link) => (
+        <a
+          href={link.href}
+          aria-label={link.ariaLabel}
+          class="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] hover:opacity-70 transition-opacity"
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
+
+    <!-- Desktop CTAs -->
+    <div class="hidden md:flex items-center gap-3">
+      <Button
+        href={navbar.actions?.secondary?.href}
+        variant="primary"
+        size="sm"
+        ariaLabel={navbar.actions?.secondary?.ariaLabel}
+        class="book-cta"
+        data-placement="header"
       >
-        <!-- Hamburger icon -->
-        <svg id="desktop-hamburger-icon" class="w-6 h-6 transition-all duration-300 ease-in-out opacity-100 scale-100 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-        </svg>
-        <!-- Close icon -->
-        <svg id="desktop-close-icon" class="w-6 h-6 absolute transition-all duration-300 ease-in-out opacity-0 scale-0 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
+        {navbar.actions?.secondary?.label}
+      </Button>
     </div>
-    <div class="md:hidden flex items-center gap-3">
-    <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="book-cta" data-placement="mobile_nav">Book</Button>
+
     <!-- Mobile menu button -->
     <button
       id="mobile-menu-button"
-      aria-label="Toggle mobile menu"
+      aria-label="Toggle menu"
       aria-expanded="false"
       aria-controls="mobile-menu"
-      class="md:hidden inline-flex items-center justify-center p-2 text-[var(--primary-foreground)] hover:bg-[var(--accent)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] relative"
+      class="md:hidden inline-flex items-center justify-center p-2 text-[var(--pyre-creme)] hover:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] relative"
     >
       <!-- Hamburger icon -->
       <svg id="hamburger-icon" class="w-6 h-6 transition-all duration-300 ease-in-out opacity-100 scale-100 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,114 +69,62 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
       </svg>
     </button>
   </div>
-  </div>
 
   <!-- Mobile menu -->
   <nav
     id="mobile-menu"
     aria-label="Mobile navigation"
-    class="md:hidden bg-black border-t border-[var(--border)] overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
+    class="md:hidden bg-[var(--pyre-black)] border-t border-[var(--pyre-creme)]/10 overflow-hidden transition-all duration-300 ease-in-out max-h-0 opacity-0"
   >
     <div class="px-4 py-4 flex flex-col gap-3">
-      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta" data-placement="mobile_nav">{navbar.actions?.secondary?.label}</Button>
-      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full">{navbar.actions?.primary?.label}</Button>
       {navbar.elements.links && navbar.elements.links.map((link) => (
-        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="w-full">{link.label}</Button>
-      ))}
-      {navbar.actions?.social?.instagram && (
-        <Button
-          href={navbar.actions.social.instagram.href}
-          variant="secondary"
-          size="sm"
-          ariaLabel={navbar.actions.social.instagram.ariaLabel}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="w-full"
+        <a
+          href={link.href}
+          aria-label={link.ariaLabel}
+          class="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] py-2 hover:opacity-70 transition-opacity"
         >
-          {navbar.actions.social.instagram.label}
-        </Button>
-      )}
-    </div>
-  </nav>
-
-  <!-- Desktop dropdown menu -->
-  <nav
-    id="desktop-dropdown"
-    aria-label="Desktop dropdown navigation"
-    class="hidden md:block absolute top-full right-4 mt-2 w-64 bg-black border border-[var(--border)] rounded-md shadow-lg overflow-hidden transition-all duration-300 ease-in-out opacity-0 -translate-y-2 max-h-0"
-  >
-    <div class="px-4 py-4 flex flex-col gap-3">
-      <Button href={navbar.actions?.secondary?.href} variant="primary" size="sm" ariaLabel={navbar.actions?.secondary?.ariaLabel} class="w-full book-cta desktop-dropdown-link" data-placement="desktop_dropdown">{navbar.actions?.secondary?.label}</Button>
-      <Button href={navbar.actions?.primary?.href} variant="outline" size="sm" ariaLabel={navbar.actions?.primary?.ariaLabel} class="w-full desktop-dropdown-link">{navbar.actions?.primary?.label}</Button>
-      {navbar.elements.links && navbar.elements.links.map((link) => (
-        <Button href={link.href} variant="secondary" size="sm" ariaLabel={link.ariaLabel} class="w-full desktop-dropdown-link">{link.label}</Button>
+          {link.label}
+        </a>
       ))}
-      {navbar.actions?.social?.instagram && (
+      <div class="pt-3 border-t border-[var(--pyre-creme)]/10">
         <Button
-          href={navbar.actions.social.instagram.href}
-          variant="secondary"
+          href={navbar.actions?.secondary?.href}
+          variant="primary"
           size="sm"
-          ariaLabel={navbar.actions.social.instagram.ariaLabel}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="w-full desktop-dropdown-link"
+          ariaLabel={navbar.actions?.secondary?.ariaLabel}
+          class="w-full book-cta"
+          data-placement="mobile_nav"
         >
-          {navbar.actions.social.instagram.label}
+          {navbar.actions?.secondary?.label}
         </Button>
-      )}
+      </div>
     </div>
   </nav>
 </header>
 
-<script is:inline define:vars={{ basePath }}>
+<script>
   (function () {
-    const SCROLLED_CLASSES = ['bg-black', 'backdrop-blur', 'shadow'];
-
-    function applyScrolledState(navbar, isScrolled) {
-      if (!navbar) return;
-      if (isScrolled) {
-        navbar.classList.remove('bg-transparent');
-        navbar.classList.add(...SCROLLED_CLASSES);
-      } else {
-        navbar.classList.remove(...SCROLLED_CLASSES);
-        navbar.classList.add('bg-transparent');
-      }
-    }
-
     function setupMobileMenu() {
       const menuButton = document.getElementById('mobile-menu-button');
       const mobileMenu = document.getElementById('mobile-menu');
-      const navbar = document.querySelector('[data-component="navbar"]');
       const hamburgerIcon = document.getElementById('hamburger-icon');
       const closeIcon = document.getElementById('close-icon');
 
-      if (!menuButton || !mobileMenu || !navbar || !hamburgerIcon || !closeIcon) return;
+      if (!menuButton || !mobileMenu || !hamburgerIcon || !closeIcon) return;
 
-      function toggleMenu(shouldOpen) {
+      function toggleMenu(shouldOpen: boolean) {
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
 
         if (shouldOpen) {
-          // Force black background when menu is open
-          navbar.classList.remove('bg-transparent');
-          navbar.classList.add('bg-black');
-          // Slide menu down
           mobileMenu.classList.remove('max-h-0', 'opacity-0');
-          mobileMenu.classList.add('max-h-96', 'opacity-100');
-          // Animate icon transition - hide hamburger, show close
+          mobileMenu.classList.add('max-h-[80vh]', 'opacity-100');
           hamburgerIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
           hamburgerIcon.classList.add('opacity-0', 'scale-0', '-rotate-90');
           closeIcon.classList.remove('opacity-0', 'scale-0', 'rotate-90');
           closeIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
         } else {
-          // Slide menu up
-          mobileMenu.classList.remove('max-h-96', 'opacity-100');
+          mobileMenu.classList.remove('max-h-[80vh]', 'opacity-100');
           mobileMenu.classList.add('max-h-0', 'opacity-0');
-          // Restore appropriate background based on page and scroll position
-          const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
-          const isScrolled = window.scrollY > 0;
-          // Only allow transparent on landing page at top
-          applyScrolledState(navbar, !isLandingPage || isScrolled);
-          // Animate icon transition - show hamburger, hide close
           hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
           hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
           closeIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
@@ -190,122 +139,27 @@ const basePath = import.meta.env.PUBLIC_ASTRO_BASE || '/';
 
       // Close menu when clicking outside
       document.addEventListener('click', (event) => {
-        if (!menuButton.contains(event.target) && !mobileMenu.contains(event.target)) {
+        if (!menuButton.contains(event.target as Node) && !mobileMenu.contains(event.target as Node)) {
           const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
           if (isExpanded) {
             toggleMenu(false);
           }
         }
       });
-    }
 
-    function setupDesktopDropdown() {
-      const menuButton = document.getElementById('desktop-menu-button');
-      const dropdown = document.getElementById('desktop-dropdown');
-      const hamburgerIcon = document.getElementById('desktop-hamburger-icon');
-      const closeIcon = document.getElementById('desktop-close-icon');
-
-      if (!menuButton || !dropdown || !hamburgerIcon || !closeIcon) return;
-
-      function toggleDropdown(shouldOpen) {
-        menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-
-        if (shouldOpen) {
-          // Show dropdown with animation
-          dropdown.classList.remove('opacity-0', '-translate-y-2', 'max-h-0');
-          dropdown.classList.add('opacity-100', 'translate-y-0', 'max-h-96');
-          // Animate icon transition - hide hamburger, show close
-          hamburgerIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
-          hamburgerIcon.classList.add('opacity-0', 'scale-0', '-rotate-90');
-          closeIcon.classList.remove('opacity-0', 'scale-0', 'rotate-90');
-          closeIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
-        } else {
-          // Hide dropdown with animation
-          dropdown.classList.remove('opacity-100', 'translate-y-0', 'max-h-96');
-          dropdown.classList.add('opacity-0', '-translate-y-2', 'max-h-0');
-          // Animate icon transition - show hamburger, hide close
-          hamburgerIcon.classList.remove('opacity-0', 'scale-0', '-rotate-90');
-          hamburgerIcon.classList.add('opacity-100', 'scale-100', 'rotate-0');
-          closeIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
-          closeIcon.classList.add('opacity-0', 'scale-0', 'rotate-90');
-        }
-      }
-
-      // Toggle dropdown on button click
-      menuButton.addEventListener('click', () => {
-        const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
-        toggleDropdown(!isExpanded);
-      });
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (event) => {
-        if (!menuButton.contains(event.target) && !dropdown.contains(event.target)) {
-          const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';
-          if (isExpanded) {
-            toggleDropdown(false);
-          }
-        }
-      });
-
-      // Close dropdown when clicking any link inside
-      const dropdownLinks = dropdown.querySelectorAll('.desktop-dropdown-link');
-      dropdownLinks.forEach((link) => {
+      // Close menu when clicking a link
+      const menuLinks = mobileMenu.querySelectorAll('a');
+      menuLinks.forEach((link) => {
         link.addEventListener('click', () => {
-          toggleDropdown(false);
+          toggleMenu(false);
         });
       });
     }
 
-    function setup() {
-      const navbar = document.querySelector('[data-component="navbar"]');
-      const isLandingPage = window.location.pathname === basePath || window.location.pathname === basePath.replace(/\/$/, '');
-      if (!navbar) return;
-      
-      // Initialize navbar state immediately
-      const initiallyScrolled = window.scrollY > 0;
-      
-      if (!isLandingPage) {
-        // Non-landing pages: always show black navbar
-        applyScrolledState(navbar, true);
-      } else {
-        // Landing page: transparent only at top, black when scrolled
-        applyScrolledState(navbar, initiallyScrolled);
-        
-        const sentinel = document.getElementById('nav-sentinel');
-
-        if (sentinel) {
-          const observer = new IntersectionObserver((entries) => {
-            const entry = entries[0];
-            applyScrolledState(navbar, !entry.isIntersecting);
-          }, { root: null, threshold: 0 });
-          observer.observe(sentinel);
-        } else {
-          // Fallback: scroll listener
-          let ticking = false;
-          function onScroll() {
-            if (!ticking) {
-              window.requestAnimationFrame(() => {
-                applyScrolledState(navbar, window.scrollY > 0);
-                ticking = false;
-              });
-              ticking = true;
-            }
-          }
-          window.addEventListener('scroll', onScroll, { passive: true });
-        }
-      }
-
-      // Setup mobile menu - always run this regardless of page
-      setupMobileMenu();
-
-      // Setup desktop dropdown menu
-      setupDesktopDropdown();
-    }
-
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', setup, { once: true });
+      document.addEventListener('DOMContentLoaded', setupMobileMenu, { once: true });
     } else {
-      setup();
+      setupMobileMenu();
     }
   })();
 </script>
