@@ -6,6 +6,7 @@ interface Props {
   visibleAnimation?: 'wave' | 'pulse' | 'none';
   animate?: 'wave' | 'reveal' | 'none';  // deprecated, for backwards compat
   scrollAware?: boolean;  // Enable scroll-direction-aware reveal/hide
+  strokeWidth?: number;  // Stroke width for the divider path (default: 3)
   class?: string;
 }
 
@@ -16,6 +17,7 @@ const {
   visibleAnimation: visibleAnimationProp,
   animate,
   scrollAware = false,
+  strokeWidth = 3,
   class: className = ''
 } = Astro.props;
 
@@ -61,7 +63,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,30 C100,10 200,50 300,30 C400,10 500,50 600,30 C700,10 800,50 900,30 C1000,10 1100,50 1200,30"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         class="divider-path"
       />
@@ -79,7 +81,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,30 Q50,15 75,30 T150,30 T225,30 T300,30 T375,30 T450,30 T525,30 T600,30 T675,30 T750,30 T825,30 T900,30 T975,30 T1050,30 T1125,30 T1200,30"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         class="divider-path"
       />
@@ -97,7 +99,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,45 L40,15 L80,45 L120,15 L160,45 L200,15 L240,45 L280,15 L320,45 L360,15 L400,45 L440,15 L480,45 L520,15 L560,45 L600,15 L640,45 L680,15 L720,45 L760,15 L800,45 L840,15 L880,45 L920,15 L960,45 L1000,15 L1040,45 L1080,15 L1120,45 L1160,15 L1200,45"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         stroke-linejoin="round"
         class="divider-path"
@@ -116,7 +118,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,30 C80,50 120,10 200,30 C280,50 320,15 400,25 C480,35 520,55 600,30 C680,5 720,45 800,35 C880,25 920,50 1000,30 C1080,10 1120,40 1200,30"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         class="divider-path"
       />
@@ -134,7 +136,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,50 Q50,10 100,50 Q150,10 200,50 Q250,10 300,50 Q350,10 400,50 Q450,10 500,50 Q550,10 600,50 Q650,10 700,50 Q750,10 800,50 Q850,10 900,50 Q950,10 1000,50 Q1050,10 1100,50 Q1150,10 1200,50"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         class="divider-path"
       />
@@ -152,7 +154,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       <path
         d="M0,35 L45,25 L70,40 L110,20 L150,45 L180,15 L230,38 L270,22 L320,42 L355,18 L400,35 L450,28 L490,48 L540,12 L580,40 L630,25 L680,45 L720,20 L770,38 L810,15 L860,42 L900,30 L950,48 L1000,18 L1040,35 L1090,25 L1130,45 L1170,20 L1200,32"
         stroke="var(--pyre-creme)"
-        stroke-width="3"
+        stroke-width={strokeWidth}
         stroke-linecap="round"
         stroke-linejoin="round"
         class="divider-path"

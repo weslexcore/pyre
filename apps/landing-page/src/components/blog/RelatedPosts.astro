@@ -15,8 +15,8 @@ if (!posts || posts.length === 0) {
 }
 ---
 
-<section class="mt-16 border-t border-[rgb(38,37,37)]/10 pt-16">
-  <h2 class="mb-8 font-sans text-3xl font-semibold tracking-[-0.02em] text-[rgb(38,37,37)]">
+<section class="mt-16 border-t border-foreground/10 pt-16">
+  <h2 class="mb-8 font-sans text-3xl font-semibold tracking-[-0.02em] text-foreground">
     Related Posts
   </h2>
 
@@ -45,9 +45,9 @@ if (!posts || posts.length === 0) {
               />
             </a>
           ) : (
-            <div class="relative mb-4 aspect-[16/9] overflow-hidden rounded-[var(--radius)] bg-gradient-to-br from-[rgb(36,90,130)] to-[rgb(241,88,54)]">
+            <div class="relative mb-4 aspect-[16/9] overflow-hidden rounded-[var(--radius)] bg-gradient-to-br from-secondary to-primary">
               <div class="flex h-full items-center justify-center">
-                <span class="font-sans text-2xl font-semibold tracking-[-0.02em] text-[rgb(250,248,236)]">
+                <span class="font-sans text-2xl font-semibold tracking-[-0.02em] text-background">
                   Pyre
                 </span>
               </div>
@@ -59,18 +59,18 @@ if (!posts || posts.length === 0) {
             <h3 class="mb-2">
               <a
                 href={`/blog/${post.slug}`}
-                class="font-sans text-xl font-semibold leading-tight tracking-[-0.02em] text-[rgb(38,37,37)] transition-colors group-hover:text-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+                class="font-sans text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground transition-colors group-hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
               >
                 {post.data.title}
               </a>
             </h3>
 
-            <p class="mb-4 flex-1 font-sans text-sm leading-relaxed text-[rgb(38,37,37)]/70">
+            <p class="mb-4 flex-1 font-sans text-sm leading-relaxed text-foreground/70">
               {post.data.description}
             </p>
 
             {/* Meta */}
-            <div class="flex flex-wrap items-center gap-3 font-mono text-xs text-[rgb(38,37,37)]/60">
+            <div class="flex flex-wrap items-center gap-3 font-mono text-xs text-foreground/60">
               <time datetime={post.data.date.toISOString()}>{formattedDate}</time>
               <span aria-hidden="true">•</span>
               <span>{formatReadingTime(readingTime)}</span>

@@ -27,7 +27,7 @@ if (!show) {
   <!-- Mobile Accordion - Hidden for now -->
   <aside class="hidden lg:hidden" data-toc-mobile-accordion>
     <button
-      class="w-full flex items-center justify-between px-4 py-3 bg-[rgb(250,248,236)]/95 backdrop-blur-[10px] border border-[rgb(38,37,37)]/10 rounded-lg transition-colors hover:bg-[rgb(36,90,130)]/5 hover:border-[rgb(36,90,130)]/30 shadow-[0_2px_8px_rgba(38,37,37,0.1)] text-[rgb(38,37,37)]"
+      class="w-full flex items-center justify-between px-4 py-3 bg-background/95 backdrop-blur-[10px] border border-foreground/10 rounded-lg transition-colors hover:bg-secondary/5 hover:border-secondary/30 shadow-[0_2px_8px_color-mix(in_srgb,var(--foreground)_10%,transparent)] text-foreground"
       aria-label="Toggle Table of Contents"
       aria-expanded="false"
       aria-controls="toc-mobile-content"
@@ -48,7 +48,7 @@ if (!show) {
       aria-hidden="true"
       data-toc-accordion-content
     >
-      <div class="px-4 py-3 bg-[rgb(250,248,236)]/98 backdrop-blur-[12px] border-x border-b border-[rgb(38,37,37)]/10 rounded-b-lg max-h-[60vh] overflow-y-auto">
+      <div class="px-4 py-3 bg-background/98 backdrop-blur-[12px] border-x border-b border-foreground/10 rounded-b-lg max-h-[60vh] overflow-y-auto">
         <ul class="space-y-1" role="list" aria-label="Table of contents navigation" data-toc-list>
           <!-- TOC items will be populated by JavaScript -->
           <li class="text-sm text-gray-500 dark:text-gray-400 animate-pulse" aria-live="polite">
@@ -61,11 +61,11 @@ if (!show) {
 
   <!-- Desktop Sidebar -->
   <nav
-    class="hidden lg:block fixed left-8 top-48 w-64 max-h-[60vh] overflow-y-auto bg-[rgb(250,248,236)]/95 backdrop-blur-[10px] border border-[rgb(38,37,37)]/10 rounded-xl shadow-[0_10px_25px_rgba(38,37,37,0.1)] p-4 z-[1000] [scrollbar-width:thin] [scrollbar-color:rgb(156,163,175)_rgb(243,244,246)]"
+    class="hidden lg:block fixed left-8 top-48 w-64 max-h-[60vh] overflow-y-auto bg-background/95 backdrop-blur-[10px] border border-foreground/10 rounded-xl shadow-[0_10px_25px_color-mix(in_srgb,var(--foreground)_10%,transparent)] p-4 z-[1000] [scrollbar-width:thin]"
     aria-label="Table of Contents"
   >
     <div class="mb-4">
-      <h3 class="text-sm font-semibold text-[rgb(38,37,37)] uppercase tracking-wide font-sans">
+      <h3 class="text-sm font-semibold text-foreground uppercase tracking-wide font-sans">
         Contents
       </h3>
     </div>
@@ -80,7 +80,7 @@ if (!show) {
     <div class="mt-2 hidden" data-show-progress>
       <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1" role="progressbar" aria-labelledby="reading-progress-label">
         <div
-          class="bg-gradient-to-r from-[rgb(36,90,130)] to-[rgb(241,88,54)] h-1 rounded-full transition-all duration-300 ease-out"
+          class="bg-gradient-to-r from-secondary to-primary h-1 rounded-full transition-all duration-300 ease-out"
           style="width: 0%"
           data-progress-bar
           aria-valuenow="0"
@@ -88,7 +88,7 @@ if (!show) {
           aria-valuemax="100"
         ></div>
       </div>
-      <div id="reading-progress-label" class="text-xs text-[rgb(38,37,37)]/70 mt-1" data-progress-text>
+      <div id="reading-progress-label" class="text-xs text-foreground/70 mt-1" data-progress-text>
         0% complete
       </div>
     </div>
@@ -149,7 +149,7 @@ if (!show) {
   /* Focus styles for accessibility */
   button[data-toc-accordion-toggle]:focus-visible,
   .toc-item a:focus-visible {
-    outline: 2px solid rgb(36, 90, 130);
+    outline: 2px solid var(--secondary);
     outline-offset: 2px;
   }
 </style>

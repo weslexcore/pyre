@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import type { BlogPostCard } from '@/lib/types';
 import { formatReadingTime } from '@/lib/reading-time';
+import { getDividerVariant } from '@/lib/divider-utils';
 import SectionDivider from '../SectionDivider.astro';
 
 interface Props {
@@ -15,6 +16,7 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
   day: 'numeric',
   timeZone: 'UTC',
 });
+const dividerVariant = getDividerVariant(post.slug);
 ---
 
 <article class="group relative flex flex-col md:flex-row overflow-hidden rounded-[var(--radius)] bg-[var(--pyre-black)] text-[var(--pyre-creme)] transition-all duration-300 shadow-2xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
@@ -40,7 +42,7 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
       )}
     </a>
   ) : (
-    <div class="relative aspect-[16/9] md:aspect-auto md:w-2/5 bg-gradient-to-br from-[rgb(36,90,130)] to-[rgb(241,88,54)] shrink-0">
+    <div class="relative aspect-[16/9] md:aspect-auto md:w-2/5 bg-gradient-to-br from-secondary to-primary shrink-0">
       <div class="flex h-full items-center justify-center p-6">
         <span class="font-sans text-2xl md:text-3xl font-semibold tracking-[-0.02em] text-[var(--pyre-creme)] text-center">
           {post.title}
@@ -55,17 +57,24 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
     <h3 class="mb-3">
       <a
         href={`/blog/${post.slug}`}
-        class="font-sans text-xl md:text-3xl font-semibold leading-tight tracking-[-0.02em] text-[var(--pyre-creme)] transition-colors group-hover:text-[var(--pyre-red))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+        class="font-sans text-xl md:text-3xl font-semibold leading-tight tracking-[-0.02em] text-[var(--pyre-creme)] transition-colors group-hover:text-[var(--pyre-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
       >
         {post.title}
       </a>
     </h3>
-    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-full my-1 h-0.5" scrollAware={true}/>
 
     <!-- Description -->
     <p class="mb-4 flex-1 font-sans text-base md:text-lg leading-relaxed text-[var(--pyre-creme)]">
       {post.description}
     </p>
+    <SectionDivider
+      variant={dividerVariant}
+      revealAnimation="draw"
+      visibleAnimation="pulse"
+      class="mx-auto w-full my-1 h-0.5"
+      scrollAware={true}
+      strokeWidth={1.5}
+    />
 
 
     <!-- Meta info -->
@@ -82,7 +91,7 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
       {post.tags.map((tag) => (
         <a
           href={`/blog?tag=${encodeURIComponent(tag)}`}
-          class="rounded-md bg-[rgb(36,90,130)] px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-[rgb(250,248,236)] transition-colors hover:bg-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+          class="rounded-md bg-secondary px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-background transition-colors hover:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2"
         >
           {tag}
         </a>
