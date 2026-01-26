@@ -10,13 +10,11 @@ const location: LocationContent = {
   instagramUrl: 'https://instagram.com/pyre_sauna',
   tagline: 'SELF CARE TOGETHER',
   hours: [
-    { day: 'SUN', open: '8AM', close: '10PM' },
-    { day: 'MON', open: '6AM', close: '10PM' },
-    { day: 'TUE', open: '6AM', close: '10PM' },
-    { day: 'WED', open: '6AM', close: '10PM' },
-    { day: 'THU', open: '6AM', close: '10PM' },
-    { day: 'FRI', open: '6AM', close: '10PM' },
-    { day: 'SAT', open: '8AM', close: '10PM' },
+    { day: 'THU', open: '6PM', close: '8PM' },
+    { day: 'FRI', open: '6PM', close: '9PM' },
+    { day: 'SAT', open: '10AM', close: '4PM' },
+    { day: 'SUN', open: '10AM', close: '4PM' },
+    { day: 'MON', open: '6PM', close: '8PM' },
   ],
 };
 
