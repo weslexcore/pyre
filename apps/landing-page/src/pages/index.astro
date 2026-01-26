@@ -1,22 +1,117 @@
 ---
+import TexturedCard from '@/components/TexturedCard.astro';
+import AboutContent from '../components/AboutContent.astro';
 import AboutSection from '../components/AboutSection.astro';
+import BenefitsContent from '../components/BenefitsContent.astro';
 import BenefitsSection from '../components/BenefitsSection.astro';
+import EventsContent from '../components/EventsContent.astro';
 import EventsSection from '../components/EventsSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
+import FAQContent from '../components/FAQContent.astro';
+import Footer from '../components/Footer.astro';
 import Hero from '../components/Hero.astro';
+import HeroBackground from '../components/HeroBackground.astro';
+import HeroCarousel from '../components/HeroCarousel.astro';
+import MembershipContent from '../components/MembershipContent.astro';
 import MembershipPricing from '../components/MembershipPricing.astro';
+import SectionCard from '../components/SectionCard.astro';
+import SessionContent from '../components/SessionContent.astro';
+import SessionPricing from '../components/SessionPricing.astro';
 import SignupForm from '../components/SignupForm.astro';
+import SignupFormCompact from '../components/SignupFormCompact.astro';
 import Layout from '../layouts/main.astro';
 ---
 
 <Layout>
   <main class="dark">
-    <Hero />
-    <AboutSection />
-    <BenefitsSection />
-    <FAQAccordion />
-    <MembershipPricing />
-    <SignupForm />
-    <EventsSection />
+    <!-- Mobile: three-layer scroll effect -->
+    <div class="lg:hidden">
+      <!-- Layer 1: Fixed text (z-0) + spacer - rendered by Hero component -->
+      <Hero />
+
+      <!-- Layer 2: Sticky image (z-10) - scrolls up, locks at top when reached -->
+      <div class="sticky top-0 z-10 h-[100dvh]">
+        <HeroCarousel />
+      </div>
+
+      <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
+      <div class="relative z-20 space-y-4 px-4 pt-4 pb-4">
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <AboutSection />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <BenefitsSection />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <SessionPricing />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <MembershipPricing />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <EventsSection />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <FAQAccordion />
+        </div>
+        <div class="rounded-lg overflow-hidden bg-[var(--pyre-black)]">
+          <SignupForm />
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop: fixed background + scrolling cards on right side only -->
+    <div class="hidden lg:block">
+      <!-- Fixed background layer (z-0) -->
+      <HeroBackground />
+
+      <!-- Scrolling cards layer - positioned on right 60% only -->
+      <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
+        <div class="space-y-6 px-6 pb-6">
+          <!-- Row 1: About + Benefits (stacked in single column) -->
+          <div class="space-y-6">
+            <SectionCard>
+              <AboutContent />
+            </SectionCard>
+            <SectionCard>
+              <BenefitsContent />
+            </SectionCard>
+          </div>
+
+          <!-- Row 2: Sessions + Memberships (stacked) -->
+          <div class="space-y-6">
+            <SectionCard>
+              <SessionContent />
+            </SectionCard>
+            <SectionCard>
+              <MembershipContent />
+            </SectionCard>
+          </div>
+
+          <!-- Events -->
+          <SectionCard>
+            <EventsContent />
+          </SectionCard>
+
+          <!-- FAQ -->
+          <SectionCard>
+            <FAQContent />
+          </SectionCard>
+
+          <!-- Signup Form -->
+          <SectionCard>
+            <SignupFormCompact />
+          </SectionCard>
+        </div>
+
+        <!-- Footer (full width of the 60% column) -->
+        <Footer />
+      </div>
+    </div>
   </main>
+
+  <!-- Mobile Footer (separate from desktop layout) -->
+  <div class="lg:hidden">
+    <Footer />
+  </div>
 </Layout>

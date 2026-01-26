@@ -34,7 +34,7 @@ const symbols = {
       {experiences.elements.items.map((experience, idx) => (
         <article class="bg-[var(--pyre-black)]/75 text-[var(--pyre-creme)] p-6 sm:p-8" aria-labelledby={`experience-${experience.title.toLowerCase()}-title`}>
           <div class="flex flex-col items-start gap-4">
-            <div class="bg-[var(--pyre-blue)] rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24">
+            <div class="bg-[var(--pyre-deep-blue)] rounded-full flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24">
               <Image
                 src={symbols[experience.icon as keyof typeof symbols]}
                 alt={experience.icon ?? ''}
@@ -62,7 +62,7 @@ const symbols = {
               <div class="flex-1"></div>
               <a
                 href={experience.link?.href}
-                class="font-primary-semibold tracking-[-0.02em] uppercase text-[var(--pyre-red)] text-center"
+                class="font-primary-semibold tracking-[-0.02em] uppercase text-[var(--pyre-burnt-orange)] text-center"
               >
                 {experience.linkText} &gt;
               </a>

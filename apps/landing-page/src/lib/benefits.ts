@@ -1,38 +1,23 @@
 import type { BenefitsContent } from './types';
 
 const benefits: BenefitsContent = {
-  title: 'Benefits of Contrast Therapy',
-  subtitle: 'Ancient wisdom, modern science',
+  title: 'Reset & Reconnect',
+  subtitle: 'Escape the noise. Find your balance.',
   items: [
     {
-      title: 'Enhanced Recovery',
+      title: 'Melt Away Stress',
       description:
-        'Accelerate muscle recovery and reduce inflammation through alternating heat and cold exposure.',
+        'The heat-cold contrast activates your parasympathetic nervous system, triggering a deep relaxation response that lowers cortisol and quiets a racing mind.',
     },
     {
-      title: 'Improved Circulation',
+      title: 'Recover from Burnout',
       description:
-        'Stimulate blood flow and cardiovascular health through thermal cycling.',
+        'Break the cycle of chronic exhaustion. Regular contrast therapy resets your nervous system, restoring the energy and mental clarity modern life depletes.',
     },
     {
-      title: 'Mental Clarity',
+      title: 'Connect with Others',
       description:
-        'Trigger endorphin release and reduce cortisol for improved focus and mood.',
-    },
-    {
-      title: 'Better Sleep',
-      description:
-        'Regulate your circadian rhythm and promote deeper, more restorative sleep.',
-    },
-    {
-      title: 'Immune Support',
-      description:
-        'Strengthen your immune system through regular thermal stress adaptation.',
-    },
-    {
-      title: 'Stress Relief',
-      description:
-        'Activate your parasympathetic nervous system and build resilience to daily stressors.',
+        'Share the experience in a distraction-free space. No phones, no screens—just real conversation and community in an environment designed for presence.',
     },
   ],
   cta: {

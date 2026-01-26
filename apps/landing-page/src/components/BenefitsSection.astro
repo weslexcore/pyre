@@ -3,7 +3,7 @@ import benefits from '../lib/benefits';
 import Button from './Button.astro';
 ---
 
-<section id="benefits" aria-labelledby="benefits-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
+<section id="benefits" aria-labelledby="benefits-heading" class="py-12 md:py-16 px-4 bg-[var(--pyre-black)]/5">
   <div class="max-w-5xl mx-auto">
     <div class="text-center mb-12">
       <h2
@@ -17,7 +17,7 @@ import Button from './Button.astro';
       )}
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       {benefits.items.map((benefit) => (
         <div class="benefit-card p-6 border border-current/10 rounded-lg">
           <h3 class="font-mono-bold text-lg uppercase tracking-wide mb-3">
@@ -31,7 +31,7 @@ import Button from './Button.astro';
     </div>
 
     {benefits.cta && (
-      <div class="mt-12 text-center">
+      <div class="mt-8 text-center">
         <Button
           href={benefits.cta.href}
           variant="primary"

@@ -4,6 +4,7 @@ import logo from '../assets/logos/creme/logo.png';
 import footerConfig from '../lib/footer';
 import location from '../lib/location';
 import { withBase } from '../lib/paths';
+import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');
@@ -14,7 +15,12 @@ function isMailto(href: string): boolean {
 }
 ---
 
-<footer role="contentinfo" class="relative w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+<footer role="contentinfo" class="relative w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-hidden">
+  <!-- Repeating logo background pattern -->
+  <RepeatingLogoBackground class="absolute inset-0 opacity-[0.05]" />
+
+  <!-- Content layer (above background) -->
+  <div class="relative z-10">
   <!-- Tagline Section -->
   {location.tagline && (
     <div class="border-b border-[var(--pyre-creme)]/10 py-10 md:py-16 px-4 text-center">
@@ -142,5 +148,6 @@ function isMailto(href: string): boolean {
         {footerConfig.elements.copyright}
       </div>
     </div>
+  </div>
   </div>
 </footer>

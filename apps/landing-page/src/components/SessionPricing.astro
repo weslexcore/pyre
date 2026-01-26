@@ -1,0 +1,55 @@
+---
+import sessions from '../lib/sessions';
+import Button from './Button.astro';
+---
+
+<section id="sessions" aria-labelledby="sessions-heading" class="py-16 md:py-24 px-4">
+  <div class="max-w-3xl mx-auto">
+    <div class="text-center mb-10">
+      <h2
+        id="sessions-heading"
+        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+      >
+        {sessions.title}
+      </h2>
+      {sessions.subtitle && (
+        <p class="text-lg opacity-80">{sessions.subtitle}</p>
+      )}
+    </div>
+
+    <div class="space-y-4">
+      {sessions.items.map((item) => (
+        <div
+          class={`session-item flex items-center justify-between p-5 border rounded-lg transition-all duration-300 ${
+            item.highlighted
+              ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
+              : 'border-current/20 hover:border-current/40'
+          }`}
+        >
+          <div>
+            <h3 class={`font-mono-bold text-lg uppercase tracking-wide ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+              {item.name}
+            </h3>
+            <p class="text-sm opacity-70 mt-1">{item.description}</p>
+          </div>
+          <div class={`font-primary-semibold text-3xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+            ${item.price}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {sessions.cta && (
+      <div class="mt-8 text-center">
+        <Button
+          href={sessions.cta.href}
+          variant="primary"
+          size="lg"
+          ariaLabel={sessions.cta.ariaLabel}
+        >
+          {sessions.cta.label}
+        </Button>
+      </div>
+    )}
+  </div>
+</section>

@@ -1,0 +1,288 @@
+---
+import signupForm from '../lib/signupForm';
+import Button from './Button.astro';
+
+const subscribed =
+  Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
+---
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
+
+<div
+  id="signup-compact"
+  aria-labelledby="signup-compact-heading"
+  class="py-8 md:py-12"
+>
+  <div class="max-w-xl mx-auto text-center">
+    <h2
+      id="signup-compact-heading"
+      class="font-primary-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3"
+    >
+      {signupForm.elements.title}
+    </h2>
+    <p class="text-base opacity-80 mb-6">{signupForm.elements.subtitle}</p>
+
+    {subscribed && (
+      <div role="status" class="mb-4 rounded-md border border-green-700/30 bg-green-800/20 p-3 text-sm">
+        {signupForm.elements.successMessage}
+      </div>
+    )}
+
+    <form
+      class="signup-form-compact flex flex-col sm:flex-row gap-3"
+      method="POST"
+      action={signupForm.mailchimp.action}
+      novalidate
+      data-honeypot={signupForm.mailchimp.honeypotFieldName}
+      data-antispam={JSON.stringify(signupForm.antiSpam)}
+      data-turnstile={JSON.stringify(signupForm.turnstile)}
+    >
+      <div class="flex-1 min-w-0">
+        <label for="signup-email-compact" class="sr-only">{signupForm.elements.emailLabel}</label>
+        <input
+          id="signup-email-compact"
+          name="EMAIL"
+          type="email"
+          required
+          inputmode="email"
+          autocomplete="email"
+          placeholder="Enter your email"
+          class="w-full rounded-md border border-current/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]"
+        />
+      </div>
+      <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+      <!-- Honeypot fields -->
+      <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+      <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+      <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+      <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
+      <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
+      <input type="hidden" name="cf-turnstile-response" value="" id="turnstile-token-compact" />
+
+      <Button type="submit" variant="primary" size="md" class="sm:flex-shrink-0">
+        {signupForm.elements.submitLabel}
+      </Button>
+    </form>
+
+    <!-- Turnstile widget -->
+    <div id="turnstile-container-compact" class="flex justify-center mt-4"></div>
+
+    <p id="signup-error-compact" aria-live="polite" class="mt-3 text-sm text-[var(--pyre-burnt-orange)]"></p>
+    <div id="signup-success-compact" role="status" class="mt-3 text-sm text-green-400 hidden"></div>
+  </div>
+</div>
+
+<script>
+  const form = document.querySelector('.signup-form-compact') as HTMLFormElement | null;
+  if (form) {
+    const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+    const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
+    const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+    let formStartTime = Date.now();
+    let hasInteracted = false;
+    let mouseMoved = false;
+    let turnstileToken = '';
+
+    if (timestampField) {
+      timestampField.value = formStartTime.toString();
+    }
+
+    function initTurnstile() {
+      if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey) {
+        (window as any).turnstile.render('#turnstile-container-compact', {
+          sitekey: turnstileConfig.siteKey,
+          theme: turnstileConfig.theme || 'dark',
+          size: turnstileConfig.size || 'normal',
+          callback: function(token: string) {
+            turnstileToken = token;
+            const tokenInput = document.getElementById('turnstile-token-compact') as HTMLInputElement;
+            if (tokenInput) tokenInput.value = token;
+          },
+          'error-callback': function() {
+            turnstileToken = '';
+            const tokenInput = document.getElementById('turnstile-token-compact') as HTMLInputElement;
+            if (tokenInput) tokenInput.value = '';
+          },
+          'expired-callback': function() {
+            turnstileToken = '';
+            const tokenInput = document.getElementById('turnstile-token-compact') as HTMLInputElement;
+            if (tokenInput) tokenInput.value = '';
+          }
+        });
+      }
+    }
+
+    if (typeof (window as any).turnstile !== 'undefined') {
+      initTurnstile();
+    } else {
+      window.addEventListener('load', initTurnstile);
+    }
+
+    if (antiSpamConfig.trackInteractions) {
+      document.addEventListener('mousemove', () => { mouseMoved = true; }, { once: true, passive: true });
+      form.addEventListener('focusin', () => { hasInteracted = true; }, { passive: true });
+      form.addEventListener('input', () => { hasInteracted = true; }, { passive: true });
+    }
+
+    form.addEventListener('submit', async (event) => {
+      const emailInput = form.querySelector('#signup-email-compact') as HTMLInputElement;
+      const errorEl = document.getElementById('signup-error-compact');
+      const successEl = document.getElementById('signup-success-compact');
+
+      if (!emailInput || !errorEl) return;
+
+      errorEl.textContent = '';
+      if (successEl) {
+        successEl.textContent = '';
+        successEl.classList.add('hidden');
+      }
+
+      const email = emailInput.value.trim();
+      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+      if (!emailValid) {
+        event.preventDefault();
+        errorEl.textContent = 'Please enter a valid email.';
+        emailInput.focus();
+        return;
+      }
+
+      // Honeypot checks
+      const honeypotName = form.getAttribute('data-honeypot');
+      const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
+      if (honeypotInput && honeypotInput.value.trim() !== '') {
+        event.preventDefault();
+        return;
+      }
+
+      const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+      const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+      const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
+
+      if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
+        event.preventDefault();
+        return;
+      }
+
+      // Timestamp validation
+      const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+      if (timestampInput) {
+        const submissionTime = Date.now();
+        const startTime = parseInt(timestampInput.value) || submissionTime;
+        const elapsedSeconds = (submissionTime - startTime) / 1000;
+        if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
+        event.preventDefault();
+        return;
+      }
+
+      if (turnstileConfig.siteKey && !turnstileToken) {
+        event.preventDefault();
+        errorEl.textContent = 'Please complete the security check.';
+        return;
+      }
+
+      if (turnstileToken) {
+        try {
+          const verifyResponse = await fetch('/api/verify-turnstile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: turnstileToken }),
+          });
+          const verifyResult = await verifyResponse.json();
+          if (!verifyResult.success) {
+            event.preventDefault();
+            errorEl.textContent = 'Security verification failed. Please try again.';
+            if (typeof (window as any).turnstile !== 'undefined') {
+              (window as any).turnstile.reset();
+            }
+            turnstileToken = '';
+            return;
+          }
+        } catch {
+          event.preventDefault();
+          errorEl.textContent = 'Security verification failed. Please try again.';
+          return;
+        }
+      }
+
+      // JSONP submission
+      event.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+      if (submitBtn) submitBtn.disabled = true;
+
+      try {
+        const action = form.getAttribute('action') || '';
+        const url = new URL(action);
+        url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+        const params = new URLSearchParams(url.search);
+        params.set('u', params.get('u') || '');
+        params.set('id', params.get('id') || '');
+        if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
+        params.set('EMAIL', email);
+        const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
+        if (tagInput?.value) params.set('tags', tagInput.value);
+        const callbackName = '__mc_cb_compact_' + Math.random().toString(36).slice(2);
+        params.set('c', callbackName);
+        const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+        const script = document.createElement('script');
+        script.src = jsonpUrl;
+        script.async = true;
+
+        function cleanup() {
+          try { delete (window as any)[callbackName]; } catch {}
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        (window as any)[callbackName] = function(response: any) {
+          cleanup();
+          if (response?.result === 'success') {
+            emailInput.value = '';
+            errorEl.textContent = '';
+            if (successEl) {
+              successEl.textContent = 'Thanks for subscribing!';
+              successEl.classList.remove('hidden');
+            }
+            const urlObj = new URL(window.location.href);
+            urlObj.searchParams.set('subscribed', '1');
+            window.history.replaceState({}, '', urlObj.toString());
+
+            if ((window as any).posthog) {
+              (window as any).posthog.identify(email);
+              (window as any).posthog.people.set({
+                email: email,
+                signup_source: 'mailing_list',
+                signup_date: new Date().toISOString()
+              });
+              (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
+            }
+          } else if (response?.msg) {
+            if (successEl) successEl.classList.add('hidden');
+            errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
+          } else {
+            if (successEl) successEl.classList.add('hidden');
+            errorEl.textContent = 'Something went wrong. Please try again later.';
+          }
+          if (submitBtn) submitBtn.disabled = false;
+        };
+
+        script.addEventListener('error', () => {
+          cleanup();
+          if (submitBtn) submitBtn.disabled = false;
+          form.submit();
+        }, { once: true });
+
+        document.body.appendChild(script);
+      } catch {
+        if (submitBtn) submitBtn.disabled = false;
+        form.submit();
+      }
+    });
+  }
+</script>
