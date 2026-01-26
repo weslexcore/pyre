@@ -15,6 +15,9 @@ import Button from './Button.astro';
       {sessions.subtitle && (
         <p class="text-lg opacity-80">{sessions.subtitle}</p>
       )}
+      {sessions.note && (
+        <p class="text-xs md:text-sm opacity-60 mt-2 italic">{sessions.note}</p>
+      )}
     </div>
 
     <div class="space-y-4">

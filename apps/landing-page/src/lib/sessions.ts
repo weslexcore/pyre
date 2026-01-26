@@ -11,6 +11,7 @@ export interface SessionItem {
 export interface SessionsContent {
   title: string;
   subtitle?: string;
+  note?: string;
   items: SessionItem[];
   cta?: ActionRef;
 }
@@ -18,6 +19,7 @@ export interface SessionsContent {
 const sessions: SessionsContent = {
   title: 'Session Prices',
   subtitle: 'Drop in anytime during open hours',
+  note: 'Packs are transferrable - share with friends & family',
   items: [
     {
       id: 'single',

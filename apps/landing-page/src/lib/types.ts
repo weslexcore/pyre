@@ -380,6 +380,7 @@ export interface MembershipTier {
 export interface MembershipContent {
   title: string;
   subtitle?: string;
+  note?: string;
   tiers: MembershipTier[];
   dropIn?: {
     title: string;
