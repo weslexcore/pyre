@@ -25,7 +25,7 @@ const sessions: SessionsContent = {
     {
       id: 'single',
       name: 'Single Session',
-      price: 35,
+      price: 39,
       description: 'Drop-in visit',
       href:'/book'
     },
