@@ -14,6 +14,7 @@ import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipContent from '../components/MembershipContent.astro';
 import MembershipPricing from '../components/MembershipPricing.astro';
+import SectionBridge from '../components/SectionBridge.astro';
 import SectionCard from '../components/SectionCard.astro';
 import SectionDivider from '../components/SectionDivider.astro';
 import SessionContent from '../components/SessionContent.astro';
@@ -24,7 +25,7 @@ import Layout from '../layouts/main.astro';
 import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
 ---
 
-<Layout>
+<Layout isHomePage={true}>
   <main class="dark">
     <!-- Mobile: three-layer scroll effect -->
     <!-- Black background prevents white showing during overscroll bounce -->
@@ -51,11 +52,13 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
           <BenefitsSection />
         </div>
         <SectionDivider variant="blob" animate="reveal" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <SessionPricing />
         </div>
-        <SectionDivider variant="zigzag" animate="reveal" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" />
+        <div class="h-4"></div>
+        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" />
+        <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <MembershipPricing />
         </div>
         <SectionDivider variant="squiggle" animate="reveal" class="my-8 mx-auto w-72"/>
@@ -93,11 +96,13 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
             <BenefitsContent />
           </SectionCard>
           <SectionDivider variant="blob" animate="reveal" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={2}>
+          <SectionCard stackIndex={2} class="lg:rounded-t-lg lg:rounded-b-none">
             <SessionContent />
           </SectionCard>
-          <SectionDivider variant="zigzag" animate="reveal" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={3}>
+          <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" />
+          <div class="h-4"></div>
+          <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" />
+          <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg">
             <MembershipContent />
           </SectionCard>
           <SectionDivider variant="squiggle" animate="reveal" class="my-4 mx-auto w-72"/>

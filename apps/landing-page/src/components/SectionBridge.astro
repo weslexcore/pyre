@@ -1,0 +1,94 @@
+---
+interface Props {
+  bgColor: string;
+  position?: 'top' | 'bottom';
+  variant?: 'wave' | 'scallop' | 'zigzag' | 'torn' | 'clouds';
+  height?: 'sm' | 'md' | 'lg';
+  animate?: boolean;
+  class?: string;
+}
+
+const {
+  bgColor,
+  position = 'bottom',
+  variant = 'wave',
+  height = 'md',
+  animate = true,
+  class: className = '',
+} = Astro.props;
+
+const heightClasses = {
+  sm: 'h-8 md:h-10 lg:h-12',
+  md: 'h-12 md:h-16 lg:h-20',
+  lg: 'h-16 md:h-24 lg:h-32',
+};
+
+// SVG paths for each variant
+// Bottom position: flat top edge, decorative bottom edge
+// Top position: decorative top edge, flat bottom edge
+const paths = {
+  wave: {
+    bottom: 'M0,0 L0,70 Q25,100 50,70 T100,70 L100,0 Z',
+    top: 'M0,100 L0,30 Q25,0 50,30 T100,30 L100,100 Z',
+  },
+  scallop: {
+    bottom: 'M0,0 L0,50 Q12.5,100 25,50 Q37.5,100 50,50 Q62.5,100 75,50 Q87.5,100 100,50 L100,0 Z',
+    top: 'M0,100 L0,50 Q12.5,0 25,50 Q37.5,0 50,50 Q62.5,0 75,50 Q87.5,0 100,50 L100,100 Z',
+  },
+  zigzag: {
+    bottom: 'M0,0 L0,50 L12.5,100 L25,50 L37.5,100 L50,50 L62.5,100 L75,50 L87.5,100 L100,50 L100,0 Z',
+    top: 'M0,100 L0,50 L12.5,0 L25,50 L37.5,0 L50,50 L62.5,0 L75,50 L87.5,0 L100,50 L100,100 Z',
+  },
+  torn: {
+    bottom: 'M0,0 L0,60 L8,75 L15,55 L22,80 L30,50 L38,70 L45,55 L52,85 L60,60 L68,75 L75,45 L82,70 L90,55 L100,65 L100,0 Z',
+    top: 'M0,100 L0,40 L8,25 L15,45 L22,20 L30,50 L38,30 L45,45 L52,15 L60,40 L68,25 L75,55 L82,30 L90,45 L100,35 L100,100 Z',
+  },
+  clouds: {
+    bottom: 'M0,0 L0,50 Q5,70 15,60 Q25,85 40,65 Q50,90 65,60 Q75,80 85,55 Q95,75 100,50 L100,0 Z',
+    top: 'M0,100 L0,50 Q5,30 15,40 Q25,15 40,35 Q50,10 65,40 Q75,20 85,45 Q95,25 100,50 L100,100 Z',
+  },
+};
+
+const currentPath = paths[variant][position];
+---
+
+<div
+  class:list={[
+    'section-bridge relative w-full overflow-hidden',
+    heightClasses[height],
+    className,
+  ]}
+  data-animate={animate}
+>
+  <svg
+    class="absolute inset-0 h-full w-full"
+    viewBox="0 0 100 100"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+  >
+    <path d={currentPath} fill={bgColor} class="section-bridge-path" />
+  </svg>
+</div>
+
+<style>
+  @keyframes bridge-wave {
+    0%,
+    100% {
+      transform: scaleY(1);
+    }
+    50% {
+      transform: scaleY(1.03);
+    }
+  }
+
+  .section-bridge[data-animate='true'] .section-bridge-path {
+    animation: bridge-wave 4s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .section-bridge[data-animate='true'] .section-bridge-path {
+      animation: none;
+    }
+  }
+</style>
