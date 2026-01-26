@@ -5,21 +5,22 @@ const benefits: BenefitsContent = {
   subtitle: 'Escape the noise. Find your balance.',
   items: [
     {
-      title: 'Melt Away Stress',
+      title: 'Melt Into the Heat',
       description:
-        'The heat-cold contrast activates your parasympathetic nervous system, triggering a deep relaxation response that lowers cortisol and quiets a racing mind.',
+        'As you settle into the sauna, your body softens. Muscles release. Breath slows. Tension you didn\'t know you were holding begins to let go. The noise fades, allowing your mind and body to settle.',
     },
     {
-      title: 'Recover from Burnout',
+      title: 'Refresh in the Cold',
       description:
-        'Break the cycle of chronic exhaustion. Regular contrast therapy resets your nervous system, restoring the energy and mental clarity modern life depletes.',
+        'Cold is immediate and clarifying. It pulls you fully into the present, releasing tension and sharpening focus. What lingers after is a steady sense of ease and clarity that stays with you long after you leave.',
     },
     {
-      title: 'Connect with Others',
+      title: 'Feel Human Together',
       description:
-        'Share the experience in a distraction-free space. No phones, no screens—just real conversation and community in an environment designed for presence.',
+        'Pyre is a technology-free space designed for connection. Shared heat. Shared cold. Shared presence without distraction or performance. In a world constantly demanding your attention, this is a place to slow down together—to remember we\'re not alone, and that connection can be effortless.',
     },
   ],
+  closing: 'You\'ll leave feeling better than when you walked in.',
   cta: {
     label: 'Book a Session',
     href: '#',

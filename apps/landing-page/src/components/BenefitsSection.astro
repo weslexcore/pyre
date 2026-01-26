@@ -1,9 +1,9 @@
 ---
-import { Image } from 'astro:assets';
-import benefits from '../lib/benefits';
-import Button from './Button.astro';
-import SectionDivider from './SectionDivider.astro';
-import plunging from '../assets/images/plunging.jpg';
+import { Image } from "astro:assets";
+import benefits from "../lib/benefits";
+import Button from "./Button.astro";
+import SectionDivider from "./SectionDivider.astro";
+import plunging from "../assets/images/plunging.jpg";
 ---
 
 <section id="benefits" aria-labelledby="benefits-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
@@ -38,6 +38,11 @@ import plunging from '../assets/images/plunging.jpg';
           ))}
         </div>
 
+
+        {benefits.closing && (
+          <p class="mt-6 text-base opacity-80">{benefits.closing}</p>
+        )}
+
         {benefits.cta && (
           <div class="mt-6">
             <Button
@@ -66,7 +71,7 @@ import plunging from '../assets/images/plunging.jpg';
 
     {/* Mobile/tablet: header+image row, then cards below */}
     <div class="lg:hidden">
-      <div class="grid grid-cols-[1.5fr_1fr] gap-6 items-start mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr] gap-6 items-start mb-8">
         <!-- Header column -->
         <div>
           <h2
@@ -106,11 +111,15 @@ import plunging from '../assets/images/plunging.jpg';
         ))}
       </div>
 
+      {benefits.closing&& (
+          <p class="mt-6 text-base opacity-80 text-center">{benefits.closing}</p>
+        )}
+
       {benefits.cta && (
         <div class="mt-8 text-center">
           <Button
             href={benefits.cta.href}
-            variant="primary"
+            variant="cta"
             size="lg"
             ariaLabel={benefits.cta.ariaLabel}
           >

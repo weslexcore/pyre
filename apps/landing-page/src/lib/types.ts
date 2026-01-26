@@ -435,6 +435,7 @@ export interface BenefitsContent {
   title: string;
   subtitle?: string;
   items: BenefitItem[];
+  closing?: string;
   cta?: ActionRef;
 }
 
