@@ -1,59 +1,75 @@
 ---
+import { Image } from 'astro:assets';
 import about from '../lib/about';
 import Button from './Button.astro';
+import warmSauna from '../assets/images/warm_sauna.jpg';
 ---
 
-<section id="about" aria-labelledby="about-heading" class="py-20 md:py-24 px-4">
-  <div class="max-w-3xl mx-auto">
-    <h2
-      id="about-heading"
-      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-8"
-    >
-      {about.title}
-    </h2>
+<section id="about" aria-labelledby="about-heading" class="py-12 md:py-16 px-4">
+  <div class="max-w-3xl mx-auto grid grid-cols-[1fr_1.5fr] gap-6 items-start">
+    <!-- Image column -->
+    <div class="aspect-[3/4] overflow-hidden rounded-lg">
+      <Image
+        src={warmSauna}
+        alt="People enjoying a social sauna session"
+        class="w-full h-full object-cover object-center"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
 
-    <div class="space-y-4 text-lg leading-relaxed">
-      {about.body.map((paragraph) => (
-        <p>{paragraph}</p>
-      ))}
+    <!-- Text column -->
+    <div>
+      <h2
+        id="about-heading"
+        class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-4"
+      >
+        {about.title}
+      </h2>
+
+      <div class="space-y-3 text-sm leading-relaxed">
+        {about.body.map((paragraph) => (
+          <p>{paragraph}</p>
+        ))}
+
+        {about.expandedBody && about.expandedBody.length > 0 && (
+          <div
+            id="about-expanded"
+            class="about-expanded space-y-3 overflow-hidden transition-all duration-500 ease-out"
+            style="max-height: 0; opacity: 0;"
+          >
+            {about.expandedBody.map((paragraph) => (
+              <p>{paragraph}</p>
+            ))}
+          </div>
+        )}
+      </div>
 
       {about.expandedBody && about.expandedBody.length > 0 && (
-        <div
-          id="about-expanded"
-          class="about-expanded space-y-4 overflow-hidden transition-all duration-500 ease-out"
-          style="max-height: 0; opacity: 0;"
+        <button
+          type="button"
+          id="about-toggle"
+          class="mt-4 font-mono-bold text-xs uppercase tracking-wide underline underline-offset-4 hover:no-underline focus:no-underline transition-colors"
+          aria-expanded="false"
+          aria-controls="about-expanded"
         >
-          {about.expandedBody.map((paragraph) => (
-            <p>{paragraph}</p>
-          ))}
+          Read more
+        </button>
+      )}
+
+      {about.cta && (
+        <div class="mt-4">
+          <Button
+            href={about.cta.href}
+            variant="outline"
+            size="sm"
+            ariaLabel={about.cta.ariaLabel}
+          >
+            {about.cta.label}
+          </Button>
         </div>
       )}
     </div>
-
-    {about.expandedBody && about.expandedBody.length > 0 && (
-      <button
-        type="button"
-        id="about-toggle"
-        class="mt-6 font-mono-bold text-sm uppercase tracking-wide underline underline-offset-4 hover:no-underline focus:no-underline transition-colors"
-        aria-expanded="false"
-        aria-controls="about-expanded"
-      >
-        Read more
-      </button>
-    )}
-
-    {about.cta && (
-      <div class="mt-8">
-        <Button
-          href={about.cta.href}
-          variant="outline"
-          size="md"
-          ariaLabel={about.cta.ariaLabel}
-        >
-          {about.cta.label}
-        </Button>
-      </div>
-    )}
   </div>
 </section>
 

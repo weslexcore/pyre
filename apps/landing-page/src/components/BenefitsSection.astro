@@ -1,23 +1,39 @@
 ---
+import { Image } from 'astro:assets';
 import benefits from '../lib/benefits';
 import Button from './Button.astro';
+import plunging from '../assets/images/plunging.jpg';
 ---
 
 <section id="benefits" aria-labelledby="benefits-heading" class="py-12 md:py-16 px-4 bg-[var(--pyre-black)]/5">
   <div class="max-w-5xl mx-auto">
-    <div class="text-center mb-12">
-      <h2
-        id="benefits-heading"
-        class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
-      >
-        {benefits.title}
-      </h2>
-      {benefits.subtitle && (
-        <p class="text-lg opacity-80">{benefits.subtitle}</p>
-      )}
+    <div class="grid grid-cols-[1.5fr_1fr] gap-6 items-start mb-8">
+      <!-- Header column -->
+      <div>
+        <h2
+          id="benefits-heading"
+          class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3"
+        >
+          {benefits.title}
+        </h2>
+        {benefits.subtitle && (
+          <p class="text-sm opacity-80">{benefits.subtitle}</p>
+        )}
+      </div>
+
+      <!-- Image column -->
+      <div class="aspect-square overflow-hidden rounded-lg">
+        <Image
+          src={plunging}
+          alt="Woman relaxing in a cold plunge tub"
+          class="w-full h-full object-cover object-center"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       {benefits.items.map((benefit) => (
         <div class="benefit-card p-6 border border-current/10 rounded-lg">
           <h3 class="font-mono-bold text-lg uppercase tracking-wide mb-3">

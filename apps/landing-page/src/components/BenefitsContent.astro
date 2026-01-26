@@ -1,44 +1,60 @@
 ---
+import { Image } from 'astro:assets';
 import benefits from '../lib/benefits';
 import Button from './Button.astro';
+import plunging from '../assets/images/plunging.jpg';
 ---
 
-<div id="benefits" aria-labelledby="benefits-heading">
-  <div class="mb-8">
-    <h2
-      id="benefits-heading"
-      class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
-    >
-      {benefits.title}
-    </h2>
-    {benefits.subtitle && (
-      <p class="text-base opacity-80">{benefits.subtitle}</p>
+<div id="benefits" class="grid grid-cols-[1.5fr_1fr] gap-8 items-start" aria-labelledby="benefits-heading">
+  <!-- Content column -->
+  <div>
+    <div class="mb-6">
+      <h2
+        id="benefits-heading"
+        class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
+      >
+        {benefits.title}
+      </h2>
+      {benefits.subtitle && (
+        <p class="text-base opacity-80">{benefits.subtitle}</p>
+      )}
+    </div>
+
+    <div class="grid grid-cols-1 gap-3">
+      {benefits.items.map((benefit) => (
+        <div class="benefit-card p-4 border border-current/10 rounded-lg">
+          <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">
+            {benefit.title}
+          </h3>
+          <p class="text-sm leading-relaxed opacity-80">
+            {benefit.description}
+          </p>
+        </div>
+      ))}
+    </div>
+
+    {benefits.cta && (
+      <div class="mt-6">
+        <Button
+          href={benefits.cta.href}
+          variant="primary"
+          size="md"
+          ariaLabel={benefits.cta.ariaLabel}
+        >
+          {benefits.cta.label}
+        </Button>
+      </div>
     )}
   </div>
 
-  <div class="grid grid-cols-1 gap-3">
-    {benefits.items.map((benefit) => (
-      <div class="benefit-card p-4 border border-current/10 rounded-lg">
-        <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">
-          {benefit.title}
-        </h3>
-        <p class="text-sm leading-relaxed opacity-80">
-          {benefit.description}
-        </p>
-      </div>
-    ))}
+  <!-- Image column -->
+  <div class="aspect-square overflow-hidden rounded-lg">
+    <Image
+      src={plunging}
+      alt="Woman relaxing in a cold plunge tub"
+      class="w-full h-full object-cover object-center"
+      loading="lazy"
+      decoding="async"
+    />
   </div>
-
-  {benefits.cta && (
-    <div class="mt-6">
-      <Button
-        href={benefits.cta.href}
-        variant="primary"
-        size="md"
-        ariaLabel={benefits.cta.ariaLabel}
-      >
-        {benefits.cta.label}
-      </Button>
-    </div>
-  )}
 </div>

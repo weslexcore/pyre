@@ -43,14 +43,14 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 -mt-[50dvh]">
         <!-- <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/> -->
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
           <AboutSection />
         </div>
-        <SectionDivider variant="wave" animate="wave" class="my-8 mx-auto w-72"/>
+        <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <BenefitsSection />
         </div>
-        <SectionDivider variant="blob" animate="reveal" class="my-8 mx-auto w-72"/>
+        <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
         <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <SessionPricing />
         </div>
@@ -60,16 +60,16 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
         <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <MembershipPricing />
         </div>
-        <SectionDivider variant="squiggle" animate="reveal" class="my-8 mx-auto w-72"/>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
           <EventsSection />
         </div>
-        <SectionDivider variant="torn" animate="reveal" class="my-8 mx-auto w-72"/>
+        <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
           <FAQAccordion />
         </div>
-        <SectionDivider variant="wave" flip animate="wave" />
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+        <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="wave" class="my-8 mx-auto w-72"/>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated">
           <SignupForm />
         </div>
       </div>
@@ -90,11 +90,11 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
           <SectionCard stackIndex={0} class="btn-cta-animated">
             <AboutContent />
           </SectionCard>
-          <SectionDivider variant="wave" animate="wave" class="my-4 mx-auto w-72"/>
+          <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={1}>
             <BenefitsContent />
           </SectionCard>
-          <SectionDivider variant="blob" animate="wave" class="my-4 mx-auto w-72"/>
+          <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={2} class="lg:rounded-t-lg lg:rounded-b-none">
             <SessionContent />
           </SectionCard>
@@ -104,15 +104,15 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
           <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg ">
             <MembershipContent />
           </SectionCard>
-          <SectionDivider variant="squiggle" animate="reveal" class="my-4 mx-auto w-72"/>
+          <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={4} class="btn-cta-animated">
             <EventsContent />
           </SectionCard>
-          <SectionDivider variant="torn" animate="reveal" class="my-4 mx-auto w-72"/>
+          <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={5}>
             <FAQContent />
           </SectionCard>
-          <SectionDivider variant="wave" flip animate="wave" class="my-4 mx-auto w-72"/>
+          <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="wave" class="my-4 mx-auto w-72"/>
           <SectionCard stackIndex={6} class="btn-cta-animated">
             <SignupFormCompact />
           </SectionCard>

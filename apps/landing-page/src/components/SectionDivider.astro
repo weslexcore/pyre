@@ -2,20 +2,51 @@
 interface Props {
   variant?: 'wave' | 'squiggle' | 'zigzag' | 'blob' | 'scallop' | 'torn';
   flip?: boolean;
-  animate?: 'wave' | 'reveal' | 'none';
+  revealAnimation?: 'draw' | 'fade' | 'scale' | 'none';
+  visibleAnimation?: 'wave' | 'pulse' | 'none';
+  animate?: 'wave' | 'reveal' | 'none';  // deprecated, for backwards compat
   class?: string;
 }
 
-const { variant = 'wave', flip = false, animate = 'none', class: className = '' } = Astro.props;
+const {
+  variant = 'wave',
+  flip = false,
+  revealAnimation: revealAnimationProp,
+  visibleAnimation: visibleAnimationProp,
+  animate,
+  class: className = ''
+} = Astro.props;
+
+// Handle backwards compatibility for deprecated `animate` prop
+let revealAnimation = revealAnimationProp ?? 'none';
+let visibleAnimation = visibleAnimationProp ?? 'none';
+
+if (animate !== undefined) {
+  // Map old animate values to new props (backwards compat)
+  if (animate === 'wave') {
+    visibleAnimation = visibleAnimationProp ?? 'wave';
+  } else if (animate === 'reveal') {
+    revealAnimation = revealAnimationProp ?? 'draw';
+  }
+}
 
 const flipClass = flip ? 'rotate-180' : '';
-const animateClass = animate === 'wave' ? 'divider-wave-animate' : animate === 'reveal' ? 'divider-reveal' : '';
+
+// Build animation classes
+const revealClass = revealAnimation !== 'none' ? `reveal-${revealAnimation}` : '';
+const visibleClass = visibleAnimation !== 'none' ? `visible-${visibleAnimation}` : '';
+
 // Check if a custom width class is passed, otherwise default to w-full
 const hasCustomWidth = /\bw-\d+|\bw-\[/.test(className);
 const widthClass = hasCustomWidth ? '' : 'w-full';
 ---
 
-<div class:list={['section-divider h-12 md:h-16 lg:h-20 overflow-hidden w-75', widthClass, flipClass, animateClass, className]} data-animate={animate}>
+<div
+  class:list={['section-divider h-12 md:h-16 lg:h-20 overflow-hidden w-75', widthClass, flipClass, revealClass, visibleClass, className]}
+  data-reveal-animation={revealAnimation}
+  data-visible-animation={visibleAnimation}
+  data-animate={animate}
+>
   {variant === 'wave' && (
     <svg
       viewBox="0 0 1200 60"
@@ -128,7 +159,51 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
 </div>
 
 <style>
-  /* Wave animation - subtle vertical undulation */
+  /* Ensure SVG doesn't clip */
+  .section-divider {
+    line-height: 0;
+  }
+
+  /* ========================================
+     REVEAL ANIMATIONS (one-time entrance)
+     Triggered by .is-visible class
+     ======================================== */
+
+  /* Draw - stroke draws in */
+  .reveal-draw .divider-path {
+    stroke-dasharray: 3000;
+    stroke-dashoffset: 3000;
+    transition: stroke-dashoffset 2s ease-out;
+  }
+  .reveal-draw.is-visible .divider-path {
+    stroke-dashoffset: 0;
+  }
+
+  /* Fade - opacity transition */
+  .reveal-fade .divider-svg {
+    opacity: 0;
+    transition: opacity 1.5s ease-out;
+  }
+  .reveal-fade.is-visible .divider-svg {
+    opacity: 1;
+  }
+
+  /* Scale - scales up horizontally */
+  .reveal-scale .divider-svg {
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 1.5s ease-out;
+  }
+  .reveal-scale.is-visible .divider-svg {
+    transform: scaleX(1);
+  }
+
+  /* ========================================
+     VISIBLE ANIMATIONS (ongoing after reveal)
+     Triggered by .is-revealed class
+     ======================================== */
+
+  /* Wave - subtle vertical undulation */
   @keyframes divider-wave {
     0%, 100% {
       transform: scaleY(1);
@@ -138,37 +213,88 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
     }
   }
 
-  .divider-wave-animate .divider-svg {
+  .visible-wave.is-revealed .divider-svg {
     animation: divider-wave 3s ease-in-out infinite;
   }
 
-  /* Reveal animation - stroke draw-in effect */
-  .divider-reveal .divider-path {
-    stroke-dasharray: 3000;
-    stroke-dashoffset: 3000;
-    transition: stroke-dashoffset 1.5s ease-out;
+  /* Pulse - opacity breathing */
+  @keyframes divider-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
   }
 
-  .divider-reveal.is-visible .divider-path {
-    stroke-dashoffset: 0;
+  .visible-pulse.is-revealed .divider-svg {
+    animation: divider-pulse 2s ease-in-out infinite;
   }
 
-  /* Ensure SVG doesn't clip */
-  .section-divider {
-    line-height: 0;
+  /* ========================================
+     IMMEDIATE VISIBLE ANIMATIONS
+     For when there's no reveal animation
+     ======================================== */
+
+  /* If no reveal animation, start visible animation immediately */
+  .visible-wave:not(.reveal-draw):not(.reveal-fade):not(.reveal-scale) .divider-svg {
+    animation: divider-wave 3s ease-in-out infinite;
+  }
+
+  .visible-pulse:not(.reveal-draw):not(.reveal-fade):not(.reveal-scale) .divider-svg {
+    animation: divider-pulse 2s ease-in-out infinite;
   }
 </style>
 
 <script>
-  // Intersection Observer for reveal animations
-  const revealDividers = document.querySelectorAll('.divider-reveal');
+  // Reveal animation durations (ms) - matches CSS transition durations
+  const revealDurations: Record<string, number> = {
+    draw: 2000,   // 2s
+    fade: 1500,   // 1.5s
+    scale: 1500,  // 1.5s
+    none: 0
+  };
 
-  if (revealDividers.length > 0) {
+  // Select all section dividers that have any animation
+  const animatedDividers = document.querySelectorAll(
+    '.section-divider[data-reveal-animation]:not([data-reveal-animation="none"]), ' +
+    '.section-divider[data-visible-animation]:not([data-visible-animation="none"])'
+  );
+
+  // Deprecation warning for old animate prop
+  const deprecatedDividers = document.querySelectorAll('.section-divider[data-animate]:not([data-animate="none"])');
+  if (deprecatedDividers.length > 0) {
+    console.warn(
+      '[SectionDivider] The "animate" prop is deprecated. ' +
+      'Use "revealAnimation" and "visibleAnimation" props instead.'
+    );
+  }
+
+  if (animatedDividers.length > 0) {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            entry.target.classList.add('is-visible');
+            const target = entry.target as HTMLElement;
+            const revealType = target.dataset.revealAnimation || 'none';
+            const visibleType = target.dataset.visibleAnimation || 'none';
+
+            // Add .is-visible immediately (starts reveal animation)
+            target.classList.add('is-visible');
+
+            // If there's a reveal animation, wait for it to complete before starting visible animation
+            if (revealType !== 'none' && visibleType !== 'none') {
+              const delay = revealDurations[revealType] || 0;
+              setTimeout(() => {
+                target.classList.add('is-revealed');
+              }, delay);
+            } else if (visibleType !== 'none') {
+              // No reveal animation, start visible animation immediately
+              target.classList.add('is-revealed');
+            }
+
+            // Stop observing this element
+            observer.unobserve(target);
           }
         });
       },
@@ -178,7 +304,7 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       }
     );
 
-    revealDividers.forEach((divider) => {
+    animatedDividers.forEach((divider) => {
       observer.observe(divider);
     });
   }
