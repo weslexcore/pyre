@@ -43,7 +43,7 @@ const navbar: NavbarContent = {
     },
     secondary: {
       label: 'Book',
-      href: withBase('/book'),
+      href: withBase('/events'),
       ariaLabel: 'Book now',
     },
     login: {

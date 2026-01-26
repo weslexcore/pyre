@@ -140,6 +140,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
       ariaLabel: `Reserve spot for ${event.title}`,
     },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
+    spotsRemaining: event.spotsRemaining,
   };
 }
 

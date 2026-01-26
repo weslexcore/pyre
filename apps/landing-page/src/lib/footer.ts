@@ -19,7 +19,7 @@ const footerConfig: FooterContent = {
       links: [
         {
           label: 'Book a session',
-          href: withBase('/book'),
+          href: withBase('/events'),
           ariaLabel: 'Book now',
         },
       ],

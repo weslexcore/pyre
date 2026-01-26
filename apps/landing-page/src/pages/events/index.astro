@@ -21,11 +21,6 @@ const description = 'Discover upcoming events, workshops, and community gatherin
         <h1 class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4 text-[var(--pyre-creme)]">
           {eventsContent.title}
         </h1>
-        <!-- {eventsContent.subtitle && (
-          <p class="font-sans text-xl leading-relaxed text-[rgb(38,37,37)]/70">
-            {eventsContent.subtitle}
-          </p>
-        )} -->
       </header>
 
       <!-- Date Filters -->
@@ -54,7 +49,7 @@ const description = 'Discover upcoming events, workshops, and community gatherin
       <div id="empty-state" class="hidden text-center py-12">
         <div class="mx-auto max-w-md space-y-4">
           <svg
-            class="mx-auto h-16 w-16 text-[rgb(38,37,37)]/20"
+            class="mx-auto h-16 w-16 text-[var(--pyre-creme)]/20"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -67,15 +62,15 @@ const description = 'Discover upcoming events, workshops, and community gatherin
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <h2 class="font-sans text-xl font-semibold text-[rgb(38,37,37)]">
+          <h2 class="font-sans text-xl font-semibold text-[var(--pyre-creme)]">
             No events in this time range
           </h2>
-          <p class="font-sans text-base text-[rgb(38,37,37)]/70">
+          <p class="font-sans text-base text-[var(--pyre-creme)]/70">
             Try selecting a different filter to see more events.
           </p>
           <button
             id="show-all-btn"
-            class="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
+            class="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
           >
             Show All Events
           </button>
@@ -84,7 +79,7 @@ const description = 'Discover upcoming events, workshops, and community gatherin
 
       <!-- Results Count -->
       <div id="results-count" class="mt-6 text-center">
-        <p class="font-mono text-sm text-[rgb(38,37,37)]/50">
+        <p class="font-mono text-sm text-[var(--pyre-creme)]/50">
           Showing <span id="visible-count">{events.length}</span> of <span id="total-count">{events.length}</span> events
         </p>
       </div>
