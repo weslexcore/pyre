@@ -87,7 +87,7 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
         <div class="px-6 pb-6">
           <!-- <SectionDivider variant="wave" animate="wave" /> -->
-          <SectionCard stackIndex={0}>
+          <SectionCard stackIndex={0} class="btn-cta-animated">
             <AboutContent />
           </SectionCard>
           <SectionDivider variant="wave" animate="wave" class="my-4 mx-auto w-72"/>
@@ -101,11 +101,11 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" />
           <div class="h-4"></div>
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" />
-          <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg">
+          <SectionCard stackIndex={3} class="lg:rounded-t-none lg:rounded-b-lg ">
             <MembershipContent />
           </SectionCard>
           <SectionDivider variant="squiggle" animate="reveal" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={4}>
+          <SectionCard stackIndex={4} class="btn-cta-animated">
             <EventsContent />
           </SectionCard>
           <SectionDivider variant="torn" animate="reveal" class="my-4 mx-auto w-72"/>
@@ -113,7 +113,7 @@ import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
             <FAQContent />
           </SectionCard>
           <SectionDivider variant="wave" flip animate="wave" class="my-4 mx-auto w-72"/>
-          <SectionCard stackIndex={6}>
+          <SectionCard stackIndex={6} class="btn-cta-animated">
             <SignupFormCompact />
           </SectionCard>
         </div>
