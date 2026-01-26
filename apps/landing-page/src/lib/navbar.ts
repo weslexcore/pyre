@@ -46,10 +46,15 @@ const navbar: NavbarContent = {
       href: withBase('/book'),
       ariaLabel: 'Book now',
     },
+    login: {
+      label: 'Login',
+      href: 'https://momence.com/sign-in?hostId=169530',
+      ariaLabel: 'Log in to manage your bookings',
+    },
     social: {
       instagram: {
         label: 'Instagram',
-        href: 'https://www.instagram.com/pyre_sauna/',
+        href: withBase('/events'),
         ariaLabel: 'Follow us on Instagram',
       },
     },

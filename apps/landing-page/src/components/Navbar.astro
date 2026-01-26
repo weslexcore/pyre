@@ -8,9 +8,10 @@ import Button from './Button.astro';
 interface Props {
   isHomePage?: boolean;
   transparentNav?: boolean;
+  darkLogoText?: boolean;
 }
 
-const { isHomePage = false, transparentNav = false } = Astro.props;
+const { isHomePage = false, transparentNav = false, darkLogoText = false } = Astro.props;
 ---
 
 <header
@@ -44,7 +45,10 @@ const { isHomePage = false, transparentNav = false } = Astro.props;
         decoding="sync"
       />
       {!isHomePage && (
-        <p class="font-logo text-5xl text-[var(--pyre-creme)]">PYRE</p>
+        <p class:list={[
+          "font-logo text-5xl",
+          darkLogoText ? "text-[var(--pyre-black)]" : "text-[var(--pyre-creme)]"
+        ]}>PYRE</p>
       )}
     </a>
 
@@ -70,6 +74,14 @@ const { isHomePage = false, transparentNav = false } = Astro.props;
     <!-- Desktop CTAs -->
     <div class="hidden md:flex items-center gap-3">
       <Button
+        href={navbar.actions?.login?.href}
+        variant="secondary"
+        size="lg"
+        ariaLabel={navbar.actions?.login?.ariaLabel}
+      >
+        {navbar.actions?.login?.label}
+      </Button>
+      <Button
         href={navbar.actions?.secondary?.href}
         variant="cta"
         size="lg"
@@ -83,6 +95,14 @@ const { isHomePage = false, transparentNav = false } = Astro.props;
 
     <!-- Mobile CTA + menu button -->
     <div class="flex md:hidden items-center gap-2">
+      <!-- <Button
+        href={navbar.actions?.login?.href}
+        variant="secondary"
+        size="sm"
+        ariaLabel={navbar.actions?.login?.ariaLabel}
+      >
+        {navbar.actions?.login?.label}
+      </Button> -->
       <Button
         href={navbar.actions?.secondary?.href}
         variant="cta"
@@ -130,7 +150,16 @@ const { isHomePage = false, transparentNav = false } = Astro.props;
           {link.label}
         </a>
       ))}
-      <div class="pt-3 border-t border-[var(--pyre-creme)]/10">
+      <div class="pt-3 border-t border-[var(--pyre-creme)]/10 flex flex-row gap-3">
+        <Button
+          href={navbar.actions?.login?.href}
+          variant="secondary"
+          size="lg"
+          ariaLabel={navbar.actions?.login?.ariaLabel}
+          class="w-full"
+        >
+          {navbar.actions?.login?.label}
+        </Button>
         <Button
           href={navbar.actions?.secondary?.href}
           variant="cta"

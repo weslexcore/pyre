@@ -119,6 +119,7 @@ export interface NavbarContent {
   actions?: {
     primary?: ActionRef;
     secondary?: ActionRef;
+    login?: ActionRef;
     social?: {
       instagram?: LinkRef;
     };
