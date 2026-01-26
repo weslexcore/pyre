@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import type { BlogPostCard } from '@/lib/types';
 import { formatReadingTime } from '@/lib/reading-time';
+import SectionDivider from '../SectionDivider.astro';
 
 interface Props {
   post: BlogPostCard;
@@ -16,7 +17,7 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
 });
 ---
 
-<article class="group relative flex flex-col md:flex-row overflow-hidden rounded-[var(--radius)] border border-[rgb(38,37,37)]/10 bg-[rgb(250,248,236)] transition-all duration-300 shadow-2xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+<article class="group relative flex flex-col md:flex-row overflow-hidden rounded-[var(--radius)] bg-[var(--pyre-black)] text-[var(--pyre-creme)] transition-all duration-300 shadow-2xl hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
   <!-- Featured Image -->
   {post.image ? (
     <a href={`/blog/${post.slug}`} class="relative aspect-[16/9] md:aspect-auto md:w-2/5 overflow-hidden shrink-0">
@@ -41,7 +42,7 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
   ) : (
     <div class="relative aspect-[16/9] md:aspect-auto md:w-2/5 bg-gradient-to-br from-[rgb(36,90,130)] to-[rgb(241,88,54)] shrink-0">
       <div class="flex h-full items-center justify-center p-6">
-        <span class="font-sans text-2xl md:text-3xl font-semibold tracking-[-0.02em] text-[rgb(250,248,236)] text-center">
+        <span class="font-sans text-2xl md:text-3xl font-semibold tracking-[-0.02em] text-[var(--pyre-creme)] text-center">
           {post.title}
         </span>
       </div>
@@ -54,19 +55,21 @@ const formattedDate = post.date.toLocaleDateString('en-US', {
     <h3 class="mb-3">
       <a
         href={`/blog/${post.slug}`}
-        class="font-sans text-xl md:text-3xl font-semibold leading-tight tracking-[-0.02em] text-[rgb(38,37,37)] transition-colors group-hover:text-[rgb(241,88,54)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+        class="font-sans text-xl md:text-3xl font-semibold leading-tight tracking-[-0.02em] text-[var(--pyre-creme)] transition-colors group-hover:text-[var(--pyre-red))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
       >
         {post.title}
       </a>
     </h3>
+    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-full my-1 h-0.5" scrollAware={true}/>
 
     <!-- Description -->
-    <p class="mb-4 flex-1 font-sans text-base md:text-lg leading-relaxed text-[rgb(38,37,37)]">
+    <p class="mb-4 flex-1 font-sans text-base md:text-lg leading-relaxed text-[var(--pyre-creme)]">
       {post.description}
     </p>
 
+
     <!-- Meta info -->
-    <div class="flex flex-wrap items-center gap-4 border-t border-[rgb(38,37,37)]/10 pt-4 font-mono text-sm text-[rgb(38,37,37)]/70">
+    <div class="flex flex-wrap items-center gap-4 pt-4 font-mono text-sm text-[var(--pyre-creme)]/70">
       <span class="font-bold">{post.author}</span>
       <!-- <span aria-hidden="true">•</span> -->
       <!-- <time datetime={post.date.toISOString()}>{formattedDate}</time> -->

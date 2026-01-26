@@ -65,7 +65,7 @@ const fallbackEvents: EventsContent = {
   ],
   viewAllCta: {
     label: 'View All Events',
-    href: '#',
+    href: '/events',
     ariaLabel: 'View all upcoming events',
   },
 };

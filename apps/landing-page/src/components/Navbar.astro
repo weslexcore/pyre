@@ -7,18 +7,19 @@ import Button from './Button.astro';
 
 interface Props {
   isHomePage?: boolean;
+  transparentNav?: boolean;
 }
 
-const { isHomePage = false } = Astro.props;
+const { isHomePage = false, transparentNav = false } = Astro.props;
 ---
 
 <header
   data-component="navbar"
   data-at-top="true"
-  data-is-home={isHomePage ? 'true' : 'false'}
+  data-transparent-nav={transparentNav ? 'true' : 'false'}
   class:list={[
     "fixed inset-x-0 top-0 z-50 transition-colors duration-300 motion-reduce:transition-none",
-    isHomePage
+    transparentNav
       ? "bg-transparent data-[at-top=false]:max-lg:bg-[var(--pyre-black)]"
       : "bg-[var(--pyre-black)]"
   ]}
@@ -32,20 +33,23 @@ const { isHomePage = false } = Astro.props;
 
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
-    <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex flex-shrink-0">
+    <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex items-center gap-3 flex-shrink-0">
       <Image
         src={logo}
         alt="Pyre Sauna logo"
-        width="512"
+        width="128"
         height="128"
         class="h-8 md:h-10 w-auto"
         loading="eager"
         decoding="sync"
       />
+      {!isHomePage && (
+        <p class="font-logo text-5xl text-[var(--pyre-creme)]">PYRE</p>
+      )}
     </a>
 
     <!-- Desktop navigation links -->
-    <nav class="hidden lg:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
+    <nav class="hidden md:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
       <!-- Desktop gradient overlay - always visible on desktop nav -->
       <div
         class="navbar-gradient absolute inset-0 pointer-events-none opacity-50"
@@ -281,7 +285,7 @@ const { isHomePage = false } = Astro.props;
       const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
       if (!header) return;
 
-      const isHomePage = header.dataset.isHome === 'true';
+      const transparentNav = header.dataset.transparentNav === 'true';
       let ticking = false;
 
       function updateNavbar() {
@@ -290,9 +294,9 @@ const { isHomePage = false } = Astro.props;
 
         // Update mobile gradient visibility
         if (mobileGradient) {
-          // On homepage: show gradient only when scrolled (when dark bg is visible)
+          // On transparent nav pages: show gradient only when scrolled (when dark bg is visible)
           // On other pages: always show gradient (dark bg is always present)
-          const showGradient = !isHomePage || !atTop;
+          const showGradient = !transparentNav || !atTop;
           mobileGradient.style.opacity = showGradient ? '0.2' : '0';
         }
 

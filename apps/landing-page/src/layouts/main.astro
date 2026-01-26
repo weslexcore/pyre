@@ -27,6 +27,7 @@ interface Props {
     tags?: string[];
   };
   isHomePage?: boolean;
+  transparentNav?: boolean;
 }
 
 const {
@@ -36,6 +37,7 @@ const {
   ogType = 'website',
   article,
   isHomePage = false,
+  transparentNav = false,
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL ?? '/';
@@ -131,7 +133,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		</script>
 	</head>
     <body class="min-h-screen flex flex-col">
-        <Navbar isHomePage={isHomePage} />
+        <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} />
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
 		<main class="flex-1">
 			<slot />

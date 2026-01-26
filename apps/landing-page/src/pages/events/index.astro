@@ -1,0 +1,205 @@
+---
+import MainLayout from '@/layouts/main.astro';
+import EventCard from '@/components/events/EventCard.astro';
+import EventDateFilter from '@/components/events/EventDateFilter.astro';
+import { getEventsContent } from '@/lib/events';
+
+// Fetch events from Momence API
+const eventsContent = await getEventsContent();
+const events = eventsContent.items;
+
+// SEO metadata
+const title = 'Events - Pyre';
+const description = 'Discover upcoming events, workshops, and community gatherings at Pyre Sauna + Cold Plunge in Richmond, VA.';
+---
+
+<MainLayout title={title} description={description} transparentNav={true}>
+  <div class="min-h-screen bg-[var(--pyre-black)] pb-16 pt-24 md:pt-32">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <header class="mb-8">
+        <h1 class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4 text-[var(--pyre-creme)]">
+          {eventsContent.title}
+        </h1>
+        <!-- {eventsContent.subtitle && (
+          <p class="font-sans text-xl leading-relaxed text-[rgb(38,37,37)]/70">
+            {eventsContent.subtitle}
+          </p>
+        )} -->
+      </header>
+
+      <!-- Date Filters -->
+      <div class="mb-8">
+        <EventDateFilter />
+      </div>
+
+      <!-- Events Grid -->
+      <div id="events-container">
+        {events.length > 0 ? (
+          <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((event) => (
+              <EventCard event={event} />
+            ))}
+          </div>
+        ) : (
+          <div class="text-center py-12">
+            <p class="font-sans text-lg text-[rgb(38,37,37)]/70">
+              No upcoming events at this time. Check back soon!
+            </p>
+          </div>
+        )}
+      </div>
+
+      <!-- Empty State (hidden by default, shown when no events match filter) -->
+      <div id="empty-state" class="hidden text-center py-12">
+        <div class="mx-auto max-w-md space-y-4">
+          <svg
+            class="mx-auto h-16 w-16 text-[rgb(38,37,37)]/20"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+          <h2 class="font-sans text-xl font-semibold text-[rgb(38,37,37)]">
+            No events in this time range
+          </h2>
+          <p class="font-sans text-base text-[rgb(38,37,37)]/70">
+            Try selecting a different filter to see more events.
+          </p>
+          <button
+            id="show-all-btn"
+            class="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-white transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
+          >
+            Show All Events
+          </button>
+        </div>
+      </div>
+
+      <!-- Results Count -->
+      <div id="results-count" class="mt-6 text-center">
+        <p class="font-mono text-sm text-[rgb(38,37,37)]/50">
+          Showing <span id="visible-count">{events.length}</span> of <span id="total-count">{events.length}</span> events
+        </p>
+      </div>
+    </div>
+  </div>
+</MainLayout>
+
+<script>
+  function initEventsPage() {
+    const eventsGrid = document.getElementById('events-grid');
+    const emptyState = document.getElementById('empty-state');
+    const eventsContainer = document.getElementById('events-container');
+    const visibleCountEl = document.getElementById('visible-count');
+    const showAllBtn = document.getElementById('show-all-btn');
+
+    if (!eventsGrid) return;
+
+    const allCards = Array.from(eventsGrid.querySelectorAll('.event-card'));
+
+    // Filter events based on date range
+    function filterEvents(filter: string) {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      let endDate: Date;
+
+      switch (filter) {
+        case 'week': {
+          // End of current week (Sunday)
+          endDate = new Date(now);
+          const daysUntilSunday = 7 - now.getDay();
+          endDate.setDate(now.getDate() + daysUntilSunday);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        }
+        case 'month': {
+          // End of current month
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        }
+        case '30days': {
+          // 30 days from now
+          endDate = new Date(now);
+          endDate.setDate(now.getDate() + 30);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        }
+        case 'all':
+        default: {
+          // No end date limit
+          endDate = new Date('2100-01-01');
+          break;
+        }
+      }
+
+      let visibleCount = 0;
+
+      allCards.forEach((card) => {
+        const isoDate = card.getAttribute('data-iso-date');
+        if (!isoDate) {
+          // Show cards without ISO date (fallback events)
+          (card as HTMLElement).style.display = '';
+          visibleCount++;
+          return;
+        }
+
+        const eventDate = new Date(isoDate);
+        const isInRange = eventDate >= now && eventDate <= endDate;
+
+        if (isInRange) {
+          (card as HTMLElement).style.display = '';
+          visibleCount++;
+        } else {
+          (card as HTMLElement).style.display = 'none';
+        }
+      });
+
+      // Update visible count
+      if (visibleCountEl) {
+        visibleCountEl.textContent = String(visibleCount);
+      }
+
+      // Show/hide empty state
+      if (visibleCount === 0) {
+        eventsContainer?.classList.add('hidden');
+        emptyState?.classList.remove('hidden');
+      } else {
+        eventsContainer?.classList.remove('hidden');
+        emptyState?.classList.add('hidden');
+      }
+    }
+
+    // Listen for filter changes
+    window.addEventListener('event-date-filter', ((e: CustomEvent) => {
+      filterEvents(e.detail.filter);
+    }) as EventListener);
+
+    // Handle "Show All Events" button
+    showAllBtn?.addEventListener('click', () => {
+      // Click the "All Upcoming" filter button
+      const allFilterBtn = document.querySelector('.filter-btn[data-filter="all"]');
+      if (allFilterBtn) {
+        (allFilterBtn as HTMLButtonElement).click();
+      }
+    });
+  }
+
+  // Initialize on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initEventsPage);
+  } else {
+    initEventsPage();
+  }
+
+  // Support Astro view transitions
+  document.addEventListener('astro:page-load', initEventsPage);
+</script>

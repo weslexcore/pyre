@@ -1,6 +1,7 @@
 import { withBase } from './paths';
 import type { FooterContent } from './types';
 import saunaMasterCert from '../assets/logos/sauna_master_cert.png';
+import breathworkCert from '../assets/logos/sherpa_logo.png';
 
 const footerConfig: FooterContent = {
   elements: {
@@ -83,15 +84,26 @@ const footerConfig: FooterContent = {
       ],
     },
   ],
-  certification: {
-    image: {
-      src: saunaMasterCert.src,
-      alt: 'Deutsche Sauna-Akademie Certified Sauna Master',
+  certifications: [
+    {
+      image: {
+        src: saunaMasterCert.src,
+        alt: 'Deutsche Sauna-Akademie Certified Sauna Master',
+      },
+      title: 'Deutsche Sauna-Akademie Certified Sauna Master',
+      link: 'https://saunameister.de/',
+      ariaLabel: 'Visit Deutsche Sauna-Akademie - Certified Sauna Master credential',
     },
-    title: 'Deutsche Sauna-Akademie Certified Sauna Master',
-    link: 'https://saunameister.de/',
-    ariaLabel: 'Visit Deutsche Sauna-Akademie - Certified Sauna Master credential',
-  },
+    {
+      image: {
+        src: breathworkCert.src,
+        alt: 'Sherpa Breath and Cold Certified',
+      },
+      title: 'Sherpa Breath and Cold Certified',
+      link: 'https://www.sherpabreathandcold.com/',
+      ariaLabel: 'Visit Sherpa Breath and Cold - Breathwork certification credential',
+    },
+  ],
 };
 
 export default footerConfig;

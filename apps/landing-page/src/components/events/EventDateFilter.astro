@@ -1,0 +1,93 @@
+---
+import { EVENTS_CONFIG } from '@/lib/events-config';
+import Button from '../Button.astro';
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={['event-date-filter', className]}>
+  <div class="flex flex-wrap gap-2" role="group" aria-label="Date filters">
+    {EVENTS_CONFIG.quickFilters.map((filter) => (
+      <Button
+        variant="cta"
+        data-filter={filter.id}
+        class="filter-btn"
+        aria-pressed={filter.id === EVENTS_CONFIG.defaultFilter ? 'true' : 'false'}
+      >
+        {filter.label}
+      </Button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { EVENTS_CONFIG } from '@/lib/events-config';
+
+  function initEventDateFilter() {
+    const filterButtons = document.querySelectorAll('.event-date-filter .filter-btn');
+
+    // Get initial filter from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialFilter = urlParams.get('filter') || EVENTS_CONFIG.defaultFilter;
+
+    // Set initial active state from URL
+    filterButtons.forEach((button) => {
+      const filterId = button.getAttribute('data-filter');
+      if (filterId === initialFilter) {
+        button.setAttribute('aria-pressed', 'true');
+      } else {
+        button.setAttribute('aria-pressed', 'false');
+      }
+    });
+
+    // Dispatch initial filter event
+    dispatchFilterEvent(initialFilter);
+
+    // Handle filter button clicks
+    filterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const filterId = button.getAttribute('data-filter');
+        if (!filterId) return;
+
+        // Update aria-pressed states
+        filterButtons.forEach((btn) => {
+          btn.setAttribute('aria-pressed', btn === button ? 'true' : 'false');
+        });
+
+        // Update URL without reload
+        const url = new URL(window.location.href);
+        if (filterId === EVENTS_CONFIG.defaultFilter) {
+          url.searchParams.delete('filter');
+        } else {
+          url.searchParams.set('filter', filterId);
+        }
+        window.history.replaceState({}, '', url.toString());
+
+        // Dispatch filter event
+        dispatchFilterEvent(filterId);
+      });
+    });
+  }
+
+  function dispatchFilterEvent(filterId: string) {
+    window.dispatchEvent(
+      new CustomEvent('event-date-filter', {
+        detail: { filter: filterId },
+      })
+    );
+  }
+
+  // Initialize on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initEventDateFilter);
+  } else {
+    initEventDateFilter();
+  }
+
+  // Support Astro view transitions
+  document.addEventListener('astro:page-load', initEventDateFilter);
+</script>

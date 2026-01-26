@@ -20,7 +20,7 @@ const navbar: NavbarContent = {
       },
       {
         label: 'Events',
-        href: withBase('#events'),
+        href: withBase('/events'),
         ariaLabel: 'View upcoming events',
       },
       {

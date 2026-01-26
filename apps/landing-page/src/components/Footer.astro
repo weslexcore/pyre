@@ -116,17 +116,17 @@ function isMailto(href: string): boolean {
     <!-- Certification & Legal -->
     <div class="mt-12 pt-8 border-t border-[var(--pyre-creme)]/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
       <div class="flex flex-wrap items-center gap-6">
-        {footerConfig.certification && (
+        {footerConfig.certifications && footerConfig.certifications.map((cert) => (
           <a
-            href={footerConfig.certification.link}
-            aria-label={footerConfig.certification.ariaLabel}
+            href={cert.link}
+            aria-label={cert.ariaLabel}
             target="_blank"
             rel="noopener noreferrer"
             class="inline-block hover:opacity-80 transition-opacity"
           >
             <img
-              src={footerConfig.certification.image.src}
-              alt={footerConfig.certification.image.alt || footerConfig.certification.title}
+              src={cert.image.src}
+              alt={cert.image.alt || cert.title}
               width="60"
               height="60"
               class="h-14 w-auto"
@@ -134,7 +134,7 @@ function isMailto(href: string): boolean {
               decoding="async"
             />
           </a>
-        )}
+        ))}
 
         <!-- Legal links -->
         {footerConfig.groups && footerConfig.groups.find(g => g.title === 'Legal') && (

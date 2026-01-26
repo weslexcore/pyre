@@ -35,7 +35,7 @@ const membership: MembershipContent = {
         { text: 'Unlimited sauna & cold plunge access' },
         { text: '4 guest passes per month', highlighted: true },
         // { text: 'Access to all open sessions' },
-        // { text: 'Free Pyre tote bag', highlighted: true },
+        { text: 'Free Pyre tote bag', highlighted: true },
         // { text: 'Locker and amenities included' },
       ],
       cta: {

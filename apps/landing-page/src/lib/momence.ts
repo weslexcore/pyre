@@ -84,11 +84,12 @@ export function sortEventsByDate(events: MomenceEvent[]): MomenceEvent[] {
 }
 
 /**
- * Format a date string like "February 12, 2026"
+ * Format a date string like "Wed, February 12, 2026"
  */
 function formatDate(isoDate: string): string {
   const date = new Date(isoDate);
   return date.toLocaleDateString('en-US', {
+    weekday: 'short',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -138,6 +139,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
       href: event.link,
       ariaLabel: `Reserve spot for ${event.title}`,
     },
+    isoDate: event.dateTime, // Preserve original ISO date for filtering
   };
 }
 

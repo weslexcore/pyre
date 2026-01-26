@@ -227,7 +227,7 @@ export interface FooterContent {
     instagram?: LinkRef;
   };
   groups?: Array<FooterNavGroup>;
-  certification?: CertificationBadge;
+  certifications?: CertificationBadge[];
 }
 
 export interface FooterNavGroup {
@@ -401,6 +401,7 @@ export interface EventItem {
   location: string;
   image?: ImageRef;
   cta?: ActionRef;
+  isoDate?: string; // ISO 8601 date for client-side filtering
 }
 
 export interface EventsContent {

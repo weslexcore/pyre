@@ -8,32 +8,32 @@ interface Props {
 const { tags } = Astro.props;
 ---
 
-<div class="space-y-4 rounded-[var(--radius)] border border-[rgb(38,37,37)]/10 bg-[rgb(250,248,236)] pt-4 pl-4">
+<div class="space-y-4 rounded-[var(--radius)] border border-[var(--pyre-creme)]/10 bg-transparent pt-4 pl-4">
   <!-- Filter header -->
   <div class="flex items-center justify-between">
     <button
       id="toggle-tag-filters"
       type="button"
-      class="flex items-center gap-2 font-sans text-lg font-semibold text-[rgb(38,37,37)] transition-colors hover:text-[rgb(36,90,130)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+      class="flex items-center gap-2 font-sans text-lg font-semibold text-[var(--pyre-creme)] transition-colors hover:text-[var(--pyre-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
       aria-expanded="false"
       aria-controls="tag-filters-content"
     >
-      <svg 
-        id="toggle-icon" 
-        class="h-5 w-5 transition-transform duration-200" 
-        fill="none" 
-        stroke="currentColor" 
+      <svg
+        id="toggle-icon"
+        class="h-5 w-5 transition-transform duration-200"
+        fill="none"
+        stroke="currentColor"
         viewBox="0 0 24 24"
         aria-hidden="true"
       >
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
       Filter by Tag
-      <span id="active-count" class="hidden rounded-full bg-[rgb(36,90,130)] px-2 py-0.5 font-mono text-xs font-bold text-[rgb(250,248,236)]"></span>
+      <span id="active-count" class="hidden rounded-full bg-[var(--pyre-blue)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--pyre-creme)]"></span>
     </button>
     <button
       id="clear-all-filters"
-      class="hidden font-mono text-sm font-bold text-[rgb(241,88,54)] transition-colors hover:text-[rgb(36,90,130)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2"
+      class="hidden font-mono text-sm font-bold text-[var(--pyre-red)] transition-colors hover:text-[var(--pyre-blue)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
       aria-label="Clear all tag filters"
     >
       Clear All
@@ -47,7 +47,7 @@ const { tags } = Astro.props;
         <button
           type="button"
           data-tag={tag.name}
-          class="tag-filter-btn rounded-md border-2 border-[rgb(36,90,130)]/20 bg-white px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide text-[rgb(38,37,37)] transition-colors hover:border-[rgb(36,90,130)] hover:bg-[rgb(36,90,130)] hover:text-[rgb(250,248,236)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(36,90,130)] focus-visible:ring-offset-2 aria-pressed:border-[rgb(36,90,130)] aria-pressed:bg-[rgb(36,90,130)] aria-pressed:text-[rgb(250,248,236)]"
+          class="tag-filter-btn rounded-md border-2 border-[var(--pyre-creme)]/20 bg-[var(--pyre-black)] px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-[var(--pyre-blue)] hover:bg-[var(--pyre-blue)] hover:text-[var(--pyre-creme)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)] aria-pressed:border-[var(--pyre-blue)] aria-pressed:bg-[var(--pyre-blue)] aria-pressed:text-[var(--pyre-creme)]"
           aria-pressed="false"
           aria-label={`Filter by ${tag.name} tag (${tag.count} posts)`}
         >
@@ -59,7 +59,7 @@ const { tags } = Astro.props;
 
     <!-- Active filters display -->
     <div id="active-filters" class="hidden space-y-2">
-      <p class="font-mono text-sm font-bold text-[rgb(38,37,37)]/70">
+      <p class="font-mono text-sm font-bold text-[var(--pyre-creme)]/70">
         Active Filters:
       </p>
       <div id="active-filters-list" class="flex flex-wrap gap-2">
@@ -163,11 +163,11 @@ const { tags } = Astro.props;
     // Build active filter tags
     const filterTags = Array.from(activeTags).map((tag) => {
       return `
-        <span class="inline-flex items-center gap-2 rounded-md bg-[rgb(36,90,130)] px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-[rgb(250,248,236)]">
+        <span class="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-blue)] px-3 py-1 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
           ${tag}
           <button
             type="button"
-            class="remove-filter-btn hover:text-[rgb(241,88,54)] focus-visible:outline-none focus-visible:text-[rgb(241,88,54)]"
+            class="remove-filter-btn hover:text-[var(--pyre-red)] focus-visible:outline-none focus-visible:text-[var(--pyre-red)]"
             data-tag="${tag}"
             aria-label="Remove ${tag} filter"
           >
