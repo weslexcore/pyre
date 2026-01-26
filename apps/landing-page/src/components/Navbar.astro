@@ -23,6 +23,13 @@ const { isHomePage = false } = Astro.props;
       : "bg-[var(--pyre-black)]"
   ]}
 >
+  <!-- Mobile gradient overlay - visible when navbar has dark background (mobile only) -->
+  <div
+    class="navbar-gradient absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300 lg:hidden"
+    aria-hidden="true"
+    data-navbar-gradient="mobile"
+  ></div>
+
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
     <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex flex-shrink-0">
@@ -38,12 +45,18 @@ const { isHomePage = false } = Astro.props;
     </a>
 
     <!-- Desktop navigation links -->
-    <nav class="hidden lg:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4" aria-label="Main navigation">
+    <nav class="hidden lg:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
+      <!-- Desktop gradient overlay - always visible on desktop nav -->
+      <div
+        class="navbar-gradient absolute inset-0 pointer-events-none opacity-50"
+        aria-hidden="true"
+        data-navbar-gradient="desktop"
+      ></div>
       {navbar.elements.links && navbar.elements.links.map((link) => (
         <a
           href={link.href}
           aria-label={link.ariaLabel}
-          class="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] hover:opacity-70 transition-opacity"
+          class="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] hover:opacity-70 transition-opacity relative z-10"
         >
           {link.label}
         </a>
@@ -55,7 +68,7 @@ const { isHomePage = false } = Astro.props;
       <Button
         href={navbar.actions?.secondary?.href}
         variant="cta"
-        size="sm"
+        size="lg"
         ariaLabel={navbar.actions?.secondary?.ariaLabel}
         class="book-cta"
         data-placement="header"
@@ -117,7 +130,7 @@ const { isHomePage = false } = Astro.props;
         <Button
           href={navbar.actions?.secondary?.href}
           variant="cta"
-          size="sm"
+          size="lg"
           ariaLabel={navbar.actions?.secondary?.ariaLabel}
           class="w-full book-cta"
           data-placement="mobile_nav"
@@ -128,6 +141,86 @@ const { isHomePage = false } = Astro.props;
     </div>
   </nav>
 </header>
+
+<style>
+  @keyframes gradient-drift {
+    0%, 100% {
+      --anim-progress: 0;
+    }
+    50% {
+      --anim-progress: 1;
+    }
+  }
+
+  @property --anim-progress {
+    syntax: '<number>';
+    initial-value: 0;
+    inherits: false;
+  }
+
+  .navbar-gradient {
+    animation: gradient-drift 15s ease-in-out infinite;
+
+    /* Multiple layered gradients for depth - matching ScrollGradientOverlay */
+    background:
+      /* Pyre Red - warm glow moving right and down */
+      radial-gradient(
+        ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
+        oklch(0.65 0.18 25 / 0.4) 0%,
+        transparent 55%
+      ),
+      /* Pyre Blue (deep) - moves from right to left */
+      radial-gradient(
+        ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
+        oklch(0.35 0.15 220 / 0.6) 0%,
+        transparent 55%
+      ),
+      /* Pyre Sky (lighter blue) - drifts up from bottom left */
+      radial-gradient(
+        ellipse 85% 65% at calc(15% + var(--anim-progress) * 35%) calc(90% - var(--anim-progress) * 50%),
+        oklch(0.62 0.12 230 / 0.55) 0%,
+        transparent 55%
+      ),
+      /* Pyre Gold - sweeps diagonally across */
+      radial-gradient(
+        ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
+        oklch(0.78 0.15 85 / 0.55) 0%,
+        transparent 55%
+      ),
+      /* Secondary Gold - moves opposite direction */
+      radial-gradient(
+        ellipse 75% 60% at calc(80% - var(--anim-progress) * 50%) calc(25% + var(--anim-progress) * 45%),
+        oklch(0.78 0.15 85 / 0.5) 0%,
+        transparent 50%
+      ),
+      /* Secondary Blue - subtle accent moving vertically */
+      radial-gradient(
+        ellipse 70% 55% at calc(50% + var(--anim-progress) * 25%) calc(10% + var(--anim-progress) * 60%),
+        oklch(0.45 0.16 220 / 0.5) 0%,
+        transparent 50%
+      ),
+      /* Pyre Sage - organic undertone drifting */
+      radial-gradient(
+        ellipse 75% 50% at calc(30% + var(--anim-progress) * 40%) calc(70% - var(--anim-progress) * 25%),
+        oklch(0.65 0.06 130 / 0.25) 0%,
+        transparent 50%
+      );
+
+    /* Screen blend mode works well over dark backgrounds */
+    mix-blend-mode: screen;
+
+    /* Smooth fade for visibility changes */
+    transition: opacity 0.3s ease-out;
+  }
+
+  /* Accessibility: Pause animation for reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    .navbar-gradient {
+      animation: none;
+      --anim-progress: 0.5;
+    }
+  }
+</style>
 
 <script>
   (function () {
@@ -184,14 +277,25 @@ const { isHomePage = false } = Astro.props;
     }
 
     function setupScrollBehavior() {
-      const header = document.querySelector('[data-component="navbar"]');
+      const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
+      const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
       if (!header) return;
 
+      const isHomePage = header.dataset.isHome === 'true';
       let ticking = false;
 
       function updateNavbar() {
         const atTop = window.scrollY <= 10;
         header.setAttribute('data-at-top', atTop ? 'true' : 'false');
+
+        // Update mobile gradient visibility
+        if (mobileGradient) {
+          // On homepage: show gradient only when scrolled (when dark bg is visible)
+          // On other pages: always show gradient (dark bg is always present)
+          const showGradient = !isHomePage || !atTop;
+          mobileGradient.style.opacity = showGradient ? '0.2' : '0';
+        }
+
         ticking = false;
       }
 
