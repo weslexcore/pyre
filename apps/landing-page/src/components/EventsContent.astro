@@ -1,4 +1,6 @@
 ---
+import { Image } from 'astro:assets';
+import warmSauna2 from '../assets/images/warm_sauna_2.webp';
 import fallbackEvents from '../lib/events';
 import Button from './Button.astro';
 import EventsCarousel from './events/EventsCarousel';
@@ -6,7 +8,8 @@ import SectionDivider from './SectionDivider.astro';
 ---
 
 <div aria-labelledby="events-heading">
-  <div class="text-center mb-8">
+  <!-- Header -->
+  <div class="text-center mb-6">
     <h2
       id="events-heading"
       class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
@@ -16,7 +19,18 @@ import SectionDivider from './SectionDivider.astro';
     {fallbackEvents.subtitle && (
       <p class="text-base opacity-80">{fallbackEvents.subtitle}</p>
     )}
-    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" flip={true} scrollAware={true}/>
+    <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-48 my-4" flip={true} scrollAware={true}/>
+  </div>
+
+  <!-- Image -->
+  <div class="aspect-[16/9] overflow-hidden rounded-lg mb-6">
+    <Image
+      src={warmSauna2}
+      alt="Friends enjoying a social sauna session together"
+      class="w-full h-full object-cover object-center"
+      loading="lazy"
+      decoding="async"
+    />
   </div>
 
   <!-- Dynamic events carousel (React island with compact variant) -->
