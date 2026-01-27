@@ -1,76 +1,18 @@
 ---
-import { Image } from "astro:assets";
-import benefits from "../lib/benefits";
-import Button from "./Button.astro";
-import SectionDivider from "./SectionDivider.astro";
-import plunging from "../assets/images/plunging.jpg";
+import { Image } from 'astro:assets';
+import plunging from '../assets/images/plunging.png';
+import benefits from '../lib/benefits';
+import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
 ---
 
 <section id="benefits" aria-labelledby="benefits-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
   <div class="max-w-5xl mx-auto lg:max-w-none">
     {/* Desktop: side-by-side layout (content | image) */}
-    <div class="hidden lg:grid grid-cols-[1.5fr_1fr] gap-8 items-start">
-      <!-- Content column -->
-      <div>
-        <div class="mb-6">
-          <h2
-            id="benefits-heading"
-            class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
-          >
-            {benefits.title}
-          </h2>
-          {benefits.subtitle && (
-            <p class="text-base opacity-80">{benefits.subtitle}</p>
-          )}
-          <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="w-48 my-4" scrollAware={true}/>
-        </div>
-
-        <div class="grid grid-cols-1 gap-3">
-          {benefits.items.map((benefit) => (
-            <div class="benefit-card p-4 border border-current/10 rounded-lg">
-              <h3 class="font-mono-bold text-base uppercase tracking-wide mb-2">
-                {benefit.title}
-              </h3>
-              <p class="text-sm leading-relaxed opacity-80">
-                {benefit.description}
-              </p>
-            </div>
-          ))}
-        </div>
-
-
-        {benefits.closing && (
-          <p class="mt-6 text-base opacity-80">{benefits.closing}</p>
-        )}
-
-        {benefits.cta && (
-          <div class="mt-6">
-            <Button
-              href={benefits.cta.href}
-              variant="primary"
-              size="md"
-              ariaLabel={benefits.cta.ariaLabel}
-            >
-              {benefits.cta.label}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <!-- Image column -->
-      <div class="aspect-square overflow-hidden rounded-lg">
-        <Image
-          src={plunging}
-          alt="Woman relaxing in a cold plunge tub"
-          class="w-full h-full object-cover object-center"
-          loading="lazy"
-          decoding="async"
-        />
-      </div>
-    </div>
+    
 
     {/* Mobile/tablet: header+image row, then cards below */}
-    <div class="lg:hidden">
+    <div class="">
       <div class="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr] gap-6 items-start mb-8">
         <!-- Header column -->
         <div>
@@ -94,6 +36,7 @@ import plunging from "../assets/images/plunging.jpg";
             class="w-full h-full object-cover object-center"
             loading="lazy"
             decoding="async"
+            data-preload-priority="1"
           />
         </div>
       </div>

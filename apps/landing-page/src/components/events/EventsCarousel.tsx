@@ -1,7 +1,7 @@
 // React carousel component for dynamically loaded events
 // Used as an Astro island with client:load directive
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
 
@@ -32,7 +32,9 @@ const variantStyles = {
 function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant }) {
   const styles = variantStyles[variant];
   return (
-    <div className={`flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse`}>
+    <div
+      className={`flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse`}
+    >
       <div className="p-5">
         <div className="mb-4">
           <div className="h-6 w-24 bg-current/10 rounded" />
@@ -49,10 +51,18 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
   );
 }
 
-function EventCard({ event, variant = 'default' }: { event: EventItem; variant?: CarouselVariant }) {
+function EventCard({
+  event,
+  variant = 'default',
+}: {
+  event: EventItem;
+  variant?: CarouselVariant;
+}) {
   const styles = variantStyles[variant];
   return (
-    <article className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}>
+    <article
+      className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}
+    >
       <div className="p-5">
         <div className="mb-4">
           <span className="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
@@ -60,20 +70,13 @@ function EventCard({ event, variant = 'default' }: { event: EventItem; variant?:
           </span>
         </div>
 
-        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">
-          {event.title}
-        </h3>
+        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">{event.title}</h3>
 
         <p className="text-sm opacity-70 mb-4 line-clamp-2">{event.description}</p>
 
         <div className="space-y-1 text-sm opacity-70 mb-4">
           <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -84,12 +87,7 @@ function EventCard({ event, variant = 'default' }: { event: EventItem; variant?:
             <span>{event.time}</span>
           </div>
           <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -121,7 +119,10 @@ function EventCard({ event, variant = 'default' }: { event: EventItem; variant?:
   );
 }
 
-export default function EventsCarousel({ fallback = [], variant = 'default' }: EventsCarouselProps) {
+export default function EventsCarousel({
+  fallback = [],
+  variant = 'default',
+}: EventsCarouselProps) {
   const { events, loading } = useEvents(fallback);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -137,15 +138,18 @@ export default function EventsCarousel({ fallback = [], variant = 'default' }: E
     setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
   }, []);
 
-  const scroll = useCallback((direction: number) => {
-    const container = scrollRef.current;
-    if (!container) return;
+  const scroll = useCallback(
+    (direction: number) => {
+      const container = scrollRef.current;
+      if (!container) return;
 
-    container.scrollBy({
-      left: direction * styles.cardWidth,
-      behavior: 'smooth',
-    });
-  }, [styles.cardWidth]);
+      container.scrollBy({
+        left: direction * styles.cardWidth,
+        behavior: 'smooth',
+      });
+    },
+    [styles.cardWidth]
+  );
 
   useEffect(() => {
     updateArrows();
@@ -177,12 +181,7 @@ export default function EventsCarousel({ fallback = [], variant = 'default' }: E
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
@@ -201,12 +200,7 @@ export default function EventsCarousel({ fallback = [], variant = 'default' }: E
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 5l7 7-7 7"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </button>
 

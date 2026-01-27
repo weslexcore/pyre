@@ -2,18 +2,18 @@
  * Unit tests for TOC utility functions
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  generateAnchorId,
-  extractHeadersFromContent,
-  buildTOCTree,
-  flattenTOCTree,
-  getCurrentActiveHeader,
-  calculateReadingProgress,
-  scrollToHeader,
-  DEFAULT_TOC_CONFIG,
-} from './toc-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TOCHeader, TOCSection } from './toc-types';
+import {
+  buildTOCTree,
+  calculateReadingProgress,
+  DEFAULT_TOC_CONFIG,
+  extractHeadersFromContent,
+  flattenTOCTree,
+  generateAnchorId,
+  getCurrentActiveHeader,
+  scrollToHeader,
+} from './toc-utils';
 
 // Mock DOM APIs
 Object.defineProperty(window, 'DOMParser', {

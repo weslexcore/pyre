@@ -1,7 +1,7 @@
-import { withBase } from './paths';
-import type { FooterContent } from './types';
 import saunaMasterCert from '../assets/logos/sauna_master_cert.png';
 import breathworkCert from '../assets/logos/sherpa_logo.png';
+import { withBase } from './paths';
+import type { FooterContent } from './types';
 
 const footerConfig: FooterContent = {
   elements: {

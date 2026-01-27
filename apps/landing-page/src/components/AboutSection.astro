@@ -1,9 +1,9 @@
 ---
 import { Image } from 'astro:assets';
+import warmSauna from '../assets/images/warm_sauna.jpg';
 import about from '../lib/about';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
-import warmSauna from '../assets/images/warm_sauna.jpg';
 ---
 
 <section id="about" aria-labelledby="about-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0">
@@ -14,8 +14,9 @@ import warmSauna from '../assets/images/warm_sauna.jpg';
         src={warmSauna}
         alt="People enjoying a social sauna session"
         class="w-full h-full object-cover object-center"
-        loading="lazy"
+        loading="eager"
         decoding="async"
+        fetchpriority="low"
       />
     </div>
 

@@ -1,7 +1,7 @@
 // React hook for fetching events from the API endpoint
 // Includes client-side sessionStorage caching for performance
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { EventItem } from '@/lib/types';
 
 const CACHE_KEY = 'pyre-events-cache';

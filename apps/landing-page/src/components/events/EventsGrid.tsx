@@ -1,7 +1,7 @@
 // React grid component for dynamically loaded events on the events page
 // Listens for date filter events from the Astro EventDateFilter component
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
 
@@ -43,9 +43,7 @@ function EventCard({ event, visible }: { event: EventItem; visible: boolean }) {
           </span>
         </div>
 
-        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">
-          {event.title}
-        </h3>
+        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">{event.title}</h3>
 
         <p className="text-sm opacity-70 mb-4 line-clamp-2">{event.description}</p>
 
@@ -170,10 +168,7 @@ function NoEventsMessage() {
 
 type FilterType = 'week' | 'month' | '30days' | 'all';
 
-function filterEventsByDateRange(
-  events: EventItem[],
-  filter: FilterType
-): EventItem[] {
+function filterEventsByDateRange(events: EventItem[], filter: FilterType): EventItem[] {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
@@ -222,10 +217,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
       setFilter(e.detail.filter as FilterType);
     }
 
-    window.addEventListener(
-      'event-date-filter',
-      handleFilterEvent as EventListener
-    );
+    window.addEventListener('event-date-filter', handleFilterEvent as EventListener);
 
     // Get initial filter from URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -233,10 +225,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     setFilter(initialFilter as FilterType);
 
     return () => {
-      window.removeEventListener(
-        'event-date-filter',
-        handleFilterEvent as EventListener
-      );
+      window.removeEventListener('event-date-filter', handleFilterEvent as EventListener);
     };
   }, []);
 

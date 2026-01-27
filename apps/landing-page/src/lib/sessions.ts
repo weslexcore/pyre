@@ -27,7 +27,7 @@ const sessions: SessionsContent = {
       name: 'Single Session',
       price: 39,
       description: 'Drop-in visit',
-      href:'/book'
+      href: '/book',
     },
     {
       id: 'intro',
@@ -51,7 +51,7 @@ const sessions: SessionsContent = {
       description: 'Save $51',
       href: 'https://momence.com/Pyre/membership/8-Pack/630916',
     },
-  ]
+  ],
 };
 
 export default sessions;

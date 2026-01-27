@@ -2,14 +2,14 @@
 export const prerender = true;
 
 import { getCollection } from 'astro:content';
-import MainLayout from '@/layouts/main.astro';
 import BlogPostCard from '@/components/blog/BlogPostCard.astro';
 import BlogSearch from '@/components/blog/BlogSearch.astro';
 import BlogTagFilter from '@/components/blog/BlogTagFilter.astro';
-import { calculateReadingTime } from '@/lib/reading-time';
-import { BLOG_CONFIG } from '@/lib/blog-config';
-import type { BlogPostCard as BlogPostCardType, TagWithCount } from '@/lib/types';
 import ScrollGradientOverlay from '@/components/ScrollGradientOverlay.astro';
+import MainLayout from '@/layouts/main.astro';
+import { BLOG_CONFIG } from '@/lib/blog-config';
+import { calculateReadingTime } from '@/lib/reading-time';
+import type { BlogPostCard as BlogPostCardType, TagWithCount } from '@/lib/types';
 
 // Fetch all blog posts
 const allPosts = await getCollection('blog', ({ data }) => {

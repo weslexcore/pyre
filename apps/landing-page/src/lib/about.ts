@@ -6,9 +6,7 @@ const about: AboutContent = {
     'Pyre is a modern communal bathhouse offering sauna and cold plunges to help people release stress, reconnect, and feel more human together.',
     'People today are overwhelmed, disconnected, and chronically stressed. Self-care has become individual, optimized, and isolating — when what many people are really seeking is a simple way to regulate, reconnect, and feel human together. ',
   ],
-  expandedBody: [
-    
-  ],
+  expandedBody: [],
   // cta: {
   //   label: 'Learn More',
   //   href: '/about',

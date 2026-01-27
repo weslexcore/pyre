@@ -2,13 +2,9 @@
 // This enables server-side fetching with edge caching for fresh data
 
 import type { APIRoute } from 'astro';
+import { filterValidEvents, sortEventsByDate, transformToEventItem } from '@/lib/momence';
 import type { MomenceEvent } from '@/lib/momence-types';
 import type { EventItem } from '@/lib/types';
-import {
-  filterValidEvents,
-  sortEventsByDate,
-  transformToEventItem,
-} from '@/lib/momence';
 
 export const prerender = false;
 
@@ -25,9 +21,7 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
   if (!hostId || !apiToken) {
-    console.warn(
-      '[Events API] Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)'
-    );
+    console.warn('[Events API] Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)');
     return [];
   }
 
@@ -40,9 +34,7 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   });
 
   if (!response.ok) {
-    console.error(
-      `[Events API] Momence returned ${response.status}: ${response.statusText}`
-    );
+    console.error(`[Events API] Momence returned ${response.status}: ${response.statusText}`);
     return [];
   }
 

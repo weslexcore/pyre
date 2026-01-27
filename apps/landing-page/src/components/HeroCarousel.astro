@@ -2,8 +2,7 @@
 import { Image } from 'astro:assets';
 
 // Import hero image
-import tiled from '../assets/backgrounds/tiled2.png';
-
+import tiled from '../assets/backgrounds/tiled_upscale.png';
 ---
 <!-- <div class="relative h-full w-full overflow-hidden">
   <div class="flex h-full snap-x snap-mandatory overflow-x-auto scrollbar-hide">
@@ -16,6 +15,7 @@ import tiled from '../assets/backgrounds/tiled2.png';
           class="h-full w-full object-cover"
           loading="eager"
           decoding="sync"
+          fetchpriority="high"
         />
       <!-- </div>
   </div>

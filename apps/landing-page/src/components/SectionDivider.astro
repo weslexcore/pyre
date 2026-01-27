@@ -4,9 +4,9 @@ interface Props {
   flip?: boolean;
   revealAnimation?: 'draw' | 'fade' | 'scale' | 'none';
   visibleAnimation?: 'wave' | 'pulse' | 'none';
-  animate?: 'wave' | 'reveal' | 'none';  // deprecated, for backwards compat
-  scrollAware?: boolean;  // Enable scroll-direction-aware reveal/hide
-  strokeWidth?: number;  // Stroke width for the divider path (default: 3)
+  animate?: 'wave' | 'reveal' | 'none'; // deprecated, for backwards compat
+  scrollAware?: boolean; // Enable scroll-direction-aware reveal/hide
+  strokeWidth?: number; // Stroke width for the divider path (default: 3)
   class?: string;
 }
 
@@ -18,7 +18,7 @@ const {
   animate,
   scrollAware = false,
   strokeWidth = 3,
-  class: className = ''
+  class: className = '',
 } = Astro.props;
 
 // Handle backwards compatibility for deprecated `animate` prop

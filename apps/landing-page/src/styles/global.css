@@ -121,12 +121,12 @@
   /* --pyre-red: oklch(0.65 0.18 25); #F15836 */
   --pyre-red: oklch(0.6015 0.1676 35.22); /* #B55439 */
   /* --pyre-blue: oklch(0.35 0.12 220); /* #245A82 */
-  --pyre-blue: oklch(0.392 0.0671 249.22); /* #245A82, rgb(39,72,104 */ 
+  --pyre-blue: oklch(0.392 0.0671 249.22); /* #245A82, rgb(39,72,104 */
   --pyre-gold: oklch(0.78 0.12 85); /* #C9A855 */
   /* --pyre-muted-gold: oklch(0.72 0.08 85); Muted version of gold - lower chroma */
   --pyre-muted-gold: oklch(0.7472 0.0902 77.47); /* #B99746 */
   --pyre-sage: oklch(0.65 0.06 130); /* #8A9A7B */
-  --pyre-sky: oklch(0.62 0.10 230); /* #5B8FB9 */
+  --pyre-sky: oklch(0.62 0.1 230); /* #5B8FB9 */
 
   /* Pyre Design System - 2-Color Rule */
   /* Primary: Pyre Red + Pyre Creme for CTAs */
@@ -290,8 +290,12 @@
 
 /* Animated Gradient Border for CTA Button */
 @keyframes gradient-rotate {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-cta-animated {
@@ -304,7 +308,7 @@
 }
 
 .btn-cta-animated::before {
-  content: '';
+  content: "";
   position: absolute;
   z-index: -2;
   left: -50%;
@@ -324,7 +328,7 @@
 }
 
 .btn-cta-animated::after {
-  content: '';
+  content: "";
   position: absolute;
   z-index: -1;
   inset: 2px;
@@ -355,34 +359,34 @@
 
 /* Only apply animation on lg+ screens where rounded corners are visible */
 /* @media (min-width: 1024px) { */
-  .card-cta-animated::before {
-    content: '';
-    position: absolute;
-    z-index: -2;
-    left: -50%;
-    top: -50%;
-    width: 200%;
-    height: 200%;
-    background: conic-gradient(
-      from 0deg,
-      var(--pyre-red),
-      var(--pyre-gold),
-      var(--pyre-sage),
-      var(--pyre-sky),
-      var(--pyre-blue),
-      var(--pyre-red)
-    );
-    animation: gradient-rotate 25s linear infinite;
-  }
+.card-cta-animated::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  left: -50%;
+  top: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    var(--pyre-red),
+    var(--pyre-gold),
+    var(--pyre-sage),
+    var(--pyre-sky),
+    var(--pyre-blue),
+    var(--pyre-red)
+  );
+  animation: gradient-rotate 25s linear infinite;
+}
 
-  .card-cta-animated::after {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    inset: 4px;
-    background: var(--pyre-black);
-    border-radius: calc(0.5rem - 4px);
-  }
+.card-cta-animated::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 4px;
+  background: var(--pyre-black);
+  border-radius: calc(0.5rem - 4px);
+}
 /* } */
 
 /* Accessibility: Respect reduced motion for card animation */
@@ -392,29 +396,3 @@
   }
 }
 
-/* View Transitions - Page fade effect */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-::view-transition-old(root) {
-  animation: fade-out 200ms ease-out forwards;
-}
-
-::view-transition-new(root) {
-  animation: fade-in 200ms ease-in forwards;
-}
-
-/* Respect reduced motion preference for view transitions */
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation-duration: 0ms;
-  }
-}

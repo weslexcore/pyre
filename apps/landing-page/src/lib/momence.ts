@@ -155,9 +155,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
  * Main function to fetch and transform Momence events
  * Returns fallback events if API is unavailable
  */
-export async function getMomenceEvents(
-  fallbackItems: EventItem[] = []
-): Promise<EventItem[]> {
+export async function getMomenceEvents(fallbackItems: EventItem[] = []): Promise<EventItem[]> {
   try {
     const rawEvents = await fetchMomenceEvents();
 
@@ -186,9 +184,7 @@ export async function getMomenceEvents(
 /**
  * Get full events content with Momence events or fallback
  */
-export async function getEventsContentFromMomence(
-  fallback: EventsContent
-): Promise<EventsContent> {
+export async function getEventsContentFromMomence(fallback: EventsContent): Promise<EventsContent> {
   const items = await getMomenceEvents(fallback.items);
 
   return {

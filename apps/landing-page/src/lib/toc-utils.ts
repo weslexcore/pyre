@@ -2,7 +2,7 @@
  * Utility functions for table of contents functionality
  */
 
-import type { TOCHeader, TOCSection, TOCConfig } from './toc-types';
+import type { TOCConfig, TOCHeader, TOCSection } from './toc-types';
 
 /**
  * Detects if the current viewport is mobile (< 1024px)

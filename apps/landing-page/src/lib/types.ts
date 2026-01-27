@@ -447,10 +447,10 @@ export interface BenefitsContent {
 // ------------------------------------------------------------
 
 export type {
+  BlogFilters,
   BlogPost,
+  BlogPostCard,
   BlogPostData,
   ProcessedBlogPost,
-  BlogPostCard,
-  BlogFilters,
   TagWithCount,
 } from './blog-types';

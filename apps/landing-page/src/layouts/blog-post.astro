@@ -1,12 +1,12 @@
 ---
 import { Image } from 'astro:assets';
-import MainLayout from './main.astro';
 import BlogTags from '@/components/blog/BlogTags.astro';
 import ReadingTime from '@/components/blog/ReadingTime.astro';
 import RelatedPosts from '@/components/blog/RelatedPosts.astro';
 import ShareButtons from '@/components/blog/ShareButtons.astro';
 import TableOfContents from '@/components/TableOfContents.astro';
 import type { BlogPost } from '@/lib/types';
+import MainLayout from './main.astro';
 
 interface Props {
   post: BlogPost;
