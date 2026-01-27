@@ -115,23 +115,17 @@
 :root {
   --radius: 0.625rem;
 
-  /* Pyre Brand Colors - RGB to OKLCH Conversion */
-  --pyre-black: oklch(0.2509 0.0111 99.35); /* #23221c */
-  --pyre-creme: oklch(0.959 0.0115 84.58); /* #f5f1e9 */
-  /* --pyre-red: oklch(0.65 0.18 25); #F15836 */
-  --pyre-red: oklch(0.6015 0.1676 35.22); /* #B55439 */
-  /* --pyre-blue: oklch(0.35 0.12 220); /* #245A82 */
-  --pyre-blue: oklch(0.392 0.0671 249.22); /* #245A82, rgb(39,72,104 */
-  --pyre-gold: oklch(0.78 0.12 85); /* #C9A855 */
-  /* --pyre-muted-gold: oklch(0.72 0.08 85); Muted version of gold - lower chroma */
-  --pyre-muted-gold: oklch(0.7472 0.0902 77.47); /* #B99746 */
-  --pyre-sage: oklch(0.65 0.06 130); /* #8A9A7B */
-  --pyre-sky: oklch(0.62 0.1 230); /* #5B8FB9 */
+  /* Pyre Brand Colors - OKLCH with hex and RGB equivalents */
+  --pyre-black: oklch(0.2509 0.0111 99.35); /* #23221c | rgb(35, 34, 28) */
+  --pyre-creme: oklch(0.959 0.0115 84.58); /* #f5f1e9 | rgb(245, 241, 233) */
+  --pyre-red: oklch(0.6015 0.1676 35.22); /* #d15232 | rgb(209, 82, 50) */
+  --pyre-blue: oklch(0.392 0.0671 249.22); /* #274868 | rgb(39, 72, 104) */
+  --pyre-gold: oklch(0.78 0.12 85); /* #dbb155 | rgb(219, 177, 85) */
+  --pyre-muted-gold: oklch(0.7472 0.0902 77.47); /* #cda56a | rgb(205, 166, 106) */
+  --pyre-sage: oklch(0.65 0.06 130); /* #839770 | rgb(131, 151, 112) */
+  --pyre-sky: oklch(0.62 0.1 230); /* #3991b7 | rgb(57, 145, 183) */
 
   /* Pyre Design System - 2-Color Rule */
-  /* Primary: Pyre Red + Pyre Creme for CTAs */
-  /* Secondary: Pyre Blue + Pyre Creme for secondary actions */
-  /* Outline: Pyre Black + Pyre Creme for subtle actions */
 
   /* Base Colors - Following Pyre Design System 2-Color Rule */
   --background: var(--pyre-creme);

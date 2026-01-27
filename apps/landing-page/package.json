@@ -14,6 +14,8 @@
     "check:fix": "biome check --write .",
     "type-check": "astro check",
     "optimize:videos": "tsx scripts/optimize-videos.ts",
+    "optimize:images": "node scripts/optimize-images.mjs",
+    "optimize:images:dry": "node scripts/optimize-images.mjs --dry-run",
     "deploy": "yarn build && scripts/updateCFT.sh"
   },
   "dependencies": {
