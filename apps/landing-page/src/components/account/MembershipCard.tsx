@@ -33,9 +33,9 @@ export function MembershipCard() {
   // Loading state
   if (loading) {
     return (
-      <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">
-        <div className="h-6 w-32 bg-[var(--pyre-creme)]/20 rounded animate-pulse mb-4" />
-        <div className="h-4 w-48 bg-[var(--pyre-creme)]/20 rounded animate-pulse" />
+      <div className="bg-[var(--pyre-black)] text-[var(--pyre-creme)] rounded-lg p-6">
+        <div className="h-6 w-32 bg-[var(--pyre-black)]/20 rounded animate-pulse mb-4" />
+        <div className="h-4 w-48 bg-[var(--pyre-black)]/20 rounded animate-pulse" />
       </div>
     );
   }
@@ -69,7 +69,7 @@ function CreditsDisplay({ credits, compact = false }: CreditsDisplayProps) {
 
   if (compact) {
     return (
-      <div className="bg-[var(--pyre-creme)]/10 rounded-lg p-4">
+      <div className="bg-[var(--pyre-black)]/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-2">
           <p className="font-mono-bold text-sm uppercase tracking-wide opacity-80">
             {accountConfig.membership.creditsLabel}
@@ -129,7 +129,7 @@ function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) 
   const tiers = membershipConfig.tiers;
 
   return (
-    <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">
+    <div className="bg-[var(--pyre-black)] text-[var(--pyre-creme)] rounded-lg p-6 border border-[var(--pyre-creme)]/30">
       <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
         {accountConfig.membership.title}
       </h2>
@@ -151,33 +151,51 @@ function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) 
           <p className="text-sm opacity-80 mb-2">{accountConfig.membership.emptyState}</p>
           <p className="text-sm opacity-60 mb-6">{accountConfig.membership.emptyStateSubtitle}</p>
 
-          {/* Membership tier buttons */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* Membership tier cards */}
+          <div className="flex flex-col gap-4 mb-4">
             {tiers.map((tier) => (
               <a
                 key={tier.id}
                 href={tier.cta.href}
                 aria-label={tier.cta.ariaLabel}
-                className="flex flex-col items-center justify-center p-4 rounded-lg border border-[var(--pyre-creme)]/30 hover:border-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors text-center"
+                className="block p-4 rounded-lg border border-[var(--pyre-creme)]/30 hover:border-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors"
               >
-                <span className="font-mono-bold text-sm uppercase tracking-wide">
-                  {tier.name}
-                </span>
-                <span className="text-lg font-primary-semibold mt-1">
-                  ${tier.price}
-                  <span className="text-sm opacity-70">{tier.period}</span>
-                </span>
+                <div className="flex items-baseline justify-between mb-3">
+                  <span className="font-mono-bold text-sm uppercase tracking-wide">
+                    {tier.name}
+                  </span>
+                  <span className="text-lg font-primary-semibold">
+                    ${tier.price}
+                    <span className="text-sm opacity-70">{tier.period}</span>
+                  </span>
+                </div>
+                <ul className="space-y-1.5 text-sm">
+                  {tier.features.map((feature, i) => (
+                    <li
+                      key={i}
+                      className={`flex items-start gap-2 ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : 'opacity-80'}`}
+                    >
+                      <svg
+                        className="w-4 h-4 mt-0.5 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      {feature.text}
+                    </li>
+                  ))}
+                </ul>
               </a>
             ))}
           </div>
-
-          {/* Single session fallback link */}
-          <a
-            href="/#events"
-            className="inline-block font-mono-bold text-xs uppercase tracking-wide opacity-70 hover:opacity-100 transition-opacity"
-          >
-            {accountConfig.membership.singleSessionLink} &rarr;
-          </a>
         </>
       )}
     </div>
@@ -217,7 +235,7 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
         <h2 className="font-mono-bold text-lg uppercase tracking-wide">
           {accountConfig.membership.title}
         </h2>
-        <span className="px-2 py-1 text-xs font-mono-bold uppercase rounded bg-[var(--pyre-creme)]/20">
+        <span className="px-2 py-1 text-xs font-mono-bold uppercase rounded bg-[var(--pyre-black)]/20">
           {membership.status}
         </span>
       </div>
@@ -239,7 +257,7 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
 
       {/* Renewal date */}
       {renewalDate && (
-        <div className="pt-4 border-t border-[var(--pyre-creme)]/20">
+        <div className="pt-4 border-t border-[var(--pyre-black)]/20">
           <p className="text-sm">
             <span className="opacity-80">{accountConfig.membership.renewalLabel}</span>{' '}
             <span className="font-mono-bold">{renewalDate}</span>
@@ -249,7 +267,7 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
 
       {/* Benefits from tier config */}
       {benefits.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-[var(--pyre-creme)]/20">
+        <div className="mt-4 pt-4 border-t border-[var(--pyre-black)]/20">
           <p className="font-mono-bold text-sm uppercase tracking-wide mb-3 opacity-80">
             {accountConfig.membership.benefitsLabel}
           </p>

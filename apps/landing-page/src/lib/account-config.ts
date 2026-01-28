@@ -56,7 +56,7 @@ export const accountConfig = {
     sessionsLabel: 'Sessions remaining',
     unlimitedLabel: 'Unlimited',
     creditsLabel: 'Available Credits',
-    singleSessionLink: 'Or browse single sessions',
+    // singleSessionLink: 'Or browse single sessions',
     upgradePrompt: 'Upgrade to a membership for more value',
     benefitsLabel: 'Your Benefits',
   },

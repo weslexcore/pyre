@@ -75,6 +75,7 @@ export function AccountDashboard({ error, freshAuth }: AccountDashboardProps) {
           {accountConfig.dashboard.subtitle}
         </p>
       </div>
+      
 
       {/* Profile card */}
       <div className="mb-6">
