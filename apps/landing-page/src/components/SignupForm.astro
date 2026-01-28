@@ -5,55 +5,118 @@ import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
 
+interface Props {
+  variant?: 'default' | 'compact';
+}
+
+const { variant = 'default' } = Astro.props;
+const isCompact = variant === 'compact';
+
 const subscribed =
   Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
+
+const idSuffix = isCompact ? '-compact' : '';
+const headingId = `signup-heading${idSuffix}`;
+const emailId = `signup-email${idSuffix}`;
+
+const gridClass = isCompact
+  ? 'grid grid-cols-[1fr_1.5fr] gap-6 lg:gap-8 items-center'
+  : 'grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-6 md:gap-8 items-center';
+
+const headingClass = isCompact
+  ? 'font-primary-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3'
+  : 'font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4';
+
+const subtitleClass = isCompact ? 'text-base opacity-80' : 'text-lg opacity-80';
+
+const formColumnClass = isCompact ? '' : 'text-center md:text-left';
+
+const dividerClass = isCompact ? 'w-48 my-4' : 'mx-auto md:mx-0 w-72 my-4';
+
+const subscribedBannerClass = isCompact
+  ? 'mb-4 rounded-md border border-green-700/30 bg-green-800/20 p-3 text-sm'
+  : 'mb-6 rounded-md border border-green-700/30 bg-green-800/20 p-4 text-sm';
+
+const formClass = isCompact
+  ? 'flex flex-col sm:flex-row gap-3'
+  : 'flex flex-col sm:flex-row gap-3 max-w-md mx-auto md:mx-0';
+
+const inputClass = isCompact
+  ? 'w-full rounded-md border border-current/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]'
+  : 'w-full rounded-md border border-current/20 bg-[var(--background)] px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[var(--ring)]';
+
+const turnstileContainerClass = isCompact
+  ? 'flex justify-start mt-4'
+  : 'flex justify-center md:justify-start mt-4';
+
+const errorClass = isCompact
+  ? 'mt-3 text-sm text-[var(--pyre-burnt-orange)]'
+  : 'mt-3 text-sm text-[var(--destructive)]';
+
+const successClass = isCompact
+  ? 'mt-3 text-sm text-green-400 hidden'
+  : 'mt-3 text-sm text-green-600 hidden';
+
+const imageOrderClass = isCompact
+  ? 'aspect-square overflow-hidden rounded-lg'
+  : 'aspect-square overflow-hidden rounded-lg order-first md:order-last';
+
+const turnstileTheme = isCompact ? 'dark' : 'auto';
 ---
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
 
-<section
-  aria-labelledby="signup-heading"
-  class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5"
->
-  <div class="max-w-4xl mx-auto">
-    <div class="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-6 md:gap-8 items-center">
+{isCompact ? (
+  <div aria-labelledby={headingId} class="py-8 md:py-12">
+    <div class={gridClass}>
+      <!-- Image column (left on desktop) -->
+      <div class={imageOrderClass}>
+        <Image
+          src={warmSauna3}
+          alt="Friends laughing and enjoying time together in a sauna"
+          class="w-full h-full object-cover object-center"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+
       <!-- Form column -->
-      <div class="text-center md:text-left">
-        <h2
-          id="signup-heading"
-          class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
-        >
+      <div class={formColumnClass}>
+        <h2 id={headingId} class={headingClass}>
           {signupForm.elements.title}
         </h2>
-        <p class="text-lg opacity-80">{signupForm.elements.subtitle}</p>
-        <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class="mx-auto md:mx-0 w-72 my-4" scrollAware={true}  />
+        <p class={subtitleClass}>{signupForm.elements.subtitle}</p>
+        <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class={dividerClass} scrollAware={true} />
 
         {subscribed && (
-          <div role="status" class="mb-6 rounded-md border border-green-700/30 bg-green-800/20 p-4 text-sm">
+          <div role="status" class={subscribedBannerClass}>
             {signupForm.elements.successMessage}
           </div>
         )}
 
         <form
-          class="signup-form flex flex-col sm:flex-row gap-3 max-w-md mx-auto md:mx-0"
+          class={formClass}
           method="POST"
           action={signupForm.mailchimp.action}
           novalidate
+          data-signup-form
+          data-turnstile-theme={turnstileTheme}
           data-honeypot={signupForm.mailchimp.honeypotFieldName}
           data-antispam={JSON.stringify(signupForm.antiSpam)}
           data-turnstile={JSON.stringify(signupForm.turnstile)}
         >
           <div class="flex-1 min-w-0">
-            <label for="signup-email" class="sr-only">{signupForm.elements.emailLabel}</label>
+            <label for={emailId} class="sr-only">{signupForm.elements.emailLabel}</label>
             <input
-              id="signup-email"
+              id={emailId}
               name="EMAIL"
               type="email"
               required
               inputmode="email"
               autocomplete="email"
               placeholder="Enter your email"
-              class="w-full rounded-md border border-current/20 bg-[var(--background)] px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              class={inputClass}
+              data-signup-email
             />
           </div>
           <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
@@ -63,7 +126,7 @@ const subscribed =
           <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
           <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
           <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
-          <input type="hidden" name="cf-turnstile-response" value="" id="turnstile-token" />
+          <input type="hidden" name="cf-turnstile-response" value="" data-turnstile-token />
 
           <Button type="submit" variant="primary" size="md" class="sm:flex-shrink-0">
             {signupForm.elements.submitLabel}
@@ -71,288 +134,362 @@ const subscribed =
         </form>
 
         <!-- Turnstile widget -->
-        <div id="turnstile-container" class="flex justify-center md:justify-start mt-4"></div>
+        <div class={turnstileContainerClass} data-turnstile-container></div>
 
-        <p id="signup-error" aria-live="polite" class="mt-3 text-sm text-[var(--destructive)]"></p>
-        <div id="signup-success" role="status" class="mt-3 text-sm text-green-600 hidden"></div>
-      </div>
-
-      <!-- Image column -->
-      <div class="aspect-square overflow-hidden rounded-lg order-first md:order-last">
-        <Image
-          src={warmSauna3}
-          alt="Friends laughing and enjoying time together in a sauna"
-          class="w-full h-full object-cover object-center"
-          loading="lazy"
-          decoding="async"
-        />
+        <p aria-live="polite" class={errorClass} data-signup-error></p>
+        <div role="status" class={successClass} data-signup-success></div>
       </div>
     </div>
   </div>
-</section>
+) : (
+  <section aria-labelledby={headingId} class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
+    <div class="max-w-4xl mx-auto">
+      <div class={gridClass}>
+        <!-- Form column -->
+        <div class={formColumnClass}>
+          <h2 id={headingId} class={headingClass}>
+            {signupForm.elements.title}
+          </h2>
+          <p class={subtitleClass}>{signupForm.elements.subtitle}</p>
+          <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class={dividerClass} scrollAware={true} />
+
+          {subscribed && (
+            <div role="status" class={subscribedBannerClass}>
+              {signupForm.elements.successMessage}
+            </div>
+          )}
+
+          <form
+            class={formClass}
+            method="POST"
+            action={signupForm.mailchimp.action}
+            novalidate
+            data-signup-form
+            data-turnstile-theme={turnstileTheme}
+            data-honeypot={signupForm.mailchimp.honeypotFieldName}
+            data-antispam={JSON.stringify(signupForm.antiSpam)}
+            data-turnstile={JSON.stringify(signupForm.turnstile)}
+          >
+            <div class="flex-1 min-w-0">
+              <label for={emailId} class="sr-only">{signupForm.elements.emailLabel}</label>
+              <input
+                id={emailId}
+                name="EMAIL"
+                type="email"
+                required
+                inputmode="email"
+                autocomplete="email"
+                placeholder="Enter your email"
+                class={inputClass}
+                data-signup-email
+              />
+            </div>
+            <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+            <!-- Honeypot fields -->
+            <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
+            <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
+            <input type="hidden" name="cf-turnstile-response" value="" data-turnstile-token />
+
+            <Button type="submit" variant="primary" size="md" class="sm:flex-shrink-0">
+              {signupForm.elements.submitLabel}
+            </Button>
+          </form>
+
+          <!-- Turnstile widget -->
+          <div class={turnstileContainerClass} data-turnstile-container></div>
+
+          <p aria-live="polite" class={errorClass} data-signup-error></p>
+          <div role="status" class={successClass} data-signup-success></div>
+        </div>
+
+        <!-- Image column -->
+        <div class={imageOrderClass}>
+          <Image
+            src={warmSauna3}
+            alt="Friends laughing and enjoying time together in a sauna"
+            class="w-full h-full object-cover object-center"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+)}
 
 <script>
   (function() {
+    const widgetIds = new Map<HTMLElement, string>();
     let cleanup: (() => void) | null = null;
-    let turnstileWidgetId: string | null = null;
 
-    function initSignupForm() {
-      // Clean up previous listeners
+    function initSignupForms() {
       if (cleanup) {
         cleanup();
       }
 
-      const form = document.querySelector('.signup-form') as HTMLFormElement | null;
-      if (!form) {
+      const forms = document.querySelectorAll<HTMLFormElement>('[data-signup-form]');
+      if (!forms.length) {
         cleanup = () => {};
         return;
       }
 
-      const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
-      const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
-      const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
-      let formStartTime = Date.now();
-      let hasInteracted = false;
-      let mouseMoved = false;
-      let turnstileToken = '';
       const cleanupFns: Array<() => void> = [];
 
-      if (timestampField) {
-        timestampField.value = formStartTime.toString();
-      }
+      forms.forEach((form) => {
+        const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+        const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
+        const turnstileTheme = form.getAttribute('data-turnstile-theme') || 'auto';
+        const timestampField = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+        const formStartTime = Date.now();
+        let hasInteracted = false;
+        let mouseMoved = false;
+        let turnstileToken = '';
 
-      function initTurnstile() {
-        const container = document.getElementById('turnstile-container');
-        if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey && container) {
-          // Clear container before rendering
-          container.innerHTML = '';
-          turnstileWidgetId = (window as any).turnstile.render(container, {
-            sitekey: turnstileConfig.siteKey,
-            theme: turnstileConfig.theme || 'auto',
-            size: turnstileConfig.size || 'normal',
-            callback: function(token: string) {
-              turnstileToken = token;
-              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-              if (tokenInput) tokenInput.value = token;
-            },
-            'error-callback': function() {
-              turnstileToken = '';
-              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-              if (tokenInput) tokenInput.value = '';
-            },
-            'expired-callback': function() {
-              turnstileToken = '';
-              const tokenInput = document.getElementById('turnstile-token') as HTMLInputElement;
-              if (tokenInput) tokenInput.value = '';
+        if (timestampField) {
+          timestampField.value = formStartTime.toString();
+        }
+
+        // Elements relative to this form's container
+        const formParent = form.parentElement!;
+        const emailInput = form.querySelector('[data-signup-email]') as HTMLInputElement;
+        const tokenInput = form.querySelector('[data-turnstile-token]') as HTMLInputElement;
+        const errorEl = formParent.querySelector('[data-signup-error]') as HTMLElement;
+        const successEl = formParent.querySelector('[data-signup-success]') as HTMLElement;
+        const turnstileContainer = formParent.querySelector('[data-turnstile-container]') as HTMLElement;
+
+        function initTurnstile() {
+          if (typeof (window as any).turnstile !== 'undefined' && turnstileConfig.siteKey && turnstileContainer) {
+            // Remove existing widget if present
+            const existingId = widgetIds.get(turnstileContainer);
+            if (existingId && typeof (window as any).turnstile?.remove === 'function') {
+              try { (window as any).turnstile.remove(existingId); } catch {}
             }
+            turnstileContainer.innerHTML = '';
+            const wId = (window as any).turnstile.render(turnstileContainer, {
+              sitekey: turnstileConfig.siteKey,
+              theme: turnstileTheme,
+              size: turnstileConfig.size || 'normal',
+              callback: function(token: string) {
+                turnstileToken = token;
+                if (tokenInput) tokenInput.value = token;
+              },
+              'error-callback': function() {
+                turnstileToken = '';
+                if (tokenInput) tokenInput.value = '';
+              },
+              'expired-callback': function() {
+                turnstileToken = '';
+                if (tokenInput) tokenInput.value = '';
+              }
+            });
+            widgetIds.set(turnstileContainer, wId);
+          }
+        }
+
+        const handleLoad = () => initTurnstile();
+
+        if (typeof (window as any).turnstile !== 'undefined') {
+          initTurnstile();
+        } else {
+          window.addEventListener('load', handleLoad);
+          cleanupFns.push(() => window.removeEventListener('load', handleLoad));
+        }
+
+        const handleMouseMove = () => { mouseMoved = true; };
+        const handleFocusIn = () => { hasInteracted = true; };
+        const handleInput = () => { hasInteracted = true; };
+
+        if (antiSpamConfig.trackInteractions) {
+          document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+          form.addEventListener('focusin', handleFocusIn, { passive: true });
+          form.addEventListener('input', handleInput, { passive: true });
+          cleanupFns.push(() => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            form.removeEventListener('focusin', handleFocusIn);
+            form.removeEventListener('input', handleInput);
           });
         }
-      }
 
-      const handleLoad = () => initTurnstile();
+        const handleSubmit = async (event: SubmitEvent) => {
+          if (!emailInput || !errorEl) return;
 
-      if (typeof (window as any).turnstile !== 'undefined') {
-        initTurnstile();
-      } else {
-        window.addEventListener('load', handleLoad);
-        cleanupFns.push(() => window.removeEventListener('load', handleLoad));
-      }
+          errorEl.textContent = '';
+          if (successEl) {
+            successEl.textContent = '';
+            successEl.classList.add('hidden');
+          }
 
-      const handleMouseMove = () => { mouseMoved = true; };
-      const handleFocusIn = () => { hasInteracted = true; };
-      const handleInput = () => { hasInteracted = true; };
+          const email = emailInput.value.trim();
+          const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-      if (antiSpamConfig.trackInteractions) {
-        document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
-        form.addEventListener('focusin', handleFocusIn, { passive: true });
-        form.addEventListener('input', handleInput, { passive: true });
-        cleanupFns.push(() => {
-          document.removeEventListener('mousemove', handleMouseMove);
-          form.removeEventListener('focusin', handleFocusIn);
-          form.removeEventListener('input', handleInput);
-        });
-      }
+          if (!emailValid) {
+            event.preventDefault();
+            errorEl.textContent = 'Please enter a valid email.';
+            emailInput.focus();
+            return;
+          }
 
-      const handleSubmit = async (event: SubmitEvent) => {
-        const emailInput = form.querySelector('#signup-email') as HTMLInputElement;
-        const errorEl = document.getElementById('signup-error');
-        const successEl = document.getElementById('signup-success');
-
-        if (!emailInput || !errorEl) return;
-
-        errorEl.textContent = '';
-        if (successEl) {
-          successEl.textContent = '';
-          successEl.classList.add('hidden');
-        }
-
-        const email = emailInput.value.trim();
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-        if (!emailValid) {
-          event.preventDefault();
-          errorEl.textContent = 'Please enter a valid email.';
-          emailInput.focus();
-          return;
-        }
-
-        const honeypotName = form.getAttribute('data-honeypot');
-        const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
-        if (honeypotInput && honeypotInput.value.trim() !== '') {
-          event.preventDefault();
-          return;
-        }
-
-        const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
-        const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
-        const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
-
-        if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
-          event.preventDefault();
-          return;
-        }
-
-        const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
-        if (timestampInput) {
-          const submissionTime = Date.now();
-          const startTime = parseInt(timestampInput.value) || submissionTime;
-          const elapsedSeconds = (submissionTime - startTime) / 1000;
-          if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
+          const honeypotName = form.getAttribute('data-honeypot');
+          const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
+          if (honeypotInput && honeypotInput.value.trim() !== '') {
             event.preventDefault();
             return;
           }
-        }
 
-        if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
-          event.preventDefault();
-          return;
-        }
+          const websiteInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+          const phoneInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+          const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
 
-        if (turnstileConfig.siteKey && !turnstileToken) {
-          event.preventDefault();
-          errorEl.textContent = 'Please complete the security check.';
-          return;
-        }
+          if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
+            event.preventDefault();
+            return;
+          }
 
-        if (turnstileToken) {
-          try {
-            const verifyResponse = await fetch('/api/verify-turnstile', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token: turnstileToken }),
-            });
-            const verifyResult = await verifyResponse.json();
-            if (!verifyResult.success) {
+          const timestampInput = form.querySelector(`input[name="${antiSpamConfig.timestampField}"]`) as HTMLInputElement;
+          if (timestampInput) {
+            const submissionTime = Date.now();
+            const startTime = parseInt(timestampInput.value) || submissionTime;
+            const elapsedSeconds = (submissionTime - startTime) / 1000;
+            if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
               event.preventDefault();
-              errorEl.textContent = 'Security verification failed. Please try again.';
-              if (typeof (window as any).turnstile !== 'undefined') {
-                (window as any).turnstile.reset();
-              }
-              turnstileToken = '';
               return;
             }
-          } catch {
+          }
+
+          if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
             event.preventDefault();
-            errorEl.textContent = 'Security verification failed. Please try again.';
             return;
           }
-        }
 
-        event.preventDefault();
-        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-        if (submitBtn) submitBtn.disabled = true;
-
-        try {
-          const action = form.getAttribute('action') || '';
-          const url = new URL(action);
-          url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
-          const params = new URLSearchParams(url.search);
-          params.set('u', params.get('u') || '');
-          params.set('id', params.get('id') || '');
-          if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
-          params.set('EMAIL', email);
-          const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
-          if (tagInput?.value) params.set('tags', tagInput.value);
-          const callbackName = '__mc_cb_' + Math.random().toString(36).slice(2);
-          params.set('c', callbackName);
-          const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
-
-          const script = document.createElement('script');
-          script.src = jsonpUrl;
-          script.async = true;
-
-          function scriptCleanup() {
-            try { delete (window as any)[callbackName]; } catch {}
-            if (script.parentNode) script.parentNode.removeChild(script);
+          if (turnstileConfig.siteKey && !turnstileToken) {
+            event.preventDefault();
+            errorEl.textContent = 'Please complete the security check.';
+            return;
           }
 
-          (window as any)[callbackName] = function(response: any) {
-            scriptCleanup();
-            if (response?.result === 'success') {
-              emailInput.value = '';
-              errorEl.textContent = '';
-              if (successEl) {
-                successEl.textContent = 'Thanks for subscribing!';
-                successEl.classList.remove('hidden');
+          if (turnstileToken) {
+            try {
+              const verifyResponse = await fetch('/api/verify-turnstile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: turnstileToken }),
+              });
+              const verifyResult = await verifyResponse.json();
+              if (!verifyResult.success) {
+                event.preventDefault();
+                errorEl.textContent = 'Security verification failed. Please try again.';
+                if (typeof (window as any).turnstile !== 'undefined') {
+                  (window as any).turnstile.reset();
+                }
+                turnstileToken = '';
+                return;
               }
-              const urlObj = new URL(window.location.href);
-              urlObj.searchParams.set('subscribed', '1');
-              window.history.replaceState({}, '', urlObj.toString());
-
-              if ((window as any).posthog) {
-                (window as any).posthog.identify(email);
-                (window as any).posthog.people.set({
-                  email: email,
-                  signup_source: 'mailing_list',
-                  signup_date: new Date().toISOString()
-                });
-                (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
-              }
-            } else if (response?.msg) {
-              if (successEl) successEl.classList.add('hidden');
-              errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
-            } else {
-              if (successEl) successEl.classList.add('hidden');
-              errorEl.textContent = 'Something went wrong. Please try again later.';
+            } catch {
+              event.preventDefault();
+              errorEl.textContent = 'Security verification failed. Please try again.';
+              return;
             }
-            if (submitBtn) submitBtn.disabled = false;
-          };
+          }
 
-          script.addEventListener('error', () => {
-            scriptCleanup();
+          event.preventDefault();
+          const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+          if (submitBtn) submitBtn.disabled = true;
+
+          try {
+            const action = form.getAttribute('action') || '';
+            const url = new URL(action);
+            url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+            const params = new URLSearchParams(url.search);
+            params.set('u', params.get('u') || '');
+            params.set('id', params.get('id') || '');
+            if (params.has('f_id')) params.set('f_id', params.get('f_id') || '');
+            params.set('EMAIL', email);
+            const tagInput = form.querySelector('input[name="tags"]') as HTMLInputElement;
+            if (tagInput?.value) params.set('tags', tagInput.value);
+            const callbackName = '__mc_cb_' + Math.random().toString(36).slice(2);
+            params.set('c', callbackName);
+            const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+            const script = document.createElement('script');
+            script.src = jsonpUrl;
+            script.async = true;
+
+            function scriptCleanup() {
+              try { delete (window as any)[callbackName]; } catch {}
+              if (script.parentNode) script.parentNode.removeChild(script);
+            }
+
+            (window as any)[callbackName] = function(response: any) {
+              scriptCleanup();
+              if (response?.result === 'success') {
+                emailInput.value = '';
+                errorEl.textContent = '';
+                if (successEl) {
+                  successEl.textContent = 'Thanks for subscribing!';
+                  successEl.classList.remove('hidden');
+                }
+                const urlObj = new URL(window.location.href);
+                urlObj.searchParams.set('subscribed', '1');
+                window.history.replaceState({}, '', urlObj.toString());
+
+                if ((window as any).posthog) {
+                  (window as any).posthog.identify(email);
+                  (window as any).posthog.people.set({
+                    email: email,
+                    signup_source: 'mailing_list',
+                    signup_date: new Date().toISOString()
+                  });
+                  (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
+                }
+              } else if (response?.msg) {
+                if (successEl) successEl.classList.add('hidden');
+                errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
+              } else {
+                if (successEl) successEl.classList.add('hidden');
+                errorEl.textContent = 'Something went wrong. Please try again later.';
+              }
+              if (submitBtn) submitBtn.disabled = false;
+            };
+
+            script.addEventListener('error', () => {
+              scriptCleanup();
+              if (submitBtn) submitBtn.disabled = false;
+              form.submit();
+            }, { once: true });
+
+            document.body.appendChild(script);
+          } catch {
             if (submitBtn) submitBtn.disabled = false;
             form.submit();
-          }, { once: true });
+          }
+        };
 
-          document.body.appendChild(script);
-        } catch {
-          if (submitBtn) submitBtn.disabled = false;
-          form.submit();
-        }
-      };
-
-      form.addEventListener('submit', handleSubmit);
-      cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
+        form.addEventListener('submit', handleSubmit);
+        cleanupFns.push(() => form.removeEventListener('submit', handleSubmit));
+      });
 
       cleanup = () => {
-        // Remove Turnstile widget if exists
-        if (turnstileWidgetId && typeof (window as any).turnstile?.remove === 'function') {
-          try {
-            (window as any).turnstile.remove(turnstileWidgetId);
-          } catch {}
-        }
-        turnstileWidgetId = null;
+        // Remove all Turnstile widgets
+        widgetIds.forEach((wId, container) => {
+          if (typeof (window as any).turnstile?.remove === 'function') {
+            try { (window as any).turnstile.remove(wId); } catch {}
+          }
+        });
+        widgetIds.clear();
         cleanupFns.forEach(fn => fn());
       };
     }
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initSignupForm, { once: true });
+      document.addEventListener('DOMContentLoaded', initSignupForms, { once: true });
     } else {
-      initSignupForm();
+      initSignupForms();
     }
 
     // Re-initialize after view transitions
-    document.addEventListener('astro:page-load', initSignupForm);
+    document.addEventListener('astro:page-load', initSignupForms);
   })();
 </script>

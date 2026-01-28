@@ -38,7 +38,7 @@ const variantClasses =
       ? 'border-2 border-transparent bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90'
       : variant === 'outline'
         ? 'border-2 border-current text-current bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]'
-        : 'border-2 border-transparent bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90';
+        : 'border-2 border-transparent bg-[var(--primary)] text-[var(--pyre-creme)] hover:opacity-90';
 
 const allClasses = [baseClasses.join(' '), sizeClasses, variantClasses, extraClass]
   .filter(Boolean)

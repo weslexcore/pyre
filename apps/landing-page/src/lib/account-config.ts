@@ -33,6 +33,8 @@ export const accountConfig = {
   },
   sessions: {
     title: 'Upcoming Sessions',
+    manageButton: 'Manage Sessions',
+    getManageUrl: (userId: number) => `https://momence.com/dashboard/u/${userId}/my-events`,
     emptyState: 'No upcoming sessions',
     emptyStateAction: 'Book Your Next Session',
     cancelButton: 'Cancel',

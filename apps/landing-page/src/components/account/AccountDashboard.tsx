@@ -101,9 +101,19 @@ export function AccountDashboard() {
       {/* Sessions section */}
       <div id="sessions" className="mt-8">
         <div className="bg-[var(--pyre-black)] border border-[var(--border)] rounded-lg p-6">
-          <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4 text-[var(--pyre-creme)]">
-            {accountConfig.sessions.title}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-mono-bold text-lg uppercase tracking-wide text-[var(--pyre-creme)]">
+              {accountConfig.sessions.title}
+            </h2>
+            <a
+              href={accountConfig.sessions.getManageUrl(user.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono uppercase text-[var(--pyre-red)] hover:text-[var(--pyre-red)]/80 transition-colors"
+            >
+              {accountConfig.sessions.manageButton}
+            </a>
+          </div>
           <SessionsList />
         </div>
       </div>
