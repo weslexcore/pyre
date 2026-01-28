@@ -4,6 +4,7 @@
 import { useAuth } from '@/hooks/useAuth';
 import { accountConfig } from '@/lib/account-config';
 import { CreditsCard } from './CreditsCard';
+import { MemberDataProvider } from './MemberDataProvider';
 import { MembershipCard } from './MembershipCard';
 import { ProfileCard } from './ProfileCard';
 import { AttendedSessionsList } from './AttendedSessionsList';
@@ -85,15 +86,17 @@ export function AccountDashboard() {
       </div>
 
       {/* Membership and Credits grid */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <div id="membership">
-          <MembershipCard />
-        </div>
+      <MemberDataProvider>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div id="membership">
+            <MembershipCard />
+          </div>
 
-        <div id="credits">
-          <CreditsCard />
+          <div id="credits">
+            <CreditsCard />
+          </div>
         </div>
-      </div>
+      </MemberDataProvider>
 
       {/* Sessions section */}
       <div id="sessions" className="mt-8">

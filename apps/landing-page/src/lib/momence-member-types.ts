@@ -122,6 +122,43 @@ export interface MomenceSessionDetail {
 }
 
 /**
+ * Momence v2 /member/bought-memberships/active response shape
+ */
+export interface MomenceBoughtMembershipsResponse {
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+  };
+  payload: MomenceBoughtMembershipPayload[];
+}
+
+/**
+ * A single bought-membership entry from Momence /member/bought-memberships/active
+ */
+export interface MomenceBoughtMembershipPayload {
+  id: number;
+  type: string;
+  startDate: string; // ISO 8601
+  endDate: string | null;
+  isFrozen: boolean;
+  eventCreditsLeft: number | null;
+  eventCreditsTotal: number | null;
+  combinedUsageLimit: number | null;
+  combinedUsage: number | null;
+  membership: MomenceHostMembershipBasic;
+}
+
+/**
+ * Nested membership (the host-defined plan) inside a bought-membership payload
+ */
+export interface MomenceHostMembershipBasic {
+  name: string;
+  description?: string;
+  autoRenewing: boolean;
+}
+
+/**
  * API response wrapper for member endpoints
  */
 export interface MemberApiResponse<T> {
