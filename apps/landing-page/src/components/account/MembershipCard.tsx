@@ -1,6 +1,7 @@
 // MembershipCard component
 // Displays user's membership status, credits, and purchase options
 
+import { useAuth } from '@/hooks/useAuth';
 import { useMemberCredits } from '@/hooks/useMemberCredits';
 import { useMemberMemberships } from '@/hooks/useMemberMemberships';
 import { accountConfig } from '@/lib/account-config';
@@ -17,6 +18,7 @@ function findMatchingTier(membershipName: string) {
 }
 
 export function MembershipCard() {
+  const { user } = useAuth();
   const { activeMembership, loading: membershipLoading, error: membershipError } = useMemberMemberships();
   const { credits, hasCredits, loading: creditsLoading, error: creditsError } = useMemberCredits();
 
@@ -51,7 +53,7 @@ export function MembershipCard() {
     return <NoMembershipDisplay credits={effectiveCredits} hasCredits={effectiveHasCredits} />;
   }
 
-  return <ActiveMembershipDisplay membership={activeMembership} credits={effectiveCredits} />;
+  return <ActiveMembershipDisplay membership={activeMembership} credits={effectiveCredits} userId={user?.id} />;
 }
 
 interface CreditsDisplayProps {
@@ -205,9 +207,10 @@ function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) 
 interface ActiveMembershipDisplayProps {
   membership: MemberMembership;
   credits: MemberCredits | null;
+  userId?: number;
 }
 
-function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDisplayProps) {
+function ActiveMembershipDisplay({ membership, credits, userId }: ActiveMembershipDisplayProps) {
   const renewalDate = membership.renewalDate
     ? new Date(membership.renewalDate).toLocaleDateString('en-US', {
         month: 'short',
@@ -235,23 +238,26 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
         <h2 className="font-mono-bold text-lg uppercase tracking-wide">
           {accountConfig.membership.title}
         </h2>
-        <span className="px-2 py-1 text-xs font-mono-bold uppercase rounded bg-[var(--pyre-black)]/20">
-          {membership.status}
-        </span>
+        {userId && (
+          <a
+            href={accountConfig.membership.getManageUrl(userId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-mono uppercase text-[var(--pyre-blue)] hover:text-[var(--pyre-red)]/80 transition-colors"
+          >
+            {accountConfig.membership.manageButton}
+          </a>
+        )}
       </div>
 
       {/* Membership name */}
       <p className="font-primary-semibold text-xl mb-4">{membership.name}</p>
 
-      {/* Credits/Sessions - using aggregated credits from hook */}
-      {displayCredits && (
+      {/* Credits/Sessions - only shown for limited memberships */}
+      {displayCredits && !displayCredits.unlimited && (
         <div className="mb-4">
           <p className="text-sm opacity-80">{accountConfig.membership.sessionsLabel}</p>
-          <p className="font-mono-bold text-2xl">
-            {displayCredits.unlimited
-              ? accountConfig.membership.unlimitedLabel
-              : displayCredits.available}
-          </p>
+          <p className="font-mono-bold text-2xl">{displayCredits.available}</p>
         </div>
       )}
 

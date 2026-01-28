@@ -71,7 +71,7 @@ export function CreditsCard() {
           </div>
         )}
 
-        <SessionPacks />
+        {!credits.unlimited && <SessionPacks />}
       </div>
     );
   }

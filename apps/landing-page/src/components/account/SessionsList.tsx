@@ -109,7 +109,7 @@ function SessionCard({
   });
 
   return (
-    <div className="flex items-start gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--card)]">
+    <div className="flex items-start gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
       {/* Date badge */}
       <div className="flex-shrink-0 w-14 text-center">
         <div className="text-xs font-mono-bold uppercase text-[var(--muted-foreground)]">
@@ -148,7 +148,7 @@ function SessionCard({
               type="button"
               onClick={onDismissCancel}
               disabled={isCancelling}
-              className="px-3 py-1.5 text-xs font-mono-bold uppercase rounded border border-[var(--border)] hover:bg-[var(--border)] disabled:opacity-50 transition-colors"
+              className="px-3 py-1.5 text-xs font-mono-bold uppercase rounded border border-[var(--pyre-blue)] hover:bg-[var(--pyre-blue)] disabled:opacity-50 transition-colors"
             >
               Keep
             </button>

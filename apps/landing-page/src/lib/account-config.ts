@@ -59,6 +59,8 @@ export const accountConfig = {
     // singleSessionLink: 'Or browse single sessions',
     upgradePrompt: 'Upgrade to a membership for more value',
     benefitsLabel: 'Your Benefits',
+    manageButton: 'Manage Membership',
+    getManageUrl: (userId: number) => `https://momence.com/dashboard/u/${userId}/my-memberships`,
   },
   credits: {
     title: 'Available Credits',
