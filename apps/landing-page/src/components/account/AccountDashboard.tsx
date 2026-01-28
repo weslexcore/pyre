@@ -3,6 +3,7 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { accountConfig } from '@/lib/account-config';
+import { CreditsCard } from './CreditsCard';
 import { MembershipCard } from './MembershipCard';
 import { ProfileCard } from './ProfileCard';
 import { SessionsList } from './SessionsList';
@@ -74,14 +75,19 @@ export function AccountDashboard({ error, freshAuth }: AccountDashboardProps) {
         </p>
       </div>
 
-      {/* Dashboard grid */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Profile card */}
+      {/* Profile card */}
+      <div className="mb-6">
         <ProfileCard user={user} />
+      </div>
 
-        {/* Membership card */}
+      {/* Membership and Credits grid */}
+      <div className="grid gap-6 md:grid-cols-2">
         <div id="membership">
           <MembershipCard />
+        </div>
+
+        <div id="credits">
+          <CreditsCard />
         </div>
       </div>
 

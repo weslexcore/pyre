@@ -50,12 +50,16 @@ export const accountConfig = {
     creditsLabel: 'Available Credits',
     singleSessionLink: 'Or browse single sessions',
     upgradePrompt: 'Upgrade to a membership for more value',
+    benefitsLabel: 'Your Benefits',
   },
   credits: {
     title: 'Available Credits',
     emptyState: 'No credits available',
+    emptyStateSubtitle: 'Purchase a session pack to get started',
     sourceLabel: 'From',
     expiresLabel: 'Expires',
+    purchaseCta: 'Purchase Sessions',
+    purchaseHref: '/#sessions',
   },
   errors: {
     authFailed: 'Authentication failed. Please try again.',

@@ -4,8 +4,17 @@
 import { useMemberCredits } from '@/hooks/useMemberCredits';
 import { useMemberMemberships } from '@/hooks/useMemberMemberships';
 import { accountConfig } from '@/lib/account-config';
-import membership from '@/lib/membership';
+import membershipConfig from '@/lib/membership';
 import type { MemberCredits, MemberMembership } from '@/lib/momence-member-types';
+
+function findMatchingTier(membershipName: string) {
+  const normalized = membershipName.trim().toLowerCase();
+  return membershipConfig.tiers.find(
+    (tier) =>
+      tier.name.toLowerCase() === normalized ||
+      tier.id === normalized.replace(/\s+/g, '-'),
+  );
+}
 
 export function MembershipCard() {
   const { activeMembership, loading: membershipLoading, error: membershipError } = useMemberMemberships();
@@ -31,16 +40,10 @@ export function MembershipCard() {
     );
   }
 
-  // Error state - only if membership API fails
+  // If membership API errors, fall through to no-membership display
+  // so users always see purchase options instead of a dead-end error
   if (hasMembershipError) {
-    return (
-      <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
-        <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
-          {accountConfig.membership.title}
-        </h2>
-        <p className="text-sm opacity-80">Failed to load membership status.</p>
-      </div>
-    );
+    return <NoMembershipDisplay credits={effectiveCredits} hasCredits={effectiveHasCredits} />;
   }
 
   // No active membership
@@ -123,7 +126,7 @@ interface NoMembershipDisplayProps {
 }
 
 function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) {
-  const tiers = membership.tiers;
+  const tiers = membershipConfig.tiers;
 
   return (
     <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
@@ -202,6 +205,12 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
     unlimited: membership.credits.unlimited,
   } : null);
 
+  // Resolve benefits from tier config, falling back to API-provided benefits
+  const matchedTier = findMatchingTier(membership.name);
+  const benefits = matchedTier
+    ? matchedTier.features.map((f) => ({ text: f.text, highlighted: f.highlighted }))
+    : membership.benefits?.map((b) => ({ text: b, highlighted: false })) ?? [];
+
   return (
     <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
       <div className="flex items-start justify-between mb-4">
@@ -238,12 +247,18 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
         </div>
       )}
 
-      {/* Benefits */}
-      {membership.benefits && membership.benefits.length > 0 && (
+      {/* Benefits from tier config */}
+      {benefits.length > 0 && (
         <div className="mt-4 pt-4 border-t border-[var(--pyre-creme)]/20">
-          <ul className="space-y-1 text-sm opacity-80">
-            {membership.benefits.map((benefit, i) => (
-              <li key={i} className="flex items-start gap-2">
+          <p className="font-mono-bold text-sm uppercase tracking-wide mb-3 opacity-80">
+            {accountConfig.membership.benefitsLabel}
+          </p>
+          <ul className="space-y-2 text-sm">
+            {benefits.map((benefit, i) => (
+              <li
+                key={i}
+                className={`flex items-start gap-2 ${benefit.highlighted ? 'text-[var(--pyre-muted-gold)]' : 'opacity-80'}`}
+              >
                 <svg
                   className="w-4 h-4 mt-0.5 flex-shrink-0"
                   fill="none"
@@ -258,7 +273,7 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
-                {benefit}
+                {benefit.text}
               </li>
             ))}
           </ul>

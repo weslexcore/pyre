@@ -34,15 +34,24 @@ export const GET: APIRoute = async ({ cookies }) => {
     });
 
     if (!response.ok) {
-      console.error('[Member Memberships API] Momence returned:', response.status);
+      // 401 means token is invalid - propagate as auth error
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: 'not_authenticated', memberships: [] }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      // Other errors (404, 500, etc.) - treat as "no memberships"
+      // This handles users who have never purchased a membership
+      console.warn('[Member Memberships API] Momence returned:', response.status);
       return new Response(
-        JSON.stringify({
-          error: 'fetch_failed',
-          memberships: [],
-        }),
+        JSON.stringify({ memberships: [], total: 0 }),
         {
-          status: response.status === 401 ? 401 : 500,
-          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'private, no-cache',
+          },
         }
       );
     }

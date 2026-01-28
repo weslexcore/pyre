@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
-import { BookButton } from './BookButton';
+
 
 interface EventsGridProps {
   fallback?: EventItem[];
@@ -108,13 +108,18 @@ function EventCard({ event, visible }: { event: EventItem; visible: boolean }) {
         </div>
 
         {event.cta && (
-          <BookButton
-            eventId={event.id}
-            eventTitle={event.title}
-            momenceLink={event.cta.href}
-            isFull={event.spotsRemaining === 0}
-            className="w-full"
-          />
+          <a
+            href={event.cta.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={event.cta.ariaLabel}
+            className="inline-flex w-full items-center justify-center px-4 py-2 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
+          >
+            {event.spotsRemaining === 0 ? 'Join Waitlist' : event.cta.label}
+            <svg className="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
         )}
       </div>
     </article>

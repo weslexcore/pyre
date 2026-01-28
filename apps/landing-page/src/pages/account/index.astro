@@ -1,5 +1,6 @@
 ---
 import MainLayout from '@/layouts/main.astro';
+import TiledHeader from '@/components/TiledHeader.astro';
 import { AccountDashboard } from '@/components/account/AccountDashboard';
 import { accountConfig } from '@/lib/account-config';
 
@@ -14,7 +15,11 @@ const freshAuth = Astro.url.searchParams.get('auth') === 'success';
   description={accountConfig.page.description}
   transparentNav={true}
 >
-  <div class="pt-24 pb-16 min-h-screen bg-[var(--pyre-black)]">
-    <AccountDashboard client:load error={error} freshAuth={freshAuth} />
+  <div class="min-h-screen bg-[var(--pyre-black)]">
+    <TiledHeader />
+
+    <div class="pb-16">
+      <AccountDashboard client:load error={error} freshAuth={freshAuth} />
+    </div>
   </div>
 </MainLayout>

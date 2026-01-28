@@ -14,9 +14,7 @@ const membership: MembershipContent = {
       features: [
         { text: '4 sauna & cold plunge sessions' },
         { text: 'Credits rollover 1 month', highlighted: true },
-        // { text: 'Access to all open sessions' },
-        // { text: 'Locker and amenities included' },
-        // { text: 'Cancel anytime' },
+        { text: '10% off extra sessions' },
       ],
       cta: {
         label: 'Get Started',
@@ -34,9 +32,8 @@ const membership: MembershipContent = {
       features: [
         { text: 'Unlimited sauna & cold plunge access' },
         { text: '4 guest passes per month', highlighted: true },
-        // { text: 'Access to all open sessions' },
         { text: 'Free Pyre tote bag', highlighted: true },
-        // { text: 'Locker and amenities included' },
+        { text: '10% off extra sessions' },
       ],
       cta: {
         label: 'Get Started',
