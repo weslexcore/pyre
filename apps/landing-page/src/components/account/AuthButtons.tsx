@@ -32,7 +32,7 @@ export function AuthButtons({
 
   // Authenticated - show user dropdown
   if (isAuthenticated) {
-    return <UserDropdown />;
+    return <UserDropdown variant={variant} />;
   }
 
   // Not authenticated - show login button
