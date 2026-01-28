@@ -3,7 +3,7 @@ import membership from '../lib/membership';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
 
-const maxMobileFeatures = 4;
+const maxMobileFeatures = 10;
 ---
 
 <section id="membership" aria-labelledby="membership-heading" class="py-8 md:py-24 lg:py-0 px-4 lg:px-0">
@@ -25,7 +25,7 @@ const maxMobileFeatures = 4;
     </div>
     <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
-    <div class="grid grid-cols-2 gap-3 md:gap-6 lg:gap-3 max-w-3xl mx-auto lg:max-w-none">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 lg:gap-3 max-w-3xl mx-auto lg:max-w-none">
       {membership.tiers.map((tier) => (
         <div
           class={`pricing-card relative flex flex-col p-4 md:p-6 lg:p-3 border rounded-lg transition-all duration-300 ${
@@ -58,8 +58,8 @@ const maxMobileFeatures = 4;
           </div>
 
           {/* Mobile/tablet: show limited features in list */}
-          <ul class="space-y-2 mb-4 flex-grow lg:hidden">
-            {tier.features.slice(0, maxMobileFeatures).map((feature) => (
+          <ul class="space-y-2 mb-4 flex-grow">
+            {tier.features.map((feature) => (
               <li class={`flex items-start gap-2 ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
                 <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -69,9 +69,9 @@ const maxMobileFeatures = 4;
             ))}
           </ul>
 
-          {/* Desktop: horizontal compact feature list */}
+          {/* Desktop: horizontal compact feature list
           <ul class="hidden lg:flex flex-wrap gap-x-3 gap-y-1 mb-3">
-            {tier.features.slice(0, maxMobileFeatures).map((feature) => (
+            {tier.features.map((feature) => (
               <li class={`flex items-center gap-1.5 text-xs ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : 'opacity-80'}`}>
                 <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -79,7 +79,7 @@ const maxMobileFeatures = 4;
                 <span>{feature.text}</span>
               </li>
             ))}
-          </ul>
+          </ul> */}
 
           <Button
             href={tier.cta.href}

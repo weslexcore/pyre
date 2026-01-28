@@ -44,19 +44,19 @@ import Layout from '../layouts/main.astro';
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
           <BenefitsSection />
         </div>
-        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8">
-          <SessionSection />
-        </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
           <TestimonialsSection />
+        </div>
+        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8">
+          <EventsSection />
+        </div>
+        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8">
+          <SessionSection />
         </div>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
         <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8">
           <MembershipSection />
-        </div>
-        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8">
-          <EventsSection />
         </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8">
           <GroupBookingSection />
@@ -84,33 +84,30 @@ import Layout from '../layouts/main.astro';
           <SectionCard stackIndex={0} class="card-cta-animated mb-8" data-section="about">
             <AboutSection />
           </SectionCard>
-          <!-- <SectionBridge bgColor="var(--pyre-black)" variant="torn" position="bottom" />
-          <SectionBridge bgColor="var(--pyre-black)" variant="torn" position="top" /> -->
-          <SectionCard stackIndex={1} class="mb-8" data-section="benefits">
+          <SectionCard class="mb-8" data-section="benefits">
             <BenefitsSection />
           </SectionCard>
-          <SectionCard stackIndex={2} class="mb-8" data-section="testimonials">
+          <SectionCard class="mb-8" data-section="testimonials">
             <TestimonialsSection />
           </SectionCard>
-          <SectionCard stackIndex={5} class="card-cta-animated my-8" data-section="events">
+          <SectionCard class="card-cta-animated my-8" data-section="events">
             <EventsSection variant="compact" />
           </SectionCard>
-
-          <SectionCard stackIndex={3} class="lg:rounded-t-lg lg:rounded-b-none" data-section="sessions">
+          <SectionCard class="lg:rounded-t-lg lg:rounded-b-none" data-section="sessions">
             <SessionSection />
           </SectionCard>
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-          <SectionCard stackIndex={4} class="lg:rounded-t-none lg:rounded-b-lg" data-section="membership">
+          <SectionCard class="lg:rounded-t-none lg:rounded-b-lg" data-section="membership">
             <MembershipSection />
           </SectionCard>
-          <SectionCard stackIndex={8} class="card-cta-animated my-8" data-section="group-booking">
+          <SectionCard class="card-cta-animated my-8" data-section="group-booking">
             <GroupBookingSection />
           </SectionCard>
-          <SectionCard stackIndex={6} class="my-8" data-section="faq">
+          <SectionCard class="my-8" data-section="faq">
             <FAQAccordion />
           </SectionCard>
-          <SectionCard stackIndex={7} class="card-cta-animated my-8" data-section="signup">
+          <SectionCard class="card-cta-animated my-8" data-section="signup">
             <SignupFormCompact />
           </SectionCard>
         </div>
