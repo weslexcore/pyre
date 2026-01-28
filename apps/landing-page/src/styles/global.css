@@ -284,13 +284,16 @@
 
 /* Removed element-specific hero utilities in favor of Tailwind utilities inline */
 
-/* Animated Gradient Border for CTA Button */
+/* Animated Gradient Border — rotate the gradient angle, not the element */
+@property --gradient-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 @keyframes gradient-rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
+  to {
+    --gradient-angle: 360deg;
   }
 }
 
@@ -307,12 +310,9 @@
   content: "";
   position: absolute;
   z-index: -2;
-  left: -50%;
-  top: -150%;
-  width: 200%;
-  height: 400%;
+  inset: 0;
   background: conic-gradient(
-    from 0deg,
+    from var(--gradient-angle),
     var(--pyre-red),
     var(--pyre-gold),
     var(--pyre-sage),
@@ -350,7 +350,7 @@
   z-index: 0;
   overflow: hidden;
   isolation: isolate;
-  background: var(--pyre-red); /* Fallback for gradient gaps at corners */
+  background: var(--pyre-black);
 }
 
 /* Only apply animation on lg+ screens where rounded corners are visible */
@@ -359,12 +359,9 @@
   content: "";
   position: absolute;
   z-index: -2;
-  left: -50%;
-  top: -50%;
-  width: 200%;
-  height: 200%;
+  inset: 0;
   background: conic-gradient(
-    from 0deg,
+    from var(--gradient-angle),
     var(--pyre-red),
     var(--pyre-gold),
     var(--pyre-sage),
