@@ -16,7 +16,8 @@
     "optimize:videos": "tsx scripts/optimize-videos.ts",
     "optimize:images": "node scripts/optimize-images.mjs",
     "optimize:images:dry": "node scripts/optimize-images.mjs --dry-run",
-    "deploy": "yarn build && scripts/updateCFT.sh"
+    "extract:dividers": "node scripts/extract-divider-svgs.mjs",
+    "extract:dividers:dry": "node scripts/extract-divider-svgs.mjs --dry-run"
   },
   "dependencies": {
     "@astrojs/check": "0.9.6",
@@ -29,6 +30,7 @@
     "@types/react-dom": "^19.1.7",
     "@vercel/speed-insights": "^1.2.0",
     "astro": "5.16.4",
+    "baseline-browser-mapping": "^2.9.19",
     "chart.js": "^4.5.0",
     "fuse.js": "^7.1.0",
     "react": "^19.1.1",
