@@ -5,54 +5,113 @@ import fallbackEvents from '../lib/events';
 import Button from './Button.astro';
 import EventsCarousel from './events/EventsCarousel';
 import SectionDivider from './SectionDivider.astro';
+
+interface Props {
+  /**
+   * Layout variant:
+   * - 'default': Side-by-side layout with image on left (used on mobile)
+   * - 'compact': Stacked layout with header, image, carousel (used on desktop cards)
+   */
+  variant?: 'default' | 'compact';
+}
+
+const { variant = 'default' } = Astro.props;
+const isCompact = variant === 'compact';
 ---
 
-<section aria-labelledby="events-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
-  <div class="max-w-6xl mx-auto">
-    <div class="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-6 md:gap-8 items-start">
-      <!-- Image column -->
-      <div class="aspect-[3/4] overflow-hidden rounded-lg">
-        <Image
-          src={warmSauna2}
-          alt="Friends enjoying a social sauna session together"
-          class="w-full h-full object-cover object-center"
-          loading="lazy"
-          decoding="async"
-        />
-      </div>
+{isCompact ? (
+  <!-- Compact variant: stacked layout for desktop cards -->
+  <div aria-labelledby="events-heading-compact">
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <h2
+        id="events-heading-compact"
+        class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
+      >
+        {fallbackEvents.title}
+      </h2>
+      {fallbackEvents.subtitle && (
+        <p class="text-base opacity-80">{fallbackEvents.subtitle}</p>
+      )}
+      <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-48 my-4" flip={true} scrollAware={true}/>
+    </div>
 
-      <!-- Content column -->
-      <div>
-        <div class="text-center md:text-left">
-          <h2
-            id="events-heading"
-            class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
-          >
-            {fallbackEvents.title}
-          </h2>
-          {fallbackEvents.subtitle && (
-            <p class="text-lg opacity-80">{fallbackEvents.subtitle}</p>
-          )}
+    <!-- Image -->
+    <div class="aspect-[16/9] overflow-hidden rounded-lg mb-6">
+      <Image
+        src={warmSauna2}
+        alt="Friends enjoying a social sauna session together"
+        class="w-full h-full object-cover object-center"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+
+    <!-- Dynamic events carousel (React island with compact variant) -->
+    <EventsCarousel client:load fallback={fallbackEvents.items} variant="compact" />
+
+    {fallbackEvents.viewAllCta && (
+      <div class="mt-8 text-center">
+        <Button
+          href={fallbackEvents.viewAllCta.href}
+          variant="outline"
+          size="md"
+          ariaLabel={fallbackEvents.viewAllCta.ariaLabel}
+        >
+          {fallbackEvents.viewAllCta.label}
+        </Button>
+      </div>
+    )}
+  </div>
+) : (
+  <!-- Default variant: side-by-side layout for mobile -->
+  <section aria-labelledby="events-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-6 md:gap-8 items-start">
+        <!-- Image column -->
+        <div class="aspect-[3/4] overflow-hidden rounded-lg">
+          <Image
+            src={warmSauna2}
+            alt="Friends enjoying a social sauna session together"
+            class="w-full h-full object-cover object-center"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
 
-        <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto md:mx-0 w-72 my-4" scrollAware={true}/>
-
-        <!-- Dynamic events carousel (React island) -->
-        <EventsCarousel client:load fallback={fallbackEvents.items} />
-
-        {fallbackEvents.viewAllCta && (
-          <div class="mt-10 text-center md:text-left">
-            <Button
-              href={fallbackEvents.viewAllCta.href}
-              variant="outline"
-              size="md"
-              ariaLabel={fallbackEvents.viewAllCta.ariaLabel}
+        <!-- Content column -->
+        <div>
+          <div class="text-center md:text-left">
+            <h2
+              id="events-heading"
+              class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
             >
-              {fallbackEvents.viewAllCta.label}
-            </Button>
+              {fallbackEvents.title}
+            </h2>
+            {fallbackEvents.subtitle && (
+              <p class="text-lg opacity-80">{fallbackEvents.subtitle}</p>
+            )}
           </div>
-        )}
+
+          <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto md:mx-0 w-72 my-4" scrollAware={true}/>
+
+          <!-- Dynamic events carousel (React island) -->
+          <EventsCarousel client:load fallback={fallbackEvents.items} />
+
+          {fallbackEvents.viewAllCta && (
+            <div class="mt-10 text-center md:text-left">
+              <Button
+                href={fallbackEvents.viewAllCta.href}
+                variant="outline"
+                size="md"
+                ariaLabel={fallbackEvents.viewAllCta.ariaLabel}
+              >
+                {fallbackEvents.viewAllCta.label}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
+)}

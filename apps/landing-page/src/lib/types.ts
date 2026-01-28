@@ -443,6 +443,50 @@ export interface BenefitsContent {
 }
 
 // ------------------------------------------------------------
+// Testimonials section types
+// ------------------------------------------------------------
+
+export interface TestimonialItem {
+  id: string;
+  name: string;
+  role: string;
+  quote: string;
+  image?: ImageRef;
+  highlight?: boolean;
+}
+
+export interface TestimonialsContent {
+  title: string;
+  subtitle?: string;
+  items: TestimonialItem[];
+  closing?: string;
+  cta?: ActionRef;
+}
+
+// ------------------------------------------------------------
+// Group Booking section types
+// ------------------------------------------------------------
+
+export interface GroupBookingOccasion {
+  icon?: string;
+  label: string;
+}
+
+export interface GroupBookingContent {
+  title: string;
+  subtitle?: string;
+  description: string[];
+  capacity: {
+    max: number;
+    label: string;
+  };
+  occasions?: GroupBookingOccasion[];
+  features?: string[];
+  cta: ActionRef;
+  secondaryCta?: ActionRef;
+}
+
+// ------------------------------------------------------------
 // Blog types
 // ------------------------------------------------------------
 

@@ -1,0 +1,45 @@
+---
+import testimonials from '../lib/testimonials';
+import Button from './Button.astro';
+import ScrollGradientOverlay from './ScrollGradientOverlay.astro';
+import SectionDivider from './SectionDivider.astro';
+import TestimonialsCarousel from './testimonials/TestimonialsCarousel';
+---
+
+<section id="testimonials" aria-labelledby="testimonials-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
+  <ScrollGradientOverlay variant="footer" />
+  <div class="max-w-5xl mx-auto lg:max-w-none">
+    <div class="text-center mb-8">
+      <h2
+        id="testimonials-heading"
+        class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3"
+      >
+        {testimonials.title}
+      </h2>
+      {testimonials.subtitle && (
+        <p class="text-sm opacity-80">{testimonials.subtitle}</p>
+      )}
+      <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
+
+      <!-- Testimonials carousel (React island) -->
+      <TestimonialsCarousel client:load items={testimonials.items} />
+
+      {testimonials.closing && (
+        <p class="mt-6 text-base opacity-80 text-center">{testimonials.closing}</p>
+      )}
+
+      {testimonials.cta && (
+        <div class="mt-8 text-center">
+          <Button
+            href={testimonials.cta.href}
+            variant="cta"
+            size="lg"
+            ariaLabel={testimonials.cta.ariaLabel}
+          >
+            {testimonials.cta.label}
+          </Button>
+        </div>
+      )}
+    </div>
+  </div>
+</section>

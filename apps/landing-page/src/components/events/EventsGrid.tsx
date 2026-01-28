@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
+import { BookButton } from './BookButton';
 
 interface EventsGridProps {
   fallback?: EventItem[];
@@ -107,13 +108,13 @@ function EventCard({ event, visible }: { event: EventItem; visible: boolean }) {
         </div>
 
         {event.cta && (
-          <a
-            href={event.cta.href}
-            aria-label={event.cta.ariaLabel}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
-          >
-            {event.cta.label}
-          </a>
+          <BookButton
+            eventId={event.id}
+            eventTitle={event.title}
+            momenceLink={event.cta.href}
+            isFull={event.spotsRemaining === 0}
+            className="w-full"
+          />
         )}
       </div>
     </article>

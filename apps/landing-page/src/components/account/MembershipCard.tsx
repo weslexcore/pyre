@@ -1,0 +1,269 @@
+// MembershipCard component
+// Displays user's membership status, credits, and purchase options
+
+import { useMemberCredits } from '@/hooks/useMemberCredits';
+import { useMemberMemberships } from '@/hooks/useMemberMemberships';
+import { accountConfig } from '@/lib/account-config';
+import membership from '@/lib/membership';
+import type { MemberCredits, MemberMembership } from '@/lib/momence-member-types';
+
+export function MembershipCard() {
+  const { activeMembership, loading: membershipLoading, error: membershipError } = useMemberMemberships();
+  const { credits, hasCredits, loading: creditsLoading, error: creditsError } = useMemberCredits();
+
+  const loading = membershipLoading || creditsLoading;
+
+  // Only show error state if membership API fails (ignore auth errors)
+  // Credits errors are handled gracefully - we just don't show credits
+  const hasMembershipError = membershipError && membershipError !== 'not_authenticated';
+
+  // If credits API fails, we can still show the membership card without credits
+  const effectiveCredits = creditsError ? null : credits;
+  const effectiveHasCredits = !creditsError && hasCredits;
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+        <div className="h-6 w-32 bg-[var(--pyre-creme)]/20 rounded animate-pulse mb-4" />
+        <div className="h-4 w-48 bg-[var(--pyre-creme)]/20 rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  // Error state - only if membership API fails
+  if (hasMembershipError) {
+    return (
+      <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+        <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
+          {accountConfig.membership.title}
+        </h2>
+        <p className="text-sm opacity-80">Failed to load membership status.</p>
+      </div>
+    );
+  }
+
+  // No active membership
+  if (!activeMembership) {
+    return <NoMembershipDisplay credits={effectiveCredits} hasCredits={effectiveHasCredits} />;
+  }
+
+  return <ActiveMembershipDisplay membership={activeMembership} credits={effectiveCredits} />;
+}
+
+interface CreditsDisplayProps {
+  credits: MemberCredits;
+  compact?: boolean;
+}
+
+function CreditsDisplay({ credits, compact = false }: CreditsDisplayProps) {
+  const expiryDate = credits.expiresAt
+    ? new Date(credits.expiresAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    : null;
+
+  if (compact) {
+    return (
+      <div className="bg-[var(--pyre-creme)]/10 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="font-mono-bold text-sm uppercase tracking-wide opacity-80">
+            {accountConfig.membership.creditsLabel}
+          </p>
+          <p className="font-mono-bold text-2xl">
+            {credits.unlimited ? accountConfig.membership.unlimitedLabel : credits.available}
+          </p>
+        </div>
+        {(credits.source || expiryDate) && (
+          <div className="flex items-center gap-4 text-xs opacity-70">
+            {credits.source && (
+              <span>
+                {accountConfig.credits.sourceLabel}: {credits.source}
+              </span>
+            )}
+            {expiryDate && (
+              <span>
+                {accountConfig.credits.expiresLabel}: {expiryDate}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4">
+      <p className="text-sm opacity-80">{accountConfig.membership.creditsLabel}</p>
+      <p className="font-mono-bold text-2xl">
+        {credits.unlimited ? accountConfig.membership.unlimitedLabel : credits.available}
+      </p>
+      {(credits.source || expiryDate) && (
+        <div className="flex items-center gap-4 text-xs opacity-70 mt-1">
+          {credits.source && (
+            <span>
+              {accountConfig.credits.sourceLabel}: {credits.source}
+            </span>
+          )}
+          {expiryDate && (
+            <span>
+              {accountConfig.credits.expiresLabel}: {expiryDate}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface NoMembershipDisplayProps {
+  credits: MemberCredits | null;
+  hasCredits: boolean;
+}
+
+function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) {
+  const tiers = membership.tiers;
+
+  return (
+    <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+      <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
+        {accountConfig.membership.title}
+      </h2>
+
+      {hasCredits && credits ? (
+        // Has credits but no membership - show credits + upgrade prompt
+        <>
+          <CreditsDisplay credits={credits} compact />
+          <a
+            href="/#membership"
+            className="inline-block mt-4 font-mono-bold text-sm uppercase tracking-wide underline hover:no-underline"
+          >
+            {accountConfig.membership.upgradePrompt} &rarr;
+          </a>
+        </>
+      ) : (
+        // No credits and no membership - show membership options
+        <>
+          <p className="text-sm opacity-80 mb-2">{accountConfig.membership.emptyState}</p>
+          <p className="text-sm opacity-60 mb-6">{accountConfig.membership.emptyStateSubtitle}</p>
+
+          {/* Membership tier buttons */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {tiers.map((tier) => (
+              <a
+                key={tier.id}
+                href={tier.cta.href}
+                aria-label={tier.cta.ariaLabel}
+                className="flex flex-col items-center justify-center p-4 rounded-lg border border-[var(--pyre-creme)]/30 hover:border-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors text-center"
+              >
+                <span className="font-mono-bold text-sm uppercase tracking-wide">
+                  {tier.name}
+                </span>
+                <span className="text-lg font-primary-semibold mt-1">
+                  ${tier.price}
+                  <span className="text-sm opacity-70">{tier.period}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+
+          {/* Single session fallback link */}
+          <a
+            href="/#events"
+            className="inline-block font-mono-bold text-xs uppercase tracking-wide opacity-70 hover:opacity-100 transition-opacity"
+          >
+            {accountConfig.membership.singleSessionLink} &rarr;
+          </a>
+        </>
+      )}
+    </div>
+  );
+}
+
+interface ActiveMembershipDisplayProps {
+  membership: MemberMembership;
+  credits: MemberCredits | null;
+}
+
+function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDisplayProps) {
+  const renewalDate = membership.renewalDate
+    ? new Date(membership.renewalDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
+
+  // Use credits from useMemberCredits hook (includes all sources) if available,
+  // otherwise fall back to membership.credits
+  const displayCredits = credits || (membership.credits ? {
+    available: membership.credits.remaining,
+    unlimited: membership.credits.unlimited,
+  } : null);
+
+  return (
+    <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+      <div className="flex items-start justify-between mb-4">
+        <h2 className="font-mono-bold text-lg uppercase tracking-wide">
+          {accountConfig.membership.title}
+        </h2>
+        <span className="px-2 py-1 text-xs font-mono-bold uppercase rounded bg-[var(--pyre-creme)]/20">
+          {membership.status}
+        </span>
+      </div>
+
+      {/* Membership name */}
+      <p className="font-primary-semibold text-xl mb-4">{membership.name}</p>
+
+      {/* Credits/Sessions - using aggregated credits from hook */}
+      {displayCredits && (
+        <div className="mb-4">
+          <p className="text-sm opacity-80">{accountConfig.membership.sessionsLabel}</p>
+          <p className="font-mono-bold text-2xl">
+            {displayCredits.unlimited
+              ? accountConfig.membership.unlimitedLabel
+              : displayCredits.available}
+          </p>
+        </div>
+      )}
+
+      {/* Renewal date */}
+      {renewalDate && (
+        <div className="pt-4 border-t border-[var(--pyre-creme)]/20">
+          <p className="text-sm">
+            <span className="opacity-80">{accountConfig.membership.renewalLabel}</span>{' '}
+            <span className="font-mono-bold">{renewalDate}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Benefits */}
+      {membership.benefits && membership.benefits.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-[var(--pyre-creme)]/20">
+          <ul className="space-y-1 text-sm opacity-80">
+            {membership.benefits.map((benefit, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <svg
+                  className="w-4 h-4 mt-0.5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                {benefit}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}

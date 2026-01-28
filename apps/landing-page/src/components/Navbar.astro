@@ -4,6 +4,7 @@ import logo from '../assets/logos/red/logo.png';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
+import { AuthButtons } from './account/AuthButtons';
 
 interface Props {
   isHomePage?: boolean;
@@ -73,14 +74,13 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 
     <!-- Desktop CTAs -->
     <div class="hidden md:flex items-center gap-3">
-      <Button
-        href={navbar.actions?.login?.href}
-        variant="secondary"
-        size="lg"
-        ariaLabel={navbar.actions?.login?.ariaLabel}
-      >
-        {navbar.actions?.login?.label}
-      </Button>
+      <AuthButtons
+        client:load
+        loginHref={navbar.actions?.login?.href || '/api/auth/login'}
+        loginLabel={navbar.actions?.login?.label}
+        loginAriaLabel={navbar.actions?.login?.ariaLabel}
+        variant="desktop"
+      />
       <Button
         href={navbar.actions?.secondary?.href}
         variant="cta"
@@ -151,15 +151,15 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
         </a>
       ))}
       <div class="pt-3 border-t border-[var(--pyre-creme)]/10 flex flex-row gap-3">
-        <Button
-          href={navbar.actions?.login?.href}
-          variant="secondary"
-          size="lg"
-          ariaLabel={navbar.actions?.login?.ariaLabel}
-          class="w-full"
-        >
-          {navbar.actions?.login?.label}
-        </Button>
+        <div class="w-full">
+          <AuthButtons
+            client:load
+            loginHref={navbar.actions?.login?.href || '/api/auth/login'}
+            loginLabel={navbar.actions?.login?.label}
+            loginAriaLabel={navbar.actions?.login?.ariaLabel}
+            variant="mobile"
+          />
+        </div>
         <Button
           href={navbar.actions?.secondary?.href}
           variant="cta"

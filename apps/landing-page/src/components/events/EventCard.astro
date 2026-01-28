@@ -1,13 +1,16 @@
 ---
 import type { EventItem } from '@/lib/types';
 import Button from '../Button.astro';
+import { EventCardActions } from './EventCardActions';
 
 interface Props {
   event: EventItem;
   class?: string;
+  enableSmartBooking?: boolean;
 }
 
-const { event, class: className } = Astro.props;
+const { event, class: className, enableSmartBooking = false } = Astro.props;
+const isFull = event.spotsRemaining === 0;
 ---
 
 <article
@@ -57,15 +60,26 @@ const { event, class: className } = Astro.props;
     </div>
 
     {event.cta && (
-      <Button
-        href={event.cta.href}
-        variant="outline"
-        size="sm"
-        ariaLabel={event.cta.ariaLabel}
-        class="w-full"
-      >
-        {event.cta.label}
-      </Button>
+      enableSmartBooking ? (
+        <EventCardActions
+          client:load
+          eventId={event.id}
+          eventTitle={event.title}
+          momenceLink={event.cta.href}
+          ctaLabel={event.cta.label}
+          isFull={isFull}
+        />
+      ) : (
+        <Button
+          href={event.cta.href}
+          variant="outline"
+          size="sm"
+          ariaLabel={event.cta.ariaLabel}
+          class="w-full"
+        >
+          {event.cta.label}
+        </Button>
+      )
     )}
   </div>
 </article>

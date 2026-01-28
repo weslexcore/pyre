@@ -244,11 +244,13 @@
   #about,
   #membership,
   #events,
+  #group-booking,
   #faq,
   #signup,
   [data-section="about"],
   [data-section="membership"],
   [data-section="events"],
+  [data-section="group-booking"],
   [data-section="faq"],
   [data-section="signup"] {
     scroll-margin-top: 5rem; /* 80px to account for fixed navbar */

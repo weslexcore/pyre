@@ -3,33 +3,33 @@ import faqs from '../lib/faqs';
 import SectionDivider from './SectionDivider.astro';
 ---
 
-<section aria-labelledby="faq-heading" class="py-16 md:py-24 px-4">
+<div aria-labelledby="faq-heading" class="py-16 md:py-24 lg:py-8 px-4 lg:px-0">
   <div class="max-w-3xl mx-auto">
     <h2
       id="faq-heading"
-      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase text-center"
+      class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] lg:text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase text-center mb-4"
     >
       {faqs.title}
     </h2>
 
-    <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
+    <SectionDivider variant="torn" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 lg:w-48 my-4" scrollAware={true}/>
 
-    <div class="faq-list space-y-4">
+    <div class="faq-list space-y-4 lg:space-y-3">
       {faqs.items.map((faq, index) => (
         <div class="faq-item border-b border-current/20">
           <button
             type="button"
-            class="faq-trigger w-full py-5 flex items-center justify-between text-left gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
+            class="faq-trigger w-full py-5 lg:py-4 flex items-center justify-between text-left gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
             aria-expanded="false"
             aria-controls={`faq-content-${index}`}
             id={`faq-trigger-${index}`}
           >
-            <span class="font-mono-bold text-base md:text-lg pr-4">
+            <span class="font-mono-bold text-base md:text-lg lg:text-base pr-4">
               {faq.question}
             </span>
-            <span class="faq-icon flex-shrink-0 w-6 h-6 relative" aria-hidden="true">
+            <span class="faq-icon flex-shrink-0 w-6 h-6 lg:w-5 lg:h-5 relative" aria-hidden="true">
               <span class="absolute inset-0 flex items-center justify-center transition-transform duration-300">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12M6 12h12" />
                 </svg>
               </span>
@@ -42,8 +42,8 @@ import SectionDivider from './SectionDivider.astro';
             role="region"
             aria-labelledby={`faq-trigger-${index}`}
           >
-            <div class="pb-5 pr-10">
-              <p class="leading-relaxed opacity-80">
+            <div class="pb-5 lg:pb-4 pr-10">
+              <p class="leading-relaxed lg:text-sm opacity-80">
                 {faq.answer}
               </p>
             </div>
@@ -52,7 +52,7 @@ import SectionDivider from './SectionDivider.astro';
       ))}
     </div>
   </div>
-</section>
+</div>
 
 <style>
   .faq-trigger[aria-expanded="true"] .faq-icon svg {

@@ -9,10 +9,15 @@ declare module '*.astro' {
 // Minimal env typing to satisfy lints without pulling in full Astro types
 interface ImportMetaEnv {
   readonly BASE_URL: string;
+  readonly PROD: boolean;
   readonly PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: string;
   readonly CLOUDFLARE_TURNSTILE_SECRET_KEY: string;
   readonly MOMENCE_HOST_ID: string;
   readonly MOMENCE_API_TOKEN: string;
+  // Momence OAuth V2
+  readonly MOMENCE_OAUTH_CLIENT_ID: string;
+  readonly MOMENCE_OAUTH_CLIENT_SECRET: string;
+  readonly PUBLIC_MOMENCE_OAUTH_REDIRECT_URI: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

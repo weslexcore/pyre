@@ -48,7 +48,7 @@ const navbar: NavbarContent = {
     },
     login: {
       label: 'Login',
-      href: 'https://momence.com/sign-in?hostId=169530',
+      href: '/api/auth/login',
       ariaLabel: 'Log in to manage your bookings',
     },
     social: {
