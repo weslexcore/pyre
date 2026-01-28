@@ -17,7 +17,6 @@ interface ImportMetaEnv {
   // Momence OAuth V2
   readonly MOMENCE_OAUTH_CLIENT_ID: string;
   readonly MOMENCE_OAUTH_CLIENT_SECRET: string;
-  readonly PUBLIC_MOMENCE_OAUTH_REDIRECT_URI: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

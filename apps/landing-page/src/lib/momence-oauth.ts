@@ -11,16 +11,19 @@ import type {
 const MOMENCE_OAUTH_BASE = 'https://api.momence.com/api/v2/auth';
 
 /**
- * Get OAuth client credentials from environment
+ * Get OAuth client credentials from environment.
+ * When a requestUrl is provided, the redirect URI is derived from its origin
+ * so it works automatically across environments (localhost, preview, production).
  */
-function getOAuthConfig() {
+function getOAuthConfig(requestUrl?: URL) {
   const clientId = import.meta.env.MOMENCE_OAUTH_CLIENT_ID;
   const clientSecret = import.meta.env.MOMENCE_OAUTH_CLIENT_SECRET;
-  const redirectUri = import.meta.env.PUBLIC_MOMENCE_OAUTH_REDIRECT_URI;
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!clientId || !clientSecret) {
     throw new Error('Missing Momence OAuth configuration. Check environment variables.');
   }
+
+  const redirectUri = requestUrl ? requestUrl.origin + '/api/auth/callback' : '';
 
   return { clientId, clientSecret, redirectUri };
 }
@@ -38,11 +41,12 @@ export function generateState(): string {
  * Build the Momence OAuth authorization URL
  */
 export function buildAuthorizationUrl(
+  requestUrl: URL,
   state: string,
   prompt: OAuthPrompt = 'login',
   returnUrl?: string
 ): string {
-  const { clientId, redirectUri } = getOAuthConfig();
+  const { clientId, redirectUri } = getOAuthConfig(requestUrl);
 
   console.log('[OAuth] Building authorization URL...');
   console.log('[OAuth] Client ID:', clientId);
@@ -71,8 +75,8 @@ export function buildAuthorizationUrl(
 /**
  * Exchange authorization code for tokens
  */
-export async function exchangeCodeForTokens(code: string): Promise<MomenceTokenData> {
-  const { clientId, clientSecret, redirectUri } = getOAuthConfig();
+export async function exchangeCodeForTokens(requestUrl: URL, code: string): Promise<MomenceTokenData> {
+  const { clientId, clientSecret, redirectUri } = getOAuthConfig(requestUrl);
 
   console.log('[OAuth] Exchanging code for tokens...');
   console.log('[OAuth] Token endpoint:', `${MOMENCE_OAUTH_BASE}/token`);

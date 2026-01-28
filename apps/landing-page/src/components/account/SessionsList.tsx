@@ -55,11 +55,11 @@ export function SessionsList() {
   // Empty state
   if (sessions.length === 0) {
     return (
-      <div>
-        <p className="text-[var(--muted-foreground)]">{accountConfig.sessions.emptyState}</p>
+      <div className="text-center py-4">
+        <p className="text-[var(--pyre-creme)]/70">{accountConfig.sessions.emptyState}</p>
         <a
           href="/events"
-          className="inline-block mt-4 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-red)] hover:underline"
+          className="inline-flex items-center justify-center mt-4 px-6 py-2.5 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
         >
           {accountConfig.sessions.emptyStateAction}
         </a>

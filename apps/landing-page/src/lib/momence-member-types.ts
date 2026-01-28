@@ -81,6 +81,47 @@ export interface CancelBookingResponse {
 }
 
 /**
+ * Momence v2 /member/sessions response shape
+ */
+export interface MomenceSessionsResponse {
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+  };
+  payload: MomenceBookingPayload[];
+}
+
+/**
+ * A single booking entry from Momence /member/sessions
+ */
+export interface MomenceBookingPayload {
+  id: number;
+  cancelledAt: string | null;
+  checkedIn: boolean;
+  session: MomenceSessionDetail;
+}
+
+/**
+ * The nested session object inside a booking payload
+ */
+export interface MomenceSessionDetail {
+  id: number;
+  name: string;
+  startsAt: string; // ISO 8601
+  endsAt: string; // ISO 8601
+  duration: number; // minutes
+  description?: string;
+  teacherName?: string;
+  image1?: string;
+  link?: string;
+  inPersonLocation?: {
+    id: number;
+    name: string;
+  };
+}
+
+/**
  * API response wrapper for member endpoints
  */
 export interface MemberApiResponse<T> {

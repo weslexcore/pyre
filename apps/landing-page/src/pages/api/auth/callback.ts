@@ -54,7 +54,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
 
   try {
     // Exchange authorization code for tokens
-    const tokens = await exchangeCodeForTokens(code);
+    const tokens = await exchangeCodeForTokens(url, code);
     console.log('[OAuth Callback] Token exchange successful');
     console.log('[OAuth Callback] Token expiresAt:', tokens.expiresAt);
     if (tokens.expiresAt && !Number.isNaN(tokens.expiresAt)) {

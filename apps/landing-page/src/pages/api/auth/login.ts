@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   console.log('[OAuth Login] State stored in cookie');
 
   // Build Momence authorization URL
-  const authUrl = buildAuthorizationUrl(state, prompt, returnUrl);
+  const authUrl = buildAuthorizationUrl(url, state, prompt, returnUrl);
   console.log('[OAuth Login] Redirecting to:', authUrl);
 
   // Redirect to Momence for authentication

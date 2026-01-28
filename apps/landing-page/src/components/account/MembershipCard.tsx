@@ -33,7 +33,7 @@ export function MembershipCard() {
   // Loading state
   if (loading) {
     return (
-      <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+      <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">
         <div className="h-6 w-32 bg-[var(--pyre-creme)]/20 rounded animate-pulse mb-4" />
         <div className="h-4 w-48 bg-[var(--pyre-creme)]/20 rounded animate-pulse" />
       </div>
@@ -129,7 +129,7 @@ function NoMembershipDisplay({ credits, hasCredits }: NoMembershipDisplayProps) 
   const tiers = membershipConfig.tiers;
 
   return (
-    <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+    <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">
       <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
         {accountConfig.membership.title}
       </h2>
@@ -212,7 +212,7 @@ function ActiveMembershipDisplay({ membership, credits }: ActiveMembershipDispla
     : membership.benefits?.map((b) => ({ text: b, highlighted: false })) ?? [];
 
   return (
-    <div className="bg-[var(--pyre-blue)] text-[var(--pyre-creme)] rounded-lg p-6">
+    <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">
       <div className="flex items-start justify-between mb-4">
         <h2 className="font-mono-bold text-lg uppercase tracking-wide">
           {accountConfig.membership.title}

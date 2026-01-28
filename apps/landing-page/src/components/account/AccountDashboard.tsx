@@ -6,6 +6,7 @@ import { accountConfig } from '@/lib/account-config';
 import { CreditsCard } from './CreditsCard';
 import { MembershipCard } from './MembershipCard';
 import { ProfileCard } from './ProfileCard';
+import { AttendedSessionsList } from './AttendedSessionsList';
 import { SessionsList } from './SessionsList';
 
 interface AccountDashboardProps {
@@ -93,13 +94,16 @@ export function AccountDashboard({ error, freshAuth }: AccountDashboardProps) {
 
       {/* Sessions section */}
       <div id="sessions" className="mt-8">
-        <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
-          <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4">
+        <div className="bg-[var(--pyre-black)] border border-[var(--border)] rounded-lg p-6">
+          <h2 className="font-mono-bold text-lg uppercase tracking-wide mb-4 text-[var(--pyre-creme)]">
             {accountConfig.sessions.title}
           </h2>
           <SessionsList />
         </div>
       </div>
+
+      {/* Session History section — self-hiding when no past sessions */}
+      <AttendedSessionsList />
     </div>
   );
 }

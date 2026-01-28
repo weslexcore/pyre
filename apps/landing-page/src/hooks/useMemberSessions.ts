@@ -4,6 +4,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MemberSession } from '@/lib/momence-member-types';
 
+interface UseMemberSessionsOptions {
+  type?: 'upcoming' | 'attended';
+}
+
 interface UseMemberSessionsResult {
   sessions: MemberSession[];
   loading: boolean;
@@ -13,7 +17,10 @@ interface UseMemberSessionsResult {
   cancelling: number | null; // bookingId being cancelled
 }
 
-export function useMemberSessions(): UseMemberSessionsResult {
+export function useMemberSessions(
+  options: UseMemberSessionsOptions = {}
+): UseMemberSessionsResult {
+  const { type = 'upcoming' } = options;
   const [sessions, setSessions] = useState<MemberSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +31,7 @@ export function useMemberSessions(): UseMemberSessionsResult {
     setError(null);
 
     try {
-      const response = await fetch('/api/member/sessions');
+      const response = await fetch(`/api/member/sessions?type=${type}`);
 
       if (response.status === 401) {
         setError('not_authenticated');
@@ -44,7 +51,7 @@ export function useMemberSessions(): UseMemberSessionsResult {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [type]);
 
   const cancelSession = useCallback(
     async (bookingId: number): Promise<boolean> => {

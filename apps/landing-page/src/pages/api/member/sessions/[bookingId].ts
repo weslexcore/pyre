@@ -40,7 +40,8 @@ export const DELETE: APIRoute = async ({ params, cookies }) => {
   }
 
   try {
-    const response = await fetch(`${MOMENCE_API_BASE}/member-sessions/${bookingId}`, {
+    // Inferred cancel path based on /member/sessions pattern
+    const response = await fetch(`${MOMENCE_API_BASE}/member/sessions/${bookingId}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${accessToken}`,

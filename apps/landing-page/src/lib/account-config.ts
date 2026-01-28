@@ -34,10 +34,18 @@ export const accountConfig = {
   sessions: {
     title: 'Upcoming Sessions',
     emptyState: 'No upcoming sessions',
-    emptyStateAction: 'Browse Events',
+    emptyStateAction: 'Book Your Next Session',
     cancelButton: 'Cancel',
     cancelConfirm: 'Are you sure you want to cancel this booking?',
     viewAllButton: 'View All Sessions',
+  },
+  attendedSessions: {
+    title: 'Session History',
+    emptyState: 'No past sessions yet',
+    statusLabels: {
+      attended: 'Attended',
+      missed: 'Missed',
+    },
   },
   membership: {
     title: 'Membership',
