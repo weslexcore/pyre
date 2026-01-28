@@ -18,11 +18,12 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 <header
   data-component="navbar"
   data-at-top="true"
+  data-menu-open="false"
   data-transparent-nav={transparentNav ? 'true' : 'false'}
   class:list={[
     "fixed inset-x-0 top-0 z-50 transition-colors duration-300 motion-reduce:transition-none",
     transparentNav
-      ? "bg-transparent data-[at-top=false]:max-lg:bg-[var(--pyre-black)]"
+      ? "bg-transparent data-[at-top=false]:max-lg:bg-[var(--pyre-black)] data-[menu-open=true]:max-lg:bg-[var(--pyre-black)]"
       : "bg-[var(--pyre-black)]"
   ]}
 >
@@ -269,7 +270,21 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
       if (!menuButton || !mobileMenu || !hamburgerIcon || !closeIcon) return () => {};
 
       function toggleMenu(shouldOpen: boolean) {
+        const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
+        const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
+
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        header?.setAttribute('data-menu-open', shouldOpen ? 'true' : 'false');
+
+        if (mobileGradient) {
+          if (shouldOpen) {
+            mobileGradient.style.opacity = '0.2';
+          } else {
+            const transparentNav = header?.dataset.transparentNav === 'true';
+            const atTop = window.scrollY <= 10;
+            mobileGradient.style.opacity = (!transparentNav || !atTop) ? '0.2' : '0';
+          }
+        }
 
         if (shouldOpen) {
           mobileMenu.classList.remove('max-h-0', 'opacity-0');

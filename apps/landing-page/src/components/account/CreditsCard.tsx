@@ -1,8 +1,10 @@
 // CreditsCard component
-// Displays user's available credits and purchase CTA
+// Displays user's available credits and inline session packs for purchase
 
 import { useMemberCredits } from '@/hooks/useMemberCredits';
 import { accountConfig } from '@/lib/account-config';
+import sessions from '@/lib/sessions';
+import type { SessionItem } from '@/lib/sessions';
 
 export function CreditsCard() {
   const { credits, hasCredits, loading, error } = useMemberCredits();
@@ -28,7 +30,7 @@ export function CreditsCard() {
           {accountConfig.credits.title}
         </h2>
         <p className="text-sm opacity-80 mb-4">Failed to load credits.</p>
-        <PurchaseCta />
+        <SessionPacks />
       </div>
     );
   }
@@ -69,7 +71,7 @@ export function CreditsCard() {
           </div>
         )}
 
-        <PurchaseCta />
+        <SessionPacks />
       </div>
     );
   }
@@ -82,29 +84,62 @@ export function CreditsCard() {
       </h2>
       <p className="text-sm opacity-80 mb-2">{accountConfig.credits.emptyState}</p>
       <p className="text-sm opacity-60 mb-6">{accountConfig.credits.emptyStateSubtitle}</p>
-      <PurchaseCta prominent />
+      <SessionPacks />
     </div>
   );
 }
 
-function PurchaseCta({ prominent = false }: { prominent?: boolean }) {
-  if (prominent) {
-    return (
-      <a
-        href={accountConfig.credits.purchaseHref}
-        className="inline-flex items-center justify-center px-5 py-2.5 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-creme)] text-[var(--pyre-blue)] hover:opacity-90 transition-opacity"
-      >
-        {accountConfig.credits.purchaseCta} &rarr;
-      </a>
-    );
-  }
+function SessionPacks() {
+  return (
+    <div className="mt-2">
+      <h3 className="font-mono-bold text-sm uppercase tracking-wide opacity-70 mb-3">
+        {accountConfig.credits.packsHeading}
+      </h3>
+      <div className="flex flex-col gap-2">
+        {sessions.items.map((item) => (
+          <SessionPackRow key={item.id} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SessionPackRow({ item }: { item: SessionItem }) {
+  const isHighlighted = item.highlighted;
 
   return (
-    <a
-      href={accountConfig.credits.purchaseHref}
-      className="inline-block font-mono-bold text-sm uppercase tracking-wide underline hover:no-underline"
+    <div
+      className={`flex items-center justify-between gap-3 rounded-md px-3 py-2.5 ${
+        isHighlighted
+          ? 'bg-[var(--pyre-gold)]/15 ring-1 ring-[var(--pyre-gold)]/40'
+          : 'bg-[var(--pyre-creme)]/8'
+      }`}
     >
-      {accountConfig.credits.purchaseCta} &rarr;
-    </a>
+      <div className="min-w-0 flex-1">
+        <span
+          className={`font-mono-bold text-sm ${isHighlighted ? 'text-[var(--pyre-gold)]' : ''}`}
+        >
+          {item.name}
+        </span>
+        <span className="ml-2 text-xs opacity-60">{item.description}</span>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="font-mono-bold text-sm">${item.price}</span>
+        {item.href && (
+          <a
+            href={item.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex items-center justify-center rounded px-3 py-1 font-mono-bold text-xs uppercase tracking-wide transition-opacity hover:opacity-90 ${
+              isHighlighted
+                ? 'bg-[var(--pyre-gold)] text-[var(--pyre-blue)]'
+                : 'bg-[var(--pyre-creme)] text-[var(--pyre-blue)]'
+            }`}
+          >
+            Buy
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

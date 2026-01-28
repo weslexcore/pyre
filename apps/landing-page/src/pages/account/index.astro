@@ -4,10 +4,7 @@ import TiledHeader from '@/components/TiledHeader.astro';
 import { AccountDashboard } from '@/components/account/AccountDashboard';
 import { accountConfig } from '@/lib/account-config';
 
-// Get error from query params (set during OAuth callback failures)
-const error = Astro.url.searchParams.get('error');
-// Check if this is a fresh auth redirect (signals to skip session cache)
-const freshAuth = Astro.url.searchParams.get('auth') === 'success';
+export const prerender = true;
 ---
 
 <MainLayout
@@ -19,7 +16,7 @@ const freshAuth = Astro.url.searchParams.get('auth') === 'success';
     <TiledHeader />
 
     <div class="pb-16">
-      <AccountDashboard client:load error={error} freshAuth={freshAuth} />
+      <AccountDashboard client:load />
     </div>
   </div>
 </MainLayout>

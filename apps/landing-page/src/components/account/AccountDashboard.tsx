@@ -9,12 +9,14 @@ import { ProfileCard } from './ProfileCard';
 import { AttendedSessionsList } from './AttendedSessionsList';
 import { SessionsList } from './SessionsList';
 
-interface AccountDashboardProps {
-  error?: string | null;
-  freshAuth?: boolean;
-}
+export function AccountDashboard() {
+  // Read query params client-side; guard for SSR where window is unavailable
+  const searchParams = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams();
+  const error = searchParams.get('error');
+  const freshAuth = searchParams.get('auth') === 'success';
 
-export function AccountDashboard({ error, freshAuth }: AccountDashboardProps) {
   const { isAuthenticated, user, loading, login } = useAuth({ skipCache: freshAuth });
 
   // Loading state

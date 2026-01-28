@@ -66,8 +66,7 @@ export const accountConfig = {
     emptyStateSubtitle: 'Purchase a session pack to get started',
     sourceLabel: 'From',
     expiresLabel: 'Expires',
-    purchaseCta: 'Purchase Sessions',
-    purchaseHref: '/#sessions',
+    packsHeading: 'Session Packs',
   },
   errors: {
     authFailed: 'Authentication failed. Please try again.',
