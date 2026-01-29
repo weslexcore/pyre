@@ -1,4 +1,5 @@
 import type { BenefitsContent } from './types';
+import { withBase } from './paths';
 
 const benefits: BenefitsContent = {
   title: 'Reset & Reconnect',
@@ -23,7 +24,7 @@ const benefits: BenefitsContent = {
   closing: "You'll leave feeling better than when you walked in.",
   cta: {
     label: 'Book a Session',
-    href: '#',
+    href: withBase('/events'),
     ariaLabel: 'Book your first contrast therapy session',
   },
 };
