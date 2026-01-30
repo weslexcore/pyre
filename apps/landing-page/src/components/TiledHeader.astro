@@ -2,7 +2,7 @@
 // TiledHeader component
 // Decorative tiled background banner with a gradient fade to the page background
 
-import { Image } from 'astro:assets';
+import { Picture } from 'astro:assets';
 import tiled from '@/assets/backgrounds/tiled_upscale.png';
 
 interface Props {
@@ -14,8 +14,11 @@ const { height = 'h-40' } = Astro.props;
 ---
 
 <div class:list={['relative w-full overflow-hidden', height]}>
-  <Image
+  <Picture
     src={tiled}
+    formats={['avif', 'webp']}
+    widths={[640, 960, 1200, 1600]}
+    sizes="100vw"
     alt=""
     width={1200}
     height={400}
