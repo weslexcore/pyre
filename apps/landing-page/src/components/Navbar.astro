@@ -195,7 +195,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
   .navbar-gradient {
     animation: gradient-drift 15s ease-in-out infinite;
 
-    /* Multiple layered gradients for depth - matching ScrollGradientOverlay */
+    /* Multiple layered gradients for depth - matching GradientOverlay */
     background:
       /* Pyre Red - warm glow moving right and down */
       radial-gradient(
@@ -209,35 +209,11 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
         oklch(0.35 0.15 220 / 0.6) 0%,
         transparent 55%
       ),
-      /* Pyre Sky (lighter blue) - drifts up from bottom left */
-      radial-gradient(
-        ellipse 85% 65% at calc(15% + var(--anim-progress) * 35%) calc(90% - var(--anim-progress) * 50%),
-        oklch(0.62 0.12 230 / 0.55) 0%,
-        transparent 55%
-      ),
       /* Pyre Gold - sweeps diagonally across */
       radial-gradient(
         ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
         oklch(0.78 0.15 85 / 0.55) 0%,
         transparent 55%
-      ),
-      /* Secondary Gold - moves opposite direction */
-      radial-gradient(
-        ellipse 75% 60% at calc(80% - var(--anim-progress) * 50%) calc(25% + var(--anim-progress) * 45%),
-        oklch(0.78 0.15 85 / 0.5) 0%,
-        transparent 50%
-      ),
-      /* Secondary Blue - subtle accent moving vertically */
-      radial-gradient(
-        ellipse 70% 55% at calc(50% + var(--anim-progress) * 25%) calc(10% + var(--anim-progress) * 60%),
-        oklch(0.45 0.16 220 / 0.5) 0%,
-        transparent 50%
-      ),
-      /* Pyre Sage - organic undertone drifting */
-      radial-gradient(
-        ellipse 75% 50% at calc(30% + var(--anim-progress) * 40%) calc(70% - var(--anim-progress) * 25%),
-        oklch(0.65 0.06 130 / 0.25) 0%,
-        transparent 50%
       );
 
     /* Screen blend mode works well over dark backgrounds */

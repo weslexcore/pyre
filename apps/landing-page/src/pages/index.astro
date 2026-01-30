@@ -10,7 +10,7 @@ import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
-import ScrollGradientOverlay from '../components/ScrollGradientOverlay.astro';
+import GradientOverlay from '../components/GradientOverlay.astro';
 import SectionBridge from '../components/SectionBridge.astro';
 import SectionCard from '../components/SectionCard.astro';
 import SessionSection from '../components/SessionSection.astro';
@@ -42,10 +42,10 @@ import Layout from '../layouts/main.astro';
       </div>
 
       <!-- Animated gradient overlay (z-15) - fixed, fades as content scrolls -->
-      <ScrollGradientOverlay variant="hero-mobile" />
+      <GradientOverlay variant="hero-mobile" />
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
-      <div class="relative z-20 px-4 pt-4 pb-4 -mt-[50dvh]">
+      <div class="relative z-20 px-4 pt-4 pb-4">
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8">
           <AboutSection />
         </div>
@@ -84,7 +84,7 @@ import Layout from '../layouts/main.astro';
       <HeroBackground />
 
       <!-- Animated gradient overlay on hero background (left 40%) -->
-      <ScrollGradientOverlay variant="hero-desktop" />
+      <GradientOverlay variant="hero-desktop" />
 
       <!-- Scrolling cards layer - positioned on right 60% only -->
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">

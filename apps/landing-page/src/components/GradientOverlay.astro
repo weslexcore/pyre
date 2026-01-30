@@ -1,6 +1,6 @@
 ---
 /**
- * ScrollGradientOverlay - Animated gradient overlay with time-based animation
+ * GradientOverlay - Animated gradient overlay with time-based animation
  *
  * Creates a dynamic color gradient that shifts over time (20 second cycle).
  *
@@ -29,7 +29,6 @@ const variantClasses = {
     variantClasses[variant],
   ]}
   aria-hidden="true"
-  data-scroll-gradient
   data-variant={variant}
 ></div>
 
@@ -99,9 +98,6 @@ const variantClasses = {
 
     /* Default blend mode for footer and mobile (works over images with varied colors) */
     mix-blend-mode: soft-light;
-
-    /* Smooth fade for visibility changes */
-    transition: opacity 0.3s ease-out;
   }
 
   /* Desktop hero needs screen blend to show on black background */
@@ -151,76 +147,3 @@ const variantClasses = {
   }
 </style>
 
-<script>
-  (function() {
-    let cleanup: (() => void) | null = null;
-
-    function initScrollGradient() {
-      // Clean up previous listeners
-      if (cleanup) {
-        cleanup();
-      }
-
-      const overlays = document.querySelectorAll('[data-scroll-gradient]');
-      const footer = document.querySelector('body > footer');
-
-      const isFooterVisible = () => {
-        if (!footer) return false;
-        return footer.offsetParent !== null || getComputedStyle(footer).display !== 'none';
-      };
-
-      if (overlays.length > 0) {
-        let rafId: number | null = null;
-
-        const updateVisibility = () => {
-          const scrolledPastHero = window.scrollY > window.innerHeight * 0.8;
-          const footerTop = isFooterVisible() ? footer!.getBoundingClientRect().top : Infinity;
-          const footerApproaching = footerTop < window.innerHeight;
-
-          overlays.forEach((overlay) => {
-            const el = overlay as HTMLElement;
-
-            if (el.dataset.variant === 'hero-mobile') {
-              const isMobile = window.innerWidth < 1024;
-              el.style.opacity = scrolledPastHero ? '0' : (isMobile ? '0.2' : '0.3');
-            }
-
-            if (el.dataset.variant === 'hero-desktop') {
-              el.style.opacity = footerApproaching ? '0' : '';
-            }
-          });
-          rafId = null;
-        };
-
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-        if (!prefersReducedMotion) {
-          const handleScroll = () => {
-            if (rafId) return;
-            rafId = requestAnimationFrame(updateVisibility);
-          };
-
-          window.addEventListener('scroll', handleScroll, { passive: true });
-          updateVisibility();
-
-          cleanup = () => {
-            window.removeEventListener('scroll', handleScroll);
-          };
-        } else {
-          cleanup = () => {};
-        }
-      } else {
-        cleanup = () => {};
-      }
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initScrollGradient, { once: true });
-    } else {
-      initScrollGradient();
-    }
-
-    // Re-initialize after view transitions
-    document.addEventListener('astro:page-load', initScrollGradient);
-  })();
-</script>
