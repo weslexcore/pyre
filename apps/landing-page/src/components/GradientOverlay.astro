@@ -8,10 +8,11 @@
  * - hero-mobile: Fixed, fills screen but sits below hero image (z-5)
  * - hero-desktop: Fixed, covers left 40% of viewport (hero background area)
  * - footer: Absolute positioned, fills footer container
+ * - card: Absolute positioned, fills card container with screen blend
  */
 
 interface Props {
-  variant: 'hero-mobile' | 'hero-desktop' | 'footer';
+  variant: 'hero-mobile' | 'hero-desktop' | 'footer' | 'card';
 }
 
 const { variant } = Astro.props;
@@ -20,6 +21,7 @@ const variantClasses = {
   'hero-mobile': 'fixed inset-0 z-[5]',
   'hero-desktop': 'fixed top-0 left-0 w-[40%] h-screen z-[5]',
   footer: 'absolute inset-0 z-0',
+  card: 'absolute inset-0 z-0',
 };
 ---
 
@@ -111,6 +113,12 @@ const variantClasses = {
     mix-blend-mode: soft-light;
   }
 
+  /* Card variant: screen blend for dark backgrounds, subtle opacity */
+  .scroll-gradient-overlay[data-variant="card"] {
+    mix-blend-mode: screen;
+    opacity: 0.15;
+  }
+
   /* Accessibility: Pause animation for reduced motion preference */
   @media (prefers-reduced-motion: reduce) {
     .scroll-gradient-overlay {
@@ -143,6 +151,12 @@ const variantClasses = {
         );
 
       mix-blend-mode: normal;
+    }
+
+    /* Card variant must keep screen blend on mobile (normal doesn't show on dark bg) */
+    .scroll-gradient-overlay[data-variant="card"] {
+      mix-blend-mode: screen;
+      opacity: 0.15;
     }
   }
 </style>
