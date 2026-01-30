@@ -172,6 +172,8 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 </header>
 
 <script>
+  import { onScroll, getScrollData } from '../lib/scroll-coordinator';
+
   (function () {
     // Track cleanup functions for event listeners
     let cleanup: (() => void) | null = null;
@@ -265,34 +267,22 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
       if (!header) return () => {};
 
       const transparentNav = header.dataset.transparentNav === 'true';
-      let ticking = false;
 
-      function updateNavbar() {
-        const atTop = window.scrollY <= 10;
+      function updateNavbar(data: { scrollY: number }) {
+        const atTop = data.scrollY <= 10;
         header.setAttribute('data-at-top', atTop ? 'true' : 'false');
 
         if (mobileGradient) {
           const showGradient = !transparentNav || !atTop;
           setGradientVisibility(mobileGradient, showGradient);
         }
-
-        ticking = false;
       }
 
-      const handleScroll = () => {
-        if (!ticking) {
-          requestAnimationFrame(updateNavbar);
-          ticking = true;
-        }
-      };
+      // Run once with current values
+      updateNavbar(getScrollData());
 
-      window.addEventListener('scroll', handleScroll, { passive: true });
-      updateNavbar();
-
-      // Return cleanup function
-      return () => {
-        window.removeEventListener('scroll', handleScroll);
-      };
+      // Return unsubscribe as cleanup
+      return onScroll(updateNavbar);
     }
 
     function init() {

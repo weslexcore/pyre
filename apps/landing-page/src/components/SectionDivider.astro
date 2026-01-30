@@ -279,6 +279,9 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
 </style>
 
 <script>
+  import { onScroll } from '../lib/scroll-coordinator';
+  import type { ScrollData } from '../lib/scroll-coordinator';
+
   (function() {
     let cleanup: (() => void) | null = null;
 
@@ -360,9 +363,8 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
       if (scrollAwareDividers.length > 0) {
         const STROKE_LENGTH = 3000;
 
-        const getScrollProgress = (element: HTMLElement): number => {
+        const getScrollProgress = (element: HTMLElement, viewportHeight: number): number => {
           const rect = element.getBoundingClientRect();
-          const viewportHeight = window.innerHeight;
           const startPoint = viewportHeight;
           const endPoint = viewportHeight * 0.3;
           const elementTop = rect.top;
@@ -394,27 +396,19 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
           }
         };
 
-        let ticking = false;
-        const updateScrollAwareDividers = () => {
+        const updateScrollAwareDividers = (data: ScrollData) => {
           scrollAwareDividers.forEach((divider) => {
             const element = divider as HTMLElement;
-            const progress = getScrollProgress(element);
+            const progress = getScrollProgress(element, data.innerHeight);
             applyScrollProgress(element, progress);
           });
-          ticking = false;
         };
 
-        const handleScroll = () => {
-          if (!ticking) {
-            requestAnimationFrame(updateScrollAwareDividers);
-            ticking = true;
-          }
-        };
+        // Run once with current values
+        updateScrollAwareDividers({ scrollY: window.scrollY, innerHeight: window.innerHeight });
 
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        updateScrollAwareDividers();
-
-        cleanupFns.push(() => window.removeEventListener('scroll', handleScroll));
+        // Subscribe to coordinator
+        cleanupFns.push(onScroll(updateScrollAwareDividers));
       }
 
       cleanup = () => {
