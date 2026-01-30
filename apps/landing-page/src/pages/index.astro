@@ -24,6 +24,15 @@ import Layout from '../layouts/main.astro';
     <!-- Mobile: three-layer scroll effect -->
     <!-- Black background prevents white showing during overscroll bounce -->
     <div class="lg:hidden bg-[var(--pyre-black)]">
+      <!-- SVG clip path definition for hero wave edge (zero-size, visually hidden) -->
+      <svg width="0" height="0" class="absolute" aria-hidden="true">
+        <defs>
+          <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
+            <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
+          </clipPath>
+        </defs>
+      </svg>
+
       <!-- Layer 1: Fixed text (z-0) + spacer - rendered by Hero component -->
       <Hero />
 
@@ -116,15 +125,10 @@ import Layout from '../layouts/main.astro';
 </Layout>
 
 <style>
-  /* Wavy top edge mask for mobile hero image */
+  /* Wavy top edge clip for mobile hero image — uses inline SVG clipPath for GPU-accelerated clipping */
   .hero-wave-mask {
-    --wave-svg: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' preserveAspectRatio='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,3 C12.5,1 25,5 37.5,3 C50,1 62.5,5 75,3 C87.5,1 100,5 100,3 L100,100 L0,100 Z' fill='white'/%3E%3C/svg%3E");
-    -webkit-mask-image: var(--wave-svg);
-    mask-image: var(--wave-svg);
-    -webkit-mask-size: 100% 100%;
-    mask-size: 100% 100%;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
+    -webkit-clip-path: url(#hero-wave-clip);
+    clip-path: url(#hero-wave-clip);
   }
 </style>
 
