@@ -1,6 +1,5 @@
 ---
-import { Image } from 'astro:assets';
-import logo from '../assets/logos/red/logo.png';
+import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
@@ -14,6 +13,8 @@ interface Props {
 }
 
 const { isHomePage = false, transparentNav = false, darkLogoText = false } = Astro.props;
+
+const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
 ---
 
 <header
@@ -36,15 +37,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
     <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex items-center gap-3 flex-shrink-0">
-      <Image
-        src={logo}
-        alt="Pyre Sauna logo"
-        width="128"
-        height="128"
-        class="h-8 md:h-10 w-auto"
-        loading="eager"
-        decoding="sync"
-      />
+      <span class="inline-block h-8 md:h-10 w-auto text-[var(--pyre-red)]" role="img" aria-label="Pyre Sauna logo" set:html={pyreLogo} />
       {!isHomePage && (
         <p class:list={[
           "font-logo text-5xl",

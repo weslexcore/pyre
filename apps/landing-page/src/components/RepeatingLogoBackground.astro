@@ -1,9 +1,9 @@
 ---
-import { getImage } from 'astro:assets';
-import tile from '../assets/logos/repeating_background.png';
+import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 
 export interface Props {
   tileSizePx?: number;
+  fillColor?: string;
   positionClass?: string;
   class?: string;
   // biome-ignore lint/suspicious/noExplicitAny: Allow any for additional props
@@ -11,27 +11,30 @@ export interface Props {
 }
 
 const {
-  tileSizePx = 240,
+  tileSizePx = 30,
+  fillColor = 'var(--pyre-blue)',
   positionClass = 'bg-center',
   class: className = '',
   ...restProps
 } = Astro.props as Props;
 
-const pngImage = await getImage({
-  src: tile,
-  width: tileSizePx,
-  height: tileSizePx,
-  format: 'png',
-  quality: 90,
-});
-
-const backgroundImageCss = `url(${pngImage.src})`;
+// Resolve CSS variables to hex at build time for SVG data URI compatibility
+const pyreColors: Record<string, string> = {
+  'var(--pyre-black)': '#23221c',
+  'var(--pyre-creme)': '#f5f1e9',
+  'var(--pyre-red)': '#d15232',
+  'var(--pyre-blue)': '#274868',
+  'var(--pyre-gold)': '#dbb155',
+  'var(--pyre-sage)': '#839770',
+  'var(--pyre-sky)': '#3991b7',
+};
+const resolvedColor = pyreColors[fillColor] ?? fillColor;
+const coloredSvg = pyreLogoRaw.replace(/currentColor/g, resolvedColor);
+const svgDataUri = `url("data:image/svg+xml,${encodeURIComponent(coloredSvg)}")`;
 ---
 
 <div
   class={`bg-repeat ${positionClass} ${className}`}
-  style={`background-image: ${backgroundImageCss}; background-size: ${tileSizePx}px ${tileSizePx}px;`}
+  style={`background-image: ${svgDataUri}; background-size: ${tileSizePx}px auto; opacity: 0.2;`}
   {...restProps}
 />
-
- 

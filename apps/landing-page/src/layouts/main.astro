@@ -7,7 +7,7 @@ import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
 import plungingImg from '../assets/images/plunging.webp';
 import warmSaunaImg from '../assets/images/warm_sauna.webp';
-import faviconImage from '../assets/logos/red/logo.png';
+import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import Footer from '../components/Footer.astro';
 import Navbar from '../components/Navbar.astro';
 import PostHog from '../components/posthog.astro';
@@ -50,7 +50,8 @@ const {
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL ?? '/';
-const faviconHref = faviconImage.src;
+const faviconSvgColored = faviconSvg.replace(/currentColor/g, '#23221c');
+const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvgColored)}`;
 
 // Use custom OG image if provided, otherwise use default
 const socialImageSrc = ogImage || SOCIAL_IMAGE.src;
@@ -67,7 +68,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="theme-color" content="#23221c" />
-    <link rel="icon" type="image/png" href={faviconHref} />
+    <link rel="icon" type="image/svg+xml" href={faviconHref} />
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		

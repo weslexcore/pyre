@@ -1,6 +1,7 @@
 ---
 import location from '../lib/location';
 import HeroCarousel from './HeroCarousel.astro';
+import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
 <!-- Mobile: Fixed text layer (z-0) - stays in place while scrolling -->
@@ -30,7 +31,7 @@ import HeroCarousel from './HeroCarousel.astro';
     <div class="space-y-6 my-8">
       <div>
         <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-        <p class="text-base md:text-lg">{location.address}</p>
+        <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-base md:text-lg hover:underline underline-offset-4">{location.address}</a>
       </div>
       <div>
         <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Instagram</h2>
@@ -38,8 +39,9 @@ import HeroCarousel from './HeroCarousel.astro';
           href={location.instagramUrl}
           target="_blank"
           rel="noopener noreferrer"
-          class="text-base md:text-lg hover:underline underline-offset-4"
+          class="inline-flex items-center gap-1.5 text-base md:text-lg hover:underline underline-offset-4"
         >
+          <InstagramIcon class="size-[1.1em] shrink-0" />
           {location.instagram}
         </a>
       </div>
@@ -84,7 +86,7 @@ import HeroCarousel from './HeroCarousel.astro';
       <div class="space-y-6">
         <div>
           <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-          <p class="text-lg">{location.address}</p>
+          <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-lg hover:underline underline-offset-4">{location.address}</a>
         </div>
         <div>
           <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Instagram</h2>
@@ -92,8 +94,9 @@ import HeroCarousel from './HeroCarousel.astro';
             href={location.instagramUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="text-lg hover:underline underline-offset-4"
+            class="inline-flex items-center gap-1.5 text-lg hover:underline underline-offset-4"
           >
+            <InstagramIcon class="size-[1.1em] shrink-0" />
             {location.instagram}
           </a>
         </div>

@@ -331,6 +331,7 @@ export interface LocationContent {
   email?: string;
   instagram: string;
   instagramUrl: string;
+  mapsUrl?: string;
   hours: DayHours[];
   tagline?: string;
 }

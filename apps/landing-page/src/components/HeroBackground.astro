@@ -1,6 +1,7 @@
 ---
 import location from '../lib/location';
 import HeroCarousel from './HeroCarousel.astro';
+import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
 <!-- Fixed background layer for desktop parallax effect -->
@@ -32,7 +33,7 @@ import HeroCarousel from './HeroCarousel.astro';
         <!-- Address -->
         <div>
           <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-          <p class="text-lg">{location.address}</p>
+          <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-lg hover:underline underline-offset-4">{location.address}</a>
         </div>
 
         <!-- Instagram -->
@@ -42,8 +43,9 @@ import HeroCarousel from './HeroCarousel.astro';
             href={location.instagramUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="text-lg hover:underline underline-offset-4"
+            class="inline-flex items-center gap-1.5 text-lg hover:underline underline-offset-4"
           >
+            <InstagramIcon class="size-[1.1em] shrink-0" />
             {location.instagram}
           </a>
         </div>

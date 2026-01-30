@@ -1,12 +1,12 @@
 ---
-import { Image } from 'astro:assets';
-import logo from '../assets/logos/creme/logo.png';
+import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 import footerConfig from '../lib/footer';
 import location from '../lib/location';
 import { withBase } from '../lib/paths';
 import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
 import GradientOverlay from './GradientOverlay.astro';
 import SectionDivider from './SectionDivider.astro';
+import InstagramIcon from './icons/InstagramIcon.astro';
 
 function isExternalLink(href: string): boolean {
   return href.startsWith('http://') || href.startsWith('https://');
@@ -15,6 +15,8 @@ function isExternalLink(href: string): boolean {
 function isMailto(href: string): boolean {
   return href.startsWith('mailto:');
 }
+
+const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
 ---
 
 <footer role="contentinfo" class="relative z-10 w-full mt-auto bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-hidden">
@@ -42,25 +44,18 @@ function isMailto(href: string): boolean {
       <!-- Brand & Contact -->
       <div class="lg:col-span-1">
         <a href={withBase('/')} class="inline-block mb-6" aria-label="Go to homepage">
-          <Image
-            src={logo}
-            alt="Pyre Sauna logo"
-            width="800"
-            height="220"
-            class="h-20 w-auto"
-            loading="lazy"
-            decoding="async"
-          />
+          <span class="inline-block h-20 w-auto text-[var(--pyre-creme)]" role="img" aria-label="Pyre Sauna logo" set:html={pyreLogo} />
         </a>
         <div class="space-y-3 text-sm">
-          <p>{location.address}</p>
+          <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="hover:underline underline-offset-4">{location.address}</a>
           <p>
             <a href={`tel:${location.phone.replace(/[^0-9+]/g, '')}`} class="hover:underline underline-offset-4">
               {location.phone}
             </a>
           </p>
           <p>
-            <a href={location.instagramUrl} target="_blank" rel="noopener noreferrer" class="hover:underline underline-offset-4">
+            <a href={location.instagramUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 hover:underline underline-offset-4">
+              <InstagramIcon class="size-4 shrink-0" />
               {location.instagram}
             </a>
           </p>
