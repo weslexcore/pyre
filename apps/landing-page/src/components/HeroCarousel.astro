@@ -5,7 +5,7 @@ import tiled from '../assets/backgrounds/tiled_upscale.png';
 ---
 <Picture
   src={tiled}
-  formats={['avif', 'webp']}
+  formats={['webp']}
   widths={[640, 960, 1200, 1600]}
   sizes="(max-width: 1023px) 100vw, 60vw"
   width={1200}
@@ -13,7 +13,7 @@ import tiled from '../assets/backgrounds/tiled_upscale.png';
   alt="Tiled background"
   class="h-full w-full object-cover"
   loading="eager"
-  decoding="async"
+  decoding="sync"
   fetchpriority="high"
 />
 
