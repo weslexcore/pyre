@@ -47,6 +47,7 @@ declare global {
 // Minimal declaration to satisfy editor/linter for astro:assets Image component usage
 declare module 'astro:assets' {
   export const Image: any;
+  export const Picture: any;
   export const getImage: any;
 }
 
