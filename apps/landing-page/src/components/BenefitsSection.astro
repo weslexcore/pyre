@@ -55,14 +55,14 @@ import SectionDivider from './SectionDivider.astro';
       </div>
 
       {benefits.closing&& (
-          <p class="mt-6 text-base opacity-80 text-center">{benefits.closing}</p>
+          <p class="mt-6 text-lg opacity-80 text-center">{benefits.closing}</p>
         )}
 
       {benefits.cta && (
         <div class="mt-8 text-center">
           <Button
             href={benefits.cta.href}
-            variant="cta"
+            variant="primary"
             size="lg"
             ariaLabel={benefits.cta.ariaLabel}
           >

@@ -11,7 +11,7 @@ const about: AboutContent = {
   ],
   expandedBody: [],
   cta: {
-    label: 'Read About Our Mission',
+    label: 'Our Mission',
     href: '/blog/our-mission-vision-values',
     ariaLabel: 'Learn more about Pyre',
   },

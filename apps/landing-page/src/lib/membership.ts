@@ -7,14 +7,14 @@ const membership: MembershipContent = {
   tiers: [
     {
       id: '4-sessions',
-      name: '4 Sessions',
+      name: 'Limited',
       price: 99,
       period: '/month',
       description: 'SAVE $57',
       features: [
         { text: '4 sauna & cold plunge sessions' },
         { text: 'Credits rollover 1 month', highlighted: true },
-        { text: '10% off extra sessions' },
+        { text: '10% off extra sessions', highlighted: true },
       ],
       cta: {
         label: 'Get Started',
@@ -28,12 +28,12 @@ const membership: MembershipContent = {
       price: 199,
       period: '/month',
       description: 'Unlimited access for dedicated practitioners',
-      popular: true,
+      popular: true, 
       features: [
         { text: 'Unlimited sauna & cold plunge access' },
-        { text: '4 guest passes per month', highlighted: true },
         { text: 'Free Pyre tote bag', highlighted: true },
-        { text: '10% off guest sessions' },
+        { text: '4 guest passes per month ($156 value)', highlighted: true },
+        { text: '10% off extra guest sessions' },
       ],
       cta: {
         label: 'Get Started',

@@ -10,6 +10,7 @@ import warmSaunaImg from '../assets/images/warm_sauna.webp';
 import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import AnnouncementBanner from '../components/AnnouncementBanner.astro';
 import Footer from '../components/Footer.astro';
+import PromoPopup from '../components/PromoPopup.astro';
 import Navbar from '../components/Navbar.astro';
 import PostHog from '../components/posthog.astro';
 import {
@@ -232,5 +233,6 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 			<slot />
 		</main>
 		<Footer />
+		<PromoPopup />
 	</body>
 </html>

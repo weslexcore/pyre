@@ -1,0 +1,285 @@
+---
+import promoConfig from '../lib/promoPopup';
+import Button from './Button.astro';
+if (!promoConfig.enabled) return;
+---
+
+<div
+  data-component="promo-popup"
+  data-popup-id={promoConfig.id}
+  data-delay={String(promoConfig.delayMs ?? 1500)}
+  data-starts={promoConfig.starts ?? ''}
+  data-expires={promoConfig.expires ?? ''}
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="promo-popup-heading"
+  class="fixed inset-0 z-[100] hidden"
+>
+  <!-- Backdrop -->
+  <div
+    data-popup-backdrop
+    class="absolute inset-0 bg-black/70 opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+  ></div>
+
+  <!-- Dialog panel -->
+  <div class="flex min-h-full items-center justify-center p-4">
+    <div
+      data-popup-panel
+      class="card-cta-animated relative w-full max-w-md rounded-lg opacity-0 scale-95 transition-all duration-300 motion-reduce:transition-none"
+    >
+      <!-- Inner content (sits above the ::after pseudo-element) -->
+      <div class="relative z-10 px-6 pt-12 pb-8 sm:px-8 sm:py-10">
+        <!-- Close button -->
+        <button
+          data-popup-close
+          type="button"
+          aria-label="Close popup"
+          class="absolute top-3 right-3 rounded-md p-1.5 text-[var(--pyre-creme)]/60 hover:text-[var(--pyre-creme)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+        >
+          <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <!-- Content -->
+        <h2
+          id="promo-popup-heading"
+          class="font-mono-bold text-2xl text-[var(--pyre-creme)] sm:text-3xl"
+        >
+          {promoConfig.headline}
+        </h2>
+
+        <p class="mt-3 text-base leading-relaxed text-[var(--pyre-creme)]/80">
+          {promoConfig.body}
+        </p>
+
+        <!-- CTA button -->
+        <Button
+          variant="primary"
+          size="lg"
+          href={promoConfig.cta.href}
+          ariaLabel={promoConfig.cta.ariaLabel}
+          class="btn-cta-animated mt-6 inline-flex w-full items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+        >
+          {promoConfig.cta.label}
+        </Button>
+
+        <!-- Dismiss link -->
+        {promoConfig.dismiss && (
+          <button
+            data-popup-dismiss
+            type="button"
+            class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+          >
+            {promoConfig.dismiss.label}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    let cleanup: (() => void) | null = null;
+
+    function initPopup() {
+      if (cleanup) {
+        cleanup();
+        cleanup = null;
+      }
+
+      const root = document.querySelector('[data-component="promo-popup"]') as HTMLElement | null;
+      if (!root) return;
+
+      const popupId = root.dataset.popupId;
+      if (!popupId) return;
+
+      const delayMs = Number(root.dataset.delay) || 1500;
+      const starts = root.dataset.starts || '';
+      const expires = root.dataset.expires || '';
+
+      // Date window check
+      const now = new Date();
+      if (starts && now < new Date(starts)) {
+        root.remove();
+        return;
+      }
+      if (expires && now > new Date(expires)) {
+        root.remove();
+        return;
+      }
+
+      // localStorage check
+      const storageKey = 'pyre-popup-dismissed-' + popupId;
+      let isDismissed = false;
+      try {
+        isDismissed = localStorage.getItem(storageKey) === '1';
+      } catch {
+        // localStorage not available — show popup as fallback
+      }
+      if (isDismissed) {
+        root.remove();
+        return;
+      }
+
+      const backdrop = root.querySelector('[data-popup-backdrop]') as HTMLElement;
+      const panel = root.querySelector('[data-popup-panel]') as HTMLElement;
+      const closeBtn = root.querySelector('[data-popup-close]') as HTMLElement;
+      const dismissBtn = root.querySelector('[data-popup-dismiss]') as HTMLElement | null;
+      const ctaBtn = root.querySelector('[data-popup-cta]') as HTMLElement | null;
+
+      if (!backdrop || !panel || !closeBtn) return;
+
+      // Store the element that had focus before the popup opened
+      let previousFocus: HTMLElement | null = null;
+
+      // Collect focusable elements inside the dialog
+      function getFocusableElements(): HTMLElement[] {
+        const selectors = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+        return Array.from(root!.querySelectorAll<HTMLElement>(selectors));
+      }
+
+      function show() {
+        previousFocus = document.activeElement as HTMLElement | null;
+
+        // Show the container
+        root!.classList.remove('hidden');
+
+        // Lock body scroll
+        document.body.style.overflow = 'hidden';
+
+        // Animate in on next frame
+        requestAnimationFrame(() => {
+          backdrop.classList.remove('opacity-0');
+          backdrop.classList.add('opacity-100');
+          panel.classList.remove('opacity-0', 'scale-95');
+          panel.classList.add('opacity-100', 'scale-100');
+        });
+
+        // Focus the close button for accessibility
+        setTimeout(() => {
+          closeBtn.focus();
+        }, 100);
+      }
+
+      function dismiss() {
+        // Save dismissal
+        try {
+          localStorage.setItem(storageKey, '1');
+        } catch {
+          // Ignore storage errors
+        }
+
+        // Animate out
+        backdrop.classList.remove('opacity-100');
+        backdrop.classList.add('opacity-0');
+        panel.classList.remove('opacity-100', 'scale-100');
+        panel.classList.add('opacity-0', 'scale-95');
+
+        // Restore body scroll
+        document.body.style.overflow = '';
+
+        // Remove from DOM after animation
+        const onDone = () => {
+          root!.remove();
+          // Restore focus
+          if (previousFocus && previousFocus.focus) {
+            previousFocus.focus();
+          }
+        };
+
+        panel.addEventListener('transitionend', onDone, { once: true });
+        // Fallback if transitionend doesn't fire
+        setTimeout(onDone, 350);
+      }
+
+      // Event listeners
+      closeBtn.addEventListener('click', dismiss);
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', dismiss);
+      }
+
+      // CTA click: dismiss then follow the link
+      if (ctaBtn) {
+        ctaBtn.addEventListener('click', () => {
+          // Save dismissal so popup doesn't reappear
+          try {
+            localStorage.setItem(storageKey, '1');
+          } catch {
+            // Ignore
+          }
+          // Restore scroll before navigating
+          document.body.style.overflow = '';
+        });
+      }
+
+      // Backdrop click
+      backdrop.addEventListener('click', dismiss);
+
+      // Escape key
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          dismiss();
+          return;
+        }
+
+        // Focus trap
+        if (e.key === 'Tab') {
+          const focusable = getFocusableElements();
+          if (focusable.length === 0) return;
+
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+
+      // Schedule showing the popup after page load + delay
+      let showTimeout: ReturnType<typeof setTimeout>;
+
+      function scheduleShow() {
+        showTimeout = setTimeout(show, delayMs);
+      }
+
+      if (document.readyState === 'complete') {
+        scheduleShow();
+      } else {
+        window.addEventListener('load', scheduleShow, { once: true });
+      }
+
+      cleanup = () => {
+        clearTimeout(showTimeout);
+        closeBtn.removeEventListener('click', dismiss);
+        if (dismissBtn) dismissBtn.removeEventListener('click', dismiss);
+        backdrop.removeEventListener('click', dismiss);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+
+    // Initialize
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPopup, { once: true });
+    } else {
+      initPopup();
+    }
+
+    // Re-init on Astro view transitions
+    document.addEventListener('astro:page-load', initPopup);
+  })();
+</script>
