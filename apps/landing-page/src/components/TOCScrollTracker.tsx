@@ -3,6 +3,7 @@
  */
 
 import type { TOCConfig, TOCHeader, TOCSection } from '../lib/toc-types';
+import { onScroll } from '../lib/scroll-coordinator';
 import {
   buildTOCTree,
   calculateReadingProgress,
@@ -22,6 +23,7 @@ export default class TOCScrollTracker {
   private flatSections: TOCSection[] = [];
   private intersectionObserver: IntersectionObserver | null = null;
   private scrollTimeout: number | null = null;
+  private unsubscribeScroll: (() => void) | null = null;
   private isUserScrolling = false;
 
   constructor(container: HTMLElement, config: Partial<TOCConfig> = {}) {
@@ -91,8 +93,8 @@ export default class TOCScrollTracker {
   }
 
   private setupEventListeners() {
-    // Scroll listener for progress tracking
-    const handleScroll = () => {
+    // Scroll listener for progress tracking (via shared scroll coordinator)
+    this.unsubscribeScroll = onScroll(() => {
       if (this.scrollTimeout) {
         clearTimeout(this.scrollTimeout);
       }
@@ -104,9 +106,7 @@ export default class TOCScrollTracker {
           this.isUserScrolling = false;
         }, 200);
       }, 100);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    });
 
     // Mobile accordion functionality
     const accordionToggle = this.container.querySelector('[data-toc-accordion-toggle]');
@@ -329,6 +329,7 @@ export default class TOCScrollTracker {
   }
 
   destroy() {
+    this.unsubscribeScroll?.();
     if (this.intersectionObserver) {
       this.intersectionObserver.disconnect();
     }
@@ -336,8 +337,5 @@ export default class TOCScrollTracker {
     if (this.scrollTimeout) {
       clearTimeout(this.scrollTimeout);
     }
-
-    // Remove event listeners would go here if we tracked them
-    // For now, since they're bound to elements that get removed, they'll be cleaned up automatically
   }
 }
