@@ -1,0 +1,151 @@
+---
+import bannerConfig from '../lib/banner';
+
+if (!bannerConfig.enabled) return;
+---
+
+<div
+  data-component="announcement-banner"
+  data-banner-id={bannerConfig.id}
+  role="region"
+  aria-label="Announcement"
+  class="fixed inset-x-0 top-0 z-[60] overflow-hidden"
+  style="translate: 0 -100%;"
+>
+  <div class="bg-[var(--pyre-gold)] text-[var(--pyre-black)]">
+    <div class="flex items-center justify-center gap-x-3 px-4 py-2.5 text-sm font-mono-bold sm:px-6">
+      <p class="text-center leading-snug">
+        <span>{bannerConfig.text}</span>
+        {bannerConfig.link && (
+          <a
+            href={bannerConfig.link.href}
+            target={bannerConfig.link.external ? '_blank' : undefined}
+            rel={bannerConfig.link.external ? 'noopener noreferrer' : undefined}
+            class="ml-2 inline-flex items-center gap-1 underline underline-offset-4 decoration-[var(--pyre-black)]/40 hover:decoration-[var(--pyre-black)] transition-colors"
+          >
+            {bannerConfig.link.label}
+            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </a>
+        )}
+      </p>
+
+      <button
+        data-banner-dismiss
+        type="button"
+        aria-label="Dismiss announcement"
+        class="flex-shrink-0 rounded-md p-1 hover:bg-[var(--pyre-black)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-black)]/50"
+      >
+        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    
+    let cleanup: (() => void) | null = null;
+
+    function initBanner() {
+      if (cleanup) {
+        cleanup();
+        cleanup = null;
+      }
+
+      const banner = document.querySelector('[data-component="announcement-banner"]') as HTMLElement;
+      if (!banner) return;
+      
+
+      const bannerId = banner.dataset.bannerId;
+      if (!bannerId) return;
+
+      const STORAGE_PREFIX = 'pyre-banner-dismissed-' + bannerId + ':';
+
+      const storageKey = STORAGE_PREFIX + bannerId;
+      const html = document.documentElement;
+
+      // Check if user already dismissed this specific banner
+      let isDismissed = false;
+      try {
+        isDismissed = localStorage.getItem(storageKey) === '1';
+      } catch {
+        // localStorage not available — show banner as fallback
+      }
+
+      if (isDismissed) {
+        html.style.setProperty('--banner-height', '0px');
+        banner.remove();
+        return;
+      }
+
+      // Measure natural height while offscreen
+      const height = banner.offsetHeight;
+
+      // Set CSS variable so navbar and scroll-margins adapt
+      html.style.setProperty('--banner-height', height + 'px');
+
+      // Animate in on next frame
+      requestAnimationFrame(() => {
+        banner.style.transition = 'translate 0.3s ease-out';
+        banner.style.translate = '0 0';
+      });
+
+      // Dismiss handler
+      const dismissBtn = banner.querySelector('[data-banner-dismiss]') as HTMLElement;
+      if (!dismissBtn) return;
+
+      const handleDismiss = () => {
+        try {
+          localStorage.setItem(storageKey, '1');
+        } catch {
+          // Ignore storage errors
+        }
+
+        banner.style.transition = 'translate 0.3s ease-in';
+        banner.style.translate = '0 -100%';
+
+        const onTransitionEnd = () => {
+          html.style.setProperty('--banner-height', '0px');
+          banner.remove();
+        };
+
+        banner.addEventListener('transitionend', onTransitionEnd, { once: true });
+        // Fallback if transitionend doesn't fire
+        setTimeout(onTransitionEnd, 350);
+      };
+
+      dismissBtn.addEventListener('click', handleDismiss);
+
+      // Recalculate height on resize (debounced)
+      let resizeTimeout: ReturnType<typeof setTimeout>;
+      const handleResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          if (banner.isConnected) {
+            html.style.setProperty('--banner-height', banner.offsetHeight + 'px');
+          }
+        }, 150);
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      cleanup = () => {
+        dismissBtn.removeEventListener('click', handleDismiss);
+        window.removeEventListener('resize', handleResize);
+        clearTimeout(resizeTimeout);
+      };
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initBanner, { once: true });
+    } else {
+      initBanner();
+    }
+
+    document.addEventListener('astro:page-load', initBanner);
+  })();
+</script>
