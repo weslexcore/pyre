@@ -122,6 +122,33 @@ const variantClasses = {
       --anim-progress: 0.5;
     }
   }
+
+  /* Mobile performance: reduce gradient layers and remove blend mode compositing */
+  @media (max-width: 1023px) {
+    .scroll-gradient-overlay {
+      background:
+        /* Pyre Red */
+        radial-gradient(
+          ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
+          oklch(0.65 0.18 25 / 0.4) 0%,
+          transparent 55%
+        ),
+        /* Pyre Blue (deep) */
+        radial-gradient(
+          ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
+          oklch(0.35 0.15 220 / 0.6) 0%,
+          transparent 55%
+        ),
+        /* Pyre Gold */
+        radial-gradient(
+          ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
+          oklch(0.78 0.15 85 / 0.55) 0%,
+          transparent 55%
+        );
+
+      mix-blend-mode: normal;
+    }
+  }
 </style>
 
 <script>
@@ -154,7 +181,8 @@ const variantClasses = {
             const el = overlay as HTMLElement;
 
             if (el.dataset.variant === 'hero-mobile') {
-              el.style.opacity = scrolledPastHero ? '0' : '.3';
+              const isMobile = window.innerWidth < 1024;
+              el.style.opacity = scrolledPastHero ? '0' : (isMobile ? '0.2' : '0.3');
             }
 
             if (el.dataset.variant === 'hero-desktop') {
