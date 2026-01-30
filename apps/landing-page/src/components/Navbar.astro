@@ -4,6 +4,7 @@ import logo from '../assets/logos/red/logo.png';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
+import GradientOverlay from './GradientOverlay.astro';
 import { AuthButtons } from './account/AuthButtons';
 
 interface Props {
@@ -28,11 +29,9 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
   ]}
 >
   <!-- Mobile gradient overlay - visible when navbar has dark background (mobile only) -->
-  <div
-    class="navbar-gradient absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300 lg:hidden"
-    aria-hidden="true"
-    data-navbar-gradient="mobile"
-  ></div>
+  <div class="lg:hidden">
+    <GradientOverlay variant="navbar-mobile" />
+  </div>
 
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
@@ -57,11 +56,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
     <!-- Desktop navigation links -->
     <nav class="hidden md:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
       <!-- Desktop gradient overlay - always visible on desktop nav -->
-      <div
-        class="navbar-gradient absolute inset-0 pointer-events-none opacity-50"
-        aria-hidden="true"
-        data-navbar-gradient="desktop"
-      ></div>
+      <GradientOverlay variant="navbar-desktop" />
       {navbar.elements.links && navbar.elements.links.map((link) => (
         <a
           href={link.href}
@@ -176,66 +171,15 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
   </nav>
 </header>
 
-<style>
-  @keyframes gradient-drift {
-    0%, 100% {
-      --anim-progress: 0;
-    }
-    50% {
-      --anim-progress: 1;
-    }
-  }
-
-  @property --anim-progress {
-    syntax: '<number>';
-    initial-value: 0;
-    inherits: false;
-  }
-
-  .navbar-gradient {
-    animation: gradient-drift 15s ease-in-out infinite;
-
-    /* Multiple layered gradients for depth - matching GradientOverlay */
-    background:
-      /* Pyre Red - warm glow moving right and down */
-      radial-gradient(
-        ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
-        oklch(0.65 0.18 25 / 0.4) 0%,
-        transparent 55%
-      ),
-      /* Pyre Blue (deep) - moves from right to left */
-      radial-gradient(
-        ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
-        oklch(0.35 0.15 220 / 0.6) 0%,
-        transparent 55%
-      ),
-      /* Pyre Gold - sweeps diagonally across */
-      radial-gradient(
-        ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
-        oklch(0.78 0.15 85 / 0.55) 0%,
-        transparent 55%
-      );
-
-    /* Screen blend mode works well over dark backgrounds */
-    mix-blend-mode: screen;
-
-    /* Smooth fade for visibility changes */
-    transition: opacity 0.3s ease-out;
-  }
-
-  /* Accessibility: Pause animation for reduced motion preference */
-  @media (prefers-reduced-motion: reduce) {
-    .navbar-gradient {
-      animation: none;
-      --anim-progress: 0.5;
-    }
-  }
-</style>
-
 <script>
   (function () {
     // Track cleanup functions for event listeners
     let cleanup: (() => void) | null = null;
+
+    function setGradientVisibility(el: HTMLElement, visible: boolean) {
+      el.style.opacity = visible ? '0.2' : '0';
+      el.style.animationPlayState = visible ? 'running' : 'paused';
+    }
 
     function setupMobileMenu() {
       const menuButton = document.getElementById('mobile-menu-button');
@@ -247,18 +191,18 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 
       function toggleMenu(shouldOpen: boolean) {
         const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
-        const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
+        const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
 
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
         header?.setAttribute('data-menu-open', shouldOpen ? 'true' : 'false');
 
         if (mobileGradient) {
           if (shouldOpen) {
-            mobileGradient.style.opacity = '0.2';
+            setGradientVisibility(mobileGradient, true);
           } else {
             const transparentNav = header?.dataset.transparentNav === 'true';
             const atTop = window.scrollY <= 10;
-            mobileGradient.style.opacity = (!transparentNav || !atTop) ? '0.2' : '0';
+            setGradientVisibility(mobileGradient, !transparentNav || !atTop);
           }
         }
 
@@ -317,7 +261,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 
     function setupScrollBehavior() {
       const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
-      const mobileGradient = document.querySelector('[data-navbar-gradient="mobile"]') as HTMLElement;
+      const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
       if (!header) return () => {};
 
       const transparentNav = header.dataset.transparentNav === 'true';
@@ -329,7 +273,7 @@ const { isHomePage = false, transparentNav = false, darkLogoText = false } = Ast
 
         if (mobileGradient) {
           const showGradient = !transparentNav || !atTop;
-          mobileGradient.style.opacity = showGradient ? '0.2' : '0';
+          setGradientVisibility(mobileGradient, showGradient);
         }
 
         ticking = false;

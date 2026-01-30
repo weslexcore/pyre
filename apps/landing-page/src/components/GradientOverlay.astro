@@ -9,10 +9,12 @@
  * - hero-desktop: Fixed, covers left 40% of viewport (hero background area)
  * - footer: Absolute positioned, fills footer container
  * - card: Absolute positioned, fills card container with screen blend
+ * - navbar-mobile: Absolute positioned, screen blend, starts paused (toggled by JS)
+ * - navbar-desktop: Absolute positioned, screen blend at 50% opacity
  */
 
 interface Props {
-  variant: 'hero-mobile' | 'hero-desktop' | 'footer' | 'card';
+  variant: 'hero-mobile' | 'hero-desktop' | 'footer' | 'card' | 'navbar-mobile' | 'navbar-desktop';
 }
 
 const { variant } = Astro.props;
@@ -22,6 +24,8 @@ const variantClasses = {
   'hero-desktop': 'fixed top-0 left-0 w-[40%] h-screen z-[5]',
   footer: 'absolute inset-0 z-0',
   card: 'absolute inset-0 z-0',
+  'navbar-mobile': 'absolute inset-0',
+  'navbar-desktop': 'absolute inset-0',
 };
 ---
 
@@ -119,6 +123,20 @@ const variantClasses = {
     opacity: 0.15;
   }
 
+  /* Navbar mobile: screen blend, starts hidden with animation paused */
+  .scroll-gradient-overlay[data-variant="navbar-mobile"] {
+    mix-blend-mode: screen;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+    animation-play-state: paused;
+  }
+
+  /* Navbar desktop: screen blend at 50% opacity */
+  .scroll-gradient-overlay[data-variant="navbar-desktop"] {
+    mix-blend-mode: screen;
+    opacity: 0.5;
+  }
+
   /* Accessibility: Pause animation for reduced motion preference */
   @media (prefers-reduced-motion: reduce) {
     .scroll-gradient-overlay {
@@ -157,6 +175,16 @@ const variantClasses = {
     .scroll-gradient-overlay[data-variant="card"] {
       mix-blend-mode: screen;
       opacity: 0.15;
+    }
+
+    /* Navbar mobile must keep screen blend on mobile */
+    .scroll-gradient-overlay[data-variant="navbar-mobile"] {
+      mix-blend-mode: screen;
+    }
+
+    /* Navbar desktop must keep screen blend on mobile */
+    .scroll-gradient-overlay[data-variant="navbar-desktop"] {
+      mix-blend-mode: screen;
     }
   }
 </style>
