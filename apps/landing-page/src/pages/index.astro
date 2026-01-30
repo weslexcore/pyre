@@ -43,11 +43,11 @@ import Layout from '../layouts/main.astro';
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
           <BenefitsSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
-          <TestimonialsSection />
-        </div>
         <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8">
           <EventsSection />
+        </div>
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
+          <TestimonialsSection />
         </div>
         <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8">
           <SessionSection />
@@ -86,11 +86,11 @@ import Layout from '../layouts/main.astro';
           <SectionCard class="mb-8" data-section="benefits">
             <BenefitsSection />
           </SectionCard>
-          <SectionCard class="mb-8" data-section="testimonials">
-            <TestimonialsSection />
-          </SectionCard>
-          <SectionCard class="card-cta-animated my-8" data-section="events">
+          <SectionCard class="card-cta-animated mb-8" data-section="events">
             <EventsSection variant="compact" />
+          </SectionCard>
+          <SectionCard class="my-8" data-section="testimonials">
+            <TestimonialsSection />
           </SectionCard>
           <SectionCard class="lg:rounded-t-lg lg:rounded-b-none" data-section="sessions">
             <SessionSection />
