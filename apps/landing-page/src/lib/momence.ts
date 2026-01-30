@@ -93,6 +93,7 @@ function formatDate(isoDate: string): string {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
+    timeZone: 'America/New_York',
   });
 }
 
@@ -108,6 +109,7 @@ function formatTimeRange(isoDate: string, durationMinutes: number): string {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: 'America/New_York',
     });
   };
 

@@ -7,39 +7,22 @@ import SectionDivider from './SectionDivider.astro';
 ---
 
 <section id="benefits" aria-labelledby="benefits-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
-  <div class="max-w-5xl mx-auto lg:max-w-none">
-    {/* Desktop: side-by-side layout (content | image) */}
-    
-
-    {/* Mobile/tablet: header+image row, then cards below */}
-    <div class="">
-      <div class="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr] gap-6 items-start mb-8">
+  <div class="max-w-6xl mx-auto lg:max-w-none">
+ 
         <!-- Header column -->
-        <div>
+        <div class="text-center">
           <h2
             aria-hidden="true"
-            class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3"
+            class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
           >
             {benefits.title}
           </h2>
           {benefits.subtitle && (
             <p class="text-sm opacity-80">{benefits.subtitle}</p>
           )}
-          <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="w-48 my-4" scrollAware={true}/>
+          <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="w-48 my-4 mx-auto" scrollAware={true}/>
         </div>
-
-        <!-- Image column -->
-        <div class="aspect-square overflow-hidden rounded-lg">
-          <Image
-            src={plunging}
-            alt="Woman relaxing in a cold plunge tub"
-            class="w-full h-full object-cover object-center"
-            loading="lazy"
-            decoding="async"
-            data-preload-priority="1"
-          />
-        </div>
-      </div>
+ 
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         {benefits.items.map((benefit) => (

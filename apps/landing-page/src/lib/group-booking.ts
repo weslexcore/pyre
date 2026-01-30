@@ -4,7 +4,6 @@ const groupBooking: GroupBookingContent = {
   title: 'Private Group Experiences',
   subtitle: 'Celebrate together in the heat',
   description: [
-    "Host your next celebration at Pyre.",
     'Private bookings include exclusive access to our sauna and cold plunge facilities, with options for guided sessions and customized experiences tailored to your group.',
   ],
   capacity: {

@@ -106,6 +106,7 @@ function SessionCard({
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'America/New_York',
   });
 
   return (
@@ -113,11 +114,13 @@ function SessionCard({
       {/* Date badge */}
       <div className="flex-shrink-0 w-14 text-center">
         <div className="text-xs font-mono-bold uppercase text-[var(--muted-foreground)]">
-          {date.toLocaleDateString('en-US', { weekday: 'short' })}
+          {date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/New_York' })}
         </div>
-        <div className="text-2xl font-primary-semibold">{date.getDate()}</div>
+        <div className="text-2xl font-primary-semibold">
+          {date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/New_York' })}
+        </div>
         <div className="text-xs font-mono-bold uppercase text-[var(--muted-foreground)]">
-          {date.toLocaleDateString('en-US', { month: 'short' })}
+          {date.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/New_York' })}
         </div>
       </div>
 
