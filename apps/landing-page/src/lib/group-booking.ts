@@ -4,7 +4,7 @@ const groupBooking: GroupBookingContent = {
   title: 'Private Group Experiences',
   subtitle: 'Celebrate together in the heat',
   description: [
-    "Host your next celebration at Pyre. Whether it's a birthday, bachelor or bachelorette party, corporate team-building, or any special occasion, our space transforms into your private sanctuary for up to 25 guests.",
+    "Host your next celebration at Pyre.",
     'Private bookings include exclusive access to our sauna and cold plunge facilities, with options for guided sessions and customized experiences tailored to your group.',
   ],
   capacity: {
@@ -13,16 +13,16 @@ const groupBooking: GroupBookingContent = {
   },
   occasions: [
     { label: 'Birthdays' },
-    { label: 'Bachelor/Bachelorette' },
+    { label: 'Bachelor / Bachelorette' },
     { label: 'Corporate Events' },
     { label: 'Special Celebrations' },
   ],
-  features: [
-    'Exclusive private access',
-    'Customizable session duration',
-    'Guided or self-directed options',
-    'Catering coordination available',
-  ],
+  // features: [
+  //   'Exclusive private access',
+  //   'Customizable session duration',
+  //   'Guided or self-directed options',
+  //   'Catering coordination available',
+  // ],
   cta: {
     label: 'HIT US UP',
     href: 'mailto:groups@pyresauna.com?subject=Group Booking Inquiry',

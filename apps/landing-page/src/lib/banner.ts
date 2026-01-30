@@ -15,10 +15,10 @@ export interface BannerConfig {
 }
 
 const banner: BannerConfig = {
-  id: 'founding-memberships',
+  id: 'founding-membership',
   text: 'Founding Memberships Available Now',
   link: {
-    label: 'Sign up',
+    label: 'Get Yours',
     href: '#membership',
   },
   enabled: true,
