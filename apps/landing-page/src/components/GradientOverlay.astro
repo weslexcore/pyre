@@ -56,6 +56,9 @@ const variantClasses = {
 
   .scroll-gradient-overlay {
     animation: gradient-drift 15s ease-in-out infinite;
+    /* Promote to own compositor layer so animation doesn't cause main-thread repaints */
+    will-change: contents;
+    transform: translateZ(0);
 
     /* Multiple layered gradients for depth - all colors move with animation */
     background:

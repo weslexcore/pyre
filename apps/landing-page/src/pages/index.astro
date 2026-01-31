@@ -37,7 +37,7 @@ import Layout from '../layouts/main.astro';
       <Hero />
 
       <!-- Layer 2: Sticky image (z-10) - starts at 80dvh, scrolls up and locks at top -->
-      <div class="sticky top-0 z-10 h-[100dvh] hero-wave-mask">
+      <div class="sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer">
         <HeroCarousel />
       </div>
 
@@ -45,37 +45,37 @@ import Layout from '../layouts/main.astro';
       <GradientOverlay variant="hero-mobile" />
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
-      <div class="relative z-20 px-4 pt-4 pb-4">
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8">
+      <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
           <AboutSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <BenefitsSection />
         </div>
-        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8">
+        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
           <EventsSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <GradientOverlay variant="card" />
           <div class="relative z-10">
             <TestimonialsSection />
           </div>
         </div>
-        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8">
+        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8 mobile-card mobile-card--deferred">
           <SessionSection />
         </div>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-        <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8">
+        <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred">
           <MembershipSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
           <GroupBookingSection />
         </div>
-        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8">
+        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <FAQAccordion />
         </div>
-        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8">
+        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
           <SignupForm />
         </div>
       </div>
@@ -135,6 +135,25 @@ import Layout from '../layouts/main.astro';
   .hero-wave-mask {
     -webkit-clip-path: url(#hero-wave-clip);
     clip-path: url(#hero-wave-clip);
+  }
+
+  /* GPU layer promotion — forces compositing to avoid repaints during scroll */
+  @media (max-width: 1023px) {
+    .gpu-layer {
+      will-change: transform;
+      transform: translateZ(0);
+    }
+
+    /* Layout containment on mobile cards so internal layout changes don't trigger full-page reflow */
+    .mobile-card {
+      contain: layout style paint;
+    }
+
+    /* Defer rendering of below-fold cards until they approach the viewport */
+    .mobile-card--deferred {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 500px;
+    }
   }
 </style>
 
@@ -220,5 +239,29 @@ import Layout from '../layouts/main.astro';
     document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
   } else {
     initSmoothScroll();
+  }
+
+  // Pause/resume gradient border animations based on viewport visibility
+  // Prevents off-screen infinite animations from consuming GPU resources
+  function initAnimationPausing() {
+    const animatedEls = document.querySelectorAll('.btn-cta-animated, .card-cta-animated');
+    if (animatedEls.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          entry.target.classList.toggle('is-animating', entry.isIntersecting);
+        }
+      },
+      { rootMargin: '100px 0px' }
+    );
+
+    animatedEls.forEach((el) => observer.observe(el));
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
+  } else {
+    initAnimationPausing();
   }
 </script>
