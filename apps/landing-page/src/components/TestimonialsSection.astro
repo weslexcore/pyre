@@ -21,7 +21,7 @@ import TestimonialsCarousel from './testimonials/TestimonialsCarousel';
       <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
       <!-- Testimonials carousel (React island) -->
-      <TestimonialsCarousel client:load items={testimonials.items} />
+      <TestimonialsCarousel client:visible items={testimonials.items} />
 
       {testimonials.closing && (
         <p class="mt-6 text-base opacity-80 text-center">{testimonials.closing}</p>

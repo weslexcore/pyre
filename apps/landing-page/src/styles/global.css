@@ -321,6 +321,11 @@
     var(--pyre-red)
   );
   animation: gradient-rotate 20s linear infinite;
+  animation-play-state: paused;
+}
+
+.btn-cta-animated.is-animating::before {
+  animation-play-state: running;
 }
 
 .btn-cta-animated::after {
@@ -370,6 +375,11 @@
     var(--pyre-red)
   );
   animation: gradient-rotate 25s linear infinite;
+  animation-play-state: paused;
+}
+
+.card-cta-animated.is-animating::before {
+  animation-play-state: running;
 }
 
 .card-cta-animated::after {
