@@ -1,0 +1,79 @@
+---
+import { Image } from 'astro:assets';
+import plunging from '../assets/images/plunging.webp';
+import communitySymbol from '../assets/symbols/community-symbol.png';
+import harmonySymbol from '../assets/symbols/harmony-symbol.png';
+import ritualSymbol from '../assets/symbols/ritual-symbol.png';
+import experiences from '../lib/experiences';
+import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
+
+const symbolMap: Record<string, ImageMetadata> = {
+  community: communitySymbol,
+  harmony: harmonySymbol,
+  ritual: ritualSymbol,
+};
+---
+
+<section id="experiences" aria-labelledby="experiences-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
+  <div class="max-w-6xl mx-auto lg:max-w-none">
+ 
+        <!-- Header column -->
+        <div class="text-center">
+          <h2
+            aria-hidden="true"
+            class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+          >
+            {experiences.title}
+          </h2>
+          {experiences.subtitle && (
+            <p class="text-sm opacity-80">{experiences.subtitle}</p>
+          )}
+          <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="w-48 my-4 mx-auto" scrollAware={true}/>
+        </div>
+ 
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {experiences.items.map((benefit) => (
+          <div class="benefit-card p-6 border border-current/10 rounded-lg">
+            <div class="flex items-center gap-3 mb-3">
+              {benefit.icon && symbolMap[benefit.icon] && (
+                <Image
+                  src={symbolMap[benefit.icon]}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
+                  class="w-8 h-auto"
+                />
+              )}
+              <h3 class="font-mono-bold text-lg uppercase tracking-wide">
+                {benefit.title}
+              </h3>
+            </div>
+            <p class="leading-relaxed opacity-80">
+              {benefit.description}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {experiences.closing&& (
+          <p class="mt-6 text-lg opacity-80 text-center">{experiences.closing}</p>
+        )}
+
+      {experiences.cta && (
+        <div class="mt-8 text-center">
+          <Button
+            href={experiences.cta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={experiences.cta.ariaLabel}
+          >
+            {experiences.cta.label}
+          </Button>
+        </div>
+      )}
+    </div>
+  </div>
+</section>

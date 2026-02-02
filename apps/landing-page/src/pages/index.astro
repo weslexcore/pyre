@@ -2,7 +2,7 @@
 export const prerender = true;
 
 import AboutSection from '../components/AboutSection.astro';
-import BenefitsSection from '../components/BenefitsSection.astro';
+import ExperiencesSection from '../components/ExperiencesSection.astro';
 import EventsSection from '../components/EventsSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
@@ -50,7 +50,7 @@ import Layout from '../layouts/main.astro';
           <AboutSection />
         </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
-          <BenefitsSection />
+          <ExperiencesSection />
         </div>
         <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
           <EventsSection />
@@ -96,7 +96,7 @@ import Layout from '../layouts/main.astro';
             <AboutSection />
           </SectionCard>
           <SectionCard class="mb-8" data-section="benefits">
-            <BenefitsSection />
+            <ExperiencesSection />
           </SectionCard>
           <SectionCard class="card-cta-animated mb-8" data-section="events">
             <EventsSection variant="compact" />

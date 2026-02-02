@@ -1,48 +1,35 @@
-import type { ExperiencesContent } from './types';
+import type { BenefitsContent } from './types';
+import { withBase } from './paths';
 
-const experiences: ExperiencesContent = {
-  elements: {
-    title: 'OFFERINGS',
-    items: [
-      {
-        title: 'SAUNA',
-        icon: 'connection',
-        description: 'A moment of ease.',
-        bullets: [
-          "Melt away daily anxieties and make space to reconnect. Improve blood flow, sleep better, make a new friend. You'll feel better than when you walked in.",
-        ],
-        link: { href: '/sauna', label: 'Join us for a sauna' },
-        linkText: 'Join us for a sauna',
-      },
-      {
-        title: 'COLD BATHING',
-        icon: 'harmony',
-        description: 'A moment of stillness.',
-        bullets: [
-          'Nurture your capacity to feel while exploring resilience. Increase dopamine, lower inflammation, and improve your immune system in just a few minutes. ',
-        ],
-        link: { href: '/meditative', label: 'Go inward' },
-        linkText: 'Go inward',
-      },
-      {
-        title: 'SPECIAL EVENTS',
-        icon: 'transformation',
-        description: 'A blank canvas.',
-        bullets: [
-          'The ancient power of sauna and cold bathing blended with new modalities. Sound baths, breathwork, drumming, guided meditations, communal healing; a new way to connect. ',
-        ],
-        link: { href: '/classes', label: 'View Experiences' },
-        linkText: 'View Experiences',
-      },
-    ],
-  },
-  actions: {
-    primary: {
-      label: 'Book a session',
-      href: '/book',
-      ariaLabel: 'Book a session now',
+const benefits: BenefitsContent = {
+  title: 'Experiences',
+  subtitle: 'Escape the noise. Find your balance.',
+  items: [
+    {
+      icon: 'community',
+      title: 'Free Flow',
+      description:
+        'Move at your own pace over 2 hours. Meet a new friend. Take a moment for yourself. This time is yours.',
     },
+    {
+      icon: 'harmony',
+      title: 'Guided Sessions',
+      description:
+        "Enjoy a curated experience designed to help release tension and connect with others.",
+    },
+    {
+      icon: 'ritual',
+      title: 'Special Events',
+      description:
+        "The ancient power of sauna and cold bathing blended with new modalities. Sound baths, breathwork, drumming, guided meditations, communal healing; a new way to connect.",
+    },
+  ],
+  closing: "You'll leave feeling better than when you walked in.",
+  cta: {
+    label: 'Book a Session',
+    href: withBase('/events'),
+    ariaLabel: 'Book your first contrast therapy session',
   },
 };
 
-export default experiences;
+export default benefits;

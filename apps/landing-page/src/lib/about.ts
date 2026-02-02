@@ -2,18 +2,21 @@ import type { AboutContent } from './types';
 
 const about: AboutContent = {
   // title: 'About',
+  title:"Heat, Cold, Connection",
   body: [
     // 'Pyre is a modern communal bathhouse offering sauna and cold plunges to help people release stress, reconnect, and feel more human together.',
     // 'People today are overwhelmed, disconnected, and chronically stressed. Self-care has become individual, optimized, and isolating — when what many people are really seeking is a simple way to regulate, reconnect, and feel human together. ',
-    'Pyre is a modern communal sauna that acts as a space to regulate, relax, and feel human together.',
-    'We are all burnt out, disconnected, and chronically stressed. ',
-    'Using the ancient practices of contrast therapy we help people gain presence and chill out.',// chill out. ',
+    "We are the bathhouse for people who want to feel human again.",
+    "Pyre provides a break from modern life’s stressors, demands, and expectations.",
+    "After just one session, you’ll feel relaxed, connected, and restored.", 
+    "Come see why this practice has been a staple in cultures around the world for thousands of years."
+ 
   ],
   expandedBody: [],
   cta: {
-    label: 'Our Mission',
-    href: '/blog/our-mission-vision-values',
-    ariaLabel: 'Learn more about Pyre',
+    label: 'Come experience self-care, together.',
+    href: '/events',
+    ariaLabel: 'Book a session',
   },
 };
 
