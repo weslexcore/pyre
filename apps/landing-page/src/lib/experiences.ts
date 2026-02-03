@@ -9,13 +9,13 @@ const benefits: BenefitsContent = {
       icon: 'community',
       title: 'Free Flow',
       description:
-        'Move at your own pace over 2 hours. Meet a new friend. Take a moment for yourself. This time is yours.',
+        'Move between our saunas and cold plunges at your own pace. Meet a new friend. Take a moment for yourself. This time is yours.',
     },
     {
       icon: 'harmony',
       title: 'Guided Sessions',
       description:
-        "Enjoy a curated experience designed to help release tension and connect with others.",
+        "Curated experiences created by our certified sauna masters, blending: Sauna cold plunge, breathwork, movement, guided questions, and more. A guided reset in community.",
     },
     {
       icon: 'ritual',

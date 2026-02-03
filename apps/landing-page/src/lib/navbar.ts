@@ -37,9 +37,9 @@ const navbar: NavbarContent = {
   },
   actions: {
     primary: {
-      label: 'Join Mailing List',
-      href: withBase('#signup'),
-      ariaLabel: 'Join the mailing list',
+      label: 'Get Early Access',
+      href: '#signup',
+      ariaLabel: 'Get early access to Pyre',
     },
     secondary: {
       label: 'Book',

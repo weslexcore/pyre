@@ -26,17 +26,32 @@ export interface PromoPopupConfig {
   delayMs?: number;
 }
 
+// const promoPopup: PromoPopupConfig = {
+//   id: 'founding-membership-launch',
+//   enabled: false,
+//   headline: 'Founding Memberships Are Here',
+//   body: 'Sign up now to lock in exclusive founding member pricing before spots fill up.',
+//   cta: {
+//     label: 'Become a Member',
+//     href: withBase('#membership'),
+//   },
+//   dismiss: {
+//     label: 'Maybe later',
+//   },
+//   delayMs: 1500,
+// };
+
 const promoPopup: PromoPopupConfig = {
-  id: 'founding-membership-launch',
-  enabled: false,
-  headline: 'Founding Memberships Are Here',
-  body: 'Sign up now to lock in exclusive founding member pricing before spots fill up.',
+  id: 'email12345',
+  enabled: true,
+  headline: 'Get Early Access',
+  body: 'Sign up to get early access, upcoming events, founding member pricing, and more.',
   cta: {
-    label: 'Become a Member',
-    href: withBase('#membership'),
+    label: 'Sign Up',
+    href: withBase('#signup'),
   },
   dismiss: {
-    label: 'Maybe later',
+    label: 'No thanks',
   },
   delayMs: 1500,
 };
