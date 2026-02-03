@@ -6,27 +6,27 @@ const faqs: FAQContent = {
     {
       question: 'What should I bring to my session?',
       answer:
-        'Bring a swimsuit, towel, and water bottle. We provide robes, sandals, and all the amenities you need for your session. Showering before your session is required.',
+        'Bring a swimsuit, a water bottle and an optional robe / sandals. We provide towels and all the amenities you need for your session.',
     },
     {
       question: 'How hot does the sauna get?',
       answer:
-        'Our traditional Finnish saunas reach temperatures between 170-195°F (75-90°C). The temperature can be adjusted based on your preference and experience level.',
+        'Our traditional Finnish saunas reach temperatures between 170-195°F.',
     },
     {
       question: 'How cold is the cold plunge?',
       answer:
-        'Our cold plunge pools are maintained between 39-50°F (4-10°C). We recommend starting with shorter immersions and gradually increasing your time as you become more comfortable.',
+        'Our cold plunge pools are maintained between 39-50°F. We recommend starting with shorter immersions and gradually increasing your time as you become more comfortable.',
     },
     {
       question: 'Is contrast therapy safe?',
       answer:
-        'Contrast therapy is generally safe for healthy adults. However, if you have cardiovascular conditions, high blood pressure, or are pregnant, please consult your doctor before participating. We recommend staying hydrated and listening to your body.',
+        'Contrast therapy is safe for healthy adults. However, if you have cardiovascular conditions, high blood pressure, or are pregnant, please consult your doctor before participating. Stay hydrated and listening to your body.',
     },
     {
       question: 'How long should I stay in the sauna and cold plunge?',
       answer:
-        'We recommend 15-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits. Our staff can guide you through your first session.',
+        'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits. Our staff can guide you through your first session.',
     },
     {
       question: 'Do I need to book in advance?',
@@ -41,7 +41,7 @@ const faqs: FAQContent = {
     {
       question: 'Can I bring guests?',
       answer:
-        'Yes! We offer social sessions where you can bring friends and family. Check our membership tiers for guest pass options, or book a group session for private events.',
+        'Yes! You can book for your friends and family when signing up for a session. Check our membership tiers for guest pass options, or book a group session for private events.',
     },
   ],
 };

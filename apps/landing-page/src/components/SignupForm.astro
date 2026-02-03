@@ -38,8 +38,8 @@ const subscribedBannerClass = isCompact
   : 'mb-6 rounded-md border border-green-700/30 bg-green-800/20 p-4 text-sm';
 
 const formClass = isCompact
-  ? 'flex flex-col sm:flex-row gap-3'
-  : 'flex flex-col sm:flex-row gap-3 max-w-md mx-auto md:mx-0';
+  ? 'flex flex-col gap-3'
+  : 'flex flex-col gap-3 max-w-md mx-auto md:mx-0';
 
 const inputClass = isCompact
   ? 'w-full rounded-md border border-current/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]'
@@ -128,7 +128,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
           <input type="hidden" name="cf-turnstile-response" value="" data-turnstile-token />
 
-          <Button type="submit" variant="primary" size="md" class="sm:flex-shrink-0">
+          <Button type="submit" variant="primary" size="md" class="w-full max-w-xs mx-auto">
             {signupForm.elements.submitLabel}
           </Button>
         </form>
@@ -193,7 +193,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
             <input type="hidden" name="cf-turnstile-response" value="" data-turnstile-token />
 
-            <Button type="submit" variant="primary" size="md" class="sm:flex-shrink-0">
+            <Button type="submit" variant="primary" size="md" class="w-full max-w-xs mx-auto">
               {signupForm.elements.submitLabel}
             </Button>
           </form>
