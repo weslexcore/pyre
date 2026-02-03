@@ -405,6 +405,7 @@ export interface EventItem {
   cta?: ActionRef;
   isoDate?: string; // ISO 8601 date for client-side filtering
   spotsRemaining?: number; // Available spots from Momence API
+  totalSpots?: number; // Total capacity from Momence API
 }
 
 export interface EventsContent {

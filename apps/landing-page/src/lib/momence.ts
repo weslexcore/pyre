@@ -150,6 +150,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
     },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
     spotsRemaining: event.spotsRemaining,
+    totalSpots: event.capacity,
   };
 }
 

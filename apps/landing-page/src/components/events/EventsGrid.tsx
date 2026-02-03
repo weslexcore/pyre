@@ -1,128 +1,101 @@
-// React grid component for dynamically loaded events on the events page
+// Date-grouped schedule view for the events page
 // Listens for date filter events from the Astro EventDateFilter component
 
 import { useCallback, useEffect, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
 
-
 interface EventsGridProps {
   fallback?: EventItem[];
 }
 
-function EventCardSkeleton() {
+// -- Icons (inline SVGs reused from the previous card layout) ----------------
+
+function ClockIcon({ className }: { className?: string }) {
   return (
-    <div className="border border-current/20 rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] animate-pulse">
-      <div className="p-5">
-        <div className="mb-4">
-          <div className="h-6 w-24 bg-current/10 rounded" />
-        </div>
-        <div className="h-6 w-full bg-current/10 rounded mb-2" />
-        <div className="h-4 w-3/4 bg-current/10 rounded mb-4" />
-        <div className="space-y-2 mb-4">
-          <div className="h-4 w-32 bg-current/10 rounded" />
-          <div className="h-4 w-28 bg-current/10 rounded" />
-        </div>
-        <div className="h-10 w-full bg-current/10 rounded" />
-      </div>
-    </div>
+    <svg
+      className={className ?? 'w-4 h-4 flex-shrink-0'}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
+    </svg>
   );
 }
 
-function EventCard({ event, visible }: { event: EventItem; visible: boolean }) {
-  if (!visible) return null;
-
+function UsersIcon({ className }: { className?: string }) {
   return (
-    <article
-      className="event-card border border-current/20 rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] transition-all duration-300 hover:border-current/40 hover:shadow-lg"
-      data-iso-date={event.isoDate}
+    <svg
+      className={className ?? 'w-4 h-4 flex-shrink-0'}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
     >
-      <div className="p-5">
-        <div className="mb-4">
-          <span className="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
-            {event.date}
-          </span>
-        </div>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+      />
+    </svg>
+  );
+}
 
-        <h3 className="font-mono-bold text-lg uppercase tracking-wide mb-2">{event.title}</h3>
+function ArrowIcon() {
+  return (
+    <svg
+      className="ml-1.5 w-3 h-3"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M17 8l4 4m0 0l-4 4m4-4H3"
+      />
+    </svg>
+  );
+}
 
-        <p className="text-sm opacity-70 mb-4 line-clamp-2">{event.description}</p>
+// -- Sub-components ----------------------------------------------------------
 
-        <div className="space-y-1 text-sm opacity-70 mb-4">
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>{event.time}</span>
+function ScheduleSkeleton() {
+  return (
+    <div className="space-y-8">
+      {Array.from({ length: 3 }).map((_, gi) => (
+        <div key={`skel-group-${gi}`}>
+          {/* Date header shimmer */}
+          <div className="flex items-center gap-4 mb-3">
+            <div className="h-4 w-48 bg-current/10 rounded animate-pulse" />
+            <div className="flex-1 h-px bg-current/10" />
           </div>
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-4 h-4 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Slot row shimmers */}
+          {Array.from({ length: 2 }).map((_, ri) => (
+            <div
+              key={`skel-row-${gi}-${ri}`}
+              className="flex items-center gap-4 py-3 px-4 animate-pulse"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            <span>{event.location}</span>
-          </div>
-          {event.spotsRemaining !== undefined && (
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-4 h-4 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-              <span>{event.spotsRemaining} spots left</span>
+              <div className="h-4 w-36 bg-current/10 rounded" />
+              <div className="flex-1" />
+              <div className="h-4 w-32 bg-current/10 rounded" />
+              <div className="h-4 w-20 bg-current/10 rounded" />
+              <div className="h-7 w-24 bg-current/10 rounded-full" />
             </div>
-          )}
+          ))}
         </div>
-
-        {event.cta && (
-          <a
-            href={event.cta.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={event.cta.ariaLabel}
-            className="inline-flex w-full items-center justify-center px-4 py-2 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
-          >
-            {event.spotsRemaining === 0 ? 'Join Waitlist' : event.cta.label}
-            <svg className="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-        )}
-      </div>
-    </article>
+      ))}
+    </div>
   );
 }
 
@@ -145,17 +118,17 @@ function EmptyState({ onShowAll }: { onShowAll: () => void }) {
           />
         </svg>
         <h2 className="font-sans text-xl font-semibold text-[var(--pyre-creme)]">
-          No events in this time range
+          No sessions in this time range
         </h2>
         <p className="font-sans text-base text-[var(--pyre-creme)]/70">
-          Try selecting a different filter to see more events.
+          Try selecting a different filter to see more sessions.
         </p>
         <button
           type="button"
           onClick={onShowAll}
           className="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
         >
-          Show All Events
+          Show All Sessions
         </button>
       </div>
     </div>
@@ -166,11 +139,122 @@ function NoEventsMessage() {
   return (
     <div className="text-center py-12">
       <p className="font-sans text-lg text-[var(--pyre-creme)]/70">
-        No upcoming events at this time. Check back soon!
+        No upcoming sessions at this time. Check back soon!
       </p>
     </div>
   );
 }
+
+function spotsColor(spots: number | undefined): string {
+  if (spots === undefined) return 'text-[var(--pyre-creme)] opacity-70';
+  if (spots === 0) return 'text-[var(--pyre-red)]';
+  if (spots <= 3) return 'text-[var(--pyre-gold)]';
+  return 'text-[var(--pyre-creme)] opacity-70';
+}
+
+function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | undefined): string | null {
+  if (spotsRemaining === undefined) return null;
+  if (spotsRemaining === 0) return 'Waitlist';
+  if (totalSpots !== undefined) {
+    return `${spotsRemaining}/${totalSpots} open`;
+  }
+  return `${spotsRemaining} open`;
+}
+
+function SlotRow({ event }: { event: EventItem }) {
+  const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
+  const isWaitlist = event.spotsRemaining === 0;
+  const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
+
+  return (
+    <a
+      href={event.cta?.href ?? '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
+      className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent transition-colors hover:border-current/10 hover:bg-current/[0.03]"
+    >
+      {/* Title */}
+      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-56 shrink-0">
+        <span className="truncate">{event.title}</span>
+        {/* Mobile-only CTA pill */}
+        <span className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2">
+          {ctaLabel}
+          <ArrowIcon />
+        </span>
+      </span>
+
+      {/* Time (second line on mobile, inline on desktop) */}
+      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+        <span className="inline-flex items-center gap-1.5">
+          <ClockIcon className="w-3.5 h-3.5" />
+          {event.time}
+        </span>
+      </span>
+
+      {/* Spots - to the left of CTA */}
+      {spots && (
+        <span className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(event.spotsRemaining)}`}>
+          <UsersIcon className="w-3.5 h-3.5" />
+          {spots}
+        </span>
+      )}
+
+      {/* Mobile spots display */}
+      {spots && (
+        <span className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(event.spotsRemaining)}`}>
+          <UsersIcon className="w-3.5 h-3.5" />
+          {spots}
+        </span>
+      )}
+
+      {/* Desktop CTA pill */}
+      <span className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] group-hover:opacity-90 transition-opacity whitespace-nowrap shrink-0">
+        {ctaLabel}
+        <ArrowIcon />
+      </span>
+    </a>
+  );
+}
+
+function DateGroup({ dateLabel, events }: { dateLabel: string; events: EventItem[] }) {
+  return (
+    <div className="mb-6">
+      {/* Date header */}
+      <div className="flex items-center gap-4 mb-1">
+        <span className="font-mono-bold text-sm sm:text-base uppercase tracking-widest text-[var(--pyre-muted-gold)] whitespace-nowrap">
+          {dateLabel}
+        </span>
+        <span className="flex-1 h-px bg-[var(--pyre-muted-gold)]/25" />
+      </div>
+
+      {/* Slot rows */}
+      <div>
+        {events.map((event) => (
+          <SlotRow key={event.id} event={event} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// -- Grouping helper ---------------------------------------------------------
+
+function groupEventsByDate(events: EventItem[]): Map<string, EventItem[]> {
+  const groups = new Map<string, EventItem[]>();
+  for (const event of events) {
+    const key = event.isoDate ? event.isoDate.split('T')[0] : 'unknown';
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(event);
+    } else {
+      groups.set(key, [event]);
+    }
+  }
+  return groups;
+}
+
+// -- Date filter logic (unchanged) -------------------------------------------
 
 type FilterType = 'week' | 'month' | '30days' | 'all';
 
@@ -200,18 +284,19 @@ function filterEventsByDateRange(events: EventItem[], filter: FilterType): Event
       break;
     }
     default: {
-      // 'all' and any other value - no end date limit
       endDate = new Date('2100-01-01');
       break;
     }
   }
 
   return events.filter((event) => {
-    if (!event.isoDate) return true; // Show events without date
+    if (!event.isoDate) return true;
     const eventDate = new Date(event.isoDate);
     return eventDate >= now && eventDate <= endDate;
   });
 }
+
+// -- Main component ----------------------------------------------------------
 
 export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const { events, loading } = useEvents(fallback);
@@ -225,7 +310,6 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
 
     window.addEventListener('event-date-filter', handleFilterEvent as EventListener);
 
-    // Get initial filter from URL
     const urlParams = new URLSearchParams(window.location.search);
     const initialFilter = urlParams.get('filter') || 'all';
     setFilter(initialFilter as FilterType);
@@ -236,7 +320,6 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   }, []);
 
   const handleShowAll = useCallback(() => {
-    // Click the "All Upcoming" filter button
     const allFilterBtn = document.querySelector(
       '.filter-btn[data-filter="all"]'
     ) as HTMLButtonElement | null;
@@ -261,13 +344,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   }, [visibleCount, totalCount]);
 
   if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <EventCardSkeleton key={`skeleton-${i}`} />
-        ))}
-      </div>
-    );
+    return <ScheduleSkeleton />;
   }
 
   if (displayEvents.length === 0) {
@@ -278,23 +355,17 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     return <EmptyState onShowAll={handleShowAll} />;
   }
 
-  return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {displayEvents.map((event) => {
-          const isVisible = filteredEvents.some((e) => e.id === event.id);
-          return <EventCard key={event.id} event={event} visible={isVisible} />;
-        })}
-      </div>
+  const grouped = groupEventsByDate(filteredEvents);
 
-      <style>{`
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-      `}</style>
-    </>
+  return (
+    <div className="space-y-2">
+      {Array.from(grouped.entries()).map(([dateKey, groupEvents]) => (
+        <DateGroup
+          key={dateKey}
+          dateLabel={groupEvents[0].date}
+          events={groupEvents}
+        />
+      ))}
+    </div>
   );
 }

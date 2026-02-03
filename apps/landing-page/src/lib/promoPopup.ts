@@ -1,3 +1,5 @@
+import { withBase } from './paths';
+
 export interface PromoPopupConfig {
   /** Unique ID used as the localStorage key. Change this to re-show the popup. */
   id: string;
@@ -25,13 +27,13 @@ export interface PromoPopupConfig {
 }
 
 const promoPopup: PromoPopupConfig = {
-  id: 'founding-membership-launh',
+  id: 'founding-membership-launch',
   enabled: true,
   headline: 'Founding Memberships Are Here',
   body: 'Sign up now to lock in exclusive founding member pricing before spots fill up.',
   cta: {
     label: 'Become a Member',
-    href: '#membership',
+    href: withBase('#membership'),
   },
   dismiss: {
     label: 'Maybe later',
