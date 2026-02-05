@@ -11,6 +11,14 @@ const fallbackEvents: EventsContent = {
     href: '/events',
     ariaLabel: 'View all upcoming events',
   },
+  emptyState: {
+    message: 'More events coming soon',
+    cta: {
+      label: 'Get Updates',
+      href: '#signup',
+      ariaLabel: 'Sign up for email updates about upcoming events',
+    },
+  },
 };
 
 export default fallbackEvents;

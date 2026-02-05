@@ -48,10 +48,10 @@ const isCompact = variant === 'compact';
     </div>
 
     <!-- Dynamic events carousel (React island with compact variant) -->
-    <EventsCarousel client:visible fallback={fallbackEvents.items} variant="compact" />
+    <EventsCarousel client:visible fallback={fallbackEvents.items} variant="compact" emptyState={fallbackEvents.emptyState} />
 
     {fallbackEvents.viewAllCta && (
-      <div class="mt-8 text-center">
+      <div class="mt-8 text-center" data-events-cta>
         <Button
           href={fallbackEvents.viewAllCta.href}
           variant="secondary"
@@ -96,10 +96,10 @@ const isCompact = variant === 'compact';
           <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto md:mx-0 w-72 my-4" scrollAware={true}/>
 
           <!-- Dynamic events carousel (React island) -->
-          <EventsCarousel client:visible fallback={fallbackEvents.items} />
+          <EventsCarousel client:visible fallback={fallbackEvents.items} emptyState={fallbackEvents.emptyState} />
 
           {fallbackEvents.viewAllCta && (
-            <div class="mt-10 text-center md:text-left">
+            <div class="mt-10 text-center md:text-left" data-events-cta>
               <Button
                 href={fallbackEvents.viewAllCta.href}
                 variant="secondary"
@@ -115,3 +115,12 @@ const isCompact = variant === 'compact';
     </div>
   </section>
 )}
+
+<script>
+  // Hide the default CTA when events are empty (empty state has its own CTA)
+  window.addEventListener('events-empty-state', ((e: CustomEvent<{ isEmpty: boolean }>) => {
+    document.querySelectorAll('[data-events-cta]').forEach((el) => {
+      (el as HTMLElement).classList.toggle('hidden', e.detail.isEmpty);
+    });
+  }) as EventListener);
+</script>

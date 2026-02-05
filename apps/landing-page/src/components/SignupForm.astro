@@ -1,6 +1,4 @@
 ---
-import { Image } from 'astro:assets';
-import warmSauna3 from '../assets/images/warm_sauna_3.webp';
 import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
@@ -20,8 +18,8 @@ const headingId = `signup-heading${idSuffix}`;
 const emailId = `signup-email${idSuffix}`;
 
 const gridClass = isCompact
-  ? 'grid grid-cols-[1fr_1.5fr] gap-6 lg:gap-8 items-center'
-  : 'grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-6 md:gap-8 items-center';
+  ? 'flex flex-col items-center'
+  : 'flex flex-col items-center';
 
 const headingClass = isCompact
   ? 'font-primary-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.02em] uppercase mb-3'
@@ -57,10 +55,6 @@ const successClass = isCompact
   ? 'mt-3 text-sm text-green-400 hidden'
   : 'mt-3 text-sm text-green-600 hidden';
 
-const imageOrderClass = isCompact
-  ? 'aspect-square overflow-hidden rounded-lg'
-  : 'aspect-square overflow-hidden rounded-lg order-first md:order-last';
-
 const turnstileTheme = isCompact ? 'dark' : 'auto';
 ---
 
@@ -69,17 +63,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 {isCompact ? (
   <div aria-labelledby={headingId} class="py-8 md:py-12">
     <div class={gridClass}>
-      <!-- Image column (left on desktop) -->
-      <div class={imageOrderClass}>
-        <Image
-          src={warmSauna3}
-          alt="Friends laughing and enjoying time together in a sauna"
-          class="w-full h-full object-cover object-center"
-          loading="lazy"
-          decoding="async"
-        />
-      </div>
-
       <!-- Form column -->
       <div class={formColumnClass}>
         <h2 id={headingId} class={headingClass}>
@@ -203,17 +186,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 
           <p aria-live="polite" class={errorClass} data-signup-error></p>
           <div role="status" class={successClass} data-signup-success></div>
-        </div>
-
-        <!-- Image column -->
-        <div class={imageOrderClass}>
-          <Image
-            src={warmSauna3}
-            alt="Friends laughing and enjoying time together in a sauna"
-            class="w-full h-full object-cover object-center"
-            loading="lazy"
-            decoding="async"
-          />
         </div>
       </div>
     </div>

@@ -413,6 +413,10 @@ export interface EventsContent {
   subtitle?: string;
   items: EventItem[];
   viewAllCta?: ActionRef;
+  emptyState?: {
+    message: string;
+    cta?: ActionRef;
+  };
 }
 
 // ------------------------------------------------------------

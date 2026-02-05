@@ -7,9 +7,19 @@ import type { EventItem } from '@/lib/types';
 
 type CarouselVariant = 'default' | 'compact';
 
+interface EmptyStateConfig {
+  message: string;
+  cta?: {
+    label: string;
+    href: string;
+    ariaLabel?: string;
+  };
+}
+
 interface EventsCarouselProps {
   fallback?: EventItem[];
   variant?: CarouselVariant;
+  emptyState?: EmptyStateConfig;
 }
 
 const variantStyles = {
@@ -119,15 +129,73 @@ function EventCard({
   );
 }
 
+function EmptyEventsState({
+  config,
+  variant = 'default',
+}: {
+  config: EmptyStateConfig;
+  variant?: CarouselVariant;
+}) {
+  const styles = variantStyles[variant];
+  return (
+    <div className="flex justify-center">
+      <div
+        className={`flex flex-col items-center justify-center text-center py-12 px-6 ${styles.card} border border-current/20 rounded-lg`}
+      >
+      {/* Calendar icon */}
+      <svg
+        className="w-12 h-12 mb-4 opacity-40"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+
+      <p className="font-mono-bold text-lg uppercase tracking-wide mb-6 opacity-70">
+        {config.message}
+      </p>
+
+      {config.cta && (
+        <a
+          href={config.cta.href}
+          aria-label={config.cta.ariaLabel}
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-current/60 px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+        >
+          {config.cta.label}
+        </a>
+      )}
+      </div>
+    </div>
+  );
+}
+
 export default function EventsCarousel({
   fallback = [],
   variant = 'default',
+  emptyState,
 }: EventsCarouselProps) {
   const { events, loading } = useEvents(fallback);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const styles = variantStyles[variant];
+
+  const displayEvents = events.length > 0 ? events : fallback;
+  const isEmpty = !loading && displayEvents.length === 0;
+
+  // Dispatch custom event when empty state changes so Astro can hide the default CTA
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('events-empty-state', { detail: { isEmpty } })
+    );
+  }, [isEmpty]);
 
   const updateArrows = useCallback(() => {
     const container = scrollRef.current;
@@ -162,7 +230,10 @@ export default function EventsCarousel({
     updateArrows();
   }, [events, updateArrows]);
 
-  const displayEvents = events.length > 0 ? events : fallback;
+  // Show empty state when no events and emptyState config is provided
+  if (isEmpty && emptyState) {
+    return <EmptyEventsState config={emptyState} variant={variant} />;
+  }
 
   return (
     <div className="events-wrapper relative">
