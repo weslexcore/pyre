@@ -42,6 +42,14 @@ const {
   style={`opacity: ${opacity}; mix-blend-mode: ${blendMode};`}
 ></div>
 
+<style>
+  .shader-canvas :global(canvas) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>
+
 <script>
   import {
     ShaderMount,
