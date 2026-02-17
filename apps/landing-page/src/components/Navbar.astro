@@ -4,7 +4,6 @@ import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
 import GradientOverlay from './GradientOverlay.astro';
-import { AuthButtons } from './account/AuthButtons';
 
 interface Props {
   isHomePage?: boolean;
@@ -64,13 +63,13 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
 
     <!-- Desktop CTAs -->
     <div class="hidden md:flex items-center gap-3">
-      <AuthButtons
+      <!-- <AuthButtons
         client:load
         loginHref={navbar.actions?.login?.href || '/api/auth/login'}
         loginLabel={navbar.actions?.login?.label}
         loginAriaLabel={navbar.actions?.login?.ariaLabel}
         variant="desktop"
-      />
+      /> -->
       <Button
         href={navbar.actions?.secondary?.href}
         variant="cta"
@@ -141,7 +140,7 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
         </a>
       ))}
       <div class="pt-3 border-t border-[var(--pyre-creme)]/10 flex flex-row items-start gap-3">
-        <div class="w-full">
+        <!-- <div class="w-full">
           <AuthButtons
             client:load
             loginHref={navbar.actions?.login?.href || '/api/auth/login'}
@@ -149,7 +148,7 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
             loginAriaLabel={navbar.actions?.login?.ariaLabel}
             variant="mobile"
           />
-        </div>
+        </div> -->
         <Button
           href={navbar.actions?.secondary?.href}
           variant="cta"
