@@ -3,8 +3,9 @@ import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 import footerConfig from '../lib/footer';
 import location from '../lib/location';
 import { withBase } from '../lib/paths';
+import { footerGrainGradient } from '../lib/shader-configs';
 import RepeatingLogoBackground from './RepeatingLogoBackground.astro';
-import GradientOverlay from './GradientOverlay.astro';
+import ShaderCanvas from './ShaderCanvas.astro';
 import SectionDivider from './SectionDivider.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 
@@ -23,8 +24,15 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
   <!-- Repeating logo background pattern -->
   <RepeatingLogoBackground class="absolute inset-0 " />
 
-  <!-- Animated gradient overlay -->
-  <GradientOverlay variant="footer" />
+  <!-- Grain Gradient shader overlay -->
+  <ShaderCanvas
+    shader="grain-gradient"
+    config={footerGrainGradient}
+    class="absolute inset-0 z-[1]"
+    opacity={0.15}
+    blendMode="screen"
+    mobileEnabled={true}
+  />
 
   <!-- Content layer (above background) -->
   <div class="relative z-10">

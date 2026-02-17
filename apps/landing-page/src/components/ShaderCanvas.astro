@@ -1,0 +1,171 @@
+---
+/**
+ * ShaderCanvas - Reusable WebGL shader component using @paper-design/shaders
+ *
+ * Renders a GPU-accelerated shader canvas with:
+ * - IntersectionObserver pause/resume when offscreen
+ * - prefers-reduced-motion support (freezes animation)
+ * - WebGL2 feature detection with graceful fallback
+ * - Optional mobile disable (default: no shader below lg breakpoint)
+ */
+
+import type { GrainGradientConfig } from '../lib/shader-configs';
+
+interface Props {
+  shader: 'grain-gradient';
+  config: GrainGradientConfig;
+  class?: string;
+  opacity?: number;
+  blendMode?: string;
+  mobileEnabled?: boolean;
+}
+
+const {
+  shader,
+  config,
+  class: className = '',
+  opacity = 1,
+  blendMode = 'normal',
+  mobileEnabled = false,
+} = Astro.props;
+---
+
+<div
+  class:list={[
+    'shader-canvas pointer-events-none',
+    { 'hidden lg:block': !mobileEnabled },
+    className,
+  ]}
+  aria-hidden="true"
+  data-shader={shader}
+  data-config={JSON.stringify(config)}
+  style={`opacity: ${opacity}; mix-blend-mode: ${blendMode};`}
+></div>
+
+<script>
+  import {
+    ShaderMount,
+    grainGradientFragmentShader,
+    GrainGradientShapes,
+    getShaderColorFromString,
+    getShaderNoiseTexture,
+  } from '@paper-design/shaders';
+  import type { ShaderMountUniforms } from '@paper-design/shaders';
+
+  function initShaderCanvases() {
+    const containers = document.querySelectorAll<HTMLElement>('.shader-canvas');
+
+    for (const container of containers) {
+      // Skip if already initialized
+      if (container.dataset.shaderInit) continue;
+      container.dataset.shaderInit = 'true';
+
+      const shaderType = container.dataset.shader;
+      const configStr = container.dataset.config;
+      if (!configStr) continue;
+
+      // WebGL2 feature detection
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl2');
+      if (!gl) continue;
+
+      if (shaderType === 'grain-gradient') {
+        initGrainGradient(container, JSON.parse(configStr));
+      }
+    }
+  }
+
+  interface GrainGradientConfig {
+    colors: string[];
+    colorBack: string;
+    softness: number;
+    intensity: number;
+    noise: number;
+    shape: string;
+    speed: number;
+  }
+
+  function initGrainGradient(container: HTMLElement, config: GrainGradientConfig) {
+    const colors = config.colors.map(getShaderColorFromString);
+    const colorBack = getShaderColorFromString(config.colorBack);
+    const noiseTexture = getShaderNoiseTexture();
+
+    const shapeValue = GrainGradientShapes[config.shape as keyof typeof GrainGradientShapes] ?? GrainGradientShapes.blob;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const speed = reducedMotion ? 0 : config.speed;
+
+    const uniforms: ShaderMountUniforms = {
+      u_colorBack: colorBack,
+      u_colors: colors,
+      u_colorsCount: colors.length,
+      u_softness: config.softness,
+      u_intensity: config.intensity,
+      u_noise: config.noise,
+      u_shape: shapeValue,
+      u_scale: 1,
+      u_rotation: 0,
+      u_offsetX: 0,
+      u_offsetY: 0,
+    };
+
+    if (noiseTexture) {
+      uniforms.u_noiseTexture = noiseTexture;
+    }
+
+    let mount: ShaderMount | null = null;
+    try {
+      mount = new ShaderMount(
+        container,
+        grainGradientFragmentShader,
+        uniforms,
+        undefined,
+        speed,
+        0,
+        1,
+        1920 * 1080 * 2,
+      );
+    } catch {
+      // WebGL initialization failed — graceful fallback
+      return;
+    }
+
+    // Pause/resume based on viewport visibility
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!mount) continue;
+          mount.setSpeed(entry.isIntersecting && !reducedMotion ? config.speed : 0);
+        }
+      },
+      { rootMargin: '100px 0px' },
+    );
+    observer.observe(container);
+
+    // Listen for reduced-motion changes
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleMotionChange = (e: MediaQueryListEvent) => {
+      if (!mount) return;
+      mount.setSpeed(e.matches ? 0 : config.speed);
+    };
+    motionQuery.addEventListener('change', handleMotionChange);
+
+    // Cleanup on Astro page transitions
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        observer.disconnect();
+        motionQuery.removeEventListener('change', handleMotionChange);
+        mount?.dispose();
+        mount = null;
+      },
+      { once: true },
+    );
+  }
+
+  // Initialize on first load
+  initShaderCanvases();
+
+  // Re-initialize after Astro page transitions
+  document.addEventListener('astro:page-load', initShaderCanvases);
+</script>

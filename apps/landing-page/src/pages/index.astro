@@ -10,13 +10,14 @@ import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
-import GradientOverlay from '../components/GradientOverlay.astro';
+import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SectionBridge from '../components/SectionBridge.astro';
 import SectionCard from '../components/SectionCard.astro';
 import SessionSection from '../components/SessionSection.astro';
 import SignupForm from '../components/SignupForm.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
 import Layout from '../layouts/main.astro';
+import { heroGrainGradient } from '../lib/shader-configs';
 ---
 
 <Layout isHomePage={true}>
@@ -41,8 +42,15 @@ import Layout from '../layouts/main.astro';
         <HeroCarousel />
       </div>
 
-      <!-- Animated gradient overlay (z-15) - fixed, fades as content scrolls -->
-      <GradientOverlay variant="hero-mobile" />
+      <!-- Grain Gradient shader overlay (mobile) -->
+      <ShaderCanvas
+        shader="grain-gradient"
+        config={heroGrainGradient}
+        class="fixed inset-0 z-[6]"
+        opacity={0.25}
+        blendMode="screen"
+        mobileEnabled={true}
+      />
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
@@ -86,8 +94,15 @@ import Layout from '../layouts/main.astro';
       <!-- Fixed background layer (z-0) -->
       <HeroBackground />
 
-      <!-- Animated gradient overlay on hero background (left 40%) -->
-      <GradientOverlay variant="hero-desktop" />
+      <!-- Grain Gradient shader overlay (left 40%) -->
+      <ShaderCanvas
+        shader="grain-gradient"
+        config={heroGrainGradient}
+        class="fixed top-0 left-0 w-[40%] h-screen z-[6]"
+        opacity={0.25}
+        blendMode="screen"
+        mobileEnabled={true}
+      />
 
       <!-- Scrolling cards layer - positioned on right 60% only -->
       <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
