@@ -54,7 +54,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
+        <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
           <AboutSection />
         </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
@@ -74,7 +74,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
         </div>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-        <div class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred">
+        <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred">
           <MembershipSection />
         </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
@@ -178,6 +178,39 @@ import { heroGrainGradient } from '../lib/shader-configs';
   function initSmoothScroll() {
     const lgBreakpoint = 1024;
 
+    /**
+     * On mobile, content-visibility:auto defers rendering of off-screen cards,
+     * so scrollIntoView computes positions from estimated placeholder sizes.
+     * Temporarily force all deferred cards to render before scrolling so
+     * the browser calculates the correct scroll offset.
+     */
+    function revealDeferredCards(): (() => void) | null {
+      if (window.innerWidth >= lgBreakpoint) return null;
+
+      const deferred = document.querySelectorAll<HTMLElement>('.mobile-card--deferred');
+      if (deferred.length === 0) return null;
+
+      for (const el of deferred) {
+        el.style.contentVisibility = 'visible';
+      }
+      // Force synchronous layout so scroll position is accurate
+      document.body.offsetHeight;
+
+      return () => {
+        for (const el of deferred) {
+          el.style.contentVisibility = '';
+        }
+      };
+    }
+
+    function findTarget(sectionId: string): Element | null {
+      if (window.innerWidth >= lgBreakpoint) {
+        const el = document.querySelector(`[data-section="${sectionId}"]`);
+        if (el) return el;
+      }
+      return document.getElementById(sectionId);
+    }
+
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       // Match any anchor with a hash in the href (handles /#about, /pyre/#about, #about)
@@ -196,51 +229,34 @@ import { heroGrainGradient } from '../lib/shader-configs';
       if (hash === '#') return;
 
       const sectionId = hash.slice(1); // Remove the #
-      const isDesktop = window.innerWidth >= lgBreakpoint;
-
-      let targetElement: Element | null = null;
-
-      if (isDesktop) {
-        // On desktop, find element with data-section attribute
-        targetElement = document.querySelector(`[data-section="${sectionId}"]`);
-      }
-
-      // Fall back to ID if data-section not found or on mobile
-      if (!targetElement) {
-        targetElement = document.getElementById(sectionId);
-      }
+      const targetElement = findTarget(sectionId);
 
       if (targetElement) {
         e.preventDefault();
+        const restore = revealDeferredCards();
         targetElement.scrollIntoView({ behavior: 'smooth' });
         // Update URL hash without jumping
         history.pushState(null, '', hash);
+        // Restore content-visibility after smooth scroll finishes
+        if (restore) setTimeout(restore, 1000);
       }
     });
 
-    // Handle direct URL navigation with hash
+    // Handle direct URL navigation with hash (initial load or back/forward)
     function scrollToHashTarget() {
       const hash = window.location.hash;
       if (!hash) return;
 
       const sectionId = hash.slice(1);
-      const isDesktop = window.innerWidth >= lgBreakpoint;
-
-      let targetElement: Element | null = null;
-
-      if (isDesktop) {
-        targetElement = document.querySelector(`[data-section="${sectionId}"]`);
-      }
-
-      if (!targetElement) {
-        targetElement = document.getElementById(sectionId);
-      }
+      const targetElement = findTarget(sectionId);
 
       if (targetElement) {
-        // Small delay to ensure layout is complete
-        setTimeout(() => {
-          targetElement!.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        const restore = revealDeferredCards();
+        // Wait for layout to stabilize after forcing visibility
+        requestAnimationFrame(() => {
+          targetElement.scrollIntoView({ behavior: 'smooth' });
+          if (restore) setTimeout(restore, 1000);
+        });
       }
     }
 

@@ -172,19 +172,33 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 				try {
 					const target = document.querySelector(hash);
 					if (target) {
+						// Reveal content-visibility:auto elements for accurate scroll positions
+						const deferred = document.querySelectorAll<HTMLElement>('.mobile-card--deferred');
+						for (const el of deferred) {
+							el.style.contentVisibility = 'visible';
+						}
+
 						// Force layout recalculation
 						document.body.offsetHeight;
 
 						const targetY = getOffsetTop(target);
-						console.log('[scroll] Found target, scrolling to:', hash, 'targetY:', targetY);
-						window.scrollTo(0, targetY);
-						console.log('[scroll] After scrollTo, current scrollY:', window.scrollY);
+						// Account for fixed navbar (5rem = 80px) and optional banner
+						const style = getComputedStyle(document.documentElement);
+						const bannerPx = parseFloat(style.getPropertyValue('--banner-height')) || 0;
+						const offset = 80 + bannerPx;
+
+						window.scrollTo(0, Math.max(0, targetY - offset));
+
+						// Restore content-visibility after layout settles
+						setTimeout(() => {
+							for (const el of deferred) {
+								el.style.contentVisibility = '';
+							}
+						}, 100);
 						return true;
-					} else {
-						console.log('[scroll] Target not found:', hash);
 					}
 				} catch (e) {
-					console.log('[scroll] Error:', e);
+					// Silently handle errors
 				}
 				return false;
 			}
@@ -197,13 +211,11 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 				const e = event as any;
 				const url = new URL(e.to);
 				pendingHash = url.hash || null;
-				console.log('[scroll] astro:before-preparation, hash:', pendingHash);
 			});
 
 			// After DOM swap but before animation, scroll to target
 			document.addEventListener('astro:after-swap', () => {
 				const hash = pendingHash || window.location.hash;
-				console.log('[scroll] astro:after-swap, hash:', hash);
 
 				if (hash) {
 					// Use requestAnimationFrame to ensure layout is computed
@@ -215,7 +227,6 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 
 			// Clear pending hash after page load
 			document.addEventListener('astro:page-load', () => {
-				console.log('[scroll] astro:page-load');
 				pendingHash = null;
 			});
 		</script>
