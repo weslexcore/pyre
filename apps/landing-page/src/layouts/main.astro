@@ -10,8 +10,8 @@ import warmSaunaImg from '../assets/images/warm_sauna.webp';
 import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import AnnouncementBanner from '../components/AnnouncementBanner.astro';
 import Footer from '../components/Footer.astro';
-import PromoPopup from '../components/PromoPopup.astro';
 import Navbar from '../components/Navbar.astro';
+import PromoPopup from '../components/PromoPopup.astro';
 import PostHog from '../components/posthog.astro';
 import {
   SOCIAL_IMAGE,
@@ -63,6 +63,50 @@ const absoluteSocialImage = Astro.site
 
 // Generate canonical URL
 const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
+
+// LLMs.txt URL for AI agent discovery
+const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/llms.txt';
+
+// Organization structured data for homepage
+const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HealthAndBeautyBusiness',
+  name: 'Pyre Sauna + Cold Plunge',
+  description:
+    'A modern communal bathhouse in Richmond, VA offering traditional Finnish saunas, cold plunge pools, and guided wellness experiences.',
+  url: Astro.site?.toString() ?? 'https://pyresauna.com',
+  email: 'hi@pyresauna.com',
+  image: absoluteSocialImage,
+  sameAs: ['https://instagram.com/pyre_sauna'],
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Richmond',
+    addressRegion: 'VA',
+    addressCountry: 'US',
+  },
+  hasOfferCatalog: {
+    '@type': 'OfferCatalog',
+    name: 'Memberships',
+    itemListElement: [
+      {
+        '@type': 'Offer',
+        name: 'Limited Membership',
+        description: '4 sauna and cold plunge sessions per month',
+        price: '99',
+        priceCurrency: 'USD',
+        eligibleDuration: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' },
+      },
+      {
+        '@type': 'Offer',
+        name: 'Unlimited Membership',
+        description: 'Unlimited sauna and cold plunge access',
+        price: '199',
+        priceCurrency: 'USD',
+        eligibleDuration: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' },
+      },
+    ],
+  },
+};
 ---
 
 <html lang="en" style={`--asset-base: ${base};`}> 
@@ -76,6 +120,9 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		
 		<!-- Canonical URL -->
 		<link rel="canonical" href={canonicalURL} />
+
+		<!-- LLMs.txt discovery for AI agents -->
+		<link rel="alternate" type="text/markdown" href={llmsTxtUrl} title="LLM-friendly site content" />
 		
 		<!-- Open Graph / Facebook -->
 		<meta property="og:type" content={ogType} />
@@ -133,6 +180,9 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 				},
 				keywords: article.tags?.join(', '),
 			})} />
+		)}
+		{isHomePage && (
+			<script type="application/ld+json" set:html={JSON.stringify(organizationJsonLd)} />
 		)}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
