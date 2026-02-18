@@ -13,11 +13,16 @@ import Footer from '../components/Footer.astro';
 import PromoPopup from '../components/PromoPopup.astro';
 import Navbar from '../components/Navbar.astro';
 import PostHog from '../components/posthog.astro';
+import faqs from '../lib/faqs';
 import {
+  ORGANIZATION,
+  SITE_LOCALE,
+  SITE_NAME,
   SOCIAL_IMAGE,
   SOCIAL_IMAGE_ALT,
   SOCIAL_IMAGE_HEIGHT,
   SOCIAL_IMAGE_WIDTH,
+  TWITTER_HANDLE,
 } from '../lib/seo';
 
 // Generate optimized image URLs for preloading
@@ -82,6 +87,8 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
     <meta property="og:url" content={canonicalURL} />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
+		<meta property="og:site_name" content={SITE_NAME} />
+		<meta property="og:locale" content={SITE_LOCALE} />
     <meta property="og:image" content={absoluteSocialImage} />
     <meta property="og:image:width" content={String(SOCIAL_IMAGE_WIDTH)} />
     <meta property="og:image:height" content={String(SOCIAL_IMAGE_HEIGHT)} />
@@ -99,14 +106,27 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 		)}
 		
 		<!-- Twitter -->
-		<meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content={canonicalURL} />
-		<meta property="twitter:title" content={title} />
-		<meta property="twitter:description" content={description} />
-    <meta property="twitter:image" content={absoluteSocialImage} />
-    <meta property="twitter:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content={TWITTER_HANDLE} />
+		<meta name="twitter:url" content={canonicalURL} />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={absoluteSocialImage} />
+		<meta name="twitter:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
+
+		<!-- Indexing directives: allow large snippets and image previews -->
+		<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 		
-		<!-- JSON-LD Structured Data for Articles -->
+		<!-- JSON-LD: WebSite schema (all pages — enables sitelinks search box) -->
+		<script type="application/ld+json" set:html={JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'WebSite',
+			name: SITE_NAME,
+			url: Astro.site?.toString() ?? 'https://pyresauna.com',
+			publisher: ORGANIZATION,
+		})} />
+
+		<!-- JSON-LD: Article schema (blog posts only) -->
 		{ogType === 'article' && article && (
 			<script type="application/ld+json" set:html={JSON.stringify({
 				'@context': 'https://schema.org',
@@ -120,8 +140,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 					name: article.author,
 				},
 				publisher: {
-					'@type': 'Organization',
-					name: 'Pyre',
+					...ORGANIZATION,
 					logo: {
 						'@type': 'ImageObject',
 						url: Astro.site ? new URL('/logos/gray/logo.png', Astro.site).toString() : '/logos/gray/logo.png',
@@ -132,6 +151,82 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 					'@id': canonicalURL,
 				},
 				keywords: article.tags?.join(', '),
+			})} />
+		)}
+
+		<!-- JSON-LD: LocalBusiness schema (homepage only — triggers rich results) -->
+		{isHomePage && (
+			<script type="application/ld+json" set:html={JSON.stringify({
+				'@context': 'https://schema.org',
+				'@type': 'HealthAndBeautyBusiness',
+				'@id': (Astro.site?.toString() ?? 'https://pyresauna.com') + '/#organization',
+				name: 'Pyre Sauna + Cold Plunge',
+				description: description,
+				url: Astro.site?.toString() ?? 'https://pyresauna.com',
+				email: 'hi@pyresauna.com',
+				image: absoluteSocialImage,
+				priceRange: '$$',
+				address: {
+					'@type': 'PostalAddress',
+					addressLocality: 'Richmond',
+					addressRegion: 'VA',
+					addressCountry: 'US',
+				},
+				sameAs: ['https://instagram.com/pyre_sauna'],
+				hasOfferCatalog: {
+					'@type': 'OfferCatalog',
+					name: 'Sauna & Wellness Services',
+					itemListElement: [
+						{
+							'@type': 'Offer',
+							itemOffered: {
+								'@type': 'Service',
+								name: 'Single Session',
+								description: 'Drop-in sauna and cold plunge visit',
+							},
+						},
+						{
+							'@type': 'Offer',
+							itemOffered: {
+								'@type': 'Service',
+								name: '2-Pack Intro',
+								description: '2 sessions for new guests',
+							},
+						},
+						{
+							'@type': 'Offer',
+							itemOffered: {
+								'@type': 'Service',
+								name: 'Limited Membership',
+								description: '4 sauna and cold plunge sessions per month',
+							},
+						},
+						{
+							'@type': 'Offer',
+							itemOffered: {
+								'@type': 'Service',
+								name: 'Unlimited Membership',
+								description: 'Unlimited sauna and cold plunge access',
+							},
+						},
+					],
+				},
+			})} />
+		)}
+
+		<!-- JSON-LD: FAQPage schema (homepage only — triggers FAQ rich results) -->
+		{isHomePage && (
+			<script type="application/ld+json" set:html={JSON.stringify({
+				'@context': 'https://schema.org',
+				'@type': 'FAQPage',
+				mainEntity: faqs.items.map((faq) => ({
+					'@type': 'Question',
+					name: faq.question,
+					acceptedAnswer: {
+						'@type': 'Answer',
+						text: faq.answer,
+					},
+				})),
 			})} />
 		)}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />

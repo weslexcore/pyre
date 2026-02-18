@@ -29,7 +29,13 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
 
-  integrations: [mdx(), react(), sitemap()],
+  integrations: [
+    mdx(),
+    react(),
+    sitemap({
+      filter: (page) => !page.includes('/api/') && !page.includes('/account/'),
+    }),
+  ],
 
   output: 'server', // Server mode: pages SSR by default, use `export const prerender = true` for static pages
   adapter: vercel({
