@@ -2199,6 +2199,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@paper-design/shaders@npm:^0.0.71":
+  version: 0.0.71
+  resolution: "@paper-design/shaders@npm:0.0.71"
+  checksum: 10c0/29875a2c0cf96db0e75541f7af6cfcc45d241d4df1bbcd375a2408261ecd1bea5e469d0e157167209b7f771cefd459b1543a83820fd007c8d05f54bd0269d5be
+  languageName: node
+  linkType: hard
+
 "@pkgjs/parseargs@npm:^0.11.0":
   version: 0.11.0
   resolution: "@pkgjs/parseargs@npm:0.11.0"
@@ -2261,6 +2268,7 @@ __metadata:
     "@astrojs/sitemap": "npm:3.6.0"
     "@astrojs/vercel": "npm:9.0.2"
     "@biomejs/biome": "npm:^2.2.2"
+    "@paper-design/shaders": "npm:^0.0.71"
     "@tailwindcss/vite": "npm:^4.1.3"
     "@types/node": "npm:^22.10.1"
     "@types/react": "npm:^19.1.9"
@@ -6818,9 +6826,9 @@ __metadata:
   linkType: hard
 
 "flatted@npm:^3.2.9":
-  version: 3.3.3
-  resolution: "flatted@npm:3.3.3"
-  checksum: 10c0/e957a1c6b0254aa15b8cce8533e24165abd98fadc98575db082b786b5da1b7d72062b81bfdcd1da2f4d46b6ed93bec2434e62333e9b4261d79ef2e75a10dd538
+  version: 3.4.1
+  resolution: "flatted@npm:3.4.1"
+  checksum: 10c0/3987a7f1e39bc7215cece001354313b462cdb4fb2dde0df4f7acd9e5016fbae56ee6fb3f0870b2150145033be8bda4f01af6f87a00946049651131bbfca7dfa6
   languageName: node
   linkType: hard
 
