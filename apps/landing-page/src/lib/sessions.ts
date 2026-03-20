@@ -40,7 +40,7 @@ const sessions: SessionsContent = {
     {
       id: 'pack-2',
       name: 'Duo - 2 Pack',
-      price: 49,
+      price: 72,
       description: 'Perfect for a date or connecting with a friend.',
 
       href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
