@@ -1,5 +1,3 @@
-import { withBase } from './paths';
-
 export interface PromoPopupConfig {
   /** Unique ID used as the localStorage key. Change this to re-show the popup. */
   id: string;
@@ -42,13 +40,13 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'email12345',
+  id: 'intro-2-pack',
   enabled: true,
-  headline: 'Get Early Access',
-  body: 'Sign up to get early access, upcoming events, founding member pricing, and more.',
+  headline: 'New Here? Try Two.',
+  body: 'Start with our Intro 2-Pack — two sessions to see how it feels.',
   cta: {
-    label: 'Sign Up',
-    href: withBase('#signup'),
+    label: 'Get Your Intro 2-Pack',
+    href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
   },
   dismiss: {
     label: 'No thanks',
