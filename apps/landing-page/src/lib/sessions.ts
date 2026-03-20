@@ -18,8 +18,8 @@ export interface SessionsContent {
 }
 
 const sessions: SessionsContent = {
-  title: 'Session Prices',
-  subtitle: 'Drop in anytime',
+  title: 'Packs & Pricing',
+  // subtitle: 'Drop in anytime',
   note: '2-Pack Intro is non-transferrable. Other packs can be shared with friends & family!',
   items: [
     {
@@ -31,24 +31,33 @@ const sessions: SessionsContent = {
     },
     {
       id: 'intro',
-      name: '2-Pack Intro',
+      name: 'First Visit - 2 Pack',
       price: 49,
-      description: '2 sessions for new guests',
+      description: 'New here? Start with two sessions and see how it feels.',
       highlighted: true,
       href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
     },
     {
+      id: 'pack-2',
+      name: 'Duo - 2 Pack',
+      price: 49,
+      description: 'Perfect for a date or connecting with a friend.',
+
+      href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
+    },
+    {
       id: 'pack-4',
-      name: '4-Pack',
-      price: 119,
-      description: 'Save $21',
+      name: 'Circle - 4 Pack',
+      price: 129,
+      description: 'Build momentum - come back often or bring your circle.',
       href: 'https://momence.com/Pyre/membership/4-Pack/630915',
     },
     {
       id: 'pack-8',
-      name: '8-Pack',
+      name: 'Ritual - 8 Pack',
       price: 229,
-      description: 'Save $51',
+      highlighted: true,
+      description: 'Our best value - designed for consistency, connection, and shared experiences.',
       href: 'https://momence.com/Pyre/membership/8-Pack/630916',
     },
   ],

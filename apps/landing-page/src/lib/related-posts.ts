@@ -9,13 +9,13 @@ import type { BlogPost } from './blog-types';
  */
 export function getRelatedPosts(currentPost: BlogPost, allPosts: BlogPost[]): BlogPost[] {
   const currentTags = new Set(currentPost.data.tags);
-  const currentSlug = currentPost.slug;
+  const currentId = currentPost.id;
 
   // Calculate relevance score for each post
   const postsWithScores = allPosts
     .filter((post) => {
       // Exclude current post and draft posts
-      return post.slug !== currentSlug && !post.data.draft;
+      return post.id !== currentId && !post.data.draft;
     })
     .map((post) => {
       // Count shared tags

@@ -1,7 +1,7 @@
 ---
 export const prerender = true;
 
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import type { GetStaticPaths } from 'astro';
 import BlogPostLayout from '@/layouts/blog-post.astro';
 import { calculateReadingTime } from '@/lib/reading-time';
@@ -16,7 +16,7 @@ export const getStaticPaths = (async () => {
 
   // Generate paths for each post
   return allPosts.map((post) => ({
-    params: { slug: post.slug },
+    params: { slug: post.id },
     props: { post, allPosts },
   }));
 }) satisfies GetStaticPaths;
@@ -25,13 +25,13 @@ export const getStaticPaths = (async () => {
 const { post, allPosts } = Astro.props;
 
 // Calculate reading time
-const readingTime = calculateReadingTime(post.body);
+const readingTime = calculateReadingTime(post.body ?? '');
 
 // Get related posts
 const relatedPosts = getRelatedPosts(post, allPosts);
 
 // Render the post content
-const { Content } = await post.render();
+const { Content } = await render(post);
 ---
 
 <BlogPostLayout post={post} relatedPosts={relatedPosts} readingTime={readingTime}>

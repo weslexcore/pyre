@@ -7,6 +7,7 @@ if (!bannerConfig.enabled) return;
 <div
   data-component="announcement-banner"
   data-banner-id={bannerConfig.id}
+  data-banner-expires={bannerConfig.expiresAt ?? undefined}
   role="region"
   aria-label="Announcement"
   class="fixed inset-x-0 top-0 z-[60] overflow-hidden"
@@ -59,6 +60,14 @@ if (!bannerConfig.enabled) return;
       const banner = document.querySelector('[data-component="announcement-banner"]') as HTMLElement;
       if (!banner) return;
       
+
+      // Client-side expiration check (visitor's real clock)
+      const expiresAt = banner.dataset.bannerExpires;
+      if (expiresAt && new Date() >= new Date(expiresAt)) {
+        document.documentElement.style.setProperty('--banner-height', '0px');
+        banner.remove();
+        return;
+      }
 
       const bannerId = banner.dataset.bannerId;
       if (!bannerId) return;

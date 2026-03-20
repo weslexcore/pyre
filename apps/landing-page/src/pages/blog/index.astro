@@ -24,7 +24,7 @@ const sortedPosts = allPosts.sort((a, b) => {
 
 // Process posts for display
 const posts: BlogPostCardType[] = sortedPosts.map((post) => ({
-  slug: post.slug,
+  slug: post.id,
   title: post.data.title,
   description: post.data.description,
   date: post.data.date,
@@ -35,7 +35,7 @@ const posts: BlogPostCardType[] = sortedPosts.map((post) => ({
       ? post.data.image
       : post.data.image.src
     : undefined,
-  readingTime: calculateReadingTime(post.body),
+  readingTime: calculateReadingTime(post.body ?? ''),
 }));
 
 // Calculate tag counts

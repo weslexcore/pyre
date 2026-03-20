@@ -12,15 +12,14 @@ export interface BannerConfig {
   };
   /** Whether the banner is currently active. Set to false to disable without removing code. */
   enabled: boolean;
+  /** Optional ISO 8601 datetime string. Banner auto-hides client-side after this time. */
+  expiresAt?: string;
 }
 
 const banner: BannerConfig = {
-  id: 'founding-membership',
-  text: 'Founding Memberships Available Now',
-  link: {
-    label: 'Get Yours',
-    href: '#membership',
-  },
+  id: 'livingwater-promo',
+  text: 'Use code LIVINGWATER before April 23rd for 10% off your purchase',
+  expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };
 

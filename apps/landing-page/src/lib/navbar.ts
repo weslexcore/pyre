@@ -13,15 +13,20 @@ const navbar: NavbarContent = {
         href: withBase('#about'),
         ariaLabel: 'Learn about Pyre',
       },
-      {
-        label: 'Membership',
-        href: withBase('#membership'),
-        ariaLabel: 'View membership options',
-      },
+      // {
+      //   label: 'Membership',
+      //   href: withBase('#membership'),
+      //   ariaLabel: 'View membership options',
+      // },
       {
         label: 'Events',
         href: withBase('/events'),
         ariaLabel: 'View upcoming events',
+      },
+            {
+        label: 'Pricing',
+        href: withBase('#sessions'),
+        ariaLabel: 'View pricing options',
       },
       {
         label: 'FAQ',

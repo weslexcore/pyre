@@ -15,11 +15,11 @@ export type BlogPostData = BlogPost['data'];
  * Processed blog post with additional computed fields
  */
 export interface ProcessedBlogPost {
-  slug: string;
+  id: string;
   data: BlogPostData;
   readingTime: number;
   excerpt?: string;
-  body: string;
+  body?: string;
 }
 
 /**
