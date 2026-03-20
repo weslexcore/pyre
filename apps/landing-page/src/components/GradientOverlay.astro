@@ -39,21 +39,6 @@ const variantClasses = {
 ></div>
 
 <style>
-  @keyframes gradient-drift {
-    0%, 100% {
-      --anim-progress: 0;
-    }
-    50% {
-      --anim-progress: 1;
-    }
-  }
-
-  @property --anim-progress {
-    syntax: '<number>';
-    initial-value: 0;
-    inherits: false;
-  }
-
   .scroll-gradient-overlay {
     animation: gradient-drift 15s ease-in-out infinite;
     /* Promote to own compositor layer so animation doesn't cause main-thread repaints */
@@ -64,43 +49,43 @@ const variantClasses = {
     background:
       /* Pyre Red - warm glow moving right and down */
       radial-gradient(
-        ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
+        ellipse 100% 80% at calc(10% + var(--anim-progress, 0) * 70%) calc(20% + var(--anim-progress, 0) * 30%),
         oklch(0.65 0.18 25 / 0.4) 0%,
         transparent 55%
       ),
       /* Pyre Blue (deep) - moves from right to left */
       radial-gradient(
-        ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
+        ellipse 90% 70% at calc(95% - var(--anim-progress, 0) * 60%) calc(60% + var(--anim-progress, 0) * 20%),
         oklch(0.35 0.15 220 / 0.6) 0%,
         transparent 55%
       ),
       /* Pyre Sky (lighter blue) - drifts up from bottom left */
       radial-gradient(
-        ellipse 85% 65% at calc(15% + var(--anim-progress) * 35%) calc(90% - var(--anim-progress) * 50%),
+        ellipse 85% 65% at calc(15% + var(--anim-progress, 0) * 35%) calc(90% - var(--anim-progress, 0) * 50%),
         oklch(0.62 0.12 230 / 0.55) 0%,
         transparent 55%
       ),
       /* Pyre Gold - sweeps diagonally across */
       radial-gradient(
-        ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
+        ellipse 90% 70% at calc(5% + var(--anim-progress, 0) * 90%) calc(50% - var(--anim-progress, 0) * 20%),
         oklch(0.78 0.15 85 / 0.55) 0%,
         transparent 55%
       ),
       /* Secondary Gold - moves opposite direction */
       radial-gradient(
-        ellipse 75% 60% at calc(80% - var(--anim-progress) * 50%) calc(25% + var(--anim-progress) * 45%),
+        ellipse 75% 60% at calc(80% - var(--anim-progress, 0) * 50%) calc(25% + var(--anim-progress, 0) * 45%),
         oklch(0.78 0.15 85 / 0.5) 0%,
         transparent 50%
       ),
       /* Secondary Blue - subtle accent moving vertically */
       radial-gradient(
-        ellipse 70% 55% at calc(50% + var(--anim-progress) * 25%) calc(10% + var(--anim-progress) * 60%),
+        ellipse 70% 55% at calc(50% + var(--anim-progress, 0) * 25%) calc(10% + var(--anim-progress, 0) * 60%),
         oklch(0.45 0.16 220 / 0.5) 0%,
         transparent 50%
       ),
       /* Pyre Sage - organic undertone drifting */
       radial-gradient(
-        ellipse 75% 50% at calc(30% + var(--anim-progress) * 40%) calc(70% - var(--anim-progress) * 25%),
+        ellipse 75% 50% at calc(30% + var(--anim-progress, 0) * 40%) calc(70% - var(--anim-progress, 0) * 25%),
         oklch(0.65 0.06 130 / 0.25) 0%,
         transparent 50%
       );
@@ -154,19 +139,19 @@ const variantClasses = {
       background:
         /* Pyre Red */
         radial-gradient(
-          ellipse 100% 80% at calc(10% + var(--anim-progress) * 70%) calc(20% + var(--anim-progress) * 30%),
+          ellipse 100% 80% at calc(10% + var(--anim-progress, 0) * 70%) calc(20% + var(--anim-progress, 0) * 30%),
           oklch(0.65 0.18 25 / 0.4) 0%,
           transparent 55%
         ),
         /* Pyre Blue (deep) */
         radial-gradient(
-          ellipse 90% 70% at calc(95% - var(--anim-progress) * 60%) calc(60% + var(--anim-progress) * 20%),
+          ellipse 90% 70% at calc(95% - var(--anim-progress, 0) * 60%) calc(60% + var(--anim-progress, 0) * 20%),
           oklch(0.35 0.15 220 / 0.6) 0%,
           transparent 55%
         ),
         /* Pyre Gold */
         radial-gradient(
-          ellipse 90% 70% at calc(5% + var(--anim-progress) * 90%) calc(50% - var(--anim-progress) * 20%),
+          ellipse 90% 70% at calc(5% + var(--anim-progress, 0) * 90%) calc(50% - var(--anim-progress, 0) * 20%),
           oklch(0.78 0.15 85 / 0.55) 0%,
           transparent 55%
         );

@@ -284,6 +284,22 @@
 
 /* Removed element-specific hero utilities in favor of Tailwind utilities inline */
 
+/* Animated gradient progress for GradientOverlay — must be global so @property survives Astro scoping */
+@property --anim-progress {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
+@keyframes gradient-drift {
+  0%, 100% {
+    --anim-progress: 0;
+  }
+  50% {
+    --anim-progress: 1;
+  }
+}
+
 /* Animated Gradient Border — rotate the gradient angle, not the element */
 @property --gradient-angle {
   syntax: "<angle>";
