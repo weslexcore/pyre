@@ -17,8 +17,8 @@ export interface BannerConfig {
 }
 
 const banner: BannerConfig = {
-  id: 'livingwater-promo',
-  text: 'Use code LIVINGWATER before April 23rd for 10% off your purchase',
+  id: 'founding-membership-launch',
+  text: 'Founding Memberships Are Here - 20% off for life with code SECRETGARDEN',
   expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };
