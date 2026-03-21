@@ -18,13 +18,13 @@ export interface SessionsContent {
 }
 
 const sessions: SessionsContent = {
-  title: 'Packs & Pricing',
+  title: 'Credits',
   // subtitle: 'Drop in anytime',
   note: '2-Pack Intro is non-transferrable. Other packs can be shared with friends & family!',
   items: [
     {
       id: 'single',
-      name: 'Single Session',
+      name: '1 Credit',
       price: 39,
       description: 'Drop-in visit',
       href: '/book',

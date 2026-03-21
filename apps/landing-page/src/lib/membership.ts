@@ -25,7 +25,7 @@ const membership: MembershipContent = {
     {
       id: 'unlimited',
       name: 'Unlimited',
-      price: 199,
+      price: 249,
       period: '/month',
       description: 'Unlimited access for dedicated practitioners',
       popular: true, 
