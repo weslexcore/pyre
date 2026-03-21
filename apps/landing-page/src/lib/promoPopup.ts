@@ -40,7 +40,7 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'intro-2-pack',
+  id: 'intro-2-pack-1',
   enabled: true,
   headline: 'New Here? Try Two.',
   body: 'Start with our Intro 2-Pack — two sessions to see how it feels.',
