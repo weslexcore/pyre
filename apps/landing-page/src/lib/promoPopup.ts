@@ -40,17 +40,18 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'intro-2-pack-1',
+  id: 'founding-membership-launch',
   enabled: true,
-  headline: 'New Here? Try Two.',
-  body: 'Start with our Intro 2-Pack — two sessions to see how it feels.',
+  headline: 'Founding Memberships Are Here',
+  body: '20% off unlimited membership for life with code SECRETGARDEN.',
   cta: {
-    label: 'Get Your Intro 2-Pack',
-    href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
+    label: 'Become a Member',
+    href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
   },
   dismiss: {
     label: 'No thanks',
   },
+  expires: '2026-04-23T00:00:00-04:00',
   delayMs: 1500,
 };
 
