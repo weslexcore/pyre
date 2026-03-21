@@ -43,7 +43,7 @@ const promoPopup: PromoPopupConfig = {
   id: 'founding-membership-launch',
   enabled: true,
   headline: 'Founding Memberships Are Here',
-  body: '20% off unlimited membership for life with code SECRETGARDEN.',
+  body: '20% off unlimited membership for life with code SECRETGARDEN. Offer expires April 23rd.',
   cta: {
     label: 'Become a Member',
     href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
