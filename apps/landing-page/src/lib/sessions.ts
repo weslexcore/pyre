@@ -24,7 +24,7 @@ const sessions: SessionsContent = {
   items: [
     {
       id: 'single',
-      name: '1 Credit',
+      name: 'Single - 1 Credit',
       price: 39,
       description: 'Drop-in visit',
       href: '/book',
