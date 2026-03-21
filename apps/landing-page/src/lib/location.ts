@@ -12,7 +12,8 @@ const location: LocationContent = {
   tagline: 'SELF-CARE TOGETHER',
   hours: [
     // { day: 'Coming Soon', open: '', close: '' },
-    { day: 'MON / THURS', open: '6PM', close: '8PM' },
+    { day: 'MON', open: '6PM', close: '8PM' },
+    { day: 'THURS', open: '6PM', close: '8PM' },
     { day: 'FRI', open: '6PM', close: '9PM' },
     { day: 'SAT / SUN', open: '10AM', close: '4PM' }
   ],
