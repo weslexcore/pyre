@@ -10,6 +10,8 @@ export interface BannerConfig {
     /** Opens in a new tab if true. Defaults to false. */
     external?: boolean;
   };
+  /** Optional URL that makes the entire banner clickable. */
+  href?: string;
   /** Whether the banner is currently active. Set to false to disable without removing code. */
   enabled: boolean;
   /** Optional ISO 8601 datetime string. Banner auto-hides client-side after this time. */
@@ -19,6 +21,7 @@ export interface BannerConfig {
 const banner: BannerConfig = {
   id: 'founding-membership-launch',
   text: 'Founding Memberships Are Here - 20% off unlimited membership for life with code SECRETGARDEN through April 23rd',
+  href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
   expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };
