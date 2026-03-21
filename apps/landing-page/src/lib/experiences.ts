@@ -7,7 +7,7 @@ const benefits: BenefitsContent = {
   items: [
     {
       icon: 'community',
-      title: 'Free Flow',
+      title: 'Open Hours',
       description:
         'Move between our saunas and cold plunges at your own pace. Meet a new friend. Take a moment for yourself. This time is yours.',
     },

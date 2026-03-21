@@ -19,7 +19,7 @@ export interface SessionsContent {
 
 const sessions: SessionsContent = {
   title: 'Credits',
-  subtitle: 'Can be used for any 2 hour free flow, guided class and select special events.',
+  subtitle: 'Can be used for any 2 hour open hours, guided class or select special events.',
   note: '2-Pack Intro is non-transferrable. Credits can be shared with friends & family!',
   items: [
     {
