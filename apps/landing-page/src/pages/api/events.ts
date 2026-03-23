@@ -69,8 +69,8 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        // Vercel edge caching: 5 min fresh, serve stale up to 10 min while revalidating
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        // Vercel edge caching: 1 min fresh, serve stale up to 2 min while revalidating
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       },
     });
   } catch (error) {
