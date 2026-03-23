@@ -37,7 +37,7 @@ const membership: MembershipContent = {
       ],
       cta: {
         label: 'Get Started',
-        href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
+        href: 'https://momence.com/m/630919',
         ariaLabel: 'Sign up for unlimited membership',
       },
     },

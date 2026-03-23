@@ -46,7 +46,7 @@ const promoPopup: PromoPopupConfig = {
   body: '20% off unlimited membership for life with code SECRETGARDEN. Offer expires April 23rd.',
   cta: {
     label: 'Become a Member',
-    href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
+    href: 'https://momence.com/m/630919',
   },
   dismiss: {
     label: 'No thanks',

@@ -21,7 +21,7 @@ export interface BannerConfig {
 const banner: BannerConfig = {
   id: 'founding-membership-launch',
   text: 'Founding Memberships Are Here - 20% off unlimited membership for life with code SECRETGARDEN through April 23rd',
-  href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
+  href: 'https://momence.com/m/630919',
   expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };
