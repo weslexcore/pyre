@@ -406,6 +406,7 @@ export interface EventItem {
   isoDate?: string; // ISO 8601 date for client-side filtering
   spotsRemaining?: number; // Available spots from Momence API
   totalSpots?: number; // Total capacity from Momence API
+  isPrivate?: boolean; // Private events hide booking CTAs
 }
 
 export interface EventsContent {
@@ -488,6 +489,7 @@ export interface GroupBookingContent {
   };
   occasions?: GroupBookingOccasion[];
   features?: string[];
+  email?: string;
   cta: ActionRef;
   secondaryCta?: ActionRef;
 }
