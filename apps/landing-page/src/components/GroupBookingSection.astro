@@ -89,6 +89,15 @@ import SectionDivider from './SectionDivider.astro';
           </Button>
         )}
       </div>
+
+      {groupBooking.email && (
+        <p class="mt-3 text-xs lg:text-sm opacity-60">
+          or email us directly at{' '}
+          <a href={`mailto:${groupBooking.email}?subject=Group Booking Inquiry`} class="underline underline-offset-2 hover:opacity-100 transition-opacity">
+            {groupBooking.email}
+          </a>
+        </p>
+      )}
     </div>
 
     <!-- Image column -->
