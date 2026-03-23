@@ -1,76 +1,77 @@
 ---
-import '../styles/global.css';
+import "../styles/global.css";
 
 // Import critical below-fold images for preloading
-import { getImage } from 'astro:assets';
-import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
-import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
-import plungingImg from '../assets/images/plunging.webp';
-import warmSaunaImg from '../assets/images/warm_sauna.webp';
-import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
-import AnnouncementBanner from '../components/AnnouncementBanner.astro';
-import Footer from '../components/Footer.astro';
-import Navbar from '../components/Navbar.astro';
-import PromoPopup from '../components/PromoPopup.astro';
-import PostHog from '../components/posthog.astro';
-import faqs from '../lib/faqs';
+import { getImage } from "astro:assets";
+import fontRegularWoff2 from "../assets/fonts/PPNeueMontreal-Regular.woff2";
+import fontSemiBoldWoff2 from "../assets/fonts/PPNeueMontreal-SemiBold.woff2";
+import plungingImg from "../assets/images/plunging.webp";
+import warmSaunaImg from "../assets/images/warm_sauna.webp";
+import faviconSvg from "../assets/logos/pyre_logo.svg?raw";
+import AnnouncementBanner from "../components/AnnouncementBanner.astro";
+import Footer from "../components/Footer.astro";
+import Navbar from "../components/Navbar.astro";
+import PromoPopup from "../components/PromoPopup.astro";
+import PostHog from "../components/posthog.astro";
+import faqs from "../lib/faqs";
 import {
-  ORGANIZATION,
-  SITE_LOCALE,
-  SITE_NAME,
-  SOCIAL_IMAGE,
-  SOCIAL_IMAGE_ALT,
-  SOCIAL_IMAGE_HEIGHT,
-  SOCIAL_IMAGE_WIDTH,
-  TWITTER_HANDLE,
-} from '../lib/seo';
+	ORGANIZATION,
+	SITE_LOCALE,
+	SITE_NAME,
+	SOCIAL_IMAGE,
+	SOCIAL_IMAGE_ALT,
+	SOCIAL_IMAGE_HEIGHT,
+	SOCIAL_IMAGE_WIDTH,
+	TWITTER_HANDLE,
+} from "../lib/seo";
 
 // Generate optimized image URLs for preloading
 const warmSaunaOptimized = await getImage({ src: warmSaunaImg, width: 800 });
 const plungingOptimized = await getImage({ src: plungingImg, width: 600 });
-// Removed SpeedInsights component usage; use inline script instead
 
 interface Props {
-  title?: string;
-  description?: string;
-  ogImage?: string;
-  ogType?: 'website' | 'article';
-  article?: {
-    publishedTime?: string;
-    author?: string;
-    tags?: string[];
-  };
-  isHomePage?: boolean;
-  transparentNav?: boolean;
-  darkLogoText?: boolean;
+	title?: string;
+	description?: string;
+	ogImage?: string;
+	ogType?: "website" | "article";
+	article?: {
+		publishedTime?: string;
+		author?: string;
+		tags?: string[];
+	};
+	isHomePage?: boolean;
+	transparentNav?: boolean;
+	darkLogoText?: boolean;
 }
 
 const {
-  title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
-  description = 'A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.',
-  ogImage,
-  ogType = 'website',
-  article,
-  isHomePage = false,
-  transparentNav = false,
-  darkLogoText = false,
+	title = "Pyre Sauna + Cold Plunge | Richmond, VA",
+	description = "A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.",
+	ogImage,
+	ogType = "website",
+	article,
+	isHomePage = false,
+	transparentNav = false,
+	darkLogoText = false,
 } = Astro.props;
 
-const base = import.meta.env.BASE_URL ?? '/';
-const faviconSvgColored = faviconSvg.replace(/currentColor/g, '#d15232');
+const base = import.meta.env.BASE_URL ?? "/";
+const faviconSvgColored = faviconSvg.replace(/currentColor/g, "#d15232");
 const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvgColored)}`;
 
 // Use custom OG image if provided, otherwise use default
 const socialImageSrc = ogImage || SOCIAL_IMAGE.src;
 const absoluteSocialImage = Astro.site
-  ? new URL(socialImageSrc, Astro.site).toString()
-  : socialImageSrc;
+	? new URL(socialImageSrc, Astro.site).toString()
+	: socialImageSrc;
 
 // Generate canonical URL
 const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
 
 // LLMs.txt URL for AI agent discovery
-const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/llms.txt';
+const llmsTxtUrl = Astro.site
+	? new URL("/llms.txt", Astro.site).toString()
+	: "/llms.txt";
 ---
 
 <html lang="en" style={`--asset-base: ${base};`}> 
@@ -251,10 +252,6 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		)}
 
 		<PostHog />
-		<script type="module">
-			import { injectSpeedInsights } from '@vercel/speed-insights';
-			injectSpeedInsights();
-		</script>
 		<script>
 			// Disable browser's automatic scroll restoration
 			if ('scrollRestoration' in history) {
