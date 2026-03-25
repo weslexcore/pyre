@@ -1,7 +1,10 @@
 ---
 import promoConfig from '../lib/promoPopup';
+import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
 if (!promoConfig.enabled) return;
+
+const hasForm = !!promoConfig.form;
 ---
 
 <div
@@ -53,27 +56,86 @@ if (!promoConfig.enabled) return;
           {promoConfig.body}
         </p>
 
-        <!-- CTA button -->
-        <Button
-          variant="primary"
-          size="lg"
-          href={promoConfig.cta.href}
-          ariaLabel={promoConfig.cta.ariaLabel}
-          data-popup-cta=""
-          class="btn-cta-animated mt-6 inline-flex w-full items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
-        >
-          {promoConfig.cta.label}
-        </Button>
-
-        <!-- Dismiss link -->
-        {promoConfig.dismiss && (
-          <button
-            data-popup-dismiss
-            type="button"
-            class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+        {hasForm ? (
+          <!-- Email signup form -->
+          <form
+            data-popup-form
+            class="mt-6 flex flex-col gap-3"
+            novalidate
+            data-mailchimp-action={signupForm.mailchimp.action}
+            data-mailchimp-u={signupForm.mailchimp.audienceU}
+            data-mailchimp-id={signupForm.mailchimp.audienceId}
+            data-mailchimp-fid={signupForm.mailchimp.fId}
+            data-mailchimp-tag={signupForm.mailchimp.tagId}
+            data-honeypot={signupForm.mailchimp.honeypotFieldName}
+            data-antispam={JSON.stringify(signupForm.antiSpam)}
+            data-success-message={promoConfig.form!.successMessage}
           >
-            {promoConfig.dismiss.label}
-          </button>
+            <div class="flex-1 min-w-0">
+              <label for="promo-popup-email" class="sr-only">Email</label>
+              <input
+                id="promo-popup-email"
+                name="EMAIL"
+                type="email"
+                required
+                inputmode="email"
+                autocomplete="email"
+                placeholder="Enter your email"
+                class="w-full rounded-md border border-[var(--pyre-creme)]/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]"
+                data-popup-email
+              />
+            </div>
+            <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+            <!-- Honeypot fields -->
+            <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
+            <input type="hidden" name={signupForm.antiSpam.timestampField} value="" data-popup-timestamp />
+
+            <Button type="submit" variant="primary" size="lg" class="btn-cta-animated w-full inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50">
+              {promoConfig.form!.submitLabel}
+            </Button>
+
+            <p aria-live="polite" class="text-sm text-[var(--pyre-burnt-orange)] hidden" data-popup-error></p>
+            <p role="status" class="text-sm text-green-400 hidden" data-popup-success></p>
+          </form>
+
+          <!-- Dismiss link -->
+          {promoConfig.dismiss && (
+            <button
+              data-popup-dismiss
+              type="button"
+              class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+            >
+              {promoConfig.dismiss.label}
+            </button>
+          )}
+        ) : (
+          <!-- CTA button -->
+          {promoConfig.cta && (
+            <Button
+              variant="primary"
+              size="lg"
+              href={promoConfig.cta.href}
+              ariaLabel={promoConfig.cta.ariaLabel}
+              data-popup-cta=""
+              class="btn-cta-animated mt-6 inline-flex w-full items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+            >
+              {promoConfig.cta.label}
+            </Button>
+          )}
+
+          <!-- Dismiss link -->
+          {promoConfig.dismiss && (
+            <button
+              data-popup-dismiss
+              type="button"
+              class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+            >
+              {promoConfig.dismiss.label}
+            </button>
+          )}
         )}
       </div>
     </div>
@@ -129,6 +191,7 @@ if (!promoConfig.enabled) return;
       const closeBtn = root.querySelector('[data-popup-close]') as HTMLElement;
       const dismissBtn = root.querySelector('[data-popup-dismiss]') as HTMLElement | null;
       const ctaBtn = root.querySelector('[data-popup-cta]') as HTMLElement | null;
+      const popupForm = root.querySelector('[data-popup-form]') as HTMLFormElement | null;
 
       if (!backdrop || !panel || !closeBtn) return;
 
@@ -217,6 +280,149 @@ if (!promoConfig.enabled) return;
           } else {
             // For full page navigation, dismiss and let browser navigate
             dismiss();
+          }
+        });
+      }
+
+      // Email signup form submission
+      if (popupForm) {
+        const antiSpamConfig = JSON.parse(popupForm.getAttribute('data-antispam') || '{}');
+        const successMessage = popupForm.getAttribute('data-success-message') || 'Success!';
+        const formStartTime = Date.now();
+        const timestampInput = popupForm.querySelector('[data-popup-timestamp]') as HTMLInputElement | null;
+        if (timestampInput) timestampInput.value = formStartTime.toString();
+
+        let hasInteracted = false;
+        let mouseMoved = false;
+
+        const handleMouseMove = () => { mouseMoved = true; };
+        const handleFocusIn = () => { hasInteracted = true; };
+
+        if (antiSpamConfig.trackInteractions) {
+          document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+          popupForm.addEventListener('focusin', handleFocusIn, { passive: true });
+        }
+
+        popupForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+
+          const emailInput = popupForm.querySelector('[data-popup-email]') as HTMLInputElement;
+          const errorEl = popupForm.querySelector('[data-popup-error]') as HTMLElement;
+          const successEl = popupForm.querySelector('[data-popup-success]') as HTMLElement;
+
+          if (!emailInput) return;
+
+          if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
+          if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
+
+          const email = emailInput.value.trim();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (errorEl) { errorEl.textContent = 'Please enter a valid email.'; errorEl.classList.remove('hidden'); }
+            emailInput.focus();
+            return;
+          }
+
+          // Honeypot checks
+          const honeypotName = popupForm.getAttribute('data-honeypot');
+          const honeypotInput = honeypotName ? popupForm.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
+          if (honeypotInput && honeypotInput.value.trim() !== '') return;
+
+          const websiteInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+          const phoneInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+          const confirmEmailInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
+          if (websiteInput?.value.trim() || phoneInput?.value.trim() || confirmEmailInput?.value.trim()) return;
+
+          // Timing check
+          if (timestampInput) {
+            const elapsed = (Date.now() - parseInt(timestampInput.value)) / 1000;
+            if (elapsed < (antiSpamConfig.minSubmissionTime || 3)) return;
+          }
+
+          // Interaction check
+          if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) return;
+
+          const submitBtn = popupForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+          if (submitBtn) submitBtn.disabled = true;
+
+          try {
+            const action = popupForm.getAttribute('data-mailchimp-action') || '';
+            const url = new URL(action);
+            url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+            const params = new URLSearchParams(url.search);
+            params.set('EMAIL', email);
+            const tagValue = popupForm.querySelector('input[name="tags"]') as HTMLInputElement;
+            if (tagValue?.value) params.set('tags', tagValue.value);
+            const callbackName = '__mc_popup_' + Math.random().toString(36).slice(2);
+            params.set('c', callbackName);
+            const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+            const script = document.createElement('script');
+            script.src = jsonpUrl;
+            script.async = true;
+
+            function scriptCleanup() {
+              try { delete (window as any)[callbackName]; } catch {}
+              if (script.parentNode) script.parentNode.removeChild(script);
+            }
+
+            (window as any)[callbackName] = function(response: any) {
+              scriptCleanup();
+              if (response?.result === 'success') {
+                if (successEl) {
+                  successEl.textContent = successMessage;
+                  successEl.classList.remove('hidden');
+                }
+                if (errorEl) errorEl.classList.add('hidden');
+
+                // PostHog tracking
+                if ((window as any).posthog) {
+                  (window as any).posthog.identify(email);
+                  (window as any).posthog.people.set({
+                    email: email,
+                    signup_source: 'intro_offer_popup',
+                    signup_date: new Date().toISOString(),
+                  });
+                  (window as any).posthog.capture('Intro Offer Signup', {
+                    email,
+                    source: 'promo_popup',
+                  });
+                }
+
+                // Dismiss popup after showing success
+                setTimeout(dismiss, 2000);
+              } else if (response?.msg) {
+                if (successEl) successEl.classList.add('hidden');
+                if (errorEl) {
+                  errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
+                  errorEl.classList.remove('hidden');
+                }
+                if (submitBtn) submitBtn.disabled = false;
+              } else {
+                if (successEl) successEl.classList.add('hidden');
+                if (errorEl) {
+                  errorEl.textContent = 'Something went wrong. Please try again.';
+                  errorEl.classList.remove('hidden');
+                }
+                if (submitBtn) submitBtn.disabled = false;
+              }
+            };
+
+            script.addEventListener('error', () => {
+              scriptCleanup();
+              if (submitBtn) submitBtn.disabled = false;
+              if (errorEl) {
+                errorEl.textContent = 'Something went wrong. Please try again.';
+                errorEl.classList.remove('hidden');
+              }
+            }, { once: true });
+
+            document.body.appendChild(script);
+          } catch {
+            if (submitBtn) submitBtn.disabled = false;
+            if (errorEl) {
+              errorEl.textContent = 'Something went wrong. Please try again.';
+              errorEl.classList.remove('hidden');
+            }
           }
         });
       }

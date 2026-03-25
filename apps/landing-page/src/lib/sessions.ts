@@ -31,8 +31,8 @@ const sessions: SessionsContent = {
     },
     {
       id: 'intro',
-      name: 'Intro Offer - 2 Credits',
-      price: 49,
+      name: 'Buy 1, Get 1 Free - 2 Credits',
+      price: 39,
       description: 'New here? Start with two sessions and see how it feels. Available once per customer.',
       highlighted: true,
       href: 'https://momence.com/m/630918',

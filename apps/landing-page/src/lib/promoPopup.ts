@@ -7,10 +7,16 @@ export interface PromoPopupConfig {
   headline: string;
   /** Supporting body text. */
   body: string;
-  /** Primary call-to-action button. */
-  cta: {
+  /** Primary call-to-action button (link mode). */
+  cta?: {
     label: string;
     href: string;
+    ariaLabel?: string;
+  };
+  /** Inline email signup form (form mode). */
+  form?: {
+    submitLabel: string;
+    successMessage: string;
   };
   /** Optional dismiss link text. */
   dismiss?: {
@@ -40,18 +46,17 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'founding-membership-launch',
+  id: 'intro-offer-email12',
   enabled: true,
-  headline: 'Founding Memberships Are Here',
-  body: '20% off unlimited membership for life with code SECRETGARDEN. Offer expires April 23rd.',
-  cta: {
-    label: 'Become a Member',
-    href: 'https://momence.com/m/630919',
+  headline: 'New Here? Buy 1, Get 1 Free',
+  body: "Sign up for our mailing list to receive an exclusive intro offer.",
+  form: {
+    submitLabel: 'Get Intro Offer',
+    successMessage: "You're in! Check your email for details.",
   },
   dismiss: {
     label: 'No thanks',
   },
-  expires: '2026-04-23T00:00:00-04:00',
   delayMs: 1500,
 };
 
