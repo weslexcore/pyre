@@ -286,6 +286,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         }
 
         const handleSubmit = async (event: SubmitEvent) => {
+          event.preventDefault();
           if (!emailInput || !errorEl) return;
 
           errorEl.textContent = '';
@@ -298,7 +299,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
           if (!emailValid) {
-            event.preventDefault();
             errorEl.textContent = 'Please enter a valid email.';
             emailInput.focus();
             return;
@@ -307,7 +307,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           const honeypotName = form.getAttribute('data-honeypot');
           const honeypotInput = honeypotName ? form.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
           if (honeypotInput && honeypotInput.value.trim() !== '') {
-            event.preventDefault();
             return;
           }
 
@@ -316,7 +315,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           const confirmEmailInput = form.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
 
           if ((websiteInput?.value.trim()) || (phoneInput?.value.trim()) || (confirmEmailInput?.value.trim())) {
-            event.preventDefault();
             return;
           }
 
@@ -326,18 +324,15 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             const startTime = parseInt(timestampInput.value) || submissionTime;
             const elapsedSeconds = (submissionTime - startTime) / 1000;
             if (elapsedSeconds < (antiSpamConfig.minSubmissionTime || 3)) {
-              event.preventDefault();
               return;
             }
           }
 
           if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) {
-            event.preventDefault();
             return;
           }
 
           if (turnstileConfig.siteKey && !turnstileToken) {
-            event.preventDefault();
             errorEl.textContent = 'Please complete the security check.';
             return;
           }
@@ -351,7 +346,6 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
               });
               const verifyResult = await verifyResponse.json();
               if (!verifyResult.success) {
-                event.preventDefault();
                 errorEl.textContent = 'Security verification failed. Please try again.';
                 if (typeof (window as any).turnstile !== 'undefined') {
                   (window as any).turnstile.reset();
@@ -360,13 +354,10 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
                 return;
               }
             } catch {
-              event.preventDefault();
               errorEl.textContent = 'Security verification failed. Please try again.';
               return;
             }
           }
-
-          event.preventDefault();
           const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
           if (submitBtn) submitBtn.disabled = true;
 
