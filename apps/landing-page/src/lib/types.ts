@@ -374,6 +374,7 @@ export interface MembershipTier {
   price: number;
   period: string;
   description: string;
+  savings?: number;
   features: MembershipFeature[];
   cta: ActionRef;
   popular?: boolean;

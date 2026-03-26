@@ -10,7 +10,8 @@ const membership: MembershipContent = {
       name: 'Limited',
       price: 99,
       period: '/month',
-      description: 'SAVE $57',
+      description: '4 sessions per month',
+      savings: 57,
       features: [
         { text: '4 sauna & cold plunge sessions' },
         { text: 'Credits rollover 1 month', highlighted: true },
