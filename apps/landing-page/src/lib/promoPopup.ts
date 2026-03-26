@@ -46,7 +46,7 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'intro-offer-email12',
+  id: 'intro-offer-email',
   enabled: true,
   headline: 'New Here? Buy 1, Get 1 Free',
   body: "Sign up for our mailing list to receive an exclusive intro offer.",
