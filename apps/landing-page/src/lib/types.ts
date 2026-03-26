@@ -495,6 +495,17 @@ export interface GroupBookingContent {
 }
 
 // ------------------------------------------------------------
+// Gift Card section types
+// ------------------------------------------------------------
+
+export interface GiftCardContent {
+  title: string;
+  subtitle?: string;
+  description: string[];
+  cta: ActionRef;
+}
+
+// ------------------------------------------------------------
 // Blog types
 // ------------------------------------------------------------
 

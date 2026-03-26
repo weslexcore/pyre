@@ -1,0 +1,44 @@
+---
+import giftCards from '../lib/gift-cards';
+import Button from './Button.astro';
+import SectionDivider from './SectionDivider.astro';
+---
+
+<section id="gift-cards" aria-labelledby="gift-cards-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0">
+  <div class="max-w-3xl mx-auto lg:max-w-none text-center">
+    <h2
+      id="gift-cards-heading"
+      class="font-primary-semibold text-[clamp(1.25rem,3vw,2rem)] lg:text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-2"
+    >
+      {giftCards.title}
+    </h2>
+
+    {giftCards.subtitle && (
+      <p class="font-mono text-sm lg:text-base opacity-80 mb-4">
+        {giftCards.subtitle}
+      </p>
+    )}
+
+    <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="lg:block w-48 my-4 mx-auto" flip={true} scrollAware={true}/>
+
+    <div class="space-y-3 lg:space-y-4 text-sm lg:text-base leading-relaxed mb-6">
+      {giftCards.description.map((paragraph) => (
+        <p>{paragraph}</p>
+      ))}
+    </div>
+
+    <div class="flex justify-center mt-6 lg:mt-8">
+      <Button
+        href={giftCards.cta.href}
+        variant="cta"
+        size="md"
+        ariaLabel={giftCards.cta.ariaLabel}
+        class="btn-cta-animated"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {giftCards.cta.label}
+      </Button>
+    </div>
+  </div>
+</section>
