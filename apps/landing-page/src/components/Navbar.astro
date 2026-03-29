@@ -1,9 +1,11 @@
 ---
 import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
+import location from '../lib/location';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
 import Button from './Button.astro';
 import GradientOverlay from './GradientOverlay.astro';
+import InstagramIcon from './icons/InstagramIcon.astro';
 
 interface Props {
   isHomePage?: boolean;
@@ -139,6 +141,23 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
           {link.label}
         </a>
       ))}
+      <a
+        href={location.instagramUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Follow us on Instagram"
+        class="inline-flex items-center gap-1.5 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] py-2 hover:opacity-70 transition-opacity"
+      >
+        <InstagramIcon class="size-[1.1em] shrink-0" />
+        Instagram
+      </a>
+      <a
+        href="#signup"
+        aria-label="Join our mailing list"
+        class="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-red)] py-2 hover:opacity-70 transition-opacity"
+      >
+        Join Mailing List
+      </a>
       <div class="pt-3 border-t border-[var(--pyre-creme)]/10 flex flex-row items-start gap-3">
         <!-- <div class="w-full">
           <AuthButtons
