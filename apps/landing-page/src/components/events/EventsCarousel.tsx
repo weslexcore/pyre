@@ -61,14 +61,13 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
   );
 }
 
-function EventCard({
+function EventCardContent({
   event,
-  variant = 'default',
+  styles,
 }: {
   event: EventItem;
-  variant?: CarouselVariant;
+  styles: (typeof variantStyles)[CarouselVariant];
 }) {
-  const styles = variantStyles[variant];
   return (
     <article
       className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}
@@ -116,17 +115,41 @@ function EventCard({
         </div>
 
         {event.cta && (
-          <a
-            href={event.cta.href}
-            aria-label={event.cta.ariaLabel}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+          <span
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 group-hover:border-current group-hover:bg-current/5"
           >
             {event.cta.label}
-          </a>
+          </span>
         )}
       </div>
     </article>
   );
+}
+
+function EventCard({
+  event,
+  variant = 'default',
+}: {
+  event: EventItem;
+  variant?: CarouselVariant;
+}) {
+  const styles = variantStyles[variant];
+
+  if (event.cta?.href) {
+    return (
+      <a
+        href={event.cta.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={event.cta.ariaLabel}
+        className="group cursor-pointer"
+      >
+        <EventCardContent event={event} styles={styles} />
+      </a>
+    );
+  }
+
+  return <EventCardContent event={event} styles={styles} />;
 }
 
 function EmptyEventsState({
