@@ -32,7 +32,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
 
 
     <!-- Contact Info -->
-    <div class="space-y-6 my-8">
+    <div class="space-y-4 my-6">
       <div>
         <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
         <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-base md:text-lg hover:underline underline-offset-4">{location.address}</a>
@@ -55,7 +55,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
     </div>
 
     <!-- Hours -->
-    <div class="pb-6">
+    <div class="pb-4">
       <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Soft Opening Hours</h2>
       <div class="grid grid-rows-3 grid-flow-col gap-x-8 gap-y-1 text-sm md:text-base">
         {location.hours.map((h) => (
