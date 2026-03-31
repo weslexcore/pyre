@@ -390,6 +390,26 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     }
   }, []);
 
+  // Open modal for event specified in ?event= query param (deep-link from carousel)
+  useEffect(() => {
+    if (loading) return;
+    const allEvents = events.length > 0 ? events : fallback;
+    if (allEvents.length === 0) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventId = urlParams.get('event');
+    if (!eventId) return;
+
+    const match = allEvents.find((e) => e.id === eventId);
+    if (match) {
+      setSelectedEvent(match);
+      // Clean up the URL so refreshing doesn't re-open the modal
+      const url = new URL(window.location.href);
+      url.searchParams.delete('event');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [loading, events, fallback]);
+
   const displayEvents = events.length > 0 ? events : fallback;
   const filteredEvents = filterEventsByDateRange(displayEvents, filter);
   const visibleCount = filteredEvents.length;

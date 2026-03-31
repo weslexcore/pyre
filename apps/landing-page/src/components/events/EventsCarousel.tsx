@@ -138,9 +138,7 @@ function EventCard({
   if (event.cta?.href) {
     return (
       <a
-        href={event.cta.href}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={`/events?event=${encodeURIComponent(event.id)}`}
         aria-label={event.cta.ariaLabel}
         className="group cursor-pointer"
       >
