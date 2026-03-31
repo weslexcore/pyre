@@ -58,9 +58,9 @@ async function handleAddressEvent(
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const { event, payload, requestId } = await verifyMomenceWebhook(request);
+    const { event, payload, requestId, timestamp } = await verifyMomenceWebhook(request);
 
-    log.info(`Received event: ${event}`, { requestId });
+    log.info(`Received event: ${event}`, { requestId, timestamp, payload });
 
     if (MEMBER_EVENTS.includes(event as MomenceEventType)) {
       await handleMemberEvent(event as MomenceEventType, payload as MomenceMemberPayload);
