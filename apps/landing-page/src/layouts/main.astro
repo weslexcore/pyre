@@ -251,7 +251,7 @@ const llmsTxtUrl = Astro.site
 			</>
 		)}
 
-		<PostHog />
+		{import.meta.env.PROD && <PostHog />}
 		<script>
 			// Disable browser's automatic scroll restoration
 			if ('scrollRestoration' in history) {
