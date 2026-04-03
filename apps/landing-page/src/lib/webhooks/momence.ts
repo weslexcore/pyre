@@ -117,7 +117,7 @@ export async function fetchMomenceMember(memberId: string): Promise<{
 }> {
   const url = `${MOMENCE_API_V2}/host/members/${memberId}`;
 
-  log.info(`Fetching member ${memberId} from Momence API`);
+  log.info(`Fetching member ${memberId} from Momence API`, { url });
 
   const response = await fetch(url, {
     headers: {
@@ -126,11 +126,25 @@ export async function fetchMomenceMember(memberId: string): Promise<{
     },
   });
 
+  const responseText = await response.text();
+
   if (!response.ok) {
+    log.error(`Momence API error for member ${memberId}`, undefined, {
+      status: response.status,
+      statusText: response.statusText,
+      body: responseText,
+      url,
+    });
     throw new Error(`Momence API returned ${response.status} for member ${memberId}`);
   }
 
-  const data = await response.json();
+  const data = JSON.parse(responseText);
+
+  log.info(`Member ${memberId} fetched successfully`, {
+    email: data.email,
+    phoneNumber: data.phoneNumber,
+    customerFieldCount: data.customerFields?.length ?? 0,
+  });
 
   // Birthday is stored in customerFields as a "date-of-birth" type field
   const birthdayField = data.customerFields?.find(
