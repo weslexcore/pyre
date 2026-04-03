@@ -13,23 +13,27 @@ const hasForm = !!promoConfig.form;
   data-delay={String(promoConfig.delayMs ?? 1500)}
   data-starts={promoConfig.starts ?? ''}
   data-expires={promoConfig.expires ?? ''}
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="promo-popup-heading"
-  class="fixed inset-0 z-[100] hidden"
 >
-  <!-- Backdrop -->
+  <!-- Full-screen dialog overlay -->
   <div
-    data-popup-backdrop
-    class="absolute inset-0 bg-black/70 opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
-  ></div>
-
-  <!-- Dialog panel -->
-  <div class="flex min-h-full items-center justify-center p-4">
+    data-popup-dialog
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="promo-popup-heading"
+    class="fixed inset-0 z-[100] hidden"
+  >
+    <!-- Backdrop -->
     <div
-      data-popup-panel
-      class="card-cta-animated relative w-full max-w-md rounded-lg opacity-0 scale-95 transition-all duration-300 motion-reduce:transition-none"
-    >
+      data-popup-backdrop
+      class="absolute inset-0 bg-black/70 opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+    ></div>
+
+    <!-- Dialog panel -->
+    <div class="flex min-h-full items-center justify-center p-4">
+      <div
+        data-popup-panel
+        class="card-cta-animated relative w-full max-w-md rounded-lg opacity-0 scale-95 transition-all duration-300 motion-reduce:transition-none"
+      >
       <!-- Inner content (sits above the ::after pseudo-element) -->
       <div class="relative z-10 px-6 pt-12 pb-8 sm:px-8 sm:py-10">
         <!-- Close button -->
@@ -140,6 +144,24 @@ const hasForm = !!promoConfig.form;
       </div>
     </div>
   </div>
+  </div>
+
+  <!-- Floating tab (shown after dismiss) -->
+  {promoConfig.promoText && (
+    <button
+      data-popup-tab
+      type="button"
+      aria-label={`Reopen offer: ${promoConfig.promoText}`}
+      class="fixed right-0 top-1/2 -translate-y-1/2 z-50 hidden cursor-pointer rounded-l-md bg-[var(--pyre-black)] border border-r-0 border-[var(--pyre-gold)]/60 px-2 py-3 shadow-lg transition-all duration-300 hover:bg-[var(--pyre-red)] hover:border-[var(--pyre-gold)] opacity-0"
+    >
+      <span
+        class="block font-mono-bold text-xs uppercase tracking-widest text-[var(--pyre-gold)] whitespace-nowrap"
+        style="writing-mode: vertical-rl; transform: rotate(180deg);"
+      >
+        {promoConfig.promoText}
+      </span>
+    </button>
+  )}
 </div>
 
 <script>
@@ -173,19 +195,28 @@ const hasForm = !!promoConfig.form;
         return;
       }
 
-      // localStorage check
+      // localStorage keys
       const storageKey = 'pyre-popup-dismissed-' + popupId;
-      let isDismissed = false;
+      const takenKey = 'pyre-popup-taken-' + popupId;
+
+      // Check if offer was already taken (form submitted successfully)
+      let offerTaken = false;
       try {
-        isDismissed = localStorage.getItem(storageKey) === '1';
-      } catch {
-        // localStorage not available — show popup as fallback
-      }
-      if (isDismissed) {
+        offerTaken = localStorage.getItem(takenKey) === '1';
+      } catch {}
+      if (offerTaken) {
         root.remove();
         return;
       }
 
+      // Check if previously dismissed
+      let isDismissed = false;
+      try {
+        isDismissed = localStorage.getItem(storageKey) === '1';
+      } catch {}
+
+      const dialog = root.querySelector('[data-popup-dialog]') as HTMLElement;
+      const tab = root.querySelector('[data-popup-tab]') as HTMLElement | null;
       const backdrop = root.querySelector('[data-popup-backdrop]') as HTMLElement;
       const panel = root.querySelector('[data-popup-panel]') as HTMLElement;
       const closeBtn = root.querySelector('[data-popup-close]') as HTMLElement;
@@ -193,7 +224,7 @@ const hasForm = !!promoConfig.form;
       const ctaBtn = root.querySelector('[data-popup-cta]') as HTMLElement | null;
       const popupForm = root.querySelector('[data-popup-form]') as HTMLFormElement | null;
 
-      if (!backdrop || !panel || !closeBtn) return;
+      if (!dialog || !backdrop || !panel || !closeBtn) return;
 
       // Store the element that had focus before the popup opened
       let previousFocus: HTMLElement | null = null;
@@ -201,14 +232,32 @@ const hasForm = !!promoConfig.form;
       // Collect focusable elements inside the dialog
       function getFocusableElements(): HTMLElement[] {
         const selectors = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-        return Array.from(root!.querySelectorAll<HTMLElement>(selectors));
+        return Array.from(dialog.querySelectorAll<HTMLElement>(selectors));
+      }
+
+      function showTab() {
+        if (!tab) return;
+        tab.classList.remove('hidden');
+        requestAnimationFrame(() => {
+          tab.classList.remove('opacity-0');
+          tab.classList.add('opacity-100');
+        });
+      }
+
+      function hideTab() {
+        if (!tab) return;
+        tab.classList.remove('opacity-100');
+        tab.classList.add('opacity-0');
+        setTimeout(() => {
+          tab.classList.add('hidden');
+        }, 300);
       }
 
       function show() {
         previousFocus = document.activeElement as HTMLElement | null;
 
-        // Show the container
-        root!.classList.remove('hidden');
+        // Show the dialog
+        dialog.classList.remove('hidden');
 
         // Lock body scroll
         document.body.style.overflow = 'hidden';
@@ -231,9 +280,7 @@ const hasForm = !!promoConfig.form;
         // Save dismissal
         try {
           localStorage.setItem(storageKey, '1');
-        } catch {
-          // Ignore storage errors
-        }
+        } catch {}
 
         // Animate out
         backdrop.classList.remove('opacity-100');
@@ -244,9 +291,15 @@ const hasForm = !!promoConfig.form;
         // Restore body scroll
         document.body.style.overflow = '';
 
-        // Remove from DOM after animation
+        // Hide dialog and show tab after animation
         const onDone = () => {
-          root!.remove();
+          dialog.classList.add('hidden');
+          // Reset panel state for re-opening
+          backdrop.classList.add('opacity-0');
+          panel.classList.add('opacity-0', 'scale-95');
+          panel.classList.remove('opacity-100', 'scale-100');
+          // Show the floating tab
+          showTab();
           // Restore focus
           if (previousFocus && previousFocus.focus) {
             previousFocus.focus();
@@ -254,15 +307,32 @@ const hasForm = !!promoConfig.form;
         };
 
         panel.addEventListener('transitionend', onDone, { once: true });
-        // Fallback if transitionend doesn't fire
         setTimeout(onDone, 350);
       }
 
-      // Event listeners
+      function removeAll() {
+        // Fully remove everything (offer taken)
+        try {
+          localStorage.setItem(takenKey, '1');
+        } catch {}
+        document.body.style.overflow = '';
+        root.remove();
+      }
+
+      // Event listeners — must be before the early return so they work
+      // when the popup is re-opened from the tab
       closeBtn.addEventListener('click', dismiss);
 
       if (dismissBtn) {
         dismissBtn.addEventListener('click', dismiss);
+      }
+
+      // Tab click: hide tab, re-open popup
+      if (tab) {
+        tab.addEventListener('click', () => {
+          hideTab();
+          setTimeout(show, 300);
+        });
       }
 
       // CTA click: dismiss then follow the link
@@ -270,7 +340,6 @@ const hasForm = !!promoConfig.form;
         ctaBtn.addEventListener('click', (e) => {
           const href = ctaBtn.getAttribute('href');
 
-          // For anchor links, prevent default and navigate after dismiss animation
           if (href && href.startsWith('#')) {
             e.preventDefault();
             dismiss();
@@ -278,7 +347,6 @@ const hasForm = !!promoConfig.form;
               window.location.hash = href;
             }, 350);
           } else {
-            // For full page navigation, dismiss and let browser navigate
             dismiss();
           }
         });
@@ -388,8 +456,8 @@ const hasForm = !!promoConfig.form;
                   });
                 }
 
-                // Dismiss popup after showing success
-                setTimeout(dismiss, 2000);
+                // Offer taken — fully remove after showing success (no tab)
+                setTimeout(removeAll, 2000);
               } else if (response?.msg) {
                 if (successEl) successEl.classList.add('hidden');
                 if (errorEl) {
@@ -460,6 +528,12 @@ const hasForm = !!promoConfig.form;
       };
 
       document.addEventListener('keydown', handleKeyDown);
+
+      // If previously dismissed, show tab immediately instead of popup
+      if (isDismissed && tab) {
+        showTab();
+        return;
+      }
 
       // Schedule showing the popup after page load + delay
       let showTimeout: ReturnType<typeof setTimeout>;

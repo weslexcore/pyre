@@ -18,6 +18,8 @@ export interface PromoPopupConfig {
     submitLabel: string;
     successMessage: string;
   };
+  /** Short text shown on the floating tab when popup is dismissed (e.g. "Buy 1, Get 1"). */
+  promoText?: string;
   /** Optional dismiss link text. */
   dismiss?: {
     label: string;
@@ -50,6 +52,7 @@ const promoPopup: PromoPopupConfig = {
   enabled: true,
   headline: 'New Here? Buy 1, Get 1 Free',
   body: 'Sign up for our mailing list to receive an exclusive intro offer.',
+  promoText: 'Buy 1, Get 1',
   form: {
     submitLabel: 'Get Intro Offer',
     successMessage: "You're in! Check your email for details.",
