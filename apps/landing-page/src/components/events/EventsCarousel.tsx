@@ -45,6 +45,7 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
     <div
       className={`flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse`}
     >
+      <div className="w-full h-36 bg-current/10" />
       <div className="p-5">
         <div className="mb-4">
           <div className="h-6 w-24 bg-current/10 rounded" />
@@ -93,6 +94,14 @@ function EventCardContent({
     <article
       className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}
     >
+      {event.image && (
+        <img
+          src={event.image.src}
+          alt={event.image.alt}
+          className="w-full h-36 object-cover"
+          loading="lazy"
+        />
+      )}
       <div className="p-5">
         <div className="mb-4">
           <span className="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
