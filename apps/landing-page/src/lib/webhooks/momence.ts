@@ -129,12 +129,9 @@ export async function fetchMomenceMember(memberId: string): Promise<{
   const responseText = await response.text();
 
   if (!response.ok) {
-    log.error(`Momence API error for member ${memberId}`, undefined, {
-      status: response.status,
-      statusText: response.statusText,
-      body: responseText,
-      url,
-    });
+    log.error(
+      `Momence API error for member ${memberId}: status=${response.status} url=${url} body=${responseText}`
+    );
     throw new Error(`Momence API returned ${response.status} for member ${memberId}`);
   }
 
