@@ -24,21 +24,21 @@ const sessions: SessionsContent = {
   note: 'Credits can be shared with friends & family! 2-Pack Intro is non-transferrable. ',
   items: [
     {
+      id: 'intro',
+      name: 'Buy 1, Get 1 Free - 2 Credits',
+      price: 39,
+      description:
+        'New here? Start with two sessions and see how it feels. Available once per customer + non-transferrable.',
+      savings: 39,
+      highlighted: true,
+      href: 'https://momence.com/m/630918',
+    },
+    {
       id: 'single',
       name: 'Single - 1 Credit',
       price: 39,
       description: 'Drop-in visit',
       href: '/book',
-    },
-    {
-      id: 'intro',
-      name: 'Buy 1, Get 1 Free - 2 Credits',
-      price: 39,
-      description:
-        'New here? Start with two sessions and see how it feels. Available once per customer.',
-      savings: 39,
-      highlighted: true,
-      href: 'https://momence.com/m/630918',
     },
     {
       id: 'pack-2',
