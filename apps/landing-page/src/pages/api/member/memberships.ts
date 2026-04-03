@@ -50,16 +50,13 @@ export const GET: APIRoute = async ({ cookies }) => {
         );
       }
       console.warn('[Member Memberships API] Momence returned:', response.status);
-      return new Response(
-        JSON.stringify({ memberships: [], credits: null, total: 0 }),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'private, no-cache',
-          },
-        }
-      );
+      return new Response(JSON.stringify({ memberships: [], credits: null, total: 0 }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-cache',
+        },
+      });
     }
 
     const data: MomenceBoughtMembershipsResponse = await response.json();
@@ -175,10 +172,7 @@ function computeAggregatedCredits(
     if (status !== 'active') continue;
 
     // Check for unlimited
-    if (
-      m.eventCreditsTotal === null &&
-      m.combinedUsageLimit === null
-    ) {
+    if (m.eventCreditsTotal === null && m.combinedUsageLimit === null) {
       hasUnlimited = true;
       source = m.membership.name;
       break;

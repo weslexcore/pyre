@@ -106,7 +106,7 @@ function spotsColor(spots: number | undefined): string {
 
 function spotsLabel(
   spotsRemaining: number | undefined,
-  totalSpots: number | undefined,
+  totalSpots: number | undefined
 ): string | null {
   if (spotsRemaining === undefined) return null;
   if (spotsRemaining === 0) return 'Waitlist';
@@ -116,11 +116,7 @@ function spotsLabel(
 
 // -- Modal component ----------------------------------------------------------
 
-export default function EventDetailModal({
-  event,
-  isOpen,
-  onClose,
-}: EventDetailModalProps) {
+export default function EventDetailModal({ event, isOpen, onClose }: EventDetailModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -147,7 +143,7 @@ export default function EventDetailModal({
       // Focus trap
       if (e.key === 'Tab' && panelRef.current) {
         const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
         );
         if (focusable.length === 0) return;
 
@@ -180,9 +176,7 @@ export default function EventDetailModal({
 
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
-  const ctaLabel = isWaitlist
-    ? 'Join Waitlist'
-    : (event.cta?.label ?? 'Book Now');
+  const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
 
   const modal = (
     <div
@@ -219,11 +213,7 @@ export default function EventDetailModal({
             stroke="currentColor"
             aria-hidden="true"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18 18 6M6 6l12 12"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
           </svg>
         </button>
 

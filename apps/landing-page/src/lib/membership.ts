@@ -29,7 +29,7 @@ const membership: MembershipContent = {
       price: 249,
       period: '/month',
       description: 'Unlimited access for dedicated practitioners',
-      popular: true, 
+      popular: true,
       features: [
         { text: 'Unlimited sauna & cold plunge access' },
         { text: 'Free Pyre tote bag', highlighted: true },

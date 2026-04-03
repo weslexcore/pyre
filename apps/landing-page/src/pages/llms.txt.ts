@@ -7,34 +7,32 @@ import membership from '@/lib/membership';
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
-	const baseUrl = site?.origin ?? 'https://pyresauna.com';
+  const baseUrl = site?.origin ?? 'https://pyresauna.com';
 
-	// Fetch all published blog posts
-	const allPosts = await getCollection('blog', ({ data }) => !data.draft);
-	const sortedPosts = allPosts.sort(
-		(a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime(),
-	);
+  // Fetch all published blog posts
+  const allPosts = await getCollection('blog', ({ data }) => !data.draft);
+  const sortedPosts = allPosts.sort(
+    (a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
+  );
 
-	const experiencesList = experiences.items
-		.map((item) => `- [${item.title}](${baseUrl}/events): ${item.description}`)
-		.join('\n');
+  const experiencesList = experiences.items
+    .map((item) => `- [${item.title}](${baseUrl}/events): ${item.description}`)
+    .join('\n');
 
-	const membershipList = membership.tiers
-		.map(
-			(tier) =>
-				`- ${tier.name} ($${tier.price}${tier.period}): ${tier.features.map((f) => f.text).join(', ')}`,
-		)
-		.join('\n');
+  const membershipList = membership.tiers
+    .map(
+      (tier) =>
+        `- ${tier.name} ($${tier.price}${tier.period}): ${tier.features.map((f) => f.text).join(', ')}`
+    )
+    .join('\n');
 
-	const blogList = sortedPosts
-		.map((post) => `- [${post.data.title}](${baseUrl}/blog/${post.slug}): ${post.data.description}`)
-		.join('\n');
+  const blogList = sortedPosts
+    .map((post) => `- [${post.data.title}](${baseUrl}/blog/${post.slug}): ${post.data.description}`)
+    .join('\n');
 
-	const faqList = faqs.items
-		.map((faq) => `- ${faq.question}: ${faq.answer}`)
-		.join('\n');
+  const faqList = faqs.items.map((faq) => `- ${faq.question}: ${faq.answer}`).join('\n');
 
-	const content = `# Pyre Sauna + Cold Plunge
+  const content = `# Pyre Sauna + Cold Plunge
 
 > Pyre is a modern communal bathhouse in Richmond, VA offering traditional Finnish saunas, cold plunge pools, and guided wellness experiences. We combine ancient sweat bathing traditions with modern community-focused wellness.
 
@@ -80,11 +78,11 @@ ${faqList}
 - [Sitemap](${baseUrl}/sitemap-index.xml): XML sitemap for all pages
 `;
 
-	return new Response(content, {
-		status: 200,
-		headers: {
-			'Content-Type': 'text/markdown; charset=utf-8',
-			'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-		},
-	});
+  return new Response(content, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    },
+  });
 };

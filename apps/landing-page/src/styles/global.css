@@ -286,13 +286,14 @@
 
 /* Animated gradient progress for GradientOverlay — must be global so @property survives Astro scoping */
 @property --anim-progress {
-  syntax: '<number>';
+  syntax: "<number>";
   initial-value: 0;
   inherits: false;
 }
 
 @keyframes gradient-drift {
-  0%, 100% {
+  0%,
+  100% {
     --anim-progress: 0;
   }
   50% {
@@ -414,5 +415,3 @@
     animation: none;
   }
 }
-
-

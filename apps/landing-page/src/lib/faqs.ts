@@ -10,8 +10,7 @@ const faqs: FAQContent = {
     },
     {
       question: 'How hot does the sauna get?',
-      answer:
-        'Our traditional Finnish saunas reach temperatures between 170-195°F.',
+      answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
     },
     {
       question: 'How cold is the cold plunge?',

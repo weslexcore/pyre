@@ -65,16 +65,13 @@ export const GET: APIRoute = async ({ cookies }) => {
       expiresAt,
     };
 
-    return new Response(
-      JSON.stringify({ credits }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'private, no-cache',
-        },
-      }
-    );
+    return new Response(JSON.stringify({ credits }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'private, no-cache',
+      },
+    });
   } catch (error) {
     console.error('[Member Credits API] Error:', error);
     return new Response(

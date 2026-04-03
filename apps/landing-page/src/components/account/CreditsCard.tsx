@@ -51,9 +51,7 @@ export function CreditsCard() {
         </h2>
 
         <p className="font-mono-bold text-4xl mb-4">
-          {credits.unlimited
-            ? accountConfig.membership.unlimitedLabel
-            : credits.available}
+          {credits.unlimited ? accountConfig.membership.unlimitedLabel : credits.available}
         </p>
 
         {(credits.source || expiryDate) && (

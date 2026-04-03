@@ -32,15 +32,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const type = url.searchParams.get('type') || 'upcoming';
 
   try {
-    const response = await fetch(
-      `${MOMENCE_API_BASE}/member/sessions?page=0&pageSize=50`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-        },
-      }
-    );
+    const response = await fetch(`${MOMENCE_API_BASE}/member/sessions?page=0&pageSize=50`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+    });
 
     if (!response.ok) {
       console.error('[Member Sessions API] Momence returned:', response.status);
@@ -59,42 +56,40 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const data: MomenceSessionsResponse = await response.json();
 
     // Transform Momence booking payloads to our internal format
-    const sessions: MemberSession[] = (data.payload || []).map(
-      (booking: MomenceBookingPayload) => {
-        const session = booking.session;
-        const startsAt = new Date(session.startsAt);
-        const isPast = startsAt < new Date();
+    const sessions: MemberSession[] = (data.payload || []).map((booking: MomenceBookingPayload) => {
+      const session = booking.session;
+      const startsAt = new Date(session.startsAt);
+      const isPast = startsAt < new Date();
 
-        let status: MemberSession['status'];
-        if (booking.cancelledAt) {
-          status = 'cancelled';
-        } else if (booking.checkedIn) {
-          status = 'attended';
-        } else if (isPast) {
-          status = 'no_show';
-        } else {
-          status = 'confirmed';
-        }
-
-        const canCancel = !isPast && !booking.cancelledAt;
-
-        return {
-          id: session.id,
-          bookingId: booking.id,
-          eventId: session.id,
-          title: session.name,
-          description: session.description,
-          dateTime: session.startsAt,
-          duration: session.duration,
-          location: session.inPersonLocation?.name || '',
-          teacherName: session.teacherName,
-          status,
-          canCancel,
-          image: session.image1,
-          link: session.link,
-        };
+      let status: MemberSession['status'];
+      if (booking.cancelledAt) {
+        status = 'cancelled';
+      } else if (booking.checkedIn) {
+        status = 'attended';
+      } else if (isPast) {
+        status = 'no_show';
+      } else {
+        status = 'confirmed';
       }
-    );
+
+      const canCancel = !isPast && !booking.cancelledAt;
+
+      return {
+        id: session.id,
+        bookingId: booking.id,
+        eventId: session.id,
+        title: session.name,
+        description: session.description,
+        dateTime: session.startsAt,
+        duration: session.duration,
+        location: session.inPersonLocation?.name || '',
+        teacherName: session.teacherName,
+        status,
+        canCancel,
+        image: session.image1,
+        link: session.link,
+      };
+    });
 
     const now = new Date();
     let filtered: MemberSession[];
@@ -106,10 +101,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           const sessionDate = new Date(s.dateTime);
           return sessionDate < now && s.status !== 'cancelled';
         })
-        .sort(
-          (a, b) =>
-            new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()
-        );
+        .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
     } else {
       // Upcoming sessions, excluding cancelled
       filtered = sessions
@@ -117,10 +109,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           const sessionDate = new Date(s.dateTime);
           return sessionDate >= now && s.status !== 'cancelled';
         })
-        .sort(
-          (a, b) =>
-            new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime()
-        );
+        .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
     }
 
     return new Response(

@@ -128,9 +128,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
   // Show "Join Waitlist" when event is full
   const isFull = event.spotsRemaining === 0;
   const ctaLabel = isFull ? 'Join Waitlist' : 'Book Now';
-  const ctaAriaLabel = isFull
-    ? `Join waitlist for ${event.title}`
-    : `Book ${event.title}`;
+  const ctaAriaLabel = isFull ? `Join waitlist for ${event.title}` : `Book ${event.title}`;
 
   return {
     id: String(event.id),

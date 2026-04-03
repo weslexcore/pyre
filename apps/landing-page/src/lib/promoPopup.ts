@@ -49,7 +49,7 @@ const promoPopup: PromoPopupConfig = {
   id: 'intro-offer-email',
   enabled: true,
   headline: 'New Here? Buy 1, Get 1 Free',
-  body: "Sign up for our mailing list to receive an exclusive intro offer.",
+  body: 'Sign up for our mailing list to receive an exclusive intro offer.',
   form: {
     submitLabel: 'Get Intro Offer',
     successMessage: "You're in! Check your email for details.",

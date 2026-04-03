@@ -153,7 +153,10 @@ function spotsColor(spots: number | undefined): string {
   return 'text-[var(--pyre-creme)] opacity-70';
 }
 
-function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | undefined): string | null {
+function spotsLabel(
+  spotsRemaining: number | undefined,
+  totalSpots: number | undefined
+): string | null {
   if (spotsRemaining === undefined) return null;
   if (spotsRemaining === 0) return 'Waitlist';
   if (totalSpots !== undefined) {
@@ -162,7 +165,13 @@ function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | und
   return `${spotsRemaining} open`;
 }
 
-function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (event: EventItem) => void }) {
+function SlotRow({
+  event,
+  onViewDetails,
+}: {
+  event: EventItem;
+  onViewDetails: (event: EventItem) => void;
+}) {
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
@@ -173,7 +182,12 @@ function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (e
         role="button"
         tabIndex={0}
         onClick={() => onViewDetails(event)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewDetails(event); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewDetails(event);
+          }
+        }}
         className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
       >
         {/* Title */}
@@ -211,7 +225,12 @@ function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (e
       role="button"
       tabIndex={0}
       onClick={() => onViewDetails(event)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onViewDetails(event); } }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewDetails(event);
+        }
+      }}
       className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
       {/* Title */}
@@ -241,7 +260,9 @@ function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (e
 
       {/* Spots - to the left of CTA */}
       {spots && (
-        <span className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(event.spotsRemaining)}`}>
+        <span
+          className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(event.spotsRemaining)}`}
+        >
           <UsersIcon className="w-3.5 h-3.5" />
           {spots}
         </span>
@@ -249,7 +270,9 @@ function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (e
 
       {/* Mobile spots display */}
       {spots && (
-        <span className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(event.spotsRemaining)}`}>
+        <span
+          className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(event.spotsRemaining)}`}
+        >
           <UsersIcon className="w-3.5 h-3.5" />
           {spots}
         </span>
@@ -276,7 +299,15 @@ function SlotRow({ event, onViewDetails }: { event: EventItem; onViewDetails: (e
   );
 }
 
-function DateGroup({ dateLabel, events, onViewDetails }: { dateLabel: string; events: EventItem[]; onViewDetails: (event: EventItem) => void }) {
+function DateGroup({
+  dateLabel,
+  events,
+  onViewDetails,
+}: {
+  dateLabel: string;
+  events: EventItem[];
+  onViewDetails: (event: EventItem) => void;
+}) {
   return (
     <div className="mb-6">
       {/* Date header */}
@@ -430,9 +461,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     const available = filterIds.filter(
       (id) => id === 'all' || filterEventsByDateRange(displayEvents, id).length > 0
     );
-    window.dispatchEvent(
-      new CustomEvent('event-filters-available', { detail: { available } })
-    );
+    window.dispatchEvent(new CustomEvent('event-filters-available', { detail: { available } }));
   }, [loading, displayEvents]);
 
   if (loading) {

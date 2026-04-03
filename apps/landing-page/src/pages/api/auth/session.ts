@@ -9,7 +9,10 @@ export const prerender = false;
 
 export const GET: APIRoute = async ({ cookies, request }) => {
   console.log('[Session API] Session check requested');
-  console.log('[Session API] Request headers cookie:', request.headers.get('cookie')?.substring(0, 100) + '...');
+  console.log(
+    '[Session API] Request headers cookie:',
+    request.headers.get('cookie')?.substring(0, 100) + '...'
+  );
 
   try {
     const { session } = await validateSession(cookies);

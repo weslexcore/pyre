@@ -75,7 +75,10 @@ export function buildAuthorizationUrl(
 /**
  * Exchange authorization code for tokens
  */
-export async function exchangeCodeForTokens(requestUrl: URL, code: string): Promise<MomenceTokenData> {
+export async function exchangeCodeForTokens(
+  requestUrl: URL,
+  code: string
+): Promise<MomenceTokenData> {
   const { clientId, clientSecret, redirectUri } = getOAuthConfig(requestUrl);
 
   console.log('[OAuth] Exchanging code for tokens...');
@@ -137,7 +140,16 @@ export async function exchangeCodeForTokens(requestUrl: URL, code: string): Prom
   const userId = data.user?.id || data.userId || data.user_id;
   console.log('[OAuth] User ID from token response:', userId);
 
-  console.log('[OAuth] Parsed tokens - accessToken present:', !!accessToken, 'refreshToken present:', !!refreshToken, 'expiresIn:', expiresIn, 'userId:', userId);
+  console.log(
+    '[OAuth] Parsed tokens - accessToken present:',
+    !!accessToken,
+    'refreshToken present:',
+    !!refreshToken,
+    'expiresIn:',
+    expiresIn,
+    'userId:',
+    userId
+  );
 
   return {
     accessToken,
@@ -228,8 +240,13 @@ export async function fetchUserProfile(accessToken: string): Promise<MomenceUser
         return {
           id: profile.id || profile.userId || profile.memberId,
           email: profile.email || profile.emailAddress || '',
-          firstName: profile.firstName || profile.first_name || profile.name?.split(' ')[0] || 'User',
-          lastName: profile.lastName || profile.last_name || profile.name?.split(' ').slice(1).join(' ') || '',
+          firstName:
+            profile.firstName || profile.first_name || profile.name?.split(' ')[0] || 'User',
+          lastName:
+            profile.lastName ||
+            profile.last_name ||
+            profile.name?.split(' ').slice(1).join(' ') ||
+            '',
           phone: profile.phone || profile.phoneNumber || profile.phone_number,
           avatarUrl: profile.avatarUrl || profile.avatar || profile.profileImage || profile.image,
         };
@@ -237,7 +254,12 @@ export async function fetchUserProfile(accessToken: string): Promise<MomenceUser
 
       // Log non-200 responses but continue trying other endpoints
       const errorText = await response.text();
-      console.log('[OAuth] Profile endpoint returned', response.status, ':', errorText.substring(0, 200));
+      console.log(
+        '[OAuth] Profile endpoint returned',
+        response.status,
+        ':',
+        errorText.substring(0, 200)
+      );
     } catch (err) {
       console.log('[OAuth] Error fetching from', endpoint, ':', err);
     }

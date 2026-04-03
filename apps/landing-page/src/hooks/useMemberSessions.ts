@@ -17,9 +17,7 @@ interface UseMemberSessionsResult {
   cancelling: number | null; // bookingId being cancelled
 }
 
-export function useMemberSessions(
-  options: UseMemberSessionsOptions = {}
-): UseMemberSessionsResult {
+export function useMemberSessions(options: UseMemberSessionsOptions = {}): UseMemberSessionsResult {
   const { type = 'upcoming' } = options;
   const [sessions, setSessions] = useState<MemberSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,35 +51,32 @@ export function useMemberSessions(
     }
   }, [type]);
 
-  const cancelSession = useCallback(
-    async (bookingId: number): Promise<boolean> => {
-      setCancelling(bookingId);
+  const cancelSession = useCallback(async (bookingId: number): Promise<boolean> => {
+    setCancelling(bookingId);
 
-      try {
-        const response = await fetch(`/api/member/sessions/${bookingId}`, {
-          method: 'DELETE',
-        });
+    try {
+      const response = await fetch(`/api/member/sessions/${bookingId}`, {
+        method: 'DELETE',
+      });
 
-        const data = await response.json();
+      const data = await response.json();
 
-        if (!data.success) {
-          throw new Error(data.message || 'Cancel failed');
-        }
-
-        // Remove the cancelled session from local state
-        setSessions((prev) => prev.filter((s) => s.bookingId !== bookingId));
-
-        return true;
-      } catch (err) {
-        console.error('[useMemberSessions] Cancel error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to cancel');
-        return false;
-      } finally {
-        setCancelling(null);
+      if (!data.success) {
+        throw new Error(data.message || 'Cancel failed');
       }
-    },
-    []
-  );
+
+      // Remove the cancelled session from local state
+      setSessions((prev) => prev.filter((s) => s.bookingId !== bookingId));
+
+      return true;
+    } catch (err) {
+      console.error('[useMemberSessions] Cancel error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cancel');
+      return false;
+    } finally {
+      setCancelling(null);
+    }
+  }, []);
 
   useEffect(() => {
     fetchSessions();
