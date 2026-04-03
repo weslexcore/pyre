@@ -21,7 +21,11 @@ async function syncMember(
       birthday: member.birthday,
     });
 
-    await setSubscriberTags(member.email, [{ name: 'Active Guest', status: 'active' }]);
+    const tags = [
+      { name: 'Active Guest', status: 'active' as const },
+      ...member.tags.map((name) => ({ name, status: 'active' as const })),
+    ];
+    await setSubscriberTags(member.email, tags);
 
     return { success: true };
   } catch (error) {

@@ -42,8 +42,12 @@ async function handleMemberEvent(
     birthday: member.birthday,
   });
 
+  const tags = member.tags.map((name) => ({ name, status: 'active' as const }));
   if (event === 'member-assigned') {
-    await setSubscriberTags(email, [{ name: 'Active Guest', status: 'active' }]);
+    tags.push({ name: 'Active Guest', status: 'active' });
+  }
+  if (tags.length > 0) {
+    await setSubscriberTags(email, tags);
   }
 }
 

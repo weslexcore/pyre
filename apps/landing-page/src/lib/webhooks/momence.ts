@@ -185,11 +185,13 @@ export interface MomenceMemberData {
   lastName: string;
   phone: string;
   birthday: string;
+  tags: string[];
 }
 
 function mapMemberData(data: Record<string, unknown>): MomenceMemberData {
   const customerFields = data.customerFields as { type: string; value: string }[] | undefined;
   const birthdayField = customerFields?.find((f) => f.type === 'date-of-birth');
+  const customerTags = data.customerTags as { name: string }[] | undefined;
 
   return {
     email: data.email as string,
@@ -197,6 +199,7 @@ function mapMemberData(data: Record<string, unknown>): MomenceMemberData {
     lastName: data.lastName as string,
     phone: (data.phoneNumber as string) ?? '',
     birthday: birthdayField?.value ?? '',
+    tags: customerTags?.map((t) => t.name) ?? [],
   };
 }
 
