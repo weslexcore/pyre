@@ -423,6 +423,18 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     if (totalCountEl) totalCountEl.textContent = String(totalCount);
   }, [visibleCount, totalCount]);
 
+  // Tell the Astro filter component which filters have events
+  useEffect(() => {
+    if (loading) return;
+    const filterIds: FilterType[] = ['week', 'month', '30days', 'all'];
+    const available = filterIds.filter(
+      (id) => id === 'all' || filterEventsByDateRange(displayEvents, id).length > 0
+    );
+    window.dispatchEvent(
+      new CustomEvent('event-filters-available', { detail: { available } })
+    );
+  }, [loading, displayEvents]);
+
   if (loading) {
     return <ScheduleSkeleton />;
   }
