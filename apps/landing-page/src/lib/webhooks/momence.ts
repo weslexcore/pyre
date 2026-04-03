@@ -97,7 +97,13 @@ export async function verifyMomenceWebhook(request: Request): Promise<MomenceWeb
 
 export async function fetchMomenceMember(
   memberId: string
-): Promise<{ email: string; firstName: string; lastName: string }> {
+): Promise<{
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  birthday: string;
+}> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
@@ -123,5 +129,7 @@ export async function fetchMomenceMember(
     email: data.email,
     firstName: data.firstName,
     lastName: data.lastName,
+    phone: data.phone ?? '',
+    birthday: data.birthday ?? '',
   };
 }

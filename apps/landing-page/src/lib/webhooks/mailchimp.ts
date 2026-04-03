@@ -26,18 +26,32 @@ function getSubscriberHash(email: string): string {
   return createHash('md5').update(email.toLowerCase()).digest('hex');
 }
 
+function formatBirthday(birthday: string): string {
+  // Momence may send ISO date (e.g., "1990-03-15") or other formats
+  // Mailchimp BIRTHDAY merge field expects "MM/DD"
+  const date = new Date(birthday);
+  if (Number.isNaN(date.getTime())) return '';
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${month}/${day}`;
+}
+
 // --- Subscriber management ---
 
 export interface UpsertSubscriberParams {
   email: string;
   firstName: string;
   lastName: string;
+  phone?: string;
+  birthday?: string;
 }
 
 export async function upsertSubscriber({
   email,
   firstName,
   lastName,
+  phone,
+  birthday,
 }: UpsertSubscriberParams): Promise<void> {
   const { baseUrl, audienceId, headers } = getConfig();
   const hash = getSubscriberHash(email);
@@ -53,6 +67,8 @@ export async function upsertSubscriber({
       merge_fields: {
         FNAME: firstName,
         LNAME: lastName,
+        ...(phone && { PHONE: phone }),
+        ...(birthday && { BIRTHDAY: formatBirthday(birthday) }),
       },
     }),
   });

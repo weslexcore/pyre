@@ -29,9 +29,18 @@ async function handleMemberEvent(
   event: MomenceEventType,
   payload: MomenceMemberPayload
 ): Promise<void> {
-  const { email, firstName, lastName } = payload;
+  const { email, firstName, lastName, memberId } = payload;
 
-  await upsertSubscriber({ email, firstName, lastName });
+  // Fetch full member profile from Momence API to get phone number
+  const member = await fetchMomenceMember(memberId);
+
+  await upsertSubscriber({
+    email,
+    firstName,
+    lastName,
+    phone: member.phone,
+    birthday: member.birthday,
+  });
 
   if (event === 'member-assigned') {
     await setSubscriberTags(email, [{ name: 'Active Guest', status: 'active' }]);
