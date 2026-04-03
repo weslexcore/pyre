@@ -3,7 +3,7 @@ import { createWebhookLogger } from './logger';
 
 const log = createWebhookLogger('Momence');
 
-const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
+const MOMENCE_API_V2 = 'https://api.momence.com/api/v2';
 
 // --- Types ---
 
@@ -95,28 +95,35 @@ export async function verifyMomenceWebhook(request: Request): Promise<MomenceWeb
 
 // --- Member lookup ---
 
-export async function fetchMomenceMember(
-  memberId: string
-): Promise<{
+function getHostBasicAuth(): string {
+  const clientId = import.meta.env.MOMENCE_OAUTH_CLIENT_ID;
+  const clientSecret = import.meta.env.MOMENCE_OAUTH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'Missing Momence OAuth credentials (MOMENCE_OAUTH_CLIENT_ID or MOMENCE_OAUTH_CLIENT_SECRET)'
+    );
+  }
+
+  return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+}
+
+export async function fetchMomenceMember(memberId: string): Promise<{
   email: string;
   firstName: string;
   lastName: string;
   phone: string;
   birthday: string;
 }> {
-  const hostId = import.meta.env.MOMENCE_HOST_ID;
-  const apiToken = import.meta.env.MOMENCE_API_TOKEN;
-
-  if (!hostId || !apiToken) {
-    throw new Error('Missing Momence API credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)');
-  }
-
-  const url = `${MOMENCE_API_BASE}/host/${hostId}/members/${memberId}?token=${apiToken}`;
+  const url = `${MOMENCE_API_V2}/host/members/${memberId}`;
 
   log.info(`Fetching member ${memberId} from Momence API`);
 
   const response = await fetch(url, {
-    headers: { Accept: 'application/json' },
+    headers: {
+      Authorization: getHostBasicAuth(),
+      Accept: 'application/json',
+    },
   });
 
   if (!response.ok) {
@@ -125,11 +132,16 @@ export async function fetchMomenceMember(
 
   const data = await response.json();
 
+  // Birthday is stored in customerFields as a "date-of-birth" type field
+  const birthdayField = data.customerFields?.find(
+    (f: { type: string }) => f.type === 'date-of-birth'
+  );
+
   return {
     email: data.email,
     firstName: data.firstName,
     lastName: data.lastName,
-    phone: data.phone ?? '',
-    birthday: data.birthday ?? '',
+    phone: data.phoneNumber ?? '',
+    birthday: birthdayField?.value ?? '',
   };
 }
