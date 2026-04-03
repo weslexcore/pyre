@@ -277,25 +277,15 @@ export async function fetchMomenceMembers(
 
   const data = JSON.parse(responseText);
 
-  // Log raw response keys to identify the correct field names
-  log.info('Momence members list response keys', {
-    keys: Object.keys(data),
-    totalCount: data.totalCount,
-    total: data.total,
-    count: data.count,
-    page: data.page,
-    pageSize: data.pageSize,
-    payloadLength: Array.isArray(data.payload) ? data.payload.length : 'not an array',
-  });
-
+  const pagination = data.pagination ?? {};
   const members = (data.payload as Record<string, unknown>[]).map(mapMemberData);
 
-  log.info(`Fetched ${members.length} members (total: ${data.totalCount ?? data.total ?? 'unknown'})`);
+  log.info(`Fetched ${members.length} members`, { pagination });
 
   return {
     members,
-    totalCount: data.totalCount,
-    page: data.page,
-    pageSize: data.pageSize,
+    totalCount: pagination.totalCount ?? pagination.total ?? members.length,
+    page,
+    pageSize,
   };
 }
