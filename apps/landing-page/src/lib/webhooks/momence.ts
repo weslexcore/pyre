@@ -93,16 +93,48 @@ export async function verifyMomenceWebhook(request: Request): Promise<MomenceWeb
   };
 }
 
-// --- Host access token via client credentials ---
+// --- Host API auth via password grant ---
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
+let cachedToken: { accessToken: string; refreshToken: string; expiresAt: number } | null = null;
 
 async function getHostAccessToken(): Promise<string> {
   // Return cached token if still valid (with 60s buffer)
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
-    return cachedToken.token;
+    return cachedToken.accessToken;
   }
 
+  // Try refresh first if we have a refresh token
+  if (cachedToken?.refreshToken) {
+    try {
+      const token = await exchangeToken({
+        grant_type: 'refresh_token',
+        refresh_token: cachedToken.refreshToken,
+      });
+      return token;
+    } catch {
+      log.warn('Refresh token failed, falling back to password grant');
+      cachedToken = null;
+    }
+  }
+
+  // Password grant
+  const hostEmail = import.meta.env.MOMENCE_HOST_EMAIL;
+  const hostPassword = import.meta.env.MOMENCE_HOST_PASSWORD;
+
+  if (!hostEmail || !hostPassword) {
+    throw new Error(
+      'Missing Momence host credentials (MOMENCE_HOST_EMAIL or MOMENCE_HOST_PASSWORD)'
+    );
+  }
+
+  return exchangeToken({
+    grant_type: 'password',
+    username: hostEmail,
+    password: hostPassword,
+  });
+}
+
+async function exchangeToken(params: Record<string, string>): Promise<string> {
   const clientId = import.meta.env.MOMENCE_OAUTH_CLIENT_ID;
   const clientSecret = import.meta.env.MOMENCE_OAUTH_CLIENT_SECRET;
 
@@ -112,13 +144,13 @@ async function getHostAccessToken(): Promise<string> {
     );
   }
 
-  log.info('Fetching host access token via client credentials');
+  log.info(`Token exchange via ${params.grant_type}`);
 
   const response = await fetch(`${MOMENCE_API_V2}/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'client_credentials',
+      ...params,
       client_id: clientId,
       client_secret: clientSecret,
     }),
@@ -132,15 +164,16 @@ async function getHostAccessToken(): Promise<string> {
 
   const data = await response.json();
   const accessToken = data.access_token || data.accessToken;
+  const refreshToken = data.refresh_token || data.refreshToken;
   const expiresIn = data.expires_in || data.expiresIn || 3600;
 
   cachedToken = {
-    token: accessToken,
+    accessToken,
+    refreshToken,
     expiresAt: Date.now() + expiresIn * 1000,
   };
 
   log.info('Host access token obtained successfully');
-
   return accessToken;
 }
 
