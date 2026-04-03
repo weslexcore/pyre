@@ -457,7 +457,6 @@ export interface BenefitsContent {
 export interface TestimonialItem {
   id: string;
   name: string;
-  role: string;
   quote: string;
   image?: ImageRef;
   highlight?: boolean;

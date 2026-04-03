@@ -27,7 +27,6 @@ function TestimonialCard({ testimonial }: { testimonial: TestimonialItem }) {
       <footer>
         <cite className="not-italic">
           <span className="font-mono-bold text-sm block">{testimonial.name}</span>
-          <span className="text-xs opacity-70">{testimonial.role}</span>
         </cite>
       </footer>
     </article>
