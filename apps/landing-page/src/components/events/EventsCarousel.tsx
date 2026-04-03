@@ -61,6 +61,22 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
   );
 }
 
+function spotsColor(spots: number | undefined): string {
+  if (spots === undefined) return 'text-[var(--pyre-creme)] opacity-70';
+  if (spots === 0) return 'text-[var(--pyre-red)]';
+  if (spots <= 3) return 'text-[var(--pyre-gold)]';
+  return 'text-[var(--pyre-creme)] opacity-70';
+}
+
+function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | undefined): string | null {
+  if (spotsRemaining === undefined) return null;
+  if (spotsRemaining === 0) return 'Waitlist';
+  if (totalSpots !== undefined) {
+    return `${spotsRemaining}/${totalSpots} open`;
+  }
+  return `${spotsRemaining} open`;
+}
+
 function EventCardContent({
   event,
   styles,
@@ -68,6 +84,8 @@ function EventCardContent({
   event: EventItem;
   styles: (typeof variantStyles)[CarouselVariant];
 }) {
+  const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
+
   return (
     <article
       className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}
@@ -112,13 +130,26 @@ function EventCardContent({
             </svg>
             <span>{event.location}</span>
           </div>
+          {spots && (
+            <div className={`flex items-center gap-2 ${spotsColor(event.spotsRemaining)}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              <span>{spots}</span>
+            </div>
+          )}
         </div>
 
         {event.cta && (
           <span
             className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 group-hover:border-current group-hover:bg-current/5"
           >
-            {event.cta.label}
+            {event.spotsRemaining === 0 ? 'Join Waitlist' : event.cta.label}
           </span>
         )}
       </div>
