@@ -7,7 +7,7 @@ export const prerender = false;
 
 const log = createWebhookLogger('Momence Backfill');
 
-const DEFAULT_LIMIT = 50;
+const DEFAULT_LIMIT = 25;
 
 async function syncMember(
   member: MomenceMemberData
