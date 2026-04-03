@@ -97,7 +97,7 @@ export async function verifyMomenceWebhook(request: Request): Promise<MomenceWeb
 
 let cachedToken: { accessToken: string; refreshToken: string; expiresAt: number } | null = null;
 
-async function getHostAccessToken(): Promise<string> {
+export async function getHostAccessToken(): Promise<string> {
   // Return cached token if still valid (with 60s buffer)
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.accessToken;
@@ -177,15 +177,32 @@ async function exchangeToken(params: Record<string, string>): Promise<string> {
   return accessToken;
 }
 
-// --- Member lookup ---
+// --- Member data ---
 
-export async function fetchMomenceMember(memberId: string): Promise<{
+export interface MomenceMemberData {
   email: string;
   firstName: string;
   lastName: string;
   phone: string;
   birthday: string;
-}> {
+}
+
+function mapMemberData(data: Record<string, unknown>): MomenceMemberData {
+  const customerFields = data.customerFields as { type: string; value: string }[] | undefined;
+  const birthdayField = customerFields?.find((f) => f.type === 'date-of-birth');
+
+  return {
+    email: data.email as string,
+    firstName: data.firstName as string,
+    lastName: data.lastName as string,
+    phone: (data.phoneNumber as string) ?? '',
+    birthday: birthdayField?.value ?? '',
+  };
+}
+
+// --- Member lookup ---
+
+export async function fetchMomenceMember(memberId: string): Promise<MomenceMemberData> {
   const url = `${MOMENCE_API_V2}/host/members/${memberId}`;
 
   log.info(`Fetching member ${memberId} from Momence API`, { url });
@@ -216,16 +233,58 @@ export async function fetchMomenceMember(memberId: string): Promise<{
     customerFieldCount: data.customerFields?.length ?? 0,
   });
 
-  // Birthday is stored in customerFields as a "date-of-birth" type field
-  const birthdayField = data.customerFields?.find(
-    (f: { type: string }) => f.type === 'date-of-birth'
-  );
+  return mapMemberData(data);
+}
+
+// --- Member list (for backfill) ---
+
+export interface FetchMomenceMembersResult {
+  members: MomenceMemberData[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function fetchMomenceMembers(
+  page: number,
+  pageSize: number
+): Promise<FetchMomenceMembersResult> {
+  const accessToken = await getHostAccessToken();
+
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+    sortBy: 'lastSeenAt',
+    sortOrder: 'DESC',
+  });
+
+  const url = `${MOMENCE_API_V2}/host/members?${params}`;
+  log.info(`Fetching members page ${page} (pageSize=${pageSize})`, { url });
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    log.error(`Momence members list error: status=${response.status} body=${responseText}`);
+    throw new Error(`Momence API returned ${response.status} for members list`);
+  }
+
+  const data = JSON.parse(responseText);
+
+  const members = (data.payload as Record<string, unknown>[]).map(mapMemberData);
+
+  log.info(`Fetched ${members.length} members (total: ${data.totalCount})`);
 
   return {
-    email: data.email,
-    firstName: data.firstName,
-    lastName: data.lastName,
-    phone: data.phoneNumber ?? '',
-    birthday: birthdayField?.value ?? '',
+    members,
+    totalCount: data.totalCount,
+    page: data.page,
+    pageSize: data.pageSize,
   };
 }
