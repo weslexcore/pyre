@@ -93,9 +93,16 @@ export async function verifyMomenceWebhook(request: Request): Promise<MomenceWeb
   };
 }
 
-// --- Member lookup ---
+// --- Host access token via client credentials ---
 
-function getHostBasicAuth(): string {
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function getHostAccessToken(): Promise<string> {
+  // Return cached token if still valid (with 60s buffer)
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
+    return cachedToken.token;
+  }
+
   const clientId = import.meta.env.MOMENCE_OAUTH_CLIENT_ID;
   const clientSecret = import.meta.env.MOMENCE_OAUTH_CLIENT_SECRET;
 
@@ -105,8 +112,39 @@ function getHostBasicAuth(): string {
     );
   }
 
-  return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+  log.info('Fetching host access token via client credentials');
+
+  const response = await fetch(`${MOMENCE_API_V2}/auth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    log.error(`Token exchange failed: status=${response.status} body=${body}`);
+    throw new Error(`Momence token exchange failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const accessToken = data.access_token || data.accessToken;
+  const expiresIn = data.expires_in || data.expiresIn || 3600;
+
+  cachedToken = {
+    token: accessToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+  };
+
+  log.info('Host access token obtained successfully');
+
+  return accessToken;
 }
+
+// --- Member lookup ---
 
 export async function fetchMomenceMember(memberId: string): Promise<{
   email: string;
@@ -119,9 +157,11 @@ export async function fetchMomenceMember(memberId: string): Promise<{
 
   log.info(`Fetching member ${memberId} from Momence API`, { url });
 
+  const accessToken = await getHostAccessToken();
+
   const response = await fetch(url, {
     headers: {
-      Authorization: getHostBasicAuth(),
+      Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
     },
   });
