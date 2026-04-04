@@ -222,6 +222,8 @@ export function WebhookDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [offset, setOffset] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const limit = 50;
@@ -307,7 +309,10 @@ export function WebhookDashboard() {
 
   const lowerSearch = search.toLowerCase();
   const stringify = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v ?? ''));
+  const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : 0;
+  const toMs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
   const filtered = data?.records.filter((r) => {
+    if (r.timestamp < fromMs || r.timestamp > toMs) return false;
     if (!lowerSearch) return true;
     return (
       stringify(r.eventType).toLowerCase().includes(lowerSearch) ||
@@ -356,13 +361,42 @@ export function WebhookDashboard() {
         </div>
       </div>
 
-      <input
-        type="text"
-        placeholder="Filter by event, source, email, status..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full mt-4 mb-4 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30"
-      />
+      <div className="flex flex-col sm:flex-row gap-2 mt-4 mb-4">
+        <input
+          type="text"
+          placeholder="Filter by event, source, email, status..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30"
+        />
+        <div className="flex gap-2 items-center">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-2 py-2 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [color-scheme:dark]"
+          />
+          <span className="text-white/30 text-xs">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-2 py-2 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [color-scheme:dark]"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+              }}
+              className="text-xs text-white/40 hover:text-white/60"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       {error && error !== 'forbidden' && (
         <div className="mb-4 p-3 bg-red-900/20 border border-red-900/40 rounded text-sm text-[var(--pyre-red)]">
