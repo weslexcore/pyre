@@ -15,7 +15,6 @@ interface WebhookExecution {
   id: string;
   timestamp: number;
   eventType: string;
-  requestId: string;
   source: string;
   status: 'success' | 'error';
   durationMs: number;
@@ -163,10 +162,6 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
     <div className="px-4 py-3 bg-[var(--pyre-black)] border-t border-white/5 text-sm space-y-3">
       <div className="grid grid-cols-2 gap-4 max-w-lg">
         <div>
-          <span className="text-white/40">Request ID</span>
-          <p className="font-mono text-xs text-white/70 break-all">{record.requestId}</p>
-        </div>
-        <div>
           <span className="text-white/40">Duration</span>
           <p className="text-white/70">{record.durationMs}ms</p>
         </div>
@@ -226,6 +221,7 @@ export function WebhookDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const limit = 50;
@@ -309,12 +305,28 @@ export function WebhookDashboard() {
     );
   }
 
+  const lowerSearch = search.toLowerCase();
+  const stringify = (v: unknown): string =>
+    typeof v === 'string' ? v : JSON.stringify(v ?? '');
+  const filtered = data?.records.filter((r) => {
+    if (!lowerSearch) return true;
+    return (
+      stringify(r.eventType).toLowerCase().includes(lowerSearch) ||
+      stringify(r.source).toLowerCase().includes(lowerSearch) ||
+      stringify(r.payloadSummary).toLowerCase().includes(lowerSearch) ||
+      stringify(r.errorMessage).toLowerCase().includes(lowerSearch) ||
+      stringify(r.fullPayload).toLowerCase().includes(lowerSearch) ||
+      stringify(r.traceSteps).toLowerCase().includes(lowerSearch) ||
+      String(r.httpStatus).includes(lowerSearch)
+    );
+  });
+
   const totalPages = data ? Math.ceil(data.total / limit) : 0;
   const currentPage = Math.floor(offset / limit) + 1;
 
   return (
     <div className="max-w-6xl mx-auto px-4">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <h1 className="font-primary-semibold text-2xl text-[var(--pyre-creme)]">
           Webhook Executions
         </h1>
@@ -339,6 +351,14 @@ export function WebhookDashboard() {
         </div>
       </div>
 
+      <input
+        type="text"
+        placeholder="Filter by event, source, email, status..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full mb-4 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30"
+      />
+
       {error && error !== 'forbidden' && (
         <div className="mb-4 p-3 bg-red-900/20 border border-red-900/40 rounded text-sm text-[var(--pyre-red)]">
           {error}
@@ -349,7 +369,11 @@ export function WebhookDashboard() {
         <div className="text-center py-16 text-white/40">No webhook executions recorded yet.</div>
       )}
 
-      {data && data.records.length > 0 && (
+      {filtered && filtered.length === 0 && data && data.records.length > 0 && (
+        <div className="text-center py-8 text-white/40">No results matching "{search}"</div>
+      )}
+
+      {filtered && filtered.length > 0 && (
         <>
           <div className="overflow-x-auto rounded-lg border border-white/10">
             <table className="w-full text-sm">
@@ -363,7 +387,7 @@ export function WebhookDashboard() {
                 </tr>
               </thead>
               <tbody className="text-[var(--pyre-creme)]">
-                {data.records.map((record) => (
+                {filtered.map((record) => (
                   <tr key={record.id} className="group">
                     <td colSpan={5} className="p-0">
                       <button

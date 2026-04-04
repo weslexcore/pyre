@@ -16,8 +16,6 @@ export function instrumentWebhook(source: string, handler: TracedAPIRoute): APIR
     let eventType = 'unknown';
     let payloadSummary = '{}';
     let fullPayload = '{}';
-    const requestId = context.request.headers.get('x-webhook-reqeuest-id') ?? 'unknown';
-
     // Capture relevant request headers
     const headerKeys = [
       'x-webhook-secret',
@@ -90,7 +88,6 @@ export function instrumentWebhook(source: string, handler: TracedAPIRoute): APIR
       id,
       timestamp: start,
       eventType,
-      requestId,
       source,
       status,
       durationMs: Date.now() - start,

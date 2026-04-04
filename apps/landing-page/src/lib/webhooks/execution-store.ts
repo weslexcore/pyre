@@ -8,7 +8,6 @@ export interface WebhookExecution {
   id: string;
   timestamp: number;
   eventType: string;
-  requestId: string;
   source: string;
   status: 'success' | 'error';
   durationMs: number;

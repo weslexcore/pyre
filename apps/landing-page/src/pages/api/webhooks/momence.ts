@@ -99,7 +99,7 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
     const { event, payload, requestId, timestamp } = await tracer.span(
       'Verify webhook',
       () => verifyMomenceWebhook(request),
-      { requestId: request.headers.get('x-webhook-reqeuest-id') ?? 'unknown' }
+      {}
     );
 
     log.info(`Received event: ${event}`, { requestId, timestamp, payload });
