@@ -152,14 +152,13 @@ const hasForm = !!promoConfig.form;
       data-popup-tab
       type="button"
       aria-label={`Reopen offer: ${promoConfig.promoText}`}
-      class="fixed right-1 sm:right-0 top-1/2 -translate-y-1/2 z-50 hidden cursor-pointer rounded-md sm:rounded-l-md sm:rounded-r-none bg-[oklch(0.30_0.02_85)] border border-[var(--pyre-gold)] sm:border-r-0 px-4 py-4 sm:px-3 sm:py-3 shadow-[-4px_0_12px_rgba(219,177,85,0.15)] transition-all duration-300 hover:bg-[var(--pyre-red)] hover:border-[var(--pyre-gold)] opacity-0"
+      class="fixed right-0 top-1/2 -translate-y-1/2 z-50 hidden cursor-pointer flex flex-col items-center gap-0.5 rounded-l-full bg-[oklch(0.30_0.02_85)] border border-r-0 border-[var(--pyre-gold)] px-1.5 py-3 shadow-[-4px_0_12px_rgba(219,177,85,0.15)] transition-all duration-300 hover:bg-[var(--pyre-red)] hover:border-[var(--pyre-gold)] opacity-0"
     >
-      <span
-        class="block font-mono-bold text-sm sm:text-xs uppercase tracking-widest text-[var(--pyre-gold)] whitespace-nowrap"
-        style="writing-mode: vertical-rl; transform: rotate(180deg);"
-      >
-        {promoConfig.promoText}
-      </span>
+      {promoConfig.promoText.toUpperCase().split('').map(char =>
+        char === ' '
+          ? <span class="h-1.5" aria-hidden="true"></span>
+          : <span class="font-mono-bold text-xs leading-none text-[var(--pyre-gold)]">{char}</span>
+      )}
     </button>
   )}
 </div>
