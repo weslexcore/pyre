@@ -11,9 +11,10 @@ interface Props {
   isHomePage?: boolean;
   transparentNav?: boolean;
   darkLogoText?: boolean;
+  minimal?: boolean;
 }
 
-const { isHomePage = false, transparentNav = false, darkLogoText = false } = Astro.props;
+const { isHomePage = false, transparentNav = false, darkLogoText = false, minimal = false } = Astro.props;
 
 const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
 ---
@@ -48,6 +49,7 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
       )}
     </a>
 
+    {!minimal && (
     <!-- Desktop navigation links -->
     <nav class="hidden md:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
       <!-- Desktop gradient overlay - always visible on desktop nav -->
@@ -62,7 +64,9 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
         </a>
       ))}
     </nav>
+    )}
 
+    {!minimal && (
     <!-- Desktop CTAs -->
     <div class="hidden md:flex items-center gap-3">
       <!-- <AuthButtons
@@ -83,7 +87,9 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
         {navbar.actions?.secondary?.label}
       </Button>
     </div>
+    )}
 
+    {!minimal && (
     <!-- Mobile CTA + menu button -->
     <div class="flex md:hidden items-center gap-2">
       <!-- <Button
@@ -123,8 +129,10 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
       </svg>
     </button>
     </div>
+    )}
   </div>
 
+  {!minimal && (
   <!-- Mobile menu -->
   <nav
     id="mobile-menu"
@@ -181,6 +189,7 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
       </div>
     </div>
   </nav>
+  )}
 </header>
 
 <script>
