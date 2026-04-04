@@ -25,6 +25,17 @@ const ADDRESS_EVENTS: MomenceEventType[] = [
   'member-address-updated',
   'member-address-deleted',
 ];
+const BOOKING_EVENTS: MomenceEventType[] = ['session-booked'];
+
+async function handleBookingEvent(
+  _event: MomenceEventType,
+  payload: unknown,
+  tracer: WebhookTracer
+): Promise<void> {
+  await tracer.span('Log booking event', async () => {
+    log.info('Session booked', { payload });
+  });
+}
 
 async function handleMemberEvent(
   event: MomenceEventType,
@@ -108,6 +119,8 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleMemberEvent(event as MomenceEventType, payload as MomenceMemberPayload, tracer);
     } else if (ADDRESS_EVENTS.includes(event as MomenceEventType)) {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
+    } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
+      await handleBookingEvent(event as MomenceEventType, payload, tracer);
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }
