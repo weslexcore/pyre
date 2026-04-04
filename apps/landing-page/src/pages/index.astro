@@ -5,6 +5,8 @@ import AboutSection from '../components/AboutSection.astro';
 import ExperiencesSection from '../components/ExperiencesSection.astro';
 import EventsSection from '../components/EventsSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
+import GiftCardSection from '../components/GiftCardSection.astro';
+import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
@@ -63,22 +65,25 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
           <EventsSection />
         </div>
-        <!-- <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <GradientOverlay variant="card" />
           <div class="relative z-10">
             <TestimonialsSection />
           </div>
-        </div> -->
+        </div>
         <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8 mobile-card mobile-card--deferred">
           <SessionSection />
         </div>
-        <!-- <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
+        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
         <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred">
           <MembershipSection />
-        </div> -->
+        </div>
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
           <GroupBookingSection />
+        </div>
+        <div id="gift-cards" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+          <GiftCardSection />
         </div>
         <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <FAQAccordion />
@@ -116,22 +121,25 @@ import { heroGrainGradient } from '../lib/shader-configs';
           <SectionCard class="card-cta-animated mb-8" data-section="events">
             <EventsSection variant="compact" />
           </SectionCard>
-          <!-- <SectionCard class="my-8" data-section="testimonials">
+          <SectionCard class="my-8" data-section="testimonials">
             <GradientOverlay variant="card" />
             <div class="relative z-10">
               <TestimonialsSection />
             </div>
-          </SectionCard> -->
+          </SectionCard>
           <SectionCard class="lg:rounded-t-lg lg:rounded-b-none" data-section="sessions">
             <SessionSection />
           </SectionCard>
-          <!-- <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
+          <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
           <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
           <SectionCard class="lg:rounded-t-none lg:rounded-b-lg" data-section="membership">
             <MembershipSection />
-          </SectionCard> -->
+          </SectionCard>
           <SectionCard class="card-cta-animated my-8" data-section="group-booking">
             <GroupBookingSection />
+          </SectionCard>
+          <SectionCard class="my-8" data-section="gift-cards">
+            <GiftCardSection />
           </SectionCard>
           <SectionCard class="my-8" data-section="faq">
             <FAQAccordion />

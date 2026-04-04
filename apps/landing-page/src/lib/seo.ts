@@ -12,9 +12,9 @@ export const TWITTER_HANDLE = '@pyre_sauna';
 
 // Organization structured data (reused across JSON-LD schemas)
 export const ORGANIZATION = {
-	'@type': 'Organization' as const,
-	name: 'Pyre Sauna + Cold Plunge',
-	url: 'https://pyresauna.com',
-	email: 'hi@pyresauna.com',
-	sameAs: ['https://instagram.com/pyre_sauna'],
+  '@type': 'Organization' as const,
+  name: 'Pyre Sauna + Cold Plunge',
+  url: 'https://pyresauna.com',
+  email: 'hi@pyresauna.com',
+  sameAs: ['https://instagram.com/pyre_sauna'],
 };

@@ -5,6 +5,7 @@ export interface SessionItem {
   name: string;
   price: number;
   description: string;
+  savings?: number;
   highlighted?: boolean;
   href?: string;
 }
@@ -18,47 +19,52 @@ export interface SessionsContent {
 }
 
 const sessions: SessionsContent = {
-  title: 'Packs & Pricing',
-  // subtitle: 'Drop in anytime',
-  note: '2-Pack Intro is non-transferrable. Other packs can be shared with friends & family!',
+  title: 'Credits',
+  subtitle: 'Can be used for any 2 hour open hours, guided class or select special events.',
+  note: 'Credits can be shared with friends & family! 2-Pack Intro is non-transferrable. ',
   items: [
     {
+      id: 'intro',
+      name: 'Buy 1, Get 1 Free - 2 Credits',
+      price: 39,
+      description:
+        'New here? Start with two sessions and see how it feels. Available once per customer + non-transferrable.',
+      savings: 39,
+      highlighted: true,
+      href: 'https://momence.com/m/630918',
+    },
+    {
       id: 'single',
-      name: 'Single Session',
+      name: 'Single - 1 Credit',
       price: 39,
       description: 'Drop-in visit',
       href: '/book',
     },
     {
-      id: 'intro',
-      name: 'First Visit - 2 Pack',
-      price: 49,
-      description: 'New here? Start with two sessions and see how it feels.',
-      highlighted: true,
-      href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
-    },
-    {
       id: 'pack-2',
-      name: 'Duo - 2 Pack',
-      price: 49,
-      description: 'Perfect for a date or connecting with a friend.',
+      name: 'Duo - 2 Credits',
+      price: 72,
+      description: 'Come once, then come back - or bring someone along.',
+      savings: 6,
 
-      href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
+      href: 'https://momence.com/m/702636',
     },
     {
       id: 'pack-4',
-      name: 'Circle - 4 Pack',
+      name: 'Circle - 4 Credits',
       price: 129,
       description: 'Build momentum - come back often or bring your circle.',
-      href: 'https://momence.com/Pyre/membership/4-Pack/630915',
+      savings: 27,
+      href: 'https://momence.com/m/630915',
     },
     {
       id: 'pack-8',
-      name: 'Ritual - 8 Pack',
+      name: 'Ritual - 8 Credits',
       price: 229,
+      savings: 83,
       highlighted: true,
       description: 'Our best value - designed for consistency, connection, and shared experiences.',
-      href: 'https://momence.com/Pyre/membership/8-Pack/630916',
+      href: 'https://momence.com/m/630916',
     },
   ],
 };

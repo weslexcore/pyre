@@ -8,7 +8,7 @@ const groupBooking: GroupBookingContent = {
   ],
   capacity: {
     max: 25,
-    label: 'Up to 25 guests',
+    label: 'Up to 30 guests',
   },
   occasions: [
     { label: 'Birthdays' },
@@ -22,6 +22,7 @@ const groupBooking: GroupBookingContent = {
   //   'Guided or self-directed options',
   //   'Catering coordination available',
   // ],
+  email: 'groups@pyresauna.com',
   cta: {
     label: 'HIT US UP',
     href: 'mailto:groups@pyresauna.com?subject=Group Booking Inquiry',

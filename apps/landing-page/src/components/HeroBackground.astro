@@ -4,7 +4,7 @@ import HeroCarousel from './HeroCarousel.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
-<!-- Fixed background layer for desktop parallax effect -->
+<!-- DESKTOP HERO: Fixed background layer for desktop parallax effect -->
 <div class="fixed inset-0 z-0 bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
   <div id="nav-sentinel" class="absolute top-0 left-0 w-full h-1" aria-hidden="true"></div>
 
@@ -20,12 +20,9 @@ import InstagramIcon from './icons/InstagramIcon.astro';
 
       <!-- Phone / Tagline -->
       <div>
-        <a
-          href={`tel:${location.phone.replace(/[^0-9+]/g, '')}`}
-          class="text-3xl hover:underline underline-offset-4"
-        >
+        <p class="text-3xl">
           SAUNA + COLD PLUNGE
-        </a>
+        </p>
       </div>
 
       <!-- Contact Info -->
@@ -49,11 +46,16 @@ import InstagramIcon from './icons/InstagramIcon.astro';
             {location.instagram}
           </a>
         </div>
+
+        <!-- Mailing List -->
+        <div>
+          <a href="#signup" class="text-lg hover:underline underline-offset-4 text-[var(--pyre-red)]" >Join Our Mailing List</a>
+        </div>
       </div>
 
       <!-- Hours -->
       <div>
-        <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Hours</h2>
+        <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Soft Opening Hours</h2>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-base">
           {location.hours.map((h) => (
             <div class="flex justify-between">
@@ -62,6 +64,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
             </div>
           ))}
         </div>
+        <p class="text-xs opacity-60 mt-2">Last entry is 1 hour before closing</p>
       </div>
     </div>
 

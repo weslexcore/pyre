@@ -10,8 +10,7 @@ const faqs: FAQContent = {
     },
     {
       question: 'How hot does the sauna get?',
-      answer:
-        'Our traditional Finnish saunas reach temperatures between 170-195°F.',
+      answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
     },
     {
       question: 'How cold is the cold plunge?',
@@ -21,7 +20,7 @@ const faqs: FAQContent = {
     {
       question: 'Is contrast therapy safe?',
       answer:
-        'Contrast therapy is safe for healthy adults. However, if you have cardiovascular conditions, high blood pressure, or are pregnant, please consult your doctor before participating. Stay hydrated and listening to your body.',
+        'Contrast therapy is safe for healthy adults. However, if you have cardiovascular conditions, high blood pressure, or are pregnant, please consult your doctor before participating. Stay hydrated and listen to your body.',
     },
     {
       question: 'How long should I stay in the sauna and cold plunge?',
@@ -31,7 +30,7 @@ const faqs: FAQContent = {
     {
       question: 'Do I need to book in advance?',
       answer:
-        'Yes, we recommend booking in advance to guarantee your preferred time slot. Walk-ins are welcome based on availability, but booking ensures you get your desired session time.',
+        'We recommend booking in advance to guarantee your preferred time slot. Walk-ins are welcome based on availability, but booking ensures you get your desired session time.',
     },
     {
       question: 'What are the benefits of contrast therapy?',

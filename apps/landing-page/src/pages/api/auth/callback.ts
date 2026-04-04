@@ -76,7 +76,10 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     return redirect(redirectUrl.toString(), 302);
   } catch (err) {
     console.error('[OAuth Callback] Token exchange failed:', err);
-    console.error('[OAuth Callback] Error details:', err instanceof Error ? err.message : String(err));
+    console.error(
+      '[OAuth Callback] Error details:',
+      err instanceof Error ? err.message : String(err)
+    );
     if (err instanceof Error && err.stack) {
       console.error('[OAuth Callback] Stack:', err.stack);
     }

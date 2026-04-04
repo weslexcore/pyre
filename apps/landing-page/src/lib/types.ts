@@ -374,6 +374,7 @@ export interface MembershipTier {
   price: number;
   period: string;
   description: string;
+  savings?: number;
   features: MembershipFeature[];
   cta: ActionRef;
   popular?: boolean;
@@ -406,6 +407,7 @@ export interface EventItem {
   isoDate?: string; // ISO 8601 date for client-side filtering
   spotsRemaining?: number; // Available spots from Momence API
   totalSpots?: number; // Total capacity from Momence API
+  isPrivate?: boolean; // Private events hide booking CTAs
 }
 
 export interface EventsContent {
@@ -455,7 +457,6 @@ export interface BenefitsContent {
 export interface TestimonialItem {
   id: string;
   name: string;
-  role: string;
   quote: string;
   image?: ImageRef;
   highlight?: boolean;
@@ -488,8 +489,20 @@ export interface GroupBookingContent {
   };
   occasions?: GroupBookingOccasion[];
   features?: string[];
+  email?: string;
   cta: ActionRef;
   secondaryCta?: ActionRef;
+}
+
+// ------------------------------------------------------------
+// Gift Card section types
+// ------------------------------------------------------------
+
+export interface GiftCardContent {
+  title: string;
+  subtitle?: string;
+  description: string[];
+  cta: ActionRef;
 }
 
 // ------------------------------------------------------------

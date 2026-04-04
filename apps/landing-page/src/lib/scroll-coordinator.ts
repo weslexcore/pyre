@@ -7,8 +7,8 @@
  */
 
 export interface ScrollData {
-	scrollY: number;
-	innerHeight: number;
+  scrollY: number;
+  innerHeight: number;
 }
 
 type ScrollCallback = (data: ScrollData) => void;
@@ -17,21 +17,21 @@ const subscribers = new Set<ScrollCallback>();
 let ticking = false;
 
 function onFrame() {
-	const data: ScrollData = {
-		scrollY: window.scrollY,
-		innerHeight: window.innerHeight,
-	};
-	for (const cb of subscribers) {
-		cb(data);
-	}
-	ticking = false;
+  const data: ScrollData = {
+    scrollY: window.scrollY,
+    innerHeight: window.innerHeight,
+  };
+  for (const cb of subscribers) {
+    cb(data);
+  }
+  ticking = false;
 }
 
 function handleScroll() {
-	if (!ticking) {
-		requestAnimationFrame(onFrame);
-		ticking = true;
-	}
+  if (!ticking) {
+    requestAnimationFrame(onFrame);
+    ticking = true;
+  }
 }
 
 /**
@@ -40,23 +40,23 @@ function handleScroll() {
  * removed when the last subscriber leaves.
  */
 export function onScroll(callback: ScrollCallback): () => void {
-	subscribers.add(callback);
-	if (subscribers.size === 1) {
-		window.addEventListener("scroll", handleScroll, { passive: true });
-	}
-	return () => {
-		subscribers.delete(callback);
-		if (subscribers.size === 0) {
-			window.removeEventListener("scroll", handleScroll);
-			ticking = false;
-		}
-	};
+  subscribers.add(callback);
+  if (subscribers.size === 1) {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+  }
+  return () => {
+    subscribers.delete(callback);
+    if (subscribers.size === 0) {
+      window.removeEventListener('scroll', handleScroll);
+      ticking = false;
+    }
+  };
 }
 
 /** Read current scroll values without subscribing. */
 export function getScrollData(): ScrollData {
-	return {
-		scrollY: window.scrollY,
-		innerHeight: window.innerHeight,
-	};
+  return {
+    scrollY: window.scrollY,
+    innerHeight: window.innerHeight,
+  };
 }

@@ -1,16 +1,15 @@
 ---
 import location from '../lib/location';
-import HeroCarousel from './HeroCarousel.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
-<!-- Mobile: Fixed text layer (z-0) - stays in place while scrolling -->
+<!-- MOBILE HERO: Fixed text layer (z-0) - stays in place while scrolling -->
 <!-- Extended above viewport to prevent white showing during overscroll bounce -->
 <div class="fixed inset-x-0 -top-[20dvh] z-0 min-h-[100dvh] pt-[20dvh] bg-[var(--pyre-black)] text-[var(--pyre-creme)] lg:hidden">
   <div id="nav-sentinel" class="absolute top-[20dvh] left-0 w-full h-1 lg:hidden" aria-hidden="true"></div>
   <div class="flex flex-col justify-between p-6 md:p-10 min-h-[80dvh]">
     <!-- Location Name -->
-    <div class="pt-16">
+    <div style="padding-top: calc(4rem + var(--banner-height, 0px));">
       <h1 class="font-logo text-[clamp(4rem,20vw,8rem)] tracking-[-0.03em] leading-[0.85] uppercase text-[var(--pyre-creme)]">
         {location.name}
       </h1>
@@ -30,10 +29,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
       {location.tagline}
     </h3>
     </div>
-    
+
 
     <!-- Contact Info -->
-    <div class="space-y-6 my-8">
+    <div class="space-y-4 my-6">
       <div>
         <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
         <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-base md:text-lg hover:underline underline-offset-4">{location.address}</a>
@@ -50,11 +49,14 @@ import InstagramIcon from './icons/InstagramIcon.astro';
           {location.instagram}
         </a>
       </div>
+      <div>
+        <a href="#signup" class="text-lg hover:underline underline-offset-4 text-[var(--pyre-red)]">Join Our Mailing List</a>
+      </div>
     </div>
 
     <!-- Hours -->
-    <div class="pb-6">
-      <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Hours</h2>
+    <div class="pb-4">
+      <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Soft Opening Hours</h2>
       <div class="grid grid-rows-3 grid-flow-col gap-x-8 gap-y-1 text-sm md:text-base">
         {location.hours.map((h) => (
           <div class="flex justify-between gap-4">
@@ -63,71 +65,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
           </div>
         ))}
       </div>
+      <p class="text-xs opacity-60 mt-2">Last entry is 1 hour before closing</p>
     </div>
   </div>
 </div>
 
 <!-- Mobile: Spacer for fixed text positioning -->
 <div class="h-[80dvh] lg:hidden" aria-hidden="true"></div>
-
-<!-- Desktop: Original Hero layout -->
-<section class="relative min-h-[100dvh] bg-[var(--pyre-black)] text-[var(--pyre-creme)] hidden lg:block">
-  <div id="nav-sentinel" class="absolute top-0 left-0 w-full h-1" aria-hidden="true"></div>
-  <div class="min-h-[100dvh] grid grid-cols-[40%_60%]">
-    <!-- Left: Location Info -->
-    <div class="flex flex-col justify-between p-12">
-      <div class="pt-20">
-        <h1 class="font-logo text-[clamp(4rem,20vw,9rem)] tracking-[-0.03em] leading-[0.85] uppercase text-[var(--pyre-creme)]">
-          {location.name}
-        </h1>
-        <!-- <p class="text-base md:text-lg text-[var(--pyre-gold)]">{location.neighborhood}</p> -->
-      </div>
-
-      <div>
-        <h2 class="text-3xl">
-          SAUNA + COLD PLUNGE
-        </h2>
-        <h3
-        class="text-2xl"
-      >
-        {location.tagline}
-      </h3>
-
-      <div class="space-y-6">
-        <div>
-          <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Address</h2>
-          <a href={location.mapsUrl} target="_blank" rel="noopener noreferrer" class="text-lg hover:underline underline-offset-4">{location.address}</a>
-        </div>
-        <div>
-          <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-1">Instagram</h2>
-          <a
-            href={location.instagramUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-lg hover:underline underline-offset-4"
-          >
-            <InstagramIcon class="size-[1.1em] shrink-0" />
-            {location.instagram}
-          </a>
-        </div>
-      </div>
-
-      <div>
-        <h2 class="font-mono-bold text-xs uppercase tracking-wider opacity-60 mb-3">Hours</h2>
-        <div class="columns-2 gap-x-8 text-base">
-          {location.hours.map((h) => (
-            <div class="flex justify-between gap-4 mb-1">
-              <span class="font-mono-bold opacity-80">{h.day}</span>
-              <span>{h.open} - {h.close}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-
-    <!-- Right: Image Carousel -->
-    <div class="relative h-auto">
-      <HeroCarousel />
-    </div>
-  </div>
-</section>

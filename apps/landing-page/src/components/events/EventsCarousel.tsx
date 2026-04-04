@@ -45,6 +45,7 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
     <div
       className={`flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse`}
     >
+      <div className="w-full h-36 bg-current/10" />
       <div className="p-5">
         <div className="mb-4">
           <div className="h-6 w-24 bg-current/10 rounded" />
@@ -61,18 +62,46 @@ function EventCardSkeleton({ variant = 'default' }: { variant?: CarouselVariant 
   );
 }
 
-function EventCard({
+function spotsColor(spots: number | undefined): string {
+  if (spots === undefined) return 'text-[var(--pyre-creme)] opacity-70';
+  if (spots === 0) return 'text-[var(--pyre-red)]';
+  if (spots <= 3) return 'text-[var(--pyre-gold)]';
+  return 'text-[var(--pyre-creme)] opacity-70';
+}
+
+function spotsLabel(
+  spotsRemaining: number | undefined,
+  totalSpots: number | undefined
+): string | null {
+  if (spotsRemaining === undefined) return null;
+  if (spotsRemaining === 0) return 'Waitlist';
+  if (totalSpots !== undefined) {
+    return `${spotsRemaining}/${totalSpots} open`;
+  }
+  return `${spotsRemaining} open`;
+}
+
+function EventCardContent({
   event,
-  variant = 'default',
+  styles,
 }: {
   event: EventItem;
-  variant?: CarouselVariant;
+  styles: (typeof variantStyles)[CarouselVariant];
 }) {
-  const styles = variantStyles[variant];
+  const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
+
   return (
     <article
       className={`event-card flex-shrink-0 ${styles.card} snap-start border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg`}
     >
+      {event.image && (
+        <img
+          src={event.image.src}
+          alt={event.image.alt}
+          className="w-full h-36 object-cover"
+          loading="lazy"
+        />
+      )}
       <div className="p-5">
         <div className="mb-4">
           <span className="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">
@@ -113,20 +142,53 @@ function EventCard({
             </svg>
             <span>{event.location}</span>
           </div>
+          {spots && (
+            <div className={`flex items-center gap-2 ${spotsColor(event.spotsRemaining)}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              <span>{spots}</span>
+            </div>
+          )}
         </div>
 
         {event.cta && (
-          <a
-            href={event.cta.href}
-            aria-label={event.cta.ariaLabel}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
-          >
-            {event.cta.label}
-          </a>
+          <span className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 group-hover:border-current group-hover:bg-current/5">
+            {event.spotsRemaining === 0 ? 'Join Waitlist' : event.cta.label}
+          </span>
         )}
       </div>
     </article>
   );
+}
+
+function EventCard({
+  event,
+  variant = 'default',
+}: {
+  event: EventItem;
+  variant?: CarouselVariant;
+}) {
+  const styles = variantStyles[variant];
+
+  if (event.cta?.href) {
+    return (
+      <a
+        href={`/events?event=${encodeURIComponent(event.id)}`}
+        aria-label={event.cta.ariaLabel}
+        className="group cursor-pointer"
+      >
+        <EventCardContent event={event} styles={styles} />
+      </a>
+    );
+  }
+
+  return <EventCardContent event={event} styles={styles} />;
 }
 
 function EmptyEventsState({
@@ -142,35 +204,35 @@ function EmptyEventsState({
       <div
         className={`flex flex-col items-center justify-center text-center py-12 px-6 ${styles.card} border border-current/20 rounded-lg`}
       >
-      {/* Calendar icon */}
-      <svg
-        className="w-12 h-12 mb-4 opacity-40"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
-
-      <p className="font-mono-bold text-lg uppercase tracking-wide mb-6 opacity-70">
-        {config.message}
-      </p>
-
-      {config.cta && (
-        <a
-          href={config.cta.href}
-          aria-label={config.cta.ariaLabel}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-current/60 px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+        {/* Calendar icon */}
+        <svg
+          className="w-12 h-12 mb-4 opacity-40"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
         >
-          {config.cta.label}
-        </a>
-      )}
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+
+        <p className="font-mono-bold text-lg uppercase tracking-wide mb-6 opacity-70">
+          {config.message}
+        </p>
+
+        {config.cta && (
+          <a
+            href={config.cta.href}
+            aria-label={config.cta.ariaLabel}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-current/60 px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+          >
+            {config.cta.label}
+          </a>
+        )}
       </div>
     </div>
   );
@@ -192,9 +254,7 @@ export default function EventsCarousel({
 
   // Dispatch custom event when empty state changes so Astro can hide the default CTA
   useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent('events-empty-state', { detail: { isEmpty } })
-    );
+    window.dispatchEvent(new CustomEvent('events-empty-state', { detail: { isEmpty } }));
   }, [isEmpty]);
 
   const updateArrows = useCallback(() => {

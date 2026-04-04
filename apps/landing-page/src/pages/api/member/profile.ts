@@ -92,7 +92,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
     // If 404 or 405, the endpoint doesn't exist - fall back to localStorage
     if (updateResponse.status === 404 || updateResponse.status === 405) {
-      console.log('[Profile API] Momence API does not support profile updates, using localStorage fallback');
+      console.log(
+        '[Profile API] Momence API does not support profile updates, using localStorage fallback'
+      );
       const response: UpdateProfileResponse = {
         success: true,
         useLocalStorage: true,

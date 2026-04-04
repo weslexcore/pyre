@@ -1,7 +1,7 @@
 ---
 import bannerConfig from '../lib/banner';
 
-if (!bannerConfig.enabled) return;
+if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
 ---
 
 <div
@@ -15,22 +15,36 @@ if (!bannerConfig.enabled) return;
 >
   <div class="bg-[var(--pyre-gold)] text-[var(--pyre-black)]">
     <div class="flex items-center justify-center gap-x-3 px-4 py-2.5 text-sm font-mono-bold sm:px-6">
-      <p class="text-center leading-snug">
-        <span>{bannerConfig.text}</span>
-        {bannerConfig.link && (
-          <a
-            href={bannerConfig.link.href}
-            target={bannerConfig.link.external ? '_blank' : undefined}
-            rel={bannerConfig.link.external ? 'noopener noreferrer' : undefined}
-            class="ml-2 inline-flex items-center gap-1 underline underline-offset-4 decoration-[var(--pyre-black)]/40 hover:decoration-[var(--pyre-black)] transition-colors"
-          >
-            {bannerConfig.link.label}
-            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-            </svg>
-          </a>
-        )}
-      </p>
+      {bannerConfig.href ? (
+        <a href={bannerConfig.href} class="text-center leading-snug hover:underline underline-offset-4 transition-colors">
+          <span>{bannerConfig.text}</span>
+          {bannerConfig.link && (
+            <span class="ml-2 inline-flex items-center gap-1 underline underline-offset-4 decoration-[var(--pyre-black)]/40">
+              {bannerConfig.link.label}
+              <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+            </span>
+          )}
+        </a>
+      ) : (
+        <p class="text-center leading-snug">
+          <span>{bannerConfig.text}</span>
+          {bannerConfig.link && (
+            <a
+              href={bannerConfig.link.href}
+              target={bannerConfig.link.external ? '_blank' : undefined}
+              rel={bannerConfig.link.external ? 'noopener noreferrer' : undefined}
+              class="ml-2 inline-flex items-center gap-1 underline underline-offset-4 decoration-[var(--pyre-black)]/40 hover:decoration-[var(--pyre-black)] transition-colors"
+            >
+              {bannerConfig.link.label}
+              <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+            </a>
+          )}
+        </p>
+      )}
 
       <button
         data-banner-dismiss

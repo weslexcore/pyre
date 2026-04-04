@@ -80,8 +80,8 @@ const dividerVariant = getDividerVariant(post.slug);
     <!-- Meta info -->
     <div class="flex flex-wrap items-center gap-4 pt-4 font-mono text-sm text-[var(--pyre-creme)]/70">
       <span class="font-bold">{post.author}</span>
-      <!-- <span aria-hidden="true">•</span> -->
-      <!-- <time datetime={post.date.toISOString()}>{formattedDate}</time> -->
+      <span aria-hidden="true">•</span>
+      <time datetime={post.date.toISOString()}>{formattedDate}</time>
       <span aria-hidden="true">•</span>
       <span>{formatReadingTime(post.readingTime)}</span>
     </div>

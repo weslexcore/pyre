@@ -7,11 +7,19 @@ export interface PromoPopupConfig {
   headline: string;
   /** Supporting body text. */
   body: string;
-  /** Primary call-to-action button. */
-  cta: {
+  /** Primary call-to-action button (link mode). */
+  cta?: {
     label: string;
     href: string;
+    ariaLabel?: string;
   };
+  /** Inline email signup form (form mode). */
+  form?: {
+    submitLabel: string;
+    successMessage: string;
+  };
+  /** Short text shown on the floating tab when popup is dismissed (e.g. "Buy 1, Get 1"). */
+  promoText?: string;
   /** Optional dismiss link text. */
   dismiss?: {
     label: string;
@@ -40,13 +48,14 @@ export interface PromoPopupConfig {
 // };
 
 const promoPopup: PromoPopupConfig = {
-  id: 'intro-2-pack',
+  id: 'intro-offer-email',
   enabled: true,
-  headline: 'New Here? Try Two.',
-  body: 'Start with our Intro 2-Pack — two sessions to see how it feels.',
-  cta: {
-    label: 'Get Your Intro 2-Pack',
-    href: 'https://momence.com/Pyre/membership/2-Pack-Intro/630918',
+  headline: 'New Here? Buy 1, Get 1 Free',
+  body: 'Sign up for our mailing list to receive an exclusive intro offer.',
+  promoText: 'Buy 1, Get 1',
+  form: {
+    submitLabel: 'Get Intro Offer',
+    successMessage: "You're in! Check your email for details.",
   },
   dismiss: {
     label: 'No thanks',

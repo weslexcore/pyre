@@ -28,7 +28,6 @@ import {
 // Generate optimized image URLs for preloading
 const warmSaunaOptimized = await getImage({ src: warmSaunaImg, width: 800 });
 const plungingOptimized = await getImage({ src: plungingImg, width: 600 });
-// Removed SpeedInsights component usage; use inline script instead
 
 interface Props {
   title?: string;
@@ -47,7 +46,7 @@ interface Props {
 
 const {
   title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
-  description = 'A wellness sanctuary coming to Richmond, VA. Traditional saunas, cold plunge, hot pool, and guided classes for your health and wellness journey.',
+  description = 'A social wellness club in Richmond, VA. Traditional saunas, cold plunge, and guided classes for your health and wellness journey.',
   ogImage,
   ogType = 'website',
   article,
@@ -57,6 +56,7 @@ const {
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL ?? '/';
+const isAdminRoute = Astro.url.pathname.startsWith('/admin');
 const faviconSvgColored = faviconSvg.replace(/currentColor/g, '#d15232');
 const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvgColored)}`;
 
@@ -78,7 +78,10 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="theme-color" content="#23221c" />
+    <link rel="icon" type="image/png" sizes="32x32" href={`${base}favicon.png`} />
+    <link rel="icon" type="image/x-icon" href={`${base}favicon.ico`} />
     <link rel="icon" type="image/svg+xml" href={faviconHref} />
+    <link rel="apple-touch-icon" href={`${base}favicon.png`} />
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		
@@ -130,6 +133,24 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 			name: SITE_NAME,
 			url: Astro.site?.toString() ?? 'https://pyresauna.com',
 			publisher: ORGANIZATION,
+			potentialAction: {
+				'@type': 'SearchAction',
+				target: `${Astro.site?.toString() ?? 'https://pyresauna.com'}/blog?q={search_term_string}`,
+				'query-input': 'required name=search_term_string',
+			},
+		})} />
+
+		<!-- JSON-LD: SiteNavigationElement (all pages — influences sitelinks) -->
+		<script type="application/ld+json" set:html={JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'ItemList',
+			itemListElement: [
+				{ '@type': 'SiteNavigationElement', position: 1, name: 'Book a Session', url: new URL('/events', Astro.site ?? 'https://pyresauna.com').toString() },
+				{ '@type': 'SiteNavigationElement', position: 2, name: 'Blog', url: new URL('/blog', Astro.site ?? 'https://pyresauna.com').toString() },
+				{ '@type': 'SiteNavigationElement', position: 3, name: 'Membership', url: new URL('/#membership', Astro.site ?? 'https://pyresauna.com').toString() },
+				{ '@type': 'SiteNavigationElement', position: 4, name: 'FAQs', url: new URL('/#faqs', Astro.site ?? 'https://pyresauna.com').toString() },
+				{ '@type': 'SiteNavigationElement', position: 5, name: 'Health & Safety', url: new URL('/health-and-safety', Astro.site ?? 'https://pyresauna.com').toString() },
+			],
 		})} />
 
 		<!-- JSON-LD: Article schema (blog posts only) -->
@@ -250,11 +271,7 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 			</>
 		)}
 
-		<PostHog />
-		<script type="module">
-			import { injectSpeedInsights } from '@vercel/speed-insights';
-			injectSpeedInsights();
-		</script>
+		{import.meta.env.PROD && <PostHog />}
 		<script>
 			// Disable browser's automatic scroll restoration
 			if ('scrollRestoration' in history) {
@@ -343,12 +360,12 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 	</head>
     <body class="min-h-screen flex flex-col">
         <AnnouncementBanner />
-        <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} />
+        <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} minimal={isAdminRoute} />
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
-		<main class="flex-1">
+		<main class="flex-1" style="padding-top: var(--banner-height, 0px);">
 			<slot />
 		</main>
-		<Footer />
+		{!isAdminRoute && <Footer />}
 		<PromoPopup />
 	</body>
 </html>

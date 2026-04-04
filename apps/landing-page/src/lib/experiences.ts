@@ -7,7 +7,7 @@ const benefits: BenefitsContent = {
   items: [
     {
       icon: 'community',
-      title: 'Free Flow',
+      title: 'Open Hours',
       description:
         'Move between our saunas and cold plunges at your own pace. Meet a new friend. Take a moment for yourself. This time is yours.',
     },
@@ -15,13 +15,13 @@ const benefits: BenefitsContent = {
       icon: 'harmony',
       title: 'Guided Sessions',
       description:
-        "Curated experiences created by our certified sauna masters, blending: Sauna cold plunge, breathwork, movement, guided questions, and more. A guided reset in community.",
+        'Curated experiences created by our certified sauna masters blending: Sauna, cold plunge, breathwork, movement, guided questions, and more. A guided reset in community.',
     },
     {
       icon: 'ritual',
       title: 'Special Events',
       description:
-        "The ancient power of sauna and cold bathing blended with new modalities. Sound baths, breathwork, drumming, guided meditations, communal healing; a new way to connect.",
+        'The ancient power of sauna and cold bathing blended with complimentary modalities: yoga, sound baths, breathwork, drumming, guided meditations, communal healing; a new way to connect.',
     },
   ],
   closing: "You'll leave feeling better than when you walked in.",

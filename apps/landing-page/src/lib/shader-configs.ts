@@ -5,7 +5,14 @@
  * Brand colors are hex values matching the CSS custom properties in global.css.
  */
 
-export type GrainGradientShape = 'wave' | 'dots' | 'truchet' | 'corners' | 'ripple' | 'blob' | 'sphere';
+export type GrainGradientShape =
+  | 'wave'
+  | 'dots'
+  | 'truchet'
+  | 'corners'
+  | 'ripple'
+  | 'blob'
+  | 'sphere';
 
 export interface GrainGradientConfig {
   colors: string[];

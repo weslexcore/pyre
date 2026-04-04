@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
+import EventDetailModal from './EventDetailModal';
 
 interface EventsGridProps {
   fallback?: EventItem[];
@@ -152,7 +153,10 @@ function spotsColor(spots: number | undefined): string {
   return 'text-[var(--pyre-creme)] opacity-70';
 }
 
-function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | undefined): string | null {
+function spotsLabel(
+  spotsRemaining: number | undefined,
+  totalSpots: number | undefined
+): string | null {
   if (spotsRemaining === undefined) return null;
   if (spotsRemaining === 0) return 'Waitlist';
   if (totalSpots !== undefined) {
@@ -161,27 +165,89 @@ function spotsLabel(spotsRemaining: number | undefined, totalSpots: number | und
   return `${spotsRemaining} open`;
 }
 
-function SlotRow({ event }: { event: EventItem }) {
+function SlotRow({
+  event,
+  onViewDetails,
+}: {
+  event: EventItem;
+  onViewDetails: (event: EventItem) => void;
+}) {
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
 
+  if (event.isPrivate) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onViewDetails(event)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewDetails(event);
+          }
+        }}
+        className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
+      >
+        {/* Title */}
+        <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-56 shrink-0">
+          <span className="truncate">{event.title}</span>
+          {/* Mobile-only Private label */}
+          <span className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide border border-current/40 rounded-full px-3 py-1 text-[var(--pyre-creme)]/50 whitespace-nowrap ml-2">
+            Private
+          </span>
+        </span>
+
+        {/* Time */}
+        <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+          <span className="inline-flex items-center gap-1.5">
+            <ClockIcon className="w-3.5 h-3.5" />
+            {event.time}
+          </span>
+        </span>
+
+        {/* View Details link (desktop) */}
+        <span className="hidden sm:inline-flex items-center text-xs font-mono uppercase tracking-wide text-[var(--pyre-creme)]/50 group-hover:text-[var(--pyre-creme)]/80 transition-colors whitespace-nowrap shrink-0">
+          View Details
+        </span>
+
+        {/* Desktop Private label */}
+        <span className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide border border-current/40 rounded-full px-4 py-1.5 text-[var(--pyre-creme)]/50 whitespace-nowrap shrink-0">
+          Private
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <a
-      href={event.cta?.href ?? '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
-      className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent transition-colors hover:border-current/10 hover:bg-current/[0.03]"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onViewDetails(event)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewDetails(event);
+        }
+      }}
+      className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
       {/* Title */}
       <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-56 shrink-0">
         <span className="truncate">{event.title}</span>
         {/* Mobile-only CTA pill */}
-        <span className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2">
+        <a
+          href={event.cta?.href ?? '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
+          onClick={(e) => e.stopPropagation()}
+          className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
+        >
           {ctaLabel}
           <ArrowIcon />
-        </span>
+        </a>
       </span>
 
       {/* Time (second line on mobile, inline on desktop) */}
@@ -194,7 +260,9 @@ function SlotRow({ event }: { event: EventItem }) {
 
       {/* Spots - to the left of CTA */}
       {spots && (
-        <span className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(event.spotsRemaining)}`}>
+        <span
+          className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(event.spotsRemaining)}`}
+        >
           <UsersIcon className="w-3.5 h-3.5" />
           {spots}
         </span>
@@ -202,22 +270,44 @@ function SlotRow({ event }: { event: EventItem }) {
 
       {/* Mobile spots display */}
       {spots && (
-        <span className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(event.spotsRemaining)}`}>
+        <span
+          className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(event.spotsRemaining)}`}
+        >
           <UsersIcon className="w-3.5 h-3.5" />
           {spots}
         </span>
       )}
 
+      {/* View Details link (desktop) */}
+      <span className="hidden sm:inline-flex items-center text-xs font-mono uppercase tracking-wide text-[var(--pyre-creme)]/50 group-hover:text-[var(--pyre-creme)]/80 transition-colors whitespace-nowrap shrink-0">
+        View Details
+      </span>
+
       {/* Desktop CTA pill */}
-      <span className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] group-hover:opacity-90 transition-opacity whitespace-nowrap shrink-0">
+      <a
+        href={event.cta?.href ?? '#'}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
+        onClick={(e) => e.stopPropagation()}
+        className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
+      >
         {ctaLabel}
         <ArrowIcon />
-      </span>
-    </a>
+      </a>
+    </div>
   );
 }
 
-function DateGroup({ dateLabel, events }: { dateLabel: string; events: EventItem[] }) {
+function DateGroup({
+  dateLabel,
+  events,
+  onViewDetails,
+}: {
+  dateLabel: string;
+  events: EventItem[];
+  onViewDetails: (event: EventItem) => void;
+}) {
   return (
     <div className="mb-6">
       {/* Date header */}
@@ -231,7 +321,7 @@ function DateGroup({ dateLabel, events }: { dateLabel: string; events: EventItem
       {/* Slot rows */}
       <div>
         {events.map((event) => (
-          <SlotRow key={event.id} event={event} />
+          <SlotRow key={event.id} event={event} onViewDetails={onViewDetails} />
         ))}
       </div>
     </div>
@@ -301,6 +391,12 @@ function filterEventsByDateRange(events: EventItem[], filter: FilterType): Event
 export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const { events, loading } = useEvents(fallback);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+
+  // Remove server-rendered skeleton once React has hydrated
+  useEffect(() => {
+    document.getElementById('events-skeleton')?.remove();
+  }, []);
 
   // Listen for filter events from the Astro EventDateFilter component
   useEffect(() => {
@@ -330,6 +426,26 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     }
   }, []);
 
+  // Open modal for event specified in ?event= query param (deep-link from carousel)
+  useEffect(() => {
+    if (loading) return;
+    const allEvents = events.length > 0 ? events : fallback;
+    if (allEvents.length === 0) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventId = urlParams.get('event');
+    if (!eventId) return;
+
+    const match = allEvents.find((e) => e.id === eventId);
+    if (match) {
+      setSelectedEvent(match);
+      // Clean up the URL so refreshing doesn't re-open the modal
+      const url = new URL(window.location.href);
+      url.searchParams.delete('event');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [loading, events, fallback]);
+
   const displayEvents = events.length > 0 ? events : fallback;
   const filteredEvents = filterEventsByDateRange(displayEvents, filter);
   const visibleCount = filteredEvents.length;
@@ -342,6 +458,16 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     if (visibleCountEl) visibleCountEl.textContent = String(visibleCount);
     if (totalCountEl) totalCountEl.textContent = String(totalCount);
   }, [visibleCount, totalCount]);
+
+  // Tell the Astro filter component which filters have events
+  useEffect(() => {
+    if (loading) return;
+    const filterIds: FilterType[] = ['week', 'month', '30days', 'all'];
+    const available = filterIds.filter(
+      (id) => id === 'all' || filterEventsByDateRange(displayEvents, id).length > 0
+    );
+    window.dispatchEvent(new CustomEvent('event-filters-available', { detail: { available } }));
+  }, [loading, displayEvents]);
 
   if (loading) {
     return <ScheduleSkeleton />;
@@ -358,14 +484,22 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const grouped = groupEventsByDate(filteredEvents);
 
   return (
-    <div className="space-y-2">
-      {Array.from(grouped.entries()).map(([dateKey, groupEvents]) => (
-        <DateGroup
-          key={dateKey}
-          dateLabel={groupEvents[0].date}
-          events={groupEvents}
-        />
-      ))}
-    </div>
+    <>
+      <div className="space-y-2">
+        {Array.from(grouped.entries()).map(([dateKey, groupEvents]) => (
+          <DateGroup
+            key={dateKey}
+            dateLabel={groupEvents[0].date}
+            events={groupEvents}
+            onViewDetails={setSelectedEvent}
+          />
+        ))}
+      </div>
+      <EventDetailModal
+        event={selectedEvent}
+        isOpen={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+      />
+    </>
   );
 }

@@ -25,19 +25,30 @@ import SectionDivider from './SectionDivider.astro';
     <div class="space-y-4 lg:space-y-3">
       {sessions.items.map((item) => (
         <div
-          class={`session-item flex items-center justify-between p-5 lg:p-4 border rounded-lg transition-all duration-300 ${
+          class={`session-item flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between lg:p-4 border rounded-lg transition-all duration-300 ${
             item.highlighted
               ? 'border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/10'
               : 'border-current/20 hover:border-current/40'
           }`}
         >
           <div>
-            <h3 class={`font-mono-bold text-lg lg:text-base uppercase tracking-wide ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
-              {item.name}
-            </h3>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class={`font-mono-bold text-lg lg:text-base uppercase tracking-wide ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+                {item.name}
+              </h3>
+              {item.savings && (
+                <span class={`text-xs font-mono-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                  item.highlighted
+                    ? 'bg-[var(--pyre-muted-gold)]/20 text-[var(--pyre-muted-gold)]'
+                    : 'bg-current/10 opacity-70'
+                }`}>
+                  Save ${item.savings}
+                </span>
+              )}
+            </div>
             <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex items-center justify-between lg:justify-end gap-4">
             <div class={`font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
               ${item.price}
             </div>

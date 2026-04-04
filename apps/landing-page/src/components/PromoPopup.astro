@@ -1,7 +1,10 @@
 ---
 import promoConfig from '../lib/promoPopup';
+import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
-if (!promoConfig.enabled) return;
+if (!promoConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
+
+const hasForm = !!promoConfig.form;
 ---
 
 <div
@@ -10,23 +13,27 @@ if (!promoConfig.enabled) return;
   data-delay={String(promoConfig.delayMs ?? 1500)}
   data-starts={promoConfig.starts ?? ''}
   data-expires={promoConfig.expires ?? ''}
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="promo-popup-heading"
-  class="fixed inset-0 z-[100] hidden"
 >
-  <!-- Backdrop -->
+  <!-- Full-screen dialog overlay -->
   <div
-    data-popup-backdrop
-    class="absolute inset-0 bg-black/70 opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
-  ></div>
-
-  <!-- Dialog panel -->
-  <div class="flex min-h-full items-center justify-center p-4">
+    data-popup-dialog
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="promo-popup-heading"
+    class="fixed inset-0 z-[100] hidden"
+  >
+    <!-- Backdrop -->
     <div
-      data-popup-panel
-      class="card-cta-animated relative w-full max-w-md rounded-lg opacity-0 scale-95 transition-all duration-300 motion-reduce:transition-none"
-    >
+      data-popup-backdrop
+      class="absolute inset-0 bg-black/70 opacity-0 transition-opacity duration-300 motion-reduce:transition-none"
+    ></div>
+
+    <!-- Dialog panel -->
+    <div class="flex min-h-full items-center justify-center p-4">
+      <div
+        data-popup-panel
+        class="card-cta-animated relative w-full max-w-md rounded-lg opacity-0 scale-95 transition-all duration-300 motion-reduce:transition-none"
+      >
       <!-- Inner content (sits above the ::after pseudo-element) -->
       <div class="relative z-10 px-6 pt-12 pb-8 sm:px-8 sm:py-10">
         <!-- Close button -->
@@ -53,31 +60,107 @@ if (!promoConfig.enabled) return;
           {promoConfig.body}
         </p>
 
-        <!-- CTA button -->
-        <Button
-          variant="primary"
-          size="lg"
-          href={promoConfig.cta.href}
-          ariaLabel={promoConfig.cta.ariaLabel}
-          data-popup-cta=""
-          class="btn-cta-animated mt-6 inline-flex w-full items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
-        >
-          {promoConfig.cta.label}
-        </Button>
-
-        <!-- Dismiss link -->
-        {promoConfig.dismiss && (
-          <button
-            data-popup-dismiss
-            type="button"
-            class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+        {hasForm ? (
+          <!-- Email signup form -->
+          <form
+            data-popup-form
+            class="mt-6 flex flex-col gap-3"
+            novalidate
+            data-mailchimp-action={signupForm.mailchimp.action}
+            data-mailchimp-u={signupForm.mailchimp.audienceU}
+            data-mailchimp-id={signupForm.mailchimp.audienceId}
+            data-mailchimp-fid={signupForm.mailchimp.fId}
+            data-mailchimp-tag={signupForm.mailchimp.tagId}
+            data-honeypot={signupForm.mailchimp.honeypotFieldName}
+            data-antispam={JSON.stringify(signupForm.antiSpam)}
+            data-success-message={promoConfig.form!.successMessage}
           >
-            {promoConfig.dismiss.label}
-          </button>
+            <div class="flex-1 min-w-0">
+              <label for="promo-popup-email" class="sr-only">Email</label>
+              <input
+                id="promo-popup-email"
+                name="EMAIL"
+                type="email"
+                required
+                inputmode="email"
+                autocomplete="email"
+                placeholder="Enter your email"
+                class="w-full rounded-md border border-[var(--pyre-creme)]/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]"
+                data-popup-email
+              />
+            </div>
+            <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+            <!-- Honeypot fields -->
+            <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="tel" name={signupForm.antiSpam.honeypotFields.phone} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+            <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
+            <input type="hidden" name={signupForm.antiSpam.timestampField} value="" data-popup-timestamp />
+
+            <Button type="submit" variant="primary" size="lg" class="btn-cta-animated w-full inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50">
+              {promoConfig.form!.submitLabel}
+            </Button>
+
+            <p aria-live="polite" class="text-sm text-[var(--pyre-burnt-orange)] hidden" data-popup-error></p>
+            <p role="status" class="text-sm text-green-400 hidden" data-popup-success></p>
+          </form>
+
+          <!-- Dismiss link -->
+          {promoConfig.dismiss && (
+            <button
+              data-popup-dismiss
+              type="button"
+              class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+            >
+              {promoConfig.dismiss.label}
+            </button>
+          )}
+        ) : (
+          <!-- CTA button -->
+          {promoConfig.cta && (
+            <Button
+              variant="primary"
+              size="lg"
+              href={promoConfig.cta.href}
+              ariaLabel={promoConfig.cta.ariaLabel}
+              data-popup-cta=""
+              class="btn-cta-animated mt-6 inline-flex w-full items-center justify-center rounded-md px-6 py-3 text-base font-mono-bold text-[var(--pyre-black)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+            >
+              {promoConfig.cta.label}
+            </Button>
+          )}
+
+          <!-- Dismiss link -->
+          {promoConfig.dismiss && (
+            <button
+              data-popup-dismiss
+              type="button"
+              class="mt-3 block w-full text-center text-sm text-[var(--pyre-creme)]/50 hover:text-[var(--pyre-creme)]/80 transition-colors"
+            >
+              {promoConfig.dismiss.label}
+            </button>
+          )}
         )}
       </div>
     </div>
   </div>
+  </div>
+
+  <!-- Floating tab (shown after dismiss) -->
+  {promoConfig.promoText && (
+    <button
+      data-popup-tab
+      type="button"
+      aria-label={`Reopen offer: ${promoConfig.promoText}`}
+      class="fixed right-0 top-1/2 -translate-y-1/2 z-50 hidden cursor-pointer flex flex-col items-center gap-0.5 rounded-l-full bg-[oklch(0.30_0.02_85)] border border-r-0 border-[var(--pyre-gold)] px-1.5 py-3 shadow-[-4px_0_12px_rgba(219,177,85,0.15)] transition-all duration-300 hover:bg-[var(--pyre-red)] hover:border-[var(--pyre-gold)] opacity-0"
+    >
+      {promoConfig.promoText.toUpperCase().split('').map(char =>
+        char === ' '
+          ? <span class="h-1.5" aria-hidden="true"></span>
+          : <span class="font-mono-bold text-xs leading-none text-[var(--pyre-gold)]">{char}</span>
+      )}
+    </button>
+  )}
 </div>
 
 <script>
@@ -111,26 +194,36 @@ if (!promoConfig.enabled) return;
         return;
       }
 
-      // localStorage check
+      // localStorage keys
       const storageKey = 'pyre-popup-dismissed-' + popupId;
-      let isDismissed = false;
+      const takenKey = 'pyre-popup-taken-' + popupId;
+
+      // Check if offer was already taken (form submitted successfully)
+      let offerTaken = false;
       try {
-        isDismissed = localStorage.getItem(storageKey) === '1';
-      } catch {
-        // localStorage not available — show popup as fallback
-      }
-      if (isDismissed) {
+        offerTaken = localStorage.getItem(takenKey) === '1';
+      } catch {}
+      if (offerTaken) {
         root.remove();
         return;
       }
 
+      // Check if previously dismissed
+      let isDismissed = false;
+      try {
+        isDismissed = localStorage.getItem(storageKey) === '1';
+      } catch {}
+
+      const dialog = root.querySelector('[data-popup-dialog]') as HTMLElement;
+      const tab = root.querySelector('[data-popup-tab]') as HTMLElement | null;
       const backdrop = root.querySelector('[data-popup-backdrop]') as HTMLElement;
       const panel = root.querySelector('[data-popup-panel]') as HTMLElement;
       const closeBtn = root.querySelector('[data-popup-close]') as HTMLElement;
       const dismissBtn = root.querySelector('[data-popup-dismiss]') as HTMLElement | null;
       const ctaBtn = root.querySelector('[data-popup-cta]') as HTMLElement | null;
+      const popupForm = root.querySelector('[data-popup-form]') as HTMLFormElement | null;
 
-      if (!backdrop || !panel || !closeBtn) return;
+      if (!dialog || !backdrop || !panel || !closeBtn) return;
 
       // Store the element that had focus before the popup opened
       let previousFocus: HTMLElement | null = null;
@@ -138,14 +231,32 @@ if (!promoConfig.enabled) return;
       // Collect focusable elements inside the dialog
       function getFocusableElements(): HTMLElement[] {
         const selectors = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-        return Array.from(root!.querySelectorAll<HTMLElement>(selectors));
+        return Array.from(dialog.querySelectorAll<HTMLElement>(selectors));
+      }
+
+      function showTab() {
+        if (!tab) return;
+        tab.classList.remove('hidden');
+        requestAnimationFrame(() => {
+          tab.classList.remove('opacity-0');
+          tab.classList.add('opacity-100');
+        });
+      }
+
+      function hideTab() {
+        if (!tab) return;
+        tab.classList.remove('opacity-100');
+        tab.classList.add('opacity-0');
+        setTimeout(() => {
+          tab.classList.add('hidden');
+        }, 300);
       }
 
       function show() {
         previousFocus = document.activeElement as HTMLElement | null;
 
-        // Show the container
-        root!.classList.remove('hidden');
+        // Show the dialog
+        dialog.classList.remove('hidden');
 
         // Lock body scroll
         document.body.style.overflow = 'hidden';
@@ -168,9 +279,7 @@ if (!promoConfig.enabled) return;
         // Save dismissal
         try {
           localStorage.setItem(storageKey, '1');
-        } catch {
-          // Ignore storage errors
-        }
+        } catch {}
 
         // Animate out
         backdrop.classList.remove('opacity-100');
@@ -181,9 +290,15 @@ if (!promoConfig.enabled) return;
         // Restore body scroll
         document.body.style.overflow = '';
 
-        // Remove from DOM after animation
+        // Hide dialog and show tab after animation
         const onDone = () => {
-          root!.remove();
+          dialog.classList.add('hidden');
+          // Reset panel state for re-opening
+          backdrop.classList.add('opacity-0');
+          panel.classList.add('opacity-0', 'scale-95');
+          panel.classList.remove('opacity-100', 'scale-100');
+          // Show the floating tab
+          showTab();
           // Restore focus
           if (previousFocus && previousFocus.focus) {
             previousFocus.focus();
@@ -191,15 +306,32 @@ if (!promoConfig.enabled) return;
         };
 
         panel.addEventListener('transitionend', onDone, { once: true });
-        // Fallback if transitionend doesn't fire
         setTimeout(onDone, 350);
       }
 
-      // Event listeners
+      function removeAll() {
+        // Fully remove everything (offer taken)
+        try {
+          localStorage.setItem(takenKey, '1');
+        } catch {}
+        document.body.style.overflow = '';
+        root.remove();
+      }
+
+      // Event listeners — must be before the early return so they work
+      // when the popup is re-opened from the tab
       closeBtn.addEventListener('click', dismiss);
 
       if (dismissBtn) {
         dismissBtn.addEventListener('click', dismiss);
+      }
+
+      // Tab click: hide tab, re-open popup
+      if (tab) {
+        tab.addEventListener('click', () => {
+          hideTab();
+          setTimeout(show, 300);
+        });
       }
 
       // CTA click: dismiss then follow the link
@@ -207,7 +339,6 @@ if (!promoConfig.enabled) return;
         ctaBtn.addEventListener('click', (e) => {
           const href = ctaBtn.getAttribute('href');
 
-          // For anchor links, prevent default and navigate after dismiss animation
           if (href && href.startsWith('#')) {
             e.preventDefault();
             dismiss();
@@ -215,8 +346,150 @@ if (!promoConfig.enabled) return;
               window.location.hash = href;
             }, 350);
           } else {
-            // For full page navigation, dismiss and let browser navigate
             dismiss();
+          }
+        });
+      }
+
+      // Email signup form submission
+      if (popupForm) {
+        const antiSpamConfig = JSON.parse(popupForm.getAttribute('data-antispam') || '{}');
+        const successMessage = popupForm.getAttribute('data-success-message') || 'Success!';
+        const formStartTime = Date.now();
+        const timestampInput = popupForm.querySelector('[data-popup-timestamp]') as HTMLInputElement | null;
+        if (timestampInput) timestampInput.value = formStartTime.toString();
+
+        let hasInteracted = false;
+        let mouseMoved = false;
+
+        const handleMouseMove = () => { mouseMoved = true; };
+        const handleFocusIn = () => { hasInteracted = true; };
+
+        if (antiSpamConfig.trackInteractions) {
+          document.addEventListener('mousemove', handleMouseMove, { once: true, passive: true });
+          popupForm.addEventListener('focusin', handleFocusIn, { passive: true });
+        }
+
+        popupForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+
+          const emailInput = popupForm.querySelector('[data-popup-email]') as HTMLInputElement;
+          const errorEl = popupForm.querySelector('[data-popup-error]') as HTMLElement;
+          const successEl = popupForm.querySelector('[data-popup-success]') as HTMLElement;
+
+          if (!emailInput) return;
+
+          if (errorEl) { errorEl.textContent = ''; errorEl.classList.add('hidden'); }
+          if (successEl) { successEl.textContent = ''; successEl.classList.add('hidden'); }
+
+          const email = emailInput.value.trim();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            if (errorEl) { errorEl.textContent = 'Please enter a valid email.'; errorEl.classList.remove('hidden'); }
+            emailInput.focus();
+            return;
+          }
+
+          // Honeypot checks
+          const honeypotName = popupForm.getAttribute('data-honeypot');
+          const honeypotInput = honeypotName ? popupForm.querySelector(`input[name="${honeypotName}"]`) as HTMLInputElement : null;
+          if (honeypotInput && honeypotInput.value.trim() !== '') return;
+
+          const websiteInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.website}"]`) as HTMLInputElement;
+          const phoneInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.phone}"]`) as HTMLInputElement;
+          const confirmEmailInput = popupForm.querySelector(`input[name="${antiSpamConfig.honeypotFields?.confirmEmail}"]`) as HTMLInputElement;
+          if (websiteInput?.value.trim() || phoneInput?.value.trim() || confirmEmailInput?.value.trim()) return;
+
+          // Timing check
+          if (timestampInput) {
+            const elapsed = (Date.now() - parseInt(timestampInput.value)) / 1000;
+            if (elapsed < (antiSpamConfig.minSubmissionTime || 3)) return;
+          }
+
+          // Interaction check
+          if (antiSpamConfig.trackInteractions && (!hasInteracted || !mouseMoved)) return;
+
+          const submitBtn = popupForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+          if (submitBtn) submitBtn.disabled = true;
+
+          try {
+            const action = popupForm.getAttribute('data-mailchimp-action') || '';
+            const url = new URL(action);
+            url.pathname = url.pathname.replace('/subscribe/post', '/subscribe/post-json');
+            const params = new URLSearchParams(url.search);
+            params.set('EMAIL', email);
+            const tagValue = popupForm.querySelector('input[name="tags"]') as HTMLInputElement;
+            if (tagValue?.value) params.set('tags', tagValue.value);
+            const callbackName = '__mc_popup_' + Math.random().toString(36).slice(2);
+            params.set('c', callbackName);
+            const jsonpUrl = url.origin + url.pathname + '?' + params.toString();
+
+            const script = document.createElement('script');
+            script.src = jsonpUrl;
+            script.async = true;
+
+            function scriptCleanup() {
+              try { delete (window as any)[callbackName]; } catch {}
+              if (script.parentNode) script.parentNode.removeChild(script);
+            }
+
+            (window as any)[callbackName] = function(response: any) {
+              scriptCleanup();
+              if (response?.result === 'success') {
+                if (successEl) {
+                  successEl.textContent = successMessage;
+                  successEl.classList.remove('hidden');
+                }
+                if (errorEl) errorEl.classList.add('hidden');
+
+                // PostHog tracking
+                if ((window as any).posthog) {
+                  (window as any).posthog.identify(email);
+                  (window as any).posthog.people.set({
+                    email: email,
+                    signup_source: 'intro_offer_popup',
+                    signup_date: new Date().toISOString(),
+                  });
+                  (window as any).posthog.capture('Intro Offer Signup', {
+                    email,
+                    source: 'promo_popup',
+                  });
+                }
+
+                // Offer taken — fully remove after showing success (no tab)
+                setTimeout(removeAll, 2000);
+              } else if (response?.msg) {
+                if (successEl) successEl.classList.add('hidden');
+                if (errorEl) {
+                  errorEl.textContent = String(response.msg).replace(/<[^>]*>/g, '');
+                  errorEl.classList.remove('hidden');
+                }
+                if (submitBtn) submitBtn.disabled = false;
+              } else {
+                if (successEl) successEl.classList.add('hidden');
+                if (errorEl) {
+                  errorEl.textContent = 'Something went wrong. Please try again.';
+                  errorEl.classList.remove('hidden');
+                }
+                if (submitBtn) submitBtn.disabled = false;
+              }
+            };
+
+            script.addEventListener('error', () => {
+              scriptCleanup();
+              if (submitBtn) submitBtn.disabled = false;
+              if (errorEl) {
+                errorEl.textContent = 'Something went wrong. Please try again.';
+                errorEl.classList.remove('hidden');
+              }
+            }, { once: true });
+
+            document.body.appendChild(script);
+          } catch {
+            if (submitBtn) submitBtn.disabled = false;
+            if (errorEl) {
+              errorEl.textContent = 'Something went wrong. Please try again.';
+              errorEl.classList.remove('hidden');
+            }
           }
         });
       }
@@ -254,6 +527,12 @@ if (!promoConfig.enabled) return;
       };
 
       document.addEventListener('keydown', handleKeyDown);
+
+      // If previously dismissed, show tab immediately instead of popup
+      if (isDismissed && tab) {
+        showTab();
+        return;
+      }
 
       // Schedule showing the popup after page load + delay
       let showTimeout: ReturnType<typeof setTimeout>;

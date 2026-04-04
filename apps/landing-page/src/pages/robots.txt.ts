@@ -3,9 +3,9 @@ import type { APIRoute } from 'astro';
 export const prerender = true;
 
 export const GET: APIRoute = ({ site }) => {
-	const baseUrl = site?.origin ?? 'https://pyresauna.com';
+  const baseUrl = site?.origin ?? 'https://pyresauna.com';
 
-	const content = `# Robots.txt for Pyre Sauna + Cold Plunge
+  const content = `# Robots.txt for Pyre Sauna + Cold Plunge
 # ${baseUrl}
 
 # Allow all crawlers
@@ -46,11 +46,11 @@ Allow: /
 Sitemap: ${baseUrl}/sitemap-index.xml
 `;
 
-	return new Response(content, {
-		status: 200,
-		headers: {
-			'Content-Type': 'text/plain; charset=utf-8',
-			'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-		},
-	});
+  return new Response(content, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    },
+  });
 };

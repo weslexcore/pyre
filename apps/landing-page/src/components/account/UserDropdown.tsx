@@ -64,7 +64,13 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
         className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors"
         onClick={() => setIsOpen(false)}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -80,7 +86,13 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
         className="flex items-center gap-2 px-4 py-2 text-sm text-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors"
         onClick={() => setIsOpen(false)}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -98,7 +110,13 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
         onClick={handleLogout}
         className="flex items-center gap-2 w-full px-4 py-2 text-sm text-[var(--pyre-creme)] hover:bg-[var(--pyre-creme)]/10 transition-colors"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -128,7 +146,13 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
         <span className="w-7 h-7 rounded-full bg-[var(--pyre-creme)]/20 flex items-center justify-center text-sm font-mono-bold">
           {initials}
         </span>
-        <span className={isMobile ? 'font-mono-bold text-sm uppercase tracking-wide' : 'hidden sm:inline font-mono-bold text-sm uppercase tracking-wide'}>
+        <span
+          className={
+            isMobile
+              ? 'font-mono-bold text-sm uppercase tracking-wide'
+              : 'hidden sm:inline font-mono-bold text-sm uppercase tracking-wide'
+          }
+        >
           {user.firstName}
         </span>
         {/* Chevron */}
@@ -144,8 +168,8 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
       </button>
 
       {/* Dropdown menu */}
-      {isOpen && (
-        isMobile ? (
+      {isOpen &&
+        (isMobile ? (
           <div className="mt-2 rounded-md border border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] overflow-hidden">
             <div className="py-1">{menuItems}</div>
           </div>
@@ -153,8 +177,7 @@ export function UserDropdown({ variant = 'desktop' }: UserDropdownProps) {
           <div className="absolute right-0 mt-2 w-48 bg-[var(--pyre-black)] rounded-md shadow-lg border border-[var(--pyre-creme)]/10 overflow-hidden z-50">
             <div className="py-1">{menuItems}</div>
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }

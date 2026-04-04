@@ -81,13 +81,35 @@ const { class: className } = Astro.props;
     );
   }
 
+  function initFilterVisibility() {
+    window.addEventListener('event-filters-available', ((e: CustomEvent<{ available: string[] }>) => {
+      const available = new Set(e.detail.available);
+      const filterButtons = document.querySelectorAll('.event-date-filter .filter-btn');
+      filterButtons.forEach((button) => {
+        const filterId = button.getAttribute('data-filter');
+        if (!filterId) return;
+        (button as HTMLElement).style.display = available.has(filterId) ? '' : 'none';
+      });
+
+      // If the currently active filter was hidden, switch to the first visible one
+      const activeBtn = document.querySelector('.event-date-filter .filter-btn[aria-pressed="true"]') as HTMLElement | null;
+      if (activeBtn && activeBtn.style.display === 'none') {
+        const firstVisible = document.querySelector('.event-date-filter .filter-btn:not([style*="display: none"])') as HTMLElement | null;
+        if (firstVisible) {
+          firstVisible.click();
+        }
+      }
+    }) as EventListener);
+  }
+
   // Initialize on page load
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initEventDateFilter);
+    document.addEventListener('DOMContentLoaded', () => { initEventDateFilter(); initFilterVisibility(); });
   } else {
     initEventDateFilter();
+    initFilterVisibility();
   }
 
   // Support Astro view transitions
-  document.addEventListener('astro:page-load', initEventDateFilter);
+  document.addEventListener('astro:page-load', () => { initEventDateFilter(); initFilterVisibility(); });
 </script>

@@ -4,7 +4,8 @@
 export const accountConfig = {
   page: {
     title: 'My Account | Pyre Sauna',
-    description: 'Manage your Pyre Sauna account, view upcoming sessions, and check your membership status.',
+    description:
+      'Manage your Pyre Sauna account, view upcoming sessions, and check your membership status.',
   },
   dashboard: {
     title: 'Welcome back',

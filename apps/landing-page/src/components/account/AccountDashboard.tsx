@@ -12,9 +12,10 @@ import { SessionsList } from './SessionsList';
 
 export function AccountDashboard() {
   // Read query params client-side; guard for SSR where window is unavailable
-  const searchParams = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search)
-    : new URLSearchParams();
+  const searchParams =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
   const error = searchParams.get('error');
   const freshAuth = searchParams.get('auth') === 'success';
 
@@ -39,12 +40,8 @@ export function AccountDashboard() {
           </div>
         )}
 
-        <h1 className="font-primary-semibold text-3xl mb-2">
-          {accountConfig.loginPrompt.title}
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-8">
-          {accountConfig.loginPrompt.subtitle}
-        </p>
+        <h1 className="font-primary-semibold text-3xl mb-2">{accountConfig.loginPrompt.title}</h1>
+        <p className="text-[var(--muted-foreground)] mb-8">{accountConfig.loginPrompt.subtitle}</p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
@@ -74,11 +71,8 @@ export function AccountDashboard() {
         <h1 className="font-primary-semibold text-3xl mb-1 text-[var(--pyre-creme)]">
           {accountConfig.dashboard.title}, {user.firstName}
         </h1>
-        <p className="text-[var(--muted-foreground)]">
-          {accountConfig.dashboard.subtitle}
-        </p>
+        <p className="text-[var(--muted-foreground)]">{accountConfig.dashboard.subtitle}</p>
       </div>
-      
 
       {/* Profile card */}
       <div className="mb-6">

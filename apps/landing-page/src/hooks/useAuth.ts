@@ -121,37 +121,31 @@ export function useAuth(options?: UseAuthOptions): UseAuthResult {
   }, [fetchSession, options?.skipCache]);
 
   // Login action - redirect to OAuth login
-  const login = useCallback(
-    (options?: { signup?: boolean; returnUrl?: string }) => {
-      const params = new URLSearchParams();
-      if (options?.signup) {
-        params.set('signup', 'true');
-      }
-      if (options?.returnUrl) {
-        params.set('returnUrl', options.returnUrl);
-      }
-      const queryString = params.toString();
-      window.location.href = `/api/auth/login${queryString ? `?${queryString}` : ''}`;
-    },
-    []
-  );
+  const login = useCallback((options?: { signup?: boolean; returnUrl?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.signup) {
+      params.set('signup', 'true');
+    }
+    if (options?.returnUrl) {
+      params.set('returnUrl', options.returnUrl);
+    }
+    const queryString = params.toString();
+    window.location.href = `/api/auth/login${queryString ? `?${queryString}` : ''}`;
+  }, []);
 
   // Logout action
-  const logout = useCallback(
-    (options?: { momenceLogout?: boolean; returnUrl?: string }) => {
-      clearCachedSession();
-      const params = new URLSearchParams();
-      if (options?.momenceLogout) {
-        params.set('momence', 'true');
-      }
-      if (options?.returnUrl) {
-        params.set('returnUrl', options.returnUrl);
-      }
-      const queryString = params.toString();
-      window.location.href = `/api/auth/logout${queryString ? `?${queryString}` : ''}`;
-    },
-    []
-  );
+  const logout = useCallback((options?: { momenceLogout?: boolean; returnUrl?: string }) => {
+    clearCachedSession();
+    const params = new URLSearchParams();
+    if (options?.momenceLogout) {
+      params.set('momence', 'true');
+    }
+    if (options?.returnUrl) {
+      params.set('returnUrl', options.returnUrl);
+    }
+    const queryString = params.toString();
+    window.location.href = `/api/auth/logout${queryString ? `?${queryString}` : ''}`;
+  }, []);
 
   // Refresh session (skip cache)
   const refresh = useCallback(async () => {

@@ -10,7 +10,8 @@ const membership: MembershipContent = {
       name: 'Limited',
       price: 99,
       period: '/month',
-      description: 'SAVE $57',
+      description: '4 sessions per month',
+      savings: 57,
       features: [
         { text: '4 sauna & cold plunge sessions' },
         { text: 'Credits rollover 1 month', highlighted: true },
@@ -25,10 +26,10 @@ const membership: MembershipContent = {
     {
       id: 'unlimited',
       name: 'Unlimited',
-      price: 199,
+      price: 249,
       period: '/month',
       description: 'Unlimited access for dedicated practitioners',
-      popular: true, 
+      popular: true,
       features: [
         { text: 'Unlimited sauna & cold plunge access' },
         { text: 'Free Pyre tote bag', highlighted: true },
@@ -37,7 +38,7 @@ const membership: MembershipContent = {
       ],
       cta: {
         label: 'Get Started',
-        href: 'https://momence.com/Pyre/membership/Unlimited-Monthly/630919',
+        href: 'https://momence.com/m/630919',
         ariaLabel: 'Sign up for unlimited membership',
       },
     },

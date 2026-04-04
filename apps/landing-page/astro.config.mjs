@@ -40,9 +40,6 @@ export default defineConfig({
   output: 'server', // Server mode: pages SSR by default, use `export const prerender = true` for static pages
   adapter: vercel({
     imageService: false, // Disable Vercel image optimization (not available on free plan)
-    webAnalytics: {
-      enabled: true,
-    },
   }),
 
   // Image optimization at build time using Sharp

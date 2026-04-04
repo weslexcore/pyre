@@ -41,9 +41,7 @@ function setLocalProfileOverrides(overrides: LocalProfileOverrides): void {
 /**
  * Merge API profile with local overrides
  */
-export function mergeProfileWithOverrides(
-  profile: MomenceUserProfile
-): MomenceUserProfile {
+export function mergeProfileWithOverrides(profile: MomenceUserProfile): MomenceUserProfile {
   const overrides = getLocalProfileOverrides();
   if (!overrides) return profile;
 
@@ -65,50 +63,47 @@ export function useUpdateProfile(): UseUpdateProfileResult {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const updateProfile = useCallback(
-    async (data: UpdateProfileRequest): Promise<boolean> => {
-      setLoading(true);
-      setError(null);
-      setSuccess(false);
+  const updateProfile = useCallback(async (data: UpdateProfileRequest): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
 
-      try {
-        const response = await fetch('/api/member/profile', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
+    try {
+      const response = await fetch('/api/member/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
 
-        const result: UpdateProfileResponse = await response.json();
+      const result: UpdateProfileResponse = await response.json();
 
-        if (!response.ok || !result.success) {
-          setError(result.error || 'Failed to update profile');
-          return false;
-        }
-
-        // If API returned useLocalStorage flag, save to localStorage
-        if (result.useLocalStorage && data.phone !== undefined) {
-          const currentOverrides = getLocalProfileOverrides();
-          setLocalProfileOverrides({
-            ...currentOverrides,
-            phone: data.phone,
-            updatedAt: Date.now(),
-          });
-        }
-
-        setSuccess(true);
-        return true;
-      } catch (err) {
-        console.error('[useUpdateProfile] Error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to update profile');
+      if (!response.ok || !result.success) {
+        setError(result.error || 'Failed to update profile');
         return false;
-      } finally {
-        setLoading(false);
       }
-    },
-    []
-  );
+
+      // If API returned useLocalStorage flag, save to localStorage
+      if (result.useLocalStorage && data.phone !== undefined) {
+        const currentOverrides = getLocalProfileOverrides();
+        setLocalProfileOverrides({
+          ...currentOverrides,
+          phone: data.phone,
+          updatedAt: Date.now(),
+        });
+      }
+
+      setSuccess(true);
+      return true;
+    } catch (err) {
+      console.error('[useUpdateProfile] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return {
     updateProfile,

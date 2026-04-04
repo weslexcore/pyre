@@ -11,15 +11,17 @@ import type { MemberCredits, MemberMembership } from '@/lib/momence-member-types
 function findMatchingTier(membershipName: string) {
   const normalized = membershipName.trim().toLowerCase();
   return membershipConfig.tiers.find(
-    (tier) =>
-      tier.name.toLowerCase() === normalized ||
-      tier.id === normalized.replace(/\s+/g, '-'),
+    (tier) => tier.name.toLowerCase() === normalized || tier.id === normalized.replace(/\s+/g, '-')
   );
 }
 
 export function MembershipCard() {
   const { user } = useAuth();
-  const { activeMembership, loading: membershipLoading, error: membershipError } = useMemberMemberships();
+  const {
+    activeMembership,
+    loading: membershipLoading,
+    error: membershipError,
+  } = useMemberMemberships();
   const { credits, hasCredits, loading: creditsLoading, error: creditsError } = useMemberCredits();
 
   const loading = membershipLoading || creditsLoading;
@@ -53,7 +55,13 @@ export function MembershipCard() {
     return <NoMembershipDisplay credits={effectiveCredits} hasCredits={effectiveHasCredits} />;
   }
 
-  return <ActiveMembershipDisplay membership={activeMembership} credits={effectiveCredits} userId={user?.id} />;
+  return (
+    <ActiveMembershipDisplay
+      membership={activeMembership}
+      credits={effectiveCredits}
+      userId={user?.id}
+    />
+  );
 }
 
 interface CreditsDisplayProps {
@@ -221,16 +229,20 @@ function ActiveMembershipDisplay({ membership, credits, userId }: ActiveMembersh
 
   // Use credits from useMemberCredits hook (includes all sources) if available,
   // otherwise fall back to membership.credits
-  const displayCredits = credits || (membership.credits ? {
-    available: membership.credits.remaining,
-    unlimited: membership.credits.unlimited,
-  } : null);
+  const displayCredits =
+    credits ||
+    (membership.credits
+      ? {
+          available: membership.credits.remaining,
+          unlimited: membership.credits.unlimited,
+        }
+      : null);
 
   // Resolve benefits from tier config, falling back to API-provided benefits
   const matchedTier = findMatchingTier(membership.name);
   const benefits = matchedTier
     ? matchedTier.features.map((f) => ({ text: f.text, highlighted: f.highlighted }))
-    : membership.benefits?.map((b) => ({ text: b, highlighted: false })) ?? [];
+    : (membership.benefits?.map((b) => ({ text: b, highlighted: false })) ?? []);
 
   return (
     <div className="bg-[var(--pyre-gold)] text-[var(--pyre-black)] rounded-lg p-6">

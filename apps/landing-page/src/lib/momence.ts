@@ -123,12 +123,12 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
   // Use image1 if available, otherwise fall back to image2
   const imageUrl = event.image1 || event.image2;
 
+  const isPrivate = event.type === 'private';
+
   // Show "Join Waitlist" when event is full
   const isFull = event.spotsRemaining === 0;
   const ctaLabel = isFull ? 'Join Waitlist' : 'Book Now';
-  const ctaAriaLabel = isFull
-    ? `Join waitlist for ${event.title}`
-    : `Book ${event.title}`;
+  const ctaAriaLabel = isFull ? `Join waitlist for ${event.title}` : `Book ${event.title}`;
 
   return {
     id: String(event.id),
@@ -143,14 +143,17 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
           alt: event.title,
         }
       : undefined,
-    cta: {
-      label: ctaLabel,
-      href: event.link,
-      ariaLabel: ctaAriaLabel,
-    },
+    cta: isPrivate
+      ? undefined
+      : {
+          label: ctaLabel,
+          href: event.link,
+          ariaLabel: ctaAriaLabel,
+        },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
-    spotsRemaining: event.spotsRemaining,
-    totalSpots: event.capacity,
+    spotsRemaining: isPrivate ? undefined : event.spotsRemaining,
+    totalSpots: isPrivate ? undefined : event.capacity,
+    isPrivate,
   };
 }
 

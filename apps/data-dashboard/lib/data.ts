@@ -58,8 +58,8 @@ function normalizeNumber(value: string) {
 
 function deriveSessionType(sessionName: string) {
   const name = sessionName.toLowerCase();
-  if (name.includes("free flow") || name.includes("quiet flow")) {
-    return "Free Flow";
+  if (name.includes("open hours") || name.includes("quiet flow")) {
+    return "Open Hours";
   }
   if (name.includes("guided")) {
     return "Guided";

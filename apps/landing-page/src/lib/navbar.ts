@@ -3,7 +3,10 @@ import type { NavbarContent } from './types';
 
 const navbar: NavbarContent = {
   images: {
-    brandMark: { src: '/logos/creme/logo_with_text.png', alt: 'Pyre Sauna + Cold Plunge' },
+    brandMark: {
+      src: '/logos/creme/logo_with_text.png',
+      alt: 'Pyre Sauna + Cold Plunge',
+    },
   },
   elements: {
     ariaLabel: 'Pyre Sauna Home',
@@ -23,10 +26,15 @@ const navbar: NavbarContent = {
         href: withBase('/events'),
         ariaLabel: 'View upcoming events',
       },
-            {
-        label: 'Pricing',
+      {
+        label: 'Credits',
         href: withBase('#sessions'),
-        ariaLabel: 'View pricing options',
+        ariaLabel: 'View Credits options',
+      },
+      {
+        label: 'Memberships',
+        href: withBase('#membership'),
+        ariaLabel: 'View Memberships options',
       },
       {
         label: 'FAQ',
