@@ -33,6 +33,26 @@ const description =
 
       <!-- Dynamic Events Grid (React island) -->
       <div id="events-container">
+        {/* Server-rendered skeleton shown instantly, replaced when React hydrates */}
+        <div id="events-skeleton" class="space-y-8 text-[var(--pyre-creme)]">
+          {Array.from({ length: 3 }).map((_, gi) => (
+            <div>
+              <div class="flex items-center gap-4 mb-3">
+                <div class="h-4 w-48 bg-current/10 rounded animate-pulse" />
+                <div class="flex-1 h-px bg-current/10" />
+              </div>
+              {Array.from({ length: 2 }).map((_, ri) => (
+                <div class="flex items-center gap-4 py-3 px-4 animate-pulse">
+                  <div class="h-4 w-36 bg-current/10 rounded" />
+                  <div class="flex-1" />
+                  <div class="h-4 w-32 bg-current/10 rounded" />
+                  <div class="h-4 w-20 bg-current/10 rounded" />
+                  <div class="h-7 w-24 bg-current/10 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
         <EventsGrid client:load fallback={fallbackEvents.items} />
       </div>
 

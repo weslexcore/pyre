@@ -393,6 +393,11 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
+  // Remove server-rendered skeleton once React has hydrated
+  useEffect(() => {
+    document.getElementById('events-skeleton')?.remove();
+  }, []);
+
   // Listen for filter events from the Astro EventDateFilter component
   useEffect(() => {
     function handleFilterEvent(e: CustomEvent<{ filter: string }>) {
