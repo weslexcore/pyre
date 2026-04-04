@@ -25,22 +25,37 @@ const ADDRESS_EVENTS: MomenceEventType[] = [
   'member-address-updated',
   'member-address-deleted',
 ];
-const BOOKING_EVENTS: MomenceEventType[] = ['session-booked'];
+const BOOKING_EVENTS: MomenceEventType[] = ['session-booked', 'session-booking-cancelled'];
+
+interface MomenceBookingPayload {
+  sessionId: number;
+  sessionBookingId: number;
+  payingMemberId: number;
+  targetMemberId: number;
+  isLateCancellation?: boolean;
+  cancelledAt?: string;
+}
 
 async function handleBookingEvent(
-  _event: MomenceEventType,
-  payload: MomenceMemberPayload,
+  event: MomenceEventType,
+  payload: MomenceBookingPayload,
   tracer: WebhookTracer
 ): Promise<void> {
   await tracer.span('Log booking event', async () => {
-    log.info('Session booked', { payload });
+    log.info(`${event}`, { payload });
+  }, {
+    sessionId: payload.sessionId,
+    sessionBookingId: payload.sessionBookingId,
+    targetMemberId: payload.targetMemberId,
+    ...(payload.isLateCancellation != null && { isLateCancellation: payload.isLateCancellation }),
+    ...(payload.cancelledAt && { cancelledAt: payload.cancelledAt }),
   });
 
-  if (payload.memberId) {
-    await tracer.span('Fetch Momence member', () => fetchMomenceMember(payload.memberId), {
-      memberId: payload.memberId,
-    });
-  }
+  await tracer.span(
+    'Fetch Momence member',
+    () => fetchMomenceMember(String(payload.targetMemberId)),
+    { memberId: payload.targetMemberId }
+  );
 }
 
 async function handleMemberEvent(
