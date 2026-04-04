@@ -29,12 +29,18 @@ const BOOKING_EVENTS: MomenceEventType[] = ['session-booked'];
 
 async function handleBookingEvent(
   _event: MomenceEventType,
-  payload: unknown,
+  payload: MomenceMemberPayload,
   tracer: WebhookTracer
 ): Promise<void> {
   await tracer.span('Log booking event', async () => {
     log.info('Session booked', { payload });
   });
+
+  if (payload.memberId) {
+    await tracer.span('Fetch Momence member', () => fetchMomenceMember(payload.memberId), {
+      memberId: payload.memberId,
+    });
+  }
 }
 
 async function handleMemberEvent(
