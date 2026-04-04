@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { instrumentWebhook } from '@/lib/webhooks/instrument';
 import { createWebhookLogger } from '@/lib/webhooks/logger';
 import { setSubscriberTags, upsertSubscriber } from '@/lib/webhooks/mailchimp';
 import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/webhooks/momence';
@@ -35,7 +36,7 @@ async function syncMember(
   }
 }
 
-export const POST: APIRoute = async ({ request, url }) => {
+const handler: APIRoute = async ({ request, url }) => {
   // Auth check
   const authHeader = request.headers.get('Authorization');
   const expectedSecret = import.meta.env.MOMENCE_BACKFILL_SECRET;
@@ -101,3 +102,5 @@ export const POST: APIRoute = async ({ request, url }) => {
     });
   }
 };
+
+export const POST = instrumentWebhook('momence-backfill', handler);

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { instrumentWebhook } from '@/lib/webhooks/instrument';
 import { createWebhookLogger } from '@/lib/webhooks/logger';
 import {
   setSubscriberTags,
@@ -69,7 +70,7 @@ async function handleAddressEvent(
   }
 }
 
-export const POST: APIRoute = async ({ request }) => {
+const handler: APIRoute = async ({ request }) => {
   try {
     const { event, payload, requestId, timestamp } = await verifyMomenceWebhook(request);
 
@@ -103,3 +104,5 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 };
+
+export const POST = instrumentWebhook('momence', handler);

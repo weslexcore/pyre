@@ -17,6 +17,11 @@ interface ImportMetaEnv {
   // Momence OAuth V2
   readonly MOMENCE_OAUTH_CLIENT_ID: string;
   readonly MOMENCE_OAUTH_CLIENT_SECRET: string;
+  // Upstash Redis (via Vercel KV integration)
+  readonly KV_REST_API_URL: string;
+  readonly KV_REST_API_TOKEN: string;
+  // Admin
+  readonly ADMIN_EMAILS: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
