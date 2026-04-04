@@ -15,6 +15,7 @@ export interface WebhookExecution {
   payloadSummary: string; // JSON: { email?, memberId? }
   fullPayload: string; // Full parsed webhook payload as JSON
   requestHeaders: string; // Relevant request headers as JSON
+  traceSteps: string; // JSON array of TraceStep
   errorMessage: string;
   httpStatus: number;
 }

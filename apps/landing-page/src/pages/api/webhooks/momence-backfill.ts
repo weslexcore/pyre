@@ -1,8 +1,8 @@
-import type { APIRoute } from 'astro';
-import { instrumentWebhook } from '@/lib/webhooks/instrument';
+import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import { createWebhookLogger } from '@/lib/webhooks/logger';
 import { setSubscriberTags, upsertSubscriber } from '@/lib/webhooks/mailchimp';
 import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/webhooks/momence';
+import type { WebhookTracer } from '@/lib/webhooks/tracer';
 
 export const prerender = false;
 
@@ -11,22 +11,31 @@ const log = createWebhookLogger('Momence Backfill');
 const DEFAULT_LIMIT = 25;
 
 async function syncMember(
-  member: MomenceMemberData
+  member: MomenceMemberData,
+  tracer: WebhookTracer
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await upsertSubscriber({
-      email: member.email,
-      firstName: member.firstName,
-      lastName: member.lastName,
-      phone: member.phone,
-      birthday: member.birthday,
-    });
+    await tracer.span(
+      `Upsert subscriber: ${member.email}`,
+      () =>
+        upsertSubscriber({
+          email: member.email,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          phone: member.phone,
+          birthday: member.birthday,
+        }),
+      { email: member.email }
+    );
 
     const tags = [
       { name: 'Active Guest', status: 'active' as const },
       ...member.tags.map((name) => ({ name, status: 'active' as const })),
     ];
-    await setSubscriberTags(member.email, tags);
+    await tracer.span(`Set tags: ${member.email}`, () => setSubscriberTags(member.email, tags), {
+      email: member.email,
+      tags: tags.map((t) => t.name),
+    });
 
     return { success: true };
   } catch (error) {
@@ -36,8 +45,7 @@ async function syncMember(
   }
 }
 
-const handler: APIRoute = async ({ request, url }) => {
-  // Auth check
+const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
   const authHeader = request.headers.get('Authorization');
   const expectedSecret = import.meta.env.MOMENCE_BACKFILL_SECRET;
 
@@ -63,14 +71,18 @@ const handler: APIRoute = async ({ request, url }) => {
 
   try {
     const page = Math.floor(offset / limit);
-    const { members, totalCount } = await fetchMomenceMembers(page, limit);
+    const { members, totalCount } = await tracer.span(
+      'Fetch Momence members',
+      () => fetchMomenceMembers(page, limit),
+      { page, limit }
+    );
 
     log.info(`Processing ${members.length} members (total in Momence: ${totalCount})`);
 
     const results: { email: string; success: boolean; error?: string }[] = [];
 
     for (const member of members) {
-      const result = await syncMember(member);
+      const result = await syncMember(member, tracer);
       results.push({ email: member.email, ...result });
     }
 

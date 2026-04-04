@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
+interface TraceStep {
+  name: string;
+  startMs: number;
+  durationMs: number;
+  status: 'ok' | 'error';
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string;
+}
+
 interface WebhookExecution {
   id: string;
   timestamp: number;
@@ -12,6 +22,7 @@ interface WebhookExecution {
   payloadSummary: string;
   fullPayload: string;
   requestHeaders: string;
+  traceSteps: string | TraceStep[];
   errorMessage: string;
   httpStatus: number;
 }
@@ -52,12 +63,18 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
   return <span title={full}>{label}</span>;
 }
 
-function formatJson(str: string): string {
-  try {
-    return JSON.stringify(JSON.parse(str), null, 2);
-  } catch {
-    return str;
+function formatJson(value: unknown): string {
+  if (typeof value === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+      return value;
+    }
   }
+  if (value && typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+  return String(value ?? '');
 }
 
 function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
@@ -69,6 +86,68 @@ function DetailSection({ label, children }: { label: string; children: React.Rea
       </summary>
       <div className="mt-1">{children}</div>
     </details>
+  );
+}
+
+function parseSteps(raw: string | TraceStep[]): TraceStep[] {
+  if (Array.isArray(raw)) return raw;
+  if (!raw || raw === '[]') return [];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function TraceTimeline({
+  steps: raw,
+  baseTimestamp,
+}: {
+  steps: string | TraceStep[];
+  baseTimestamp: number;
+}) {
+  const steps = parseSteps(raw);
+  if (steps.length === 0) return null;
+
+  return (
+    <div>
+      <span className="text-white/40">Trace</span>
+      <div className="mt-1 space-y-1">
+        {steps.map((step) => {
+          const offsetMs = step.startMs - baseTimestamp;
+          const isError = step.status === 'error';
+          return (
+            <details key={`${step.name}-${step.startMs}`} className="group">
+              <summary className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/5 rounded px-2 py-1">
+                <span
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${isError ? 'bg-[var(--pyre-red)]' : 'bg-green-500'}`}
+                />
+                <span className="text-white/70 flex-1 truncate">{step.name}</span>
+                <span className="text-white/30 tabular-nums">+{offsetMs}ms</span>
+                <span className="text-white/50 tabular-nums">{step.durationMs}ms</span>
+              </summary>
+              <div className="ml-6 mt-1 mb-2 space-y-1">
+                {step.input && (
+                  <pre className="text-xs text-white/50 bg-white/5 rounded p-2 overflow-x-auto">
+                    {formatJson(step.input)}
+                  </pre>
+                )}
+                {step.output && (
+                  <pre className="text-xs text-green-400/70 bg-green-900/10 rounded p-2 overflow-x-auto">
+                    {formatJson(step.output)}
+                  </pre>
+                )}
+                {step.error && (
+                  <pre className="text-xs text-[var(--pyre-red)] bg-red-900/10 rounded p-2 overflow-x-auto">
+                    {step.error}
+                  </pre>
+                )}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -133,6 +212,8 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
           </pre>
         </DetailSection>
       )}
+
+      <TraceTimeline steps={record.traceSteps} baseTimestamp={record.timestamp} />
     </div>
   );
 }

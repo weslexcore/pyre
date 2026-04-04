@@ -1,5 +1,4 @@
-import type { APIRoute } from 'astro';
-import { instrumentWebhook } from '@/lib/webhooks/instrument';
+import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import { createWebhookLogger } from '@/lib/webhooks/logger';
 import {
   setSubscriberTags,
@@ -14,6 +13,7 @@ import {
   verifyMomenceWebhook,
   WebhookVerificationError,
 } from '@/lib/webhooks/momence';
+import type { WebhookTracer } from '@/lib/webhooks/tracer';
 
 export const prerender = false;
 
@@ -28,58 +28,86 @@ const ADDRESS_EVENTS: MomenceEventType[] = [
 
 async function handleMemberEvent(
   event: MomenceEventType,
-  payload: MomenceMemberPayload
+  payload: MomenceMemberPayload,
+  tracer: WebhookTracer
 ): Promise<void> {
   const { email, firstName, lastName, memberId } = payload;
 
-  // Fetch full member profile from Momence API to get phone number
-  const member = await fetchMomenceMember(memberId);
-
-  await upsertSubscriber({
-    email,
-    firstName,
-    lastName,
-    phone: member.phone,
-    birthday: member.birthday,
+  const member = await tracer.span('Fetch Momence member', () => fetchMomenceMember(memberId), {
+    memberId,
   });
+
+  await tracer.span(
+    'Upsert Mailchimp subscriber',
+    () =>
+      upsertSubscriber({
+        email,
+        firstName,
+        lastName,
+        phone: member.phone,
+        birthday: member.birthday,
+      }),
+    { email }
+  );
 
   const tags = member.tags.map((name) => ({ name, status: 'active' as const }));
   if (event === 'member-assigned') {
     tags.push({ name: 'Active Guest', status: 'active' });
   }
   if (tags.length > 0) {
-    await setSubscriberTags(email, tags);
+    await tracer.span('Set Mailchimp tags', () => setSubscriberTags(email, tags), {
+      email,
+      tags: tags.map((t) => t.name),
+    });
   }
 }
 
 async function handleAddressEvent(
   event: MomenceEventType,
-  payload: MomenceAddressPayload
+  payload: MomenceAddressPayload,
+  tracer: WebhookTracer
 ): Promise<void> {
-  const member = await fetchMomenceMember(payload.memberId);
+  const member = await tracer.span(
+    'Fetch Momence member',
+    () => fetchMomenceMember(payload.memberId),
+    { memberId: payload.memberId }
+  );
 
   if (event === 'member-address-deleted') {
-    await updateSubscriberAddress(member.email, null);
+    await tracer.span(
+      'Clear Mailchimp address',
+      () => updateSubscriberAddress(member.email, null),
+      { email: member.email }
+    );
   } else {
-    await updateSubscriberAddress(member.email, {
-      addr1: payload.address,
-      city: payload.city,
-      zip: payload.zipcode,
-      country: payload.country,
-    });
+    await tracer.span(
+      'Update Mailchimp address',
+      () =>
+        updateSubscriberAddress(member.email, {
+          addr1: payload.address,
+          city: payload.city,
+          zip: payload.zipcode,
+          country: payload.country,
+        }),
+      { email: member.email, address: payload.address }
+    );
   }
 }
 
-const handler: APIRoute = async ({ request }) => {
+const handler: TracedAPIRoute = async ({ request }, tracer) => {
   try {
-    const { event, payload, requestId, timestamp } = await verifyMomenceWebhook(request);
+    const { event, payload, requestId, timestamp } = await tracer.span(
+      'Verify webhook',
+      () => verifyMomenceWebhook(request),
+      { requestId: request.headers.get('x-webhook-reqeuest-id') ?? 'unknown' }
+    );
 
     log.info(`Received event: ${event}`, { requestId, timestamp, payload });
 
     if (MEMBER_EVENTS.includes(event as MomenceEventType)) {
-      await handleMemberEvent(event as MomenceEventType, payload as MomenceMemberPayload);
+      await handleMemberEvent(event as MomenceEventType, payload as MomenceMemberPayload, tracer);
     } else if (ADDRESS_EVENTS.includes(event as MomenceEventType)) {
-      await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload);
+      await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }

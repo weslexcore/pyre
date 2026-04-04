@@ -1,10 +1,14 @@
-import type { APIRoute } from 'astro';
+import type { APIContext, APIRoute } from 'astro';
 import { recordExecution, type WebhookExecution } from './execution-store';
+import { WebhookTracer } from './tracer';
 
-export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
+export type TracedAPIRoute = (context: APIContext, tracer: WebhookTracer) => Promise<Response>;
+
+export function instrumentWebhook(source: string, handler: TracedAPIRoute): APIRoute {
   const instrumented: APIRoute = async (context) => {
     const start = Date.now();
     const id = `${source}-${start}-${Math.random().toString(36).slice(2, 8)}`;
+    const tracer = new WebhookTracer();
 
     // Clone request so inner handler can still read the body
     const clone = context.request.clone();
@@ -29,7 +33,6 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
     for (const key of headerKeys) {
       const val = context.request.headers.get(key);
       if (val) {
-        // Mask secrets — only show first/last 4 chars
         if (
           key === 'x-webhook-secret' ||
           key === 'x-webhook-signature' ||
@@ -64,7 +67,7 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
     let errorMessage = '';
 
     try {
-      response = await handler(context);
+      response = await handler(context, tracer);
       if (response.status >= 400) {
         status = 'error';
         try {
@@ -94,11 +97,11 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
       payloadSummary,
       fullPayload,
       requestHeaders,
+      traceSteps: tracer.toJSON(),
       errorMessage,
       httpStatus: response.status,
     };
 
-    // Await to avoid data loss on serverless; silently catch Redis errors
     try {
       await recordExecution(record);
     } catch (err) {
