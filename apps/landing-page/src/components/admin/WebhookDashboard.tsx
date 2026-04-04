@@ -326,10 +326,16 @@ export function WebhookDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <h1 className="font-primary-semibold text-2xl text-[var(--pyre-creme)]">
-          Webhook Executions
-        </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+        <div>
+          <h1 className="font-primary-semibold text-2xl text-[var(--pyre-creme)]">
+            Webhook Executions
+          </h1>
+          <p className="text-xs text-white/40 mt-1">
+            Webhook events from the last 14 days. Expand a row to see the full
+            trace, payload, and headers.
+          </p>
+        </div>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-white/60 cursor-pointer">
             <input
@@ -356,7 +362,7 @@ export function WebhookDashboard() {
         placeholder="Filter by event, source, email, status..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full mb-4 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30"
+        className="w-full mt-4 mb-4 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30"
       />
 
       {error && error !== 'forbidden' && (
