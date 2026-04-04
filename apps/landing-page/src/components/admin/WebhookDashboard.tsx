@@ -306,8 +306,7 @@ export function WebhookDashboard() {
   }
 
   const lowerSearch = search.toLowerCase();
-  const stringify = (v: unknown): string =>
-    typeof v === 'string' ? v : JSON.stringify(v ?? '');
+  const stringify = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v ?? ''));
   const filtered = data?.records.filter((r) => {
     if (!lowerSearch) return true;
     return (
@@ -332,8 +331,8 @@ export function WebhookDashboard() {
             Webhook Executions
           </h1>
           <p className="text-xs text-white/40 mt-1">
-            Webhook events from the last 14 days. Expand a row to see the full
-            trace, payload, and headers.
+            Webhook events from the last 14 days. Expand a row to see the full trace, payload, and
+            headers.
           </p>
         </div>
         <div className="flex items-center gap-4">
