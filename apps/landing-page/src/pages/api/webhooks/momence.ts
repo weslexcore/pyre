@@ -41,15 +41,19 @@ async function handleBookingEvent(
   payload: MomenceBookingPayload,
   tracer: WebhookTracer
 ): Promise<void> {
-  await tracer.span('Log booking event', async () => {
-    log.info(`${event}`, { payload });
-  }, {
-    sessionId: payload.sessionId,
-    sessionBookingId: payload.sessionBookingId,
-    targetMemberId: payload.targetMemberId,
-    ...(payload.isLateCancellation != null && { isLateCancellation: payload.isLateCancellation }),
-    ...(payload.cancelledAt && { cancelledAt: payload.cancelledAt }),
-  });
+  await tracer.span(
+    'Log booking event',
+    async () => {
+      log.info(`${event}`, { payload });
+    },
+    {
+      sessionId: payload.sessionId,
+      sessionBookingId: payload.sessionBookingId,
+      targetMemberId: payload.targetMemberId,
+      ...(payload.isLateCancellation != null && { isLateCancellation: payload.isLateCancellation }),
+      ...(payload.cancelledAt && { cancelledAt: payload.cancelledAt }),
+    }
+  );
 
   await tracer.span(
     'Fetch Momence member',
