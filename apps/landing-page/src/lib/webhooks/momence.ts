@@ -29,7 +29,8 @@ export type MomenceEventType =
   | 'member-address-created'
   | 'member-address-updated'
   | 'member-address-deleted'
-  | 'session-booked';
+  | 'session-booked'
+  | 'session-booking-cancelled';
 
 export interface MomenceWebhookResult<T = unknown> {
   event: string;

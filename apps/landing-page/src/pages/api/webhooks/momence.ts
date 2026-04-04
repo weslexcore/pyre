@@ -141,7 +141,7 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
     } else if (ADDRESS_EVENTS.includes(event as MomenceEventType)) {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
-      await handleBookingEvent(event as MomenceEventType, payload, tracer);
+      await handleBookingEvent(event as MomenceEventType, payload as MomenceBookingPayload, tracer);
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }
