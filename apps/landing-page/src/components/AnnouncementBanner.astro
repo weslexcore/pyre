@@ -1,7 +1,7 @@
 ---
 import bannerConfig from '../lib/banner';
 
-if (!bannerConfig.enabled) return;
+if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
 ---
 
 <div

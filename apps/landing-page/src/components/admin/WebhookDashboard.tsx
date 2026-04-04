@@ -10,6 +10,8 @@ interface WebhookExecution {
   status: 'success' | 'error';
   durationMs: number;
   payloadSummary: string;
+  fullPayload: string;
+  requestHeaders: string;
   errorMessage: string;
   httpStatus: number;
 }
@@ -50,6 +52,26 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
   return <span title={full}>{label}</span>;
 }
 
+function formatJson(str: string): string {
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2);
+  } catch {
+    return str;
+  }
+}
+
+function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="group">
+      <summary className="text-white/40 cursor-pointer hover:text-white/60 select-none">
+        {label}
+        <span className="ml-1 text-xs text-white/20 group-open:hidden">+</span>
+      </summary>
+      <div className="mt-1">{children}</div>
+    </details>
+  );
+}
+
 function ExpandedRow({ record }: { record: WebhookExecution }) {
   let payload: Record<string, string> = {};
   try {
@@ -59,7 +81,7 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
   }
 
   return (
-    <div className="px-4 py-3 bg-[var(--pyre-black)] border-t border-white/5 text-sm space-y-2">
+    <div className="px-4 py-3 bg-[var(--pyre-black)] border-t border-white/5 text-sm space-y-3">
       <div className="grid grid-cols-2 gap-4 max-w-lg">
         <div>
           <span className="text-white/40">Request ID</span>
@@ -81,7 +103,12 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
             <p className="text-white/70">{payload.memberId}</p>
           </div>
         )}
+        <div>
+          <span className="text-white/40">Timestamp</span>
+          <p className="text-white/70 text-xs">{new Date(record.timestamp).toISOString()}</p>
+        </div>
       </div>
+
       {record.errorMessage && (
         <div>
           <span className="text-white/40">Error</span>
@@ -90,10 +117,22 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
           </pre>
         </div>
       )}
-      <div>
-        <span className="text-white/40">Timestamp</span>
-        <p className="text-white/70 text-xs">{new Date(record.timestamp).toISOString()}</p>
-      </div>
+
+      {record.fullPayload && record.fullPayload !== '{}' && (
+        <DetailSection label="Full Payload">
+          <pre className="text-xs text-white/70 bg-white/5 rounded p-2 overflow-x-auto max-h-80 overflow-y-auto">
+            {formatJson(record.fullPayload)}
+          </pre>
+        </DetailSection>
+      )}
+
+      {record.requestHeaders && record.requestHeaders !== '{}' && (
+        <DetailSection label="Request Headers">
+          <pre className="text-xs text-white/70 bg-white/5 rounded p-2 overflow-x-auto">
+            {formatJson(record.requestHeaders)}
+          </pre>
+        </DetailSection>
+      )}
     </div>
   );
 }
@@ -164,10 +203,8 @@ export function WebhookDashboard() {
   if (!isAuthenticated || !user) {
     return (
       <div className="max-w-md mx-auto text-center py-16 px-4">
-        <h1 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
-          Admin Access Required
-        </h1>
-        <p className="text-white/60 mb-6">Log in to view webhook executions.</p>
+        <h1 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">Sign In</h1>
+        <p className="text-white/60 mb-6">Log in to continue.</p>
         <button
           type="button"
           onClick={() => login({ returnUrl: '/admin/webhooks' })}
@@ -184,9 +221,9 @@ export function WebhookDashboard() {
     return (
       <div className="max-w-md mx-auto text-center py-16 px-4">
         <h1 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
-          Access Denied
+          Unauthorized
         </h1>
-        <p className="text-white/60">Your account does not have admin access.</p>
+        <p className="text-white/60">You do not have access to this page.</p>
       </div>
     );
   }

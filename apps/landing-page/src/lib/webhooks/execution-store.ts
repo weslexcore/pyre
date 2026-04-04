@@ -13,6 +13,8 @@ export interface WebhookExecution {
   status: 'success' | 'error';
   durationMs: number;
   payloadSummary: string; // JSON: { email?, memberId? }
+  fullPayload: string; // Full parsed webhook payload as JSON
+  requestHeaders: string; // Relevant request headers as JSON
   errorMessage: string;
   httpStatus: number;
 }

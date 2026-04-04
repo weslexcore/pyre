@@ -2,7 +2,7 @@
 import promoConfig from '../lib/promoPopup';
 import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
-if (!promoConfig.enabled) return;
+if (!promoConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
 
 const hasForm = !!promoConfig.form;
 ---

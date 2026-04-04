@@ -11,7 +11,37 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
 
     let eventType = 'unknown';
     let payloadSummary = '{}';
+    let fullPayload = '{}';
     const requestId = context.request.headers.get('x-webhook-reqeuest-id') ?? 'unknown';
+
+    // Capture relevant request headers
+    const headerKeys = [
+      'x-webhook-secret',
+      'x-webhook-signature',
+      'x-webhook-reqeuest-id',
+      'content-type',
+      'user-agent',
+      'x-forwarded-for',
+      'x-vercel-id',
+      'authorization',
+    ];
+    const headers: Record<string, string> = {};
+    for (const key of headerKeys) {
+      const val = context.request.headers.get(key);
+      if (val) {
+        // Mask secrets — only show first/last 4 chars
+        if (
+          key === 'x-webhook-secret' ||
+          key === 'x-webhook-signature' ||
+          key === 'authorization'
+        ) {
+          headers[key] = val.length > 12 ? `${val.slice(0, 4)}...${val.slice(-4)}` : '***';
+        } else {
+          headers[key] = val;
+        }
+      }
+    }
+    const requestHeaders = JSON.stringify(headers);
 
     // Try to extract metadata from the cloned request
     try {
@@ -19,6 +49,7 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
       if (body.payload && typeof body.payload === 'string') {
         const parsed = JSON.parse(body.payload);
         eventType = parsed.event ?? 'unknown';
+        fullPayload = JSON.stringify(parsed).slice(0, 10_000);
         const summary: Record<string, string> = {};
         if (parsed.payload?.email) summary.email = parsed.payload.email;
         if (parsed.payload?.memberId) summary.memberId = parsed.payload.memberId;
@@ -61,6 +92,8 @@ export function instrumentWebhook(source: string, handler: APIRoute): APIRoute {
       status,
       durationMs: Date.now() - start,
       payloadSummary,
+      fullPayload,
+      requestHeaders,
       errorMessage,
       httpStatus: response.status,
     };
