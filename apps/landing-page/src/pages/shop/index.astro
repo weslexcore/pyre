@@ -4,6 +4,7 @@ export const prerender = true;
 import ProductCard from '@/components/shop/ProductCard.astro';
 import MainLayout from '@/layouts/main.astro';
 import shop from '@/lib/shop';
+import ogImg from '@/assets/images/merch/pyre-og-sticker/DSCF4143.webp';
 
 const title = `${shop.title} - Pyre`;
 const description = shop.subtitle || 'Browse Pyre merchandise and essentials.';
@@ -12,7 +13,7 @@ const products = shop.products;
 const categories = [...new Set(products.map((p) => p.category))].sort();
 ---
 
-<MainLayout title={title} description={description} transparentNav={true}>
+<MainLayout title={title} description={description} transparentNav={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
   <div class="min-h-screen bg-[var(--pyre-black)] pb-16 pt-24 md:pt-32">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <header class="mb-12">

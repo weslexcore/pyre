@@ -3,6 +3,7 @@ export const prerender = true;
 
 import { Image } from 'astro:assets';
 import saunaLadle from '../assets/images/sauna_ladle.webp';
+import ogImg from '../assets/images/plunging.webp';
 import Layout from '../layouts/main.astro';
 import { healthSafety } from '../lib/healthSafety';
 
@@ -10,7 +11,7 @@ const pageTitle = `${healthSafety.title} | Pyre Sauna`;
 const description = healthSafety.intro ?? healthSafety.sections[0]?.paragraphs?.[0] ?? '';
 ---
 
-<Layout title={pageTitle} description={description}>
+<Layout title={pageTitle} description={description} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
 	{healthSafety.headerImage && (
 		<div class="w-full max-h-[45dvh] overflow-hidden">
 			<Image 

@@ -33,6 +33,8 @@ interface Props {
   title?: string;
   description?: string;
   ogImage?: string;
+  ogImageWidth?: number;
+  ogImageHeight?: number;
   ogType?: 'website' | 'article';
   article?: {
     publishedTime?: string;
@@ -48,6 +50,8 @@ const {
   title = 'Pyre Sauna + Cold Plunge | Richmond, VA',
   description = 'A social wellness club in Richmond, VA. Traditional saunas, cold plunge, and guided classes for your health and wellness journey.',
   ogImage,
+  ogImageWidth,
+  ogImageHeight,
   ogType = 'website',
   article,
   isHomePage = false,
@@ -99,8 +103,8 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		<meta property="og:site_name" content={SITE_NAME} />
 		<meta property="og:locale" content={SITE_LOCALE} />
     <meta property="og:image" content={absoluteSocialImage} />
-    <meta property="og:image:width" content={String(SOCIAL_IMAGE_WIDTH)} />
-    <meta property="og:image:height" content={String(SOCIAL_IMAGE_HEIGHT)} />
+    <meta property="og:image:width" content={String(ogImageWidth ?? SOCIAL_IMAGE_WIDTH)} />
+    <meta property="og:image:height" content={String(ogImageHeight ?? SOCIAL_IMAGE_HEIGHT)} />
     <meta property="og:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
 		
 		<!-- Article-specific Open Graph tags -->

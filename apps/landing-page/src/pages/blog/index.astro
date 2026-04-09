@@ -1,5 +1,5 @@
 ---
-export const prerender = true;
+export const prerender = false;
 
 import { getCollection } from 'astro:content';
 import BlogPostCard from '@/components/blog/BlogPostCard.astro';
@@ -8,13 +8,14 @@ import BlogTagFilter from '@/components/blog/BlogTagFilter.astro';
 import GradientOverlay from '@/components/GradientOverlay.astro';
 import MainLayout from '@/layouts/main.astro';
 import { BLOG_CONFIG } from '@/lib/blog-config';
+import ogImg from '@/assets/images/cyano_sweat_logo.jpg';
 import { calculateReadingTime } from '@/lib/reading-time';
 import type { BlogPostCard as BlogPostCardType, TagWithCount } from '@/lib/types';
 
-// Fetch all blog posts
+// Fetch all blog posts (exclude drafts and future-dated posts)
+const now = new Date();
 const allPosts = await getCollection('blog', ({ data }) => {
-  // Filter out draft posts
-  return data.draft !== true;
+  return data.draft !== true && data.date <= now;
 });
 
 // Sort posts in reverse chronological order (newest first)
@@ -62,7 +63,7 @@ const description =
   'Explore articles about sauna wellness, health benefits, and the Pyre community.';
 ---
 
-<MainLayout title={title} description={description} transparentNav>
+<MainLayout title={title} description={description} transparentNav ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
   <div class="min-h-screen bg-[var(--pyre-black)] pb-16 pt-24 md:pt-32">
     <GradientOverlay variant="hero-mobile" />
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

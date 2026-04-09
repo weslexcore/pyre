@@ -20,10 +20,11 @@ import SessionSection from '../components/SessionSection.astro';
 import SignupForm from '../components/SignupForm.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
 import Layout from '../layouts/main.astro';
+import ogImg from '../assets/images/cyano_sweat_logo.jpg';
 import { heroGrainGradient } from '../lib/shader-configs';
 ---
 
-<Layout isHomePage={true}>
+<Layout isHomePage={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
   <div class="dark">
     <!-- Mobile: three-layer scroll effect -->
     <!-- Black background prevents white showing during overscroll bounce -->
