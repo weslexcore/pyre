@@ -171,14 +171,22 @@ const categories = [...new Set(products.map((p) => p.category))].sort();
     for (const item of items) grid.appendChild(item);
   }
 
+  function enableAllCards() {
+    document.querySelectorAll<HTMLElement>('[data-momence-id]').forEach((card) => {
+      card.classList.remove('pointer-events-none');
+      card.classList.add('hover:bg-[var(--pyre-creme)]/8');
+    });
+  }
+
   async function hydrateStock() {
     const base = import.meta.env.BASE_URL ?? '/';
     let data: StockMap;
     try {
       const res = await fetch(`${base}api/shop-stock`.replace(/\/\//g, '/'));
-      if (!res.ok) return;
+      if (!res.ok) { enableAllCards(); return; }
       data = await res.json();
     } catch {
+      enableAllCards();
       return;
     }
 
@@ -203,9 +211,14 @@ const categories = [...new Set(products.map((p) => p.category))].sort();
         if (variantsEl) renderVariants(variantsEl, stock.variants);
       }
 
+      // Enable pointer events now that stock is known so hover gallery works
+      card.classList.remove('pointer-events-none');
+
       if (stock.soldOut) {
         anySoldOut = true;
         applySoldOutState(card);
+      } else {
+        card.classList.add('hover:bg-[var(--pyre-creme)]/8');
       }
     });
 
