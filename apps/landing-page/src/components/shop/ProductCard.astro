@@ -8,6 +8,7 @@ interface Props {
 
 const { product } = Astro.props;
 const hasMultipleImages = product.images.length > 1;
+const needsStockCheck = !!product.momenceId;
 ---
 
 <a
@@ -15,7 +16,10 @@ const hasMultipleImages = product.images.length > 1;
   target="_blank"
   rel="noopener noreferrer"
   aria-label={`Buy ${product.name}`}
-  class="group relative flex flex-col overflow-hidden rounded-lg bg-[var(--pyre-creme)]/5 transition-colors hover:bg-[var(--pyre-creme)]/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+  class:list={[
+    'group relative flex flex-col overflow-hidden rounded-lg bg-[var(--pyre-creme)]/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]',
+    needsStockCheck ? 'pointer-events-none' : 'hover:bg-[var(--pyre-creme)]/8',
+  ]}
   data-product-card
   data-momence-id={product.momenceId}
   data-purchase-url={product.purchaseUrl}
@@ -93,9 +97,16 @@ const hasMultipleImages = product.images.length > 1;
     <div class="flex flex-wrap gap-1.5 pt-1 empty:hidden" data-product-variants></div>
 
     <div class="mt-auto pt-4" data-product-cta>
-      <span class="inline-block w-full rounded-full bg-[var(--pyre-red)] px-4 py-2.5 text-center font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors group-hover:bg-[var(--pyre-red)]/85">
-        Buy Now
-      </span>
+      {needsStockCheck ? (
+        <span class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[var(--pyre-creme)]/20 px-4 py-2.5 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]/40">
+          <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          Checking stock
+        </span>
+      ) : (
+        <span class="inline-block w-full rounded-full bg-[var(--pyre-red)] px-4 py-2.5 text-center font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors group-hover:bg-[var(--pyre-red)]/85">
+          Buy Now
+        </span>
+      )}
     </div>
   </div>
 </a>

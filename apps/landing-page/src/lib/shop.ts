@@ -29,7 +29,7 @@ const shop: ShopContent = {
     {
       id: 'duality-shirt',
       momenceId: 439332,
-      name: 'Pyre Duality Shirt',
+      name: 'Duality Shirt',
       // description:
       //   'An extremely comfortable tee that showcases the human connection of sauna bathing.',
       price: 30,
@@ -45,7 +45,7 @@ const shop: ShopContent = {
     {
       id: 'og-sticker',
       momenceId: 439371,
-      name: 'Pyre OG Sticker',
+      name:  'OG Sticker',
       // description:
       //   'A limited edition sticker featuring the Pyre logo.',
       price: 3,
