@@ -112,99 +112,33 @@ const needsStockCheck = !!product.momenceId;
 </a>
 
 <script>
-  const ROTATE_MS = 4000;
-  const hoverNoneMq = window.matchMedia('(hover: none)');
-  const reduceMotionMq = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-  const galleryDisposers: Array<() => void> = [];
-
-  function setupGallery(gallery: HTMLElement): (() => void) | undefined {
-    const slides = gallery.querySelectorAll<HTMLElement>('[data-gallery-slide]');
-    const dots = gallery.querySelectorAll<HTMLElement>('[data-gallery-dot]');
-    if (slides.length < 2) return undefined;
-
-    const count = slides.length;
-    let current = 0;
-
-    function show(index: number) {
-      current = ((index % count) + count) % count;
-      slides.forEach((s, i) => {
-        s.classList.toggle('opacity-100', i === current);
-        s.classList.toggle('opacity-0', i !== current);
-      });
-      dots.forEach((d, i) => {
-        d.classList.toggle('bg-[var(--pyre-creme)]', i === current);
-        d.classList.toggle('w-3', i === current);
-        d.classList.toggle('bg-[var(--pyre-creme)]/40', i !== current);
-        d.classList.toggle('w-1.5', i !== current);
-      });
-    }
-
-    const abort = new AbortController();
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let observer: IntersectionObserver | null = null;
-
-    function clearRotate() {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    }
-
-    if (hoverNoneMq.matches) {
-      // Tap still advances (in addition to autorotate when motion is allowed).
-      gallery.addEventListener(
-        'click',
-        (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          show(current + 1);
-        },
-        { signal: abort.signal }
-      );
-
-      if (!reduceMotionMq.matches) {
-        observer = new IntersectionObserver(
-          (entries) => {
-            for (const entry of entries) {
-              if (entry.target !== gallery) continue;
-              if (entry.isIntersecting) {
-                if (intervalId === null) {
-                  intervalId = setInterval(() => show(current + 1), ROTATE_MS);
-                }
-              } else {
-                clearRotate();
-              }
-            }
-          },
-          { threshold: 0.25 }
-        );
-        observer.observe(gallery);
-      }
-    } else {
-      gallery.addEventListener('mouseenter', () => show(current + 1), { signal: abort.signal });
-      gallery.addEventListener('mouseleave', () => show(0), { signal: abort.signal });
-    }
-
-    return () => {
-      abort.abort();
-      clearRotate();
-      observer?.disconnect();
-    };
-  }
-
   function initGalleries() {
-    for (const dispose of galleryDisposers) dispose();
-    galleryDisposers.length = 0;
-
     document.querySelectorAll<HTMLElement>('[data-gallery]').forEach((gallery) => {
-      const dispose = setupGallery(gallery);
-      if (dispose) galleryDisposers.push(dispose);
+      const slides = gallery.querySelectorAll<HTMLElement>('[data-gallery-slide]');
+      const dots = gallery.querySelectorAll<HTMLElement>('[data-gallery-dot]');
+      if (slides.length < 2) return;
+
+      const count = slides.length;
+      let current = 0;
+
+      function show(index: number) {
+        current = ((index % count) + count) % count;
+        slides.forEach((s, i) => {
+          s.classList.toggle('opacity-100', i === current);
+          s.classList.toggle('opacity-0', i !== current);
+        });
+        dots.forEach((d, i) => {
+          d.classList.toggle('bg-[var(--pyre-creme)]', i === current);
+          d.classList.toggle('w-3', i === current);
+          d.classList.toggle('bg-[var(--pyre-creme)]/40', i !== current);
+          d.classList.toggle('w-1.5', i !== current);
+        });
+      }
+
+      gallery.addEventListener('mouseenter', () => show(current + 1));
+      gallery.addEventListener('mouseleave', () => show(0));
     });
   }
-
-  hoverNoneMq.addEventListener('change', initGalleries);
-  reduceMotionMq.addEventListener('change', initGalleries);
 
   initGalleries();
   document.addEventListener('astro:after-swap', initGalleries);
