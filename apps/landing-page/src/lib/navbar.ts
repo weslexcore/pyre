@@ -42,6 +42,11 @@ const navbar: NavbarContent = {
         ariaLabel: 'Frequently asked questions',
       },
       {
+        label: 'Shop',
+        href: withBase('/shop'),
+        ariaLabel: 'Browse Pyre merchandise',
+      },
+      {
         label: 'Blog',
         href: withBase('/blog'),
         ariaLabel: 'Read our blog',

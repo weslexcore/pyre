@@ -1,0 +1,109 @@
+---
+export const prerender = false;
+
+import ProductCard from '@/components/shop/ProductCard.astro';
+import MainLayout from '@/layouts/main.astro';
+import { getShopProductsWithStock } from '@/lib/momence-products';
+import shop from '@/lib/shop';
+
+const title = `${shop.title} - Pyre`;
+const description = shop.subtitle || 'Browse Pyre merchandise and essentials.';
+
+const products = await getShopProductsWithStock(shop.products);
+const categories = [...new Set(products.map((p) => p.category))].sort();
+
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, s-maxage=60, stale-while-revalidate=120'
+);
+---
+
+<MainLayout title={title} description={description} transparentNav={true}>
+  <div class="min-h-screen bg-[var(--pyre-black)] pb-16 pt-24 md:pt-32">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <header class="mb-12">
+        <h1 class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4 text-[var(--pyre-creme)]">
+          {shop.title}
+        </h1>
+        {shop.subtitle && (
+          <p class="font-sans text-xl leading-relaxed text-[var(--pyre-creme)]/70">
+            {shop.subtitle}
+          </p>
+        )}
+      </header>
+
+      {/* Category filters */}
+      {categories.length > 1 && (
+        <nav aria-label="Filter by product type" class="mb-8 flex flex-wrap gap-2" data-shop-filters>
+          <button
+            type="button"
+            data-filter="all"
+            class="rounded-full border border-[var(--pyre-creme)]/20 bg-[var(--pyre-creme)] px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-black)] transition-colors"
+          >
+            All
+          </button>
+          {categories.map((cat) => (
+            <button
+              type="button"
+              data-filter={cat}
+              class="rounded-full border border-[var(--pyre-creme)]/20 px-4 py-1.5 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]/70 transition-colors hover:border-[var(--pyre-creme)]/40 hover:text-[var(--pyre-creme)]"
+            >
+              {cat}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {products.length > 0 ? (
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" data-shop-grid>
+          {products.map((product) => (
+            <div data-category={product.category}>
+              <ProductCard product={product} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="flex flex-col items-center justify-center py-24 text-center">
+          <p class="font-mono text-sm uppercase tracking-wide text-[var(--pyre-creme)]/40">
+            {shop.emptyMessage}
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+</MainLayout>
+
+<script>
+  const ACTIVE = 'bg-[var(--pyre-creme)] text-[var(--pyre-black)] border-[var(--pyre-creme)]';
+  const INACTIVE =
+    'border-[var(--pyre-creme)]/20 text-[var(--pyre-creme)]/70';
+
+  function initFilters() {
+    const filterNav = document.querySelector<HTMLElement>('[data-shop-filters]');
+    const grid = document.querySelector<HTMLElement>('[data-shop-grid]');
+    if (!filterNav || !grid) return;
+
+    const buttons = filterNav.querySelectorAll<HTMLButtonElement>('[data-filter]');
+    const items = grid.querySelectorAll<HTMLElement>('[data-category]');
+
+    function setFilter(category: string) {
+      buttons.forEach((btn) => {
+        const isActive = btn.dataset.filter === category;
+        ACTIVE.split(' ').forEach((c) => btn.classList.toggle(c, isActive));
+        INACTIVE.split(' ').forEach((c) => btn.classList.toggle(c, !isActive));
+      });
+
+      items.forEach((item) => {
+        const match = category === 'all' || item.dataset.category === category;
+        item.style.display = match ? '' : 'none';
+      });
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => setFilter(btn.dataset.filter!));
+    });
+  }
+
+  initFilters();
+  document.addEventListener('astro:after-swap', initFilters);
+</script>

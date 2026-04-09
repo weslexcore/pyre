@@ -495,6 +495,31 @@ export interface GroupBookingContent {
 }
 
 // ------------------------------------------------------------
+// Private rentals section types
+// ------------------------------------------------------------
+
+export interface PrivateRentalTier {
+  name: string;
+  price: number;
+  extraDayPrice: number;
+  features: string[];
+  imageAlt: string;
+}
+
+export interface PrivateRentalsContent {
+  title: string;
+  subtitle?: string;
+  description: string[];
+  unitSummary: string;
+  periodLabel: string;
+  logistics: string[];
+  addonSummary: string;
+  tiers: [PrivateRentalTier, PrivateRentalTier];
+  email?: string;
+  cta: ActionRef;
+}
+
+// ------------------------------------------------------------
 // Gift Card section types
 // ------------------------------------------------------------
 
@@ -503,6 +528,67 @@ export interface GiftCardContent {
   subtitle?: string;
   description: string[];
   cta: ActionRef;
+}
+
+// ------------------------------------------------------------
+// Shop / merchandise types
+// ------------------------------------------------------------
+
+import type { ImageMetadata } from 'astro';
+
+export interface ShopImage {
+  src: ImageMetadata;
+  alt: string;
+}
+
+export interface ShopVariant {
+  name: string;
+  price?: number;
+  soldOut?: boolean;
+}
+
+export interface ShopProduct {
+  id: string;
+  momenceId?: number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  images: ShopImage[];
+  purchaseUrl: string;
+  variants?: ShopVariant[];
+  badge?: string;
+  soldOut?: boolean;
+}
+
+export interface MomenceProductVariant {
+  id: number;
+  name: string;
+  price: number;
+  link: string;
+  leftInStock: number | null;
+  isDeleted: boolean;
+}
+
+export interface MomenceProduct {
+  id: number;
+  name: string;
+  description: string | null;
+  link: string;
+  imageLink: string;
+  price: number;
+  leftInStock: number | null;
+  category?: string;
+  isDeleted: boolean;
+  availableForShipping: boolean;
+  variants: MomenceProductVariant[];
+}
+
+export interface ShopContent {
+  title: string;
+  subtitle?: string;
+  products: ShopProduct[];
+  emptyMessage?: string;
 }
 
 // ------------------------------------------------------------
