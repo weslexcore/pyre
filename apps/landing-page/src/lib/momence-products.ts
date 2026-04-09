@@ -1,4 +1,4 @@
-import type { MomenceProduct, ShopProduct, ShopVariant } from './types';
+import type { MomenceProduct, StockInfo, StockMap } from './types';
 
 const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
@@ -12,7 +12,7 @@ const SIZE_ORDER: Record<string, number> = {
   '3XL': 6,
 };
 
-function sortVariants(variants: ShopVariant[]): ShopVariant[] {
+function sortVariantsBySize<T extends { name: string }>(variants: T[]): T[] {
   return [...variants].sort((a, b) => {
     const aOrder = SIZE_ORDER[a.name.toUpperCase()] ?? 99;
     const bOrder = SIZE_ORDER[b.name.toUpperCase()] ?? 99;
@@ -20,10 +20,11 @@ function sortVariants(variants: ShopVariant[]): ShopVariant[] {
   });
 }
 
-/**
- * Fetch products from the Momence v1 API.
- */
-async function fetchMomenceProducts(): Promise<MomenceProduct[]> {
+export function isOutOfStock(leftInStock: number | null): boolean {
+  return leftInStock === null || leftInStock <= 0;
+}
+
+export async function fetchMomenceProducts(): Promise<MomenceProduct[]> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
@@ -43,73 +44,46 @@ async function fetchMomenceProducts(): Promise<MomenceProduct[]> {
     }
 
     const data = await res.json();
-    // console.log(data);
     return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('[Shop] Failed to fetch products:', err);
     return [];
   }
 }
- 
-function isOutOfStock(leftInStock: number | null): boolean {
-  return leftInStock === null || leftInStock <= 0;
-}
 
 /**
- * Merge live Momence data onto the static product catalog.
- *
- * Static config provides: images, descriptions, categories.
- * Momence provides: price, variants, stock levels, purchase links.
- *
- * Products without a `momenceId` are passed through unchanged (useful for
- * items not yet in Momence).
+ * Build a stock map keyed by Momence product ID.
+ * Consumed by the /api/shop-stock endpoint and sent to the client
+ * for hydrating the statically rendered shop page.
  */
-export async function getShopProductsWithStock(
-  staticProducts: ShopProduct[]
-): Promise<ShopProduct[]> {
-  const momenceProducts = await fetchMomenceProducts();
+export function buildStockMap(momenceProducts: MomenceProduct[]): StockMap {
+  const map: StockMap = {};
 
-  if (momenceProducts.length === 0) {
-    return staticProducts;
+  for (const product of momenceProducts) {
+    if (product.isDeleted) continue;
+
+    const variants = sortVariantsBySize(
+      product.variants
+        .filter((v) => !v.isDeleted)
+        .map((v) => ({
+          name: v.name,
+          price: v.price !== product.price ? v.price : undefined,
+          soldOut: isOutOfStock(v.leftInStock),
+        }))
+    );
+
+    const allVariantsSoldOut = variants.length > 0 && variants.every((v) => v.soldOut);
+    const soldOut = isOutOfStock(product.leftInStock) || allVariantsSoldOut;
+
+    const entry: StockInfo = {
+      price: product.price,
+      purchaseUrl: product.link,
+      soldOut,
+      variants,
+    };
+
+    map[String(product.id)] = entry;
   }
 
-  const momenceById = new Map(momenceProducts.map((p) => [p.id, p]));
-
-  return staticProducts
-    .map((product) => {
-      if (!product.momenceId) return product;
-
-      const live = momenceById.get(product.momenceId);
-      if (!live) return product;
-
-      if (live.isDeleted) return null;
-
-      const liveVariants =
-        live.variants.length > 0
-          ? sortVariants(
-              live.variants
-                .filter((v) => !v.isDeleted)
-                .map((v) => ({
-                  name: v.name,
-                  price: v.price !== live.price ? v.price : undefined,
-                  soldOut: isOutOfStock(v.leftInStock),
-                }))
-            )
-          : product.variants;
-
-      const allVariantsSoldOut =
-        liveVariants && liveVariants.length > 0 && liveVariants.every((v) => v.soldOut);
-
-      const productSoldOut = isOutOfStock(live.leftInStock) || allVariantsSoldOut;
-
-      return {
-        ...product,
-        price: live.price,
-        purchaseUrl: live.link,
-        variants: liveVariants,
-        soldOut: productSoldOut || undefined,
-      } satisfies ShopProduct;
-    })
-    .filter((p): p is ShopProduct => p !== null)
-    .sort((a, b) => Number(!!a.soldOut) - Number(!!b.soldOut));
+  return map;
 }

@@ -551,7 +551,7 @@ export interface ShopProduct {
   id: string;
   momenceId?: number;
   name: string;
-  description: string;
+  description?: string;
   price: number;
   category: string;
   images: ShopImage[];
@@ -590,6 +590,21 @@ export interface ShopContent {
   products: ShopProduct[];
   emptyMessage?: string;
 }
+
+export interface StockVariantInfo {
+  name: string;
+  price?: number;
+  soldOut: boolean;
+}
+
+export interface StockInfo {
+  price: number;
+  purchaseUrl: string;
+  soldOut: boolean;
+  variants: StockVariantInfo[];
+}
+
+export type StockMap = Record<string, StockInfo>;
 
 // ------------------------------------------------------------
 // Blog types

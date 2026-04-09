@@ -3,10 +3,9 @@ import type { ShopContent } from './types';
 import bathouseTote1 from '../assets/images/merch/bathhouse-tote/DSCF4134.webp';
 import bathouseTote2 from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
 import dualityShirt1 from '../assets/images/merch/duality-shirt/DSCF4130.webp';
-import dualityShirt2 from '../assets/images/merch/duality-shirt/DSCF4239.webp';
-import dualityShirt3 from '../assets/images/merch/duality-shirt/DSCF4243.webp';
 import dualityShirt4 from '../assets/images/merch/duality-shirt/DSCF4126.webp';
 import ogSticker from '../assets/images/merch/pyre-og-sticker/DSCF4141.webp';
+import ogSticker2 from '../assets/images/merch/pyre-og-sticker/DSCF4143.webp';
 
 const shop: ShopContent = {
   title: 'Shop',
@@ -38,8 +37,8 @@ const shop: ShopContent = {
       images: [
         { src: dualityShirt4, alt: 'Pyre Duality Shirt — back' },
         { src: dualityShirt1, alt: 'Pyre Duality Shirt — worn' },
-        { src: dualityShirt2, alt: 'Pyre Duality Shirt — front' },
-        { src: dualityShirt3, alt: 'Pyre Duality Shirt — detail' },
+        // { src: dualityShirt2, alt: 'Pyre Duality Shirt — front' },
+        // { src: dualityShirt3, alt: 'Pyre Duality Shirt — detail' },
       ],
       purchaseUrl: 'https://momence.com/g/439332',
     },
@@ -52,6 +51,7 @@ const shop: ShopContent = {
       price: 3,
       category: 'Accessories',
       images: [
+        { src: ogSticker2, alt: 'Pyre OG Sticker' },
         { src: ogSticker, alt: 'Pyre OG Sticker' },
       ],
       purchaseUrl: 'https://momence.com/g/439371',

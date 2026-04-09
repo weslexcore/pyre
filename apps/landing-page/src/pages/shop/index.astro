@@ -1,21 +1,15 @@
 ---
-export const prerender = false;
+export const prerender = true;
 
 import ProductCard from '@/components/shop/ProductCard.astro';
 import MainLayout from '@/layouts/main.astro';
-import { getShopProductsWithStock } from '@/lib/momence-products';
 import shop from '@/lib/shop';
 
 const title = `${shop.title} - Pyre`;
 const description = shop.subtitle || 'Browse Pyre merchandise and essentials.';
 
-const products = await getShopProductsWithStock(shop.products);
+const products = shop.products;
 const categories = [...new Set(products.map((p) => p.category))].sort();
-
-Astro.response.headers.set(
-  'Cache-Control',
-  'public, s-maxage=60, stale-while-revalidate=120'
-);
 ---
 
 <MainLayout title={title} description={description} transparentNav={true}>
@@ -57,7 +51,7 @@ Astro.response.headers.set(
       {products.length > 0 ? (
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" data-shop-grid>
           {products.map((product) => (
-            <div data-category={product.category}>
+            <div data-category={product.category} data-grid-item>
               <ProductCard product={product} />
             </div>
           ))}
@@ -75,8 +69,7 @@ Astro.response.headers.set(
 
 <script>
   const ACTIVE = 'bg-[var(--pyre-creme)] text-[var(--pyre-black)] border-[var(--pyre-creme)]';
-  const INACTIVE =
-    'border-[var(--pyre-creme)]/20 text-[var(--pyre-creme)]/70';
+  const INACTIVE = 'border-[var(--pyre-creme)]/20 text-[var(--pyre-creme)]/70';
 
   function initFilters() {
     const filterNav = document.querySelector<HTMLElement>('[data-shop-filters]');
@@ -104,6 +97,125 @@ Astro.response.headers.set(
     });
   }
 
-  initFilters();
-  document.addEventListener('astro:after-swap', initFilters);
+  interface StockVariant {
+    name: string;
+    price?: number;
+    soldOut: boolean;
+  }
+
+  interface StockEntry {
+    price: number;
+    purchaseUrl: string;
+    soldOut: boolean;
+    variants: StockVariant[];
+  }
+
+  type StockMap = Record<string, StockEntry>;
+
+  function applySoldOutState(card: HTMLElement) {
+    card.removeAttribute('href');
+    card.setAttribute('aria-disabled', 'true');
+    card.setAttribute(
+      'aria-label',
+      card.getAttribute('aria-label')?.replace(/^Buy /, '') + ' — sold out'
+    );
+    card.classList.remove(
+      'hover:bg-[var(--pyre-creme)]/8',
+      'focus-visible:outline-none',
+      'focus-visible:ring-2',
+      'focus-visible:ring-[var(--pyre-red)]',
+      'focus-visible:ring-offset-2',
+      'focus-visible:ring-offset-[var(--pyre-black)]'
+    );
+    card.classList.add('cursor-default');
+    card.querySelectorAll<HTMLImageElement>('[data-product-img]').forEach((img) => {
+      img.classList.add('opacity-50', 'grayscale');
+    });
+
+    const badge = card.querySelector<HTMLElement>('[data-product-badge]');
+    if (badge) {
+      badge.classList.remove('bg-[var(--pyre-red)]', 'text-[var(--pyre-creme)]');
+      badge.classList.add('bg-[var(--pyre-creme)]/20', 'text-[var(--pyre-creme)]/50');
+    }
+
+    const cta = card.querySelector<HTMLElement>('[data-product-cta]');
+    if (cta) {
+      cta.innerHTML =
+        '<span class="inline-block w-full rounded-full border border-[var(--pyre-creme)]/20 px-4 py-2.5 text-center font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]/30">Sold Out</span>';
+    }
+  }
+
+  function renderVariants(container: HTMLElement, variants: StockVariant[]) {
+    container.innerHTML = variants
+      .map((v) => {
+        const classes = v.soldOut
+          ? 'border-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]/25 line-through'
+          : 'border-[var(--pyre-creme)]/20 text-[var(--pyre-creme)]/70';
+        return `<span class="rounded-full border px-2.5 py-0.5 font-mono text-[0.65rem] font-bold uppercase tracking-wide transition-colors ${classes}">${v.name}</span>`;
+      })
+      .join('');
+  }
+
+  function reorderGrid() {
+    const grid = document.querySelector<HTMLElement>('[data-shop-grid]');
+    if (!grid) return;
+
+    const items = [...grid.querySelectorAll<HTMLElement>('[data-grid-item]')];
+    items.sort((a, b) => {
+      const aOut = a.querySelector('[aria-disabled="true"]') ? 1 : 0;
+      const bOut = b.querySelector('[aria-disabled="true"]') ? 1 : 0;
+      return aOut - bOut;
+    });
+
+    for (const item of items) grid.appendChild(item);
+  }
+
+  async function hydrateStock() {
+    const base = import.meta.env.BASE_URL ?? '/';
+    let data: StockMap;
+    try {
+      const res = await fetch(`${base}api/shop-stock`.replace(/\/\//g, '/'));
+      if (!res.ok) return;
+      data = await res.json();
+    } catch {
+      return;
+    }
+
+    const cards = document.querySelectorAll<HTMLElement>('[data-momence-id]');
+    let anySoldOut = false;
+
+    cards.forEach((card) => {
+      const momenceId = card.dataset.momenceId;
+      if (!momenceId || !data[momenceId]) return;
+
+      const stock = data[momenceId];
+
+      const priceEl = card.querySelector<HTMLElement>('[data-product-price]');
+      if (priceEl) priceEl.textContent = `$${stock.price}`;
+
+      if (stock.purchaseUrl) {
+        card.setAttribute('href', stock.purchaseUrl);
+      }
+
+      if (stock.variants.length > 0) {
+        const variantsEl = card.querySelector<HTMLElement>('[data-product-variants]');
+        if (variantsEl) renderVariants(variantsEl, stock.variants);
+      }
+
+      if (stock.soldOut) {
+        anySoldOut = true;
+        applySoldOutState(card);
+      }
+    });
+
+    if (anySoldOut) reorderGrid();
+  }
+
+  function init() {
+    initFilters();
+    hydrateStock();
+  }
+
+  init();
+  document.addEventListener('astro:after-swap', init);
 </script>
