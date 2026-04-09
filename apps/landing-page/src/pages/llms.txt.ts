@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 import experiences from '@/lib/experiences';
 import faqs from '@/lib/faqs';
 import membership from '@/lib/membership';
+import shop from '@/lib/shop';
 
 export const prerender = true;
 
@@ -41,6 +42,7 @@ Pyre provides contrast therapy (sauna + cold plunge), guided sessions led by cer
 - Contact: hi@pyresauna.com
 - Instagram: https://instagram.com/pyre_sauna
 - Group bookings: groups@pyresauna.com
+- Sauna rentals: rentals@pyresauna.com
 
 ## Experiences
 
@@ -57,6 +59,12 @@ ${membershipList}
 - Cold plunge pools (39-50 F)
 - Towels and amenities provided
 - Bring: swimsuit, water bottle, optional robe/sandals
+
+## Shop
+
+Browse Pyre merchandise and essentials at ${baseUrl}/shop
+
+${shop.products.map((p) => `- [${p.name}](${p.purchaseUrl}): $${p.price} — ${p.description}`).join('\n')}
 
 ## Blog
 

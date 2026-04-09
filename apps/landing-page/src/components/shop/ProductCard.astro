@@ -1,5 +1,4 @@
 ---
-import { Image } from 'astro:assets';
 import type { ShopProduct } from '@/lib/types';
 
 interface Props {
@@ -54,11 +53,11 @@ const linkProps = isSoldOut
         ]}
         data-gallery-slide={i}
       >
-        <Image
-          src={image.src}
+        <img
+          src={image.src.src}
           alt={image.alt}
-          widths={[400, 600, 800]}
-          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          width={image.src.width}
+          height={image.src.height}
           loading="lazy"
           decoding="async"
           class:list={[

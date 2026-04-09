@@ -5,6 +5,8 @@ import benefits from '@/lib/experiences';
 import faqs from '@/lib/faqs';
 import groupBooking from '@/lib/group-booking';
 import membership from '@/lib/membership';
+import privateRentals from '@/lib/private-rentals';
+import shop from '@/lib/shop';
 
 export const prerender = true;
 
@@ -96,6 +98,40 @@ ${groupBooking.occasions.map((o) => `- ${o.label}`).join('\n')}
 
 Contact: groups@pyresauna.com
 
+## Private Rentals
+
+${privateRentals.subtitle ?? ''}
+
+${privateRentals.unitSummary}
+
+${privateRentals.description.join('\n\n')}
+
+**${privateRentals.periodLabel}**
+
+${privateRentals.tiers
+  .map(
+    (t) =>
+      `- **${t.name}**: $${t.price} base; +$${t.extraDayPrice} per additional day — ${t.features.join('; ')}`
+  )
+  .join('\n')}
+
+${privateRentals.logistics.join('\n\n')}
+
+${privateRentals.addonSummary}
+
+Private rental inquiries: rentals@pyresauna.com
+
+## Shop
+
+Browse Pyre merchandise and essentials at ${baseUrl}/shop
+
+${shop.products
+  .map(
+    (p) =>
+      `### ${p.name} — $${p.price}\n\n${p.description}\n\n- **Category**: ${p.category}\n- **Purchase**: ${p.purchaseUrl}${p.variants ? `\n- **Sizes**: ${p.variants.map((v) => v.name).join(', ')}` : ''}`
+  )
+  .join('\n\n')}
+
 ## Blog
 
 ${blogSection}
@@ -114,6 +150,7 @@ Our sauna masters hold certifications from the Deutsche Sauna-Akademie and Sherp
 
 - **Email**: hi@pyresauna.com
 - **Group bookings**: groups@pyresauna.com
+- **Sauna rentals**: rentals@pyresauna.com
 - **Instagram**: https://instagram.com/pyre_sauna
 - **Website**: ${baseUrl}
 
