@@ -245,12 +245,14 @@
   #membership,
   #events,
   #group-booking,
+  #private-rentals,
   #faq,
   #signup,
   [data-section="about"],
   [data-section="membership"],
   [data-section="events"],
   [data-section="group-booking"],
+  [data-section="private-rentals"],
   [data-section="faq"],
   [data-section="signup"] {
     scroll-margin-top: calc(5rem + var(--banner-height, 0px)); /* 80px navbar + optional banner */

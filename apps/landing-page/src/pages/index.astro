@@ -8,6 +8,7 @@ import FAQAccordion from '../components/FAQAccordion.astro';
 import GiftCardSection from '../components/GiftCardSection.astro';
 import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
+import PrivateRentalsSection from '../components/PrivateRentalsSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
@@ -82,6 +83,9 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
           <GroupBookingSection />
         </div>
+        <!-- <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
+          <PrivateRentalsSection />
+        </div> -->
         <div id="gift-cards" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
           <GiftCardSection />
         </div>
@@ -138,6 +142,9 @@ import { heroGrainGradient } from '../lib/shader-configs';
           <SectionCard class="card-cta-animated my-8" data-section="group-booking">
             <GroupBookingSection />
           </SectionCard>
+          <!-- <SectionCard class="card-cta-animated my-8" data-section="private-rentals">
+            <PrivateRentalsSection />
+          </SectionCard> -->
           <SectionCard class="my-8" data-section="gift-cards">
             <GiftCardSection />
           </SectionCard>
