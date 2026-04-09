@@ -38,7 +38,7 @@ const sessions: SessionsContent = {
       name: 'Single - 1 Credit',
       price: 39,
       description: 'Drop-in visit',
-      href: '/book',
+      href: '/events',
     },
     {
       id: 'pack-2',
