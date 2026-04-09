@@ -135,8 +135,26 @@ const needsStockCheck = !!product.momenceId;
         });
       }
 
+      // Desktop: hover to cycle
       gallery.addEventListener('mouseenter', () => show(current + 1));
       gallery.addEventListener('mouseleave', () => show(0));
+
+      // Mobile: tap image to cycle (distinguish taps from scrolls)
+      let touchStartY = 0;
+      let touchStartX = 0;
+      gallery.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      gallery.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
+          e.preventDefault();
+          show(current + 1);
+        }
+      });
     });
   }
 
