@@ -19,10 +19,10 @@ export interface BannerConfig {
 }
 
 const banner: BannerConfig = {
-  id: 'founding-membership-launch',
-  text: 'Founding Memberships Are Here - 20% off unlimited membership for life with code SECRETGARDEN through April 23rd',
-  href: 'https://momence.com/m/630919',
-  expiresAt: '2026-04-23T00:00:00-04:00',
+  id: 'founding-membership-30-launch',
+  text: 'Founding Memberships are here — $199/mo for life (normally $249). Only 30 available.',
+  href: 'https://momence.com/m/756341',
+  // expiresAt: '2026-04-23T00:00:00-04:00',
   enabled: true,
 };
 

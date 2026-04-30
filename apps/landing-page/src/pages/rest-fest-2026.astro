@@ -1,0 +1,289 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import heroImg from '../assets/images/837A0206.webp';
+import bandImg1 from '../assets/images/837A0044.webp';
+import sessionsBgImg from '../assets/images/837A0269.webp';
+import bandImg2 from '../assets/images/837A9942.webp';
+import raffleBgImg from '../assets/images/837A0338.webp';
+import SignupForm from '../components/SignupForm.astro';
+import Button from '../components/Button.astro';
+import SectionDivider from '../components/SectionDivider.astro';
+import Layout from '../layouts/main.astro';
+import membership from '../lib/membership';
+import restFest from '../lib/restFest';
+
+const founding = membership.tiers.find((t) => t.id === 'unlimited') ?? membership.tiers[0];
+
+const pageTitle = 'Rest Fest 2026 | Pyre Sauna';
+const pageDescription =
+  'We met at Rest Fest 2026. Sign up for the Pyre mailing list, book a pre-opening session, or grab a membership — and enter our raffle.';
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  ogImage={heroImg.src}
+  ogImageWidth={heroImg.width}
+  ogImageHeight={heroImg.height}
+  noIndex={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-[90dvh] flex items-center justify-center overflow-hidden">
+      <Image
+        src={heroImg}
+        alt="Pyre sauna"
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center md:object-top max-w-[1100px] m-auto"
+        loading="eager"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/70 md:bg-[var(--pyre-black)]/30"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)]/80 via-[var(--pyre-black)]/40 to-[var(--pyre-black)]/30"></div>
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <p class="font-mono-bold text-base tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4">
+          Hi, we met at Rest Fest 2026
+        </p>
+        <h1 class="font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4 md:mb-6">
+          Welcome to Pyre
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto mb-8">
+          Richmond's social sauna and cold-plunge opens Fall 2026. Enter our Rest Fest raffle, book a pre-opening
+          session, or claim an Unlimited Membership while we soft-open.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button href="#raffle" variant="primary" size="lg" ariaLabel="Enter the Rest Fest raffle">
+            Enter the raffle
+          </Button>
+          <Button href="#membership" variant="outline" size="lg" ariaLabel="See membership options">
+            See Founding Membership
+          </Button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Raffle prizes -->
+    <section
+      id="raffle"
+      aria-labelledby="raffle-heading"
+      class="relative py-16 md:py-24 px-4 overflow-hidden"
+    >
+      <!-- <Image
+        src={raffleBgImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      /> -->
+      <!-- <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div> -->
+      <div class="relative z-10 max-w-6xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <h2
+            id="raffle-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            The Rest Fest Raffle
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
+            Sign up below for the email list <em>or</em> book a session to enter. Winners drawn the week after Rest Fest.
+          </p>
+          <SectionDivider
+            variant="wave"
+            revealAnimation="draw"
+            visibleAnimation="pulse"
+            class="mx-auto w-72 my-6"
+            scrollAware={true}
+          />
+        </div>
+
+        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
+          {restFest.prizes.map((prize) => (
+            <li class="flex flex-col p-5 md:p-6 border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
+              <div class="flex items-baseline gap-2 mb-2">
+                <span class="font-primary-semibold text-3xl md:text-4xl text-[var(--pyre-muted-gold)] leading-none">
+                  {prize.count}
+                </span>
+                <span class="font-mono-bold text-xs uppercase tracking-wide opacity-60">
+                  {prize.count === 1 ? 'winner' : 'winners'}
+                </span>
+              </div>
+              <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-1">
+                {prize.name}
+              </h3>
+              {prize.note && (
+                <p class="text-xs md:text-sm opacity-70">{prize.note}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- Photo band
+    <div class="relative w-full h-[40dvh] md:h-[55dvh] overflow-hidden">
+      <Image
+        src={bandImg1}
+        alt="Inside Pyre sauna"
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/30"></div>
+    </div> -->
+
+
+     
+
+    <!-- Founding Memberships -->
+    <section
+      id="membership"
+      aria-labelledby="founding-heading"
+      class="border-t border-current/10 py-16 md:py-24 px-4"
+    >
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-8 md:mb-12">
+          <p class="font-mono-bold text-xs md:text-sm tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-3">
+            Founding Memberships
+          </p>
+          <h2
+            id="founding-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            $199/mo for life
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto">
+            Only 30 founding memberships. Lock in $199/mo (normally $249) — for life — and get unlimited access from
+            day one.
+          </p>
+        </div>
+
+        <div
+          class="relative border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 md:p-10 shadow-lg"
+        >
+          <div
+            class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
+          >
+            Only 30 Available
+          </div>
+
+          <div class="md:grid md:grid-cols-[minmax(0,18rem)_1fr] md:gap-10 md:items-center">
+            <!-- Price + CTA column -->
+            <div class="text-center md:text-left mb-8 md:mb-0 md:border-r md:border-current/20 md:pr-10">
+              <p class="font-mono-bold text-xs uppercase tracking-wide opacity-60 mb-3">
+                {founding.name}
+              </p>
+              <div class="flex items-baseline justify-center md:justify-start gap-1 mb-1">
+                <span class="font-primary-semibold text-5xl md:text-6xl text-[var(--pyre-muted-gold)] leading-none">
+                  ${founding.price}
+                </span>
+                <span class="text-sm opacity-70">/mo for life</span>
+              </div>
+              <p class="text-xs md:text-sm opacity-60 mb-6">
+                <s>${founding.price + (founding.savings ?? 0)}/mo</s>
+                {founding.savings && <span> · Save ${founding.savings}/mo forever</span>}
+              </p>
+              <Button
+                href={founding.cta.href}
+                variant="primary"
+                size="lg"
+                ariaLabel={founding.cta.ariaLabel}
+                class="w-full md:w-auto"
+              >
+                {founding.cta.label}
+              </Button>
+            </div>
+
+            <!-- Features column -->
+            <ul class="space-y-2.5 md:pl-2">
+              {founding.features.map((feature) => (
+                <li
+                  class={`flex items-start gap-2 ${feature.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}
+                >
+                  <svg
+                    class="w-5 h-5 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span class="text-sm md:text-base">{feature.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {membership.note && (
+          <p class="mt-6 text-xs md:text-sm opacity-60 text-center italic">{membership.note}</p>
+        )}
+      </div>
+    </section>
+
+    <!-- Session CTA -->
+    <section
+      id="sessions"
+      aria-labelledby="sessions-heading"
+      class="relative py-20 md:py-32 px-4 border-t border-current/10 text-center overflow-hidden"
+    >
+      <Image
+        src={sessionsBgImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/75"></div>
+      <div class="relative z-10 max-w-2xl mx-auto">
+        <h2
+          id="sessions-heading"
+          class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
+        >
+          Book a session before opening
+        </h2>
+        <p class="text-base md:text-lg opacity-90 mb-8">
+          We're running pre-opening sauna and cold-plunge sessions across Richmond. Booking one is also a raffle entry.
+        </p>
+        <Button
+          href={restFest.eventsUrl}
+          variant="primary"
+          size="lg"
+          ariaLabel="See upcoming Pyre sessions"
+        >
+          See upcoming sessions
+        </Button>
+      </div>
+    </section>
+
+  
+    <!-- Email signup -->
+    <section aria-labelledby="signup-heading" class="px-4 border-t border-current/10">
+      <div class="max-w-2xl mx-auto">
+        <SignupForm
+          variant="compact"
+          tagId={restFest.tagId}
+          posthogSource={restFest.posthogSource}
+          title={restFest.signupCopy.title}
+          subtitle={restFest.signupCopy.subtitle}
+          successMessage={restFest.signupCopy.successMessage}
+        />
+      </div>
+    </section>
+
+    <!-- Disclaimer -->
+    <section class="px-4 pb-16 md:pb-24 border-t border-current/10 pt-8">
+      <p class="max-w-3xl mx-auto text-xs md:text-sm opacity-60 text-center italic leading-relaxed">
+        {restFest.disclaimer}
+      </p>
+    </section>
+  </div>
+</Layout>

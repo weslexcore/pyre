@@ -25,7 +25,7 @@ const maxMobileFeatures = 10;
     </div>
     <SectionDivider variant="wave" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 lg:gap-3 max-w-3xl mx-auto lg:max-w-none">
+    <div class="grid grid-cols-1 gap-3 md:gap-6 lg:gap-3 max-w-3xl mx-auto lg:max-w-none">
       {membership.tiers.map((tier) => (
         <div
           class={`pricing-card relative flex flex-col p-4 md:p-6 lg:p-3 border rounded-lg transition-all duration-300 ${
@@ -34,12 +34,12 @@ const maxMobileFeatures = 10;
               : 'border-current/20 hover:border-current/40'
           }`}
         >
-          {tier.popular && (
+          {/* {tier.popular && (
             <div class="absolute -top-2.5 md:-top-3 lg:-top-2.5 left-1/2 lg:left-3 -translate-x-1/2 lg:translate-x-0 px-2 md:px-3 lg:px-2 py-0.5 md:py-1 lg:py-0.5 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs lg:text-[10px] font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap">
               <span class="lg:hidden">Most Popular</span>
               <span class="hidden lg:inline">Popular</span>
             </div>
-          )}
+          )} */}
 
           <div class="mb-3 md:mb-6 lg:mb-2">
             <div class="flex items-center gap-2 flex-wrap mb-1 md:mb-2 lg:mb-0">

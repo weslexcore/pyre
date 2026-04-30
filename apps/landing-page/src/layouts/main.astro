@@ -44,6 +44,7 @@ interface Props {
   isHomePage?: boolean;
   transparentNav?: boolean;
   darkLogoText?: boolean;
+  noIndex?: boolean;
 }
 
 const {
@@ -57,6 +58,7 @@ const {
   isHomePage = false,
   transparentNav = false,
   darkLogoText = false,
+  noIndex = false,
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL ?? '/';
@@ -128,7 +130,11 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		<meta name="twitter:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
 
 		<!-- Indexing directives: allow large snippets and image previews -->
-		<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+		{noIndex ? (
+			<meta name="robots" content="noindex, follow" />
+		) : (
+			<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+		)}
 		
 		<!-- JSON-LD: WebSite schema (all pages — enables sitelinks search box) -->
 		<script type="application/ld+json" set:html={JSON.stringify({

@@ -5,10 +5,28 @@ import SectionDivider from './SectionDivider.astro';
 
 interface Props {
   variant?: 'default' | 'compact';
+  tagId?: string;
+  posthogSource?: string;
+  title?: string;
+  subtitle?: string;
+  successMessage?: string;
 }
 
-const { variant = 'default' } = Astro.props;
+const {
+  variant = 'default',
+  tagId,
+  posthogSource,
+  title,
+  subtitle,
+  successMessage,
+} = Astro.props;
 const isCompact = variant === 'compact';
+
+const resolvedTagId = tagId ?? signupForm.mailchimp.tagId;
+const resolvedPosthogSource = posthogSource ?? 'website_form';
+const resolvedTitle = title ?? signupForm.elements.title;
+const resolvedSubtitle = subtitle ?? signupForm.elements.subtitle;
+const resolvedSuccessMessage = successMessage ?? signupForm.elements.successMessage;
 
 const subscribed =
   Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
@@ -60,14 +78,14 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
       <!-- Form column -->
       <div class={formColumnClass}>
         <h2 id={headingId} class={headingClass}>
-          {signupForm.elements.title}
+          {resolvedTitle}
         </h2>
-        <p class={subtitleClass}>{signupForm.elements.subtitle}</p>
+        <p class={subtitleClass}>{resolvedSubtitle}</p>
         <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class={dividerClass} scrollAware={true} />
 
         {subscribed && (
           <div role="status" class={subscribedBannerClass}>
-            {signupForm.elements.successMessage}
+            {resolvedSuccessMessage}
           </div>
         )}
 
@@ -81,6 +99,8 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           data-honeypot={signupForm.mailchimp.honeypotFieldName}
           data-antispam={JSON.stringify(signupForm.antiSpam)}
           data-turnstile={JSON.stringify(signupForm.turnstile)}
+          data-posthog-source={resolvedPosthogSource}
+          data-success-message={resolvedSuccessMessage}
         >
           <div class="flex-1 min-w-0">
             <label for={emailId} class="sr-only">{signupForm.elements.emailLabel}</label>
@@ -96,7 +116,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
               data-signup-email
             />
           </div>
-          <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+          <input type="hidden" name="tags" value={resolvedTagId} />
           <!-- Honeypot fields -->
           <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
           <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
@@ -125,14 +145,14 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         <!-- Form column -->
         <div class={formColumnClass}>
           <h2 id={headingId} class={headingClass}>
-            {signupForm.elements.title}
+            {resolvedTitle}
           </h2>
-          <p class={subtitleClass}>{signupForm.elements.subtitle}</p>
+          <p class={subtitleClass}>{resolvedSubtitle}</p>
           <SectionDivider variant="wave" flip revealAnimation="draw" visibleAnimation="pulse" class={dividerClass} scrollAware={true} />
 
           {subscribed && (
             <div role="status" class={subscribedBannerClass}>
-              {signupForm.elements.successMessage}
+              {resolvedSuccessMessage}
             </div>
           )}
 
@@ -146,6 +166,8 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             data-honeypot={signupForm.mailchimp.honeypotFieldName}
             data-antispam={JSON.stringify(signupForm.antiSpam)}
             data-turnstile={JSON.stringify(signupForm.turnstile)}
+            data-posthog-source={resolvedPosthogSource}
+            data-success-message={resolvedSuccessMessage}
           >
             <div class="flex-1 min-w-0">
               <label for={emailId} class="sr-only">{signupForm.elements.emailLabel}</label>
@@ -161,7 +183,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
                 data-signup-email
               />
             </div>
-            <input type="hidden" name="tags" value={signupForm.mailchimp.tagId} />
+            <input type="hidden" name="tags" value={resolvedTagId} />
             <!-- Honeypot fields -->
             <input type="text" name={signupForm.mailchimp.honeypotFieldName} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
             <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
@@ -385,7 +407,8 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
                 emailInput.value = '';
                 errorEl.textContent = '';
                 if (successEl) {
-                  successEl.textContent = 'Thanks for subscribing!';
+                  const successMsg = form.getAttribute('data-success-message') || 'Thanks for subscribing!';
+                  successEl.textContent = successMsg;
                   successEl.classList.remove('hidden');
                 }
                 const urlObj = new URL(window.location.href);
@@ -393,13 +416,14 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
                 window.history.replaceState({}, '', urlObj.toString());
 
                 if ((window as any).posthog) {
+                  const phSource = form.getAttribute('data-posthog-source') || 'website_form';
                   (window as any).posthog.identify(email);
                   (window as any).posthog.people.set({
                     email: email,
                     signup_source: 'mailing_list',
                     signup_date: new Date().toISOString()
                   });
-                  (window as any).posthog.capture('Mailing List Signup', { email, source: 'website_form' });
+                  (window as any).posthog.capture('Mailing List Signup', { email, source: phSource });
                 }
               } else if (response?.msg) {
                 if (successEl) successEl.classList.add('hidden');
