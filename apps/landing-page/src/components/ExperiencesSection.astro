@@ -1,6 +1,8 @@
 ---
 import { Image } from 'astro:assets';
-import plunging from '../assets/images/plunging.webp';
+import centered from '../assets/images/centered.webp';
+import guided from '../assets/images/guided.webp';
+import coldSmile from '../assets/images/cold_smile.webp';
 import communitySymbol from '../assets/symbols/community-symbol.png';
 import harmonySymbol from '../assets/symbols/harmony-symbol.png';
 import ritualSymbol from '../assets/symbols/ritual-symbol.png';
@@ -12,6 +14,12 @@ const symbolMap: Record<string, ImageMetadata> = {
   community: communitySymbol,
   harmony: harmonySymbol,
   ritual: ritualSymbol,
+};
+
+const imageMap: Record<string, ImageMetadata> = {
+  centered,
+  guided,
+  cold_smile: coldSmile,
 };
 ---
 
@@ -35,25 +43,41 @@ const symbolMap: Record<string, ImageMetadata> = {
 
       <div class="grid grid-cols-1 gap-4">
         {experiences.items.map((benefit) => (
-          <div class="benefit-card p-6 border border-current/10 rounded-lg">
-            <div class="flex items-center gap-3 mb-3">
-              {benefit.icon && symbolMap[benefit.icon] && (
+          <div class="benefit-card border border-current/10 rounded-lg overflow-hidden grid grid-cols-1 md:grid-cols-[1fr_2fr]">
+            {benefit.image && imageMap[benefit.image] && (
+              <div class="aspect-[16/10] md:aspect-auto md:h-full overflow-hidden">
                 <Image
-                  src={symbolMap[benefit.icon]}
+                  src={imageMap[benefit.image]}
                   alt=""
                   aria-hidden="true"
                   loading="lazy"
                   decoding="async"
-                  class="w-12 h-auto"
+                  widths={[400, 800, 1200]}
+                  sizes="(max-width: 768px) 100vw, 400px"
+                  class="w-full h-full object-cover object-center"
                 />
-              )}
-              <h3 class="font-mono-bold text-lg uppercase tracking-wide">
-                {benefit.title}
-              </h3>
+              </div>
+            )}
+            <div class="p-6">
+              <div class="flex items-center gap-3 mb-3">
+                {benefit.icon && symbolMap[benefit.icon] && (
+                  <Image
+                    src={symbolMap[benefit.icon]}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
+                    class="w-12 h-auto"
+                  />
+                )}
+                <h3 class="font-mono-bold text-lg uppercase tracking-wide">
+                  {benefit.title}
+                </h3>
+              </div>
+              <p class="leading-relaxed opacity-80">
+                {benefit.description}
+              </p>
             </div>
-            <p class="leading-relaxed opacity-80">
-              {benefit.description}
-            </p>
           </div>
         ))}
       </div>
