@@ -5,6 +5,7 @@ import SectionDivider from './SectionDivider.astro';
 
 interface Props {
   variant?: 'default' | 'compact';
+  formKey?: string;
   tagId?: string;
   posthogSource?: string;
   title?: string;
@@ -14,6 +15,7 @@ interface Props {
 
 const {
   variant = 'default',
+  formKey,
   tagId,
   posthogSource,
   title,
@@ -31,7 +33,7 @@ const resolvedSuccessMessage = successMessage ?? signupForm.elements.successMess
 const subscribed =
   Astro.url.searchParams.get(signupForm.metadata?.subscribedParam ?? 'subscribed') === '1';
 
-const idSuffix = isCompact ? '-compact' : '';
+const idSuffix = formKey ? `-${formKey}` : isCompact ? '-compact' : '';
 const headingId = `signup-heading${idSuffix}`;
 const emailId = `signup-email${idSuffix}`;
 

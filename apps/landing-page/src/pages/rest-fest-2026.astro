@@ -90,7 +90,7 @@ const pageDescription =
             The Rest Fest Raffle
           </h2>
           <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
-            Sign up below for the email list <em>or</em> book a session to enter. Winners drawn the week after Rest Fest.
+            Sign up for the email list <em>or</em> book a session to enter. Winners drawn the week after Rest Fest.
           </p>
           <SectionDivider
             variant="wave"
@@ -121,6 +121,18 @@ const pageDescription =
             </li>
           ))}
         </ul>
+
+        <div class="mt-10 md:mt-12 max-w-xl mx-auto">
+          <SignupForm
+            variant="compact"
+            formKey="raffle"
+            tagId={restFest.tagId}
+            posthogSource={restFest.posthogSource}
+            title="Enter the raffle"
+            subtitle="Drop your email to enter and we'll send you pre-opening session invites."
+            successMessage="You're entered. Good luck — we'll be in touch."
+          />
+        </div>
       </div>
     </section>
 
@@ -270,6 +282,7 @@ const pageDescription =
       <div class="max-w-2xl mx-auto">
         <SignupForm
           variant="compact"
+          formKey="footer"
           tagId={restFest.tagId}
           posthogSource={restFest.posthogSource}
           title={restFest.signupCopy.title}
