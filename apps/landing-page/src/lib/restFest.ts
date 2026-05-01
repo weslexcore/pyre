@@ -3,6 +3,7 @@ import type { ImageMetadata } from 'astro';
 import bathhouseTote from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
 import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 import membershipImg from '../assets/images/837A0262.webp';
+import sessionImg from '../assets/images/837A0269.webp';
 
 export interface RestFestPrize {
   name: string;
@@ -43,7 +44,12 @@ const restFest: RestFestContent = {
       note: 'Valid for 6 months from Grand Opening',
       image: { src: membershipImg, alt: 'Pyre sauna outdoor showers' },
     },
-    // { name: 'Limited Membership', count: 2, note: 'Valid 6 months from Grand Opening' },
+    {
+      name: 'Free Session',
+      count: 4,
+      note: 'One free session each',
+      image: { src: sessionImg, alt: 'Pyre sauna session' },
+    },
     {
       name: 'Pyre T-Shirt',
       count: 1,

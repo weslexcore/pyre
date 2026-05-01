@@ -38,12 +38,13 @@ const pageDescription =
         alt="Pyre sauna"
         widths={[768, 1280, 1920]}
         sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover object-center md:object-top max-w-[1100px] m-auto"
+        class="absolute inset-0 w-full h-full object-cover object-center sm:object-[20%_20%]"
         loading="eager"
         decoding="async"
       />
-      <div class="absolute inset-0 bg-[var(--pyre-black)]/70 md:bg-[var(--pyre-black)]/30"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)]/80 via-[var(--pyre-black)]/40 to-[var(--pyre-black)]/30"></div>
+
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/40 "></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/10 to-[var(--pyre-black)]/40"></div>
       <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
         <p class="font-mono-bold text-base tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4">
           Hi, we met at Rest Fest 2026
@@ -72,16 +73,6 @@ const pageDescription =
       aria-labelledby="raffle-heading"
       class="relative py-16 md:py-24 px-4 overflow-hidden"
     >
-      <!-- <Image
-        src={raffleBgImg}
-        alt=""
-        widths={[768, 1280, 1920]}
-        sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-        decoding="async"
-      /> -->
-      <!-- <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div> -->
       <div class="relative z-10 max-w-6xl mx-auto">
         <div class="text-center mb-8 md:mb-12">
           <h2
@@ -91,7 +82,7 @@ const pageDescription =
             The Rest Fest Raffle
           </h2>
           <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
-            Sign up for the email list <em>or</em> book a session to enter. Winners drawn the week after Rest Fest.
+            <a href="#raffle-signup" class="underline underline-offset-4 hover:text-[var(--pyre-muted-gold)]">Sign up for the email list</a> <em>or</em> <a href={restFest.eventsUrl} class="underline underline-offset-4 hover:text-[var(--pyre-muted-gold)]">book a session</a> to enter. Winners drawn the week after Rest Fest.
           </p>
           <SectionDivider
             variant="wave"
@@ -102,7 +93,7 @@ const pageDescription =
           />
         </div>
 
-        <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-6">
           {restFest.prizes.map((prize) => (
             <li class="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
               <div class="relative w-full aspect-[4/3] overflow-hidden bg-[var(--pyre-black)]">
@@ -136,7 +127,7 @@ const pageDescription =
           ))}
         </ul>
 
-        <div class="mt-10 md:mt-12 max-w-xl mx-auto">
+        <div id="raffle-signup" class="mt-10 md:mt-12 max-w-xl mx-auto scroll-mt-24">
           <SignupForm
             variant="compact"
             formKey="raffle"
@@ -149,23 +140,6 @@ const pageDescription =
         </div>
       </div>
     </section>
-
-    <!-- Photo band
-    <div class="relative w-full h-[40dvh] md:h-[55dvh] overflow-hidden">
-      <Image
-        src={bandImg1}
-        alt="Inside Pyre sauna"
-        widths={[768, 1280, 1920]}
-        sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-        decoding="async"
-      />
-      <div class="absolute inset-0 bg-[var(--pyre-black)]/30"></div>
-    </div> -->
-
-
-     
 
     <!-- Founding Memberships -->
     <section
@@ -274,10 +248,10 @@ const pageDescription =
           id="sessions-heading"
           class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
         >
-          Book a session before opening
+          Book a session
         </h2>
         <p class="text-base md:text-lg opacity-90 mb-8">
-          We're running pre-opening sauna and cold-plunge sessions across Richmond. Booking one is also a raffle entry.
+          We're running pre-opening sauna and cold-plunge sessions across Richmond. Booking one also enters you into the raffle.
         </p>
         <Button
           href={restFest.eventsUrl}
@@ -290,11 +264,5 @@ const pageDescription =
       </div>
     </section>
 
-    <!-- Disclaimer -->
-    <section class="px-4 pb-16 md:pb-24 border-t border-current/10 pt-8">
-      <p class="max-w-3xl mx-auto text-xs md:text-sm opacity-60 text-center italic leading-relaxed">
-        {restFest.disclaimer}
-      </p>
-    </section>
   </div>
 </Layout>
