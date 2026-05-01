@@ -1,8 +1,25 @@
 ---
+import { getImage } from 'astro:assets';
+import community1 from '../assets/images/community_1.webp';
+import community2 from '../assets/images/community_2.webp';
+import community3 from '../assets/images/community_3.webp';
 import testimonials from '../lib/testimonials';
 import Button from './Button.astro';
 import SectionDivider from './SectionDivider.astro';
 import TestimonialsCarousel from './testimonials/TestimonialsCarousel';
+
+const photoSources = [
+  { src: community1, alt: 'Community gathering at Pyre' },
+  { src: community2, alt: 'Pyre member sharing a moment of connection' },
+  { src: community3, alt: 'Friends after a contrast therapy session' },
+];
+
+const photos = await Promise.all(
+  photoSources.map(async ({ src, alt }) => {
+    const optimized = await getImage({ src, width: 600, height: 750, fit: 'cover' });
+    return { src: optimized.src, alt };
+  })
+);
 ---
 
 <section id="testimonials" aria-labelledby="testimonials-heading" class="py-12 md:py-16 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent">
@@ -21,7 +38,7 @@ import TestimonialsCarousel from './testimonials/TestimonialsCarousel';
       <SectionDivider variant="blob" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-72 my-4" scrollAware={true}/>
 
       <!-- Testimonials carousel (React island) -->
-      <TestimonialsCarousel client:visible items={testimonials.items} />
+      <TestimonialsCarousel client:visible items={testimonials.items} photos={photos} />
 
       {testimonials.closing && (
         <p class="mt-6 text-base opacity-80 text-center">{testimonials.closing}</p>

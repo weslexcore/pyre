@@ -1,21 +1,34 @@
 // React carousel component for testimonials
 // Used as an Astro island with client:load directive
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TestimonialItem } from '@/lib/types';
+
+interface CarouselPhoto {
+  src: string;
+  alt: string;
+}
 
 interface TestimonialsCarouselProps {
   items: TestimonialItem[];
+  photos?: CarouselPhoto[];
 }
+
+type CarouselEntry =
+  | { kind: 'testimonial'; key: string; testimonial: TestimonialItem }
+  | { kind: 'photo'; key: string; photo: CarouselPhoto };
 
 const CARD_WIDTH = 300;
 const GAP = 16;
 const SCROLL_AMOUNT = CARD_WIDTH + GAP;
 
+const CARD_SIZING =
+  'flex-shrink-0 w-[280px] md:w-[300px] aspect-[4/5] snap-start rounded-lg overflow-hidden';
+
 function TestimonialCard({ testimonial }: { testimonial: TestimonialItem }) {
   return (
     <article
-      className={`testimonial-card flex-shrink-0 w-[280px] md:w-[300px] snap-start rounded-lg p-6 transition-all duration-300 ${
+      className={`testimonial-card ${CARD_SIZING} p-6 flex flex-col transition-all duration-300 ${
         testimonial.highlight
           ? 'border border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/5 hover:border-[var(--pyre-gold)]/80'
           : 'border border-current/10 hover:border-current/30'
@@ -31,7 +44,7 @@ function TestimonialCard({ testimonial }: { testimonial: TestimonialItem }) {
           </svg>
         ))}
       </div>
-      <blockquote className="mb-4">
+      <blockquote className="mb-4 flex-1 overflow-hidden">
         <p className="italic leading-relaxed opacity-90">"{testimonial.quote}"</p>
       </blockquote>
       <footer>
@@ -48,10 +61,34 @@ function TestimonialCard({ testimonial }: { testimonial: TestimonialItem }) {
   );
 }
 
-export default function TestimonialsCarousel({ items }: TestimonialsCarouselProps) {
+function PhotoCard({ photo }: { photo: CarouselPhoto }) {
+  return (
+    <div className={`testimonial-photo ${CARD_SIZING} border border-current/10`}>
+      <img src={photo.src} alt={photo.alt} className="w-full h-full object-cover" loading="lazy" />
+    </div>
+  );
+}
+
+function interleave(items: TestimonialItem[], photos: CarouselPhoto[]): CarouselEntry[] {
+  const result: CarouselEntry[] = [];
+  const max = Math.max(items.length, photos.length);
+  for (let i = 0; i < max; i++) {
+    if (i < items.length) {
+      result.push({ kind: 'testimonial', key: `t-${items[i].id}`, testimonial: items[i] });
+    }
+    if (i < photos.length) {
+      result.push({ kind: 'photo', key: `p-${i}`, photo: photos[i] });
+    }
+  }
+  return result;
+}
+
+export default function TestimonialsCarousel({ items, photos = [] }: TestimonialsCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const entries = useMemo(() => interleave(items, photos), [items, photos]);
 
   const updateArrows = useCallback(() => {
     const container = scrollRef.current;
@@ -78,12 +115,12 @@ export default function TestimonialsCarousel({ items }: TestimonialsCarouselProp
     return () => window.removeEventListener('resize', updateArrows);
   }, [updateArrows]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: items triggers arrow update when changed
+  // biome-ignore lint/correctness/useExhaustiveDependencies: entries triggers arrow update when changed
   useEffect(() => {
     updateArrows();
-  }, [items, updateArrows]);
+  }, [entries, updateArrows]);
 
-  if (items.length === 0) return null;
+  if (entries.length === 0) return null;
 
   return (
     <div className="testimonials-wrapper relative">
@@ -137,9 +174,13 @@ export default function TestimonialsCarousel({ items }: TestimonialsCarouselProp
             scrollbarWidth: 'none',
           }}
         >
-          {items.map((testimonial) => (
-            <TestimonialCard key={testimonial.id} testimonial={testimonial} />
-          ))}
+          {entries.map((entry) =>
+            entry.kind === 'testimonial' ? (
+              <TestimonialCard key={entry.key} testimonial={entry.testimonial} />
+            ) : (
+              <PhotoCard key={entry.key} photo={entry.photo} />
+            )
+          )}
         </div>
       </div>
 
