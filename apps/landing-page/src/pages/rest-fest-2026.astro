@@ -104,21 +104,34 @@ const pageDescription =
 
         <ul class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
           {restFest.prizes.map((prize) => (
-            <li class="flex flex-col p-5 md:p-6 border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
-              <div class="flex items-baseline gap-2 mb-2">
-                <span class="font-primary-semibold text-3xl md:text-4xl text-[var(--pyre-muted-gold)] leading-none">
-                  {prize.count}
-                </span>
-                <span class="font-mono-bold text-xs uppercase tracking-wide opacity-60">
-                  {prize.count === 1 ? 'winner' : 'winners'}
-                </span>
+            <li class="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
+              <div class="relative w-full aspect-[4/3] overflow-hidden bg-[var(--pyre-black)]">
+                <Image
+                  src={prize.image.src}
+                  alt={prize.image.alt}
+                  widths={[400, 600, 900]}
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  class="absolute inset-0 w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
               </div>
-              <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-1">
-                {prize.name}
-              </h3>
-              {prize.note && (
-                <p class="text-xs md:text-sm opacity-70">{prize.note}</p>
-              )}
+              <div class="flex flex-col p-5 md:p-6">
+                <div class="flex items-baseline gap-2 mb-2">
+                  <span class="font-primary-semibold text-3xl md:text-4xl text-[var(--pyre-muted-gold)] leading-none">
+                    {prize.count}
+                  </span>
+                  <span class="font-mono-bold text-xs uppercase tracking-wide opacity-60">
+                    {prize.count === 1 ? 'winner' : 'winners'}
+                  </span>
+                </div>
+                <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-1">
+                  {prize.name}
+                </h3>
+                {prize.note && (
+                  <p class="text-xs md:text-sm opacity-70">{prize.note}</p>
+                )}
+              </div>
             </li>
           ))}
         </ul>
