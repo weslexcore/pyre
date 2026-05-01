@@ -1,7 +1,7 @@
 import type { ImageMetadata } from 'astro';
 
 import bathhouseTote from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
-import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4126.webp';
+import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 import membershipImg from '../assets/images/837A0262.webp';
 
 export interface RestFestPrize {
@@ -47,7 +47,7 @@ const restFest: RestFestContent = {
     {
       name: 'Pyre T-Shirt',
       count: 1,
-      image: { src: dualityShirt, alt: 'Pyre Duality Shirt' },
+      image: { src: dualityShirt, alt: 'Pyre Duality Shirt — worn' },
     },
     {
       name: 'Pyre Tote',
