@@ -1,7 +1,17 @@
+import type { ImageMetadata } from 'astro';
+
+import bathhouseTote from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
+import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4126.webp';
+import membershipImg from '../assets/images/837A0262.webp';
+
 export interface RestFestPrize {
   name: string;
   count: number;
   note?: string;
+  image: {
+    src: ImageMetadata;
+    alt: string;
+  };
 }
 
 export interface RestFestContent {
@@ -27,10 +37,23 @@ const restFest: RestFestContent = {
     successMessage: "You're entered. Good luck — we'll be in touch.",
   },
   prizes: [
-    { name: 'Founding Unlimited Membership', count: 1, note: 'Valid for 6 months from Grand Opening' },
+    {
+      name: 'Founding Unlimited Membership',
+      count: 1,
+      note: 'Valid for 6 months from Grand Opening',
+      image: { src: membershipImg, alt: 'Pyre sauna outdoor showers' },
+    },
     // { name: 'Limited Membership', count: 2, note: 'Valid 6 months from Grand Opening' },
-    { name: 'Pyre T-Shirt', count: 1 },
-    { name: 'Pyre Tote', count: 1 },
+    {
+      name: 'Pyre T-Shirt',
+      count: 1,
+      image: { src: dualityShirt, alt: 'Pyre Duality Shirt' },
+    },
+    {
+      name: 'Pyre Tote',
+      count: 1,
+      image: { src: bathhouseTote, alt: 'The Bathhouse Tote by Pyre' },
+    },
   ],
   disclaimer:
     "Drawing held the week after Rest Fest. Memberships are valid 6 months from Pyre's Grand Opening (planned Fall 2026) and include access to all soft-open events. No purchase necessary; one entry per person.",
