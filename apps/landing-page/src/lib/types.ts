@@ -458,6 +458,7 @@ export interface TestimonialItem {
   id: string;
   name: string;
   quote: string;
+  sessionType?: string;
   image?: ImageRef;
   highlight?: boolean;
 }

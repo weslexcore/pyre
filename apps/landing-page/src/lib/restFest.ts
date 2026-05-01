@@ -1,9 +1,9 @@
 import type { ImageMetadata } from 'astro';
 
-import bathhouseTote from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
-import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 import membershipImg from '../assets/images/837A0262.webp';
 import sessionImg from '../assets/images/837A0269.webp';
+import bathhouseTote from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
+import dualityShirt from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 
 export interface RestFestPrize {
   name: string;
@@ -47,17 +47,19 @@ const restFest: RestFestContent = {
     {
       name: 'Free Session',
       count: 4,
-      note: 'One free session each',
+      note: 'Come visit us at Living Water',
       image: { src: sessionImg, alt: 'Pyre sauna session' },
     },
     {
       name: 'Pyre T-Shirt',
       count: 1,
+      note: 'Duality shirt',
       image: { src: dualityShirt, alt: 'Pyre Duality Shirt — worn' },
     },
     {
       name: 'Pyre Tote',
       count: 1,
+      note: 'Big enough to carry everything you need for the Pyre experience',
       image: { src: bathhouseTote, alt: 'The Bathhouse Tote by Pyre' },
     },
   ],

@@ -37,6 +37,11 @@ function TestimonialCard({ testimonial }: { testimonial: TestimonialItem }) {
       <footer>
         <cite className="not-italic">
           <span className="font-mono-bold text-sm block">{testimonial.name}</span>
+          {testimonial.sessionType && (
+            <span className="font-mono-bold text-xs uppercase tracking-wide opacity-60 block mt-1">
+              {testimonial.sessionType}
+            </span>
+          )}
         </cite>
       </footer>
     </article>
