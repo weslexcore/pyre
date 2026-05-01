@@ -129,9 +129,9 @@ const pageDescription =
             formKey="raffle"
             tagId={restFest.tagId}
             posthogSource={restFest.posthogSource}
-            title="Enter the raffle"
-            subtitle="Drop your email to enter and we'll send you pre-opening session invites."
-            successMessage="You're entered. Good luck — we'll be in touch."
+            title={restFest.signupCopy.title}
+            subtitle={restFest.signupCopy.subtitle}
+            successMessage={restFest.signupCopy.successMessage}
           />
         </div>
       </div>
@@ -274,22 +274,6 @@ const pageDescription =
         >
           See upcoming sessions
         </Button>
-      </div>
-    </section>
-
-  
-    <!-- Email signup -->
-    <section aria-labelledby="signup-heading" class="px-4 border-t border-current/10">
-      <div class="max-w-2xl mx-auto">
-        <SignupForm
-          variant="compact"
-          formKey="footer"
-          tagId={restFest.tagId}
-          posthogSource={restFest.posthogSource}
-          title={restFest.signupCopy.title}
-          subtitle={restFest.signupCopy.subtitle}
-          successMessage={restFest.signupCopy.successMessage}
-        />
       </div>
     </section>
 

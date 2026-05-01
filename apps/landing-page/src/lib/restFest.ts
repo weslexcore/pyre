@@ -22,10 +22,9 @@ const restFest: RestFestContent = {
   posthogSource: 'restfest_2026',
   eventsUrl: '/events?utm_source=restfest2026&utm_medium=event&utm_campaign=rest_fest_2026',
   signupCopy: {
-    title: 'JOIN THE LIST',
-    subtitle:
-      'Sign up to enter the raffle and hear about pre-opening sessions, soft-open events, and Grand Opening.',
-    successMessage: "You're in. We'll be in touch.",
+    title: 'Enter the raffle',
+    subtitle: "Drop your email to enter and we'll send you pre-opening session invites.",
+    successMessage: "You're entered. Good luck — we'll be in touch.",
   },
   prizes: [
     { name: 'Founding Unlimited Membership', count: 1, note: 'Valid for 6 months from Grand Opening' },
