@@ -44,7 +44,6 @@ export interface WorkTradeContent {
     title: string;
     summary: string;
     creditAmountLabel: string;
-    creditAmountValue: string;
     creditDescription: string;
     fineprint: string;
     steps: WorkTradeStep[];
@@ -70,9 +69,9 @@ export interface WorkTradeContent {
 const workTrade: WorkTradeContent = {
   hero: {
     eyebrow: 'Work trade & volunteering',
-    title: 'Show up. Earn credits. Sweat for free.',
+    title: 'Show up. Volunteer. Sauna on us.',
     subtitle:
-      'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and earn 25% off your next session. Credits stack: do four days, get a free session.',
+      'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your Momence account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
     primaryCta: {
       label: 'See upcoming days',
@@ -88,13 +87,12 @@ const workTrade: WorkTradeContent = {
   program: {
     title: 'How the program works',
     summary:
-      'Pyre is built by the people who use it. For every sign-up day you complete with us, we credit your Momence account with a 25% discount toward your next session. Credits stack — show up to four days and your next session is on us.',
-    creditAmountLabel: '25% off',
-    creditAmountValue: '~$10',
+      'Pyre is built by the people who use it. For every volunteer day you complete with us, we drop one free session credit onto your Momence account — the same account you book with.',
+    creditAmountLabel: '1 free session',
     creditDescription:
-      'Each completed day adds a promotional credit (worth roughly $10) to your Momence account. Stack them and apply at checkout.',
+      'Each completed day adds one free-session credit to the volunteer\'s Momence account. Show up, work the day, and your next session is on us.',
     fineprint:
-      'Credits are issued as Momence promotional credits, redeemable on standard sessions. They do not expire while we are pre-opening, but cannot be exchanged for cash.',
+      'Credits are issued as Momence session credits to the account of the person who showed up. They are non-transferable and cannot be exchanged for cash, but do not expire while we are pre-opening.',
     steps: [
       {
         title: '1. Sign up for a day',
@@ -109,22 +107,22 @@ const workTrade: WorkTradeContent = {
       {
         title: '3. Get your credit',
         description:
-          'Within 48 hours of finishing your day, we drop a 25% promotional credit (~$10) into your Momence account.',
+          'Within 48 hours of finishing your day, we drop one free-session credit onto the Momence account of the person who volunteered.',
       },
       {
-        title: '4. Stack & redeem',
+        title: '4. Book & sweat',
         description:
-          'Credits stack on a single booking. Four full days = one free session. Apply at checkout on your next visit.',
+          'Use your credit on any standard session. Want to volunteer again? Stack another credit by signing up for the next day.',
       },
     ],
   },
   rules: {
     title: 'A few ground rules',
     items: [
+      'Volunteers must be 18 or older. No exceptions — we\'re working with tools, heat, and uneven terrain.',
       'You must check in with the day lead at the start and end of the event for your day to count.',
-      'Ages 16+ welcome. Anyone under 18 needs a guardian to sign a waiver in advance.',
-      'Credits are issued per person — no transferring between accounts.',
-      'Credits are tracked in Momence under your booking email; let us know if you use a different one.',
+      'Credits are issued only to the account of the person who actually shows up — no transferring, no proxies.',
+      'Credits are tracked in Momence under the email you use to book; let us know in advance if it differs from your signup email.',
       'If weather or staffing forces us to cancel, we\'ll reschedule and you keep priority signup.',
     ],
   },
