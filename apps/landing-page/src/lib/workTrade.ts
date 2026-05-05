@@ -71,7 +71,7 @@ const workTrade: WorkTradeContent = {
     eyebrow: 'Work trade & volunteering',
     title: 'Show up. Volunteer. Sauna on us.',
     subtitle:
-      'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your Momence account. One day, one free session.',
+      'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
     primaryCta: {
       label: 'See upcoming days',
@@ -87,12 +87,12 @@ const workTrade: WorkTradeContent = {
   program: {
     title: 'How the program works',
     summary:
-      'Pyre is built by the people who use it. For every volunteer day you complete with us, we drop one free session credit onto your Momence account — the same account you book with.',
+      'Pyre is built by the people who use it. For every volunteer day you complete with us, we drop one free session credit onto your booking account — the same one you use to reserve sessions.',
     creditAmountLabel: '1 free session',
     creditDescription:
-      'Each completed day adds one free-session credit to the volunteer\'s Momence account. Show up, work the day, and your next session is on us.',
+      'Each completed day adds one free-session credit to the volunteer\'s booking account. Show up, work the day, and your next session is on us.',
     fineprint:
-      'Credits are issued as Momence session credits to the account of the person who showed up. They are non-transferable and cannot be exchanged for cash, but do not expire while we are pre-opening.',
+      'Credits are issued as session credits to the account of the person who showed up. They are non-transferable and cannot be exchanged for cash, but do not expire while we are pre-opening.',
     steps: [
       {
         title: '1. Sign up for a day',
@@ -107,7 +107,7 @@ const workTrade: WorkTradeContent = {
       {
         title: '3. Get your credit',
         description:
-          'Within 48 hours of finishing your day, we drop one free-session credit onto the Momence account of the person who volunteered.',
+          'Within 48 hours of finishing your day, we drop one free-session credit onto the booking account of the person who volunteered.',
       },
       {
         title: '4. Book & sweat',
@@ -122,7 +122,7 @@ const workTrade: WorkTradeContent = {
       'Volunteers must be 18 or older. No exceptions — we\'re working with tools, heat, and uneven terrain.',
       'You must check in with the day lead at the start and end of the event for your day to count.',
       'Credits are issued only to the account of the person who actually shows up — no transferring, no proxies.',
-      'Credits are tracked in Momence under the email you use to book; let us know in advance if it differs from your signup email.',
+      'Credits are tracked under the email you use to book; let us know in advance if it differs from your signup email.',
       'If weather or staffing forces us to cancel, we\'ll reschedule and you keep priority signup.',
     ],
   },
