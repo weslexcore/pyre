@@ -4,12 +4,13 @@ export const prerender = true;
 import { Image } from 'astro:assets';
 import Button from '../components/Button.astro';
 import SectionDivider from '../components/SectionDivider.astro';
+import VolunteerEventsGrid from '../components/volunteer/VolunteerEventsGrid';
 import Layout from '../layouts/main.astro';
 import workTrade from '../lib/workTrade';
 
-const pageTitle = 'Work Trade & Volunteering | Pyre Sauna';
+const pageTitle = 'Volunteer with Pyre | Pyre Sauna';
 const pageDescription =
-  'Volunteer with Pyre — gardening, litter cleanups, build days — and earn a free session credit. Each volunteer day you complete adds one free-session credit to the booking account of the person who showed up.';
+  'Volunteer with Pyre — gardening, litter cleanups, build days — and earn a free session credit. Each volunteer day you complete adds one free-session credit to the account of the person who showed up.';
 
 const heroImg = workTrade.hero.image.src;
 ---
@@ -183,64 +184,11 @@ const heroImg = workTrade.hero.image.src;
           </p>
         </header>
 
-        {workTrade.events.items.length === 0 ? (
-          <p class="text-center text-base md:text-lg opacity-70 py-12">
-            {workTrade.events.emptyState}
-          </p>
-        ) : (
-          <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-            {workTrade.events.items.map((event) => (
-              <li class="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 hover:border-[var(--pyre-muted-gold)]/60 transition-colors">
-                <div class="relative w-full aspect-[4/3] overflow-hidden bg-[var(--pyre-black)]">
-                  <Image
-                    src={event.image.src}
-                    alt={event.image.alt}
-                    widths={[400, 600, 900]}
-                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                    class="absolute inset-0 w-full h-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div class="absolute top-3 left-3">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-[var(--pyre-black)]/80 text-[var(--pyre-muted-gold)] font-mono-bold text-[10px] uppercase tracking-wide">
-                      {event.activity}
-                    </span>
-                  </div>
-                </div>
-                <div class="flex flex-col flex-1 p-5 md:p-6">
-                  <p class="font-mono-bold text-xs uppercase tracking-wide opacity-60 mb-2">
-                    {event.date}{event.time ? ` · ${event.time}` : ''}
-                  </p>
-                  <h3 class="font-primary-semibold text-xl md:text-2xl tracking-[-0.01em] mb-2">
-                    {event.title}
-                  </h3>
-                  <p class="text-sm opacity-70 mb-3">{event.location}</p>
-                  <p class="text-sm md:text-base opacity-80 leading-relaxed flex-1">
-                    {event.description}
-                  </p>
-
-                  <div class="mt-5 flex items-center justify-between gap-3">
-                    {typeof event.spotsRemaining === 'number' && (
-                      <span class="font-mono text-xs opacity-60">
-                        {event.spotsRemaining} {event.spotsRemaining === 1 ? 'spot' : 'spots'} left
-                      </span>
-                    )}
-                    {event.signupUrl && (
-                      <Button
-                        href={event.signupUrl}
-                        variant="secondary"
-                        size="sm"
-                        ariaLabel={`Sign up for ${event.title}`}
-                      >
-                        Sign up
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <VolunteerEventsGrid
+          client:load
+          emptyMessage={workTrade.events.emptyState}
+          emptyCta={workTrade.events.emptyCta}
+        />
       </div>
     </section>
 

@@ -1,10 +1,10 @@
-// Runtime API endpoint for fetching events from Momence
-// This enables server-side fetching with edge caching for fresh data
+// Runtime API endpoint for fetching volunteer-tagged events from Momence.
+// Mirrors /api/events but returns ONLY events tagged with VOLUNTEER_TAG.
 
 import type { APIRoute } from 'astro';
 import {
-  excludeVolunteerEvents,
   filterValidEvents,
+  onlyVolunteerEvents,
   sortEventsByDate,
   transformToEventItem,
 } from '@/lib/momence';
@@ -15,7 +15,7 @@ export const prerender = false;
 
 const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
-interface EventsApiResponse {
+interface VolunteerEventsApiResponse {
   events: EventItem[];
   cached: boolean;
   timestamp: string;
@@ -26,7 +26,9 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
   if (!hostId || !apiToken) {
-    console.warn('[Events API] Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)');
+    console.warn(
+      '[Volunteer Events API] Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)'
+    );
     return [];
   }
 
@@ -39,13 +41,14 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   });
 
   if (!response.ok) {
-    console.error(`[Events API] Momence returned ${response.status}: ${response.statusText}`);
+    console.error(
+      `[Volunteer Events API] Momence returned ${response.status}: ${response.statusText}`
+    );
     return [];
   }
 
   const data = await response.json();
 
-  // Handle array or wrapped response
   if (Array.isArray(data)) {
     return data as MomenceEvent[];
   }
@@ -53,7 +56,7 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
     return data.events as MomenceEvent[];
   }
 
-  console.warn('[Events API] Unexpected response format');
+  console.warn('[Volunteer Events API] Unexpected response format');
   return [];
 }
 
@@ -61,11 +64,11 @@ export const GET: APIRoute = async () => {
   try {
     const rawEvents = await fetchMomenceEventsServer();
     const validEvents = filterValidEvents(rawEvents);
-    const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
-    const sortedEvents = sortEventsByDate(nonVolunteerEvents);
+    const volunteerEvents = onlyVolunteerEvents(validEvents);
+    const sortedEvents = sortEventsByDate(volunteerEvents);
     const events = sortedEvents.map(transformToEventItem);
 
-    const response: EventsApiResponse = {
+    const response: VolunteerEventsApiResponse = {
       events,
       cached: false,
       timestamp: new Date().toISOString(),
@@ -75,19 +78,18 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        // Vercel edge caching: 1 min fresh, serve stale up to 2 min while revalidating
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
       },
     });
   } catch (error) {
-    console.error('[Events API] Error:', error);
+    console.error('[Volunteer Events API] Error:', error);
 
     return new Response(
       JSON.stringify({
         events: [],
         cached: false,
         timestamp: new Date().toISOString(),
-        error: 'Failed to fetch events',
+        error: 'Failed to fetch volunteer events',
       }),
       {
         status: 500,
