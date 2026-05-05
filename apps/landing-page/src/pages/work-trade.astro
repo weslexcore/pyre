@@ -25,15 +25,42 @@ const heroImg = workTrade.hero.image.src;
   <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
     <!-- Hero -->
     <section class="relative w-full min-h-[80dvh] flex items-center justify-center overflow-hidden">
-      <Image
-        src={workTrade.hero.image.src}
-        alt={workTrade.hero.image.alt}
-        widths={[768, 1280, 1920]}
-        sizes="100vw"
-        class="absolute inset-0 w-full h-full object-cover object-center"
-        loading="eager"
-        decoding="async"
-      />
+      {workTrade.hero.video ? (
+        <>
+          <video
+            class="absolute inset-0 w-full h-full object-cover object-center motion-reduce:hidden"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster={workTrade.hero.video.poster}
+            aria-hidden="true"
+          >
+            <source src={workTrade.hero.video.webm} type="video/webm" />
+            <source src={workTrade.hero.video.mp4} type="video/mp4" />
+          </video>
+          <Image
+            src={workTrade.hero.image.src}
+            alt={workTrade.hero.image.alt}
+            widths={[768, 1280, 1920]}
+            sizes="100vw"
+            class="absolute inset-0 w-full h-full object-cover object-center hidden motion-reduce:block"
+            loading="eager"
+            decoding="async"
+          />
+        </>
+      ) : (
+        <Image
+          src={workTrade.hero.image.src}
+          alt={workTrade.hero.image.alt}
+          widths={[768, 1280, 1920]}
+          sizes="100vw"
+          class="absolute inset-0 w-full h-full object-cover object-center"
+          loading="eager"
+          decoding="async"
+        />
+      )}
 
       <div class="absolute inset-0 bg-[var(--pyre-black)]/55"></div>
       <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/20 to-[var(--pyre-black)]/40"></div>
@@ -249,9 +276,28 @@ const heroImg = workTrade.hero.image.src;
     <!-- Contact CTA -->
     <section
       aria-labelledby="contact-heading"
-      class="relative py-20 md:py-28 px-4 border-t border-current/10 text-center"
+      class="relative py-20 md:py-28 px-4 border-t border-current/10 text-center overflow-hidden"
     >
-      <div class="max-w-2xl mx-auto">
+      {workTrade.contact.video && (
+        <>
+          <video
+            class="absolute inset-0 w-full h-full object-cover object-center motion-reduce:hidden"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster={workTrade.contact.video.poster}
+            aria-hidden="true"
+          >
+            <source src={workTrade.contact.video.webm} type="video/webm" />
+            <source src={workTrade.contact.video.mp4} type="video/mp4" />
+          </video>
+          <div class="absolute inset-0 bg-[var(--pyre-black)]/80"></div>
+        </>
+      )}
+
+      <div class="relative max-w-2xl mx-auto">
         <h2
           id="contact-heading"
           class="font-primary-semibold text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-0.02em] uppercase mb-4"

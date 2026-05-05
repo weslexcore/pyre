@@ -12,6 +12,12 @@ export interface WorkTradeImage {
   alt: string;
 }
 
+export interface BackgroundVideo {
+  webm: string;
+  mp4: string;
+  poster: string;
+}
+
 export interface WorkTradeStep {
   title: string;
   description: string;
@@ -37,6 +43,7 @@ export interface WorkTradeContent {
     title: string;
     subtitle: string;
     image: WorkTradeImage;
+    video?: BackgroundVideo;
     primaryCta: { label: string; href: string; ariaLabel?: string };
     secondaryCta?: { label: string; href: string; ariaLabel?: string };
   };
@@ -63,6 +70,7 @@ export interface WorkTradeContent {
     body: string;
     email: string;
     cta: { label: string; href: string; ariaLabel?: string };
+    video?: BackgroundVideo;
   };
 }
 
@@ -73,6 +81,11 @@ const workTrade: WorkTradeContent = {
     subtitle:
       'Join a work day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
+    video: {
+      webm: '/videos/IMG_0266.8e844a832bc8923a.720p.webm',
+      mp4: '/videos/IMG_0266.8e844a832bc8923a.720p.mp4',
+      poster: '/videos/IMG_0266.8e844a832bc8923a.poster.jpg',
+    },
     primaryCta: {
       label: 'See upcoming days',
       href: '#upcoming',
@@ -207,6 +220,11 @@ const workTrade: WorkTradeContent = {
       label: 'Email the team',
       href: 'mailto:hi@pyresauna.com?subject=Work%20Trade%20%2F%20Volunteering%20Idea',
       ariaLabel: 'Email Pyre about a volunteering idea',
+    },
+    video: {
+      webm: '/videos/IMG_4864.3262cda3eeaabddd.720p.webm',
+      mp4: '/videos/IMG_4864.3262cda3eeaabddd.720p.mp4',
+      poster: '/videos/IMG_4864.3262cda3eeaabddd.poster.jpg',
     },
   },
 };
