@@ -36,6 +36,7 @@ const heroImg = workTrade.hero.image.src;
             preload="metadata"
             poster={workTrade.hero.video.poster}
             aria-hidden="true"
+            data-slow
           >
             <source src={workTrade.hero.video.webm} type="video/webm" />
             <source src={workTrade.hero.video.mp4} type="video/mp4" />
@@ -289,6 +290,7 @@ const heroImg = workTrade.hero.image.src;
             preload="metadata"
             poster={workTrade.contact.video.poster}
             aria-hidden="true"
+            data-slow
           >
             <source src={workTrade.contact.video.webm} type="video/webm" />
             <source src={workTrade.contact.video.mp4} type="video/mp4" />
@@ -318,4 +320,19 @@ const heroImg = workTrade.hero.image.src;
       </div>
     </section>
   </div>
+
+  <script>
+    // Slow background videos to half speed; reapply on loop/replay (some browsers reset rate).
+    const videos = document.querySelectorAll<HTMLVideoElement>('video[data-slow]');
+    for (const video of videos) {
+      const apply = () => {
+        video.playbackRate = 0.5;
+      };
+      apply();
+      video.addEventListener('play', apply);
+      video.addEventListener('ratechange', () => {
+        if (video.playbackRate !== 0.5) apply();
+      });
+    }
+  </script>
 </Layout>
