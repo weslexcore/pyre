@@ -71,7 +71,7 @@ const workTrade: WorkTradeContent = {
     eyebrow: 'Work trade & volunteering',
     title: 'Volunteer your time. Sauna on us.',
     subtitle:
-      'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
+      'Join a work day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
     primaryCta: {
       label: 'See upcoming days',
