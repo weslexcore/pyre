@@ -64,20 +64,38 @@ function CardSkeleton() {
   );
 }
 
-function EmptyState({ message, cta }: VolunteerEventsGridProps) {
+function PlaceholderCard({ message, cta }: VolunteerEventsGridProps) {
   return (
-    <div className="text-center py-12">
-      <p className="text-base md:text-lg opacity-70 max-w-xl mx-auto mb-6">{message}</p>
-      {cta && (
-        <a
-          href={cta.href}
-          aria-label={cta.ariaLabel}
-          className="inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-4 py-2 text-base border-2 border-current text-current bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
-        >
-          {cta.label}
-        </a>
-      )}
-    </div>
+    <li className="md:col-span-2 lg:col-span-3 flex flex-col md:flex-row overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
+      <div className="relative md:w-1/2 aspect-[4/3] md:aspect-auto bg-[var(--pyre-black)] overflow-hidden">
+        <img
+          src="/videos/IMG_0266.8e844a832bc8923a.poster.jpg"
+          alt="Pyre community at a previous volunteer day"
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover opacity-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[var(--pyre-black)]/40" />
+      </div>
+      <div className="flex flex-col justify-center p-6 md:p-10 md:w-1/2">
+        <p className="font-mono-bold text-xs uppercase tracking-[0.2em] opacity-70 mb-3 text-[var(--pyre-muted-gold)]">
+          Coming soon
+        </p>
+        <h3 className="font-primary-semibold text-2xl md:text-3xl tracking-[-0.01em] mb-3">
+          More volunteer days on the way
+        </h3>
+        <p className="text-sm md:text-base opacity-80 leading-relaxed mb-6">{message}</p>
+        {cta && (
+          <a
+            href={cta.href}
+            aria-label={cta.ariaLabel}
+            className="self-start inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-4 py-2 text-base border-2 border-current text-current bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
+          >
+            {cta.label}
+          </a>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -180,7 +198,11 @@ export default function VolunteerEventsGrid(props: VolunteerEventsGridProps) {
   }
 
   if (events.length === 0) {
-    return <EmptyState {...props} />;
+    return (
+      <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+        <PlaceholderCard {...props} />
+      </ul>
+    );
   }
 
   return (
