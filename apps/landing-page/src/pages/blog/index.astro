@@ -61,9 +61,13 @@ const tags: TagWithCount[] = Array.from(tagCounts.entries())
 const title = 'Blog - Pyre';
 const description =
   'Explore articles about sauna wellness, health benefits, and the Pyre community.';
+
+// Noindex filtered/search views — they have no unique content vs the base /blog page
+const hasFilter =
+  Astro.url.searchParams.has('tag') || Astro.url.searchParams.has('q');
 ---
 
-<MainLayout title={title} description={description} transparentNav ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
+<MainLayout title={title} description={description} transparentNav ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height} noIndex={hasFilter}>
   <div class="min-h-screen bg-[var(--pyre-black)] pb-16 pt-24 md:pt-32">
     <GradientOverlay variant="hero-mobile" />
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

@@ -19,6 +19,7 @@ const VERCEL_PROJECT_PRODUCTION_URL =
 
 // https://astro.build/config
 export default defineConfig({
+  trailingSlash: 'never',
   // For GitHub Pages project sites, ensure assets work under subpath
   // Override with env vars if deploying to root: PUBLIC_ASTRO_BASE="/" and optionally set VERCEL_PROJECT_PRODUCTION_URL
   site: VERCEL_PROJECT_PRODUCTION_URL.includes('localhost')
