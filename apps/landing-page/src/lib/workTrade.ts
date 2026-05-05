@@ -49,8 +49,12 @@ export interface WorkTradeContent {
   events: {
     title: string;
     subtitle: string;
-    emptyState: string;
-    emptyCta?: WorkTradeCta;
+    emptyState: {
+      eyebrow: string;
+      heading: string;
+      body: string;
+      successMessage: string;
+    };
   };
   contact: {
     title: string;
@@ -129,12 +133,11 @@ const workTrade: WorkTradeContent = {
     title: 'Upcoming volunteer days',
     subtitle:
       'Each day is a different focus. Pick what sounds fun, sign up, and we\'ll see you there.',
-    emptyState:
-      'No volunteer days are scheduled right now. Email hi@pyresauna.com to be the first to know when the next one drops.',
-    emptyCta: {
-      label: 'Email the team',
-      href: 'mailto:hi@pyresauna.com?subject=Volunteer%20Day%20Notifications',
-      ariaLabel: 'Email Pyre to hear about upcoming volunteer days',
+    emptyState: {
+      eyebrow: 'Coming soon',
+      heading: 'Get notified when the next volunteer day drops',
+      body: 'No volunteer days are scheduled right now. Drop your email and we\'ll let you know the moment we open signups for the next one.',
+      successMessage: "You're on the list. We'll send the next volunteer day your way.",
     },
   },
   contact: {
