@@ -1,0 +1,312 @@
+{
+  "pipelineVersion": "1.0.0",
+  "generatedAt": "2026-05-05T19:15:25.150Z",
+  "sources": [
+    {
+      "id": "img_0266",
+      "sourcePath": "/videos/volunteer/IMG_0266.mov",
+      "contentHash": "8e844a832bc8923a",
+      "width": 1280,
+      "height": 720,
+      "durationSec": 30.433333,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_0266.8e844a832bc8923a.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_0266.8e844a832bc8923a.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_0266.8e844a832bc8923a.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_0266.8e844a832bc8923a.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_0266.8e844a832bc8923a.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "img_0276",
+      "sourcePath": "/videos/volunteer/IMG_0276.mov",
+      "contentHash": "d1af0d1292e8bb7f",
+      "width": 1280,
+      "height": 720,
+      "durationSec": 25.5,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_0276.d1af0d1292e8bb7f.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_0276.d1af0d1292e8bb7f.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_0276.d1af0d1292e8bb7f.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_0276.d1af0d1292e8bb7f.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_0276.d1af0d1292e8bb7f.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "img_3740",
+      "sourcePath": "/videos/volunteer/IMG_3740.mov",
+      "contentHash": "71873b8495b23d2e",
+      "width": 720,
+      "height": 1280,
+      "durationSec": 6.1,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.1080p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.1080p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_3740.71873b8495b23d2e.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_3740.71873b8495b23d2e.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "img_4864",
+      "sourcePath": "/videos/volunteer/IMG_4864.mov",
+      "contentHash": "3262cda3eeaabddd",
+      "width": 1280,
+      "height": 720,
+      "durationSec": 25.4,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_4864.3262cda3eeaabddd.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 1280,
+          "height": 720,
+          "url": "/videos/IMG_4864.3262cda3eeaabddd.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_4864.3262cda3eeaabddd.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 854,
+          "height": 480,
+          "url": "/videos/IMG_4864.3262cda3eeaabddd.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_4864.3262cda3eeaabddd.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "img_5062",
+      "sourcePath": "/videos/volunteer/IMG_5062.mov",
+      "contentHash": "cb5c6d40c8ebf082",
+      "width": 720,
+      "height": 1280,
+      "durationSec": 5.7,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.1080p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.1080p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_5062.cb5c6d40c8ebf082.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_5062.cb5c6d40c8ebf082.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
+    {
+      "id": "img_5164",
+      "sourcePath": "/videos/volunteer/IMG_5164.mov",
+      "contentHash": "d51f36cd929f3df9",
+      "width": 720,
+      "height": 1280,
+      "durationSec": 7.9,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.1080p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.1080p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/IMG_5164.d51f36cd929f3df9.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/IMG_5164.d51f36cd929f3df9.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    }
+  ]
+}
