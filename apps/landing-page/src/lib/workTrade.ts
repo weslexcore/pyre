@@ -87,42 +87,41 @@ const workTrade: WorkTradeContent = {
   program: {
     title: 'How the program works',
     summary:
-      'Pyre is built by the people who use it. For every volunteer day you complete with us, we drop one free session credit onto your booking account — the same one you use to reserve sessions.',
+      'Pyre is built by the people who use it. For every volunteer day you complete, we drop one free session credit onto your account.',
     creditAmountLabel: '1 free session',
     creditDescription:
-      'Each completed day adds one free-session credit to the volunteer\'s booking account. Show up, work the day, and your next session is on us.',
+      'Each completed day adds one free-session credit to your account. Show up, work the day, and your next session is on us.',
     fineprint:
-      'Credits are issued as session credits to the account of the person who showed up. They are non-transferable and cannot be exchanged for cash, but do not expire while we are pre-opening.',
+      'Credits are issued as session credits to the account of the person who volunteers. They cannot be exchanged for cash, and expire in 1 year.',
     steps: [
       {
         title: '1. Sign up for a day',
         description:
-          'Pick a volunteer day below that fits your schedule. Each day runs roughly 2–3 hours.',
+          'Pick a volunteer day that fits your schedule. Each day runs roughly 2–3 hours.',
       },
       {
         title: '2. Show up & pitch in',
         description:
-          'Meet the crew on-site. We\'ll handle tools, gloves, water, and snacks — you bring the work ethic.',
+          'Meet the crew on-site. We\'ll handle tools, gloves and equipment — you bring the work ethic.',
       },
       {
         title: '3. Get your credit',
         description:
-          'Within 48 hours of finishing your day, we drop one free-session credit onto the booking account of the person who volunteered.',
+          'Within 48 hours of finishing your day, we drop one free-session credit into your account.',
       },
       {
         title: '4. Book & sweat',
         description:
-          'Use your credit on any standard session. Want to volunteer again? Stack another credit by signing up for the next day.',
+          'Use your credit on any session. Want to volunteer again? Stack another credit by signing up for the next event.',
       },
     ],
   },
   rules: {
     title: 'A few ground rules',
     items: [
-      'Volunteers must be 18 or older. No exceptions — we\'re working with tools, heat, and uneven terrain.',
+      'Volunteers must be 18 or older.',
       'You must check in with the day lead at the start and end of the event for your day to count.',
-      'Credits are issued only to the account of the person who actually shows up — no transferring, no proxies.',
-      'Credits are tracked under the email you use to book; let us know in advance if it differs from your signup email.',
+      'Credits are issued to the account of the person who signs up to volunteer.',
       'If weather or staffing forces us to cancel, we\'ll reschedule and you keep priority signup.',
     ],
   },
