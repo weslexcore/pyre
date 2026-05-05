@@ -4,6 +4,7 @@ export const prerender = true;
 import { Image } from 'astro:assets';
 import Button from '../components/Button.astro';
 import SectionDivider from '../components/SectionDivider.astro';
+import SignupForm from '../components/SignupForm.astro';
 import VolunteerEventsGrid from '../components/volunteer/VolunteerEventsGrid';
 import Layout from '../layouts/main.astro';
 import workTrade from '../lib/workTrade';
@@ -184,13 +185,57 @@ const heroImg = workTrade.hero.image.src;
           </p>
         </header>
 
-        <VolunteerEventsGrid
-          client:load
-          emptyMessage={workTrade.events.emptyState}
-          emptyCta={workTrade.events.emptyCta}
-        />
+        <div data-volunteer-grid>
+          <VolunteerEventsGrid client:load />
+        </div>
+
+        <!-- Empty state: revealed by VolunteerEventsGrid when no events are scheduled -->
+        <div data-volunteer-empty hidden>
+          <div class="md:grid md:grid-cols-2 overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5">
+            <div class="relative aspect-[4/3] md:aspect-auto bg-[var(--pyre-black)] overflow-hidden">
+              <img
+                src="/videos/IMG_0266.8e844a832bc8923a.poster.jpg"
+                alt="Pyre community at a previous volunteer day"
+                loading="lazy"
+                decoding="async"
+                class="absolute inset-0 w-full h-full object-cover opacity-90"
+              />
+              <div class="absolute inset-0 bg-gradient-to-r from-transparent to-[var(--pyre-black)]/50"></div>
+            </div>
+            <div class="flex flex-col justify-center px-6 md:px-10">
+              <p class="font-mono-bold text-xs uppercase tracking-[0.2em] text-[var(--pyre-muted-gold)] mt-8 md:mt-0 mb-2 text-center">
+                {workTrade.events.emptyState.eyebrow}
+              </p>
+              <SignupForm
+                variant="compact"
+                formKey="volunteer"
+                title={workTrade.events.emptyState.heading}
+                subtitle={workTrade.events.emptyState.body}
+                successMessage={workTrade.events.emptyState.successMessage}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </section>
+
+    <script>
+      // Toggle the volunteer events grid vs. the mailing-list empty state in
+      // response to the React island's emptiness signal.
+      window.addEventListener('volunteer-events-state', ((e: CustomEvent<{ isEmpty: boolean }>) => {
+        const isEmpty = e.detail.isEmpty;
+        document.querySelectorAll<HTMLElement>('[data-volunteer-grid]').forEach((el) => {
+          el.classList.toggle('hidden', isEmpty);
+        });
+        document.querySelectorAll<HTMLElement>('[data-volunteer-empty]').forEach((el) => {
+          if (isEmpty) {
+            el.removeAttribute('hidden');
+          } else {
+            el.setAttribute('hidden', '');
+          }
+        });
+      }) as EventListener);
+    </script>
 
     <!-- Ground rules -->
     <section
