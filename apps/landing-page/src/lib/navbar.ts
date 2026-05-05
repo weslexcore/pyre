@@ -27,6 +27,11 @@ const navbar: NavbarContent = {
         ariaLabel: 'View upcoming events',
       },
       {
+        label: 'Work Trade',
+        href: withBase('/work-trade'),
+        ariaLabel: 'Volunteer with Pyre and earn session credits',
+      },
+      {
         label: 'Credits',
         href: withBase('#sessions'),
         ariaLabel: 'View Credits options',
