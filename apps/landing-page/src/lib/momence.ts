@@ -7,6 +7,24 @@ import type { EventItem, EventsContent } from './types';
 const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 /**
+ * Tag used in Momence to mark volunteer / work-trade events.
+ * Tagged events are surfaced on /volunteer and excluded from the main schedule.
+ */
+export const VOLUNTEER_TAG = 'Volunteer';
+
+function hasTag(event: MomenceEvent, tag: string): boolean {
+  return Array.isArray(event.tags) && event.tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+}
+
+export function excludeVolunteerEvents(events: MomenceEvent[]): MomenceEvent[] {
+  return events.filter((event) => !hasTag(event, VOLUNTEER_TAG));
+}
+
+export function onlyVolunteerEvents(events: MomenceEvent[]): MomenceEvent[] {
+  return events.filter((event) => hasTag(event, VOLUNTEER_TAG));
+}
+
+/**
  * Fetch events from the Momence API (via Ribbon)
  */
 export async function fetchMomenceEvents(): Promise<MomenceEvent[]> {
@@ -171,7 +189,8 @@ export async function getMomenceEvents(fallbackItems: EventItem[] = []): Promise
     }
 
     const validEvents = filterValidEvents(rawEvents);
-    const sortedEvents = sortEventsByDate(validEvents);
+    const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
+    const sortedEvents = sortEventsByDate(nonVolunteerEvents);
     const transformedEvents = sortedEvents.map(transformToEventItem);
 
     if (transformedEvents.length === 0) {
