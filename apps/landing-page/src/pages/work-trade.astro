@@ -1,0 +1,278 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import Button from '../components/Button.astro';
+import SectionDivider from '../components/SectionDivider.astro';
+import Layout from '../layouts/main.astro';
+import workTrade from '../lib/workTrade';
+
+const pageTitle = 'Work Trade & Volunteering | Pyre Sauna';
+const pageDescription =
+  'Volunteer with Pyre — gardening, litter cleanups, build days — and earn 25% off your next sauna session. Credits stack: every sign-up day completed adds a promotional credit to your Momence account.';
+
+const heroImg = workTrade.hero.image.src;
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  ogImage={heroImg.src}
+  ogImageWidth={heroImg.width}
+  ogImageHeight={heroImg.height}
+  transparentNav={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-[80dvh] flex items-center justify-center overflow-hidden">
+      <Image
+        src={workTrade.hero.image.src}
+        alt={workTrade.hero.image.alt}
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center"
+        loading="eager"
+        decoding="async"
+      />
+
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/55"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/20 to-[var(--pyre-black)]/40"></div>
+
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <p class="font-mono-bold text-base tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4">
+          {workTrade.hero.eyebrow}
+        </p>
+        <h1 class="font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4 md:mb-6">
+          {workTrade.hero.title}
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto mb-8">
+          {workTrade.hero.subtitle}
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button
+            href={workTrade.hero.primaryCta.href}
+            variant="primary"
+            size="lg"
+            ariaLabel={workTrade.hero.primaryCta.ariaLabel}
+          >
+            {workTrade.hero.primaryCta.label}
+          </Button>
+          {workTrade.hero.secondaryCta && (
+            <Button
+              href={workTrade.hero.secondaryCta.href}
+              variant="outline"
+              size="lg"
+              ariaLabel={workTrade.hero.secondaryCta.ariaLabel}
+            >
+              {workTrade.hero.secondaryCta.label}
+            </Button>
+          )}
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section
+      id="how-it-works"
+      aria-labelledby="how-it-works-heading"
+      class="relative py-16 md:py-24 px-4 border-t border-current/10"
+    >
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-10 md:mb-14">
+          <h2
+            id="how-it-works-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {workTrade.program.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
+            {workTrade.program.summary}
+          </p>
+          <SectionDivider
+            variant="squiggle"
+            revealAnimation="draw"
+            visibleAnimation="pulse"
+            class="mx-auto w-72 my-6"
+            scrollAware={true}
+          />
+        </div>
+
+        <!-- Credit highlight -->
+        <div class="border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 md:p-10 mb-10 md:mb-14">
+          <div class="md:grid md:grid-cols-[minmax(0,18rem)_1fr] md:gap-10 md:items-center">
+            <div class="text-center md:text-left mb-6 md:mb-0 md:border-r md:border-current/20 md:pr-10">
+              <p class="font-mono-bold text-xs uppercase tracking-wide opacity-60 mb-3">
+                Per day completed
+              </p>
+              <div class="flex items-baseline justify-center md:justify-start gap-2 mb-1">
+                <span class="font-primary-semibold text-5xl md:text-6xl text-[var(--pyre-muted-gold)] leading-none">
+                  {workTrade.program.creditAmountLabel}
+                </span>
+              </div>
+              <p class="text-sm md:text-base opacity-70 mt-2">
+                ~{workTrade.program.creditAmountValue} promotional credit · stacks
+              </p>
+            </div>
+            <p class="text-sm md:text-base opacity-90 leading-relaxed">
+              {workTrade.program.creditDescription}
+            </p>
+          </div>
+        </div>
+
+        <!-- Steps -->
+        <ol class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+          {workTrade.program.steps.map((step) => (
+            <li class="border border-current/20 rounded-lg p-5 md:p-6 bg-[var(--pyre-creme)]/5">
+              <h3 class="font-mono-bold text-sm md:text-base uppercase tracking-wide mb-2 text-[var(--pyre-muted-gold)]">
+                {step.title}
+              </h3>
+              <p class="text-sm md:text-base opacity-80 leading-relaxed">
+                {step.description}
+              </p>
+            </li>
+          ))}
+        </ol>
+
+        <p class="mt-8 text-xs md:text-sm opacity-60 text-center italic max-w-2xl mx-auto">
+          {workTrade.program.fineprint}
+        </p>
+      </div>
+    </section>
+
+    <!-- Upcoming volunteer events -->
+    <section
+      id="upcoming"
+      aria-labelledby="upcoming-heading"
+      class="relative py-16 md:py-24 px-4 border-t border-current/10 bg-[var(--pyre-black)]"
+    >
+      <div class="max-w-7xl mx-auto">
+        <header class="mb-10 md:mb-12">
+          <h2
+            id="upcoming-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {workTrade.events.title}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl">
+            {workTrade.events.subtitle}
+          </p>
+        </header>
+
+        {workTrade.events.items.length === 0 ? (
+          <p class="text-center text-base md:text-lg opacity-70 py-12">
+            {workTrade.events.emptyState}
+          </p>
+        ) : (
+          <ul class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+            {workTrade.events.items.map((event) => (
+              <li class="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 hover:border-[var(--pyre-muted-gold)]/60 transition-colors">
+                <div class="relative w-full aspect-[4/3] overflow-hidden bg-[var(--pyre-black)]">
+                  <Image
+                    src={event.image.src}
+                    alt={event.image.alt}
+                    widths={[400, 600, 900]}
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    class="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div class="absolute top-3 left-3">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-[var(--pyre-black)]/80 text-[var(--pyre-muted-gold)] font-mono-bold text-[10px] uppercase tracking-wide">
+                      {event.activity}
+                    </span>
+                  </div>
+                </div>
+                <div class="flex flex-col flex-1 p-5 md:p-6">
+                  <p class="font-mono-bold text-xs uppercase tracking-wide opacity-60 mb-2">
+                    {event.date}{event.time ? ` · ${event.time}` : ''}
+                  </p>
+                  <h3 class="font-primary-semibold text-xl md:text-2xl tracking-[-0.01em] mb-2">
+                    {event.title}
+                  </h3>
+                  <p class="text-sm opacity-70 mb-3">{event.location}</p>
+                  <p class="text-sm md:text-base opacity-80 leading-relaxed flex-1">
+                    {event.description}
+                  </p>
+
+                  <div class="mt-5 flex items-center justify-between gap-3">
+                    {typeof event.spotsRemaining === 'number' && (
+                      <span class="font-mono text-xs opacity-60">
+                        {event.spotsRemaining} {event.spotsRemaining === 1 ? 'spot' : 'spots'} left
+                      </span>
+                    )}
+                    {event.signupUrl && (
+                      <Button
+                        href={event.signupUrl}
+                        variant="secondary"
+                        size="sm"
+                        ariaLabel={`Sign up for ${event.title}`}
+                      >
+                        Sign up
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+
+    <!-- Ground rules -->
+    <section
+      aria-labelledby="rules-heading"
+      class="relative py-16 md:py-24 px-4 border-t border-current/10"
+    >
+      <div class="max-w-3xl mx-auto">
+        <h2
+          id="rules-heading"
+          class="font-primary-semibold text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-0.02em] uppercase mb-6 text-center"
+        >
+          {workTrade.rules.title}
+        </h2>
+        <ul class="space-y-3">
+          {workTrade.rules.items.map((item) => (
+            <li class="flex items-start gap-3 text-sm md:text-base opacity-90">
+              <svg
+                class="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--pyre-muted-gold)]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- Contact CTA -->
+    <section
+      aria-labelledby="contact-heading"
+      class="relative py-20 md:py-28 px-4 border-t border-current/10 text-center"
+    >
+      <div class="max-w-2xl mx-auto">
+        <h2
+          id="contact-heading"
+          class="font-primary-semibold text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-0.02em] uppercase mb-4"
+        >
+          {workTrade.contact.title}
+        </h2>
+        <p class="text-base md:text-lg opacity-80 mb-8">
+          {workTrade.contact.body}
+        </p>
+        <Button
+          href={workTrade.contact.cta.href}
+          variant="primary"
+          size="lg"
+          ariaLabel={workTrade.contact.cta.ariaLabel}
+        >
+          {workTrade.contact.cta.label}
+        </Button>
+      </div>
+    </section>
+  </div>
+</Layout>

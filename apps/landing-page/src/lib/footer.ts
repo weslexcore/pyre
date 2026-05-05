@@ -22,6 +22,11 @@ const footerConfig: FooterContent = {
           href: withBase('/events'),
           ariaLabel: 'Book now',
         },
+        {
+          label: 'Work Trade & Volunteering',
+          href: withBase('/work-trade'),
+          ariaLabel: 'Volunteer with Pyre and earn session credits',
+        },
       ],
     },
     {
