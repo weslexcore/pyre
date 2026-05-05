@@ -69,7 +69,7 @@ export interface WorkTradeContent {
 const workTrade: WorkTradeContent = {
   hero: {
     eyebrow: 'Work trade & volunteering',
-    title: 'Show up. Volunteer. Sauna on us.',
+    title: 'Volunteer your time. Sauna on us.',
     subtitle:
       'Join a sign-up day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
