@@ -82,9 +82,9 @@ const workTrade: WorkTradeContent = {
       'Join a work day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
     video: {
-      webm: '/videos/IMG_0266.8e844a832bc8923a.720p.webm',
-      mp4: '/videos/IMG_0266.8e844a832bc8923a.720p.mp4',
-      poster: '/videos/IMG_0266.8e844a832bc8923a.poster.jpg',
+      webm: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.webm',
+      mp4: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.mp4',
+      poster: '/videos/IMG_0276.d1af0d1292e8bb7f.poster.jpg',
     },
     primaryCta: {
       label: 'See upcoming days',
