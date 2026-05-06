@@ -50,7 +50,6 @@ export interface WorkTradeContent {
     title: string;
     subtitle: string;
     emptyState: {
-      eyebrow: string;
       heading: string;
       body: string;
       successMessage: string;
@@ -134,7 +133,6 @@ const workTrade: WorkTradeContent = {
     subtitle:
       'Each day is a different focus. Pick what sounds fun, sign up, and we\'ll see you there.',
     emptyState: {
-      eyebrow: 'Coming soon',
       heading: 'Get notified when the next volunteer day drops',
       body: 'No volunteer days are scheduled right now. Drop your email and we\'ll let you know the moment we open signups for the next one.',
       successMessage: "You're on the list. We'll send the next volunteer day your way.",
