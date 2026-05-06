@@ -88,6 +88,31 @@ export interface SubscriberTag {
   status: 'active' | 'inactive';
 }
 
+export interface MailchimpTag {
+  id: number;
+  name: string;
+  member_count: number;
+}
+
+export async function listTags(): Promise<MailchimpTag[]> {
+  const { baseUrl, audienceId, headers } = getConfig();
+
+  log.info('Listing tags');
+
+  const response = await fetch(
+    `${baseUrl}/lists/${audienceId}/segments?type=static&count=1000&fields=segments.id,segments.name,segments.member_count`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Mailchimp listTags failed (${response.status}): ${error.detail}`);
+  }
+
+  const data = (await response.json()) as { segments: MailchimpTag[] };
+  return data.segments;
+}
+
 export async function setSubscriberTags(email: string, tags: SubscriberTag[]): Promise<void> {
   const { baseUrl, audienceId, headers } = getConfig();
   const hash = getSubscriberHash(email);

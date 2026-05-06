@@ -1,0 +1,14 @@
+---
+import { AdminIndex } from '@/components/admin/AdminIndex';
+import MainLayout from '@/layouts/main.astro';
+
+export const prerender = true;
+---
+
+<MainLayout title="Admin" description="" transparentNav={true} noIndex={true}>
+  <div class="min-h-screen bg-[var(--pyre-black)]">
+    <div class="pt-24 pb-16">
+      <AdminIndex client:load />
+    </div>
+  </div>
+</MainLayout>
