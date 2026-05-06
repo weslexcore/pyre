@@ -73,9 +73,9 @@ const workTrade: WorkTradeContent = {
       'Join a work day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
     image: { src: heroImg, alt: 'Pyre community gathering' },
     video: {
-      webm: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.webm',
-      mp4: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.mp4',
-      poster: '/videos/IMG_0276.d1af0d1292e8bb7f.poster.jpg',
+      webm: '/videos/IMG_4864.3262cda3eeaabddd.720p.webm',
+      mp4: '/videos/IMG_4864.3262cda3eeaabddd.720p.mp4',
+      poster: '/videos/IMG_4864.3262cda3eeaabddd.poster.jpg',
     },
     primaryCta: {
       label: 'See upcoming days',
@@ -150,9 +150,9 @@ const workTrade: WorkTradeContent = {
       ariaLabel: 'Email Pyre about a volunteering idea',
     },
     video: {
-      webm: '/videos/IMG_4864.3262cda3eeaabddd.720p.webm',
-      mp4: '/videos/IMG_4864.3262cda3eeaabddd.720p.mp4',
-      poster: '/videos/IMG_4864.3262cda3eeaabddd.poster.jpg',
+      webm: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.webm',
+      mp4: '/videos/IMG_0276.d1af0d1292e8bb7f.720p.mp4',
+      poster: '/videos/IMG_0276.d1af0d1292e8bb7f.poster.jpg',
     },
   },
 };
