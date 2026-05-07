@@ -18,6 +18,13 @@ interface Props {
   opacity?: number;
   blendMode?: string;
   mobileEnabled?: boolean;
+  /**
+   * Render the shader once at speed=0 and never animate. Skips the
+   * IntersectionObserver pause/resume and reduced-motion watcher. Used on
+   * mobile where animating WebGL while scrolling is too costly but the
+   * visual is still desired.
+   */
+  staticRender?: boolean;
 }
 
 const {
@@ -27,6 +34,7 @@ const {
   opacity = 1,
   blendMode = 'normal',
   mobileEnabled = false,
+  staticRender = false,
 } = Astro.props;
 ---
 
@@ -39,6 +47,7 @@ const {
   aria-hidden="true"
   data-shader={shader}
   data-config={JSON.stringify(config)}
+  data-static={staticRender ? 'true' : undefined}
   style={`opacity: ${opacity}; mix-blend-mode: ${blendMode};`}
 ></div>
 
@@ -127,8 +136,9 @@ const {
 
     const shapeValue = GrainGradientShapes[config.shape as keyof typeof GrainGradientShapes] ?? GrainGradientShapes.blob;
 
+    const isStatic = container.dataset.static === 'true';
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const speed = reducedMotion ? 0 : config.speed;
+    const speed = isStatic || reducedMotion ? 0 : config.speed;
 
     const uniforms: ShaderMountUniforms = {
       u_colorBack: colorBack,
@@ -158,6 +168,18 @@ const {
       1,
       1920 * 1080 * 2,
     );
+
+    // Static mode: render once at speed=0 and skip the pause/resume +
+    // reduced-motion watchers — they're meaningless when speed is always 0.
+    // Just dispose on page transitions.
+    if (isStatic) {
+      document.addEventListener(
+        'astro:before-swap',
+        () => mount.dispose(),
+        { once: true },
+      );
+      return;
+    }
 
     // Pause/resume based on viewport visibility
     const observer = new IntersectionObserver(
