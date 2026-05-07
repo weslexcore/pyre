@@ -92,30 +92,63 @@ const {
     return webgl2Supported;
   }
 
+  /**
+   * Attempt to initialize a single container. Returns true on success.
+   * Fails when dimensions are 0 (CSS hasn't laid the element out yet) or
+   * when ShaderMount throws.
+   */
+  function tryInitContainer(container: HTMLElement): boolean {
+    if (container.dataset.shaderInit) return true;
+
+    const shaderType = container.dataset.shader;
+    const configStr = container.dataset.config;
+    if (!configStr) return false;
+
+    if (container.offsetWidth === 0 && container.offsetHeight === 0) return false;
+
+    if (shaderType === 'grain-gradient') {
+      try {
+        initGrainGradient(container, JSON.parse(configStr));
+        container.dataset.shaderInit = 'true';
+        return true;
+      } catch (err) {
+        console.warn('[ShaderCanvas] init failed', err);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Try to init now; if the container has no dimensions (Tailwind CSS
+   * hasn't applied yet, parent flips between hidden/visible at the lg
+   * breakpoint, etc.), watch for layout changes and retry. Without this,
+   * a single rAF tick that loses the race against CSS leaves the shader
+   * un-rendered until the next view-transition or page refresh.
+   */
+  function setupContainer(container: HTMLElement) {
+    if (container.dataset.shaderInit) return;
+    if (tryInitContainer(container)) return;
+    if (container.dataset.shaderObserved === 'true') return;
+
+    container.dataset.shaderObserved = 'true';
+
+    const ro = new ResizeObserver(() => {
+      if (tryInitContainer(container)) ro.disconnect();
+    });
+    ro.observe(container);
+
+    document.addEventListener(
+      'astro:before-swap',
+      () => ro.disconnect(),
+      { once: true },
+    );
+  }
+
   function initShaderCanvases() {
     if (!isWebGL2Supported()) return;
-
-    const containers = document.querySelectorAll<HTMLElement>('.shader-canvas');
-
-    for (const container of containers) {
-      // Skip if already initialized
-      if (container.dataset.shaderInit) continue;
-
-      const shaderType = container.dataset.shader;
-      const configStr = container.dataset.config;
-      if (!configStr) continue;
-
-      // Skip containers that have no dimensions yet
-      if (container.offsetWidth === 0 && container.offsetHeight === 0) continue;
-
-      if (shaderType === 'grain-gradient') {
-        try {
-          initGrainGradient(container, JSON.parse(configStr));
-          container.dataset.shaderInit = 'true'; // Only mark on success
-        } catch {
-          // Will retry on next scheduleInit call
-        }
-      }
+    for (const container of document.querySelectorAll<HTMLElement>('.shader-canvas')) {
+      setupContainer(container);
     }
   }
 
@@ -211,16 +244,11 @@ const {
     );
   }
 
-  // Initialize after layout is complete
-  function scheduleInit() {
-    requestAnimationFrame(() => {
-      initShaderCanvases();
-    });
-  }
+  // Run synchronously — tryInitContainer handles the no-dimensions case
+  // by attaching a ResizeObserver that retries when layout completes, so
+  // we don't need to gate on rAF or DOMContentLoaded.
+  initShaderCanvases();
 
-  // Initialize on first load
-  scheduleInit();
-
-  // Re-initialize after Astro page transitions
-  document.addEventListener('astro:page-load', scheduleInit);
+  // Pick up new shader containers added by Astro view transitions.
+  document.addEventListener('astro:page-load', initShaderCanvases);
 </script>
