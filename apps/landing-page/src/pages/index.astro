@@ -46,10 +46,9 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <HeroCarousel />
       </div>
 
-      <!-- Grain Gradient shader overlay (mobile)
-           Disabled on mobile: full-viewport WebGL + mix-blend-mode: screen
-           was a major scroll-perf cost. CSS gradient fallback in ShaderCanvas
-           still renders behind it. -->
+      <!-- Grain Gradient shader overlay (desktop only — disabled on mobile)
+           The full-viewport WebGL canvas + mix-blend-mode: screen was a major
+           scroll-perf cost on mobile; mobile uses GradientOverlay below instead. -->
       <ShaderCanvas
         shader="grain-gradient"
         config={heroGrainGradient}
@@ -59,8 +58,23 @@ import { heroGrainGradient } from '../lib/shader-configs';
         mobileEnabled={false}
       />
 
+      <!-- Mobile gradient overlay - CSS-only, no WebGL/mix-blend-mode.
+           Animation plays only while the hero zone is visible; once the
+           cards (z-20, opaque black) cover the gradient (z-5), the
+           IntersectionObserver below pauses it so we stop wasting paint
+           frames on a layer no one can see. -->
+      <GradientOverlay variant="hero-mobile" />
+
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
+        <!-- Sentinel at top of cards container — when this scrolls above
+             the viewport top, cards fully cover the gradient and the
+             observer below pauses the animation. -->
+        <div
+          id="hero-gradient-sentinel"
+          class="absolute top-0 left-0 w-full h-1 pointer-events-none"
+          aria-hidden="true"
+        ></div>
         <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
           <AboutSection />
         </div>
@@ -325,5 +339,36 @@ import { heroGrainGradient } from '../lib/shader-configs';
     document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
   } else {
     initAnimationPausing();
+  }
+
+  // Pause the mobile hero gradient animation once the cards cover it.
+  // The gradient sits at z-5 and is fully obscured by the opaque card stack
+  // (z-20) once the user scrolls past the hero zone, so animating it then
+  // is pure wasted paint cost.
+  function initHeroGradientPausing() {
+    const sentinel = document.getElementById('hero-gradient-sentinel');
+    const overlay = document.querySelector<HTMLElement>(
+      '.scroll-gradient-overlay[data-variant="hero-mobile"]'
+    );
+    if (!sentinel || !overlay) return;
+
+    // Sentinel sits at top of cards container. Animation should pause once
+    // the sentinel has scrolled above the viewport top (cards now cover
+    // the gradient), and resume when scrolled back down.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isAboveViewport =
+          !entry.isIntersecting && entry.boundingClientRect.top < 0;
+        overlay.style.animationPlayState = isAboveViewport ? 'paused' : 'running';
+      },
+      { rootMargin: '0px' }
+    );
+    observer.observe(sentinel);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHeroGradientPausing, { once: true });
+  } else {
+    initHeroGradientPausing();
   }
 </script>
