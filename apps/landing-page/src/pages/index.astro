@@ -46,14 +46,17 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <HeroCarousel />
       </div>
 
-      <!-- Grain Gradient shader overlay (mobile) -->
+      <!-- Grain Gradient shader overlay (mobile)
+           Disabled on mobile: full-viewport WebGL + mix-blend-mode: screen
+           was a major scroll-perf cost. CSS gradient fallback in ShaderCanvas
+           still renders behind it. -->
       <ShaderCanvas
         shader="grain-gradient"
         config={heroGrainGradient}
         class="fixed inset-0 z-[6]"
         opacity={0.25}
         blendMode="screen"
-        mobileEnabled={true}
+        mobileEnabled={false}
       />
 
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
@@ -61,39 +64,39 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
           <AboutSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--lg">
           <ExperiencesSection />
         </div>
-        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
+        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--md">
           <EventsSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--md">
           <GradientOverlay variant="card" />
           <div class="relative z-10">
             <TestimonialsSection />
           </div>
         </div>
-        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8 mobile-card mobile-card--deferred">
+        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8 mobile-card mobile-card--deferred mobile-card--md">
           <SessionSection />
         </div>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
         <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-        <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred">
+        <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred mobile-card--lg">
           <MembershipSection />
         </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
+        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--sm">
           <GroupBookingSection />
         </div>
         <!-- <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
           <PrivateRentalsSection />
         </div> -->
-        <div id="gift-cards" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+        <div id="gift-cards" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--sm">
           <GiftCardSection />
         </div>
-        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred">
+        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--lg">
           <FAQAccordion />
         </div>
-        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred">
+        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--md">
           <SignupForm />
         </div>
       </div>
@@ -180,10 +183,22 @@ import { heroGrainGradient } from '../lib/shader-configs';
       contain: layout style paint;
     }
 
-    /* Defer rendering of below-fold cards until they approach the viewport */
+    /* Defer rendering of below-fold cards until they approach the viewport.
+       Per-size intrinsic placeholders prevent layout shift when the real
+       content paints — the default 500px was too small for tall sections
+       (FAQ, Membership, Experiences) and caused scroll jumps. */
     .mobile-card--deferred {
       content-visibility: auto;
-      contain-intrinsic-size: auto 500px;
+      contain-intrinsic-size: auto 900px;
+    }
+    .mobile-card--deferred.mobile-card--sm {
+      contain-intrinsic-size: auto 600px;
+    }
+    .mobile-card--deferred.mobile-card--md {
+      contain-intrinsic-size: auto 900px;
+    }
+    .mobile-card--deferred.mobile-card--lg {
+      contain-intrinsic-size: auto 1400px;
     }
   }
 </style>
