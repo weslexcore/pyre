@@ -1,17 +1,17 @@
 ---
 export const prerender = true;
 
-import EventDateFilter from '@/components/events/EventDateFilter.astro';
-import EventsGrid from '@/components/events/EventsGrid';
-import GradientOverlay from '@/components/GradientOverlay.astro';
-import MainLayout from '@/layouts/main.astro';
-import fallbackEvents from '@/lib/events';
-import ogImg from '@/assets/images/warm_sauna.webp';
+import EventDateFilter from "@/components/events/EventDateFilter.astro";
+import EventsGrid from "@/components/events/EventsGrid";
+import GradientOverlay from "@/components/GradientOverlay.astro";
+import MainLayout from "@/layouts/main.astro";
+import fallbackEvents from "@/lib/events";
+import ogImg from "@/assets/images/warm_sauna.webp";
 
 // SEO metadata
-const title = 'Events - Pyre';
+const title = "Events - Pyre";
 const description =
-  'Browse and book upcoming sauna sessions, cold plunge classes, and guided wellness events at Pyre in Richmond, VA.';
+	"Browse and book upcoming sauna sessions, cold plunge classes, and guided wellness events at Pyre in Richmond, VA.";
 ---
 
 <MainLayout title={title} description={description} transparentNav={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
@@ -75,19 +75,19 @@ const description =
           <div>
             <h3 class="font-primary-semibold text-lg uppercase tracking-wide text-[var(--pyre-creme)] mb-3">Social Sessions</h3>
             <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-              Open-format sessions where guests share the sauna and cold plunge at their own pace. Great for first-timers and regulars alike. Talk, relax, or zone out — the space is yours.
+             Sauna and cold plunge combined with DJ sets, live music, and community events. Great for first-timers and regulars alike. Bring a friend or make a new one.
             </p>
           </div>
           <div>
-            <h3 class="font-primary-semibold text-lg uppercase tracking-wide text-[var(--pyre-creme)] mb-3">Silent Sessions</h3>
+            <h3 class="font-primary-semibold text-lg uppercase tracking-wide text-[var(--pyre-creme)] mb-3">Open Hours</h3>
             <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-              A phone-free, conversation-free environment for deep rest and recovery. Ideal for those who want to use the space intentionally without distraction.
+              Self-paced sessions for socializing, resting and unwinding. Great for first-timers and regulars alike. Talk, relax, or zone out — the space is yours.
             </p>
           </div>
           <div>
             <h3 class="font-primary-semibold text-lg uppercase tracking-wide text-[var(--pyre-creme)] mb-3">Guided Sessions</h3>
             <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-              Led by a host who walks you through contrast therapy rounds — sauna heat, cold plunge, and rest intervals timed for maximum benefit. No experience required.
+              Our certified Sauna Masters guide you through contrast therapy rounds — sauna heat, cold plunge, movement and rest timed for maximum benefit and community connection. No experience required.
             </p>
           </div>
         </div>
@@ -100,13 +100,13 @@ const description =
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Location</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Pyre is located in Richmond, VA. Sessions are held in our facility with traditional Finnish-style saunas and cold plunge tubs. All sessions include towel service and locker access.
+                Pyre is located at 1000 Westover Hills Blvd, Richmond, VA. Sessions are held outdoors and we have changing rooms and a rinse shower for during and after your session. All sessions include towel service and cubby access.
               </p>
             </div>
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">What to Bring</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Wear a swimsuit or athletic shorts. Bring sandals if you prefer. We provide towels, lockers, and water. Leave your phone in the locker — sessions are a digital detox by design.
+                Wear a swimsuit, bring a water bottle and sandals if you'd like. We provide towels, cubbies, and water. Leave your phone in the cubby — sessions are a digital detox by design.
               </p>
             </div>
           </div>
@@ -114,13 +114,13 @@ const description =
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Session Length</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Most sessions run 75–90 minutes. A typical contrast therapy round is 10–15 minutes in the sauna followed by 2–3 minutes in the cold plunge, repeated 3–5 times with rest in between.
+                Most sessions run 120 minutes. A typical contrast therapy round is 10–15 minutes in the sauna followed by 2–3 minutes in the cold plunge, repeated 3–5 times with rest in between.
               </p>
             </div>
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Booking</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Sessions are bookable online — select a date and time above. Members get priority booking and discounted rates. New to Pyre? Our intro 2-pack is the best way to try it.
+                Sessions are bookable online — select a date and time above. New to Pyre? Our intro 2-pack is the best way to try it.
               </p>
             </div>
           </div>
