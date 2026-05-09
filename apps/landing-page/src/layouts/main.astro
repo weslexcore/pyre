@@ -1,12 +1,8 @@
 ---
 import '../styles/global.css';
 
-// Import critical below-fold images for preloading
-import { getImage } from 'astro:assets';
 import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
 import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
-import plungingImg from '../assets/images/plunging.webp';
-import warmSaunaImg from '../assets/images/warm_sauna.webp';
 import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import AnnouncementBanner from '../components/AnnouncementBanner.astro';
 import Footer from '../components/Footer.astro';
@@ -24,10 +20,6 @@ import {
   SOCIAL_IMAGE_WIDTH,
   TWITTER_HANDLE,
 } from '../lib/seo';
-
-// Generate optimized image URLs for preloading
-const warmSaunaOptimized = await getImage({ src: warmSaunaImg, width: 800 });
-const plungingOptimized = await getImage({ src: plungingImg, width: 600 });
 
 interface Props {
   title?: string;
@@ -274,14 +266,6 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		)}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
-
-		<!-- Preload critical below-fold images to prevent late loading -->
-		{isHomePage && (
-			<>
-				<link rel="preload" as="image" href={warmSaunaOptimized.src} />
-				<link rel="preload" as="image" href={plungingOptimized.src} />
-			</>
-		)}
 
 		{import.meta.env.PROD && <PostHog />}
 		<script>

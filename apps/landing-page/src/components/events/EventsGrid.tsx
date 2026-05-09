@@ -1,10 +1,11 @@
 // Date-grouped schedule view for the events page
 // Listens for date filter events from the Astro EventDateFilter component
 
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import type { EventItem } from '@/lib/types';
-import EventDetailModal from './EventDetailModal';
+
+const EventDetailModal = lazy(() => import('./EventDetailModal'));
 
 interface EventsGridProps {
   fallback?: EventItem[];
@@ -388,10 +389,52 @@ function filterEventsByDateRange(events: EventItem[], filter: FilterType): Event
 
 // -- Main component ----------------------------------------------------------
 
+function computeAvailableFilters(events: EventItem[]): FilterType[] {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const nowMs = now.getTime();
+
+  const weekEnd = new Date(now);
+  weekEnd.setDate(now.getDate() + (7 - now.getDay()));
+  weekEnd.setHours(23, 59, 59, 999);
+  const weekEndMs = weekEnd.getTime();
+
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  monthEnd.setHours(23, 59, 59, 999);
+  const monthEndMs = monthEnd.getTime();
+
+  const thirtyEnd = new Date(now);
+  thirtyEnd.setDate(now.getDate() + 30);
+  thirtyEnd.setHours(23, 59, 59, 999);
+  const thirtyEndMs = thirtyEnd.getTime();
+
+  let hasWeek = false;
+  let hasMonth = false;
+  let hasThirty = false;
+
+  for (const event of events) {
+    if (!event.isoDate) continue;
+    const t = new Date(event.isoDate).getTime();
+    if (!Number.isFinite(t) || t < nowMs) continue;
+    if (!hasWeek && t <= weekEndMs) hasWeek = true;
+    if (!hasMonth && t <= monthEndMs) hasMonth = true;
+    if (!hasThirty && t <= thirtyEndMs) hasThirty = true;
+    if (hasWeek && hasMonth && hasThirty) break;
+  }
+
+  const available: FilterType[] = [];
+  if (hasWeek) available.push('week');
+  if (hasMonth) available.push('month');
+  if (hasThirty) available.push('30days');
+  available.push('all');
+  return available;
+}
+
 export default function EventsGrid({ fallback = [] }: EventsGridProps) {
-  const { events, loading } = useEvents(fallback);
+  const { events, loading, loadingMore, hasMore, loadAll } = useEvents(fallback);
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  const loadedAllRef = useRef(false);
 
   // Remove server-rendered skeleton once React has hydrated
   useEffect(() => {
@@ -446,8 +489,23 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     }
   }, [loading, events, fallback]);
 
+  // When the user picks "all" and the server has more, fetch the rest once.
+  useEffect(() => {
+    if (filter !== 'all') return;
+    if (!hasMore) return;
+    if (loadedAllRef.current) return;
+    loadedAllRef.current = true;
+    loadAll();
+  }, [filter, hasMore, loadAll]);
+
   const displayEvents = events.length > 0 ? events : fallback;
-  const filteredEvents = filterEventsByDateRange(displayEvents, filter);
+
+  const filteredEvents = useMemo(
+    () => filterEventsByDateRange(displayEvents, filter),
+    [displayEvents, filter]
+  );
+  const grouped = useMemo(() => groupEventsByDate(filteredEvents), [filteredEvents]);
+
   const visibleCount = filteredEvents.length;
   const totalCount = displayEvents.length;
 
@@ -459,15 +517,18 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     if (totalCountEl) totalCountEl.textContent = String(totalCount);
   }, [visibleCount, totalCount]);
 
+  const availableFilters = useMemo(
+    () => (loading ? null : computeAvailableFilters(displayEvents)),
+    [loading, displayEvents]
+  );
+
   // Tell the Astro filter component which filters have events
   useEffect(() => {
-    if (loading) return;
-    const filterIds: FilterType[] = ['week', 'month', '30days', 'all'];
-    const available = filterIds.filter(
-      (id) => id === 'all' || filterEventsByDateRange(displayEvents, id).length > 0
+    if (!availableFilters) return;
+    window.dispatchEvent(
+      new CustomEvent('event-filters-available', { detail: { available: availableFilters } })
     );
-    window.dispatchEvent(new CustomEvent('event-filters-available', { detail: { available } }));
-  }, [loading, displayEvents]);
+  }, [availableFilters]);
 
   if (loading) {
     return <ScheduleSkeleton />;
@@ -481,8 +542,6 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     return <EmptyState onShowAll={handleShowAll} />;
   }
 
-  const grouped = groupEventsByDate(filteredEvents);
-
   return (
     <>
       <div className="space-y-2">
@@ -495,11 +554,26 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
           />
         ))}
       </div>
-      <EventDetailModal
-        event={selectedEvent}
-        isOpen={!!selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-      />
+      {loadingMore && (
+        <div
+          role="status"
+          aria-label="Loading more sessions"
+          className="flex items-center gap-4 py-3 px-4 mt-2 animate-pulse"
+        >
+          <div className="h-4 w-36 bg-current/10 rounded" />
+          <div className="flex-1" />
+          <div className="h-4 w-32 bg-current/10 rounded" />
+          <div className="h-4 w-20 bg-current/10 rounded" />
+          <div className="h-7 w-24 bg-current/10 rounded-full" />
+        </div>
+      )}
+      <Suspense fallback={null}>
+        <EventDetailModal
+          event={selectedEvent}
+          isOpen={!!selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      </Suspense>
     </>
   );
 }

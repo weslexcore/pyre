@@ -557,11 +557,24 @@ const hasForm = !!promoConfig.form;
       };
     }
 
-    // Initialize
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initPopup, { once: true });
+    // Defer initialization until the browser is idle so the popup's setup
+    // work (and its JS chunk) stays out of the LCP critical chain.
+    function scheduleInit() {
+      type IdleWindow = Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      };
+      const w = window as IdleWindow;
+      if (typeof w.requestIdleCallback === 'function') {
+        w.requestIdleCallback(initPopup, { timeout: 2000 });
+      } else {
+        setTimeout(initPopup, 1500);
+      }
+    }
+
+    if (document.readyState === 'complete') {
+      scheduleInit();
     } else {
-      initPopup();
+      window.addEventListener('load', scheduleInit, { once: true });
     }
 
     // Re-init on Astro view transitions
