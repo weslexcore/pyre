@@ -54,7 +54,7 @@ const description =
             </div>
           ))}
         </div>
-        <EventsGrid client:load fallback={fallbackEvents.items} />
+        <EventsGrid client:idle fallback={fallbackEvents.items} />
       </div>
 
       <!-- Results Count -->

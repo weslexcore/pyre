@@ -19,6 +19,19 @@ interface EventsApiResponse {
   events: EventItem[];
   cached: boolean;
   timestamp: string;
+  hasMore: boolean;
+  totalUpcoming: number;
+}
+
+const DEFAULT_WINDOW_DAYS = 60;
+const MIN_WINDOW_DAYS = 1;
+const MAX_WINDOW_DAYS = 730;
+
+function parseWindowDays(raw: string | null): number {
+  if (!raw) return DEFAULT_WINDOW_DAYS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_WINDOW_DAYS;
+  return Math.min(MAX_WINDOW_DAYS, Math.max(MIN_WINDOW_DAYS, parsed));
 }
 
 async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
@@ -57,18 +70,49 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   return [];
 }
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ url }) => {
   try {
+    const wantsAll = url.searchParams.get('all') === '1';
+    const windowDays = parseWindowDays(url.searchParams.get('days'));
+
     const rawEvents = await fetchMomenceEventsServer();
     const validEvents = filterValidEvents(rawEvents);
     const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
     const sortedEvents = sortEventsByDate(nonVolunteerEvents);
-    const events = sortedEvents.map(transformToEventItem);
+    const allEvents = sortedEvents.map(transformToEventItem);
+
+    let events: EventItem[];
+    let hasMore: boolean;
+
+    if (wantsAll) {
+      events = allEvents;
+      hasMore = false;
+    } else {
+      const cutoff = Date.now() + windowDays * 24 * 60 * 60 * 1000;
+      const eventsInWindow: EventItem[] = [];
+      let restCount = 0;
+      for (const event of allEvents) {
+        if (!event.isoDate) {
+          eventsInWindow.push(event);
+          continue;
+        }
+        const eventTime = new Date(event.isoDate).getTime();
+        if (Number.isFinite(eventTime) && eventTime > cutoff) {
+          restCount += 1;
+        } else {
+          eventsInWindow.push(event);
+        }
+      }
+      events = eventsInWindow;
+      hasMore = restCount > 0;
+    }
 
     const response: EventsApiResponse = {
       events,
       cached: false,
       timestamp: new Date().toISOString(),
+      hasMore,
+      totalUpcoming: allEvents.length,
     };
 
     return new Response(JSON.stringify(response), {
@@ -87,6 +131,8 @@ export const GET: APIRoute = async () => {
         events: [],
         cached: false,
         timestamp: new Date().toISOString(),
+        hasMore: false,
+        totalUpcoming: 0,
         error: 'Failed to fetch events',
       }),
       {
