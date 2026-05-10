@@ -133,9 +133,14 @@ const variantClasses = {
     }
   }
 
-  /* Mobile performance: reduce gradient layers and remove blend mode compositing */
+  /* Mobile performance: reduce gradient layers, freeze the @property
+     animation (full-frame repaints of multi-radial-gradients are the
+     dominant CSS cost during scroll), and skip layer promotion. */
   @media (max-width: 1023px) {
     .scroll-gradient-overlay {
+      animation: none;
+      will-change: auto;
+      --anim-progress: 0.5;
       background:
         /* Pyre Red */
         radial-gradient(

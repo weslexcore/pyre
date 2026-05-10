@@ -68,14 +68,7 @@ const {
 </style>
 
 <script>
-  import {
-    ShaderMount,
-    grainGradientFragmentShader,
-    GrainGradientShapes,
-    getShaderColorFromString,
-    getShaderNoiseTexture,
-  } from '@paper-design/shaders';
-  import type { ShaderMountUniforms } from '@paper-design/shaders';
+  type ShaderModule = typeof import('@paper-design/shaders');
 
   // Cache WebGL2 support — test once, reuse for all containers
   let webgl2Supported: boolean | null = null;
@@ -84,7 +77,6 @@ const {
     const testCanvas = document.createElement('canvas');
     const gl = testCanvas.getContext('webgl2');
     webgl2Supported = gl !== null;
-    // Actively lose the context to free resources
     if (gl) {
       const loseExt = gl.getExtension('WEBGL_lose_context');
       loseExt?.loseContext();
@@ -92,23 +84,33 @@ const {
     return webgl2Supported;
   }
 
-  /**
-   * Attempt to initialize a single container. Returns true on success.
-   * Fails when dimensions are 0 (CSS hasn't laid the element out yet) or
-   * when ShaderMount throws.
-   */
-  function tryInitContainer(container: HTMLElement): boolean {
+  // Lazy-load the shader package only when we actually have a visible
+  // container to render. Keeps the ~100KB+ WebGL bundle out of the mobile
+  // critical path entirely (mobile hides .shader-canvas via `hidden lg:block`).
+  let shaderModulePromise: Promise<ShaderModule> | null = null;
+  function loadShaderModule(): Promise<ShaderModule> {
+    if (!shaderModulePromise) {
+      shaderModulePromise = import('@paper-design/shaders');
+    }
+    return shaderModulePromise;
+  }
+
+  function isContainerVisible(container: HTMLElement): boolean {
+    return container.offsetWidth > 0 || container.offsetHeight > 0;
+  }
+
+  function tryInitContainer(container: HTMLElement, mod: ShaderModule): boolean {
     if (container.dataset.shaderInit) return true;
 
     const shaderType = container.dataset.shader;
     const configStr = container.dataset.config;
     if (!configStr) return false;
 
-    if (container.offsetWidth === 0 && container.offsetHeight === 0) return false;
+    if (!isContainerVisible(container)) return false;
 
     if (shaderType === 'grain-gradient') {
       try {
-        initGrainGradient(container, JSON.parse(configStr));
+        initGrainGradient(container, JSON.parse(configStr), mod);
         container.dataset.shaderInit = 'true';
         return true;
       } catch (err) {
@@ -119,22 +121,15 @@ const {
     return false;
   }
 
-  /**
-   * Try to init now; if the container has no dimensions (Tailwind CSS
-   * hasn't applied yet, parent flips between hidden/visible at the lg
-   * breakpoint, etc.), watch for layout changes and retry. Without this,
-   * a single rAF tick that loses the race against CSS leaves the shader
-   * un-rendered until the next view-transition or page refresh.
-   */
-  function setupContainer(container: HTMLElement) {
+  function setupContainer(container: HTMLElement, mod: ShaderModule) {
     if (container.dataset.shaderInit) return;
-    if (tryInitContainer(container)) return;
+    if (tryInitContainer(container, mod)) return;
     if (container.dataset.shaderObserved === 'true') return;
 
     container.dataset.shaderObserved = 'true';
 
     const ro = new ResizeObserver(() => {
-      if (tryInitContainer(container)) ro.disconnect();
+      if (tryInitContainer(container, mod)) ro.disconnect();
     });
     ro.observe(container);
 
@@ -145,10 +140,25 @@ const {
     );
   }
 
-  function initShaderCanvases() {
+  async function initShaderCanvases() {
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>('.shader-canvas'),
+    );
+    if (containers.length === 0) return;
+
+    // Bail out before importing the shader bundle if nothing is visible
+    // (e.g. mobile, where every shader-canvas has `display: none`). The
+    // ResizeObserver path can re-trigger when layout changes (viewport
+    // resize across the lg breakpoint), so we check again on the next
+    // `astro:page-load`.
+    const anyVisible = containers.some(isContainerVisible);
+    if (!anyVisible) return;
+
     if (!isWebGL2Supported()) return;
-    for (const container of document.querySelectorAll<HTMLElement>('.shader-canvas')) {
-      setupContainer(container);
+
+    const mod = await loadShaderModule();
+    for (const container of containers) {
+      setupContainer(container, mod);
     }
   }
 
@@ -162,7 +172,19 @@ const {
     speed: number;
   }
 
-  function initGrainGradient(container: HTMLElement, config: GrainGradientConfig) {
+  function initGrainGradient(
+    container: HTMLElement,
+    config: GrainGradientConfig,
+    mod: ShaderModule,
+  ) {
+    const {
+      ShaderMount,
+      grainGradientFragmentShader,
+      GrainGradientShapes,
+      getShaderColorFromString,
+      getShaderNoiseTexture,
+    } = mod;
+
     const colors = config.colors.map(getShaderColorFromString);
     const colorBack = getShaderColorFromString(config.colorBack);
     const noiseTexture = getShaderNoiseTexture();
@@ -173,7 +195,7 @@ const {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const speed = isStatic || reducedMotion ? 0 : config.speed;
 
-    const uniforms: ShaderMountUniforms = {
+    const uniforms: import('@paper-design/shaders').ShaderMountUniforms = {
       u_colorBack: colorBack,
       u_colors: colors,
       u_colorsCount: colors.length,
@@ -202,9 +224,6 @@ const {
       1920 * 1080 * 2,
     );
 
-    // Static mode: render once at speed=0 and skip the pause/resume +
-    // reduced-motion watchers — they're meaningless when speed is always 0.
-    // Just dispose on page transitions.
     if (isStatic) {
       document.addEventListener(
         'astro:before-swap',
@@ -214,7 +233,6 @@ const {
       return;
     }
 
-    // Pause/resume based on viewport visibility
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -225,14 +243,12 @@ const {
     );
     observer.observe(container);
 
-    // Listen for reduced-motion changes
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     const handleMotionChange = (e: MediaQueryListEvent) => {
       mount.setSpeed(e.matches ? 0 : config.speed);
     };
     motionQuery.addEventListener('change', handleMotionChange);
 
-    // Cleanup on Astro page transitions
     document.addEventListener(
       'astro:before-swap',
       () => {
@@ -244,11 +260,26 @@ const {
     );
   }
 
-  // Run synchronously — tryInitContainer handles the no-dimensions case
-  // by attaching a ResizeObserver that retries when layout completes, so
-  // we don't need to gate on rAF or DOMContentLoaded.
-  initShaderCanvases();
+  // Defer the visibility check + dynamic import to idle time so the
+  // shader bundle never competes with the LCP critical request chain
+  // (or with the navbar Book button becoming interactive).
+  type IdleWindow = Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  };
+  function scheduleInit() {
+    const w = window as IdleWindow;
+    if (typeof w.requestIdleCallback === 'function') {
+      w.requestIdleCallback(() => { initShaderCanvases(); }, { timeout: 2000 });
+    } else {
+      setTimeout(() => { initShaderCanvases(); }, 200);
+    }
+  }
 
-  // Pick up new shader containers added by Astro view transitions.
-  document.addEventListener('astro:page-load', initShaderCanvases);
+  if (document.readyState === 'complete') {
+    scheduleInit();
+  } else {
+    window.addEventListener('load', scheduleInit, { once: true });
+  }
+
+  document.addEventListener('astro:page-load', scheduleInit);
 </script>
