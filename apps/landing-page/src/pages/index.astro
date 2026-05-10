@@ -46,20 +46,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <HeroCarousel />
       </div>
 
-      <!-- Grain Gradient shader overlay (mobile)
-           staticRender renders the shader once at speed=0 — keeps the
-           visual without per-frame WebGL fragment-shader work, which
-           was the dominant scroll-perf cost. -->
-      <ShaderCanvas
-        shader="grain-gradient"
-        config={heroGrainGradient}
-        class="fixed inset-0 z-[6]"
-        opacity={0.25}
-        blendMode="screen"
-        mobileEnabled={true}
-        staticRender={true}
-      />
-
       <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
       <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
         <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
@@ -108,14 +94,13 @@ import { heroGrainGradient } from '../lib/shader-configs';
       <!-- Fixed background layer (z-0) -->
       <HeroBackground />
 
-      <!-- Grain Gradient shader overlay (left 40%) -->
+      <!-- Grain Gradient shader overlay (left 40%, desktop only) -->
       <ShaderCanvas
         shader="grain-gradient"
         config={heroGrainGradient}
         class="fixed top-0 left-0 w-[40%] h-screen z-[6]"
         opacity={0.25}
         blendMode="screen"
-        mobileEnabled={true}
       />
 
       <!-- Scrolling cards layer - positioned on right 60% only -->

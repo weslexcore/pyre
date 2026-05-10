@@ -24,14 +24,13 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
   <!-- Repeating logo background pattern -->
   <RepeatingLogoBackground class="absolute inset-0 " />
 
-  <!-- Grain Gradient shader overlay -->
+  <!-- Grain Gradient shader overlay (desktop only — mobile uses CSS gradient fallback) -->
   <ShaderCanvas
     shader="grain-gradient"
     config={footerGrainGradient}
     class="absolute inset-0 z-[1]"
     opacity={0.15}
     blendMode="screen"
-    mobileEnabled={true}
   />
 
   <!-- Content layer (above background) -->

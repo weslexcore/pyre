@@ -83,12 +83,25 @@ function setup() {
   cleanup = initImagePreloader();
 }
 
-// Run on initial load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setup, { once: true });
+// Defer to idle so the main-thread cost of querying every lazy image and
+// re-evaluating srcsets stays out of the LCP / TTI critical path.
+type IdleWindow = Window & {
+  requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+};
+function scheduleSetup() {
+  const w = window as IdleWindow;
+  if (typeof w.requestIdleCallback === 'function') {
+    w.requestIdleCallback(setup, { timeout: 2000 });
+  } else {
+    setTimeout(setup, 200);
+  }
+}
+
+if (document.readyState === 'complete') {
+  scheduleSetup();
 } else {
-  setup();
+  window.addEventListener('load', scheduleSetup, { once: true });
 }
 
 // Re-initialize after Astro view transitions
-document.addEventListener('astro:page-load', setup);
+document.addEventListener('astro:page-load', scheduleSetup);

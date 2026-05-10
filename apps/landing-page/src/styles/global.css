@@ -417,3 +417,15 @@
     animation: none;
   }
 }
+
+/* Mobile performance: freeze the rotating conic-gradient on CTAs and
+   cards. Animating @property --gradient-angle re-rasterizes the entire
+   conic-gradient every frame, which keeps the navbar Book button and
+   every animated card constantly repainting. The static gradient border
+   still shows; it just doesn't rotate. */
+@media (max-width: 1023px) {
+  .btn-cta-animated::before,
+  .card-cta-animated::before {
+    animation: none;
+  }
+}
