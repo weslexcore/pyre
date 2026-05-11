@@ -1,44 +1,110 @@
 ---
 import fallbackEvents from '../lib/events';
 import Button from './Button.astro';
-import EventsCarousel from './events/EventsCarousel';
 import SectionDivider from './SectionDivider.astro';
 
 interface Props {
-  /**
-   * Layout variant:
-   * - 'default': Side-by-side layout with image on left (used on mobile)
-   * - 'compact': Stacked layout with header, image, carousel (used on desktop cards)
-   */
   variant?: 'default' | 'compact';
+  limit?: number;
 }
 
-const { variant = 'default' } = Astro.props;
+const { variant = 'default', limit = 10 } = Astro.props;
 const isCompact = variant === 'compact';
 ---
 
-{isCompact ? (
-  <!-- Compact variant: stacked layout for desktop cards -->
-  <div aria-labelledby="events-heading-compact">
-    <!-- Header -->
-    <div class="text-center mb-6">
+<section
+  id="events"
+  aria-labelledby={isCompact ? 'events-heading-compact' : 'events-heading'}
+  class:list={[
+    isCompact
+      ? 'home-events'
+      : 'home-events py-16 md:py-24 lg:py-0 px-4 lg:px-0 bg-[var(--pyre-black)]/5 lg:bg-transparent',
+  ]}
+  data-home-events
+  data-events-limit={String(limit)}
+>
+  <div class:list={[isCompact ? '' : 'max-w-6xl mx-auto lg:max-w-none']}>
+    <div class:list={[isCompact ? 'text-center mb-6' : 'text-center']}>
       <h2
-        id="events-heading-compact"
-        class="font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
+        id={isCompact ? 'events-heading-compact' : 'events-heading'}
+        class:list={[
+          isCompact
+            ? 'font-primary-semibold text-[clamp(1.75rem,3vw,2.5rem)] tracking-[-0.02em] uppercase mb-3'
+            : 'font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4',
+        ]}
       >
         {fallbackEvents.title}
       </h2>
       {fallbackEvents.subtitle && (
-        <p class="text-base opacity-80">{fallbackEvents.subtitle}</p>
+        <p class:list={[isCompact ? 'text-base opacity-80' : 'text-lg opacity-80']}>
+          {fallbackEvents.subtitle}
+        </p>
       )}
-      <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto w-48 my-4" flip={true} scrollAware={true}/>
+      <SectionDivider
+        variant="squiggle"
+        revealAnimation="draw"
+        visibleAnimation="pulse"
+        class={isCompact ? 'mx-auto w-48 my-4' : 'mx-auto w-72 my-4'}
+        flip={isCompact}
+        scrollAware={true}
+      />
     </div>
 
-    <!-- Dynamic events carousel (React island with compact variant) -->
-    <EventsCarousel client:visible fallback={fallbackEvents.items} variant="compact" emptyState={fallbackEvents.emptyState} />
+    <div class="relative" data-events-results>
+      <div class="events-loading hidden" data-events-loading aria-live="polite">
+        <div class="events-scroll flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-4">
+          {Array.from({ length: 3 }).map(() => (
+            <div class="flex-shrink-0 w-[280px] md:w-[320px] bg-[var(--background)] snap-start border border-current/20 rounded-lg overflow-hidden animate-pulse">
+              <div class="w-full h-36 bg-current/10"></div>
+              <div class="p-5">
+                <div class="h-6 w-24 bg-current/10 rounded mb-4"></div>
+                <div class="h-6 w-full bg-current/10 rounded mb-2"></div>
+                <div class="h-4 w-3/4 bg-current/10 rounded mb-4"></div>
+                <div class="h-10 w-full bg-current/10 rounded"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="hidden" data-events-empty>
+        <div class="flex justify-center">
+          <div class="flex flex-col items-center justify-center text-center py-12 px-6 w-[280px] md:w-[320px] bg-[var(--background)] border border-current/20 rounded-lg">
+            <svg
+              class="w-12 h-12 mb-4 opacity-40"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <p class="font-mono-bold text-lg uppercase tracking-wide mb-6 opacity-70">
+              {fallbackEvents.emptyState.message}
+            </p>
+            {fallbackEvents.emptyState.cta && (
+              <a
+                href={fallbackEvents.emptyState.cta.href}
+                aria-label={fallbackEvents.emptyState.cta.ariaLabel}
+                class="inline-flex items-center justify-center gap-2 rounded-full border border-current/60 px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 hover:border-current hover:bg-current/5"
+              >
+                {fallbackEvents.emptyState.cta.label}
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div class="events-container -mx-4 px-4 md:-mx-8 md:px-8" data-events-list hidden></div>
+    </div>
 
     {fallbackEvents.viewAllCta && (
-      <div class="mt-8 text-center" data-events-cta>
+      <div class:list={[isCompact ? 'mt-8 text-center' : 'mt-10 text-center']}>
         <Button
           href={fallbackEvents.viewAllCta.href}
           variant="secondary"
@@ -50,48 +116,201 @@ const isCompact = variant === 'compact';
       </div>
     )}
   </div>
-) : (
-  <!-- Default variant: side-by-side layout for mobile -->
-  <section aria-labelledby="events-heading" class="py-16 md:py-24 px-4 bg-[var(--pyre-black)]/5">
-    <div class="max-w-6xl mx-auto">
-      <div class="text-center md:text-left">
-        <h2
-          id="events-heading"
-          class="font-primary-semibold text-[clamp(2rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-4"
-        >
-          {fallbackEvents.title}
-        </h2>
-        {fallbackEvents.subtitle && (
-          <p class="text-lg opacity-80">{fallbackEvents.subtitle}</p>
-        )}
-      </div>
-
-      <SectionDivider variant="squiggle" revealAnimation="draw" visibleAnimation="pulse" class="mx-auto md:mx-0 w-72 my-4" scrollAware={true}/>
-
-      <!-- Dynamic events carousel (React island) -->
-      <EventsCarousel client:visible fallback={fallbackEvents.items} emptyState={fallbackEvents.emptyState} />
-
-      {fallbackEvents.viewAllCta && (
-        <div class="mt-10 text-center md:text-left" data-events-cta>
-          <Button
-            href={fallbackEvents.viewAllCta.href}
-            variant="secondary"
-            size="md"
-            ariaLabel={fallbackEvents.viewAllCta.ariaLabel}
-          >
-            {fallbackEvents.viewAllCta.label}
-          </Button>
-        </div>
-      )}
-    </div>
-  </section>
-)}
+</section>
 
 <script>
-  // Hide the default CTA when events are empty (empty state has its own CTA)
-  window.addEventListener('events-empty-state', ((e: CustomEvent<{ isEmpty: boolean }>) => {
-    document.querySelectorAll('[data-events-cta]').forEach((el) => {
-      (el as HTMLElement).classList.toggle('hidden', e.detail.isEmpty);
+  type EventItem = {
+    id: string;
+    title: string;
+    description: string;
+    date: string;
+    time: string;
+    location: string;
+    image?: { src: string; alt?: string };
+    cta?: { label: string; ariaLabel?: string };
+    spotsRemaining?: number;
+    totalSpots?: number;
+  };
+
+  const CACHE_TTL_MS = 5 * 60 * 1000;
+
+  function escapeHtml(value: string | undefined): string {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => {
+      const entities: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
+      return entities[char] ?? char;
     });
-  }) as EventListener);
+  }
+
+  function spotsLabel(event: EventItem): string {
+    if (event.spotsRemaining === undefined) return '';
+    if (event.spotsRemaining === 0) return 'Waitlist';
+    if (event.totalSpots !== undefined) return `${event.spotsRemaining}/${event.totalSpots} open`;
+    return `${event.spotsRemaining} open`;
+  }
+
+  function spotsClass(event: EventItem): string {
+    if (event.spotsRemaining === undefined) return 'text-[var(--pyre-creme)] opacity-70';
+    if (event.spotsRemaining === 0) return 'text-[var(--pyre-red)]';
+    if (event.spotsRemaining <= 3) return 'text-[var(--pyre-gold)]';
+    return 'text-[var(--pyre-creme)] opacity-70';
+  }
+
+  function renderEventCard(event: EventItem): string {
+    const image = event.image?.src
+      ? `<img src="${escapeHtml(event.image.src)}" alt="${escapeHtml(event.image.alt)}" class="w-full h-36 object-cover" loading="lazy" decoding="async">`
+      : '';
+    const spots = spotsLabel(event);
+    const spotsMarkup = spots
+      ? `<div class="flex items-center gap-2 ${spotsClass(event)}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          <span>${escapeHtml(spots)}</span>
+        </div>`
+      : '';
+    const label = event.spotsRemaining === 0 ? 'Join Waitlist' : event.cta?.label || 'View details';
+
+    return `<a href="/events?event=${encodeURIComponent(event.id)}" aria-label="${escapeHtml(
+      event.cta?.ariaLabel || event.title
+    )}" class="group cursor-pointer flex-shrink-0 w-[280px] md:w-[320px] snap-start">
+      <article class="event-card h-full bg-[var(--background)] border border-current/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-current/40 hover:shadow-lg">
+        ${image}
+        <div class="p-5">
+          <div class="mb-4">
+            <span class="inline-block px-2 py-1 text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-burnt-orange)]/10 text-[var(--pyre-burnt-orange)] rounded">${escapeHtml(event.date)}</span>
+          </div>
+          <h3 class="font-mono-bold text-lg uppercase tracking-wide mb-2">${escapeHtml(event.title)}</h3>
+          <p class="text-sm opacity-70 mb-4 line-clamp-2">${escapeHtml(event.description)}</p>
+          <div class="space-y-1 text-sm opacity-70 mb-4">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span>${escapeHtml(event.time)}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              <span>${escapeHtml(event.location)}</span>
+            </div>
+            ${spotsMarkup}
+          </div>
+          <span class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-current/60 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-200 group-hover:border-current group-hover:bg-current/5">${escapeHtml(label)}</span>
+        </div>
+      </article>
+    </a>`;
+  }
+
+  function readCache(limit: number): EventItem[] | null {
+    try {
+      const raw = sessionStorage.getItem(`pyre-home-events:${limit}`);
+      if (!raw) return null;
+      const entry = JSON.parse(raw) as { timestamp: number; events: EventItem[] };
+      if (!entry || !Array.isArray(entry.events)) return null;
+      if (Date.now() - entry.timestamp > CACHE_TTL_MS) return null;
+      return entry.events;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCache(limit: number, events: EventItem[]) {
+    try {
+      sessionStorage.setItem(
+        `pyre-home-events:${limit}`,
+        JSON.stringify({ timestamp: Date.now(), events })
+      );
+    } catch {}
+  }
+
+  function initHomeEvents() {
+    const sections = document.querySelectorAll<HTMLElement>('[data-home-events]');
+    if (!sections.length) return;
+
+    const loadSection = async (section: HTMLElement) => {
+      if (section.dataset.eventsLoaded === 'true') return;
+      section.dataset.eventsLoaded = 'true';
+
+      const limit = Number.parseInt(section.dataset.eventsLimit || '10', 10) || 10;
+      const loading = section.querySelector<HTMLElement>('[data-events-loading]');
+      const empty = section.querySelector<HTMLElement>('[data-events-empty]');
+      const list = section.querySelector<HTMLElement>('[data-events-list]');
+      if (!list) return;
+
+      loading?.classList.remove('hidden');
+      empty?.classList.add('hidden');
+      list.hidden = true;
+
+      let events = readCache(limit);
+      if (!events) {
+        try {
+          const response = await fetch(`/api/events?limit=${limit}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          events = Array.isArray(data.events) ? data.events : [];
+          writeCache(limit, events);
+        } catch {
+          events = [];
+        }
+      }
+
+      loading?.classList.add('hidden');
+      if (!events.length) {
+        empty?.classList.remove('hidden');
+        return;
+      }
+
+      list.innerHTML = `<div class="events-scroll flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-4">${events
+        .slice(0, limit)
+        .map(renderEventCard)
+        .join('')}</div>`;
+      list.hidden = false;
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer.unobserve(entry.target);
+          loadSection(entry.target as HTMLElement);
+        }
+      },
+      { rootMargin: '300px 0px', threshold: 0 }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHomeEvents, { once: true });
+  } else {
+    initHomeEvents();
+  }
+  document.addEventListener('astro:page-load', initHomeEvents);
 </script>
+
+<style>
+  .events-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .events-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

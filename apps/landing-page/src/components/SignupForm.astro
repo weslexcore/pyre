@@ -72,8 +72,6 @@ const successClass = isCompact
 const turnstileTheme = isCompact ? 'dark' : 'auto';
 ---
 
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
-
 {isCompact ? (
   <div aria-labelledby={headingId} class="py-8 md:py-12">
     <div class={gridClass}>
@@ -213,7 +211,35 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 <script>
   (function() {
     const widgetIds = new Map<HTMLElement, string>();
+    let turnstileScriptPromise: Promise<void> | null = null;
     let cleanup: (() => void) | null = null;
+
+    function loadTurnstileScript(): Promise<void> {
+      if (typeof (window as any).turnstile !== 'undefined') {
+        return Promise.resolve();
+      }
+      if (turnstileScriptPromise) return turnstileScriptPromise;
+
+      turnstileScriptPromise = new Promise((resolve, reject) => {
+        const existing = document.querySelector<HTMLScriptElement>('script[data-turnstile-loader]');
+        if (existing) {
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('Turnstile failed to load')), { once: true });
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.defer = true;
+        script.dataset.turnstileLoader = 'true';
+        script.addEventListener('load', () => resolve(), { once: true });
+        script.addEventListener('error', () => reject(new Error('Turnstile failed to load')), { once: true });
+        document.head.appendChild(script);
+      });
+
+      return turnstileScriptPromise;
+    }
 
     function initSignupForms() {
       if (cleanup) {
@@ -237,6 +263,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
         let hasInteracted = false;
         let mouseMoved = false;
         let turnstileToken = '';
+        let turnstileRequested = false;
 
         if (timestampField) {
           timestampField.value = formStartTime.toString();
@@ -279,14 +306,29 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           }
         }
 
-        const handleLoad = () => initTurnstile();
-
-        if (typeof (window as any).turnstile !== 'undefined') {
-          initTurnstile();
-        } else {
-          window.addEventListener('load', handleLoad);
-          cleanupFns.push(() => window.removeEventListener('load', handleLoad));
+        function requestTurnstile() {
+          if (turnstileRequested || !turnstileConfig.siteKey || !turnstileContainer) return;
+          turnstileRequested = true;
+          loadTurnstileScript()
+            .then(initTurnstile)
+            .catch(() => {
+              if (errorEl) {
+                errorEl.textContent = 'Security check could not load. Please try again.';
+              }
+            });
         }
+
+        const turnstileObserver = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+              turnstileObserver.disconnect();
+              requestTurnstile();
+            }
+          },
+          { rootMargin: '200px 0px', threshold: 0 }
+        );
+        turnstileObserver.observe(form);
+        cleanupFns.push(() => turnstileObserver.disconnect());
 
         const handleMouseMove = () => { mouseMoved = true; };
         const handleFocusIn = () => { hasInteracted = true; };
@@ -302,6 +344,13 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
             form.removeEventListener('input', handleInput);
           });
         }
+
+        form.addEventListener('focusin', requestTurnstile, { passive: true });
+        form.addEventListener('input', requestTurnstile, { passive: true });
+        cleanupFns.push(() => {
+          form.removeEventListener('focusin', requestTurnstile);
+          form.removeEventListener('input', requestTurnstile);
+        });
 
         const handleSubmit = async (event: SubmitEvent) => {
           event.preventDefault();
@@ -351,6 +400,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
           }
 
           if (turnstileConfig.siteKey && !turnstileToken) {
+            requestTurnstile();
             errorEl.textContent = 'Please complete the security check.';
             return;
           }
@@ -456,7 +506,7 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 
       cleanup = () => {
         // Remove all Turnstile widgets
-        widgetIds.forEach((wId, container) => {
+        widgetIds.forEach((wId) => {
           if (typeof (window as any).turnstile?.remove === 'function') {
             try { (window as any).turnstile.remove(wId); } catch {}
           }

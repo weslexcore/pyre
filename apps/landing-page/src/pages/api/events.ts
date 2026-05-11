@@ -26,12 +26,21 @@ interface EventsApiResponse {
 const DEFAULT_WINDOW_DAYS = 60;
 const MIN_WINDOW_DAYS = 1;
 const MAX_WINDOW_DAYS = 730;
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 50;
 
 function parseWindowDays(raw: string | null): number {
   if (!raw) return DEFAULT_WINDOW_DAYS;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return DEFAULT_WINDOW_DAYS;
   return Math.min(MAX_WINDOW_DAYS, Math.max(MIN_WINDOW_DAYS, parsed));
+}
+
+function parseLimit(raw: string | null): number | null {
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, parsed));
 }
 
 async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
@@ -74,6 +83,7 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     const wantsAll = url.searchParams.get('all') === '1';
     const windowDays = parseWindowDays(url.searchParams.get('days'));
+    const limit = parseLimit(url.searchParams.get('limit'));
 
     const rawEvents = await fetchMomenceEventsServer();
     const validEvents = filterValidEvents(rawEvents);
@@ -84,7 +94,10 @@ export const GET: APIRoute = async ({ url }) => {
     let events: EventItem[];
     let hasMore: boolean;
 
-    if (wantsAll) {
+    if (limit !== null && !wantsAll) {
+      events = allEvents.slice(0, limit);
+      hasMore = allEvents.length > limit;
+    } else if (wantsAll) {
       events = allEvents;
       hasMore = false;
     } else {

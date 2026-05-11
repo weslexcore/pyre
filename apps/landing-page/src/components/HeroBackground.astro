@@ -6,7 +6,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
 
 <!-- DESKTOP HERO: Fixed background layer for desktop parallax effect -->
 <div class="fixed inset-0 z-0 bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
-  <div id="nav-sentinel" class="absolute top-0 left-0 w-full h-1" aria-hidden="true"></div>
+  <div data-nav-sentinel class="absolute top-0 left-0 w-full h-1" aria-hidden="true"></div>
 
   <div class="h-screen grid grid-cols-[40%_60%]">
     <!-- Left: Location Info -->
@@ -74,7 +74,7 @@ import InstagramIcon from './icons/InstagramIcon.astro';
 
     <!-- Right: Image -->
     <div class="relative h-full">
-      <HeroCarousel />
+      <HeroCarousel priority={true} />
     </div>
   </div>
 </div>

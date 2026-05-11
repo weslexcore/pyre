@@ -293,6 +293,22 @@ const widthClass = hasCustomWidth ? '' : 'w-full';
 
       const cleanupFns: Array<() => void> = [];
 
+      if (window.matchMedia('(max-width: 1023px)').matches) {
+        document.querySelectorAll<HTMLElement>('.section-divider').forEach((divider) => {
+          const path = divider.querySelector<SVGPathElement>('.divider-path');
+          const svg = divider.querySelector<SVGElement>('.divider-svg');
+          divider.classList.add('is-visible');
+          divider.classList.remove('is-revealed');
+          if (path) path.style.strokeDashoffset = '0';
+          if (svg) {
+            svg.style.opacity = '1';
+            svg.style.transform = 'scaleX(1)';
+          }
+        });
+        cleanup = () => {};
+        return;
+      }
+
       // Reveal animation durations (ms) - matches CSS transition durations
       const revealDurations: Record<string, number> = {
         draw: 2000,
