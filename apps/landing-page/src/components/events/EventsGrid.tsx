@@ -74,7 +74,7 @@ function ArrowIcon() {
 
 function ScheduleSkeleton() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 text-[var(--pyre-creme)]">
       {Array.from({ length: 3 }).map((_, gi) => (
         <div key={`skel-group-${gi}`}>
           {/* Date header shimmer */}
@@ -558,7 +558,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
         <div
           role="status"
           aria-label="Loading more sessions"
-          className="flex items-center gap-4 py-3 px-4 mt-2 animate-pulse"
+          className="flex items-center gap-4 py-3 px-4 mt-2 animate-pulse text-[var(--pyre-creme)]"
         >
           <div className="h-4 w-36 bg-current/10 rounded" />
           <div className="flex-1" />
