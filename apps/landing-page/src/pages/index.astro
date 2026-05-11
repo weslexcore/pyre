@@ -8,14 +8,12 @@ import FAQAccordion from '../components/FAQAccordion.astro';
 import GiftCardSection from '../components/GiftCardSection.astro';
 import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
-import PrivateRentalsSection from '../components/PrivateRentalsSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SectionBridge from '../components/SectionBridge.astro';
-import SectionCard from '../components/SectionCard.astro';
 import SessionSection from '../components/SessionSection.astro';
 import SignupForm from '../components/SignupForm.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
@@ -25,76 +23,25 @@ import { heroGrainGradient } from '../lib/shader-configs';
 ---
 
 <Layout isHomePage={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
-  <div class="dark">
-    <!-- Mobile: three-layer scroll effect -->
-    <!-- Black background prevents white showing during overscroll bounce -->
-    <div class="lg:hidden bg-[var(--pyre-black)]">
-      <!-- SVG clip path definition for hero wave edge (zero-size, visually hidden) -->
-      <svg width="0" height="0" class="absolute" aria-hidden="true">
-        <defs>
-          <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
-            <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
-          </clipPath>
-        </defs>
-      </svg>
+  <div class="dark bg-[var(--pyre-black)]">
+    <svg width="0" height="0" class="absolute lg:hidden" aria-hidden="true">
+      <defs>
+        <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
+          <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
+        </clipPath>
+      </defs>
+    </svg>
 
-      <!-- Layer 1: Fixed text (z-0) + spacer - rendered by Hero component -->
+    <div class="lg:hidden">
       <Hero />
-
-      <!-- Layer 2: Sticky image (z-10) - starts at 80dvh, scrolls up and locks at top -->
-      <div class="sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer">
-        <HeroCarousel />
-      </div>
-
-      <!-- Layer 3: Content cards (z-20) - scroll over the locked image -->
-      <div class="relative z-20 px-4 pt-4 pb-4 gpu-layer">
-        <div id="about" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card">
-          <AboutSection />
-        </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--lg">
-          <ExperiencesSection />
-        </div>
-        <div id="events" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--md">
-          <EventsSection />
-        </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--md">
-          <GradientOverlay variant="card" />
-          <div class="relative z-10">
-            <TestimonialsSection />
-          </div>
-        </div>
-        <div class="relative rounded-t-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mt-8 mobile-card mobile-card--deferred mobile-card--md">
-          <SessionSection />
-        </div>
-        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
-        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-        <div id="membership" class="relative rounded-b-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] mb-8 mobile-card mobile-card--deferred mobile-card--lg">
-          <MembershipSection />
-        </div>
-        <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--sm">
-          <GroupBookingSection />
-        </div>
-        <!-- <div class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] card-cta-animated my-8 mobile-card mobile-card--deferred">
-          <PrivateRentalsSection />
-        </div> -->
-        <div id="gift-cards" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--sm">
-          <GiftCardSection />
-        </div>
-        <div id="faq" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] my-8 mobile-card mobile-card--deferred mobile-card--lg">
-          <FAQAccordion />
-        </div>
-        <div id="signup" class="relative rounded-lg overflow-hidden bg-[var(--pyre-black)] text-[var(--pyre-creme)] btn-cta-animated my-8 mobile-card mobile-card--deferred mobile-card--md">
-          <SignupForm />
-        </div>
-      </div>
     </div>
 
-    <!-- Desktop: fixed background + scrolling cards on right side only -->
-    <div class="hidden lg:block">
-      <!-- Fixed background layer (z-0) -->
-      <HeroBackground />
+    <div class="mobile-hero-background sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer pointer-events-none lg:hidden" aria-hidden="true">
+      <HeroCarousel />
+    </div>
 
-      <!-- Grain Gradient shader overlay (left 40%, desktop only) -->
+    <div class="hidden lg:block">
+      <HeroBackground />
       <ShaderCanvas
         shader="grain-gradient"
         config={heroGrainGradient}
@@ -102,115 +49,154 @@ import { heroGrainGradient } from '../lib/shader-configs';
         opacity={0.25}
         blendMode="screen"
       />
+    </div>
 
-      <!-- Scrolling cards layer - positioned on right 60% only -->
-      <div class="relative z-10 ml-[40%] w-[60%] pt-[100vh] pb-0">
-        <div class="px-6 pb-6">
-          <SectionCard stackIndex={0} class="card-cta-animated mb-8" data-section="about">
-            <AboutSection />
-          </SectionCard>
-          <SectionCard class="mb-8" data-section="benefits">
-            <ExperiencesSection />
-          </SectionCard>
-          <SectionCard class="card-cta-animated mb-8" data-section="events">
-            <EventsSection variant="compact" />
-          </SectionCard>
-          <SectionCard class="my-8" data-section="testimonials">
-            <GradientOverlay variant="card" />
-            <div class="relative z-10">
-              <TestimonialsSection />
-            </div>
-          </SectionCard>
-          <SectionCard class="lg:rounded-t-lg lg:rounded-b-none" data-section="sessions">
-            <SessionSection />
-          </SectionCard>
-          <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height='sm'/>
-          <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height='sm' />
-          <SectionCard class="lg:rounded-t-none lg:rounded-b-lg" data-section="membership">
-            <MembershipSection />
-          </SectionCard>
-          <SectionCard class="card-cta-animated my-8" data-section="group-booking">
-            <GroupBookingSection />
-          </SectionCard>
-          <!-- <SectionCard class="card-cta-animated my-8" data-section="private-rentals">
-            <PrivateRentalsSection />
-          </SectionCard> -->
-          <SectionCard class="my-8" data-section="gift-cards">
-            <GiftCardSection />
-          </SectionCard>
-          <SectionCard class="my-8" data-section="faq">
-            <FAQAccordion />
-          </SectionCard>
-          <SectionCard class="card-cta-animated my-8" data-section="signup">
-            <SignupForm variant="compact" />
-          </SectionCard>
+    <div class="relative z-20 px-4 pt-4 pb-4 lg:z-10 lg:ml-[40%] lg:w-[60%] lg:pt-[100vh] lg:px-6 lg:pb-6 gpu-layer">
+      <div class="home-card home-card--animated" data-section="about">
+        <AboutSection />
+      </div>
+
+      <div class="home-card home-card--deferred home-card--lg" data-section="benefits">
+        <ExperiencesSection />
+      </div>
+
+      <div class="home-card home-card--animated home-card--deferred home-card--md" data-section="events">
+        <EventsSection limit={10} />
+      </div>
+
+      <div class="home-card home-card--deferred home-card--md" data-section="testimonials">
+        <GradientOverlay variant="card" />
+        <div class="relative z-10">
+          <TestimonialsSection />
         </div>
+      </div>
+
+      <div class="home-card home-card--joined-top home-card--deferred home-card--md" data-section="sessions">
+        <SessionSection />
+      </div>
+      <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height="sm" />
+      <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height="sm" />
+      <div class="home-card home-card--joined-bottom home-card--deferred home-card--lg" data-section="membership">
+        <MembershipSection />
+      </div>
+
+      <div class="home-card home-card--animated home-card--deferred home-card--sm" data-section="group-booking">
+        <GroupBookingSection />
+      </div>
+
+      <div class="home-card home-card--deferred home-card--sm" data-section="gift-cards">
+        <GiftCardSection />
+      </div>
+
+      <div id="faq" class="home-card home-card--deferred home-card--lg" data-section="faq">
+        <FAQAccordion />
+      </div>
+
+      <div id="signup" class="home-card home-card--animated home-card--deferred home-card--md" data-section="signup">
+        <SignupForm />
       </div>
     </div>
   </div>
 </Layout>
 
 <style>
-  /* Wavy top edge clip for mobile hero image — uses inline SVG clipPath for GPU-accelerated clipping */
   .hero-wave-mask {
     -webkit-clip-path: url(#hero-wave-clip);
     clip-path: url(#hero-wave-clip);
   }
 
-  /* GPU layer promotion — forces compositing to avoid repaints during scroll */
+  .mobile-hero-background {
+    margin-bottom: -80dvh;
+  }
+
+  .home-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--pyre-black);
+    color: var(--pyre-creme);
+    border-radius: 0.5rem;
+    margin-block: 2rem;
+  }
+
+  .home-card--animated {
+    position: relative;
+  }
+
+  .home-card--joined-top {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-bottom: 0;
+  }
+
+  .home-card--joined-bottom {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin-top: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .home-card {
+      border-radius: 0.5rem;
+      padding: 3rem 3rem;
+    }
+
+    .home-card--joined-top {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .home-card--joined-bottom {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+
+    .home-card--animated {
+      isolation: isolate;
+    }
+  }
+
   @media (max-width: 1023px) {
     .gpu-layer {
       will-change: transform;
       transform: translateZ(0);
     }
 
-    /* Layout containment on mobile cards so internal layout changes don't trigger full-page reflow */
-    .mobile-card {
+    .home-card {
       contain: layout style paint;
     }
 
-    /* Defer rendering of below-fold cards until they approach the viewport.
-       Per-size intrinsic placeholders prevent layout shift when the real
-       content paints — the default 500px was too small for tall sections
-       (FAQ, Membership, Experiences) and caused scroll jumps. */
-    .mobile-card--deferred {
+    .home-card--deferred {
       content-visibility: auto;
       contain-intrinsic-size: auto 900px;
     }
-    .mobile-card--deferred.mobile-card--sm {
+
+    .home-card--deferred.home-card--sm {
       contain-intrinsic-size: auto 600px;
     }
-    .mobile-card--deferred.mobile-card--md {
+
+    .home-card--deferred.home-card--md {
       contain-intrinsic-size: auto 900px;
     }
-    .mobile-card--deferred.mobile-card--lg {
+
+    .home-card--deferred.home-card--lg {
       contain-intrinsic-size: auto 1400px;
     }
   }
 </style>
 
 <script>
-  // Handle smooth scrolling for anchor links based on viewport
-  // On desktop (lg+), scroll to data-section elements instead of IDs
   function initSmoothScroll() {
     const lgBreakpoint = 1024;
 
-    /**
-     * On mobile, content-visibility:auto defers rendering of off-screen cards,
-     * so scrollIntoView computes positions from estimated placeholder sizes.
-     * Temporarily force all deferred cards to render before scrolling so
-     * the browser calculates the correct scroll offset.
-     */
     function revealDeferredCards(): (() => void) | null {
       if (window.innerWidth >= lgBreakpoint) return null;
 
-      const deferred = document.querySelectorAll<HTMLElement>('.mobile-card--deferred');
+      const deferred = document.querySelectorAll<HTMLElement>('.home-card--deferred');
       if (deferred.length === 0) return null;
 
       for (const el of deferred) {
         el.style.contentVisibility = 'visible';
       }
-      // Force synchronous layout so scroll position is accurate
       document.body.offsetHeight;
 
       return () => {
@@ -230,68 +216,43 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      // Match any anchor with a hash in the href (handles /#about, /pyre/#about, #about)
       const anchor = target.closest('a[href*="#"]') as HTMLAnchorElement | null;
-
       if (!anchor) return;
 
       const href = anchor.getAttribute('href');
       if (!href) return;
 
-      // Extract the hash portion
       const hashIndex = href.indexOf('#');
       if (hashIndex === -1) return;
 
       const hash = href.slice(hashIndex);
       if (hash === '#') return;
 
-      const sectionId = hash.slice(1); // Remove the #
-      const targetElement = findTarget(sectionId);
+      const targetElement = findTarget(hash.slice(1));
+      if (!targetElement) return;
 
-      if (targetElement) {
-        e.preventDefault();
-        const restore = revealDeferredCards();
-        targetElement.scrollIntoView({ behavior: 'smooth' });
-        // Update URL hash without jumping
-        history.pushState(null, '', hash);
-        // Restore content-visibility after smooth scroll finishes
-        if (restore) setTimeout(restore, 1000);
-      }
+      e.preventDefault();
+      const restore = revealDeferredCards();
+      targetElement.scrollIntoView({ behavior: 'smooth' });
+      history.pushState(null, '', hash);
+      if (restore) setTimeout(restore, 1000);
     });
 
-    // Handle direct URL navigation with hash (initial load or back/forward)
-    function scrollToHashTarget() {
-      const hash = window.location.hash;
-      if (!hash) return;
-
-      const sectionId = hash.slice(1);
-      const targetElement = findTarget(sectionId);
-
+    if (window.location.hash) {
+      const targetElement = findTarget(window.location.hash.slice(1));
       if (targetElement) {
         const restore = revealDeferredCards();
-        // Wait for layout to stabilize after forcing visibility
         requestAnimationFrame(() => {
           targetElement.scrollIntoView({ behavior: 'smooth' });
           if (restore) setTimeout(restore, 1000);
         });
       }
     }
-
-    // Run on page load if there's a hash
-    if (window.location.hash) {
-      scrollToHashTarget();
-    }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
-  } else {
-    initSmoothScroll();
-  }
-
-  // Pause/resume gradient border animations based on viewport visibility
-  // Prevents off-screen infinite animations from consuming GPU resources
   function initAnimationPausing() {
+    if (window.innerWidth < 1024) return;
+
     const animatedEls = document.querySelectorAll('.btn-cta-animated, .card-cta-animated');
     if (animatedEls.length === 0) return;
 
@@ -308,8 +269,10 @@ import { heroGrainGradient } from '../lib/shader-configs';
   }
 
   if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
     document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
   } else {
+    initSmoothScroll();
     initAnimationPausing();
   }
 </script>

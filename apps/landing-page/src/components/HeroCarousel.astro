@@ -1,11 +1,17 @@
 ---
-import { Picture } from 'astro:assets';
+import { Image } from 'astro:assets';
 
 import tiled from '../assets/backgrounds/tiled_upscale.png';
+
+interface Props {
+  priority?: boolean;
+}
+
+const { priority = false } = Astro.props;
 ---
-<Picture
+<Image
   src={tiled}
-  formats={['webp']}
+  format="webp"
   widths={[640, 960, 1200, 1600]}
   sizes="(max-width: 1023px) 100vw, 60vw"
   quality={70}
@@ -13,9 +19,9 @@ import tiled from '../assets/backgrounds/tiled_upscale.png';
   height={800}
   alt="Tiled background"
   class="h-full w-full object-cover"
-  loading="eager"
+  loading={priority ? 'eager' : 'lazy'}
   decoding="async"
-  fetchpriority="high"
+  fetchpriority={priority ? 'high' : undefined}
 />
 
 <style>

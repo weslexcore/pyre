@@ -1,5 +1,5 @@
 ---
-import { Picture } from 'astro:assets';
+import { Image } from 'astro:assets';
 import warmSauna from '../assets/images/warm_sauna.webp';
 import about from '../lib/about';
 import Button from './Button.astro';
@@ -10,9 +10,9 @@ import SectionDivider from './SectionDivider.astro';
   <div class="max-w-3xl mx-auto lg:max-w-none grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-6 lg:gap-8 items-start">
     <!-- Image column -->
     <div class="aspect-[3/4] overflow-hidden rounded-lg">
-      <Picture
+      <Image
         src={warmSauna}
-        formats={['webp']}
+        format="webp"
         widths={[400, 600, 800, 1000]}
         sizes="(max-width: 768px) 100vw, 40vw"
         alt="People enjoying a social sauna session"
