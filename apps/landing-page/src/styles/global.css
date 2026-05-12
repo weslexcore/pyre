@@ -377,8 +377,6 @@
   background: var(--pyre-black);
 }
 
-/* Only apply animation on lg+ screens where rounded corners are visible */
-/* @media (min-width: 1024px) { */
 .card-cta-animated::before {
   content: "";
   position: absolute;
@@ -409,7 +407,6 @@
   background: var(--pyre-black);
   border-radius: calc(0.5rem - 4px);
 }
-/* } */
 
 /* Accessibility: Respect reduced motion for card animation */
 @media (prefers-reduced-motion: reduce) {
@@ -418,14 +415,11 @@
   }
 }
 
-/* Mobile performance: freeze the rotating conic-gradient on CTAs and
-   cards. Animating @property --gradient-angle re-rasterizes the entire
-   conic-gradient every frame, which keeps the navbar Book button and
-   every animated card constantly repainting. The static gradient border
-   still shows; it just doesn't rotate. */
+/* Mobile performance: keep card gradients painted but paused by default.
+   Buttons are simpler to flatten on mobile because they don't need the
+   static border treatment. */
 @media (max-width: 1023px) {
-  .btn-cta-animated::before,
-  .card-cta-animated::before {
+  .btn-cta-animated::before {
     animation: none;
   }
 }

@@ -53,7 +53,7 @@ for (let index = 0; index < maxEntries; index += 1) {
             entry.kind === 'testimonial' ? (
               <article
                 class:list={[
-                  'testimonial-card flex-shrink-0 w-[280px] md:w-[300px] aspect-[4/5] snap-start rounded-lg overflow-hidden p-6 flex flex-col transition-all duration-300',
+                  'testimonial-card flex-shrink-0 w-[280px] md:w-[300px] min-h-[430px] md:min-h-0 md:aspect-[4/5] snap-start rounded-lg overflow-hidden p-6 flex flex-col transition-all duration-300',
                   entry.item.highlight
                     ? 'border border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/5'
                     : 'border border-current/10',
@@ -69,7 +69,7 @@ for (let index = 0; index < maxEntries; index += 1) {
                     </svg>
                   ))}
                 </div>
-                <blockquote class="mb-4 flex-1 overflow-hidden">
+                <blockquote class="mb-4 flex-1">
                   <p class="italic leading-relaxed opacity-90">"{entry.item.quote}"</p>
                 </blockquote>
                 <footer>
@@ -84,7 +84,7 @@ for (let index = 0; index < maxEntries; index += 1) {
                 </footer>
               </article>
             ) : (
-              <div class="testimonial-photo flex-shrink-0 w-[280px] md:w-[300px] aspect-[4/5] snap-start rounded-lg overflow-hidden border border-current/10">
+              <div class="testimonial-photo flex-shrink-0 w-[280px] md:w-[300px] h-[430px] md:h-auto md:aspect-[4/5] snap-start rounded-lg overflow-hidden border border-current/10">
                 <img
                   src={entry.item.src}
                   alt={entry.item.alt}

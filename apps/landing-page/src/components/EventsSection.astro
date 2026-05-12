@@ -100,6 +100,33 @@ const isCompact = variant === 'compact';
         </div>
       </div>
 
+      <div class="hidden" data-events-error>
+        <div class="flex justify-center">
+          <div class="flex flex-col items-center justify-center text-center py-12 px-6 w-[280px] md:w-[320px] bg-[var(--background)] border border-current/20 rounded-lg">
+            <svg
+              class="w-12 h-12 mb-4 opacity-40"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+            </svg>
+            <p class="font-mono-bold text-lg uppercase tracking-wide mb-3 opacity-70">
+              Events could not load
+            </p>
+            <p class="text-sm opacity-70">
+              Please refresh or view the full schedule.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div class="events-container -mx-4 px-4 md:-mx-8 md:px-8" data-events-list hidden></div>
     </div>
 
@@ -242,14 +269,17 @@ const isCompact = variant === 'compact';
       const limit = Number.parseInt(section.dataset.eventsLimit || '10', 10) || 10;
       const loading = section.querySelector<HTMLElement>('[data-events-loading]');
       const empty = section.querySelector<HTMLElement>('[data-events-empty]');
+      const error = section.querySelector<HTMLElement>('[data-events-error]');
       const list = section.querySelector<HTMLElement>('[data-events-list]');
       if (!list) return;
 
       loading?.classList.remove('hidden');
       empty?.classList.add('hidden');
+      error?.classList.add('hidden');
       list.hidden = true;
 
       let events = readCache(limit);
+      let fetchFailed = false;
       if (!events) {
         try {
           const response = await fetch(`/api/events?limit=${limit}`);
@@ -258,11 +288,17 @@ const isCompact = variant === 'compact';
           events = Array.isArray(data.events) ? data.events : [];
           writeCache(limit, events);
         } catch {
+          fetchFailed = true;
           events = [];
         }
       }
 
       loading?.classList.add('hidden');
+      if (fetchFailed) {
+        error?.classList.remove('hidden');
+        return;
+      }
+
       if (!events.length) {
         empty?.classList.remove('hidden');
         return;
