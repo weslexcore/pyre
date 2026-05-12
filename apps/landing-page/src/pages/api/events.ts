@@ -43,6 +43,28 @@ function parseLimit(raw: string | null): number | null {
   return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, parsed));
 }
 
+function filterEventsByWindow(events: EventItem[], windowDays: number): { eventsInWindow: EventItem[]; outsideWindowCount: number } {
+  const cutoff = Date.now() + windowDays * 24 * 60 * 60 * 1000;
+  const eventsInWindow: EventItem[] = [];
+  let outsideWindowCount = 0;
+
+  for (const event of events) {
+    if (!event.isoDate) {
+      eventsInWindow.push(event);
+      continue;
+    }
+
+    const eventTime = new Date(event.isoDate).getTime();
+    if (Number.isFinite(eventTime) && eventTime > cutoff) {
+      outsideWindowCount += 1;
+    } else {
+      eventsInWindow.push(event);
+    }
+  }
+
+  return { eventsInWindow, outsideWindowCount };
+}
+
 async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
@@ -82,7 +104,8 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
 export const GET: APIRoute = async ({ url }) => {
   try {
     const wantsAll = url.searchParams.get('all') === '1';
-    const windowDays = parseWindowDays(url.searchParams.get('days'));
+    const daysParam = url.searchParams.get('days');
+    const windowDays = parseWindowDays(daysParam);
     const limit = parseLimit(url.searchParams.get('limit'));
 
     const rawEvents = await fetchMomenceEventsServer();
@@ -94,30 +117,19 @@ export const GET: APIRoute = async ({ url }) => {
     let events: EventItem[];
     let hasMore: boolean;
 
-    if (limit !== null && !wantsAll) {
-      events = allEvents.slice(0, limit);
-      hasMore = allEvents.length > limit;
-    } else if (wantsAll) {
+    if (wantsAll) {
       events = allEvents;
       hasMore = false;
+    } else if (limit !== null) {
+      const candidateEvents = daysParam === null
+        ? allEvents
+        : filterEventsByWindow(allEvents, windowDays).eventsInWindow;
+      events = candidateEvents.slice(0, limit);
+      hasMore = candidateEvents.length > limit;
     } else {
-      const cutoff = Date.now() + windowDays * 24 * 60 * 60 * 1000;
-      const eventsInWindow: EventItem[] = [];
-      let restCount = 0;
-      for (const event of allEvents) {
-        if (!event.isoDate) {
-          eventsInWindow.push(event);
-          continue;
-        }
-        const eventTime = new Date(event.isoDate).getTime();
-        if (Number.isFinite(eventTime) && eventTime > cutoff) {
-          restCount += 1;
-        } else {
-          eventsInWindow.push(event);
-        }
-      }
+      const { eventsInWindow, outsideWindowCount } = filterEventsByWindow(allEvents, windowDays);
       events = eventsInWindow;
-      hasMore = restCount > 0;
+      hasMore = outsideWindowCount > 0;
     }
 
     const response: EventsApiResponse = {

@@ -52,7 +52,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
     </div>
 
     <div class="relative z-20 px-4 pt-4 pb-4 lg:z-10 lg:ml-[40%] lg:w-[60%] lg:pt-[100vh] lg:px-6 lg:pb-6 gpu-layer">
-      <div class="home-card home-card--animated" data-section="about">
+      <div class="home-card home-card--animated card-cta-animated" data-section="about">
         <AboutSection />
       </div>
 
@@ -60,7 +60,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <ExperiencesSection />
       </div>
 
-      <div class="home-card home-card--animated home-card--deferred home-card--md" data-section="events">
+      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="events">
         <EventsSection limit={10} />
       </div>
 
@@ -82,7 +82,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <MembershipSection />
       </div>
 
-      <div class="home-card home-card--animated home-card--deferred home-card--sm" data-section="group-booking">
+      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--sm" data-section="group-booking">
         <GroupBookingSection />
       </div>
 
@@ -94,7 +94,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
         <FAQAccordion />
       </div>
 
-      <div id="signup" class="home-card home-card--animated home-card--deferred home-card--md" data-section="signup">
+      <div id="signup" class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="signup">
         <SignupForm />
       </div>
     </div>
@@ -252,22 +252,44 @@ import { heroGrainGradient } from '../lib/shader-configs';
     }
   }
 
-  function initAnimationPausing() {
-    if (window.innerWidth < 1024) return;
+  let animationCleanup: (() => void) | null = null;
 
-    const animatedEls = document.querySelectorAll('.btn-cta-animated, .card-cta-animated');
+  function initAnimationPausing() {
+    if (animationCleanup) {
+      animationCleanup();
+      animationCleanup = null;
+    }
+
+    const canAnimate = window.matchMedia('(min-width: 1024px) and (prefers-reduced-motion: no-preference)').matches;
+    if (!canAnimate) return;
+
+    const animatedEls = document.querySelectorAll<HTMLElement>('.btn-cta-animated, .card-cta-animated');
     if (animatedEls.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
+        if (document.hidden) return;
         for (const entry of entries) {
           entry.target.classList.toggle('is-animating', entry.isIntersecting);
         }
       },
-      { rootMargin: '100px 0px' }
+      { rootMargin: '0px', threshold: 0 }
     );
 
     animatedEls.forEach((el) => observer.observe(el));
+
+    const pauseWhenHidden = () => {
+      if (!document.hidden) return;
+      animatedEls.forEach((el) => el.classList.remove('is-animating'));
+    };
+
+    document.addEventListener('visibilitychange', pauseWhenHidden);
+
+    animationCleanup = () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', pauseWhenHidden);
+      animatedEls.forEach((el) => el.classList.remove('is-animating'));
+    };
   }
 
   if (document.readyState === 'loading') {
@@ -277,4 +299,6 @@ import { heroGrainGradient } from '../lib/shader-configs';
     initSmoothScroll();
     initAnimationPausing();
   }
+
+  document.addEventListener('astro:page-load', initAnimationPausing);
 </script>
