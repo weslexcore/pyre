@@ -357,8 +357,10 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		</script>
 	</head>
     <body class="min-h-screen flex flex-col">
-        {!hidePromos && <AnnouncementBanner />}
-        <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} minimal={isAdminRoute} />
+        <div class="fixed inset-x-0 top-0 z-50">
+            {!hidePromos && <AnnouncementBanner />}
+            <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} minimal={isAdminRoute} />
+        </div>
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
 		<main class="flex-1" style="padding-top: var(--banner-height, 0px);">
 			<slot />

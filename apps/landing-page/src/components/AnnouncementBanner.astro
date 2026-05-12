@@ -10,10 +10,10 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
   data-banner-expires={bannerConfig.expiresAt ?? undefined}
   role="region"
   aria-label="Announcement"
-  class="fixed inset-x-0 top-0 z-[60] overflow-hidden"
-  style="translate: 0 -100%;"
+  class="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+  style="grid-template-rows: 0fr;"
 >
-  <div class="bg-[var(--pyre-gold)] text-[var(--pyre-black)]">
+  <div data-banner-inner class="overflow-hidden bg-[var(--pyre-gold)] text-[var(--pyre-black)]">
     <div class="flex items-center justify-center gap-x-3 px-4 py-2.5 text-sm font-mono-bold sm:px-6">
       {bannerConfig.href ? (
         <a href={bannerConfig.href} class="text-center leading-snug hover:underline underline-offset-4 transition-colors">
@@ -62,14 +62,7 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
 
 <script>
   (function () {
-    
     let cleanup: (() => void) | null = null;
-
-    function setBannerHeight(px: number) {
-      document.documentElement.style.setProperty('--banner-height', px + 'px');
-      const navbar = document.querySelector('[data-component="navbar"]') as HTMLElement | null;
-      if (navbar) navbar.style.top = px + 'px';
-    }
 
     function initBanner() {
       if (cleanup) {
@@ -80,11 +73,15 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       const banner = document.querySelector('[data-component="announcement-banner"]') as HTMLElement;
       if (!banner) return;
 
+      const inner = banner.querySelector('[data-banner-inner]') as HTMLElement;
+      if (!inner) return;
+
+      const html = document.documentElement;
 
       // Client-side expiration check (visitor's real clock)
       const expiresAt = banner.dataset.bannerExpires;
       if (expiresAt && new Date() >= new Date(expiresAt)) {
-        setBannerHeight(0);
+        html.style.setProperty('--banner-height', '0px');
         banner.remove();
         return;
       }
@@ -92,11 +89,8 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       const bannerId = banner.dataset.bannerId;
       if (!bannerId) return;
 
-      const STORAGE_PREFIX = 'pyre-banner-dismissed-' + bannerId + ':';
+      const storageKey = 'pyre-banner-dismissed-' + bannerId + ':' + bannerId;
 
-      const storageKey = STORAGE_PREFIX + bannerId;
-
-      // Check if user already dismissed this specific banner
       let isDismissed = false;
       try {
         isDismissed = localStorage.getItem(storageKey) === '1';
@@ -105,22 +99,29 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       }
 
       if (isDismissed) {
-        setBannerHeight(0);
+        html.style.setProperty('--banner-height', '0px');
         banner.remove();
         return;
       }
 
-      // Measure natural height while offscreen
-      const height = banner.offsetHeight;
+      const updateBannerHeight = () => {
+        html.style.setProperty('--banner-height', inner.offsetHeight + 'px');
+      };
 
-      // Push navbar/main down before banner slides in so they never overlap.
-      setBannerHeight(height);
-
-      // Animate in on next frame
+      // Open on next frame so the 0fr → 1fr transition runs
       requestAnimationFrame(() => {
-        banner.style.transition = 'translate 0.3s ease-out';
-        banner.style.translate = '0 0';
+        banner.style.gridTemplateRows = '1fr';
       });
+
+      // Once expanded, sync --banner-height for <main> padding and scroll-margin
+      const onTransitionEnd = (event: TransitionEvent) => {
+        if (event.propertyName === 'grid-template-rows') {
+          updateBannerHeight();
+        }
+      };
+      banner.addEventListener('transitionend', onTransitionEnd);
+      // Fallback if transitionend doesn't fire (e.g. reduced motion or unsupported)
+      const heightFallback = setTimeout(updateBannerHeight, 350);
 
       // Dismiss handler
       const dismissBtn = banner.querySelector('[data-banner-dismiss]') as HTMLElement;
@@ -133,28 +134,29 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
           // Ignore storage errors
         }
 
-        banner.style.transition = 'translate 0.3s ease-in';
-        banner.style.translate = '0 -100%';
+        html.style.setProperty('--banner-height', '0px');
+        banner.style.gridTemplateRows = '0fr';
 
-        const onTransitionEnd = () => {
-          setBannerHeight(0);
+        const onClose = (event: TransitionEvent) => {
+          if (event.propertyName !== 'grid-template-rows') return;
+          banner.removeEventListener('transitionend', onClose);
           banner.remove();
         };
-
-        banner.addEventListener('transitionend', onTransitionEnd, { once: true });
-        // Fallback if transitionend doesn't fire
-        setTimeout(onTransitionEnd, 350);
+        banner.addEventListener('transitionend', onClose);
+        setTimeout(() => {
+          if (banner.isConnected) banner.remove();
+        }, 400);
       };
 
       dismissBtn.addEventListener('click', handleDismiss);
 
-      // Recalculate height on resize (debounced)
+      // Recalculate height on resize (debounced) — banner text may wrap to a new line
       let resizeTimeout: ReturnType<typeof setTimeout>;
       const handleResize = () => {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-          if (banner.isConnected) {
-            setBannerHeight(banner.offsetHeight);
+          if (banner.isConnected && banner.style.gridTemplateRows === '1fr') {
+            updateBannerHeight();
           }
         }, 150);
       };
@@ -162,6 +164,8 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       window.addEventListener('resize', handleResize);
 
       cleanup = () => {
+        clearTimeout(heightFallback);
+        banner.removeEventListener('transitionend', onTransitionEnd);
         dismissBtn.removeEventListener('click', handleDismiss);
         window.removeEventListener('resize', handleResize);
         clearTimeout(resizeTimeout);
