@@ -74,8 +74,10 @@ import { heroGrainGradient } from '../lib/shader-configs';
       <div class="home-card home-card--joined-top home-card--deferred home-card--md" data-section="sessions">
         <SessionSection />
       </div>
-      <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height="sm" />
-      <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height="sm" />
+      <div class="bg-[var(--pyre-black)]">
+        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height="sm" />
+        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height="sm" />
+      </div>
       <div class="home-card home-card--joined-bottom home-card--deferred home-card--lg" data-section="membership">
         <MembershipSection />
       </div>

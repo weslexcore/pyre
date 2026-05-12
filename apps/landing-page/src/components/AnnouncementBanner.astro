@@ -65,6 +65,12 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
     
     let cleanup: (() => void) | null = null;
 
+    function setBannerHeight(px: number) {
+      document.documentElement.style.setProperty('--banner-height', px + 'px');
+      const navbar = document.querySelector('[data-component="navbar"]') as HTMLElement | null;
+      if (navbar) navbar.style.top = px + 'px';
+    }
+
     function initBanner() {
       if (cleanup) {
         cleanup();
@@ -73,12 +79,12 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
 
       const banner = document.querySelector('[data-component="announcement-banner"]') as HTMLElement;
       if (!banner) return;
-      
+
 
       // Client-side expiration check (visitor's real clock)
       const expiresAt = banner.dataset.bannerExpires;
       if (expiresAt && new Date() >= new Date(expiresAt)) {
-        document.documentElement.style.setProperty('--banner-height', '0px');
+        setBannerHeight(0);
         banner.remove();
         return;
       }
@@ -89,7 +95,6 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       const STORAGE_PREFIX = 'pyre-banner-dismissed-' + bannerId + ':';
 
       const storageKey = STORAGE_PREFIX + bannerId;
-      const html = document.documentElement;
 
       // Check if user already dismissed this specific banner
       let isDismissed = false;
@@ -100,7 +105,7 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       }
 
       if (isDismissed) {
-        html.style.setProperty('--banner-height', '0px');
+        setBannerHeight(0);
         banner.remove();
         return;
       }
@@ -108,8 +113,8 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
       // Measure natural height while offscreen
       const height = banner.offsetHeight;
 
-      // Set CSS variable so navbar and scroll-margins adapt
-      html.style.setProperty('--banner-height', height + 'px');
+      // Push navbar/main down before banner slides in so they never overlap.
+      setBannerHeight(height);
 
       // Animate in on next frame
       requestAnimationFrame(() => {
@@ -132,7 +137,7 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
         banner.style.translate = '0 -100%';
 
         const onTransitionEnd = () => {
-          html.style.setProperty('--banner-height', '0px');
+          setBannerHeight(0);
           banner.remove();
         };
 
@@ -149,7 +154,7 @@ if (!bannerConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
           if (banner.isConnected) {
-            html.style.setProperty('--banner-height', banner.offsetHeight + 'px');
+            setBannerHeight(banner.offsetHeight);
           }
         }, 150);
       };
