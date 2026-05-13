@@ -13,7 +13,6 @@ import HeroBackground from '../components/HeroBackground.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import ShaderCanvas from '../components/ShaderCanvas.astro';
-import SectionBridge from '../components/SectionBridge.astro';
 import SessionSection from '../components/SessionSection.astro';
 import SignupForm from '../components/SignupForm.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
@@ -71,14 +70,11 @@ import { heroGrainGradient } from '../lib/shader-configs';
         </div>
       </div>
 
-      <div class="home-card home-card--joined-top home-card--deferred home-card--md" data-section="sessions">
+      <div class="home-card home-card--deferred home-card--md" data-section="sessions">
         <SessionSection />
       </div>
-      <div class="bg-[var(--pyre-black)]">
-        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="bottom" height="sm" />
-        <SectionBridge bgColor="var(--pyre-black)" variant="wave" position="top" height="sm" />
-      </div>
-      <div class="home-card home-card--joined-bottom home-card--deferred home-card--lg" data-section="membership">
+
+      <div class="home-card home-card--deferred home-card--lg" data-section="membership">
         <MembershipSection />
       </div>
 
