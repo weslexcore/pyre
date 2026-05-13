@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pyre Social — Preview</title>
+    <link rel="stylesheet" href="/shared/reset.css" />
+    <link rel="stylesheet" href="/shared/brand.css" />
+    <link rel="stylesheet" href="/shared/tailwind.css" />
+    <style>
+      :root {
+        --bg: #1a1a18;
+        --panel: #23221c;
+        --text: #f5f1e9;
+        --muted: #9a958a;
+        --accent: #d15232;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        min-height: 100vh;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 14px 24px;
+        background: var(--panel);
+        border-bottom: 1px solid #000;
+      }
+      header h1 {
+        font-family: var(--font-display);
+        font-size: 18px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0;
+        color: var(--accent);
+      }
+      select {
+        background: #2f2e26;
+        color: var(--text);
+        border: 1px solid #3d3c33;
+        padding: 8px 12px;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        border-radius: 4px;
+      }
+      .hint {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .btn {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        padding: 8px 14px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: opacity 0.15s ease, background 0.15s ease;
+      }
+      .btn:hover:not(:disabled) {
+        background: #b9482c;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn--tile {
+        background: #2f2e26;
+        color: var(--text);
+        border: 1px solid #3d3c33;
+        padding: 4px 10px;
+        font-size: 11px;
+      }
+      .btn--tile:hover:not(:disabled) {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      #exportStatus {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      #exportStatus.error {
+        color: #ff8d6f;
+      }
+      .empty {
+        padding: 80px;
+        color: var(--muted);
+        text-align: center;
+        font-family: var(--font-mono);
+      }
+      main {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        padding: 32px;
+        align-items: flex-start;
+      }
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .page-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .frame-label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .frame-label .size {
+        color: var(--text);
+      }
+      .frame-label .format {
+        color: var(--accent);
+        text-transform: uppercase;
+      }
+      .frame-label .spacer {
+        flex: 1;
+      }
+      .frame iframe {
+        background: #fff;
+        border: 1px solid #000;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        transform-origin: top left;
+      }
+      footer {
+        padding: 24px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Pyre Social</h1>
+      <select id="postSelect"></select>
+      <button id="exportAll" class="btn" type="button">Export all</button>
+      <span class="hint">
+        Edit any file under <code>posts/</code> or <code>shared/</code> and the preview will hot-reload.
+      </span>
+      <span id="exportStatus"></span>
+    </header>
+    <div id="root"></div>
+    <footer>
+      Click <strong>Export</strong> on any tile to render that file, or
+      <code>yarn render &lt;post&gt;</code> from the terminal. Files land in
+      <code>exports/&lt;post&gt;/</code>.
+    </footer>
+
+    <script type="module">
+      const SIZES = {
+        square: { w: 1080, h: 1080, label: '1:1' },
+        portrait: { w: 1080, h: 1350, label: '4:5' },
+        landscape: { w: 1080, h: 566, label: '1.91:1' },
+        reel: { w: 1080, h: 1920, label: '9:16' },
+        story: { w: 1080, h: 1920, label: '9:16' },
+      };
+
+      const root = document.getElementById('root');
+      const select = document.getElementById('postSelect');
+      const exportAllBtn = document.getElementById('exportAll');
+      const statusEl = document.getElementById('exportStatus');
+
+      let currentPost = null;
+      let busy = false;
+
+      const res = await fetch('/__posts.json');
+      const { posts } = await res.json();
+
+      if (!posts.length) {
+        root.innerHTML = '<div class="empty">No posts yet. Create one under <code>posts/&lt;name&gt;/</code>.</div>';
+        exportAllBtn.disabled = true;
+      } else {
+        for (const post of posts) {
+          const opt = document.createElement('option');
+          opt.value = post.name;
+          opt.textContent = post.name;
+          select.appendChild(opt);
+        }
+
+        const initial = new URLSearchParams(location.search).get('post') ?? posts[0].name;
+        select.value = posts.some((p) => p.name === initial) ? initial : posts[0].name;
+        render(select.value);
+
+        select.addEventListener('change', () => {
+          const url = new URL(location.href);
+          url.searchParams.set('post', select.value);
+          history.replaceState(null, '', url.toString());
+          render(select.value);
+        });
+
+        exportAllBtn.addEventListener('click', () => exportAll());
+      }
+
+      function render(postName) {
+        currentPost = posts.find((p) => p.name === postName);
+        if (!currentPost) return;
+        const main = document.createElement('main');
+        const entries = currentPost.exports.length ? currentPost.exports : [{ size: 'square', format: 'png' }];
+        const totalPages = Math.max(1, currentPost.pages ?? 1);
+        const maxHeight = 720;
+
+        for (const entry of entries) {
+          const dims = SIZES[entry.size];
+          if (!dims) continue;
+          const scale = Math.min(1, maxHeight / dims.h);
+          const frame = document.createElement('div');
+          frame.className = 'frame';
+          const pageBlocks = [];
+          for (let page = 1; page <= totalPages; page++) {
+            const pageLabel = totalPages > 1 ? ` · page ${page}/${totalPages}` : '';
+            const durationLabel = entry.duration ? ` · ${(entry.duration / 1000).toFixed(1)}s` : '';
+            pageBlocks.push(`
+              <div class="page-block">
+                <div class="frame-label">
+                  <span class="size">${entry.size}</span>
+                  <span>${dims.w}×${dims.h} · ${dims.label}</span>
+                  <span class="format">${entry.format}${durationLabel}${pageLabel}</span>
+                  <span class="spacer"></span>
+                  <button
+                    class="btn btn--tile export-btn"
+                    type="button"
+                    data-size="${entry.size}"
+                    data-format="${entry.format}"
+                    data-page="${page}"
+                    ${entry.filename ? `data-filename="${entry.filename}"` : ''}
+                  >Export</button>
+                </div>
+                <div style="width: ${dims.w * scale}px; height: ${dims.h * scale}px; overflow: hidden;">
+                  <iframe
+                    src="/posts/${currentPost.name}/index.html#page=${page}"
+                    width="${dims.w}"
+                    height="${dims.h}"
+                    style="width: ${dims.w}px; height: ${dims.h}px; transform: scale(${scale}); border: 0;"
+                  ></iframe>
+                </div>
+              </div>
+            `);
+          }
+          frame.innerHTML = pageBlocks.join('');
+          main.appendChild(frame);
+        }
+
+        root.replaceChildren(main);
+
+        root.querySelectorAll('.export-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const { size, format, page, filename } = btn.dataset;
+            exportOne({
+              post: currentPost.name,
+              size,
+              format,
+              page: Number(page),
+              filename,
+              triggerEl: btn,
+            });
+          });
+        });
+      }
+
+      function setStatus(text, kind) {
+        statusEl.textContent = text;
+        statusEl.className = kind === 'error' ? 'error' : '';
+      }
+
+      function setBusy(value) {
+        busy = value;
+        exportAllBtn.disabled = value;
+        root.querySelectorAll('.export-btn').forEach((b) => {
+          b.disabled = value;
+        });
+      }
+
+      async function exportOne({ post, size, format, page, filename, triggerEl }) {
+        if (busy) return;
+        setBusy(true);
+        if (triggerEl) triggerEl.textContent = '…';
+        setStatus(`Rendering ${post} ${size} ${format} p${page}…`);
+        try {
+          const body = { post, size, format, page };
+          if (filename) body.filename = filename;
+          const r = await fetch('/__render', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await r.json();
+          if (!data.ok) throw new Error(data.error || 'render failed');
+          triggerDownload(data.file, data.name);
+          setStatus(`Saved ${data.name}`);
+        } catch (err) {
+          setStatus(`Failed: ${err.message}`, 'error');
+        } finally {
+          if (triggerEl) triggerEl.textContent = 'Export';
+          setBusy(false);
+        }
+      }
+
+      async function exportAll() {
+        if (!currentPost || busy) return;
+        const entries = currentPost.exports.length ? currentPost.exports : [{ size: 'square', format: 'png' }];
+        const totalPages = Math.max(1, currentPost.pages ?? 1);
+        const jobs = [];
+        for (const entry of entries) {
+          for (let page = 1; page <= totalPages; page++) {
+            jobs.push({ entry, page });
+          }
+        }
+
+        setBusy(true);
+        let done = 0;
+        let failed = 0;
+        for (const { entry, page } of jobs) {
+          setStatus(`Rendering ${done + 1}/${jobs.length} · ${entry.size} ${entry.format} p${page}…`);
+          try {
+            const body = { post: currentPost.name, size: entry.size, format: entry.format, page };
+            if (entry.filename) body.filename = entry.filename;
+            const r = await fetch('/__render', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || 'render failed');
+            triggerDownload(data.file, data.name);
+            done++;
+          } catch (err) {
+            failed++;
+            setStatus(`Failed on ${entry.size} ${entry.format} p${page}: ${err.message}`, 'error');
+          }
+        }
+        if (failed === 0) setStatus(`Saved ${done} file${done === 1 ? '' : 's'}`);
+        setBusy(false);
+      }
+
+      function triggerDownload(url, name) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name ?? url.split('/').pop();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    </script>
+  </body>
+</html>

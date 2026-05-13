@@ -1,0 +1,32 @@
+/*
+  Tailwind v4 entry for social posts. Preflight is intentionally skipped —
+  shared/reset.css already handles artboard-specific resets (full-bleed html/body,
+  font smoothing, geometric text rendering).
+
+  Link order in a post:
+    1. reset.css       — base reset for the 1080px canvas
+    2. brand.css       — @font-face + raw CSS variables
+    3. tailwind.css    — utilities + brand-aware @theme tokens
+    4. template.css    — template structure
+    5. ./style.css     — post-specific overrides
+*/
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+  --color-pyre-red: #d15232;
+  --color-pyre-blue: #274868;
+  --color-pyre-gold: #dbb155;
+  --color-pyre-sage: #839770;
+  --color-pyre-sky: #3991b7;
+  --color-pyre-black: #23221c;
+  --color-pyre-creme: #f5f1e9;
+
+  --font-sans: "PPNeueMontreal", system-ui, -apple-system, sans-serif;
+  --font-mono: "PPNeueMontrealMono", ui-monospace, monospace;
+  --font-display: "PPFraktionMono", ui-monospace, monospace;
+  --font-logo: "Eckmannpsych", serif;
+}

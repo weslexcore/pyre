@@ -1,0 +1,229 @@
+/* Cold plunging for women's health.
+   One markup, three layouts driven by aspect-ratio media queries (1/1, 4/5, 9/16). */
+
+.post {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--pyre-creme);
+  background: var(--pyre-black);
+}
+
+/* Heroes — only the one matching the current aspect ratio is visible. */
+.hero {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: none;
+}
+
+/* Cool-toned readability overlay — heavy at the bottom (where the stat sits) and
+   along the very top (where the eyebrow sits), light through the middle. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to top,
+      rgba(35, 34, 28, 0.85) 0%,
+      rgba(39, 72, 104, 0.78) 25%,
+      rgba(39, 72, 104, 0.4) 55%,
+      rgba(35, 34, 28, 0.05) 85%,
+      transparent 100%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.55) 0%, transparent 22%);
+  z-index: 1;
+}
+
+/* Shared chrome. */
+.eyebrow,
+.headline,
+.footer {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  padding: 0 var(--space-6);
+}
+
+.eyebrow {
+  top: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-sky);
+}
+
+.eyebrow__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--pyre-sky);
+  box-shadow: 0 0 0 4px rgba(57, 145, 183, 0.25);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+.headline {
+  bottom: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stat--primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stat__number {
+  font-family: var(--font-display);
+  font-size: 220px;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  color: var(--pyre-creme);
+}
+
+.stat__pct {
+  color: var(--pyre-sky);
+  font-size: 0.55em;
+  margin-left: 0.05em;
+}
+
+.stat__label {
+  font-family: var(--font-sans);
+  font-size: 30px;
+  line-height: 1.25;
+  color: var(--pyre-creme);
+  max-width: 26ch;
+}
+
+.stat__label strong {
+  font-weight: 600;
+  color: var(--pyre-sky);
+}
+
+.stats-block {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: rgba(245, 241, 233, 0.85);
+  padding-top: var(--space-3);
+  border-top: 2px solid rgba(245, 241, 233, 0.3);
+}
+
+.stats-block strong {
+  color: var(--pyre-sky);
+  font-weight: 700;
+  margin-right: 0.4em;
+}
+
+.ticker {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ticker__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  opacity: 0;
+  transform: translateY(20px);
+  animation-fill-mode: forwards;
+  animation-duration: 0.7s;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.ticker__row--1 { animation-name: rise; animation-delay: 1.5s; }
+.ticker__row--2 { animation-name: rise; animation-delay: 3.0s; }
+.ticker__row--3 { animation-name: rise; animation-delay: 4.5s; }
+
+@keyframes rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ticker__num {
+  font-family: var(--font-display);
+  font-size: 88px;
+  letter-spacing: -0.03em;
+  color: var(--pyre-sky);
+  min-width: 4.5ch;
+}
+
+.ticker__label {
+  font-family: var(--font-sans);
+  font-size: 38px;
+  color: var(--pyre-creme);
+}
+
+.footer {
+  bottom: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: rgba(245, 241, 233, 0.78);
+}
+
+.footer__logo {
+  height: 56px;
+  width: auto;
+  /* Invert dark logos onto our dark overlay; the user can drop in a creme-tinted PNG to disable this. */
+  filter: brightness(0) invert(1);
+  /* Suppress the broken-image alt text if the logo asset is missing — keeps the layout clean
+     until apps/social/shared/logos/pyre-logo.png exists. */
+  font-size: 0;
+  color: transparent;
+}
+
+/* --- 1:1 SQUARE --- */
+@media (aspect-ratio: 1 / 1) {
+  .hero--square { display: block; }
+  .eyebrow { font-size: 16px; }
+  .headline { bottom: 200px; }
+  .stat__number { font-size: 200px; }
+  .stat__label { font-size: 28px; }
+}
+
+/* --- 4:5 PORTRAIT --- */
+@media (aspect-ratio: 4 / 5) {
+  .hero--portrait { display: block; }
+  .headline { bottom: 220px; }
+  .stat__number { font-size: 240px; }
+  .stat__label { font-size: 32px; }
+  .stats-block { display: flex; }
+}
+
+/* --- 9:16 REEL --- */
+@media (aspect-ratio: 9 / 16) {
+  .hero--reel { display: block; }
+
+  /* Reel uses the animated ticker instead of the static stat block. */
+  .stat--primary { display: none; }
+  .stats-block { display: none; }
+  .ticker { display: flex; }
+
+  .headline { bottom: 260px; gap: var(--space-3); }
+  .ticker__num { font-size: 110px; }
+  .ticker__label { font-size: 42px; }
+
+  .eyebrow { top: var(--space-8); font-size: 22px; }
+  .footer { bottom: var(--space-8); }
+}

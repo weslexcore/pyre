@@ -1,0 +1,68 @@
+/* Pyre brand tokens and font faces — included by every post via <link rel="stylesheet" href="/shared/brand.css">. */
+
+@font-face {
+  font-family: "PPNeueMontreal";
+  src: url("/shared/fonts/PPNeueMontreal-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "PPNeueMontreal";
+  src: url("/shared/fonts/PPNeueMontreal-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "PPNeueMontrealMono";
+  src: url("/shared/fonts/PPNeueMontreal-Mono.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "PPFraktionMono";
+  src: url("/shared/fonts/PPFraktionMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Eckmannpsych";
+  src: url("/shared/fonts/Eckmannpsych-Small.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  /* Brand colors — pulled from apps/landing-page/src/styles/global.css */
+  --pyre-red: #d15232;
+  --pyre-blue: #274868;
+  --pyre-gold: #dbb155;
+  --pyre-sage: #839770;
+  --pyre-sky: #3991b7;
+  --pyre-black: #23221c;
+  --pyre-creme: #f5f1e9;
+
+  /* Font families */
+  --font-sans: "PPNeueMontreal", system-ui, -apple-system, sans-serif;
+  --font-mono: "PPNeueMontrealMono", ui-monospace, monospace;
+  --font-display: "PPFraktionMono", ui-monospace, monospace;
+  --font-logo: "Eckmannpsych", serif;
+
+  /* Spacing scale — multiples of 8px for a 1080px artboard */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --space-12: 96px;
+  --space-16: 128px;
+}
