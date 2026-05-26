@@ -35,12 +35,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@astrojs/internal-helpers@npm:0.9.0":
-  version: 0.9.0
-  resolution: "@astrojs/internal-helpers@npm:0.9.0"
+"@astrojs/internal-helpers@npm:0.9.1":
+  version: 0.9.1
+  resolution: "@astrojs/internal-helpers@npm:0.9.1"
   dependencies:
     picomatch: "npm:^4.0.4"
-  checksum: 10c0/6513b28955d1d4fe250c2978e0496d1a5b72be0a19db427e475bc31930d1704cdea63f67862eefd046d480aa7f1fb775b14e143e66ef70eabf187f17655d0047
+  checksum: 10c0/013453dc19271fe7ccdd239d1962a8d67a9c0763083153fd4f0e33a946c2cace32f8f90052e14aac9b70ac3313e9724c348f82a4d6fc5bc1748bd5175b277fa0
   languageName: node
   linkType: hard
 
@@ -80,12 +80,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@astrojs/markdown-remark@npm:7.1.1":
-  version: 7.1.1
-  resolution: "@astrojs/markdown-remark@npm:7.1.1"
+"@astrojs/markdown-remark@npm:7.1.2":
+  version: 7.1.2
+  resolution: "@astrojs/markdown-remark@npm:7.1.2"
   dependencies:
-    "@astrojs/internal-helpers": "npm:0.9.0"
-    "@astrojs/prism": "npm:4.0.1"
+    "@astrojs/internal-helpers": "npm:0.9.1"
+    "@astrojs/prism": "npm:4.0.2"
     github-slugger: "npm:^2.0.0"
     hast-util-from-html: "npm:^2.0.3"
     hast-util-to-text: "npm:^4.0.2"
@@ -105,15 +105,15 @@ __metadata:
     unist-util-visit: "npm:^5.1.0"
     unist-util-visit-parents: "npm:^6.0.2"
     vfile: "npm:^6.0.3"
-  checksum: 10c0/f64f8900008aa9b2ba0d574c1f2a34a9cf82192c28d3b19a8b157738bbff721424b50d16aa0d67e3d98cbfc1581c3b3b6f0029d66d449d0ebba2c7c7612afc5c
+  checksum: 10c0/7ff2bc1ea71ec9a9760835f7b64a97d1b0e231c52d0edba09161639e01c312aec078160c9522fae0a5552b0c944bb1c6e4a7dfd1933ade992deabdaf0503bee9
   languageName: node
   linkType: hard
 
-"@astrojs/mdx@npm:5.0.4":
-  version: 5.0.4
-  resolution: "@astrojs/mdx@npm:5.0.4"
+"@astrojs/mdx@npm:5.0.6":
+  version: 5.0.6
+  resolution: "@astrojs/mdx@npm:5.0.6"
   dependencies:
-    "@astrojs/markdown-remark": "npm:7.1.1"
+    "@astrojs/markdown-remark": "npm:7.1.2"
     "@mdx-js/mdx": "npm:^3.1.1"
     acorn: "npm:^8.16.0"
     es-module-lexer: "npm:^2.0.0"
@@ -128,24 +128,24 @@ __metadata:
     vfile: "npm:^6.0.3"
   peerDependencies:
     astro: ^6.0.0
-  checksum: 10c0/233d98b978b261dc38e765999806b2bdf3a780d23f5aa6dfcec6ab2db511f9d37a3805136c8688a440461b82028eea64eabe13e7458a8fbc5cfe4f611a905e02
+  checksum: 10c0/dcf93d212173713ff2d4eb7efafac9dd6908c14907b73e52602ab097fda3d686e0d44661213c52ce7ca7cadd7828bf453486fee293ead181c3dd26dce2a3b485
   languageName: node
   linkType: hard
 
-"@astrojs/prism@npm:4.0.1":
-  version: 4.0.1
-  resolution: "@astrojs/prism@npm:4.0.1"
+"@astrojs/prism@npm:4.0.2":
+  version: 4.0.2
+  resolution: "@astrojs/prism@npm:4.0.2"
   dependencies:
     prismjs: "npm:^1.30.0"
-  checksum: 10c0/e4d1513e3f665e1fc2267db474e363ac6a86c29fcb668d32413723826dec32d007de616f1f3df9be219f4226e271e83d9492e7810d26c5b4cf7c8ca18de484a5
+  checksum: 10c0/23a5bc096f966c08be6f8e89adfe9287fd6d08eeb9c4ec7de8172280aa638f2684dcefc5f848f55e211ff63369abc4f0661698daa5e2de6078c8f269215a7101
   languageName: node
   linkType: hard
 
-"@astrojs/react@npm:5.0.4":
-  version: 5.0.4
-  resolution: "@astrojs/react@npm:5.0.4"
+"@astrojs/react@npm:5.0.5":
+  version: 5.0.5
+  resolution: "@astrojs/react@npm:5.0.5"
   dependencies:
-    "@astrojs/internal-helpers": "npm:0.9.0"
+    "@astrojs/internal-helpers": "npm:0.9.1"
     "@vitejs/plugin-react": "npm:^5.2.0"
     devalue: "npm:^5.6.4"
     ultrahtml: "npm:^1.6.0"
@@ -155,40 +155,39 @@ __metadata:
     "@types/react-dom": ^17.0.17 || ^18.0.6 || ^19.0.0
     react: ^17.0.2 || ^18.0.0 || ^19.0.0
     react-dom: ^17.0.2 || ^18.0.0 || ^19.0.0
-  checksum: 10c0/354397218ed9faa099bcaa96b56f7c203841b46815a87a2b2ca21d2cd9c660bdce716fc5724387d477b562ad6fb7741fccdb7865be6955a85b5c4e355e208b95
+  checksum: 10c0/5e0cd49202137197f0f4a1d6e7fce9e9eba1f80837ee7b62999270b6f40f526af6c0d4a4b183cd2d9eae9ef51cda13bb616b496ff6641b124d0e4385cf7e21f4
   languageName: node
   linkType: hard
 
-"@astrojs/sitemap@npm:3.7.2":
-  version: 3.7.2
-  resolution: "@astrojs/sitemap@npm:3.7.2"
+"@astrojs/sitemap@npm:3.7.3":
+  version: 3.7.3
+  resolution: "@astrojs/sitemap@npm:3.7.3"
   dependencies:
     sitemap: "npm:^9.0.0"
     stream-replace-string: "npm:^2.0.0"
     zod: "npm:^4.3.6"
-  checksum: 10c0/523ec97431151b528db43e92123250a9a4e85d60d85e9944cc4298c994c90e18099596c4b00e0d25d04a4a3264dce8b68a74974d91eb43ff54b5696ad8768551
+  checksum: 10c0/99c0240586ea2ab1868903341a302ff4bd909b53c49c1c8be476921593fbee838623207c4fa88522264d79291f074ea536aef614d6b1fb286f29a1a5d244ec21
   languageName: node
   linkType: hard
 
-"@astrojs/telemetry@npm:3.3.1":
-  version: 3.3.1
-  resolution: "@astrojs/telemetry@npm:3.3.1"
+"@astrojs/telemetry@npm:3.3.2":
+  version: 3.3.2
+  resolution: "@astrojs/telemetry@npm:3.3.2"
   dependencies:
     ci-info: "npm:^4.4.0"
-    dlv: "npm:^1.1.3"
     dset: "npm:^3.1.4"
     is-docker: "npm:^4.0.0"
     is-wsl: "npm:^3.1.1"
     which-pm-runs: "npm:^1.1.0"
-  checksum: 10c0/4ce5a73808be3ebb0d5f73a36849fe69a716eef2f7c1e5d1ce879f9995e6aecca0ab0f3d2b53b6636a0f587ecde20132313238169541b004c3451cea60c5013d
+  checksum: 10c0/7af9e10bfb45bde66ce882c0aceec54141cf63255a4d85e2f99f6cebc2a0b388c38a0b7fe3c3eb3b20ae8a41b9a5103e22e27255582d8bf961cc47d71c29d230
   languageName: node
   linkType: hard
 
-"@astrojs/vercel@npm:10.0.6":
-  version: 10.0.6
-  resolution: "@astrojs/vercel@npm:10.0.6"
+"@astrojs/vercel@npm:10.0.7":
+  version: 10.0.7
+  resolution: "@astrojs/vercel@npm:10.0.7"
   dependencies:
-    "@astrojs/internal-helpers": "npm:0.9.0"
+    "@astrojs/internal-helpers": "npm:0.9.1"
     "@vercel/analytics": "npm:^1.6.1"
     "@vercel/functions": "npm:^3.4.3"
     "@vercel/nft": "npm:^1.3.2"
@@ -197,7 +196,7 @@ __metadata:
     tinyglobby: "npm:^0.2.15"
   peerDependencies:
     astro: ^6.0.0
-  checksum: 10c0/5dad9ec0263a8cb3d6b0594be0687428cb801f09781bd12d4740558e186e47f66d656102aa62d1f94170742255ff0118f1a9c60cd159fb0e01a519adf26c063a
+  checksum: 10c0/f3559279d87c19c3afebfbfea40c6ad52bc554f3b0d8042337af58b5433964549fe3533621112ba17adc017b5fcad0d4c1c997e907b7431d29992df700e5e6cb
   languageName: node
   linkType: hard
 
@@ -1580,10 +1579,10 @@ __metadata:
   resolution: "@pyre/landing-page@workspace:."
   dependencies:
     "@astrojs/check": "npm:0.9.9"
-    "@astrojs/mdx": "npm:5.0.4"
-    "@astrojs/react": "npm:5.0.4"
-    "@astrojs/sitemap": "npm:3.7.2"
-    "@astrojs/vercel": "npm:10.0.6"
+    "@astrojs/mdx": "npm:5.0.6"
+    "@astrojs/react": "npm:5.0.5"
+    "@astrojs/sitemap": "npm:3.7.3"
+    "@astrojs/vercel": "npm:10.0.7"
     "@biomejs/biome": "npm:^2.2.2"
     "@paper-design/shaders": "npm:^0.0.71"
     "@tailwindcss/vite": "npm:^4.1.3"
@@ -1591,7 +1590,7 @@ __metadata:
     "@types/react": "npm:^19.1.9"
     "@types/react-dom": "npm:^19.1.7"
     "@upstash/redis": "npm:^1.37.0"
-    astro: "npm:6.2.1"
+    astro: "npm:6.3.8"
     baseline-browser-mapping: "npm:^2.10.24"
     chart.js: "npm:^4.5.0"
     fuse.js: "npm:^7.1.0"
@@ -2607,14 +2606,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"astro@npm:6.2.1":
-  version: 6.2.1
-  resolution: "astro@npm:6.2.1"
+"astro@npm:6.3.8":
+  version: 6.3.8
+  resolution: "astro@npm:6.3.8"
   dependencies:
     "@astrojs/compiler": "npm:^4.0.0"
-    "@astrojs/internal-helpers": "npm:0.9.0"
-    "@astrojs/markdown-remark": "npm:7.1.1"
-    "@astrojs/telemetry": "npm:3.3.1"
+    "@astrojs/internal-helpers": "npm:0.9.1"
+    "@astrojs/markdown-remark": "npm:7.1.2"
+    "@astrojs/telemetry": "npm:3.3.2"
     "@capsizecss/unpack": "npm:^4.0.0"
     "@clack/prompts": "npm:^1.1.0"
     "@oslojs/encoding": "npm:^1.1.0"
@@ -2632,10 +2631,12 @@ __metadata:
     esbuild: "npm:^0.27.3"
     flattie: "npm:^1.1.1"
     fontace: "npm:~0.4.1"
+    get-tsconfig: "npm:5.0.0-beta.4"
     github-slugger: "npm:^2.0.0"
     html-escaper: "npm:3.0.3"
     http-cache-semantics: "npm:^4.2.0"
     js-yaml: "npm:^4.1.1"
+    jsonc-parser: "npm:^3.3.1"
     magic-string: "npm:^0.30.21"
     magicast: "npm:^0.5.2"
     mrmime: "npm:^2.0.1"
@@ -2655,7 +2656,6 @@ __metadata:
     tinyclip: "npm:^0.1.12"
     tinyexec: "npm:^1.0.4"
     tinyglobby: "npm:^0.2.15"
-    tsconfck: "npm:^3.1.6"
     ultrahtml: "npm:^1.6.0"
     unifont: "npm:~0.7.4"
     unist-util-visit: "npm:^5.1.0"
@@ -2670,8 +2670,8 @@ __metadata:
     sharp:
       optional: true
   bin:
-    astro: bin/astro.mjs
-  checksum: 10c0/9806044bc1c44e3eeed942c26f12690f21e9610b981aa52284951ab251cd881fa9a8b6e48740f1b05b8476e0863fa9f328af3986ac5b7e852d9c8ae05858e220
+    astro: ./bin/astro.mjs
+  checksum: 10c0/273d0e30df42f1708926466793432249e0d7e01d09426bcc7443b822c37ffc88013e519e1f11d54cdd1577ac11e79502939fbb6b527669cd3d8173e5974b6ca0
   languageName: node
   linkType: hard
 
@@ -3152,13 +3152,6 @@ __metadata:
   version: 8.0.3
   resolution: "diff@npm:8.0.3"
   checksum: 10c0/d29321c70d3545fdcb56c5fdd76028c3f04c012462779e062303d4c3c531af80d2c360c26b871e6e2b9a971d2422d47e1779a859106c4cac4b5d2d143df70e20
-  languageName: node
-  linkType: hard
-
-"dlv@npm:^1.1.3":
-  version: 1.1.3
-  resolution: "dlv@npm:1.1.3"
-  checksum: 10c0/03eb4e769f19a027fd5b43b59e8a05e3fd2100ac239ebb0bf9a745de35d449e2f25cfaf3aa3934664551d72856f4ae8b7822016ce5c42c2d27c18ae79429ec42
   languageName: node
   linkType: hard
 
@@ -3760,6 +3753,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"get-tsconfig@npm:5.0.0-beta.4":
+  version: 5.0.0-beta.4
+  resolution: "get-tsconfig@npm:5.0.0-beta.4"
+  dependencies:
+    resolve-pkg-maps: "npm:^1.0.0"
+  checksum: 10c0/6b908fc5d2abc937fca6938f5e9218238f49b11cd07362831383aa5815b25ce6f5fff36d4bcd70caa17778a54922b654745ce6c0b1bb19be8eac87da4e3fc087
+  languageName: node
+  linkType: hard
+
 "get-tsconfig@npm:^4.7.5":
   version: 4.10.1
   resolution: "get-tsconfig@npm:4.10.1"
@@ -4272,7 +4274,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsonc-parser@npm:^3.0.0":
+"jsonc-parser@npm:^3.0.0, jsonc-parser@npm:^3.3.1":
   version: 3.3.1
   resolution: "jsonc-parser@npm:3.3.1"
   checksum: 10c0/269c3ae0a0e4f907a914bf334306c384aabb9929bd8c99f909275ebd5c2d3bc70b9bcd119ad794f339dec9f24b6a4ee9cd5a8ab2e6435e730ad4075388fc2ab6
@@ -6657,20 +6659,6 @@ __metadata:
   version: 2.2.0
   resolution: "trough@npm:2.2.0"
   checksum: 10c0/58b671fc970e7867a48514168894396dd94e6d9d6456aca427cc299c004fe67f35ed7172a36449086b2edde10e78a71a284ec0076809add6834fb8f857ccb9b0
-  languageName: node
-  linkType: hard
-
-"tsconfck@npm:^3.1.6":
-  version: 3.1.6
-  resolution: "tsconfck@npm:3.1.6"
-  peerDependencies:
-    typescript: ^5.0.0
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  bin:
-    tsconfck: bin/tsconfck.js
-  checksum: 10c0/269c3c513540be44844117bb9b9258fe6f8aeab026d32aeebf458d5299125f330711429dbb556dbf125a0bc25f4a81e6c24ac96de2740badd295c3fb400f66c4
   languageName: node
   linkType: hard
 
