@@ -10,7 +10,7 @@ import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
-import HeroCarousel from '../components/HeroCarousel.astro';
+import HeroTileCurtain from '../components/HeroTileCurtain.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SessionSection from '../components/SessionSection.astro';
@@ -23,7 +23,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
 <Layout isHomePage={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
   <div class="dark bg-[var(--pyre-black)]">
-    <svg width="0" height="0" class="absolute lg:hidden" aria-hidden="true">
+    <svg width="0" height="0" class="absolute" aria-hidden="true">
       <defs>
         <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
           <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
@@ -36,7 +36,9 @@ import { heroGrainGradient } from '../lib/shader-configs';
     </div>
 
     <div class="mobile-hero-background sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer pointer-events-none lg:hidden" aria-hidden="true">
-      <HeroCarousel />
+      <div class="relative h-full w-full overflow-hidden">
+        <HeroTileCurtain role="mobile" />
+      </div>
     </div>
 
     <div class="hidden lg:block">
@@ -105,6 +107,10 @@ import { heroGrainGradient } from '../lib/shader-configs';
 
   .mobile-hero-background {
     margin-bottom: -80dvh;
+  }
+
+  [data-hero-video] {
+    pointer-events: none;
   }
 
   .home-card {
@@ -183,6 +189,8 @@ import { heroGrainGradient } from '../lib/shader-configs';
 </style>
 
 <script>
+  import { initHeroCurtain } from '../lib/hero-curtain';
+
   function initSmoothScroll() {
     const lgBreakpoint = 1024;
 
@@ -288,12 +296,24 @@ import { heroGrainGradient } from '../lib/shader-configs';
     };
   }
 
+  let curtainCleanup: (() => void) | null = null;
+
+  function bootCurtain() {
+    if (curtainCleanup) {
+      curtainCleanup();
+      curtainCleanup = null;
+    }
+    curtainCleanup = initHeroCurtain();
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
     document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
+    document.addEventListener('DOMContentLoaded', bootCurtain, { once: true });
   } else {
     initSmoothScroll();
     initAnimationPausing();
+    bootCurtain();
   }
 
   document.addEventListener('astro:page-load', initAnimationPausing);

@@ -1,0 +1,40 @@
+---
+import HeroCarousel from './HeroCarousel.astro';
+
+interface Props {
+  role: 'mobile' | 'desktop';
+  priority?: boolean;
+}
+
+const { role, priority = false } = Astro.props;
+---
+
+<div
+  class:list={[
+    'hero-tile-curtain absolute inset-0 will-change-transform',
+    role === 'desktop' && 'hero-tile-curtain--wave',
+  ]}
+  data-hero-curtain={role}
+  aria-hidden="true"
+>
+  <HeroCarousel priority={priority} />
+</div>
+
+<style>
+  .hero-tile-curtain {
+    transform: translate3d(0, 100%, 0);
+    backface-visibility: hidden;
+    contain: layout style paint;
+  }
+
+  .hero-tile-curtain--wave {
+    -webkit-clip-path: url(#hero-wave-clip);
+    clip-path: url(#hero-wave-clip);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-tile-curtain {
+      transform: translate3d(0, 0, 0) !important;
+    }
+  }
+</style>

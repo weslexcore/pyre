@@ -1,7 +1,65 @@
 {
   "pipelineVersion": "1.0.0",
-  "generatedAt": "2026-05-05T19:15:25.150Z",
+  "generatedAt": "2026-05-26T20:57:04.953Z",
   "sources": [
+    {
+      "id": "softopen",
+      "sourcePath": "/videos/Softopen.MP4",
+      "contentHash": "f3592f908f756d08",
+      "width": 1080,
+      "height": 1920,
+      "durationSec": 29.237542,
+      "variants": [
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/Softopen.f3592f908f756d08.1080p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 608,
+          "height": 1080,
+          "url": "/videos/Softopen.f3592f908f756d08.1080p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/Softopen.f3592f908f756d08.720p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 406,
+          "height": 720,
+          "url": "/videos/Softopen.f3592f908f756d08.720p.webm"
+        },
+        {
+          "format": "mp4",
+          "codec": "h264",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/Softopen.f3592f908f756d08.480p.mp4"
+        },
+        {
+          "format": "webm",
+          "codec": "vp9",
+          "width": 270,
+          "height": 480,
+          "url": "/videos/Softopen.f3592f908f756d08.480p.webm"
+        }
+      ],
+      "poster": {
+        "url": "/videos/Softopen.f3592f908f756d08.poster.jpg",
+        "width": 0,
+        "height": 0,
+        "type": "image/jpeg"
+      }
+    },
     {
       "id": "img_0266",
       "sourcePath": "/videos/volunteer/IMG_0266.mov",
