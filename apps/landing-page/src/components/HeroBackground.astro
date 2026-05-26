@@ -1,6 +1,7 @@
 ---
 import location from '../lib/location';
-import HeroCarousel from './HeroCarousel.astro';
+import HeroTileCurtain from './HeroTileCurtain.astro';
+import HeroVideo from './HeroVideo.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
 
@@ -72,9 +73,10 @@ import InstagramIcon from './icons/InstagramIcon.astro';
       </div> -->
     </div>
 
-    <!-- Right: Image -->
-    <div class="relative h-full">
-      <HeroCarousel priority={true} />
+    <!-- Right: Video + sliding tile curtain -->
+    <div class="relative h-full overflow-hidden">
+      <HeroVideo priority={true} role="desktop" class="absolute inset-0" />
+      <HeroTileCurtain role="desktop" priority={true} />
     </div>
   </div>
 </div>

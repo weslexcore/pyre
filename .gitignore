@@ -1,7 +1,10 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Ignore ALL node_modules directories everywhere
+node_modules/
+**/node_modules/
+
 # dependencies
-/node_modules
 /.pnp
 .pnp.*
 .yarn/*
