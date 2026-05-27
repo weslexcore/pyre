@@ -10,10 +10,7 @@ const { role, priority = false } = Astro.props;
 ---
 
 <div
-  class:list={[
-    'hero-tile-curtain absolute inset-0 will-change-transform',
-    role === 'desktop' && 'hero-tile-curtain--wave',
-  ]}
+  class="hero-tile-curtain hero-tile-curtain--wave absolute inset-0 will-change-transform"
   data-hero-curtain={role}
   aria-hidden="true"
 >
