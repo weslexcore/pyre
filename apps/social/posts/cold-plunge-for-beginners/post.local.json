@@ -1,0 +1,37 @@
+{
+  "pageDurations": [
+    2000,
+    2000,
+    3000,
+    3000,
+    3000,
+    2000,
+    3000
+  ],
+  "transitions": [
+    {
+      "type": "dissolve",
+      "durationMs": 450
+    },
+    {
+      "type": "dissolve",
+      "durationMs": 400
+    },
+    {
+      "type": "fade",
+      "durationMs": 500
+    },
+    {
+      "type": "wipeup",
+      "durationMs": 450
+    },
+    {
+      "type": "circleopen",
+      "durationMs": 500
+    },
+    {
+      "type": "slideup",
+      "durationMs": 400
+    }
+  ]
+}

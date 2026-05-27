@@ -1,7 +1,8 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type Plugin } from 'vite';
+import { loadPostConfig, type PostConfig, type TransitionConfig } from './lib/config.ts';
 import { renderPlugin } from './lib/render-plugin.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -10,12 +11,17 @@ const PROJECT_ROOT = resolve(__dirname, '..');
 interface PostManifestEntry {
   name: string;
   pages: number;
-  exports: { size: string; format: string; duration?: number }[];
+  exports: { size: string; format: string; duration?: number; filename?: string }[];
+  pageDurations?: number[];
+  transition?: TransitionConfig;
+  transitions?: (TransitionConfig | null)[];
 }
 
 /**
  * Vite plugin that exposes /__posts.json — the dev shell uses it to enumerate
  * posts and build the multi-viewport preview iframes for the selected post.
+ * Pulls the merged config (TS defaults + post.local.json sidecar) so the UI
+ * sees current per-page durations and the configured transition.
  */
 function postsManifestPlugin(): Plugin {
   return {
@@ -28,11 +34,9 @@ function postsManifestPlugin(): Plugin {
           const posts: PostManifestEntry[] = [];
           for (const entry of entries) {
             if (!entry.isDirectory()) continue;
-            const configPath = resolve(dir, entry.name, 'post.config.ts');
             try {
-              const src = await readFile(configPath, 'utf8');
-              const { exports, pages } = parseConfigSource(src);
-              posts.push({ name: entry.name, pages, exports });
+              const config = await loadPostConfig(entry.name, PROJECT_ROOT);
+              posts.push(serializePost(config));
             } catch {
               posts.push({ name: entry.name, pages: 1, exports: [] });
             }
@@ -48,33 +52,20 @@ function postsManifestPlugin(): Plugin {
   };
 }
 
-/**
- * Cheap regex scan of post.config.ts so we don't need to evaluate TS at request time.
- * Returns the minimal info the preview shell needs to lay out iframes.
- */
-function parseConfigSource(src: string): {
-  exports: { size: string; format: string; duration?: number }[];
-  pages: number;
-} {
-  const exports: { size: string; format: string; duration?: number }[] = [];
-  const block = src.match(/exports\s*:\s*\[([\s\S]*?)\]/);
-  if (block) {
-    const entryRe = /\{([^}]+)\}/g;
-    for (;;) {
-      const m = entryRe.exec(block[1]);
-      if (!m) break;
-      const body = m[1];
-      const size = body.match(/size\s*:\s*['"]([^'"]+)['"]/)?.[1];
-      const format = body.match(/format\s*:\s*['"]([^'"]+)['"]/)?.[1];
-      const duration = body.match(/duration\s*:\s*(\d+)/)?.[1];
-      if (size && format) {
-        exports.push({ size, format, duration: duration ? Number(duration) : undefined });
-      }
-    }
-  }
-  const pagesMatch = src.match(/^\s*pages\s*:\s*(\d+)/m);
-  const pages = pagesMatch ? Number(pagesMatch[1]) : 1;
-  return { exports, pages };
+function serializePost(config: PostConfig): PostManifestEntry {
+  return {
+    name: config.name,
+    pages: config.pages ?? 1,
+    exports: config.exports.map((e) => ({
+      size: e.size,
+      format: e.format,
+      duration: e.duration,
+      filename: e.filename,
+    })),
+    pageDurations: config.pageDurations,
+    transition: config.transition,
+    transitions: config.transitions,
+  };
 }
 
 async function main(): Promise<void> {

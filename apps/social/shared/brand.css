@@ -52,8 +52,9 @@
 
   /* Font families */
   --font-sans: "PPNeueMontreal", system-ui, -apple-system, sans-serif;
-  --font-mono: "PPNeueMontrealMono", ui-monospace, monospace;
-  --font-display: "PPFraktionMono", ui-monospace, monospace;
+  --font-mono: "PPFraktionMono", ui-monospace, monospace;
+  /* --font-display: "PPFraktionMono", ui-monospace, monospace; */
+  --font-display: "PPNeueMontreal", system-ui, -apple-system, sans-serif;
   --font-logo: "Eckmannpsych", serif;
 
   /* Spacing scale — multiples of 8px for a 1080px artboard */

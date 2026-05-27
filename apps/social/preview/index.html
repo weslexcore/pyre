@@ -85,6 +85,58 @@
         background: var(--accent);
         border-color: var(--accent);
       }
+      .duration-chip {
+        cursor: pointer;
+        border-bottom: 1px dashed currentColor;
+        padding: 0 1px;
+      }
+      .duration-chip:hover {
+        color: var(--text);
+      }
+      .duration-input {
+        background: #2f2e26;
+        color: var(--text);
+        border: 1px solid var(--accent);
+        font: inherit;
+        font-family: var(--font-mono);
+        width: 56px;
+        padding: 0 4px;
+        border-radius: 3px;
+      }
+      .duration-input::-webkit-inner-spin-button,
+      .duration-input::-webkit-outer-spin-button {
+        opacity: 1;
+      }
+      .pair-transition {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--muted);
+        padding: 6px 10px;
+        background: rgba(35, 34, 28, 0.6);
+        border: 1px dashed #3d3c33;
+        border-radius: 4px;
+        align-self: stretch;
+      }
+      .pair-transition .pair-label {
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .pair-transition select,
+      .pair-transition input {
+        background: #2f2e26;
+        color: var(--text);
+        border: 1px solid #3d3c33;
+        padding: 4px 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        border-radius: 3px;
+      }
+      .pair-transition input[type='number'] {
+        width: 52px;
+      }
       #exportStatus {
         font-family: var(--font-mono);
         font-size: 12px;
@@ -111,6 +163,21 @@
         display: flex;
         flex-direction: column;
         gap: 24px;
+      }
+      .frame.frame--reel-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, 405px);
+        gap: 24px 32px;
+        flex: 1 1 405px;
+        align-items: start;
+      }
+      .frame.frame--reel-grid > .page-block {
+        width: 405px;
+        min-width: 0;
+      }
+      .frame.frame--reel-grid .frame-label {
+        flex-wrap: wrap;
+        row-gap: 4px;
       }
       .page-block {
         display: flex;
@@ -153,7 +220,9 @@
     <header>
       <h1>Pyre Social</h1>
       <select id="postSelect"></select>
+      <select id="sizeSelect" title="Filter previews by export size"></select>
       <button id="exportAll" class="btn" type="button">Export all</button>
+      <button id="joinReels" class="btn" type="button" title="Concatenate already-rendered per-page reels into one MP4">Join reels</button>
       <span class="hint">
         Edit any file under <code>posts/</code> or <code>shared/</code> and the preview will hot-reload.
       </span>
@@ -177,11 +246,93 @@
 
       const root = document.getElementById('root');
       const select = document.getElementById('postSelect');
+      const sizeSelect = document.getElementById('sizeSelect');
       const exportAllBtn = document.getElementById('exportAll');
+      const joinReelsBtn = document.getElementById('joinReels');
       const statusEl = document.getElementById('exportStatus');
+
+      let currentSizeFilter = new URLSearchParams(location.search).get('size') ?? 'all';
+
+      function populateSizeSelect(post) {
+        const seen = new Set();
+        const sizes = [];
+        for (const e of post?.exports ?? []) {
+          if (!seen.has(e.size)) {
+            seen.add(e.size);
+            sizes.push(e.size);
+          }
+        }
+        sizeSelect.innerHTML = '';
+        const allOpt = document.createElement('option');
+        allOpt.value = 'all';
+        allOpt.textContent = sizes.length > 1 ? 'All sizes' : 'All';
+        sizeSelect.appendChild(allOpt);
+        for (const s of sizes) {
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          sizeSelect.appendChild(opt);
+        }
+        if (currentSizeFilter !== 'all' && !seen.has(currentSizeFilter)) {
+          currentSizeFilter = 'all';
+          const url = new URL(location.href);
+          url.searchParams.delete('size');
+          history.replaceState(null, '', url.toString());
+        }
+        sizeSelect.value = currentSizeFilter;
+        sizeSelect.disabled = sizes.length < 2;
+      }
+
+      const DEFAULT_TRANSITION = { type: 'fade', durationMs: 500 };
+      const TRANSITION_TYPES = [
+        'fade',
+        'dissolve',
+        'slideleft',
+        'slideup',
+        'wipeleft',
+        'wipeup',
+        'circleopen',
+        'none',
+      ];
 
       let currentPost = null;
       let busy = false;
+
+      function effectiveDurationMs(post, entry, page) {
+        const fromArr = post?.pageDurations?.[page - 1];
+        if (typeof fromArr === 'number' && fromArr > 0) return fromArr;
+        if (typeof entry?.duration === 'number' && entry.duration > 0) return entry.duration;
+        return 5000;
+      }
+
+      function fallbackTransition(post) {
+        const t = post?.transition;
+        return {
+          type: typeof t?.type === 'string' ? t.type : DEFAULT_TRANSITION.type,
+          durationMs:
+            typeof t?.durationMs === 'number' && t.durationMs >= 0
+              ? t.durationMs
+              : DEFAULT_TRANSITION.durationMs,
+        };
+      }
+
+      function effectiveTransitionForPair(post, pairIndex) {
+        const slot = post?.transitions?.[pairIndex];
+        const fb = fallbackTransition(post);
+        if (!slot) return fb;
+        return {
+          type: typeof slot.type === 'string' ? slot.type : fb.type,
+          durationMs:
+            typeof slot.durationMs === 'number' && slot.durationMs >= 0 ? slot.durationMs : fb.durationMs,
+        };
+      }
+
+      function currentTransitionsArray() {
+        const totalPages = Math.max(1, currentPost?.pages ?? 1);
+        return Array.from({ length: totalPages - 1 }, (_, i) =>
+          effectiveTransitionForPair(currentPost, i)
+        );
+      }
 
       const res = await fetch('/__posts.json');
       const { posts } = await res.json();
@@ -189,6 +340,7 @@
       if (!posts.length) {
         root.innerHTML = '<div class="empty">No posts yet. Create one under <code>posts/&lt;name&gt;/</code>.</div>';
         exportAllBtn.disabled = true;
+        joinReelsBtn.disabled = true;
       } else {
         for (const post of posts) {
           const opt = document.createElement('option');
@@ -208,14 +360,67 @@
           render(select.value);
         });
 
+        sizeSelect.addEventListener('change', () => {
+          currentSizeFilter = sizeSelect.value;
+          const url = new URL(location.href);
+          if (currentSizeFilter === 'all') {
+            url.searchParams.delete('size');
+          } else {
+            url.searchParams.set('size', currentSizeFilter);
+          }
+          history.replaceState(null, '', url.toString());
+          render(select.value);
+        });
+
         exportAllBtn.addEventListener('click', () => exportAll());
+        joinReelsBtn.addEventListener('click', () => joinReels());
+      }
+
+      async function savePairTransition(pairIndex, transition) {
+        if (!currentPost) return;
+        const totalPages = Math.max(1, currentPost.pages ?? 1);
+        const arr = Array.from({ length: totalPages - 1 }, (_, i) => {
+          if (i === pairIndex) return transition;
+          const existing = currentPost.transitions?.[i];
+          return existing ?? null;
+        });
+        currentPost.transitions = arr;
+        try {
+          const r = await fetch('/__config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: currentPost.name, transitions: arr }),
+          });
+          const data = await readJsonResponse(r, '/__config');
+          if (!data.ok) throw new Error(data.error || 'save failed');
+          setStatus(
+            `Transition ${pairIndex + 1}→${pairIndex + 2}: ${transition.type}${transition.type === 'none' ? '' : ` ${(transition.durationMs / 1000).toFixed(2).replace(/0+$/, '').replace(/\.$/, '') || '0'}s`}`
+          );
+        } catch (err) {
+          setStatus(`Failed to save transition: ${err.message}`, 'error');
+        }
+      }
+
+      function joinableEntries(post) {
+        const totalPages = Math.max(1, post?.pages ?? 1);
+        if (totalPages < 2) return [];
+        return (post?.exports ?? []).filter((e) => e.format === 'mp4');
+      }
+
+      function formatSeconds(ms) {
+        return `${(ms / 1000).toFixed(1).replace(/\.0$/, '')}s`;
       }
 
       function render(postName) {
         currentPost = posts.find((p) => p.name === postName);
         if (!currentPost) return;
+        joinReelsBtn.disabled = joinableEntries(currentPost).length === 0;
+        populateSizeSelect(currentPost);
         const main = document.createElement('main');
-        const entries = currentPost.exports.length ? currentPost.exports : [{ size: 'square', format: 'png' }];
+        const allEntries = currentPost.exports.length ? currentPost.exports : [{ size: 'square', format: 'png' }];
+        const entries = currentSizeFilter === 'all'
+          ? allEntries
+          : allEntries.filter((e) => e.size === currentSizeFilter);
         const totalPages = Math.max(1, currentPost.pages ?? 1);
         const maxHeight = 720;
 
@@ -225,17 +430,46 @@
           const scale = Math.min(1, maxHeight / dims.h);
           const frame = document.createElement('div');
           frame.className = 'frame';
-          const pageBlocks = [];
+          const isVideoEntry = entry.format === 'mp4';
+          if (entry.size === 'reel' && isVideoEntry && totalPages > 1) {
+            frame.classList.add('frame--reel-grid');
+          }
+          const pieces = [];
           for (let page = 1; page <= totalPages; page++) {
             const pageLabel = totalPages > 1 ? ` · page ${page}/${totalPages}` : '';
-            const durationLabel = entry.duration ? ` · ${(entry.duration / 1000).toFixed(1)}s` : '';
-            pageBlocks.push(`
+            const isVideo = isVideoEntry;
+            const durMs = isVideo ? effectiveDurationMs(currentPost, entry, page) : 0;
+            const durationChip = isVideo
+              ? ` · <span
+                  class="duration-chip"
+                  data-page="${page}"
+                  data-size="${entry.size}"
+                  data-format="${entry.format}"
+                  ${entry.filename ? `data-filename="${entry.filename}"` : ''}
+                  title="Click to change this page's duration"
+                >${formatSeconds(durMs)}</span>`
+              : '';
+            pieces.push(`
               <div class="page-block">
                 <div class="frame-label">
                   <span class="size">${entry.size}</span>
                   <span>${dims.w}×${dims.h} · ${dims.label}</span>
-                  <span class="format">${entry.format}${durationLabel}${pageLabel}</span>
+                  <span class="format">${entry.format}${durationChip}${pageLabel}</span>
                   <span class="spacer"></span>
+                  ${
+                    isVideo
+                      ? `<button
+                    class="btn btn--tile playpause-btn"
+                    type="button"
+                    data-paused="false"
+                  >Pause</button>
+                  <button
+                    class="btn btn--tile restart-btn"
+                    type="button"
+                    title="Restart"
+                  >↻</button>`
+                      : ''
+                  }
                   <button
                     class="btn btn--tile export-btn"
                     type="button"
@@ -255,8 +489,27 @@
                 </div>
               </div>
             `);
+            if (isVideoEntry && page < totalPages) {
+              const pairIndex = page - 1;
+              const t = effectiveTransitionForPair(currentPost, pairIndex);
+              const dispSec = (t.durationMs / 1000)
+                .toFixed(2)
+                .replace(/0+$/, '')
+                .replace(/\.$/, '') || '0';
+              const opts = TRANSITION_TYPES.map(
+                (name) => `<option value="${name}"${name === t.type ? ' selected' : ''}>${name}</option>`
+              ).join('');
+              pieces.push(`
+                <div class="pair-transition" data-pair-index="${pairIndex}">
+                  <span class="pair-label">page ${page} → ${page + 1}</span>
+                  <select class="pair-type">${opts}</select>
+                  <input class="pair-dur" type="number" step="0.05" min="0" max="5" value="${dispSec}" />
+                  <span>s</span>
+                </div>
+              `);
+            }
           }
-          frame.innerHTML = pageBlocks.join('');
+          frame.innerHTML = pieces.join('');
           main.appendChild(frame);
         }
 
@@ -275,6 +528,159 @@
             });
           });
         });
+
+        root.querySelectorAll('.playpause-btn').forEach((btn) => {
+          btn.addEventListener('click', () => togglePlayPause(btn));
+        });
+
+        root.querySelectorAll('.restart-btn').forEach((btn) => {
+          btn.addEventListener('click', () => restart(btn));
+        });
+
+        root.querySelectorAll('.duration-chip').forEach((chip) => {
+          chip.addEventListener('click', () => editDurationChip(chip));
+        });
+
+        root.querySelectorAll('.pair-transition').forEach((row) => {
+          const pairIndex = Number(row.dataset.pairIndex);
+          const typeSel = row.querySelector('.pair-type');
+          const durInp = row.querySelector('.pair-dur');
+          const commit = () => {
+            const seconds = Number(durInp.value);
+            const transition = {
+              type: typeSel.value,
+              durationMs:
+                Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : 0,
+            };
+            savePairTransition(pairIndex, transition);
+          };
+          typeSel.addEventListener('change', commit);
+          durInp.addEventListener('change', commit);
+        });
+      }
+
+      function editDurationChip(chip) {
+        if (busy || chip.dataset.editing === 'true') return;
+        const page = Number(chip.dataset.page);
+        const entry = currentPost?.exports.find(
+          (e) =>
+            e.size === chip.dataset.size &&
+            e.format === chip.dataset.format &&
+            (chip.dataset.filename ? e.filename === chip.dataset.filename : true)
+        );
+        if (!entry) return;
+
+        const currentMs = effectiveDurationMs(currentPost, entry, page);
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.1';
+        input.min = '0.1';
+        input.max = '60';
+        input.value = (currentMs / 1000).toFixed(1);
+        input.className = 'duration-input';
+        chip.dataset.editing = 'true';
+        chip.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let committed = false;
+        const commit = async () => {
+          if (committed) return;
+          committed = true;
+          const seconds = Number(input.value);
+          const newMs =
+            Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : currentMs;
+          chip.textContent = formatSeconds(newMs);
+          chip.dataset.editing = 'false';
+          input.replaceWith(chip);
+          if (newMs !== currentMs) {
+            await saveDuration(page, newMs);
+          }
+        };
+        const cancel = () => {
+          if (committed) return;
+          committed = true;
+          chip.dataset.editing = 'false';
+          input.replaceWith(chip);
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+          }
+        });
+      }
+
+      async function saveDuration(page, newMs) {
+        const totalPages = Math.max(1, currentPost.pages ?? 1);
+        const arr = [];
+        for (let p = 1; p <= totalPages; p++) {
+          const entry = currentPost.exports.find((e) => e.format === 'mp4') ?? {};
+          arr.push(p === page ? newMs : effectiveDurationMs(currentPost, entry, p));
+        }
+        currentPost.pageDurations = arr;
+        setStatus(`Saved page ${page} duration: ${formatSeconds(newMs)}`);
+        try {
+          const r = await fetch('/__config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: currentPost.name, pageDurations: arr }),
+          });
+          const data = await readJsonResponse(r, '/__config');
+          if (!data.ok) throw new Error(data.error || 'save failed');
+        } catch (err) {
+          setStatus(`Failed to save duration: ${err.message}`, 'error');
+        }
+      }
+
+      const PAUSE_STYLE_ID = '__pyre-pause-style';
+      // `transition: none` cancels in-flight transitions (they snap to their end value)
+      // rather than freezing mid-flight. Acceptable: current posts use @keyframes, not transitions.
+      const PAUSE_CSS = `
+        *, *::before, *::after {
+          animation-play-state: paused !important;
+          transition: none !important;
+        }
+      `;
+
+      function togglePlayPause(btn) {
+        const iframe = btn.closest('.page-block')?.querySelector('iframe');
+        const doc = iframe?.contentDocument;
+        if (!doc) return;
+        const isPaused = btn.dataset.paused === 'true';
+        if (isPaused) {
+          doc.getElementById(PAUSE_STYLE_ID)?.remove();
+          doc.querySelectorAll('video').forEach((v) => v.play().catch(() => {}));
+          btn.dataset.paused = 'false';
+          btn.textContent = 'Pause';
+        } else {
+          if (!doc.getElementById(PAUSE_STYLE_ID)) {
+            const style = doc.createElement('style');
+            style.id = PAUSE_STYLE_ID;
+            style.textContent = PAUSE_CSS;
+            doc.head.appendChild(style);
+          }
+          doc.querySelectorAll('video').forEach((v) => v.pause());
+          btn.dataset.paused = 'true';
+          btn.textContent = 'Play';
+        }
+      }
+
+      function restart(btn) {
+        const block = btn.closest('.page-block');
+        const iframe = block?.querySelector('iframe');
+        // contentWindow.location.reload() forces a real reload even when the src has a #hash,
+        // unlike `iframe.src = iframe.src` which the browser treats as a same-document nav.
+        iframe?.contentWindow?.location.reload();
+        const ppBtn = block?.querySelector('.playpause-btn');
+        if (ppBtn) {
+          ppBtn.dataset.paused = 'false';
+          ppBtn.textContent = 'Pause';
+        }
       }
 
       function setStatus(text, kind) {
@@ -285,26 +691,139 @@
       function setBusy(value) {
         busy = value;
         exportAllBtn.disabled = value;
+        joinReelsBtn.disabled = value || (currentPost ? joinableEntries(currentPost).length === 0 : true);
         root.querySelectorAll('.export-btn').forEach((b) => {
           b.disabled = value;
         });
+      }
+
+      function describePhase(msg) {
+        if (msg.phase === 'page-render') {
+          const totalSuffix = msg.totalPages > 1 ? `/${msg.totalPages}` : '';
+          const sizeFmt = msg.size && msg.format ? ` ${msg.size} ${msg.format}` : '';
+          const durSuffix =
+            typeof msg.durationMs === 'number' && msg.durationMs > 0
+              ? ` · ${(msg.durationMs / 1000).toFixed(1)}s target`
+              : '';
+          return `Rendering page ${msg.pageIndex}${totalSuffix}${sizeFmt}${durSuffix}`;
+        }
+        if (msg.phase === 'concat') {
+          const sizeFmt = msg.size ? ` ${msg.size}` : '';
+          return `Joining${sizeFmt} reel · ${msg.totalPages} pages`;
+        }
+        return msg.phase;
+      }
+
+      function describeProgress(msg) {
+        const pct = (n) => `${Math.round(n)}%`;
+        switch (msg.phase) {
+          case 'navigate':
+            return 'loading page';
+          case 'settle':
+            return 'settling';
+          case 'record':
+            return msg.detail ? `recording ${msg.detail}` : 'recording';
+          case 'finalize':
+            return 'finalizing recording';
+          case 'transcode':
+            return typeof msg.percent === 'number'
+              ? `transcoding ${pct(msg.percent)}`
+              : 'transcoding';
+          case 'probe':
+            return msg.detail ? `probing ${msg.detail}` : 'probing durations';
+          case 'encode': {
+            const head =
+              typeof msg.percent === 'number' ? `encoding ${pct(msg.percent)}` : 'encoding';
+            return msg.detail ? `${head} (${msg.detail})` : head;
+          }
+          default:
+            return msg.phase ?? '';
+        }
+      }
+
+      /**
+       * POST a JSON body to a render/join endpoint and consume its NDJSON stream,
+       * updating the status bar with phase + inner-progress detail as events arrive.
+       * Resolves with the final {ok, file, name, error?} object from the stream.
+       */
+      async function streamProgress(endpoint, body, prefix = '') {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.body) {
+          const text = await response.text().catch(() => '');
+          const hint =
+            response.status === 404 || response.status === 405
+              ? ' — restart the dev server (yarn workspace @pyre/social dev) so it picks up new routes'
+              : '';
+          throw new Error(
+            `${endpoint} HTTP ${response.status}: ${text.slice(0, 200) || 'no response body'}${hint}`
+          );
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let phaseLabel = '';
+        let final = null;
+
+        const handleLine = (line) => {
+          let msg;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            return;
+          }
+          if (msg.type === 'phase') {
+            phaseLabel = describePhase(msg);
+            setStatus(`${prefix}${phaseLabel}…`);
+          } else if (msg.type === 'progress') {
+            const detail = describeProgress(msg);
+            const label = phaseLabel ? phaseLabel : prefix.trim() || 'working';
+            setStatus(`${prefix}${label} · ${detail}`);
+          } else if (msg.type === 'done') {
+            final = msg;
+          }
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl;
+          while ((nl = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (line) handleLine(line);
+          }
+        }
+        const tail = buffer.trim();
+        if (tail) handleLine(tail);
+
+        if (!final) {
+          const hint =
+            response.status === 404 || response.status === 405
+              ? ' — restart the dev server (yarn workspace @pyre/social dev) so it picks up new routes'
+              : '';
+          throw new Error(
+            `${endpoint} stream ended without a done event (HTTP ${response.status})${hint}`
+          );
+        }
+        if (final.ok === false) throw new Error(final.error || 'failed');
+        return final;
       }
 
       async function exportOne({ post, size, format, page, filename, triggerEl }) {
         if (busy) return;
         setBusy(true);
         if (triggerEl) triggerEl.textContent = '…';
-        setStatus(`Rendering ${post} ${size} ${format} p${page}…`);
+        setStatus(`Rendering ${size} ${format} p${page}…`);
         try {
           const body = { post, size, format, page };
           if (filename) body.filename = filename;
-          const r = await fetch('/__render', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          const data = await r.json();
-          if (!data.ok) throw new Error(data.error || 'render failed');
+          const data = await streamProgress('/__render', body);
           triggerDownload(data.file, data.name);
           setStatus(`Saved ${data.name}`);
         } catch (err) {
@@ -329,27 +848,93 @@
         setBusy(true);
         let done = 0;
         let failed = 0;
-        for (const { entry, page } of jobs) {
-          setStatus(`Rendering ${done + 1}/${jobs.length} · ${entry.size} ${entry.format} p${page}…`);
+        const entryFailures = new Map();
+        for (let i = 0; i < jobs.length; i++) {
+          const { entry, page } = jobs[i];
+          const prefix = `[${i + 1}/${jobs.length}] `;
           try {
             const body = { post: currentPost.name, size: entry.size, format: entry.format, page };
             if (entry.filename) body.filename = entry.filename;
-            const r = await fetch('/__render', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            const data = await r.json();
-            if (!data.ok) throw new Error(data.error || 'render failed');
+            const data = await streamProgress('/__render', body, prefix);
             triggerDownload(data.file, data.name);
             done++;
           } catch (err) {
             failed++;
-            setStatus(`Failed on ${entry.size} ${entry.format} p${page}: ${err.message}`, 'error');
+            entryFailures.set(entry, true);
+            setStatus(`${prefix}Failed on ${entry.size} ${entry.format} p${page}: ${err.message}`, 'error');
           }
         }
-        if (failed === 0) setStatus(`Saved ${done} file${done === 1 ? '' : 's'}`);
+
+        const joinable = entries.filter(
+          (e) => e.format === 'mp4' && totalPages > 1 && !entryFailures.has(e)
+        );
+        let joined = 0;
+        const transitions = currentTransitionsArray();
+        for (let j = 0; j < joinable.length; j++) {
+          const entry = joinable[j];
+          const prefix = `[Join ${j + 1}/${joinable.length}] `;
+          try {
+            const body = { post: currentPost.name, size: entry.size, format: entry.format, transitions };
+            if (entry.filename) body.filename = entry.filename;
+            const data = await streamProgress('/__join', body, prefix);
+            triggerDownload(data.file, data.name);
+            joined++;
+          } catch (err) {
+            failed++;
+            setStatus(`${prefix}Join failed for ${entry.size}: ${err.message}`, 'error');
+          }
+        }
+
+        if (failed === 0) {
+          const total = done + joined;
+          setStatus(`Saved ${total} file${total === 1 ? '' : 's'}`);
+        }
         setBusy(false);
+      }
+
+      async function joinReels() {
+        if (!currentPost || busy) return;
+        const entries = joinableEntries(currentPost);
+        if (entries.length === 0) {
+          setStatus('Nothing to join: post has pages=1 or no mp4 exports.', 'error');
+          return;
+        }
+        setBusy(true);
+        let joined = 0;
+        let failed = 0;
+        const transitions = currentTransitionsArray();
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const prefix = entries.length > 1 ? `[${i + 1}/${entries.length}] ` : '';
+          try {
+            const body = { post: currentPost.name, size: entry.size, format: entry.format, transitions };
+            if (entry.filename) body.filename = entry.filename;
+            const data = await streamProgress('/__join', body, prefix);
+            triggerDownload(data.file, data.name);
+            joined++;
+          } catch (err) {
+            failed++;
+            setStatus(`${prefix}Join failed for ${entry.size}: ${err.message}`, 'error');
+          }
+        }
+        if (failed === 0) setStatus(`Saved ${joined} file${joined === 1 ? '' : 's'}`);
+        setBusy(false);
+      }
+
+      async function readJsonResponse(response, endpoint) {
+        const text = await response.text();
+        if (!text) {
+          const hint =
+            response.status === 404 || response.status === 405
+              ? ` — restart the dev server (yarn workspace @pyre/social dev) so it picks up new routes`
+              : '';
+          throw new Error(`${endpoint} returned HTTP ${response.status} with empty body${hint}`);
+        }
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error(`${endpoint} HTTP ${response.status}: ${text.slice(0, 200)}`);
+        }
       }
 
       function triggerDownload(url, name) {

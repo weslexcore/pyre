@@ -1,0 +1,28 @@
+/* Pyre photo-filter catalog — apply one .photo--<name> class to an <img>
+   to grade the photo toward a brand palette member. Composes with the
+   per-post .overlay--* gradient layer. Anchor tokens live in /shared/brand.css. */
+
+/* warm-sauna — golden/red cast, anchored on --pyre-gold/--pyre-red */
+.photo--warm-sauna {
+  filter: sepia(0.35) saturate(1.18) hue-rotate(-8deg) contrast(1.05) brightness(0.97);
+}
+
+/* cold-plunge — crisp blue cast, anchored on --pyre-blue/--pyre-sky */
+.photo--cold-plunge {
+  filter: saturate(0.85) hue-rotate(8deg) contrast(1.08) brightness(0.96);
+}
+
+/* sage-still — earthy desaturation, anchored on --pyre-sage */
+.photo--sage-still {
+  filter: sepia(0.18) saturate(0.78) hue-rotate(28deg) contrast(0.98) brightness(0.98);
+}
+
+/* noir — high-contrast near-mono with a creme cast, anchored on --pyre-creme/--pyre-black */
+.photo--noir {
+  filter: grayscale(0.92) sepia(0.12) contrast(1.18) brightness(0.94);
+}
+
+/* ember — deep amber dusk, anchored on --pyre-gold/--pyre-black */
+.photo--ember {
+  filter: sepia(0.55) saturate(1.25) hue-rotate(-14deg) contrast(1.08) brightness(0.88);
+}

@@ -1,0 +1,408 @@
+/* Why we plunge cold after hot — 6-page contrast-cycle carousel + reel.
+   Layout variants per slide so the deck doesn't read as a single template:
+     1 hook       → giant centered
+     2 heat       → bottom-left
+     3 cold       → top-right
+     4 afterglow  → right-side band, vertical-mid
+     5 hormesis   → small centered card
+     6 cta        → bottom giant
+*/
+
+.post {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--pyre-creme);
+  background: var(--pyre-black);
+}
+
+/* HERO */
+.hero {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  animation: drift 14s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.hero--pos-low   { object-position: center 35%; }
+.hero--pos-mid   { object-position: center 42%; }
+.hero--pos-high  { object-position: center 28%; }
+.hero--landscape { object-position: center 55%; }
+
+@keyframes drift {
+  0%   { transform: scale(1.06) translate3d(-0.6%, -0.4%, 0); }
+  100% { transform: scale(1.12) translate3d(0.8%,  0.6%, 0); }
+}
+
+/* OVERLAYS */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.overlay--warm {
+  background:
+    linear-gradient(
+      to top,
+      rgba(35, 34, 28, 0.92) 0%,
+      rgba(35, 34, 28, 0.78) 28%,
+      rgba(35, 34, 28, 0.45) 58%,
+      rgba(209, 82, 50, 0.18) 80%,
+      transparent 100%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.78) 0%, rgba(35, 34, 28, 0.30) 18%, transparent 32%);
+}
+
+.overlay--cold {
+  background:
+    linear-gradient(
+      to top,
+      rgba(35, 34, 28, 0.92) 0%,
+      rgba(39, 72, 104, 0.78) 28%,
+      rgba(39, 72, 104, 0.35) 60%,
+      rgba(35, 34, 28, 0.10) 88%,
+      transparent 100%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.65) 0%, transparent 22%);
+}
+
+/* Top-heavy cold gradient for top-anchored text. */
+.overlay--cold-top {
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(35, 34, 28, 0.94) 0%,
+      rgba(39, 72, 104, 0.78) 28%,
+      rgba(39, 72, 104, 0.30) 58%,
+      rgba(35, 34, 28, 0.10) 82%,
+      transparent 100%
+    ),
+    linear-gradient(to top, rgba(35, 34, 28, 0.70) 0%, transparent 28%);
+}
+
+/* Right-side darken for side-band text. */
+.overlay--right-soft {
+  background:
+    linear-gradient(
+      to left,
+      rgba(35, 34, 28, 0.88) 0%,
+      rgba(35, 34, 28, 0.55) 30%,
+      rgba(35, 34, 28, 0.18) 60%,
+      transparent 88%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.40) 0%, transparent 22%),
+    linear-gradient(to top, rgba(35, 34, 28, 0.55) 0%, transparent 28%);
+}
+
+/* Radial vignette overlays for centered-text slides. */
+.overlay--vignette-warm {
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 50% 50%,
+      rgba(35, 34, 28, 0.30) 0%,
+      rgba(35, 34, 28, 0.55) 55%,
+      rgba(35, 34, 28, 0.85) 100%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.40) 0%, transparent 30%);
+}
+
+.overlay--vignette-cold {
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 50%,
+      rgba(39, 72, 104, 0.35) 0%,
+      rgba(35, 34, 28, 0.65) 55%,
+      rgba(35, 34, 28, 0.90) 100%
+    );
+}
+
+.overlay--soft {
+  background:
+    linear-gradient(
+      to top,
+      rgba(35, 34, 28, 0.85) 0%,
+      rgba(35, 34, 28, 0.45) 35%,
+      transparent 75%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.40) 0%, transparent 20%);
+}
+
+.overlay--cta {
+  background:
+    linear-gradient(
+      to top,
+      rgba(35, 34, 28, 0.92) 0%,
+      rgba(209, 82, 50, 0.30) 35%,
+      rgba(219, 177, 85, 0.15) 65%,
+      transparent 95%
+    ),
+    linear-gradient(to bottom, rgba(35, 34, 28, 0.55) 0%, transparent 22%);
+}
+
+/* SHARED CHROME */
+.eyebrow,
+.headline,
+.footer {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  padding: 0 var(--space-6);
+}
+
+.eyebrow {
+  top: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pyre-creme);
+}
+
+.eyebrow--sky  { color: var(--pyre-sky); }
+.eyebrow--gold { color: var(--pyre-gold); }
+
+/* Eyebrow flips for non-default anchors. */
+.eyebrow--bottom {
+  top: auto;
+  bottom: var(--space-6);
+}
+
+.eyebrow--top-center {
+  justify-content: center;
+}
+
+.eyebrow__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--pyre-red);
+  box-shadow: 0 0 0 4px rgba(209, 82, 50, 0.25);
+  animation: pulse 2.2s ease-in-out infinite;
+}
+
+.eyebrow--sky  .eyebrow__dot {
+  background: var(--pyre-sky);
+  box-shadow: 0 0 0 4px rgba(57, 145, 183, 0.25);
+}
+
+.eyebrow--gold .eyebrow__dot {
+  background: var(--pyre-gold);
+  box-shadow: 0 0 0 4px rgba(219, 177, 85, 0.25);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+/* HEADLINE — default = bottom-left */
+.headline {
+  bottom: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 100%;
+}
+
+/* HEADLINE VARIANTS */
+
+/* Center: vertically + horizontally centered, no anchor. */
+.headline--center {
+  inset: 0;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-6);
+}
+
+/* Top-right: anchored to top, right-aligned, text reads top-down. */
+.headline--top-right {
+  top: 140px;
+  bottom: auto;
+  align-items: flex-end;
+  text-align: right;
+  padding-right: var(--space-6);
+}
+
+/* Right band: vertically centered on the right side, narrow column. */
+.headline--right-band {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  align-items: flex-end;
+  text-align: right;
+  padding-right: var(--space-6);
+  padding-left: 35%;
+}
+
+/* Center card: small centered stamp/title card. */
+.headline--center-card {
+  inset: 0;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-6);
+}
+
+/* CTA: keeps bottom-left anchor but a wider gap. */
+.headline--cta { gap: var(--space-8); }
+
+/* DISPLAY */
+.display {
+  font-family: var(--font-display);
+  font-size: 110px;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  color: var(--pyre-creme);
+  max-width: 18ch;
+}
+
+.display--mid   { font-size: 96px;  line-height: 1.02; }
+.display--giant { font-size: 180px; line-height: 0.88; }
+
+/* Centered display gets its own scale so it breathes. */
+.display--giant-center {
+  font-size: 160px;
+  line-height: 0.92;
+  text-align: center;
+  max-width: 16ch;
+}
+
+/* Right-aligned variant. */
+.display--right {
+  text-align: right;
+  max-width: 14ch;
+}
+
+/* Stamp-style display for the hormesis card. */
+.display--card {
+  font-size: 140px;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-align: center;
+  max-width: 16ch;
+}
+
+.accent { font-weight: inherit; }
+.accent--red  { color: var(--pyre-red); }
+.accent--sky  { color: var(--pyre-sky); }
+.accent--gold { color: var(--pyre-gold); }
+
+/* BODY */
+.body {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 1.35;
+  color: rgba(245, 241, 233, 0.92);
+  max-width: 30ch;
+}
+
+.body--center  { text-align: center; }
+.body--right   { text-align: right; }
+.body--narrow  { max-width: 22ch; }
+
+/* Kicker — small mono prelude over the card title. */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(245, 241, 233, 0.72);
+}
+
+/* FOOTER */
+.footer {
+  bottom: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: rgba(245, 241, 233, 0.78);
+}
+
+.footer--center  { justify-content: center; }
+.footer--right   { justify-content: flex-end; gap: var(--space-4); }
+
+.footer__logo {
+  height: 56px;
+  width: auto;
+  filter: brightness(0) invert(1);
+  font-size: 0;
+  color: transparent;
+}
+
+.footer__cite--cta {
+  color: var(--pyre-gold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ===== Responsive aspect adjustments ===== */
+
+/* --- 1:1 SQUARE --- */
+@media (aspect-ratio: 1 / 1) {
+  .eyebrow              { font-size: 16px; }
+  .headline             { bottom: 160px; gap: var(--space-3); }
+  .headline--top-right  { top: 120px; }
+  .display              { font-size: 88px; }
+  .display--mid         { font-size: 72px; }
+  .display--giant       { font-size: 140px; }
+  .display--giant-center { font-size: 124px; }
+  .display--card        { font-size: 112px; }
+  .body                 { font-size: 22px; max-width: 32ch; }
+  .footer               { font-size: 16px; }
+  .kicker               { font-size: 15px; }
+  .hero--landscape      { object-position: center 55%; }
+  .headline--right-band { padding-left: 28%; }
+}
+
+/* --- 4:5 PORTRAIT --- */
+@media (aspect-ratio: 4 / 5) {
+  .headline             { bottom: 220px; }
+  .headline--top-right  { top: 180px; }
+  .display              { font-size: 120px; }
+  .display--mid         { font-size: 100px; }
+  .display--giant       { font-size: 200px; }
+  .display--giant-center { font-size: 170px; }
+  .display--card        { font-size: 150px; }
+  .body                 { font-size: 30px; }
+  .hero--landscape      { object-position: 30% 50%; }
+  .headline--right-band { padding-left: 30%; }
+}
+
+/* --- 9:16 REEL --- */
+@media (aspect-ratio: 9 / 16) {
+  .eyebrow              { top: var(--space-8); font-size: 22px; }
+  .eyebrow--bottom      { bottom: var(--space-8); }
+  .headline             { bottom: 220px; gap: var(--space-3); }
+  .headline--top-right  { top: 180px; }
+  .display              { font-size: 96px;  line-height: 0.98; max-width: 14ch; }
+  .display--mid         { font-size: 84px;  line-height: 1.04; max-width: 14ch; }
+  .display--giant       { font-size: 180px; max-width: 10ch;  }
+  .display--giant-center { font-size: 140px; max-width: 11ch; }
+  .display--card        { font-size: 130px; max-width: 11ch; }
+  .body                 { font-size: 30px;  max-width: 28ch; }
+  .footer               { bottom: var(--space-8); font-size: 20px; }
+  .kicker               { font-size: 20px; }
+  .hero--landscape      { object-position: 35% 45%; }
+  .headline--right-band { padding-left: 18%; }
+}

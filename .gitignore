@@ -26,6 +26,8 @@ apps/data-dashboard/.next/
 .DS_Store
 *.pem
 
+**/.playwright-mcp
+
 # debug
 npm-debug.log*
 yarn-debug.log*
