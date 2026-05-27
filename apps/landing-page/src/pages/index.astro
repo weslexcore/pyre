@@ -10,7 +10,7 @@ import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
 import Hero from '../components/Hero.astro';
 import HeroBackground from '../components/HeroBackground.astro';
-import HeroTileCurtain from '../components/HeroTileCurtain.astro';
+import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SectionBridge from '../components/SectionBridge.astro';
@@ -37,9 +37,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
     </div>
 
     <div class="mobile-hero-background sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer pointer-events-none lg:hidden" aria-hidden="true">
-      <div class="relative h-full w-full overflow-hidden">
-        <HeroTileCurtain role="mobile" />
-      </div>
+      <HeroCarousel />
     </div>
 
     <div class="hidden lg:block">
@@ -110,7 +108,7 @@ import { heroGrainGradient } from '../lib/shader-configs';
   }
 
   .mobile-hero-background {
-    margin-bottom: -80dvh;
+    margin-bottom: -50dvh;
   }
 
   [data-hero-video] {

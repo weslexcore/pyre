@@ -25,27 +25,39 @@ function setupVideo(video: HTMLVideoElement) {
   });
 }
 
+function pauseWhenCovered(video: HTMLVideoElement, progress: number) {
+  if (progress >= PAUSE_THRESHOLD && !video.dataset.curtainPaused) {
+    video.pause();
+    video.dataset.curtainPaused = '1';
+  } else if (progress <= RESUME_THRESHOLD && video.dataset.curtainPaused) {
+    delete video.dataset.curtainPaused;
+    if (!document.hidden) video.play().catch(() => {});
+  }
+}
+
 export function initHeroCurtain(): (() => void) | null {
+  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video[data-hero-video]'));
+  for (const v of videos) setupVideo(v);
+
   const curtains = Array.from(document.querySelectorAll<HTMLElement>('[data-hero-curtain]'));
-  if (curtains.length === 0) return null;
+  const mobileVideo = document.querySelector<HTMLVideoElement>('video[data-hero-video="mobile"]');
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (reduceMotion) {
+    for (const curtain of curtains) curtain.style.transform = 'translate3d(0, 0, 0)';
+    for (const v of videos) {
+      v.pause();
+      v.dataset.curtainPaused = '1';
+    }
+    return null;
+  }
 
   const pairs = curtains.map((curtain) => {
     const role = curtain.dataset.heroCurtain ?? '';
     const video = document.querySelector<HTMLVideoElement>(`video[data-hero-video="${role}"]`);
-    if (video) setupVideo(video);
     return { curtain, video };
   });
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    for (const { curtain, video } of pairs) {
-      curtain.style.transform = 'translate3d(0, 0, 0)';
-      if (video) {
-        video.pause();
-        video.dataset.curtainPaused = '1';
-      }
-    }
-    return null;
-  }
 
   let lastProgress = -1;
 
@@ -59,15 +71,13 @@ export function initHeroCurtain(): (() => void) | null {
 
     for (const { curtain, video } of pairs) {
       curtain.style.transform = transform;
-      if (!video) continue;
+      if (video) pauseWhenCovered(video, progress);
+    }
 
-      if (progress >= PAUSE_THRESHOLD && !video.dataset.curtainPaused) {
-        video.pause();
-        video.dataset.curtainPaused = '1';
-      } else if (progress <= RESUME_THRESHOLD && video.dataset.curtainPaused) {
-        delete video.dataset.curtainPaused;
-        if (!document.hidden) video.play().catch(() => {});
-      }
+    // Mobile uses CSS sticky (no curtain element), but still pause its video
+    // once the sticky tile has fully covered the viewport.
+    if (mobileVideo && !pairs.some((p) => p.video === mobileVideo)) {
+      pauseWhenCovered(mobileVideo, progress);
     }
   }
 
