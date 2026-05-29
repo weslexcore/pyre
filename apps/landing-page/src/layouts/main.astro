@@ -39,6 +39,7 @@ interface Props {
   darkLogoText?: boolean;
   noIndex?: boolean;
   hidePromos?: boolean;
+  hidePromoPopup?: boolean;
 }
 
 const {
@@ -54,6 +55,7 @@ const {
   darkLogoText = false,
   noIndex = false,
   hidePromos = false,
+  hidePromoPopup = false,
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL ?? '/';
@@ -366,6 +368,6 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 			<slot />
 		</main>
 		{!isAdminRoute && <Footer />}
-		{!hidePromos && <PromoPopup />}
+		{!hidePromos && !hidePromoPopup && <PromoPopup />}
 	</body>
 </html>

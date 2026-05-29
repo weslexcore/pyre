@@ -99,7 +99,7 @@ const review: ReviewContent = {
     },
   },
   urls: {
-    google: "https://www.google.com/search?q=pyre+sauna",
+    google: "https://www.google.com/search?q=pyre+richmond+reviews",
     yelp: "https://www.yelp.com/writeareview/biz/s-pLbR9zcGMauIIMu_yxAw",
   },
   threshold: 5,
