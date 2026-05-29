@@ -13,6 +13,8 @@ export interface ExportEntry {
   duration?: number;
   /** Optional override of the output filename (without extension). */
   filename?: string;
+  /** PNG only: skip the default white canvas so the export has an alpha channel. */
+  transparent?: boolean;
 }
 
 export interface TransitionConfig {

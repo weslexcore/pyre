@@ -157,7 +157,10 @@ async function main(): Promise<void> {
     .description('Render Instagram posts from HTML/CSS to PNG/MP4')
     .argument('[post]', 'Post name (folder under posts/)')
     .option('--all', 'Render every post in posts/')
-    .option('--size <key>', 'Render only this size (square, portrait, landscape, reel, story)')
+    .option(
+      '--size <key>',
+      'Render only this size (square, portrait, landscape, reel, story, small-menu)'
+    )
     .parse(process.argv);
 
   const args = program.opts<RenderArgs>();

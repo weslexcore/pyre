@@ -1,4 +1,4 @@
-export type SizeKey = 'square' | 'portrait' | 'landscape' | 'reel' | 'story';
+export type SizeKey = 'square' | 'portrait' | 'landscape' | 'reel' | 'story' | 'small-menu';
 
 export interface Size {
   w: number;
@@ -12,6 +12,7 @@ export const SIZES: Record<SizeKey, Size> = {
   landscape: { w: 1080, h: 566, label: '1.91:1' },
   reel: { w: 1080, h: 1920, label: '9:16' },
   story: { w: 1080, h: 1920, label: '9:16' },
+  'small-menu': { w: 1080, h: 1920, label: '9:16' },
 };
 
 export const SIZE_KEYS = Object.keys(SIZES) as SizeKey[];

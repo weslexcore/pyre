@@ -23,11 +23,17 @@ export async function renderImage(opts: {
     if (opts.settleMs) {
       await page.waitForTimeout(opts.settleMs);
     }
+    const wantsTransparent = opts.entry.format === 'png' && opts.entry.transparent === true;
+    if (wantsTransparent) {
+      await page.addStyleTag({
+        content: 'html, body, .page, .post, .tpl-menu { background: transparent !important; }',
+      });
+    }
     await mkdir(dirname(opts.outPath), { recursive: true });
     await page.screenshot({
       path: opts.outPath,
       type: opts.entry.format === 'jpg' ? 'jpeg' : 'png',
-      omitBackground: false,
+      omitBackground: wantsTransparent,
       fullPage: false,
       clip: { x: 0, y: 0, width: size.w, height: size.h },
     });

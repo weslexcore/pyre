@@ -1,0 +1,172 @@
+/* Menu template — a single-category list with name/price rows and optional flavor chips.
+   Linkable via <link rel="stylesheet" href="/templates/menu/template.css">. */
+
+.tpl-menu {
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+  color: var(--pyre-black);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-6) var(--space-4);
+}
+
+.tpl-menu__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tpl-menu__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--pyre-red);
+}
+
+.tpl-menu__heading {
+  font-family: var(--font-display);
+  font-size: 88px;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--pyre-black);
+}
+
+.tpl-menu__items {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tpl-menu__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 30px 0;
+  border-top: 1px solid var(--pyre-black);
+}
+
+.tpl-menu__item:last-child {
+  border-bottom: 1px solid var(--pyre-black);
+}
+
+.tpl-menu__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tpl-menu__name {
+  font-family: var(--font-display);
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--pyre-black);
+}
+
+.tpl-menu__price {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--pyre-red);
+  white-space: nowrap;
+}
+
+.tpl-menu__description {
+  font-family: var(--font-mono);
+  /* font-style: italic; */
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--pyre-black);
+  max-width: 52ch;
+}
+
+.tpl-menu__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tpl-menu__chip {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--pyre-blue);
+  padding: 8px 14px;
+  border: 1px solid var(--pyre-blue);
+  border-radius: 999px;
+}
+
+.tpl-menu__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--pyre-black);
+  border-top: 2px solid var(--pyre-black);
+  padding-top: var(--space-3);
+}
+
+.tpl-menu__brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tpl-menu__brand {
+  font-family: var(--font-logo);
+  font-size: 28px;
+}
+
+/* Portrait (4:5) — slightly larger heading, same body sizing. */
+@media (aspect-ratio: 4/5) {
+  .tpl-menu__heading {
+    font-size: 128px;
+  }
+  .tpl-menu__description {
+    font-size: 22px;
+  }
+}
+
+/* Reel (9:16) — scale up so the card breathes on a tall canvas. */
+@media (aspect-ratio: 9/16) {
+  .tpl-menu {
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-8);
+  }
+  .tpl-menu__eyebrow {
+    font-size: 28px;
+  }
+  .tpl-menu__heading {
+    font-size: 168px;
+  }
+  .tpl-menu__name {
+    font-size: 56px;
+  }
+  .tpl-menu__price {
+    font-size: 40px;
+  }
+  .tpl-menu__description {
+    font-size: 26px;
+  }
+  .tpl-menu__chip {
+    font-size: 24px;
+    padding: 10px 18px;
+  }
+  .tpl-menu__footer {
+    font-size: 22px;
+  }
+  .tpl-menu__brand {
+    font-size: 34px;
+  }
+}

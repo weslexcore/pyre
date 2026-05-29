@@ -1,0 +1,7 @@
+/* Post-specific overrides for the drinks menu. Add tweaks here as needed. */
+
+/* Prints on brown cardstock — red lacks contrast, so use cream instead. */
+.tpl-menu__price {
+  color: var(--pyre-red);
+}
+
