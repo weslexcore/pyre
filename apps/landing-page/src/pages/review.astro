@@ -1,0 +1,76 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import ReviewFlow from '../components/review/ReviewFlow';
+import Layout from '../layouts/main.astro';
+import review from '../lib/review';
+
+const pageTitle = 'Leave a review | Pyre Sauna';
+const pageDescription =
+  'Tell us how your visit went. Five stars? Share it with the world. Anything less? We want to hear directly.';
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  noIndex={true}
+  transparentNav={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <!-- Hero -->
+    <section class="relative w-full min-h-[60dvh] flex items-center justify-center overflow-hidden">
+      <Image
+        src={review.hero.image}
+        alt={review.hero.imageAlt}
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center"
+        loading="eager"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/60"></div>
+      <div
+        class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/20 to-[var(--pyre-black)]/40"
+      ></div>
+
+      <div class="relative z-10 max-w-3xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-20 text-center">
+        <p
+          class="font-mono-bold text-base tracking-[0.2em] uppercase text-[var(--pyre-muted-gold)] mb-4"
+        >
+          {review.hero.eyebrow}
+        </p>
+        <h1
+          class="font-primary-semibold text-[clamp(2.25rem,5.5vw,4rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4 md:mb-6"
+        >
+          {review.hero.title}
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
+          {review.hero.subtitle}
+        </p>
+      </div>
+    </section>
+
+    <!-- Rating + branching -->
+    <section
+      aria-labelledby="review-intro-heading"
+      class="relative py-16 md:py-24 px-4 border-t border-current/10"
+    >
+      <div class="max-w-3xl mx-auto">
+        <div class="text-center mb-10 md:mb-14">
+          <h2
+            id="review-intro-heading"
+            class="font-primary-semibold text-[clamp(1.75rem,4vw,2.5rem)] tracking-[-0.02em] uppercase mb-3"
+          >
+            {review.intro.headline}
+          </h2>
+          <p class="text-base md:text-lg opacity-80 max-w-2xl mx-auto">
+            {review.intro.body}
+          </p>
+        </div>
+
+        <ReviewFlow client:visible />
+      </div>
+    </section>
+  </div>
+</Layout>
