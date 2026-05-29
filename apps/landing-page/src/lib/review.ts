@@ -2,15 +2,11 @@
  * Content + config for the /review page.
  *
  * Placeholders to swap before launch:
- *   - urls.google     → verified Google Business Profile review URL
- *   - urls.yelp       → Yelp write-a-review URL (or null to hide the CTA)
- *   - posthog.surveyId → ID of the "Pyre review feedback" Survey
- *                        (create in PostHog with NO display conditions so
- *                        posthog.renderSurvey() can mount it programmatically)
+ *   - urls.google → verified Google Business Profile review URL
+ *   - urls.yelp   → Yelp write-a-review URL (or null to hide the CTA)
  */
 
 export const REVIEW_URL_PLACEHOLDER = 'TODO_GOOGLE_REVIEW_URL';
-export const REVIEW_SURVEY_PLACEHOLDER = '019e74e7-ebd1-0000-7ff2-7299d4bc46d0';
 
 import heroImage from '../assets/images/cold_smile.webp';
 
@@ -35,33 +31,17 @@ export interface ReviewContent {
     body: string;
     googleCta: { label: string; ariaLabel: string };
     yelpCta: { label: string; ariaLabel: string };
+    privateFeedbackLink: { label: string; ariaLabel: string };
   };
-  detractor: {
-    headline: string;
-    body: string;
-    alsoPublicLink: { label: string; ariaLabel: string };
-  };
-  fallback: {
+  feedback: {
     headline: string;
     body: string;
     emailCta: { label: string; ariaLabel: string };
+    alsoPublicLink: { label: string; ariaLabel: string };
   };
   urls: {
     google: string;
     yelp: string | null;
-  };
-  posthog: {
-    surveyId: string;
-    events: {
-      pageViewed: 'review_page_viewed';
-      ratingSubmitted: 'review_rating_submitted';
-      surveyRendered: 'review_survey_rendered';
-      surveyRenderFailed: 'review_survey_render_failed';
-      platformClicked: 'review_platform_clicked';
-      detractorPublicLinkClicked: 'review_detractor_public_link_clicked';
-      fallbackClicked: 'review_fallback_clicked';
-      ratingChanged: 'review_rating_changed';
-    };
   };
   threshold: 5;
   fallbackEmail: string;
@@ -101,39 +81,26 @@ const review: ReviewContent = {
       label: 'Review on Yelp',
       ariaLabel: 'Leave a review on Yelp (opens in a new tab)',
     },
+    privateFeedbackLink: {
+      label: 'Or send us private feedback →',
+      ariaLabel: 'Send private feedback to Pyre via email',
+    },
   },
-  detractor: {
+  feedback: {
     headline: 'Thanks for the honesty.',
-    body: 'Tell us what could have been better. Everything you write goes straight to the team — no public posting.',
+    body: 'Tell us what could have been better — we read every message and respond personally.',
+    emailCta: {
+      label: 'Send feedback',
+      ariaLabel: 'Open your email client to send feedback to Pyre',
+    },
     alsoPublicLink: {
       label: 'You can also leave a public review →',
       ariaLabel: 'Leave a public review on Google (opens in a new tab)',
     },
   },
-  fallback: {
-    headline: "Let's take it to email.",
-    body: 'Send your feedback directly — we read every message and respond personally.',
-    emailCta: {
-      label: 'Email us',
-      ariaLabel: 'Open your email client to send feedback to Pyre',
-    },
-  },
   urls: {
-    google: REVIEW_URL_PLACEHOLDER,
-    yelp: null,
-  },
-  posthog: {
-    surveyId: REVIEW_SURVEY_PLACEHOLDER,
-    events: {
-      pageViewed: 'review_page_viewed',
-      ratingSubmitted: 'review_rating_submitted',
-      surveyRendered: 'review_survey_rendered',
-      surveyRenderFailed: 'review_survey_render_failed',
-      platformClicked: 'review_platform_clicked',
-      detractorPublicLinkClicked: 'review_detractor_public_link_clicked',
-      fallbackClicked: 'review_fallback_clicked',
-      ratingChanged: 'review_rating_changed',
-    },
+    google: "https://www.google.com/search?q=pyre+sauna",
+    yelp: "https://www.yelp.com/writeareview/biz/s-pLbR9zcGMauIIMu_yxAw",
   },
   threshold: 5,
   fallbackEmail: 'hi@pyresauna.com',

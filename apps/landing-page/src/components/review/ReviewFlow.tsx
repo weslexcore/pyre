@@ -1,115 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import review, {
-  REVIEW_SURVEY_PLACEHOLDER,
-  REVIEW_URL_PLACEHOLDER,
-} from '@/lib/review';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import review, { REVIEW_URL_PLACEHOLDER } from '@/lib/review';
 
-type Branch = 'idle' | 'promoter' | 'detractor' | 'fallback';
+type Branch = 'idle' | 'promoter' | 'feedback';
 type Rating = 1 | 2 | 3 | 4 | 5;
-
-// PostHog is loaded only in production (main.astro gates it on import.meta.env.PROD).
-// In dev, window.posthog is undefined, the survey watchdog trips after 4s, and the
-// flow falls through to the email fallback branch. This is expected dev-mode behavior.
-interface PostHog {
-  capture: (event: string, props?: Record<string, unknown>) => void;
-  renderSurvey: (surveyId: string, selector: string) => void;
-}
-
-declare global {
-  interface Window {
-    posthog?: PostHog;
-  }
-}
-
-function track(event: string, props?: Record<string, unknown>) {
-  if (typeof window !== 'undefined' && window.posthog) {
-    window.posthog.capture(event, props);
-  }
-}
-
-const SURVEY_WATCHDOG_MS = 4000;
-const MOUNT_ID = 'pyre-feedback-mount';
 
 export default function ReviewFlow() {
   const [branch, setBranch] = useState<Branch>('idle');
   const [rating, setRating] = useState<Rating | 0>(0);
   const [hover, setHover] = useState<Rating | 0>(0);
 
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const watchdogRef = useRef<number | null>(null);
   const starsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const events = review.posthog.events;
   const googleConfigured =
     review.urls.google && review.urls.google !== REVIEW_URL_PLACEHOLDER;
   const yelpConfigured =
     review.urls.yelp && review.urls.yelp !== REVIEW_URL_PLACEHOLDER;
-  const surveyConfigured =
-    review.posthog.surveyId && review.posthog.surveyId !== REVIEW_SURVEY_PLACEHOLDER;
-
-  useEffect(() => {
-    track(events.pageViewed);
-  }, [events.pageViewed]);
-
-  const clearSurveyMount = useCallback(() => {
-    if (mountRef.current) {
-      mountRef.current.innerHTML = '';
-    }
-    if (watchdogRef.current !== null) {
-      window.clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => clearSurveyMount, [clearSurveyMount]);
 
   const handleChangeRating = useCallback(() => {
-    track(events.ratingChanged, { from: rating });
-    clearSurveyMount();
     setBranch('idle');
     setRating(0);
     setHover(0);
-  }, [events.ratingChanged, rating, clearSurveyMount]);
+  }, []);
 
   const handleSubmit = useCallback(() => {
     if (rating === 0) return;
-    track(events.ratingSubmitted, { rating });
-
-    if (rating >= review.threshold) {
-      setBranch('promoter');
-      return;
-    }
-
-    if (!surveyConfigured) {
-      track(events.surveyRenderFailed, { rating, reason: 'unconfigured' });
-      setBranch('fallback');
-      return;
-    }
-
-    setBranch('detractor');
-    // Render the survey on the next tick so the mount node is in the DOM.
-    requestAnimationFrame(() => {
-      if (!mountRef.current) return;
-      try {
-        window.posthog?.renderSurvey(review.posthog.surveyId, `#${MOUNT_ID}`);
-        track(events.surveyRendered, { rating });
-      } catch {
-        // fall through to watchdog
-      }
-      watchdogRef.current = window.setTimeout(() => {
-        if (mountRef.current && mountRef.current.childElementCount === 0) {
-          track(events.surveyRenderFailed, { rating, reason: 'no-render' });
-          setBranch('fallback');
-        }
-      }, SURVEY_WATCHDOG_MS);
-    });
-  }, [
-    rating,
-    events.ratingSubmitted,
-    events.surveyRendered,
-    events.surveyRenderFailed,
-    surveyConfigured,
-  ]);
+    setBranch(rating >= review.threshold ? 'promoter' : 'feedback');
+  }, [rating]);
 
   const focusStar = useCallback((index: number) => {
     const el = starsRef.current[index];
@@ -147,15 +63,6 @@ export default function ReviewFlow() {
     [rating, focusStar, handleSubmit],
   );
 
-  const handlePlatformClick = (platform: 'google' | 'yelp', url: string) => {
-    track(events.platformClicked, { platform, rating });
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleDetractorPublicClick = () => {
-    track(events.detractorPublicLinkClicked, { rating });
-  };
-
   const mailtoHref = useMemo(() => {
     const subject = encodeURIComponent('Pyre feedback');
     const body = encodeURIComponent(
@@ -163,10 +70,6 @@ export default function ReviewFlow() {
     );
     return `mailto:${review.fallbackEmail}?subject=${subject}&body=${body}`;
   }, [rating]);
-
-  const handleFallbackClick = () => {
-    track(events.fallbackClicked, { rating });
-  };
 
   const stars: Rating[] = [1, 2, 3, 4, 5];
   const activeForDisplay = hover || rating;
@@ -234,7 +137,7 @@ export default function ReviewFlow() {
             </div>
 
             <p className="font-mono-bold text-xs uppercase tracking-wide opacity-70 h-5 mb-8">
-              {activeForDisplay > 0 ? review.ratingLabels[activeForDisplay as Rating] : ' '}
+              {activeForDisplay > 0 ? review.ratingLabels[activeForDisplay as Rating] : ' '}
             </p>
 
             <button
@@ -258,24 +161,26 @@ export default function ReviewFlow() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               {googleConfigured && (
-                <button
-                  type="button"
+                <a
+                  href={review.urls.google}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={review.promoter.googleCta.ariaLabel}
-                  onClick={() => handlePlatformClick('google', review.urls.google)}
                   className="inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-6 py-3 text-base border-2 border-transparent bg-[var(--primary)] text-[var(--pyre-creme)] hover:opacity-90"
                 >
                   {review.promoter.googleCta.label}
-                </button>
+                </a>
               )}
               {yelpConfigured && review.urls.yelp && (
-                <button
-                  type="button"
+                <a
+                  href={review.urls.yelp}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={review.promoter.yelpCta.ariaLabel}
-                  onClick={() => handlePlatformClick('yelp', review.urls.yelp as string)}
                   className="inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-6 py-3 text-base border-2 border-current text-current bg-transparent hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
                 >
                   {review.promoter.yelpCta.label}
-                </button>
+                </a>
               )}
             </div>
             {!googleConfigured && (
@@ -283,73 +188,53 @@ export default function ReviewFlow() {
                 Review link coming soon — thank you for your support.
               </p>
             )}
+            <div className="mt-6">
+              <a
+                href={mailtoHref}
+                aria-label={review.promoter.privateFeedbackLink.ariaLabel}
+                className="text-xs opacity-60 hover:opacity-100 underline underline-offset-4"
+              >
+                {review.promoter.privateFeedbackLink.label}
+              </a>
+            </div>
             <button
               type="button"
               onClick={handleChangeRating}
-              className="mt-8 text-sm underline underline-offset-4 opacity-70 hover:opacity-100"
+              className="mt-6 text-sm underline underline-offset-4 opacity-70 hover:opacity-100"
             >
               {review.changeRatingLabel}
             </button>
           </div>
         )}
 
-        {branch === 'detractor' && (
-          <div>
-            <div className="text-center mb-6">
-              <h2 className="font-primary-semibold text-[clamp(1.5rem,3.5vw,2rem)] uppercase tracking-[-0.01em] mb-3">
-                {review.detractor.headline}
-              </h2>
-              <p className="text-base md:text-lg opacity-80 max-w-md mx-auto">
-                {review.detractor.body}
-              </p>
-            </div>
-            <div
-              ref={mountRef}
-              id={MOUNT_ID}
-              className="min-h-[8rem]"
-            />
+        {branch === 'feedback' && (
+          <div className="text-center">
+            <h2 className="font-primary-semibold text-[clamp(1.5rem,3.5vw,2rem)] uppercase tracking-[-0.01em] mb-3">
+              {review.feedback.headline}
+            </h2>
+            <p className="text-base md:text-lg opacity-80 max-w-md mx-auto mb-8">
+              {review.feedback.body}
+            </p>
+            <a
+              href={mailtoHref}
+              aria-label={review.feedback.emailCta.ariaLabel}
+              className="inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-6 py-3 text-base border-2 border-transparent bg-[var(--primary)] text-[var(--pyre-creme)] hover:opacity-90"
+            >
+              {review.feedback.emailCta.label}
+            </a>
             {googleConfigured && (
-              <div className="mt-6 text-center">
+              <div className="mt-6">
                 <a
                   href={review.urls.google}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={review.detractor.alsoPublicLink.ariaLabel}
-                  onClick={handleDetractorPublicClick}
+                  aria-label={review.feedback.alsoPublicLink.ariaLabel}
                   className="text-xs opacity-60 hover:opacity-100 underline underline-offset-4"
                 >
-                  {review.detractor.alsoPublicLink.label}
+                  {review.feedback.alsoPublicLink.label}
                 </a>
               </div>
             )}
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={handleChangeRating}
-                className="text-sm underline underline-offset-4 opacity-70 hover:opacity-100"
-              >
-                {review.changeRatingLabel}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {branch === 'fallback' && (
-          <div className="text-center">
-            <h2 className="font-primary-semibold text-[clamp(1.5rem,3.5vw,2rem)] uppercase tracking-[-0.01em] mb-3">
-              {review.fallback.headline}
-            </h2>
-            <p className="text-base md:text-lg opacity-80 max-w-md mx-auto mb-8">
-              {review.fallback.body}
-            </p>
-            <a
-              href={mailtoHref}
-              aria-label={review.fallback.emailCta.ariaLabel}
-              onClick={handleFallbackClick}
-              className="inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-6 py-3 text-base border-2 border-transparent bg-[var(--primary)] text-[var(--pyre-creme)] hover:opacity-90"
-            >
-              {review.fallback.emailCta.label}
-            </a>
             <div className="mt-8">
               <button
                 type="button"
