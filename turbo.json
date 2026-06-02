@@ -8,7 +8,8 @@
         "$TURBO_DEFAULT$",
         "apps/booking-system/.env*",
         "apps/landing-page/.env*",
-        "apps/data-dashboard/.env*"
+        "apps/data-dashboard/.env*",
+        "apps/automations/.env*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", ".astro/**"]
     },
@@ -20,7 +21,8 @@
         "$TURBO_DEFAULT$",
         "apps/booking-system/.env*",
         "apps/landing-page/.env*",
-        "apps/data-dashboard/.env*"
+        "apps/data-dashboard/.env*",
+        "apps/automations/.env*"
       ]
     },
     "lint": {

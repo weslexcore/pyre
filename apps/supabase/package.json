@@ -1,0 +1,19 @@
+{
+  "name": "@pyre/supabase",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "yarn@4.13.0",
+  "scripts": {
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "status": "supabase status",
+    "reset": "supabase db reset",
+    "migrate": "supabase migration up",
+    "db:diff": "supabase db diff",
+    "db:push": "supabase db push",
+    "gen:types": "supabase gen types typescript --local --schema public"
+  },
+  "devDependencies": {
+    "supabase": "^1.200.0"
+  }
+}
