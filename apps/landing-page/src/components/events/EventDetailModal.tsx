@@ -270,7 +270,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
 
           {/* Description */}
           {event.description && (
-            <p className="mt-5 font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
+            <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
               {event.description}
             </p>
           )}
