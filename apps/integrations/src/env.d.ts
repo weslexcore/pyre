@@ -27,6 +27,8 @@ interface ImportMetaEnv {
   readonly EMAIL_DEV_WHITELIST?: string;
   // Public base URL for links in emails (e.g. https://pyresauna.com)
   readonly PUBLIC_SITE_URL?: string;
+  // Base URL for hosted email images (defaults to this app's production deployment)
+  readonly PUBLIC_EMAIL_ASSET_BASE?: string;
 }
 
 interface ImportMeta {
