@@ -1,8 +1,8 @@
 // React hook for fetching member memberships
 // Delegates to shared MemberDataContext
 
-import type { MemberMembership } from '@/lib/momence-member-types';
 import { useMemberData } from '@/hooks/useMemberData';
+import type { MemberMembership } from '@/lib/momence-member-types';
 
 interface UseMemberMembershipsResult {
   memberships: MemberMembership[];

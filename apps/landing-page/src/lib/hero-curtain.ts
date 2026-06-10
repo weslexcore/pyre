@@ -1,4 +1,4 @@
-import { onScroll, getScrollData, type ScrollData } from './scroll-coordinator';
+import { getScrollData, onScroll, type ScrollData } from './scroll-coordinator';
 
 const PAUSE_THRESHOLD = 0.95;
 const RESUME_THRESHOLD = 0.85;

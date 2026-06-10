@@ -2,13 +2,13 @@
 export const prerender = false;
 
 import { getCollection } from 'astro:content';
+import ogImg from '@/assets/images/cyano_sweat_logo.jpg';
 import BlogPostCard from '@/components/blog/BlogPostCard.astro';
 import BlogSearch from '@/components/blog/BlogSearch.astro';
 import BlogTagFilter from '@/components/blog/BlogTagFilter.astro';
 import GradientOverlay from '@/components/GradientOverlay.astro';
 import MainLayout from '@/layouts/main.astro';
 import { BLOG_CONFIG } from '@/lib/blog-config';
-import ogImg from '@/assets/images/cyano_sweat_logo.jpg';
 import { calculateReadingTime } from '@/lib/reading-time';
 import type { BlogPostCard as BlogPostCardType, TagWithCount } from '@/lib/types';
 
@@ -63,8 +63,7 @@ const description =
   'Explore articles about sauna wellness, health benefits, and the Pyre community.';
 
 // Noindex filtered/search views — they have no unique content vs the base /blog page
-const hasFilter =
-  Astro.url.searchParams.has('tag') || Astro.url.searchParams.has('q');
+const hasFilter = Astro.url.searchParams.has('tag') || Astro.url.searchParams.has('q');
 ---
 
 <MainLayout title={title} description={description} transparentNav ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height} noIndex={hasFilter}>

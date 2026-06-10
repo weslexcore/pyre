@@ -2,7 +2,7 @@
 // Single fetch for memberships + credits, shared across components
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import type { MemberMembership, MemberCredits } from '@/lib/momence-member-types';
+import type { MemberCredits, MemberMembership } from '@/lib/momence-member-types';
 
 export interface MemberDataResult {
   memberships: MemberMembership[];

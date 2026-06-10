@@ -43,7 +43,10 @@ function parseLimit(raw: string | null): number | null {
   return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, parsed));
 }
 
-function filterEventsByWindow(events: EventItem[], windowDays: number): { eventsInWindow: EventItem[]; outsideWindowCount: number } {
+function filterEventsByWindow(
+  events: EventItem[],
+  windowDays: number
+): { eventsInWindow: EventItem[]; outsideWindowCount: number } {
   const cutoff = Date.now() + windowDays * 24 * 60 * 60 * 1000;
   const eventsInWindow: EventItem[] = [];
   let outsideWindowCount = 0;
@@ -121,9 +124,8 @@ export const GET: APIRoute = async ({ url }) => {
       events = allEvents;
       hasMore = false;
     } else if (limit !== null) {
-      const candidateEvents = daysParam === null
-        ? allEvents
-        : filterEventsByWindow(allEvents, windowDays).eventsInWindow;
+      const candidateEvents =
+        daysParam === null ? allEvents : filterEventsByWindow(allEvents, windowDays).eventsInWindow;
       events = candidateEvents.slice(0, limit);
       hasMore = candidateEvents.length > limit;
     } else {

@@ -19,10 +19,6 @@ const instagramBadge = {
   margin: '0 auto 24px',
 };
 
-const logoMark = {
-  margin: '0 auto 28px',
-};
-
 const footerText = {
   color: COLORS.creme,
   fontSize: '13px',

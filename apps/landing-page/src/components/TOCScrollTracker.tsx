@@ -2,8 +2,8 @@
  * React island component for TOC scroll tracking and intersection observer functionality
  */
 
-import type { TOCConfig, TOCHeader, TOCSection } from '../lib/toc-types';
 import { onScroll } from '../lib/scroll-coordinator';
+import type { TOCConfig, TOCHeader, TOCSection } from '../lib/toc-types';
 import {
   buildTOCTree,
   calculateReadingProgress,

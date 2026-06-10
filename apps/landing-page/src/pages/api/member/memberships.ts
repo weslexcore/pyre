@@ -4,10 +4,10 @@
 import type { APIRoute } from 'astro';
 import { getValidAccessToken } from '@/lib/auth-session';
 import type {
-  MemberMembership,
   MemberCredits,
-  MomenceBoughtMembershipsResponse,
+  MemberMembership,
   MomenceBoughtMembershipPayload,
+  MomenceBoughtMembershipsResponse,
 } from '@/lib/momence-member-types';
 
 export const prerender = false;

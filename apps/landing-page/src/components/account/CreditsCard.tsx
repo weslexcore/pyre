@@ -3,8 +3,8 @@
 
 import { useMemberCredits } from '@/hooks/useMemberCredits';
 import { accountConfig } from '@/lib/account-config';
-import sessions from '@/lib/sessions';
 import type { SessionItem } from '@/lib/sessions';
+import sessions from '@/lib/sessions';
 
 export function CreditsCard() {
   const { credits, hasCredits, loading, error } = useMemberCredits();

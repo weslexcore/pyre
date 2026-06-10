@@ -3,9 +3,9 @@
 // Users are directed to Momence to update their profile
 
 import { useEffect, useState } from 'react';
-import type { MomenceUserProfile } from '@/lib/momence-oauth-types';
-import { accountConfig } from '@/lib/account-config';
 import { getLocalProfileOverrides } from '@/hooks/useUpdateProfile';
+import { accountConfig } from '@/lib/account-config';
+import type { MomenceUserProfile } from '@/lib/momence-oauth-types';
 
 interface ProfileCardProps {
   user: MomenceUserProfile;

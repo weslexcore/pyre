@@ -1,16 +1,23 @@
-import { Button, Column, Row, Section, Text } from '@react-email/components';
+import { Button, Column, Img, Row, Section, Text } from '@react-email/components';
 import type { ConfirmationEmailProps } from '../types';
 import { button, COLORS, EmailLayout, heading, text } from './EmailLayout';
 
+const headerImage = {
+  width: '100%',
+  height: 'auto',
+  borderRadius: '8px',
+  margin: '0 0 24px',
+};
+
 const detailsSection = {
-  backgroundColor: 'rgba(245, 241, 233, 0.08)',
+  backgroundColor: COLORS.creme,
   borderRadius: '8px',
   margin: '0 0 24px',
   padding: '20px 24px',
 };
 
 const labelStyle = {
-  color: 'rgba(245, 241, 233, 0.6)',
+  color: COLORS.black,
   fontSize: '12px',
   letterSpacing: '0.06em',
   margin: '0 0 2px',
@@ -18,7 +25,7 @@ const labelStyle = {
 };
 
 const valueStyle = {
-  color: COLORS.creme,
+  color: COLORS.black,
   fontSize: '16px',
   fontWeight: 600,
   margin: '0 0 14px',
@@ -28,6 +35,7 @@ interface BaseProps extends ConfirmationEmailProps {
   preview: string;
   headingText: string;
   intro: string;
+  headerImageUrl?: string;
 }
 
 /**
@@ -44,9 +52,13 @@ export function ConfirmationEmail({
   preview,
   headingText,
   intro,
+  headerImageUrl,
 }: BaseProps) {
   return (
     <EmailLayout preview={preview}>
+      {headerImageUrl && (
+        <Img src={headerImageUrl} width="512" height="512" alt="" style={headerImage} />
+      )}
       <Text style={heading}>{headingText}</Text>
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>

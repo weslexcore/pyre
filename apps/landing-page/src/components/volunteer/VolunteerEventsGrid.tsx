@@ -43,9 +43,7 @@ function writeCache(events: EventItem[]): void {
 
 function dispatchEmptyState(isEmpty: boolean): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(
-    new CustomEvent('volunteer-events-state', { detail: { isEmpty } })
-  );
+  window.dispatchEvent(new CustomEvent('volunteer-events-state', { detail: { isEmpty } }));
 }
 
 function CardSkeleton() {
@@ -64,8 +62,7 @@ function CardSkeleton() {
 }
 
 function VolunteerCard({ event }: { event: EventItem }) {
-  const ctaLabel =
-    event.spotsRemaining === 0 ? 'Join Waitlist' : (event.cta?.label ?? 'Sign up');
+  const ctaLabel = event.spotsRemaining === 0 ? 'Join Waitlist' : (event.cta?.label ?? 'Sign up');
 
   return (
     <li className="flex flex-col overflow-hidden border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 hover:border-[var(--pyre-muted-gold)]/60 transition-colors">

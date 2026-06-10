@@ -3,11 +3,11 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { accountConfig } from '@/lib/account-config';
+import { AttendedSessionsList } from './AttendedSessionsList';
 import { CreditsCard } from './CreditsCard';
 import { MemberDataProvider } from './MemberDataProvider';
 import { MembershipCard } from './MembershipCard';
 import { ProfileCard } from './ProfileCard';
-import { AttendedSessionsList } from './AttendedSessionsList';
 import { SessionsList } from './SessionsList';
 
 export function AccountDashboard() {

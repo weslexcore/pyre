@@ -16,7 +16,11 @@ const privateRentals: PrivateRentalsContent = {
       name: 'One unit (6-12 people)',
       price: 650,
       extraDayPrice: 150,
-      features: ['One six-person sauna + cold plunge', '24 hours on site', 'Delivery & pick-up included'],
+      features: [
+        'One six-person sauna + cold plunge',
+        '24 hours on site',
+        'Delivery & pick-up included',
+      ],
       imageAlt: 'Mobile sauna and cold plunge unit for private rental',
     },
     {

@@ -1,17 +1,17 @@
 ---
 export const prerender = true;
 
-import EventDateFilter from "@/components/events/EventDateFilter.astro";
-import EventsGrid from "@/components/events/EventsGrid";
-import GradientOverlay from "@/components/GradientOverlay.astro";
-import MainLayout from "@/layouts/main.astro";
-import fallbackEvents from "@/lib/events";
-import ogImg from "@/assets/images/warm_sauna.webp";
+import ogImg from '@/assets/images/warm_sauna.webp';
+import EventDateFilter from '@/components/events/EventDateFilter.astro';
+import EventsGrid from '@/components/events/EventsGrid';
+import GradientOverlay from '@/components/GradientOverlay.astro';
+import MainLayout from '@/layouts/main.astro';
+import fallbackEvents from '@/lib/events';
 
 // SEO metadata
-const title = "Events - Pyre";
+const title = 'Events - Pyre';
 const description =
-	"Browse and book upcoming sauna sessions, cold plunge classes, and guided wellness events at Pyre in Richmond, VA.";
+  'Browse and book upcoming sauna sessions, cold plunge classes, and guided wellness events at Pyre in Richmond, VA.';
 ---
 
 <MainLayout title={title} description={description} transparentNav={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>

@@ -1,8 +1,8 @@
 // React hook for fetching member credits
 // Delegates to shared MemberDataContext
 
-import type { MemberCredits } from '@/lib/momence-member-types';
 import { useMemberData } from '@/hooks/useMemberData';
+import type { MemberCredits } from '@/lib/momence-member-types';
 
 interface UseMemberCreditsResult {
   credits: MemberCredits | null;

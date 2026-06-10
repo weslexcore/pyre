@@ -1,11 +1,10 @@
-import type { ShopContent } from './types';
-
 import bathouseTote1 from '../assets/images/merch/bathhouse-tote/DSCF4134.webp';
 import bathouseTote2 from '../assets/images/merch/bathhouse-tote/DSCF4135.webp';
-import dualityShirt1 from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 import dualityShirt4 from '../assets/images/merch/duality-shirt/DSCF4126.webp';
+import dualityShirt1 from '../assets/images/merch/duality-shirt/DSCF4130.webp';
 import ogSticker from '../assets/images/merch/pyre-og-sticker/DSCF4141.webp';
 import ogSticker2 from '../assets/images/merch/pyre-og-sticker/DSCF4143.webp';
+import type { ShopContent } from './types';
 
 const shop: ShopContent = {
   title: 'Shop',
@@ -45,7 +44,7 @@ const shop: ShopContent = {
     {
       id: 'og-sticker',
       momenceId: 439371,
-      name:  'OG Sticker',
+      name: 'OG Sticker',
       // description:
       //   'A limited edition sticker featuring the Pyre logo.',
       price: 3,

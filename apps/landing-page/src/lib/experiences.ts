@@ -1,5 +1,5 @@
-import type { BenefitsContent } from './types';
 import { withBase } from './paths';
+import type { BenefitsContent } from './types';
 
 const benefits: BenefitsContent = {
   title: 'Experiences',

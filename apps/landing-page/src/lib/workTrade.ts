@@ -69,7 +69,7 @@ const workTrade: WorkTradeContent = {
     eyebrow: 'Work trade & volunteering',
     title: 'Volunteer your time. Sauna on us.',
     subtitle:
-      'Join a work day with the Pyre crew — gardening, litter pickups, build days — and we\'ll drop a free session credit on your account. One day, one free session.',
+      "Join a work day with the Pyre crew — gardening, litter pickups, build days — and we'll drop a free session credit on your account. One day, one free session.",
     image: { src: heroImg, alt: 'Pyre community gathering' },
     video: {
       webm: '/videos/IMG_4864.3262cda3eeaabddd.720p.webm',
@@ -105,7 +105,7 @@ const workTrade: WorkTradeContent = {
       {
         title: '2. Show up & pitch in',
         description:
-          'Meet the crew on-site. We\'ll handle tools, gloves and equipment — you bring the work ethic.',
+          "Meet the crew on-site. We'll handle tools, gloves and equipment — you bring the work ethic.",
       },
       {
         title: '3. Get your credit',
@@ -125,22 +125,22 @@ const workTrade: WorkTradeContent = {
       'Volunteers must be 18 or older.',
       'You must check in with the day lead at the start and end of the event for your day to count.',
       'Credits are issued to the account of the person who signs up to volunteer.',
-      'If weather or staffing forces us to cancel, we\'ll reschedule and you keep priority signup.',
+      "If weather or staffing forces us to cancel, we'll reschedule and you keep priority signup.",
     ],
   },
   events: {
     title: 'Upcoming volunteer days',
     subtitle:
-      'Each day is a different focus. Pick what sounds fun, sign up, and we\'ll see you there.',
+      "Each day is a different focus. Pick what sounds fun, sign up, and we'll see you there.",
     emptyState: {
       heading: 'Get notified when the next volunteer day drops',
-      body: 'No volunteer days are scheduled right now. Drop your email and we\'ll let you know the moment we open signups for the next one.',
+      body: "No volunteer days are scheduled right now. Drop your email and we'll let you know the moment we open signups for the next one.",
       successMessage: "You're on the list. We'll send the next volunteer day your way.",
     },
   },
   contact: {
     title: 'Have a project in mind?',
-    body: 'Running a community cleanup, trail day, or community-build project we should join? We love showing up. Send us the details and we\'ll see if we can help.',
+    body: "Running a community cleanup, trail day, or community-build project we should join? We love showing up. Send us the details and we'll see if we can help.",
     email: 'hi@pyresauna.com',
     cta: {
       label: 'Email the team',
