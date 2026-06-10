@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { isAdminEmail } from '@/lib/admin';
 import { validateSession } from '@/lib/auth-session';
-import { getExecution, getRecentExecutions } from '@/lib/webhooks/execution-store';
+import { getExecution, getRecentExecutions } from '@pyre/webhook-core';
 
 export const prerender = false;
 

@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { isAdminEmail } from '@/lib/admin';
 import { validateSession } from '@/lib/auth-session';
-import { listTags } from '@/lib/webhooks/mailchimp';
+import { listTags } from '@pyre/webhook-core';
 
 export const prerender = false;
 

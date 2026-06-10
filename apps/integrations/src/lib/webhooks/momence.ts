@@ -294,3 +294,73 @@ export async function fetchMomenceMembers(
     pageSize,
   };
 }
+
+// --- First-timer detection ---
+//
+// Determine whether a member has any session bookings OTHER than the one that
+// just triggered the webhook, using the host token. Returns:
+//   true  -> this is their first ever booking
+//   false -> they have prior bookings
+//   null  -> could not determine (endpoint unknown/unavailable) -> caller fails SAFE
+//
+// NOTE: the exact host endpoint/shape for a member's booking history is the
+// biggest unknown in this feature. We try the most plausible host endpoint and
+// log the raw response so the shape can be confirmed against the live API. If it
+// errors or the shape is unrecognized, we return null and the caller skips the
+// first-timer email rather than risk sending it to an existing member.
+export async function isMemberFirstBooking(
+  memberId: string,
+  currentSessionBookingId: number
+): Promise<boolean | null> {
+  try {
+    const accessToken = await getHostAccessToken();
+
+    // pageSize=2 is enough: we only need to know whether >1 booking exists.
+    const params = new URLSearchParams({ page: '0', pageSize: '2', sortOrder: 'DESC' });
+    const url = `${MOMENCE_API_V2}/host/members/${memberId}/session-bookings?${params}`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      log.warn(
+        `First-timer check: bookings endpoint returned ${response.status} for member ${memberId} — skipping (fail safe)`,
+        { url, body: responseText.slice(0, 500) }
+      );
+      return null;
+    }
+
+    const data = JSON.parse(responseText);
+    const pagination = data.pagination ?? {};
+    const total: unknown = pagination.total ?? pagination.totalCount;
+    const payload = data.payload;
+
+    // Log the shape once so we can confirm/refine against real responses.
+    log.info(`First-timer check for member ${memberId}`, {
+      total,
+      payloadLength: Array.isArray(payload) ? payload.length : undefined,
+      currentSessionBookingId,
+    });
+
+    if (typeof total === 'number') {
+      // The just-created booking is included in the count.
+      return total <= 1;
+    }
+
+    if (Array.isArray(payload)) {
+      const others = payload.filter((b: { id?: number }) => b?.id !== currentSessionBookingId);
+      return others.length === 0;
+    }
+
+    log.warn(
+      `First-timer check: unrecognized response shape for member ${memberId} — skipping (fail safe)`
+    );
+    return null;
+  } catch (error) {
+    log.warn(`First-timer check failed for member ${memberId} — skipping (fail safe)`, error);
+    return null;
+  }
+}

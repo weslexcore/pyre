@@ -1,0 +1,39 @@
+{
+  "name": "@pyre/integrations",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "email": "email dev --dir src/emails/templates --port 3030",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "type-check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "0.9.9",
+    "@astrojs/react": "5.0.4",
+    "@astrojs/vercel": "10.0.6",
+    "@pyre/webhook-core": "workspace:^",
+    "@react-email/components": "^0.0.36",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "astro": "6.2.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "resend": "^4.6.0",
+    "typescript": "^5.9.2"
+  },
+  "packageManager": "yarn@4.13.0",
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.2",
+    "@types/node": "^22.10.1",
+    "react-email": "^3.0.7"
+  }
+}

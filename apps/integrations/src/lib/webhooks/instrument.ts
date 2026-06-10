@@ -1,4 +1,4 @@
-import { recordExecution, WebhookTracer, type WebhookExecution } from '@pyre/webhook-core';
+import { recordExecution, type WebhookExecution, WebhookTracer } from '@pyre/webhook-core';
 import type { APIContext, APIRoute } from 'astro';
 
 export type TracedAPIRoute = (context: APIContext, tracer: WebhookTracer) => Promise<Response>;
