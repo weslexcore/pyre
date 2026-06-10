@@ -19,6 +19,8 @@ interface MomenceEventLite {
   dateTime: string; // ISO 8601
   duration: number; // minutes
   location?: string;
+  image1?: string | null;
+  image2?: string | null;
 }
 
 export interface ResolvedSession {
@@ -29,6 +31,8 @@ export interface ResolvedSession {
   timeLabel: string; // e.g. "6:00 PM - 8:00 PM"
   location: string;
   isoDate: string;
+  /** The event's own image (same one shown on the landing page), if it has one. */
+  imageUrl?: string;
 }
 
 /**
@@ -136,6 +140,7 @@ export async function resolveSession(sessionId: number): Promise<ResolvedSession
       timeLabel: formatTimeRange(event.dateTime, event.duration),
       location: event.location || 'Pyre Sauna',
       isoDate: event.dateTime,
+      imageUrl: event.image1 || event.image2 || undefined,
     };
   } catch (error) {
     log.warn(`Failed to resolve session ${sessionId}`, error);

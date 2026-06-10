@@ -32,21 +32,21 @@ export function FirstTimerWelcome({
       preview="Welcome to Pyre — what to expect for your first session"
       background="trees"
     >
-      <Text style={heading}>Welcome to Pyre, {firstName}</Text>
+      <Text style={heading}>Welcome, {firstName}</Text>
       <Text style={text}>
         We're so glad you booked your first session. Here's a little of what to expect so you can
-        walk in relaxed and ready.
+        walk in feeling relaxed and ready.
       </Text>
       <Text style={text}>
-        <strong>Bring:</strong> a swimsuit and a water bottle. We provide towels and everything else
-        you'll need. Arrive 10 minutes early to check in and get changed.
+        Bring a swimsuit and a water bottle. We'll provide everything else
+        you'll need. Arrive up to 10 minutes early to check in and get changed. 
       </Text>
 
       <Button href={directionsUrl} style={button}>
         Get directions
       </Button>
 
-      <Hr style={{ borderColor: 'rgba(245, 241, 233, 0.2)', margin: '28px 0 20px' }} />
+      <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
 
       <Text style={heading}>Good to know</Text>
       <Section>

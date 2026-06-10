@@ -8,6 +8,8 @@ export interface ConfirmationEmailProps {
   timeLabel: string;
   location: string;
   manageUrl: string;
+  /** The booked event's own image; templates fall back to a stock header without it. */
+  sessionImageUrl?: string;
 }
 
 export interface FaqItem {

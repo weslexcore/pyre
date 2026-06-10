@@ -50,17 +50,19 @@ export function ConfirmationEmail({
   timeLabel,
   location,
   manageUrl,
+  sessionImageUrl,
   preview,
   headingText,
   intro,
   headerImageUrl,
   background = 'clouds',
 }: BaseProps) {
+  // Prefer the event's own image (the one shown on the landing page) over the
+  // template's stock header.
+  const imageUrl = sessionImageUrl || headerImageUrl;
   return (
     <EmailLayout preview={preview} background={background}>
-      {headerImageUrl && (
-        <Img src={headerImageUrl} width="512" height="512" alt="" style={headerImage} />
-      )}
+      {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
       <Text style={heading}>{headingText}</Text>
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>

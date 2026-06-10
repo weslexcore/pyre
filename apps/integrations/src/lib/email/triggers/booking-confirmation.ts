@@ -77,6 +77,7 @@ export async function sendBookingConfirmationEmails({
     timeLabel: session?.timeLabel ?? '',
     location: session?.location ?? 'Pyre Sauna',
     manageUrl: `${siteUrl}/account`,
+    sessionImageUrl: session?.imageUrl,
   };
 
   // --- Confirmation (always; idempotent per booking) ---
