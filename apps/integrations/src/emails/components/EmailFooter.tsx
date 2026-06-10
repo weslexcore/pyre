@@ -3,6 +3,7 @@ import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
 
 const INSTAGRAM_URL = 'https://instagram.com/pyre_sauna';
+const WEBSITE_URL = 'https://pyresauna.com';
 const MAILING_ADDRESS = 'Pyre Sauna 1000 Westover Hills Blvd. Richmond, VA 23225 USA';
 
 const footer = {
@@ -15,8 +16,9 @@ const logoStrip = {
   margin: '40px 0 32px',
 };
 
-const instagramBadge = {
-  margin: '0 auto 24px',
+const iconBadge = {
+  display: 'inline-block',
+  margin: '0 6px 24px',
 };
 
 const footerText = {
@@ -62,7 +64,16 @@ export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps
           width="40"
           height="40"
           alt="Instagram"
-          style={instagramBadge}
+          style={iconBadge}
+        />
+      </Link>
+      <Link href={WEBSITE_URL}>
+        <Img
+          src={`${ASSET_BASE}/website-badge-creme.png`}
+          width="40"
+          height="40"
+          alt="Website"
+          style={iconBadge}
         />
       </Link>
       <Text style={copyrightText}>
