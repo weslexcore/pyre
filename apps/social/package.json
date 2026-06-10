@@ -7,6 +7,7 @@
     "dev": "tsx scripts/dev.ts",
     "render": "tsx scripts/render.ts",
     "render:all": "tsx scripts/render.ts --all",
+    "generate-qr": "tsx scripts/generate-qr.ts",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
@@ -27,6 +28,8 @@
     "@biomejs/biome": "^2.2.2",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^22.10.1",
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
   },
