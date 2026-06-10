@@ -1,9 +1,22 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NEXT_PUBLIC_*",
+    "PUBLIC_*",
+    "VERCEL_*",
+    "ENABLE_EXPERIMENTAL_COREPACK",
+    "MOMENCE_*",
+    "MAILCHIMP_*",
+    "CLOUDFLARE_*",
+    "ADMIN_EMAILS",
+    "KV_*",
+    "REDIS_URL",
+    "RESEND_*",
+    "EMAIL_*"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["NEXT_PUBLIC_*"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "apps/booking-system/.env*",
@@ -17,7 +30,6 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "env": ["NEXT_PUBLIC_*"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "apps/booking-system/.env*",
