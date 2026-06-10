@@ -9,7 +9,8 @@
         "apps/booking-system/.env*",
         "apps/landing-page/.env*",
         "apps/data-dashboard/.env*",
-        "apps/automations/.env*"
+        "apps/automations/.env*",
+        "apps/integrations/.env*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", ".astro/**"]
     },
@@ -22,7 +23,8 @@
         "apps/booking-system/.env*",
         "apps/landing-page/.env*",
         "apps/data-dashboard/.env*",
-        "apps/automations/.env*"
+        "apps/automations/.env*",
+        "apps/integrations/.env*"
       ]
     },
     "lint": {

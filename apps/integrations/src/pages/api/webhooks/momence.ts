@@ -5,6 +5,7 @@ import {
   upsertSubscriber,
   type WebhookTracer,
 } from '@pyre/webhook-core';
+import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
   fetchMomenceMember,
@@ -55,11 +56,22 @@ async function handleBookingEvent(
     }
   );
 
-  await tracer.span(
+  // Cancellation emails are intentionally out of scope for now.
+  if (event !== 'session-booked') return;
+
+  const member = await tracer.span(
     'Fetch Momence member',
     () => fetchMomenceMember(String(payload.targetMemberId)),
     { memberId: payload.targetMemberId }
   );
+
+  await sendBookingConfirmationEmails({
+    sessionId: payload.sessionId,
+    sessionBookingId: payload.sessionBookingId,
+    memberId: payload.targetMemberId,
+    member: { email: member.email, firstName: member.firstName },
+    tracer,
+  });
 }
 
 async function handleMemberEvent(
@@ -113,7 +125,9 @@ async function handleAddressEvent(
     await tracer.span(
       'Clear Mailchimp address',
       () => updateSubscriberAddress(member.email, null),
-      { email: member.email }
+      {
+        email: member.email,
+      }
     );
   } else {
     await tracer.span(
