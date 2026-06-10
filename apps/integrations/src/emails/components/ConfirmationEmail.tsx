@@ -1,6 +1,6 @@
 import { Button, Column, Img, Row, Section, Text } from '@react-email/components';
 import type { ConfirmationEmailProps } from '../types';
-import { button, COLORS, EmailLayout, heading, text } from './EmailLayout';
+import { button, COLORS, type EmailBackground, EmailLayout, heading, text } from './EmailLayout';
 
 const headerImage = {
   width: '100%',
@@ -36,6 +36,7 @@ interface BaseProps extends ConfirmationEmailProps {
   headingText: string;
   intro: string;
   headerImageUrl?: string;
+  background?: EmailBackground;
 }
 
 /**
@@ -53,9 +54,10 @@ export function ConfirmationEmail({
   headingText,
   intro,
   headerImageUrl,
+  background = 'clouds',
 }: BaseProps) {
   return (
-    <EmailLayout preview={preview}>
+    <EmailLayout preview={preview} background={background}>
       {headerImageUrl && (
         <Img src={headerImageUrl} width="512" height="512" alt="" style={headerImage} />
       )}
@@ -89,9 +91,9 @@ export function ConfirmationEmail({
 
 export const sampleConfirmationProps: ConfirmationEmailProps = {
   firstName: 'Alex',
-  sessionTitle: 'Guided Sauna & Cold Plunge',
+  sessionTitle: 'Signature Guided Class',
   dateLabel: 'Wed, February 12, 2026',
   timeLabel: '6:00 PM - 8:00 PM',
-  location: 'Pyre Sauna — Brooklyn',
-  manageUrl: 'https://pyresauna.com/account',
+  location: 'Pyre Sauna @ Living Water',
+  manageUrl: 'https://momence.com/sign-in',
 };

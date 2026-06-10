@@ -1,11 +1,19 @@
-import { Body, Container, Head, Html, Preview } from '@react-email/components';
+import { Body, Container, Head, Html, Preview, Section } from '@react-email/components';
 import type { ReactNode } from 'react';
+import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
 import { EmailFooter } from './EmailFooter';
 import { EmailHeader } from './EmailHeader';
 
 // Re-exported so existing templates importing COLORS from here keep working.
 export { COLORS };
+
+export type EmailBackground = 'clouds' | 'trees';
+
+const BACKGROUND_IMAGES: Record<EmailBackground, string> = {
+  clouds: 'bg-clouds.jpg',
+  trees: 'bg-trees.jpg',
+};
 
 const main = {
   backgroundColor: COLORS.black,
@@ -15,8 +23,21 @@ const main = {
   padding: 0,
 };
 
+// Background image lives on a full-width Section (not Body) because Gmail can
+// strip body styles. Clients without background-image support (desktop
+// Outlook) fall back to the solid color.
+const backdrop = (background: EmailBackground) => ({
+  backgroundColor: COLORS.black,
+  backgroundImage: `url(${ASSET_BASE}/${BACKGROUND_IMAGES[background]})`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center top',
+  backgroundRepeat: 'no-repeat',
+  padding: '40px 12px',
+});
+
 const container = {
   backgroundColor: COLORS.black,
+  borderRadius: '8px',
   margin: '0 auto',
   maxWidth: '560px',
   padding: '32px 24px 48px',
@@ -25,6 +46,7 @@ const container = {
 interface EmailLayoutProps {
   preview: string;
   children: ReactNode;
+  background?: EmailBackground;
   unsubscribeUrl?: string;
   preferencesUrl?: string;
 }
@@ -32,6 +54,7 @@ interface EmailLayoutProps {
 export function EmailLayout({
   preview,
   children,
+  background = 'clouds',
   unsubscribeUrl,
   preferencesUrl,
 }: EmailLayoutProps) {
@@ -40,11 +63,13 @@ export function EmailLayout({
       <Head />
       <Preview>{preview}</Preview>
       <Body style={main}>
-        <Container style={container}>
-          <EmailHeader />
-          {children}
-          <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
-        </Container>
+        <Section style={backdrop(background)}>
+          <Container style={container}>
+            <EmailHeader />
+            {children}
+            <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
+          </Container>
+        </Section>
       </Body>
     </Html>
   );

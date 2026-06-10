@@ -28,7 +28,10 @@ export function FirstTimerWelcome({
   directionsUrl,
 }: FirstTimerEmailProps) {
   return (
-    <EmailLayout preview="Welcome to Pyre — what to expect for your first session">
+    <EmailLayout
+      preview="Welcome to Pyre — what to expect for your first session"
+      background="trees"
+    >
       <Text style={heading}>Welcome to Pyre, {firstName}</Text>
       <Text style={text}>
         We're so glad you booked your first session. Here's a little of what to expect so you can
