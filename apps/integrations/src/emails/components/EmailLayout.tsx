@@ -1,7 +1,8 @@
-import { Body, Container, Head, Hr, Html, Preview, Text } from '@react-email/components';
+import { Body, Container, Head, Html, Preview } from '@react-email/components';
 import type { ReactNode } from 'react';
 import { COLORS } from './colors';
 import { EmailFooter } from './EmailFooter';
+import { EmailHeader } from './EmailHeader';
 
 // Re-exported so existing templates importing COLORS from here keep working.
 export { COLORS };
@@ -19,20 +20,6 @@ const container = {
   margin: '0 auto',
   maxWidth: '560px',
   padding: '32px 24px 48px',
-};
-
-const wordmark = {
-  color: COLORS.red,
-  fontSize: '28px',
-  fontWeight: 700,
-  letterSpacing: '0.08em',
-  margin: '0 0 24px',
-  textTransform: 'uppercase' as const,
-};
-
-const hr = {
-  borderColor: 'rgba(35, 34, 28, 0.15)',
-  margin: '32px 0 20px',
 };
 
 interface EmailLayoutProps {
@@ -54,9 +41,8 @@ export function EmailLayout({
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={wordmark}>Pyre</Text>
+          <EmailHeader />
           {children}
-          <Hr style={hr} />
           <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
         </Container>
       </Body>
