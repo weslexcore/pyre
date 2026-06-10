@@ -1,22 +1,10 @@
-import {
-  Body,
-  Container,
-  Head,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from '@react-email/components';
+import { Body, Container, Head, Hr, Html, Preview, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
+import { COLORS } from './colors';
+import { EmailFooter } from './EmailFooter';
 
-// Pyre brand palette (hex — email clients don't support oklch / CSS vars).
-export const COLORS = {
-  black: '#23221c',
-  creme: '#f5f1e9',
-  red: '#d15232',
-} as const;
+// Re-exported so existing templates importing COLORS from here keep working.
+export { COLORS };
 
 const main = {
   backgroundColor: COLORS.creme,
@@ -47,24 +35,19 @@ const hr = {
   margin: '32px 0 20px',
 };
 
-const footerText = {
-  color: 'rgba(35, 34, 28, 0.6)',
-  fontSize: '12px',
-  lineHeight: '18px',
-  margin: '0 0 4px',
-};
-
-const footerLink = {
-  color: COLORS.red,
-  textDecoration: 'underline',
-};
-
 interface EmailLayoutProps {
   preview: string;
   children: ReactNode;
+  unsubscribeUrl?: string;
+  preferencesUrl?: string;
 }
 
-export function EmailLayout({ preview, children }: EmailLayoutProps) {
+export function EmailLayout({
+  preview,
+  children,
+  unsubscribeUrl,
+  preferencesUrl,
+}: EmailLayoutProps) {
   return (
     <Html lang="en">
       <Head />
@@ -74,15 +57,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
           <Text style={wordmark}>Pyre</Text>
           {children}
           <Hr style={hr} />
-          <Section>
-            <Text style={footerText}>Pyre Sauna · Traditional Finnish sauna &amp; cold plunge</Text>
-            <Text style={footerText}>
-              Questions? Reply to this email or reach us at{' '}
-              <Link href="mailto:hello@pyresauna.com" style={footerLink}>
-                hello@pyresauna.com
-              </Link>
-            </Text>
-          </Section>
+          <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
         </Container>
       </Body>
     </Html>
