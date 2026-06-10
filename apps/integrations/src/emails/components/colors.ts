@@ -5,4 +5,6 @@ export const COLORS = {
   black: '#23221c',
   creme: '#f5f1e9',
   red: '#d15232',
+  sky: '#3991b7',
+  gold: '#dbb155',
 } as const;

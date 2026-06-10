@@ -8,15 +8,15 @@ import { EmailHeader } from './EmailHeader';
 export { COLORS };
 
 const main = {
-  backgroundColor: COLORS.creme,
-  color: COLORS.black,
+  backgroundColor: COLORS.black,
+  color: COLORS.creme,
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   margin: 0,
   padding: 0,
 };
 
 const container = {
-  backgroundColor: COLORS.creme,
+  backgroundColor: COLORS.black,
   margin: '0 auto',
   maxWidth: '560px',
   padding: '32px 24px 48px',
@@ -52,14 +52,14 @@ export function EmailLayout({
 
 // Shared inline styles reused across templates.
 export const text = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '16px',
   lineHeight: '26px',
   margin: '0 0 16px',
 };
 
 export const heading = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '22px',
   fontWeight: 700,
   lineHeight: '30px',

@@ -24,7 +24,7 @@ const logoMark = {
 };
 
 const footerText = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '13px',
   lineHeight: '20px',
   margin: '0 0 6px',
@@ -41,7 +41,7 @@ const spacerText = {
 };
 
 const footerLink = {
-  color: COLORS.black,
+  color: COLORS.creme,
   textDecoration: 'underline',
 };
 
@@ -53,10 +53,16 @@ interface EmailFooterProps {
 export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps) {
   return (
     <Section style={footer}>
-      <Img src={`${ASSET_BASE}/logo-strip.png`} width="512" height="32" alt="" style={logoStrip} />
+      <Img
+        src={`${ASSET_BASE}/logo-strip-creme.png`}
+        width="512"
+        height="32"
+        alt=""
+        style={logoStrip}
+      />
       <Link href={INSTAGRAM_URL}>
         <Img
-          src={`${ASSET_BASE}/instagram-badge.png`}
+          src={`${ASSET_BASE}/instagram-badge-creme.png`}
           width="40"
           height="40"
           alt="Instagram"

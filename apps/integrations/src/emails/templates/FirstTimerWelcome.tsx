@@ -3,14 +3,14 @@ import { button, COLORS, EmailLayout, heading, text } from '../components/EmailL
 import type { FirstTimerEmailProps } from '../types';
 
 const faqQuestion = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '15px',
   fontWeight: 600,
   margin: '0 0 4px',
 };
 
 const faqAnswer = {
-  color: 'rgba(35, 34, 28, 0.8)',
+  color: 'rgba(245, 241, 233, 0.8)',
   fontSize: '14px',
   lineHeight: '22px',
   margin: '0 0 16px',
@@ -43,7 +43,7 @@ export function FirstTimerWelcome({
         Get directions
       </Button>
 
-      <Hr style={{ borderColor: 'rgba(35, 34, 28, 0.15)', margin: '28px 0 20px' }} />
+      <Hr style={{ borderColor: 'rgba(245, 241, 233, 0.2)', margin: '28px 0 20px' }} />
 
       <Text style={heading}>Good to know</Text>
       <Section>

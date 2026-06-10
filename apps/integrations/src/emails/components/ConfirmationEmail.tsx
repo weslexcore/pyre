@@ -3,14 +3,14 @@ import type { ConfirmationEmailProps } from '../types';
 import { button, COLORS, EmailLayout, heading, text } from './EmailLayout';
 
 const detailsSection = {
-  backgroundColor: 'rgba(35, 34, 28, 0.04)',
+  backgroundColor: 'rgba(245, 241, 233, 0.08)',
   borderRadius: '8px',
   margin: '0 0 24px',
   padding: '20px 24px',
 };
 
 const labelStyle = {
-  color: 'rgba(35, 34, 28, 0.6)',
+  color: 'rgba(245, 241, 233, 0.6)',
   fontSize: '12px',
   letterSpacing: '0.06em',
   margin: '0 0 2px',
@@ -18,7 +18,7 @@ const labelStyle = {
 };
 
 const valueStyle = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '16px',
   fontWeight: 600,
   margin: '0 0 14px',
