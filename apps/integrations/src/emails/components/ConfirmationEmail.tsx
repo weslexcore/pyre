@@ -10,14 +10,14 @@ const headerImage = {
 };
 
 const detailsSection = {
-  backgroundColor: COLORS.creme,
+  backgroundColor: COLORS.black,
   borderRadius: '8px',
   margin: '0 0 24px',
   padding: '20px 24px',
 };
 
 const labelStyle = {
-  color: COLORS.black,
+  color: COLORS.gold,
   fontSize: '12px',
   letterSpacing: '0.06em',
   margin: '0 0 2px',
@@ -25,7 +25,7 @@ const labelStyle = {
 };
 
 const valueStyle = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '16px',
   fontWeight: 600,
   margin: '0 0 14px',
@@ -62,8 +62,9 @@ export function ConfirmationEmail({
   const imageUrl = sessionImageUrl || headerImageUrl;
   return (
     <EmailLayout preview={preview} background={background}>
-      {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
+
       <Text style={heading}>{headingText}</Text>
+      {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>
 
