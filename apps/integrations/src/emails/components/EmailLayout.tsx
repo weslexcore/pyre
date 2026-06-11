@@ -8,11 +8,12 @@ import { EmailHeader } from './EmailHeader';
 // Re-exported so existing templates importing COLORS from here keep working.
 export { COLORS };
 
-export type EmailBackground = 'clouds' | 'trees';
+export type EmailBackground = 'clouds' | 'trees' | 'lamps';
 
 const BACKGROUND_IMAGES: Record<EmailBackground, string> = {
   clouds: 'bg-clouds.jpg',
   trees: 'bg-trees.jpg',
+  lamps: 'bg-lamps.png',
 };
 
 const main = {
@@ -81,6 +82,7 @@ export const text = {
   fontSize: '16px',
   lineHeight: '26px',
   margin: '0 0 16px',
+  whiteSpace: 'pre-line',
 };
 
 export const heading = {
@@ -100,4 +102,5 @@ export const button = {
   fontWeight: 600,
   padding: '12px 24px',
   textDecoration: 'none',
+  margin: '0 0 24px',
 };

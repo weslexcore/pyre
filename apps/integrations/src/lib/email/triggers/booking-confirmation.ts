@@ -13,6 +13,7 @@ const log = createWebhookLogger('BookingEmail');
 const CONFIRMATION_BY_TYPE: Record<string, EmailTemplateKey> = {
   guided: 'guided-confirmation',
   social: 'social-confirmation',
+  'special event': 'special-event-confirmation',
 };
 const DEFAULT_CONFIRMATION: EmailTemplateKey = 'general-confirmation';
 

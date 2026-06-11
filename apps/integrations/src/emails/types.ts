@@ -27,6 +27,7 @@ export interface FirstTimerEmailProps {
 export interface EmailPropsByTemplate {
   'guided-confirmation': ConfirmationEmailProps;
   'social-confirmation': ConfirmationEmailProps;
+  'special-event-confirmation': ConfirmationEmailProps;
   'general-confirmation': ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
 }

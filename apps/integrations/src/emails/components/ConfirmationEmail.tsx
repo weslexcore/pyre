@@ -85,9 +85,8 @@ export function ConfirmationEmail({
         <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
       </Section>
 
-      <Button href={manageUrl} style={button}>
-        View &amp; manage your booking
-      </Button>
+      <Text style={text}>If you need to update your booking, cancel or chat with us, just reply to this email.</Text>
+      <Text style={text}>See you soon!</Text>
     </EmailLayout>
   );
 }
@@ -97,6 +96,6 @@ export const sampleConfirmationProps: ConfirmationEmailProps = {
   sessionTitle: 'Signature Guided Class',
   dateLabel: 'Wed, February 12, 2026',
   timeLabel: '6:00 PM - 8:00 PM',
-  location: 'Pyre Sauna @ Living Water',
+  location: 'Pyre - 1000 Westover Hills Blvd, Richmond, VA 23225',
   manageUrl: 'https://momence.com/sign-in',
 };
