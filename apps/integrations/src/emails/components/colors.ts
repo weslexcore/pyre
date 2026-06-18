@@ -7,4 +7,5 @@ export const COLORS = {
   red: '#d15232',
   sky: '#3991b7',
   gold: '#dbb155',
+  blackSoft: '#312f27', // slightly lifted black for raised cards on the black body
 } as const;

@@ -4,7 +4,7 @@ import { COLORS } from './colors';
 
 const INSTAGRAM_URL = 'https://instagram.com/pyre_sauna';
 const WEBSITE_URL = 'https://pyresauna.com';
-const MAILING_ADDRESS = 'Pyre Sauna 1000 Westover Hills Blvd. Richmond, VA 23225 USA';
+const MAILING_ADDRESS = '1000 Westover Hills Blvd. Richmond, VA 23225 USA';
 
 const footer = {
   textAlign: 'center' as const,
@@ -30,14 +30,10 @@ const iconBadge = {
 
 const footerText = {
   color: COLORS.creme,
-  fontSize: '13px',
+  fontSize: '10px',
   lineHeight: '20px',
   margin: '0 0 6px',
-};
-
-const copyrightText = {
-  ...footerText,
-  fontStyle: 'italic' as const,
+  fontFamily: 'monospace'
 };
 
 const spacerText = {
@@ -77,11 +73,7 @@ export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps
           style={iconBadge}
         />
       </Link>
-      <Text style={copyrightText}>
-        Copyright (C) {new Date().getFullYear()} Pyre Sauna. All rights reserved.
-      </Text>
-      <Text style={spacerText}>Our mailing address is:</Text>
-      <Text style={footerText}>{MAILING_ADDRESS}</Text>
+      <Text style={footerText}>Pyre LLC, {MAILING_ADDRESS}</Text>
       {(unsubscribeUrl || preferencesUrl) && (
         <>
           <Text style={spacerText}>Want to change how you receive these emails?</Text>

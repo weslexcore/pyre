@@ -11,22 +11,23 @@ const headerImage = {
 };
 
 const detailsSection = {
-  backgroundColor: COLORS.creme,
+  backgroundColor: COLORS.blackSoft,
   borderRadius: '8px',
   margin: '0 0 24px',
   padding: '20px 24px',
 };
 
 const labelStyle = {
-  color: COLORS.red,
+  color: COLORS.gold,
   fontSize: '12px',
   letterSpacing: '0.06em',
   margin: '0 0 2px',
   textTransform: 'uppercase' as const,
+  fontFamily: 'monospace'
 };
 
 const valueStyle = {
-  color: COLORS.black,
+  color: COLORS.creme,
   fontSize: '16px',
   fontWeight: 600,
   margin: '0 0 14px',
@@ -63,9 +64,7 @@ export function ConfirmationEmail({
   const imageUrl = sessionImageUrl || headerImageUrl;
   return (
     <EmailLayout preview={preview} background={background}>
-
-      {/* <Text style={heading}>{headingText}</Text> */}
-      {/* {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />} */}
+      {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>
 
@@ -87,7 +86,6 @@ export function ConfirmationEmail({
       </Section>
 
       <Text style={text}>If you need to update your booking or chat with us, just reply to this email.</Text>
-      <Text style={text}>See you soon!</Text>
     </EmailLayout>
   );
 }

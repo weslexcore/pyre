@@ -57,14 +57,14 @@ export function FirstTimerWelcome({
           </Section>
         ))}
       </Section>
-
+      <Hr style={{ borderColor: COLORS.gold, margin: '28px 0 20px' }} />
       <Text style={text}>
-        You can view or manage your booking anytime from your{' '}
-        <Link href={manageUrl} style={linkStyle}>
-          account page
-        </Link>
-        . See you soon!
+        If you have any questions or need to modify your reservation, just reply to this email.
       </Text>
+      <Text style={text}>
+        See you soon!
+      </Text>
+      <Text style={text}>Wes + Julien</Text>
     </EmailLayout>
   );
 }
