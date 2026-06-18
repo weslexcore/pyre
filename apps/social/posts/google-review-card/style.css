@@ -1,0 +1,110 @@
+/* Google review postcard — a PRINT artboard, not the usual 1080px social grid.
+   Canvas: 1275×1875px = 4.25×6.25in at 300dpi (4×6in trim + 0.125in bleed per edge).
+   1in = 300px. Keep all content at least 112px (0.375in) from the canvas edge:
+   37px of bleed gets trimmed away, plus 75px of cutting-tolerance safety. */
+
+.card {
+  width: 100vw;
+  height: 100vh;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 160px 140px 150px;
+  font-family: var(--font-sans);
+}
+
+.card__header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.card__logo {
+  height: 110px;
+  width: auto;
+}
+
+/* Ruled mono label — mirrors the menu sheet's category-title: red monospace,
+   uppercase, tracked, sitting on a black rule. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+  padding-bottom: var(--space-2);
+  /* border-bottom: 2px solid var(--pyre-black); */
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 124px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin-top: var(--space-8);
+}
+
+.accent {
+  color: var(--pyre-red);
+}
+
+.body {
+  font-size: 40px;
+  line-height: 1.35;
+  color: var(--pyre-blue);
+  margin-top: var(--space-6);
+}
+
+.card__qr {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Pure white (not creme) behind the code for maximum scan contrast on paper.
+   The 56px padding is the QR quiet zone: >= 4 modules (460px / 33 modules ≈ 14px each). */
+.qr-panel {
+  background: #ffffff;
+  padding: 56px;
+  border: 5px solid var(--pyre-black);
+  border-radius: 28px;
+}
+
+.qr-panel img {
+  width: 460px;
+  height: 460px;
+}
+
+/* Same ruled red label as the eyebrow, so the card's two labels read as a set. */
+.qr-caption {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+  margin-top: var(--space-6);
+  padding-bottom: var(--space-2);
+  /* border-bottom: 2px solid var(--pyre-black); */
+}
+
+/* Hairline ledger rule closes the sheet, echoing the menu's row separators. */
+.footer {
+  margin-top: auto;
+  width: 100%;
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--pyre-black);
+}
+
+.footer__cite {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  color: var(--pyre-blue);
+}
