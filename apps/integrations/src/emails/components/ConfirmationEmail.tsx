@@ -5,19 +5,20 @@ import { button, COLORS, type EmailBackground, EmailLayout, heading, text } from
 const headerImage = {
   width: '100%',
   height: 'auto',
+  // maxWidth: '250px',
   borderRadius: '8px',
-  margin: '0 0 24px',
+  margin: '24px auto',
 };
 
 const detailsSection = {
-  backgroundColor: COLORS.black,
+  backgroundColor: COLORS.creme,
   borderRadius: '8px',
   margin: '0 0 24px',
   padding: '20px 24px',
 };
 
 const labelStyle = {
-  color: COLORS.gold,
+  color: COLORS.red,
   fontSize: '12px',
   letterSpacing: '0.06em',
   margin: '0 0 2px',
@@ -25,7 +26,7 @@ const labelStyle = {
 };
 
 const valueStyle = {
-  color: COLORS.creme,
+  color: COLORS.black,
   fontSize: '16px',
   fontWeight: 600,
   margin: '0 0 14px',
@@ -85,7 +86,7 @@ export function ConfirmationEmail({
         <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
       </Section>
 
-      <Text style={text}>If you need to update your booking, cancel or chat with us, just reply to this email.</Text>
+      <Text style={text}>If you need to update your booking or chat with us, just reply to this email.</Text>
       <Text style={text}>See you soon!</Text>
     </EmailLayout>
   );
@@ -94,8 +95,8 @@ export function ConfirmationEmail({
 export const sampleConfirmationProps: ConfirmationEmailProps = {
   firstName: 'Alex',
   sessionTitle: 'Signature Guided Class',
-  dateLabel: 'Wed, February 12, 2026',
-  timeLabel: '6:00 PM - 8:00 PM',
-  location: 'Pyre - 1000 Westover Hills Blvd, Richmond, VA 23225',
+  dateLabel: 'Sat, June 20, 2026',
+  timeLabel: '10:00 AM - 12:00 PM',
+  location: '1000 Westover Hills Blvd, Richmond, VA 23225',
   manageUrl: 'https://momence.com/sign-in',
 };

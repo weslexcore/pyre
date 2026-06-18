@@ -10,9 +10,12 @@ const footer = {
   textAlign: 'center' as const,
 };
 
-const logoStrip = {
-  width: '100%',
-  height: 'auto',
+const treeBand = {
+  height: '96px',
+  backgroundImage: `url(${ASSET_BASE}/pine-tree-repeat-creme.png)`,
+  backgroundRepeat: 'repeat-x',
+  backgroundPosition: 'center',
+  backgroundSize: 'auto 96px',
   margin: '40px 0 32px',
 };
 
@@ -51,13 +54,7 @@ interface EmailFooterProps {
 export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps) {
   return (
     <Section style={footer}>
-      <Img
-        src={`${ASSET_BASE}/logo-strip-creme.png`}
-        width="512"
-        height="32"
-        alt=""
-        style={logoStrip}
-      />
+      <Section role="presentation" style={treeBand} />
       <Link href={INSTAGRAM_URL}>
         <Img
           src={`${ASSET_BASE}/instagram-badge-creme.png`}

@@ -9,7 +9,7 @@ export function GeneralConfirmation(props: ConfirmationEmailProps) {
       preview={`You're booked for ${props.sessionTitle}`}
       headingText="You're booked"
       headerImageUrl={`${ASSET_BASE}/confirmation-header.jpg`}
-      intro="You're all set. We've got your session reserved — arrive anytime during the first hour of your session."
+      intro={`You're all set for ${props.sessionTitle} on ${props.dateLabel} from ${props.timeLabel}. \n\nWe've got your session reserved. Arrive anytime during the first hour of your session.`}
     />
   );
 }

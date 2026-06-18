@@ -14,7 +14,7 @@ export function EmailHeader() {
   return (
     <Section style={header}>
       <Link href="https://pyresauna.com">
-        <Img src={`${ASSET_BASE}/logo-header-creme.png`} width="120" alt="Pyre" style={logo} />
+        <Img src={`${ASSET_BASE}/single-pine-tree-white.png`} width="120" alt="Pyre" style={logo} />
       </Link>
     </Section>
   );

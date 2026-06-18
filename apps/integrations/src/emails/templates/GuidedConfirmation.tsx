@@ -7,13 +7,13 @@ export function GuidedConfirmation(props: ConfirmationEmailProps) {
     <ConfirmationEmail
       {...props}
       preview={`You're booked for ${props.sessionTitle}`}
-      headingText="Your guided session is booked"
+      headingText="You're in!"
       headerImageUrl={`${ASSET_BASE}/guided-confirmation-header.jpg`}
-      intro="You're all set for your guided session. A facilitator will lead you through the sauna and cold plunge rounds — just arrive a few minutes early so you can settle in."
+      intro={`You're all set for ${props.sessionTitle} on ${props.dateLabel} from ${props.timeLabel}. \n\nA facilitator will lead you through the experience. Please arrive 10-15 minutes early so you have time to settle in.`}
     />
   );
 }
 
-GuidedConfirmation.PreviewProps = {...sampleConfirmationProps, sessionImageUrl: "https://images.momence.com/h/169530/session-template-banner/d0db75ba-775b-4335-84f8-2e6a7f28b8a3.webp"};
+GuidedConfirmation.PreviewProps = {...sampleConfirmationProps, sessionTitle: "Signature Guided Class", sessionImageUrl: "https://images.momence.com/h/169530/session-template-banner/d0db75ba-775b-4335-84f8-2e6a7f28b8a3.webp"};
 
 export default GuidedConfirmation;
