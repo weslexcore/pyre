@@ -236,14 +236,8 @@
     </footer>
 
     <script type="module">
-      const SIZES = {
-        square: { w: 1080, h: 1080, label: '1:1' },
-        portrait: { w: 1080, h: 1350, label: '4:5' },
-        landscape: { w: 1080, h: 566, label: '1.91:1' },
-        reel: { w: 1080, h: 1920, label: '9:16' },
-        story: { w: 1080, h: 1920, label: '9:16' },
-        'small-menu': { w: 1080, h: 1920, label: '9:16' },
-      };
+      // Single source of truth for export dimensions — shared with the render pipeline.
+      import { SIZES } from '/scripts/lib/sizes.ts';
 
       const root = document.getElementById('root');
       const select = document.getElementById('postSelect');
