@@ -22,11 +22,11 @@ const footerConfig: FooterContent = {
           href: withBase('/events'),
           ariaLabel: 'Book now',
         },
-        {
-          label: 'Volunteer',
-          href: withBase('/volunteer'),
-          ariaLabel: 'Volunteer with Pyre and earn session credits',
-        },
+        // {
+        //   label: 'Volunteer',
+        //   href: withBase('/volunteer'),
+        //   ariaLabel: 'Volunteer with Pyre and earn session credits',
+        // },
       ],
     },
     {
