@@ -88,6 +88,11 @@ FirstTimerWelcome.PreviewProps = {
       answer:
         'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits.',
     },
+    {
+      question: 'Where should I park?',
+      answer:
+        "Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.",
+    },
   ],
 } satisfies FirstTimerEmailProps;
 
