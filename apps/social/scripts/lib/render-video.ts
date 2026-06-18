@@ -40,7 +40,9 @@ function clampPercent(p: unknown): number | undefined {
  */
 async function probeDurationSec(file: string): Promise<number> {
   return new Promise((resolveP, rejectP) => {
-    const proc = spawn(ffmpegInstaller.path, ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+    const proc = spawn(ffmpegInstaller.path, ['-hide_banner', '-i', file], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
     let stderr = '';
     proc.stderr.on('data', (c: Buffer) => {
       stderr += c.toString();
@@ -133,7 +135,11 @@ export async function renderVideo(opts: {
   await rm(sessionTempDir, { recursive: true, force: true });
 }
 
-function transcodeToMp4(input: string, output: string, onProgress?: OnRenderProgress): Promise<void> {
+function transcodeToMp4(
+  input: string,
+  output: string,
+  onProgress?: OnRenderProgress
+): Promise<void> {
   return new Promise((resolveP, rejectP) => {
     onProgress?.({ phase: 'transcode', percent: 0 });
     ffmpeg(input)
@@ -222,7 +228,10 @@ export async function concatMp4Pages(
 
   // ffmpeg concat demuxer treats single quotes as the literal-path delimiter; escape any in paths.
   const manifestBody = inputs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
-  const manifestPath = join(tempDir, `concat-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  const manifestPath = join(
+    tempDir,
+    `concat-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
+  );
   await writeFile(manifestPath, `${manifestBody}\n`, 'utf8');
   try {
     await runFfmpegConcat(manifestPath, output, onProgress);

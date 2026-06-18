@@ -8,6 +8,12 @@ export function pageUrl(baseUrl: string, postName: string, page: number): string
   return `${baseUrl}/posts/${postName}/index.html#page=${page}`;
 }
 
+/** Export file base name: post title + size (e.g. "menu-drinks-sheet-letter"),
+ *  or the entry's explicit filename override when provided. */
+function baseName(postName: string, entry: ExportEntry): string {
+  return entry.filename ?? `${postName}-${entry.size}`;
+}
+
 export function outputPath(
   postName: string,
   entry: ExportEntry,
@@ -15,8 +21,9 @@ export function outputPath(
   projectRoot: string
 ): string {
   const ext = entry.format === 'jpg' ? 'jpg' : entry.format;
-  const base = entry.filename ?? entry.size;
-  return resolve(projectRoot, 'exports', postName, `${base}-${page}.${ext}`);
+  // Single-page posts get a clean name; page 2+ are suffixed to avoid collisions.
+  const suffix = page > 1 ? `-${page}` : '';
+  return resolve(projectRoot, 'exports', postName, `${baseName(postName, entry)}${suffix}.${ext}`);
 }
 
 /** Path for the joined-across-pages mp4 of a single export entry. */
@@ -25,8 +32,7 @@ export function joinedOutputPath(
   entry: ExportEntry,
   projectRoot: string
 ): string {
-  const base = entry.filename ?? entry.size;
-  return resolve(projectRoot, 'exports', postName, `${postName}-${base}.mp4`);
+  return resolve(projectRoot, 'exports', postName, `${baseName(postName, entry)}.mp4`);
 }
 
 export interface RenderEntryOptions {

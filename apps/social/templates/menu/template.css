@@ -64,7 +64,7 @@
 
 .tpl-menu__name {
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 32px;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--pyre-black);
@@ -85,6 +85,7 @@
   line-height: 1.3;
   color: var(--pyre-black);
   max-width: 52ch;
+  padding: 1ch;
 }
 
 .tpl-menu__chips {
@@ -129,7 +130,7 @@
 }
 
 /* Portrait (4:5) — slightly larger heading, same body sizing. */
-@media (aspect-ratio: 4/5) {
+@media (aspect-ratio: 4 / 5) {
   .tpl-menu__heading {
     font-size: 128px;
   }
@@ -139,7 +140,7 @@
 }
 
 /* Reel (9:16) — scale up so the card breathes on a tall canvas. */
-@media (aspect-ratio: 9/16) {
+@media (aspect-ratio: 9 / 16) {
   .tpl-menu {
     gap: var(--space-8);
     padding: var(--space-12) var(--space-8);

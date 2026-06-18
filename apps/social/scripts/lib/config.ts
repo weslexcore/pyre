@@ -78,7 +78,8 @@ async function readLocalOverrides(postName: string, projectRoot: string): Promis
     const parsed = JSON.parse(raw) as LocalOverrides;
     return {
       pageDurations: Array.isArray(parsed.pageDurations) ? parsed.pageDurations : undefined,
-      transition: parsed.transition && typeof parsed.transition === 'object' ? parsed.transition : undefined,
+      transition:
+        parsed.transition && typeof parsed.transition === 'object' ? parsed.transition : undefined,
       transitions: Array.isArray(parsed.transitions) ? parsed.transitions : undefined,
     };
   } catch {
@@ -154,6 +155,8 @@ export function resolveTransitionForPair(
   return {
     type: typeof slot.type === 'string' ? slot.type : fallback.type,
     durationMs:
-      typeof slot.durationMs === 'number' && slot.durationMs >= 0 ? slot.durationMs : fallback.durationMs,
+      typeof slot.durationMs === 'number' && slot.durationMs >= 0
+        ? slot.durationMs
+        : fallback.durationMs,
   };
 }

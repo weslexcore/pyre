@@ -4,7 +4,7 @@ export function renderMenu(data: MenuData, root: HTMLElement): void {
   root.replaceChildren(
     buildHeader(data.eyebrow, data.heading),
     buildItems(data.items),
-    buildFooter(data.footer.address),
+    buildFooter(data.footer.address)
   );
 }
 

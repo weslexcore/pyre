@@ -390,8 +390,7 @@ async function writeSidecarAtomic(path: string, body: SidecarShape): Promise<voi
 function sanitizeTransition(t: TransitionConfig): TransitionConfig {
   return {
     type: typeof t.type === 'string' ? t.type : undefined,
-    durationMs:
-      typeof t.durationMs === 'number' && t.durationMs >= 0 ? t.durationMs : undefined,
+    durationMs: typeof t.durationMs === 'number' && t.durationMs >= 0 ? t.durationMs : undefined,
   };
 }
 

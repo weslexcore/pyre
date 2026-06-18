@@ -100,7 +100,8 @@ async function renderPost(vite: ViteDevServer, postName: string, filter?: string
       const pageDurationsMs: number[] = [];
       for (let page = 1; page <= totalPages; page++) {
         const out = outputPath(postName, entry, page, PROJECT_ROOT);
-        const durationMs = entry.format === 'mp4' ? resolvePageDuration(config, entry, page - 1) : undefined;
+        const durationMs =
+          entry.format === 'mp4' ? resolvePageDuration(config, entry, page - 1) : undefined;
         const durLabel = durationMs ? ` · ${(durationMs / 1000).toFixed(1)}s` : '';
         console.log(
           `  → ${entry.size} (${entry.format}) page ${page}/${totalPages}${durLabel}  ${out.replace(PROJECT_ROOT, '.')}`
@@ -127,7 +128,9 @@ async function renderPost(vite: ViteDevServer, postName: string, filter?: string
           resolveTransitionForPair(config, i)
         );
         const tag = transitions
-          .map((t) => (t.type === 'none' || t.durationMs <= 0 ? 'cut' : `${t.type}/${t.durationMs}ms`))
+          .map((t) =>
+            t.type === 'none' || t.durationMs <= 0 ? 'cut' : `${t.type}/${t.durationMs}ms`
+          )
           .join(', ');
         console.log(
           `  → ${entry.size} (mp4) joined ${totalPages} pages [${tag}]  ${joined.replace(PROJECT_ROOT, '.')}`
@@ -159,7 +162,7 @@ async function main(): Promise<void> {
     .option('--all', 'Render every post in posts/')
     .option(
       '--size <key>',
-      'Render only this size (square, portrait, landscape, reel, story, small-menu)'
+      'Render only this size (square, portrait, landscape, reel, story, small-menu, postcard-4x6)'
     )
     .parse(process.argv);
 
