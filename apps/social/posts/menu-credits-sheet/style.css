@@ -1,0 +1,15 @@
+/* Post-specific overrides for the printable 8.5×11 credits & memberships menu. Add tweaks here as needed. */
+
+/* Sit the eyebrow under the heading instead of above it. */
+.tpl-menu-sheet__eyebrow {
+  order: 1;
+}
+
+/* Pin the two categories to fixed columns — credit packs left, memberships right —
+   instead of the template's auto column flow (which packs both into the left column
+   when the content is short). */
+.tpl-menu-sheet__categories {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+}

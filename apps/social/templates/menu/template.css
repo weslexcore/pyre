@@ -34,6 +34,13 @@
   color: var(--pyre-black);
 }
 
+/* Pre-discount price, struck through and muted, sitting before the price paid. */
+.tpl-menu__price-was {
+  color: var(--pyre-black);
+  opacity: 0.4;
+  margin-right: 10px;
+}
+
 .tpl-menu__items {
   display: flex;
   flex-direction: column;
@@ -86,6 +93,11 @@
   color: var(--pyre-black);
   max-width: 52ch;
   padding: 1ch;
+}
+
+/* Promotional description (e.g. "best value") called out in gold. */
+.tpl-menu__description--accent {
+  color: var(--pyre-gold);
 }
 
 .tpl-menu__chips {

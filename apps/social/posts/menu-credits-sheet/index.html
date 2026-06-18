@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Credits &amp; Memberships (Sheet) — Pyre Social</title>
+    <link rel="stylesheet" href="/shared/reset.css" />
+    <link rel="stylesheet" href="/shared/brand.css" />
+    <link rel="stylesheet" href="/shared/tailwind.css" />
+    <link rel="stylesheet" href="/templates/menu-sheet/template.css" />
+    <link rel="stylesheet" href="/shared/pages.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="/shared/pages.js"></script>
+  </head>
+  <body>
+    <section class="page" data-page="1">
+      <section class="tpl-menu-sheet post"></section>
+    </section>
+    <script type="module">
+      import { menu } from './menu.data.ts';
+      import { renderMenuSheet } from '/templates/menu-sheet/template.ts';
+      renderMenuSheet(menu, document.querySelector('.tpl-menu-sheet'));
+    </script>
+  </body>
+</html>

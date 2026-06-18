@@ -114,12 +114,24 @@
   white-space: nowrap;
 }
 
+/* Pre-discount price, struck through and muted, sitting before the price paid. */
+.tpl-menu-sheet__price-was {
+  color: var(--pyre-black);
+  opacity: 0.4;
+  margin-right: 10px;
+}
+
 .tpl-menu-sheet__description {
   font-family: var(--font-mono);
   font-size: 18px;
   line-height: 1.3;
   color: var(--pyre-black);
   max-width: 52ch;
+}
+
+/* Promotional description (e.g. "best value") called out in gold. */
+.tpl-menu-sheet__description--accent {
+  color: var(--pyre-gold);
 }
 
 .tpl-menu-sheet__chips {

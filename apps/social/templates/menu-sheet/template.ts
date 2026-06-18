@@ -60,7 +60,14 @@ function buildItem(item: MenuItem): HTMLElement {
 
   const price = document.createElement('span');
   price.className = 'tpl-menu-sheet__price';
-  price.textContent = item.price;
+  if (item.originalPrice) {
+    const was = document.createElement('s');
+    was.className = 'tpl-menu-sheet__price-was';
+    was.textContent = item.originalPrice;
+    price.append(was, document.createTextNode(item.price));
+  } else {
+    price.textContent = item.price;
+  }
 
   row.append(name, price);
   li.append(row);
@@ -80,6 +87,7 @@ function buildItem(item: MenuItem): HTMLElement {
   if (item.description) {
     const p = document.createElement('p');
     p.className = 'tpl-menu-sheet__description';
+    if (item.highlighted) p.classList.add('tpl-menu-sheet__description--accent');
     p.textContent = item.description;
     li.append(p);
   }
