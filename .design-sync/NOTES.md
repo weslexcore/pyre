@@ -3,6 +3,22 @@
 This design system was **authored fresh** from the Pyre brand foundations (it is not a
 pre-existing component library). Source lives in `packages/design-system/`.
 
+## Shape: storybook
+- This DS syncs in **storybook shape** (`cfg.shape: "storybook"`). The stories in
+  `packages/design-system/src/*.stories.tsx` are the single source of truth — design-sync
+  generates previews from them and verifies each against the reference storybook render.
+- Reference storybook is built to `.design-sync/sb-reference` (gitignored). Rebuild it when
+  stories or DS source change:
+  `corepack yarn workspace @pyre/design-system exec storybook build -o <repo>/.design-sync/sb-reference`
+- `cfg.storybookConfigDir` = `packages/design-system/.storybook`; `cfg.storybookStatic` =
+  `.design-sync/sb-reference` (both cwd-relative, run converter from repo root).
+- Known build warn: `! preview decorator bundle failed: No loader for ".woff2"` — the
+  Storybook `preview.tsx` imports `styles.css`, which `@font-face`-references woff2 files.
+  Benign: the decorator only adds a cosmetic font wrapper; components are styled via the
+  shipped `_ds_bundle.css`, so previews render correctly and match the reference. Not new.
+- `.design-sync/previews/` is intentionally EMPTY — in storybook shape, previews come from
+  the stories. Only add an owned `previews/<Name>.tsx` to override a specific story preview.
+
 ## Build
 - The DS package has no `node_modules` of its own; React 19 resolves from the repo root.
   Run the converter with `--node-modules ./node_modules` and
