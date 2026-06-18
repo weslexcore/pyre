@@ -99,6 +99,9 @@ function Gallery() {
             Enquire
           </Button>
         </Card>
+        <Card variant="gradient" heading="Founding member" style={{ width: 300 }}>
+          Lock in launch pricing for life and get first access to every new location.
+        </Card>
       </Section>
 
       <Section title="Session cards">

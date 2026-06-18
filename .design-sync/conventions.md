@@ -37,7 +37,7 @@ under the header of every `Card` (with a `heading`) and `SessionCard` automatica
 ## The components
 
 `Button` (variant: primary/secondary/outline/cta, size: sm/md/lg, `href` for links) ·
-`Card` (variant: default/ink/elevated, `heading`) · `Badge` (tone: red/blue/gold/sage/outline) ·
+`Card` (variant: default/ink/elevated/gradient — `gradient` = brand conic-gradient border, `heading`) · `Badge` (tone: red/blue/gold/sage/outline) ·
 `Input` (`label`, `error`) · `Heading` (level 1–4, `eyebrow`; Neue Montreal) ·
 `Logo` (the PYRE wordmark — the only Eckmannpsych surface; `size`, inherits color) ·
 `ColorPalette` (brand swatch reference) ·
