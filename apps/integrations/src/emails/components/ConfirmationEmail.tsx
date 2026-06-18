@@ -64,8 +64,8 @@ export function ConfirmationEmail({
   return (
     <EmailLayout preview={preview} background={background}>
 
-      <Text style={heading}>{headingText}</Text>
-      {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
+      {/* <Text style={heading}>{headingText}</Text> */}
+      {/* {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />} */}
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>
 

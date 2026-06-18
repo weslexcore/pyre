@@ -10,13 +10,17 @@ const footer = {
   textAlign: 'center' as const,
 };
 
+// Full-bleed strip: the negative side margins + extra width cancel the
+// Container's 24px horizontal padding (EmailLayout) so the trees run edge to
+// edge across the card.
 const treeBand = {
+  width: 'calc(100% + 48px)',
   height: '96px',
   backgroundImage: `url(${ASSET_BASE}/pine-tree-repeat-creme.png)`,
   backgroundRepeat: 'repeat-x',
   backgroundPosition: 'center',
   backgroundSize: 'auto 96px',
-  margin: '40px 0 32px',
+  margin: '40px -24px 32px',
 };
 
 const iconBadge = {
