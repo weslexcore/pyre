@@ -1,10 +1,13 @@
 import * as React from "react";
 import { Squiggle } from "./Squiggle";
 
-export type CardVariant = "default" | "ink" | "elevated";
+export type CardVariant = "default" | "ink" | "elevated" | "gradient";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** `ink` inverts to the dark sauna palette; `elevated` adds a soft shadow. */
+  /**
+   * `ink` inverts to the dark sauna palette; `elevated` adds a soft shadow;
+   * `gradient` wraps the card in the brand conic-gradient border.
+   */
   variant?: CardVariant;
   /** Optional heading rendered at the top of the card. */
   heading?: React.ReactNode;

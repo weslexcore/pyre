@@ -18,6 +18,15 @@ export function Ink() {
   );
 }
 
+export function Gradient() {
+  return (
+    <Card variant="gradient" heading="Founding member" style={{ width: 320 }}>
+      Lock in launch pricing for life and get first access to every new
+      location.
+    </Card>
+  );
+}
+
 export function Elevated() {
   return (
     <Card variant="elevated" heading="Private rental" style={{ width: 320 }}>

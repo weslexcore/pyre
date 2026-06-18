@@ -149,6 +149,21 @@
 }
 .pyre-card--ink { background: var(--pyre-black); color: var(--pyre-creme); border-color: transparent; }
 .pyre-card--elevated { box-shadow: 0 8px 24px rgba(35, 34, 28, 0.12); }
+/* Brand conic-gradient border (the card-cta look). */
+.pyre-card--gradient {
+  border: 3px solid transparent;
+  background:
+    linear-gradient(var(--background), var(--background)) padding-box,
+    conic-gradient(
+      from 0deg,
+      var(--pyre-red),
+      var(--pyre-gold),
+      var(--pyre-sage),
+      var(--pyre-sky),
+      var(--pyre-blue),
+      var(--pyre-red)
+    ) border-box;
+}
 .pyre-squiggle { display: block; width: 100%; }
 .pyre-card__header { display: flex; flex-direction: column; gap: 4px; }
 .pyre-card__title { font-family: var(--font-sans); font-weight: 600; font-size: 18px; margin: 0; }
