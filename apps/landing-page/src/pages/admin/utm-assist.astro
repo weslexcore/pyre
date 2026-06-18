@@ -1,0 +1,23 @@
+---
+import { getCollection } from 'astro:content';
+import { UtmAssist } from '@/components/admin/UtmAssist';
+import MainLayout from '@/layouts/main.astro';
+
+export const prerender = true;
+
+const now = new Date();
+const posts = (await getCollection('blog'))
+  .filter((p) => p.data.draft !== true && p.data.date <= now)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .map((p) => ({ slug: p.id, title: p.data.title }));
+
+const origin = Astro.site?.origin ?? 'https://pyresauna.com';
+---
+
+<MainLayout title="Admin: UTM Assist" description="" transparentNav={true} noIndex={true}>
+  <div class="min-h-screen bg-[var(--pyre-black)]">
+    <div class="pt-24 pb-16">
+      <UtmAssist client:load origin={origin} blogPosts={posts} />
+    </div>
+  </div>
+</MainLayout>

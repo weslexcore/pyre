@@ -18,6 +18,11 @@ const ADMIN_LINKS: AdminLink[] = [
     title: 'Mailchimp Tags',
     description: 'Look up tag IDs for the configured Mailchimp audience.',
   },
+  {
+    href: '/admin/utm-assist',
+    title: 'UTM Assist',
+    description: 'Build tracked links to the site, a blog post, the events page, or an event.',
+  },
 ];
 
 type GateState = 'checking' | 'ok' | 'unauthenticated' | 'forbidden' | 'error';
