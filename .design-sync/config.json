@@ -1,0 +1,14 @@
+{
+  "pkg": "@pyre/design-system",
+  "globalName": "PyreDS",
+  "projectId": "6a541502-39d4-4bd4-a541-a7c9e8e1bcda",
+  "shape": "package",
+  "buildCmd": "node build.mjs && tsc -p tsconfig.build.json",
+  "cssEntry": "styles.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Card": { "cardMode": "column" },
+    "Logo": { "cardMode": "column" },
+    "SessionCard": { "cardMode": "column" }
+  }
+}
