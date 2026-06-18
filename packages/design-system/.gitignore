@@ -1,0 +1,4 @@
+dist/
+preview/app.js
+preview/app.js.map
+node_modules/
