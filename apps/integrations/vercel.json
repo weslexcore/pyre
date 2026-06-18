@@ -3,5 +3,16 @@
   "buildCommand": "cd ../.. && yarn turbo run build --filter=@pyre/integrations",
   "installCommand": "yarn install",
   "outputDirectory": "dist",
-  "framework": "astro"
+  "framework": "astro",
+  "headers": [
+    {
+      "source": "/email/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ]
 }
