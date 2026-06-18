@@ -1,8 +1,15 @@
-// Date-grouped schedule view for the events page
-// Listens for date filter events from the Astro EventDateFilter component
+// Date-grouped schedule view for the events page.
+// Shows only sessions within the next 2 weeks and filters them by session type
+// (derived dynamically from the Momence tags present on those upcoming events).
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
+import {
+  ALL_TYPES_FILTER,
+  ALL_TYPES_LABEL,
+  CATEGORY_TAGS,
+  WINDOW_DAYS,
+} from '@/lib/events-config';
 import type { EventItem } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
@@ -120,17 +127,17 @@ function EmptyState({ onShowAll }: { onShowAll: () => void }) {
           />
         </svg>
         <h2 className="font-sans text-xl font-semibold text-[var(--pyre-creme)]">
-          No sessions in this time range
+          No sessions of this type in the next two weeks
         </h2>
         <p className="font-sans text-base text-[var(--pyre-creme)]/70">
-          Try selecting a different filter to see more sessions.
+          Try a different session type to see more upcoming sessions.
         </p>
         <button
           type="button"
           onClick={onShowAll}
           className="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
         >
-          Show All Sessions
+          Show All Types
         </button>
       </div>
     </div>
@@ -345,40 +352,16 @@ function groupEventsByDate(events: EventItem[]): Map<string, EventItem[]> {
   return groups;
 }
 
-// -- Date filter logic (unchanged) -------------------------------------------
+// -- Window + type filter logic ----------------------------------------------
 
-type FilterType = 'week' | 'month' | '30days' | 'all';
-
-function filterEventsByDateRange(events: EventItem[], filter: FilterType): EventItem[] {
+// Keep only events that fall within the next WINDOW_DAYS (the hard 2-week limit).
+function filterEventsByWindow(events: EventItem[]): EventItem[] {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
-  let endDate: Date;
-
-  switch (filter) {
-    case 'week': {
-      endDate = new Date(now);
-      const daysUntilSunday = 7 - now.getDay();
-      endDate.setDate(now.getDate() + daysUntilSunday);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    }
-    case 'month': {
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    }
-    case '30days': {
-      endDate = new Date(now);
-      endDate.setDate(now.getDate() + 30);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    }
-    default: {
-      endDate = new Date('2100-01-01');
-      break;
-    }
-  }
+  const endDate = new Date(now);
+  endDate.setDate(now.getDate() + WINDOW_DAYS);
+  endDate.setHours(23, 59, 59, 999);
 
   return events.filter((event) => {
     if (!event.isoDate) return true;
@@ -387,89 +370,95 @@ function filterEventsByDateRange(events: EventItem[], filter: FilterType): Event
   });
 }
 
-// -- Main component ----------------------------------------------------------
-
-function computeAvailableFilters(events: EventItem[]): FilterType[] {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const nowMs = now.getTime();
-
-  const weekEnd = new Date(now);
-  weekEnd.setDate(now.getDate() + (7 - now.getDay()));
-  weekEnd.setHours(23, 59, 59, 999);
-  const weekEndMs = weekEnd.getTime();
-
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  monthEnd.setHours(23, 59, 59, 999);
-  const monthEndMs = monthEnd.getTime();
-
-  const thirtyEnd = new Date(now);
-  thirtyEnd.setDate(now.getDate() + 30);
-  thirtyEnd.setHours(23, 59, 59, 999);
-  const thirtyEndMs = thirtyEnd.getTime();
-
-  let hasWeek = false;
-  let hasMonth = false;
-  let hasThirty = false;
-
+// The allowlisted category tags (in display order) that have at least one event
+// in the window. Tags on events are matched case-insensitively.
+function deriveTypeFilters(events: EventItem[]): string[] {
+  const present = new Set<string>();
   for (const event of events) {
-    if (!event.isoDate) continue;
-    const t = new Date(event.isoDate).getTime();
-    if (!Number.isFinite(t) || t < nowMs) continue;
-    if (!hasWeek && t <= weekEndMs) hasWeek = true;
-    if (!hasMonth && t <= monthEndMs) hasMonth = true;
-    if (!hasThirty && t <= thirtyEndMs) hasThirty = true;
-    if (hasWeek && hasMonth && hasThirty) break;
+    if (!Array.isArray(event.tags)) continue;
+    for (const tag of event.tags) {
+      present.add(tag.trim().toLowerCase());
+    }
   }
-
-  const available: FilterType[] = [];
-  if (hasWeek) available.push('week');
-  if (hasMonth) available.push('month');
-  if (hasThirty) available.push('30days');
-  available.push('all');
-  return available;
+  return CATEGORY_TAGS.filter((category) => present.has(category.toLowerCase()));
 }
 
+function eventHasTag(event: EventItem, tag: string): boolean {
+  if (!Array.isArray(event.tags)) return false;
+  const lower = tag.toLowerCase();
+  return event.tags.some((t) => t.trim().toLowerCase() === lower);
+}
+
+// -- Filter chips ------------------------------------------------------------
+
+const CHIP_CLASSES =
+  'inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-4 py-2 text-base btn-cta-animated text-[var(--pyre-creme)]';
+
+function TypeFilter({
+  types,
+  selected,
+  onSelect,
+}: {
+  types: string[];
+  selected: string;
+  onSelect: (type: string) => void;
+}) {
+  const chips = [ALL_TYPES_FILTER, ...types];
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Session type filters">
+      {chips.map((type) => {
+        const isActive = type === selected;
+        const label = type === ALL_TYPES_FILTER ? ALL_TYPES_LABEL : type;
+        return (
+          <button
+            key={type}
+            type="button"
+            aria-pressed={isActive}
+            onClick={() => onSelect(type)}
+            className={isActive ? `${CHIP_CLASSES} is-animating` : CHIP_CLASSES}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// -- Main component ----------------------------------------------------------
+
 export default function EventsGrid({ fallback = [] }: EventsGridProps) {
-  const { events, loading, loadingMore, hasMore, loadAll } = useEvents(fallback);
-  const [filter, setFilter] = useState<FilterType>('all');
+  const { events, loading } = useEvents(fallback);
+  const [selectedType, setSelectedType] = useState<string>(ALL_TYPES_FILTER);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
-  const loadedAllRef = useRef(false);
 
   // Remove server-rendered skeleton once React has hydrated
   useEffect(() => {
     document.getElementById('events-skeleton')?.remove();
   }, []);
 
-  // Listen for filter events from the Astro EventDateFilter component
+  // Read the initial type filter from the URL (?type=)
   useEffect(() => {
-    function handleFilterEvent(e: CustomEvent<{ filter: string }>) {
-      setFilter(e.detail.filter as FilterType);
-    }
-
-    window.addEventListener('event-date-filter', handleFilterEvent as EventListener);
-
     const urlParams = new URLSearchParams(window.location.search);
-    const initialFilter = urlParams.get('filter') || 'all';
-    setFilter(initialFilter as FilterType);
-
-    return () => {
-      window.removeEventListener('event-date-filter', handleFilterEvent as EventListener);
-    };
+    const initialType = urlParams.get('type');
+    if (initialType) setSelectedType(initialType);
   }, []);
 
-  const handleShowAll = useCallback(() => {
-    const allFilterBtn = document.querySelector(
-      '.filter-btn[data-filter="all"]'
-    ) as HTMLButtonElement | null;
-    if (allFilterBtn) {
-      allFilterBtn.click();
+  const handleSelectType = useCallback((type: string) => {
+    setSelectedType(type);
+    const url = new URL(window.location.href);
+    if (type === ALL_TYPES_FILTER) {
+      url.searchParams.delete('type');
     } else {
-      setFilter('all');
+      url.searchParams.set('type', type);
     }
+    window.history.replaceState({}, '', url.toString());
   }, []);
 
-  // Open modal for event specified in ?event= query param (deep-link from carousel)
+  const handleShowAll = useCallback(() => handleSelectType(ALL_TYPES_FILTER), [handleSelectType]);
+
+  // Open modal for event specified in ?event= query param (deep-link from carousel).
+  // Matched against the full fetched list so links to events >2 weeks out still open.
   useEffect(() => {
     if (loading) return;
     const allEvents = events.length > 0 ? events : fallback;
@@ -489,25 +478,32 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     }
   }, [loading, events, fallback]);
 
-  // When the user picks "all" and the server has more, fetch the rest once.
-  useEffect(() => {
-    if (filter !== 'all') return;
-    if (!hasMore) return;
-    if (loadedAllRef.current) return;
-    loadedAllRef.current = true;
-    loadAll();
-  }, [filter, hasMore, loadAll]);
-
   const displayEvents = events.length > 0 ? events : fallback;
 
+  // Hard 2-week window — the base set everything else derives from.
+  const windowedEvents = useMemo(() => filterEventsByWindow(displayEvents), [displayEvents]);
+
+  // Dynamic type chips, built from the tags present on the upcoming events.
+  const typeFilters = useMemo(() => deriveTypeFilters(windowedEvents), [windowedEvents]);
+
+  // If the active type isn't available in the current window, fall back to "all".
+  const effectiveType =
+    selectedType === ALL_TYPES_FILTER ||
+    typeFilters.some((t) => t.toLowerCase() === selectedType.toLowerCase())
+      ? selectedType
+      : ALL_TYPES_FILTER;
+
   const filteredEvents = useMemo(
-    () => filterEventsByDateRange(displayEvents, filter),
-    [displayEvents, filter]
+    () =>
+      effectiveType === ALL_TYPES_FILTER
+        ? windowedEvents
+        : windowedEvents.filter((event) => eventHasTag(event, effectiveType)),
+    [windowedEvents, effectiveType]
   );
   const grouped = useMemo(() => groupEventsByDate(filteredEvents), [filteredEvents]);
 
   const visibleCount = filteredEvents.length;
-  const totalCount = displayEvents.length;
+  const totalCount = windowedEvents.length;
 
   // Update the results count in the DOM (for the Astro-rendered count element)
   useEffect(() => {
@@ -517,54 +513,35 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     if (totalCountEl) totalCountEl.textContent = String(totalCount);
   }, [visibleCount, totalCount]);
 
-  const availableFilters = useMemo(
-    () => (loading ? null : computeAvailableFilters(displayEvents)),
-    [loading, displayEvents]
-  );
-
-  // Tell the Astro filter component which filters have events
-  useEffect(() => {
-    if (!availableFilters) return;
-    window.dispatchEvent(
-      new CustomEvent('event-filters-available', { detail: { available: availableFilters } })
-    );
-  }, [availableFilters]);
-
   if (loading) {
     return <ScheduleSkeleton />;
   }
 
-  if (displayEvents.length === 0) {
+  if (windowedEvents.length === 0) {
     return <NoEventsMessage />;
-  }
-
-  if (visibleCount === 0) {
-    return <EmptyState onShowAll={handleShowAll} />;
   }
 
   return (
     <>
-      <div className="space-y-2">
-        {Array.from(grouped.entries()).map(([dateKey, groupEvents]) => (
-          <DateGroup
-            key={dateKey}
-            dateLabel={groupEvents[0].date}
-            events={groupEvents}
-            onViewDetails={setSelectedEvent}
-          />
-        ))}
-      </div>
-      {loadingMore && (
-        <div
-          role="status"
-          aria-label="Loading more sessions"
-          className="flex items-center gap-4 py-3 px-4 mt-2 animate-pulse text-[var(--pyre-creme)]"
-        >
-          <div className="h-4 w-36 bg-current/10 rounded" />
-          <div className="flex-1" />
-          <div className="h-4 w-32 bg-current/10 rounded" />
-          <div className="h-4 w-20 bg-current/10 rounded" />
-          <div className="h-7 w-24 bg-current/10 rounded-full" />
+      {/* Only show the filter row when there's more than one type to choose from */}
+      {typeFilters.length > 1 && (
+        <div className="mb-8">
+          <TypeFilter types={typeFilters} selected={effectiveType} onSelect={handleSelectType} />
+        </div>
+      )}
+
+      {visibleCount === 0 ? (
+        <EmptyState onShowAll={handleShowAll} />
+      ) : (
+        <div className="space-y-2">
+          {Array.from(grouped.entries()).map(([dateKey, groupEvents]) => (
+            <DateGroup
+              key={dateKey}
+              dateLabel={groupEvents[0].date}
+              events={groupEvents}
+              onViewDetails={setSelectedEvent}
+            />
+          ))}
         </div>
       )}
       <Suspense fallback={null}>

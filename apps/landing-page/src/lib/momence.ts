@@ -172,6 +172,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
     spotsRemaining: isPrivate ? undefined : event.spotsRemaining,
     totalSpots: isPrivate ? undefined : event.capacity,
     isPrivate,
+    tags: Array.isArray(event.tags) ? event.tags : [],
   };
 }
 

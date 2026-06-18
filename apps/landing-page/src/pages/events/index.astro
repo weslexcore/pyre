@@ -2,9 +2,7 @@
 export const prerender = true;
 
 import ogImg from '@/assets/images/warm_sauna.webp';
-import EventDateFilter from '@/components/events/EventDateFilter.astro';
 import EventsGrid from '@/components/events/EventsGrid';
-import GradientOverlay from '@/components/GradientOverlay.astro';
 import MainLayout from '@/layouts/main.astro';
 import fallbackEvents from '@/lib/events';
 
@@ -27,12 +25,8 @@ const description =
         </p>
       </header>
 
-      <!-- Date Filters -->
-      <div class="mb-8">
-        <EventDateFilter />
-      </div>
+      <!-- Dynamic Events Grid (React island) — renders its own session-type filters -->
 
-      <!-- Dynamic Events Grid (React island) -->
       <div id="events-container">
         {/* Server-rendered skeleton shown instantly, replaced when React hydrates */}
         <div id="events-skeleton" class="space-y-8 text-[var(--pyre-creme)]">
@@ -120,7 +114,7 @@ const description =
             <div>
               <h3 class="font-primary-semibold text-base uppercase tracking-wide text-[var(--pyre-creme)] mb-2">Booking</h3>
               <p class="font-sans text-[var(--pyre-creme)]/70 leading-relaxed">
-                Sessions are bookable online — select a date and time above. New to Pyre? <a href="/#membership" class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">Our intro 2-pack</a> is the best way to try it.
+                Sessions are bookable online — browse the next two weeks and filter by session type above. New to Pyre? <a href="/#membership" class="text-[var(--pyre-muted-gold)] hover:text-[var(--pyre-creme)]">Our intro 2-pack</a> is the best way to try it.
               </p>
             </div>
           </div>

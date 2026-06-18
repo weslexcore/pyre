@@ -408,6 +408,7 @@ export interface EventItem {
   spotsRemaining?: number; // Available spots from Momence API
   totalSpots?: number; // Total capacity from Momence API
   isPrivate?: boolean; // Private events hide booking CTAs
+  tags?: string[]; // Momence category tags, used for type filtering on the events page
 }
 
 export interface EventsContent {
