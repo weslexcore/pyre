@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { withBase } from '@/lib/paths';
 import type { EventItem } from '@/lib/types';
@@ -46,6 +46,126 @@ const SOURCE_PRESETS = [
 
 const MEDIUM_PRESETS = ['social', 'email', 'cpc', 'qr', 'print', 'referral', 'organic'];
 
+// Short explanations surfaced via the info button next to each label.
+const FIELD_INFO: Record<string, string> = {
+  destination:
+    'The page this link opens. The UTM tags below are appended to whichever destination you choose.',
+  blog: 'Which published blog article the link opens.',
+  event: 'Which upcoming event the link opens. Loaded live from Momence.',
+  source:
+    'Where the visitor comes from — the platform or referrer. e.g. instagram, newsletter, qr.',
+  medium: 'The type of channel the link lives in. e.g. social, email, cpc, print.',
+  campaign:
+    'The promotion this link belongs to. e.g. summer-launch-2026. Reuse the exact same name across links so reports group them together.',
+  term: 'Optional. The paid-search keyword you are bidding on.',
+  content: 'Optional. Tells apart two links to the same place. e.g. header-button vs footer-link.',
+  link: 'The finished tracked URL. Copy it and share.',
+};
+
+// Recently-used values are persisted per browser so campaigns/terms can be
+// recreated with one click (and reused verbatim to avoid typos).
+const HISTORY_KEY = 'pyre-utm-history';
+const HISTORY_LIMIT = 20;
+
+type FieldHistory = Record<keyof UtmFields, string[]>;
+
+const EMPTY_HISTORY: FieldHistory = {
+  source: [],
+  medium: [],
+  campaign: [],
+  term: [],
+  content: [],
+};
+
+function loadHistory(): FieldHistory {
+  if (typeof window === 'undefined') return EMPTY_HISTORY;
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return EMPTY_HISTORY;
+    const parsed = JSON.parse(raw) as Partial<FieldHistory>;
+    const pick = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    return {
+      source: pick(parsed.source),
+      medium: pick(parsed.medium),
+      campaign: pick(parsed.campaign),
+      term: pick(parsed.term),
+      content: pick(parsed.content),
+    };
+  } catch {
+    return EMPTY_HISTORY;
+  }
+}
+
+function saveHistory(history: FieldHistory): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // Storage unavailable or full — history is best-effort only.
+  }
+}
+
+// Merge curated presets with saved history, de-duped (case-insensitive), history first.
+function mergeSuggestions(history: string[], presets: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of [...history, ...presets]) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (trimmed && !seen.has(key)) {
+      seen.add(key);
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+/** A label with a hover/tap info button explaining the field. */
+function FieldLabel({
+  children,
+  info,
+  htmlFor,
+}: {
+  children: ReactNode;
+  info: string;
+  htmlFor?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const labelClass = 'text-xs font-mono-bold uppercase tracking-wide text-white/40';
+  return (
+    <div className="flex items-center gap-1.5 mb-1.5">
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className={labelClass}>
+          {children}
+        </label>
+      ) : (
+        <span className={labelClass}>{children}</span>
+      )}
+      <span className="relative inline-flex group">
+        <button
+          type="button"
+          aria-label={`What is ${typeof children === 'string' ? children : 'this field'}?`}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          onBlur={() => setOpen(false)}
+          className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/30 text-[10px] leading-none text-white/50 hover:text-white hover:border-white/60 transition-colors"
+        >
+          i
+        </button>
+        <span
+          role="tooltip"
+          className={`pointer-events-none absolute left-0 top-6 z-20 w-60 rounded border border-white/20 bg-[var(--pyre-black)] px-2.5 py-1.5 text-[11px] font-normal normal-case tracking-normal leading-snug text-white/70 shadow-lg transition-opacity group-hover:opacity-100 ${
+            open ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {info}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /**
  * Builds an absolute, UTM-tagged URL for the given internal path.
  * Empty UTM fields are omitted. Uses the URL API so params merge cleanly with
@@ -84,6 +204,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   const [eventsError, setEventsError] = useState<string | null>(null);
 
   const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<FieldHistory>(() => loadHistory());
 
   useEffect(() => {
     if (authLoading) return;
@@ -124,32 +245,30 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   }, [authLoading, isAuthenticated, user]);
 
   // Lazily load events the first time the "Specific event" destination is chosen.
+  // A ref guard ensures the fetch fires exactly once and isn't cancelled by the
+  // re-render its own setEventsLoading(true) triggers.
+  const eventsFetchStarted = useRef(false);
   useEffect(() => {
-    if (destination !== 'event' || events !== null || eventsLoading) return;
+    if (destination !== 'event' || eventsFetchStarted.current) return;
+    eventsFetchStarted.current = true;
 
-    let cancelled = false;
     setEventsLoading(true);
     setEventsError(null);
     fetch('/api/events?all=1')
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load events (${res.status})`);
         const json = (await res.json()) as { events: EventItem[] };
-        if (cancelled) return;
         setEvents(json.events);
         setEventId((current) => current || json.events[0]?.id || '');
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
         setEventsError(err instanceof Error ? err.message : 'Failed to load events');
+        eventsFetchStarted.current = false; // allow retry on next selection
       })
       .finally(() => {
-        if (!cancelled) setEventsLoading(false);
+        setEventsLoading(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [destination, events, eventsLoading]);
+  }, [destination]);
 
   const generatedUrl = useMemo(() => {
     switch (destination) {
@@ -166,20 +285,49 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
     }
   }, [destination, origin, utm, blogSlug, eventId]);
 
+  const rememberUsedValues = useCallback((fields: UtmFields) => {
+    setHistory((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const key of Object.keys(prev) as Array<keyof UtmFields>) {
+        const value = fields[key].trim();
+        if (!value) continue;
+        const existing = next[key].filter((v) => v.toLowerCase() !== value.toLowerCase());
+        next[key] = [value, ...existing].slice(0, HISTORY_LIMIT);
+        changed = true;
+      }
+      if (!changed) return prev;
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
   const copyUrl = useCallback(async () => {
     if (!generatedUrl) return;
     try {
       await navigator.clipboard.writeText(generatedUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      rememberUsedValues(utm);
     } catch {
       // Clipboard not available
     }
-  }, [generatedUrl]);
+  }, [generatedUrl, utm, rememberUsedValues]);
 
   const setUtmField = useCallback((field: keyof UtmFields, value: string) => {
     setUtm((current) => ({ ...current, [field]: value }));
   }, []);
+
+  const suggestions = useMemo(
+    () => ({
+      source: mergeSuggestions(history.source, SOURCE_PRESETS),
+      medium: mergeSuggestions(history.medium, MEDIUM_PRESETS),
+      campaign: mergeSuggestions(history.campaign, []),
+      term: mergeSuggestions(history.term, []),
+      content: mergeSuggestions(history.content, []),
+    }),
+    [history]
+  );
 
   if (authLoading || gate === 'checking') {
     return (
@@ -226,7 +374,6 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
   const inputClass =
     'w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-  const labelClass = 'block text-xs font-mono-bold uppercase tracking-wide text-white/40 mb-1.5';
 
   return (
     <div className="max-w-2xl mx-auto px-4">
@@ -239,7 +386,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
       {/* Destination */}
       <div className="mb-6">
-        <span className={labelClass}>Destination</span>
+        <FieldLabel info={FIELD_INFO.destination}>Destination</FieldLabel>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(
             [
@@ -268,9 +415,9 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
       {/* Blog post selector */}
       {destination === 'blog' && (
         <div className="mb-6">
-          <label htmlFor="utm-blog" className={labelClass}>
+          <FieldLabel htmlFor="utm-blog" info={FIELD_INFO.blog}>
             Blog post
-          </label>
+          </FieldLabel>
           {blogPosts.length === 0 ? (
             <p className="text-sm text-white/40">No published blog posts found.</p>
           ) : (
@@ -293,9 +440,9 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
       {/* Event selector */}
       {destination === 'event' && (
         <div className="mb-6">
-          <label htmlFor="utm-event" className={labelClass}>
+          <FieldLabel htmlFor="utm-event" info={FIELD_INFO.event}>
             Event
-          </label>
+          </FieldLabel>
           {eventsLoading && <p className="text-sm text-white/40">Loading events…</p>}
           {eventsError && <p className="text-sm text-[var(--pyre-red)]">{eventsError}</p>}
           {events && events.length === 0 && (
@@ -321,83 +468,42 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
       {/* UTM fields */}
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
-        <div>
-          <label htmlFor="utm-source" className={labelClass}>
-            utm_source
-          </label>
-          <input
-            id="utm-source"
-            list="utm-source-presets"
-            value={utm.source}
-            onChange={(e) => setUtmField('source', e.target.value)}
-            placeholder="e.g. instagram"
-            className={inputClass}
-          />
-          <datalist id="utm-source-presets">
-            {SOURCE_PRESETS.map((preset) => (
-              <option key={preset} value={preset} />
-            ))}
-          </datalist>
-        </div>
-        <div>
-          <label htmlFor="utm-medium" className={labelClass}>
-            utm_medium
-          </label>
-          <input
-            id="utm-medium"
-            list="utm-medium-presets"
-            value={utm.medium}
-            onChange={(e) => setUtmField('medium', e.target.value)}
-            placeholder="e.g. social"
-            className={inputClass}
-          />
-          <datalist id="utm-medium-presets">
-            {MEDIUM_PRESETS.map((preset) => (
-              <option key={preset} value={preset} />
-            ))}
-          </datalist>
-        </div>
-        <div>
-          <label htmlFor="utm-campaign" className={labelClass}>
-            utm_campaign
-          </label>
-          <input
-            id="utm-campaign"
-            value={utm.campaign}
-            onChange={(e) => setUtmField('campaign', e.target.value)}
-            placeholder="e.g. summer-launch"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label htmlFor="utm-term" className={labelClass}>
-            utm_term
-          </label>
-          <input
-            id="utm-term"
-            value={utm.term}
-            onChange={(e) => setUtmField('term', e.target.value)}
-            placeholder="optional"
-            className={inputClass}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label htmlFor="utm-content" className={labelClass}>
-            utm_content
-          </label>
-          <input
-            id="utm-content"
-            value={utm.content}
-            onChange={(e) => setUtmField('content', e.target.value)}
-            placeholder="optional"
-            className={inputClass}
-          />
-        </div>
+        {(
+          [
+            ['source', 'utm_source', 'e.g. instagram', false],
+            ['medium', 'utm_medium', 'e.g. social', false],
+            ['campaign', 'utm_campaign', 'e.g. summer-launch', false],
+            ['term', 'utm_term', 'optional', false],
+            ['content', 'utm_content', 'optional', true],
+          ] as Array<[keyof UtmFields, string, string, boolean]>
+        ).map(([field, label, placeholder, fullWidth]) => (
+          <div key={field} className={fullWidth ? 'sm:col-span-2' : undefined}>
+            <FieldLabel htmlFor={`utm-${field}`} info={FIELD_INFO[field]}>
+              {label}
+            </FieldLabel>
+            <input
+              id={`utm-${field}`}
+              list={`utm-${field}-suggestions`}
+              value={utm[field]}
+              onChange={(e) => setUtmField(field, e.target.value)}
+              placeholder={placeholder}
+              autoComplete="off"
+              className={inputClass}
+            />
+            {suggestions[field].length > 0 && (
+              <datalist id={`utm-${field}-suggestions`}>
+                {suggestions[field].map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Generated link */}
       <div>
-        <span className={labelClass}>Generated link</span>
+        <FieldLabel info={FIELD_INFO.link}>Generated link</FieldLabel>
         <div className="flex flex-col sm:flex-row gap-2">
           <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
             {generatedUrl || <span className="text-white/30">Select a destination…</span>}
