@@ -33,18 +33,15 @@ const EMPTY_UTM: UtmFields = {
   content: '',
 };
 
-const SOURCE_PRESETS = [
-  'instagram',
-  'facebook',
-  'email',
-  'newsletter',
-  'qr',
-  'print',
-  'google',
-  'linkedin',
-];
-
-const MEDIUM_PRESETS = ['social', 'email', 'cpc', 'qr', 'print', 'referral', 'organic'];
+// Curated, built-in presets seeded for the team. Users can add their own on top
+// of these (persisted to localStorage); curated ones can't be removed.
+const CURATED_PRESETS: Record<keyof UtmFields, string[]> = {
+  source: ['instagram', 'facebook', 'email', 'newsletter', 'qr', 'print', 'google', 'linkedin'],
+  medium: ['social', 'email', 'cpc', 'qr', 'print', 'referral', 'organic'],
+  campaign: ['grand-opening', 'summer-launch', 'membership-drive', 'holiday', 'referral-program'],
+  term: [],
+  content: ['header', 'footer', 'cta-button', 'bio-link', 'story-link'],
+};
 
 // Short explanations surfaced via the info button next to each label.
 const FIELD_INFO: Record<string, string> = {
@@ -62,14 +59,13 @@ const FIELD_INFO: Record<string, string> = {
   link: 'The finished tracked URL. Copy it and share.',
 };
 
-// Recently-used values are persisted per browser so campaigns/terms can be
-// recreated with one click (and reused verbatim to avoid typos).
-const HISTORY_KEY = 'pyre-utm-history';
-const HISTORY_LIMIT = 20;
+// User-created presets are persisted per browser so campaigns/terms can be
+// reused with one click (and reused verbatim to avoid typos).
+const CUSTOM_PRESETS_KEY = 'pyre-utm-custom-presets';
 
-type FieldHistory = Record<keyof UtmFields, string[]>;
+type FieldPresets = Record<keyof UtmFields, string[]>;
 
-const EMPTY_HISTORY: FieldHistory = {
+const EMPTY_PRESETS: FieldPresets = {
   source: [],
   medium: [],
   campaign: [],
@@ -77,12 +73,12 @@ const EMPTY_HISTORY: FieldHistory = {
   content: [],
 };
 
-function loadHistory(): FieldHistory {
-  if (typeof window === 'undefined') return EMPTY_HISTORY;
+function loadCustomPresets(): FieldPresets {
+  if (typeof window === 'undefined') return EMPTY_PRESETS;
   try {
-    const raw = window.localStorage.getItem(HISTORY_KEY);
-    if (!raw) return EMPTY_HISTORY;
-    const parsed = JSON.parse(raw) as Partial<FieldHistory>;
+    const raw = window.localStorage.getItem(CUSTOM_PRESETS_KEY);
+    if (!raw) return EMPTY_PRESETS;
+    const parsed = JSON.parse(raw) as Partial<FieldPresets>;
     const pick = (v: unknown): string[] =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
     return {
@@ -93,24 +89,24 @@ function loadHistory(): FieldHistory {
       content: pick(parsed.content),
     };
   } catch {
-    return EMPTY_HISTORY;
+    return EMPTY_PRESETS;
   }
 }
 
-function saveHistory(history: FieldHistory): void {
+function saveCustomPresets(presets: FieldPresets): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    window.localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets));
   } catch {
-    // Storage unavailable or full — history is best-effort only.
+    // Storage unavailable or full — presets are best-effort only.
   }
 }
 
-// Merge curated presets with saved history, de-duped (case-insensitive), history first.
-function mergeSuggestions(history: string[], presets: string[]): string[] {
+// Combine curated + user presets, de-duped (case-insensitive), curated first.
+function mergeSuggestions(curated: string[], custom: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const value of [...history, ...presets]) {
+  for (const value of [...curated, ...custom]) {
     const trimmed = value.trim();
     const key = trimmed.toLowerCase();
     if (trimmed && !seen.has(key)) {
@@ -204,7 +200,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   const [eventsError, setEventsError] = useState<string | null>(null);
 
   const [copied, setCopied] = useState(false);
-  const [history, setHistory] = useState<FieldHistory>(() => loadHistory());
+  const [customPresets, setCustomPresets] = useState<FieldPresets>(() => loadCustomPresets());
 
   useEffect(() => {
     if (authLoading) return;
@@ -285,48 +281,55 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
     }
   }, [destination, origin, utm, blogSlug, eventId]);
 
-  const rememberUsedValues = useCallback((fields: UtmFields) => {
-    setHistory((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const key of Object.keys(prev) as Array<keyof UtmFields>) {
-        const value = fields[key].trim();
-        if (!value) continue;
-        const existing = next[key].filter((v) => v.toLowerCase() !== value.toLowerCase());
-        next[key] = [value, ...existing].slice(0, HISTORY_LIMIT);
-        changed = true;
-      }
-      if (!changed) return prev;
-      saveHistory(next);
-      return next;
-    });
-  }, []);
-
   const copyUrl = useCallback(async () => {
     if (!generatedUrl) return;
     try {
       await navigator.clipboard.writeText(generatedUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-      rememberUsedValues(utm);
     } catch {
       // Clipboard not available
     }
-  }, [generatedUrl, utm, rememberUsedValues]);
+  }, [generatedUrl]);
 
   const setUtmField = useCallback((field: keyof UtmFields, value: string) => {
     setUtm((current) => ({ ...current, [field]: value }));
   }, []);
 
-  const suggestions = useMemo(
+  // Save the field's current value as a reusable custom preset (persisted).
+  const addPreset = useCallback((field: keyof UtmFields, rawValue: string) => {
+    const value = rawValue.trim();
+    if (!value) return;
+    setCustomPresets((prev) => {
+      const lower = value.toLowerCase();
+      // Skip if it already exists as a curated or custom preset.
+      const exists = [...CURATED_PRESETS[field], ...prev[field]].some(
+        (v) => v.toLowerCase() === lower
+      );
+      if (exists) return prev;
+      const next = { ...prev, [field]: [...prev[field], value] };
+      saveCustomPresets(next);
+      return next;
+    });
+  }, []);
+
+  const removePreset = useCallback((field: keyof UtmFields, value: string) => {
+    setCustomPresets((prev) => {
+      const next = { ...prev, [field]: prev[field].filter((v) => v !== value) };
+      saveCustomPresets(next);
+      return next;
+    });
+  }, []);
+
+  const suggestions = useMemo<FieldPresets>(
     () => ({
-      source: mergeSuggestions(history.source, SOURCE_PRESETS),
-      medium: mergeSuggestions(history.medium, MEDIUM_PRESETS),
-      campaign: mergeSuggestions(history.campaign, []),
-      term: mergeSuggestions(history.term, []),
-      content: mergeSuggestions(history.content, []),
+      source: mergeSuggestions(CURATED_PRESETS.source, customPresets.source),
+      medium: mergeSuggestions(CURATED_PRESETS.medium, customPresets.medium),
+      campaign: mergeSuggestions(CURATED_PRESETS.campaign, customPresets.campaign),
+      term: mergeSuggestions(CURATED_PRESETS.term, customPresets.term),
+      content: mergeSuggestions(CURATED_PRESETS.content, customPresets.content),
     }),
-    [history]
+    [customPresets]
   );
 
   if (authLoading || gate === 'checking') {
@@ -481,21 +484,58 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
             <FieldLabel htmlFor={`utm-${field}`} info={FIELD_INFO[field]}>
               {label}
             </FieldLabel>
-            <input
-              id={`utm-${field}`}
-              list={`utm-${field}-suggestions`}
-              value={utm[field]}
-              onChange={(e) => setUtmField(field, e.target.value)}
-              placeholder={placeholder}
-              autoComplete="off"
-              className={inputClass}
-            />
+            <div className="flex gap-2">
+              <input
+                id={`utm-${field}`}
+                list={`utm-${field}-suggestions`}
+                value={utm[field]}
+                onChange={(e) => setUtmField(field, e.target.value)}
+                placeholder={placeholder}
+                autoComplete="off"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => addPreset(field, utm[field])}
+                disabled={!utm[field].trim()}
+                title="Save as preset"
+                className="shrink-0 px-3 rounded border border-white/20 text-sm text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-30"
+              >
+                + Save
+              </button>
+            </div>
             {suggestions[field].length > 0 && (
               <datalist id={`utm-${field}-suggestions`}>
                 {suggestions[field].map((option) => (
                   <option key={option} value={option} />
                 ))}
               </datalist>
+            )}
+            {customPresets[field].length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {customPresets[field].map((preset) => (
+                  <span
+                    key={preset}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 pl-2 pr-1 py-0.5 text-xs text-white/70"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setUtmField(field, preset)}
+                      className="hover:text-[var(--pyre-creme)] transition-colors"
+                    >
+                      {preset}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePreset(field, preset)}
+                      aria-label={`Remove preset ${preset}`}
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white/40 hover:text-[var(--pyre-red)] transition-colors"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         ))}
