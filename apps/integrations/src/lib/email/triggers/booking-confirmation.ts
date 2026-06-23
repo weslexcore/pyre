@@ -77,7 +77,7 @@ export async function sendBookingConfirmationEmails({
     dateLabel: session?.dateLabel ?? 'See your account for details',
     timeLabel: session?.timeLabel ?? '',
     location: session?.location ?? 'Pyre Sauna',
-    manageUrl: `${siteUrl}/account`,
+    // manageUrl: `${siteUrl}/account`,
     sessionImageUrl: session?.imageUrl,
   };
 
@@ -130,7 +130,7 @@ export async function sendBookingConfirmationEmails({
           props: {
             firstName: member.firstName || 'there',
             faqs: FIRST_TIMER_FAQS,
-            manageUrl: `${siteUrl}/account`,
+            // manageUrl: `${siteUrl}/account`,
             directionsUrl: 'https://maps.google.com/?q=Pyre+Sauna',
           },
         });

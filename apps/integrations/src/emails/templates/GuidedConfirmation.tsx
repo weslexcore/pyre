@@ -14,6 +14,11 @@ export function GuidedConfirmation(props: ConfirmationEmailProps) {
   );
 }
 
-GuidedConfirmation.PreviewProps = {...sampleConfirmationProps, sessionTitle: "Signature Guided Class", sessionImageUrl: "https://images.momence.com/h/169530/session-template-banner/d0db75ba-775b-4335-84f8-2e6a7f28b8a3.webp"};
+GuidedConfirmation.PreviewProps = {
+  ...sampleConfirmationProps,
+  sessionTitle: 'Signature Guided Class',
+  sessionImageUrl:
+    'https://images.momence.com/h/169530/session-template-banner/d0db75ba-775b-4335-84f8-2e6a7f28b8a3.webp',
+};
 
 export default GuidedConfirmation;

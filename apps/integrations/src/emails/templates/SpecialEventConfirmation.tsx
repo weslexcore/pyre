@@ -17,7 +17,8 @@ export function SpecialEventConfirmation(props: ConfirmationEmailProps) {
 SpecialEventConfirmation.PreviewProps = {
   ...sampleConfirmationProps,
   sessionTitle: 'Sound Bath // Sauna // Plunge',
-  sessionImageUrl: 'https://images.momence.com/h/169530/session-banner/32f8ce0d-8f97-4ac6-a013-d600c9a73d7d.jpeg',
+  sessionImageUrl:
+    'https://images.momence.com/h/169530/session-banner/32f8ce0d-8f97-4ac6-a013-d600c9a73d7d.jpeg',
 };
 
 export default SpecialEventConfirmation;

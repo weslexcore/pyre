@@ -24,7 +24,7 @@ const linkStyle = {
 export function FirstTimerWelcome({
   firstName,
   faqs,
-  manageUrl,
+  // manageUrl,
   directionsUrl,
 }: FirstTimerEmailProps) {
   return (
@@ -38,8 +38,8 @@ export function FirstTimerWelcome({
         walk in feeling relaxed and ready.
       </Text>
       <Text style={text}>
-        Bring a swimsuit and a water bottle. We'll provide everything else
-        you'll need. Arrive up to 10 minutes early to check in and get changed. 
+        Bring a swimsuit and a water bottle. We'll provide everything else you'll need. Arrive up to
+        10 minutes early to check in and get changed.
       </Text>
 
       <Button href={directionsUrl} style={button}>
@@ -61,17 +61,15 @@ export function FirstTimerWelcome({
       <Text style={text}>
         If you have any questions or need to modify your reservation, just reply to this email.
       </Text>
-      <Text style={text}>
-        See you soon!
-      </Text>
+      <Text style={text}>See you soon!</Text>
       <Text style={text}>Wes + Julien</Text>
     </EmailLayout>
   );
 }
 
 FirstTimerWelcome.PreviewProps = {
-  firstName: 'Alex',
-  manageUrl: 'https://pyresauna.com/account',
+  firstName: 'Julien',
+  // manageUrl: 'https://pyresauna.com/account',
   directionsUrl: 'https://maps.google.com/?q=Pyre+Sauna',
   faqs: [
     {
@@ -91,7 +89,7 @@ FirstTimerWelcome.PreviewProps = {
     {
       question: 'Where should I park?',
       answer:
-        "Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.",
+        'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.',
     },
   ],
 } satisfies FirstTimerEmailProps;

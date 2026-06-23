@@ -24,7 +24,7 @@ const labelStyle = {
   letterSpacing: '0.06em',
   margin: '0 0 2px',
   textTransform: 'uppercase' as const,
-  fontFamily: 'monospace'
+  fontFamily: 'monospace',
 };
 
 const valueStyle = {
@@ -52,7 +52,7 @@ export function ConfirmationEmail({
   dateLabel,
   timeLabel,
   location,
-  manageUrl,
+  // manageUrl,
   sessionImageUrl,
   preview,
   headingText,
@@ -86,16 +86,18 @@ export function ConfirmationEmail({
         <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
       </Section>
 
-      <Text style={text}>If you need to update your booking or chat with us, just reply to this email.</Text>
+      <Text style={text}>
+        If you need to update your booking or chat with us, just reply to this email.
+      </Text>
     </EmailLayout>
   );
 }
 
 export const sampleConfirmationProps: ConfirmationEmailProps = {
-  firstName: 'Alex',
+  firstName: 'Julien',
   sessionTitle: 'Signature Guided Class',
   dateLabel: 'Sat, June 20, 2026',
   timeLabel: '10:00 AM - 12:00 PM',
   location: '1000 Westover Hills Blvd, Richmond, VA 23225',
-  manageUrl: 'https://momence.com/sign-in',
+  // manageUrl: 'https://momence.com/sign-in',
 };

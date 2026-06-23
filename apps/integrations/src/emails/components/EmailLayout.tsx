@@ -41,7 +41,16 @@ const container = {
   borderRadius: '8px',
   margin: '0 auto',
   maxWidth: '560px',
-  padding: '32px 24px 48px',
+  // No horizontal padding here: it's re-applied per content block (bodyInset,
+  // footer) so the footer's pine-tree band can bleed edge to edge. Gmail strips
+  // negative margins, so breaking *out* of a padded container is not reliable.
+  padding: '32px 0 48px',
+};
+
+// Horizontal inset for body content; keeps text/images off the card edges while
+// the full-width tree band runs flush.
+const bodyInset = {
+  padding: '0 24px',
 };
 
 interface EmailLayoutProps {
@@ -67,7 +76,7 @@ export function EmailLayout({
         <Section style={backdrop(background)}>
           <Container style={container}>
             <EmailHeader />
-            {children}
+            <Section style={bodyInset}>{children}</Section>
             <EmailFooter unsubscribeUrl={unsubscribeUrl} preferencesUrl={preferencesUrl} />
           </Container>
         </Section>

@@ -17,7 +17,8 @@ export function SocialConfirmation(props: ConfirmationEmailProps) {
 
 SocialConfirmation.PreviewProps = {
   ...sampleConfirmationProps,
-  sessionImageUrl: "https://images.momence.com/h/169530/session-banner/9fec582a-df63-40f2-9754-b4c69f176423.jpeg",
+  sessionImageUrl:
+    'https://images.momence.com/h/169530/session-banner/9fec582a-df63-40f2-9754-b4c69f176423.jpeg',
   sessionTitle: 'Social Evening w/ Boy Lichtenstein',
 };
 

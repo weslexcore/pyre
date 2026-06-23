@@ -7,7 +7,7 @@ export interface ConfirmationEmailProps {
   dateLabel: string;
   timeLabel: string;
   location: string;
-  manageUrl: string;
+  // manageUrl: string;
   /** The booked event's own image; templates fall back to a stock header without it. */
   sessionImageUrl?: string;
 }
@@ -20,7 +20,7 @@ export interface FaqItem {
 export interface FirstTimerEmailProps {
   firstName: string;
   faqs: FaqItem[];
-  manageUrl: string;
+  // manageUrl: string;
   directionsUrl: string;
 }
 

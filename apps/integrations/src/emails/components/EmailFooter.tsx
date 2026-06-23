@@ -8,19 +8,22 @@ const MAILING_ADDRESS = '1000 Westover Hills Blvd. Richmond, VA 23225 USA';
 
 const footer = {
   textAlign: 'center' as const,
+  // The Container has no horizontal padding (EmailLayout), so each content
+  // block re-applies its own inset.
+  padding: '0 24px',
 };
 
-// Full-bleed strip: the negative side margins + extra width cancel the
-// Container's 24px horizontal padding (EmailLayout) so the trees run edge to
-// edge across the card.
+// Full-bleed strip: the Container drops its horizontal padding so a plain
+// width:100% band runs edge to edge across the card. Avoids negative margins,
+// which Gmail strips.
 const treeBand = {
-  width: 'calc(100% + 48px)',
+  width: '100%',
   height: '96px',
   backgroundImage: `url(${ASSET_BASE}/pine-tree-repeat-creme.png)`,
   backgroundRepeat: 'repeat-x',
   backgroundPosition: 'center',
   backgroundSize: 'auto 96px',
-  margin: '40px -24px 32px',
+  margin: '40px 0 32px',
 };
 
 const iconBadge = {
@@ -33,7 +36,7 @@ const footerText = {
   fontSize: '10px',
   lineHeight: '20px',
   margin: '0 0 6px',
-  fontFamily: 'monospace'
+  fontFamily: 'monospace',
 };
 
 const spacerText = {
@@ -53,46 +56,48 @@ interface EmailFooterProps {
 
 export function EmailFooter({ unsubscribeUrl, preferencesUrl }: EmailFooterProps) {
   return (
-    <Section style={footer}>
+    <>
       <Section role="presentation" style={treeBand} />
-      <Link href={INSTAGRAM_URL}>
-        <Img
-          src={`${ASSET_BASE}/instagram-badge-creme.png`}
-          width="40"
-          height="40"
-          alt="Instagram"
-          style={iconBadge}
-        />
-      </Link>
-      <Link href={WEBSITE_URL}>
-        <Img
-          src={`${ASSET_BASE}/website-badge-creme.png`}
-          width="40"
-          height="40"
-          alt="Website"
-          style={iconBadge}
-        />
-      </Link>
-      <Text style={footerText}>Pyre LLC, {MAILING_ADDRESS}</Text>
-      {(unsubscribeUrl || preferencesUrl) && (
-        <>
-          <Text style={spacerText}>Want to change how you receive these emails?</Text>
-          <Text style={footerText}>
-            You can{' '}
-            {preferencesUrl && (
-              <Link href={preferencesUrl} style={footerLink}>
-                update your preferences
-              </Link>
-            )}
-            {preferencesUrl && unsubscribeUrl && ' or '}
-            {unsubscribeUrl && (
-              <Link href={unsubscribeUrl} style={footerLink}>
-                unsubscribe
-              </Link>
-            )}
-          </Text>
-        </>
-      )}
-    </Section>
+      <Section style={footer}>
+        <Link href={INSTAGRAM_URL}>
+          <Img
+            src={`${ASSET_BASE}/instagram-badge-creme.png`}
+            width="40"
+            height="40"
+            alt="Instagram"
+            style={iconBadge}
+          />
+        </Link>
+        <Link href={WEBSITE_URL}>
+          <Img
+            src={`${ASSET_BASE}/website-badge-creme.png`}
+            width="40"
+            height="40"
+            alt="Website"
+            style={iconBadge}
+          />
+        </Link>
+        <Text style={footerText}>Pyre LLC, {MAILING_ADDRESS}</Text>
+        {(unsubscribeUrl || preferencesUrl) && (
+          <>
+            <Text style={spacerText}>Want to change how you receive these emails?</Text>
+            <Text style={footerText}>
+              You can{' '}
+              {preferencesUrl && (
+                <Link href={preferencesUrl} style={footerLink}>
+                  update your preferences
+                </Link>
+              )}
+              {preferencesUrl && unsubscribeUrl && ' or '}
+              {unsubscribeUrl && (
+                <Link href={unsubscribeUrl} style={footerLink}>
+                  unsubscribe
+                </Link>
+              )}
+            </Text>
+          </>
+        )}
+      </Section>
+    </>
   );
 }
