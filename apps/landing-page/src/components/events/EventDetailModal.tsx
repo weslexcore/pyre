@@ -238,7 +238,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
             {/* Gradient drop-shadow glow on the top edge as the card slides over the image */}
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 -top-4 h-8 rounded-[2rem] bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-sage)] opacity-70 blur-xl"
+              className="pointer-events-none absolute inset-x-0 -top-2 h-5 rounded-[2rem] bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-sage)] opacity-30 blur-2xl"
             />
 
             {/* Title */}
