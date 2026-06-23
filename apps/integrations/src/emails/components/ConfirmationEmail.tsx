@@ -1,5 +1,6 @@
 import { Button, Column, Img, Row, Section, Text } from '@react-email/components';
 import type { ConfirmationEmailProps } from '../types';
+import { proxyImageUrl } from './assets';
 import { button, COLORS, type EmailBackground, EmailLayout, heading, text } from './EmailLayout';
 
 const headerImage = {
@@ -61,7 +62,7 @@ export function ConfirmationEmail({
 }: BaseProps) {
   // Prefer the event's own image (the one shown on the landing page) over the
   // template's stock header.
-  const imageUrl = sessionImageUrl || headerImageUrl;
+  const imageUrl = proxyImageUrl(sessionImageUrl) || headerImageUrl;
   return (
     <EmailLayout preview={preview} background={background}>
       {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
