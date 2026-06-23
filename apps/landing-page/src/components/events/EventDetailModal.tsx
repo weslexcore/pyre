@@ -229,8 +229,9 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
 
         {/* Scrollable region — content scrolls up over the pinned image */}
         <div className="relative z-10 flex-1 overflow-y-auto">
-          {/* Spacer that reveals the pinned image; content card overlaps its lower edge */}
-          {event.image && <div className="h-40 sm:h-48" aria-hidden="true" />}
+          {/* Spacer matching the image height so the content starts flush with the
+              image bottom and only overlaps once the user scrolls */}
+          {event.image && <div className="h-48 sm:h-56" aria-hidden="true" />}
 
           {/* Content card */}
           <div className="relative bg-[var(--pyre-black)] rounded-t-2xl px-6 pt-8 pb-6">
