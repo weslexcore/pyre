@@ -257,3 +257,10 @@ Landing page uses:
 - Ensure type safety across all workspaces
 - Where possible, use tailwind css classes instead of css to style elements.
 - use nvm to select the proper node version
+
+## Git & Attribution
+
+- Do NOT add AI/assistant attribution to git artifacts. Never include a
+  `Co-Authored-By: Claude …` (or any Anthropic/AI) trailer in commit messages, and never
+  add a "🤖 Generated with Claude Code" footer (or any "Claude"/"Anthropic" mention) to
+  commit messages or PR titles/descriptions. Write them as a normal human-authored change.
