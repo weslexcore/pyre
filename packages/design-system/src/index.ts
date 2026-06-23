@@ -21,3 +21,9 @@ export type { ColorPaletteProps, Swatch } from "./ColorPalette";
 
 export { SessionCard } from "./SessionCard";
 export type { SessionCardProps, SessionType } from "./SessionCard";
+
+export { EventCard } from "./EventCard";
+export type { EventCardProps, EventCardVariant, EventImage } from "./EventCard";
+
+export { EventRow } from "./EventRow";
+export type { EventRowProps } from "./EventRow";
