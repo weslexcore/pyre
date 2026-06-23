@@ -98,6 +98,24 @@ function parseSteps(raw: string | TraceStep[]): TraceStep[] {
   }
 }
 
+// Resolve the email for the member an event is about. Prefer the email already
+// extracted into the payload summary, then fall back to the email returned by
+// the Momence member lookup trace step (booking events only carry a memberId).
+function getMemberEmail(record: WebhookExecution): string | null {
+  try {
+    const summary = JSON.parse(record.payloadSummary);
+    if (summary.email) return String(summary.email);
+  } catch {
+    // ignore
+  }
+  for (const step of parseSteps(record.traceSteps)) {
+    if (step.name === 'Fetch Momence member' && step.output?.email) {
+      return String(step.output.email);
+    }
+  }
+  return null;
+}
+
 function TraceTimeline({
   steps: raw,
   baseTimestamp,
@@ -426,30 +444,38 @@ export function WebhookDashboard() {
                 </tr>
               </thead>
               <tbody className="text-[var(--pyre-creme)]">
-                {filtered.map((record) => (
-                  <tr key={record.id} className="group">
-                    <td colSpan={5} className="p-0">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
-                        className="w-full text-left hover:bg-white/5 transition-colors"
-                      >
-                        <div className="grid grid-cols-5 px-4 py-3 border-b border-white/5">
-                          <div className="text-white/70">
-                            <TimeAgo timestamp={record.timestamp} />
+                {filtered.map((record) => {
+                  const email = getMemberEmail(record);
+                  return (
+                    <tr key={record.id} className="group">
+                      <td colSpan={5} className="p-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedId(expandedId === record.id ? null : record.id)
+                          }
+                          className="w-full text-left hover:bg-white/5 transition-colors"
+                        >
+                          <div className="grid grid-cols-5 px-4 py-3 border-b border-white/5">
+                            <div className="text-white/70">
+                              <TimeAgo timestamp={record.timestamp} />
+                            </div>
+                            <div className="font-mono text-xs text-white/50">{record.source}</div>
+                            <div className="font-mono text-xs">
+                              <div>{record.eventType}</div>
+                              {email && <div className="text-white/40 truncate">{email}</div>}
+                            </div>
+                            <div>
+                              <StatusBadge status={record.status} httpStatus={record.httpStatus} />
+                            </div>
+                            <div className="text-white/50">{record.durationMs}ms</div>
                           </div>
-                          <div className="font-mono text-xs text-white/50">{record.source}</div>
-                          <div className="font-mono text-xs">{record.eventType}</div>
-                          <div>
-                            <StatusBadge status={record.status} httpStatus={record.httpStatus} />
-                          </div>
-                          <div className="text-white/50">{record.durationMs}ms</div>
-                        </div>
-                      </button>
-                      {expandedId === record.id && <ExpandedRow record={record} />}
-                    </td>
-                  </tr>
-                ))}
+                        </button>
+                        {expandedId === record.id && <ExpandedRow record={record} />}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
