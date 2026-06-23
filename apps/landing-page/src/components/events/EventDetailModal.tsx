@@ -235,6 +235,12 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
 
           {/* Content card */}
           <div className="relative bg-[var(--pyre-black)] rounded-t-2xl px-6 pt-8 pb-6">
+            {/* Gradient drop-shadow glow on the top edge as the card slides over the image */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-4 h-8 rounded-[2rem] bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-sage)] opacity-70 blur-xl"
+            />
+
             {/* Title */}
             <h2
               id="event-detail-title"
