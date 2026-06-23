@@ -203,7 +203,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
           type="button"
           onClick={onClose}
           aria-label="Close details"
-          className="absolute top-3 right-3 z-30 rounded-full bg-black/40 backdrop-blur-sm p-1.5 text-[var(--pyre-creme)] hover:bg-black/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+          className="absolute top-3 right-3 z-30 rounded-full border border-[var(--pyre-gold)]/70 bg-black/40 backdrop-blur-sm p-1.5 text-[var(--pyre-creme)] hover:bg-black/60 hover:border-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
         >
           <svg
             className="size-5"
