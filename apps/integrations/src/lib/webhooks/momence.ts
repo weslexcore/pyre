@@ -303,11 +303,12 @@ export async function fetchMomenceMembers(
 //   false -> they have prior bookings
 //   null  -> could not determine (endpoint unknown/unavailable) -> caller fails SAFE
 //
-// NOTE: the exact host endpoint/shape for a member's booking history is the
-// biggest unknown in this feature. We try the most plausible host endpoint and
-// log the raw response so the shape can be confirmed against the live API. If it
-// errors or the shape is unrecognized, we return null and the caller skips the
-// first-timer email rather than risk sending it to an existing member.
+// Uses the host endpoint GET /host/members/{memberId}/sessions
+// (ApiV2HostMembersSessionBookingsController_list, "Get session bookings by a
+// specific member"). The response is a PaginatedResponseDto:
+// { pagination: { totalCount, ... }, payload: [{ id, ... }] }.
+// If it errors or the shape is unrecognized, we return null and the caller skips
+// the first-timer email rather than risk sending it to an existing member.
 export async function isMemberFirstBooking(
   memberId: string,
   currentSessionBookingId: number
@@ -316,8 +317,15 @@ export async function isMemberFirstBooking(
     const accessToken = await getHostAccessToken();
 
     // pageSize=2 is enough: we only need to know whether >1 booking exists.
-    const params = new URLSearchParams({ page: '0', pageSize: '2', sortOrder: 'DESC' });
-    const url = `${MOMENCE_API_V2}/host/members/${memberId}/session-bookings?${params}`;
+    // includeCancelled=true so a member with only cancelled prior bookings is
+    // still treated as existing (don't send the first-timer email to them).
+    const params = new URLSearchParams({
+      page: '0',
+      pageSize: '2',
+      sortOrder: 'DESC',
+      includeCancelled: 'true',
+    });
+    const url = `${MOMENCE_API_V2}/host/members/${memberId}/sessions?${params}`;
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
