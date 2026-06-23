@@ -1,7 +1,7 @@
 // Event detail modal — shows full event info with booking CTA
 // Rendered via createPortal to escape Astro layout constraints
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { EventItem } from '@/lib/types';
 
@@ -95,6 +95,39 @@ function ArrowIcon() {
   );
 }
 
+function ShareIcon() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
 // -- Helpers ------------------------------------------------------------------
 
 function spotsColor(spots: number | undefined): string {
@@ -120,6 +153,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Body scroll lock + keyboard handling + focus management
   useEffect(() => {
@@ -177,6 +211,44 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
+
+  // Build a deep-link to this event (with UTM tags) and share via the native
+  // share sheet when available, otherwise copy it to the clipboard.
+  async function handleShare() {
+    if (!event) return;
+
+    const url = new URL(`${window.location.origin}/events`);
+    url.searchParams.set('event', event.id);
+    url.searchParams.set('utm_source', 'share');
+    url.searchParams.set('utm_medium', 'referral');
+    url.searchParams.set('utm_campaign', 'event_share');
+    url.searchParams.set('utm_content', event.id);
+    const shareUrl = url.toString();
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: `Check out ${event.title} at Pyre`,
+          url: shareUrl,
+        });
+      } catch (err) {
+        // Ignore user-cancelled shares; surface anything else.
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error('Share failed:', err);
+        }
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  }
 
   const modal = (
     <div
@@ -289,21 +361,33 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
           </div>
         </div>
 
-        {/* Fixed footer — Book Now CTA stays anchored at the bottom */}
-        {!event.isPrivate && event.cta && (
-          <div className="relative z-20 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
+        {/* Fixed footer — Share + Book Now stay anchored at the bottom */}
+        <div className="relative z-20 flex items-center gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
+          {/* Share button */}
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label="Share this event"
+            className={`inline-flex items-center justify-center gap-2 rounded-full border border-[var(--pyre-creme)]/25 px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:bg-[var(--pyre-creme)]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50 ${!event.isPrivate && event.cta ? 'shrink-0' : 'w-full'}`}
+          >
+            {copied ? <CheckIcon /> : <ShareIcon />}
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+
+          {/* Book Now CTA */}
+          {!event.isPrivate && event.cta && (
             <a
               href={event.cta.href}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
             >
               {ctaLabel}
               <ArrowIcon />
             </a>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
