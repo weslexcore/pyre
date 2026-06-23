@@ -11,6 +11,7 @@
   "overrides": {
     "Badge": { "cardMode": "column" },
     "Card": { "cardMode": "column" },
+    "EventRow": { "cardMode": "column" },
     "Logo": { "cardMode": "column" },
     "SessionCard": { "cardMode": "column" }
   }

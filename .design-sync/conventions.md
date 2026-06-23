@@ -41,7 +41,9 @@ under the header of every `Card` (with a `heading`) and `SessionCard` automatica
 `Input` (`label`, `error`) · `Heading` (level 1–4, `eyebrow`; Neue Montreal) ·
 `Logo` (the PYRE wordmark — the only Eckmannpsych surface; `size`, inherits color) ·
 `ColorPalette` (brand swatch reference) ·
-`SessionCard` (domain: `type` Social/Silent/Guided, `time`, `price`, `slotsLeft`).
+`SessionCard` (domain: `type` Social/Silent/Guided, `time`, `price`, `slotsLeft`) ·
+`EventCard` (events-carousel card: `title`, `date`, `time`, `location`, `image?`, `spotsRemaining?`, `variant` default/ink) ·
+`EventRow` (events-page schedule row for the dark ground: `title`, `time`, `spotsRemaining?`, `ctaLabel`).
 
 Read each component's `<Name>.prompt.md` for its full prop contract and `styles.css` for
 the exact token values before styling.
