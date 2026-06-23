@@ -26,11 +26,11 @@ export const menu: MenuSheetData = {
       items: [
         {
           name: 'lavender + lemon balm',
-          price: '$5'
+          price: '$5',
         },
         {
           name: 'holy basil + lemon',
-          price: '$5'
+          price: '$5',
         },
         {
           name: 'beauty bubbles cbd',
@@ -51,17 +51,20 @@ export const menu: MenuSheetData = {
         {
           name: 'nordic spruce',
           price: '$5',
-          description: 'fresh spruce tips, aromatic cardamom, juniper berries, pressed lemon, unrefined mineralized sea salt',
+          description:
+            'fresh spruce tips, aromatic cardamom, juniper berries, pressed lemon, unrefined mineralized sea salt',
         },
         {
           name: 'forest fields',
           price: '$5',
-          description: 'blood orange, calming chamomile, warming ginger, antioxidant-rich sumac, unrefined mineralized sea salt',
+          description:
+            'blood orange, calming chamomile, warming ginger, antioxidant-rich sumac, unrefined mineralized sea salt',
         },
         {
           name: 'superior coast',
           price: '$5',
-          description: 'pressed lime, hyssop, elderflower, sage, juniper, unrefined mineralized sea salt',
+          description:
+            'pressed lime, hyssop, elderflower, sage, juniper, unrefined mineralized sea salt',
         },
       ],
     },

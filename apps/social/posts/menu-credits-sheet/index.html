@@ -16,8 +16,9 @@
       <section class="tpl-menu-sheet post"></section>
     </section>
     <script type="module">
-      import { menu } from './menu.data.ts';
       import { renderMenuSheet } from '/templates/menu-sheet/template.ts';
+      import { menu } from './menu.data.ts';
+
       renderMenuSheet(menu, document.querySelector('.tpl-menu-sheet'));
     </script>
   </body>

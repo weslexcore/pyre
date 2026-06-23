@@ -11,7 +11,7 @@ import {
   resolveTransitionForPair,
 } from './lib/config.ts';
 import { joinedOutputPath, outputPath, renderEntry } from './lib/render-post.ts';
-import { type RenderProgressEvent, concatMp4Pages } from './lib/render-video.ts';
+import { concatMp4Pages, type RenderProgressEvent } from './lib/render-video.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');

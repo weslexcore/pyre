@@ -157,7 +157,7 @@
 .tpl-menu-sheet__pine {
   align-self: end;
   height: 120px;
-  background-image: url('/shared/textures/single-pine-tree.png');
+  background-image: url("/shared/textures/single-pine-tree.png");
   background-repeat: no-repeat;
   background-position: center bottom;
   background-size: auto 100%;

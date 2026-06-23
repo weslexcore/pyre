@@ -1,20 +1,20 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type Browser, chromium } from 'playwright';
 import type { Plugin } from 'vite';
 import {
   type ExportEntry,
-  type TransitionConfig,
   loadPostConfig,
   localOverridesPath,
   resolvePageDuration,
   resolveTransitionForPair,
+  type TransitionConfig,
 } from './config.ts';
 import { joinedOutputPath, renderEntry } from './render-post.ts';
-import { type RenderProgressEvent, concatMp4Pages } from './render-video.ts';
+import { concatMp4Pages, type RenderProgressEvent } from './render-video.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..', '..');

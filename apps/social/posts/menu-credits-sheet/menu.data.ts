@@ -13,7 +13,7 @@ export const menu: MenuSheetData = {
           originalPrice: '$78',
           description: 'first-timers · once per customer, non-transferrable',
         },
-        { name: 'single // 1 credit', price: '$39',},// description: 'drop-in visit' },
+        { name: 'single // 1 credit', price: '$39' }, // description: 'drop-in visit' },
         { name: 'duo // 2 credits', price: '$72', originalPrice: '$78' },
         { name: 'circle // 4 credits', price: '$129', originalPrice: '$156' },
         {

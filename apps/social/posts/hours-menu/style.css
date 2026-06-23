@@ -1,0 +1,82 @@
+/* Hours overlay — transparent 9:16 card, light text for dark/busy footage.
+   Background stays transparent so the PNG exports with an alpha channel. */
+
+/* .page.is-active (set by pages.js) outranks a bare .page selector, so center here. */
+.page,
+.page.is-active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1080px;
+  height: 1920px;
+  background: var(--pyre-black);
+}
+
+.hours {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: 0 140px;
+}
+
+.hours__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 168px;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--pyre-creme);
+  margin: 0;
+}
+
+.hours__list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+}
+
+.hours__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6) 0;
+  border-bottom: 2px solid rgba(245, 241, 233, 0.28);
+}
+
+.hours__row:first-child {
+  border-top: 2px solid rgba(245, 241, 233, 0.28);
+}
+
+.hours__row dt {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 64px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+}
+
+.hours__row dd {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 64px;
+  letter-spacing: -0.01em;
+  color: var(--pyre-creme);
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours__note {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(245, 241, 233, 0.7);
+  margin: 0;
+  text-align: center;
+}
