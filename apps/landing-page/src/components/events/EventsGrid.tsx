@@ -199,7 +199,7 @@ function SlotRow({
         className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
       >
         {/* Title */}
-        <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-56 shrink-0">
+        <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-72 shrink-0">
           <span className="truncate">{event.title}</span>
           {/* Mobile-only Private label */}
           <span className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide border border-current/40 rounded-full px-3 py-1 text-[var(--pyre-creme)]/50 whitespace-nowrap ml-2">
@@ -242,7 +242,7 @@ function SlotRow({
       className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
       {/* Title */}
-      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-56 shrink-0">
+      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-72 shrink-0">
         <span className="truncate">{event.title}</span>
         {/* Mobile-only CTA pill */}
         <a

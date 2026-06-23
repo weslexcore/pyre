@@ -195,7 +195,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
       {/* Panel */}
       <div
         ref={panelRef}
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] shadow-2xl"
+        className="relative z-10 flex flex-col w-full max-w-lg max-h-[90vh] overflow-hidden rounded-lg border border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] shadow-2xl"
       >
         {/* Close button */}
         <button
@@ -203,7 +203,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
           type="button"
           onClick={onClose}
           aria-label="Close details"
-          className="absolute top-3 right-3 z-20 rounded-md p-1.5 text-[var(--pyre-creme)]/60 hover:text-[var(--pyre-creme)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+          className="absolute top-3 right-3 z-30 rounded-full bg-black/40 backdrop-blur-sm p-1.5 text-[var(--pyre-creme)] hover:bg-black/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
         >
           <svg
             className="size-5"
@@ -217,78 +217,86 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
           </svg>
         </button>
 
-        {/* Event image */}
+        {/* Pinned event image (sits behind the scrolling content) */}
         {event.image && (
           <img
             src={event.image.src}
             alt={event.image.alt}
-            className="w-full h-48 sm:h-56 object-cover rounded-t-lg"
+            className="absolute top-0 inset-x-0 w-full h-48 sm:h-56 object-cover"
             loading="lazy"
           />
         )}
 
-        {/* Content */}
-        <div className="px-6 pt-8 pb-6">
-          {/* Title */}
-          <h2
-            id="event-detail-title"
-            className="font-mono-bold text-xl sm:text-2xl uppercase tracking-wide text-[var(--pyre-creme)] pr-8"
-          >
-            {event.title}
-          </h2>
+        {/* Scrollable region — content scrolls up over the pinned image */}
+        <div className="relative z-10 flex-1 overflow-y-auto">
+          {/* Spacer that reveals the pinned image; content card overlaps its lower edge */}
+          {event.image && <div className="h-40 sm:h-48" aria-hidden="true" />}
 
-          {/* Details grid */}
-          <div className="mt-4 space-y-2">
-            {/* Date */}
-            <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
-              <ClockIcon className="w-4 h-4 flex-shrink-0" />
-              <span>{event.date}</span>
-            </div>
+          {/* Content card */}
+          <div className="relative bg-[var(--pyre-black)] rounded-t-2xl px-6 pt-8 pb-6">
+            {/* Title */}
+            <h2
+              id="event-detail-title"
+              className="font-mono-bold text-xl sm:text-2xl uppercase tracking-wide text-[var(--pyre-creme)] pr-8"
+            >
+              {event.title}
+            </h2>
 
-            {/* Time */}
-            <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
-              <ClockIcon className="w-4 h-4 flex-shrink-0" />
-              <span>{event.time}</span>
-            </div>
-
-            {/* Location */}
-            <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
-              <MapPinIcon className="w-4 h-4 flex-shrink-0" />
-              <span>{event.location}</span>
-            </div>
-
-            {/* Spots */}
-            {spots && (
-              <div
-                className={`flex items-center gap-2 text-sm ${spotsColor(event.spotsRemaining)}`}
-              >
-                <UsersIcon className="w-4 h-4 flex-shrink-0" />
-                <span>{spots}</span>
+            {/* Details grid */}
+            <div className="mt-4 space-y-2">
+              {/* Date */}
+              <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
+                <ClockIcon className="w-4 h-4 flex-shrink-0" />
+                <span>{event.date}</span>
               </div>
+
+              {/* Time */}
+              <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
+                <ClockIcon className="w-4 h-4 flex-shrink-0" />
+                <span>{event.time}</span>
+              </div>
+
+              {/* Location */}
+              <div className="flex items-center gap-2 text-sm text-[var(--pyre-creme)]/70">
+                <MapPinIcon className="w-4 h-4 flex-shrink-0" />
+                <span>{event.location}</span>
+              </div>
+
+              {/* Spots */}
+              {spots && (
+                <div
+                  className={`flex items-center gap-2 text-sm ${spotsColor(event.spotsRemaining)}`}
+                >
+                  <UsersIcon className="w-4 h-4 flex-shrink-0" />
+                  <span>{spots}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Description */}
+            {event.description && (
+              <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
+                {event.description}
+              </p>
             )}
           </div>
+        </div>
 
-          {/* Description */}
-          {event.description && (
-            <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
-              {event.description}
-            </p>
-          )}
-
-          {/* Booking CTA */}
-          {!event.isPrivate && event.cta && (
+        {/* Fixed footer — Book Now CTA stays anchored at the bottom */}
+        {!event.isPrivate && event.cta && (
+          <div className="relative z-20 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
             <a
               href={event.cta.href}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
             >
               {ctaLabel}
               <ArrowIcon />
             </a>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
