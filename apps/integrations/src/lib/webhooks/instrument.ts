@@ -53,6 +53,7 @@ export function instrumentWebhook(source: string, handler: TracedAPIRoute): APIR
         const summary: Record<string, string> = {};
         if (parsed.payload?.email) summary.email = parsed.payload.email;
         if (parsed.payload?.memberId) summary.memberId = parsed.payload.memberId;
+        if (parsed.payload?.sessionId) summary.sessionId = String(parsed.payload.sessionId);
         payloadSummary = JSON.stringify(summary);
       }
     } catch {

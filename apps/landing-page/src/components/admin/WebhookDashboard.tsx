@@ -116,6 +116,50 @@ function getMemberEmail(record: WebhookExecution): string | null {
   return null;
 }
 
+interface SessionInfo {
+  sessionId: string;
+  title: string | null;
+  dateLabel: string | null;
+}
+
+// Resolve the session/event a webhook is about. Prefer the sessionId already
+// extracted into the payload summary, then fall back to the full payload
+// (older records predate the summary field). Display fields (title / date) come
+// from the "Resolve session" trace step output, which is null when the session
+// could not be resolved.
+function getSessionInfo(record: WebhookExecution): SessionInfo | null {
+  let sessionId: string | null = null;
+  try {
+    const summary = JSON.parse(record.payloadSummary);
+    if (summary.sessionId) sessionId = String(summary.sessionId);
+  } catch {
+    // ignore
+  }
+  if (!sessionId) {
+    try {
+      const full = JSON.parse(typeof record.fullPayload === 'string' ? record.fullPayload : '{}');
+      if (full.payload?.sessionId) sessionId = String(full.payload.sessionId);
+    } catch {
+      // ignore
+    }
+  }
+  if (!sessionId) return null;
+
+  let title: string | null = null;
+  let dateLabel: string | null = null;
+  for (const step of parseSteps(record.traceSteps)) {
+    if (step.name === 'Resolve session' && step.output) {
+      if (step.output.title) title = String(step.output.title);
+      if (step.output.dateLabel) dateLabel = String(step.output.dateLabel);
+      break;
+    }
+  }
+  return { sessionId, title, dateLabel };
+}
+
+// The webhook dashboard runs on the same site as /events, so this is relative.
+const eventHref = (id: string) => `/events?event=${encodeURIComponent(id)}`;
+
 function TraceTimeline({
   steps: raw,
   baseTimestamp,
@@ -175,6 +219,7 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
   } catch {
     // ignore
   }
+  const session = getSessionInfo(record);
 
   return (
     <div className="px-4 py-3 bg-[var(--pyre-black)] border-t border-white/5 text-sm space-y-3">
@@ -193,6 +238,21 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
           <div>
             <span className="text-white/40">Member ID</span>
             <p className="text-white/70">{payload.memberId}</p>
+          </div>
+        )}
+        {session && (
+          <div>
+            <span className="text-white/40">Session</span>
+            <p>
+              <a
+                href={eventHref(session.sessionId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--pyre-red)] hover:underline"
+              >
+                {session.title ?? `Session ${session.sessionId}`} ↗
+              </a>
+            </p>
           </div>
         )}
         <div>
@@ -446,14 +506,13 @@ export function WebhookDashboard() {
               <tbody className="text-[var(--pyre-creme)]">
                 {filtered.map((record) => {
                   const email = getMemberEmail(record);
+                  const session = getSessionInfo(record);
                   return (
                     <tr key={record.id} className="group">
                       <td colSpan={5} className="p-0">
                         <button
                           type="button"
-                          onClick={() =>
-                            setExpandedId(expandedId === record.id ? null : record.id)
-                          }
+                          onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                           className="w-full text-left hover:bg-white/5 transition-colors"
                         >
                           <div className="grid grid-cols-5 px-4 py-3 border-b border-white/5">
@@ -464,6 +523,19 @@ export function WebhookDashboard() {
                             <div className="font-mono text-xs">
                               <div>{record.eventType}</div>
                               {email && <div className="text-white/40 truncate">{email}</div>}
+                              {session && (
+                                <a
+                                  href={eventHref(session.sessionId)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block truncate text-[var(--pyre-red)] hover:underline"
+                                >
+                                  {session.title
+                                    ? `${session.title}${session.dateLabel ? ` · ${session.dateLabel}` : ''}`
+                                    : `Session ${session.sessionId}`}
+                                </a>
+                              )}
                             </div>
                             <div>
                               <StatusBadge status={record.status} httpStatus={record.httpStatus} />
