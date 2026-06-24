@@ -292,7 +292,7 @@ function ExpandedRow({ record }: { record: WebhookExecution }) {
 }
 
 export function WebhookDashboard() {
-  const { isAuthenticated, user, loading: authLoading, login } = useAuth();
+  const { isAuthenticated, user, loading: authLoading, login, logout } = useAuth();
 
   const [data, setData] = useState<LogsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -380,7 +380,16 @@ export function WebhookDashboard() {
         <h1 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
           Unauthorized
         </h1>
-        <p className="text-white/60">You do not have access to this page.</p>
+        <p className="text-white/60 mb-6">
+          You do not have access to this page. If your session is stale, log out and sign in again.
+        </p>
+        <button
+          type="button"
+          onClick={() => logout({ returnUrl: '/admin/webhooks' })}
+          className="px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
+        >
+          Log Out
+        </button>
       </div>
     );
   }
@@ -435,6 +444,13 @@ export function WebhookDashboard() {
             className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
           >
             {loading ? 'Loading...' : 'Refresh'}
+          </button>
+          <button
+            type="button"
+            onClick={() => logout({ returnUrl: '/admin/webhooks' })}
+            className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-[var(--pyre-red)] hover:border-[var(--pyre-red)] transition-colors"
+          >
+            Log Out
           </button>
         </div>
       </div>
