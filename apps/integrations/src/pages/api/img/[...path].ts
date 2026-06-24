@@ -9,6 +9,10 @@ const UPSTREAM_HOST = 'images.momence.com';
 
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
+// Abort a stalled upstream fetch well within Apple Mail's image-load timeout so a
+// slow Momence response surfaces as an error we can retry, not a hung connection.
+const UPSTREAM_TIMEOUT_MS = 8000;
+
 /**
  * Image proxy for Momence session banners. Email clients fetch the banner from
  * our domain instead of images.momence.com, so every image in the email appears
@@ -36,11 +40,18 @@ export const GET: APIRoute = async ({ params }) => {
     return new Response('Forbidden host', { status: 400 });
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(upstream, { headers: { Accept: 'image/*' } });
+    response = await fetch(upstream, {
+      headers: { Accept: 'image/*', 'User-Agent': 'pyre-integrations-img-proxy' },
+      signal: controller.signal,
+    });
   } catch {
     return new Response('Upstream fetch failed', { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!response.ok) {
@@ -52,11 +63,20 @@ export const GET: APIRoute = async ({ params }) => {
     return new Response('Not an image', { status: 415 });
   }
 
-  return new Response(response.body, {
-    status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Cache-Control': IMMUTABLE_CACHE,
-    },
+  // Buffer the full image so we can send a definite Content-Length. Apple Mail's
+  // image loader (ImageIO) is far more reliable with a known length than with a
+  // streamed/chunked body, which is what broke the session banner there.
+  const body = await response.arrayBuffer();
+
+  const headers = new Headers({
+    'Content-Type': contentType,
+    'Content-Length': String(body.byteLength),
+    'Cache-Control': IMMUTABLE_CACHE,
   });
+  const etag = response.headers.get('ETag');
+  if (etag) headers.set('ETag', etag);
+  const lastModified = response.headers.get('Last-Modified');
+  if (lastModified) headers.set('Last-Modified', lastModified);
+
+  return new Response(body, { status: 200, headers });
 };
