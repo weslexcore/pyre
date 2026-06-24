@@ -8,10 +8,10 @@ export interface ConfirmationEmailProps {
   timeLabel: string;
   location: string;
   // manageUrl: string;
-  /** The booked event's own image; templates fall back to a stock header without it. */
+  /** The booked event's own image; falls back to a stock header without it. */
   sessionImageUrl?: string;
-  /** FAQ items shown in the confirmation; selected by session type in the dispatcher. */
-  faqs?: FaqItem[];
+  /** Canonical session type; selects the per-type copy in confirmation-content.ts. */
+  sessionType: string;
 }
 
 export interface FaqItem {
@@ -27,10 +27,7 @@ export interface FirstTimerEmailProps {
 }
 
 export interface EmailPropsByTemplate {
-  'guided-confirmation': ConfirmationEmailProps;
-  'social-confirmation': ConfirmationEmailProps;
-  'special-event-confirmation': ConfirmationEmailProps;
-  'general-confirmation': ConfirmationEmailProps;
+  confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
 }
 

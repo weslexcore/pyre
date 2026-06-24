@@ -1,7 +1,6 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
-import type { EmailTemplateKey } from '@/emails/registry';
 import type { ConfirmationEmailProps } from '@/emails/types';
-import { FIRST_TIMER_FAQS, getFaqsForSessionType } from '@/lib/email/faq-content';
+import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { alreadySent, markSent } from '../idempotency';
@@ -9,18 +8,6 @@ import { sendTemplate } from '../send';
 
 const log = createWebhookLogger('BookingEmail');
 
-// Session type -> confirmation template. Anything not listed falls back to the
-// general confirmation, so EVERY booking always receives a confirmation.
-const CONFIRMATION_BY_TYPE: Record<string, EmailTemplateKey> = {
-  guided: 'guided-confirmation',
-  social: 'social-confirmation',
-  'special event': 'special-event-confirmation',
-};
-const DEFAULT_CONFIRMATION: EmailTemplateKey = 'general-confirmation';
-
-function getSiteUrl(): string {
-  return import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
-}
 
 interface BookingEmailArgs {
   sessionId: number;
@@ -50,9 +37,7 @@ export async function sendBookingConfirmationEmails({
   });
 
   const sessionType = session?.sessionType ?? 'unknown';
-  const template = CONFIRMATION_BY_TYPE[sessionType] ?? DEFAULT_CONFIRMATION;
 
-  const siteUrl = getSiteUrl();
   const props: ConfirmationEmailProps = {
     firstName: member.firstName || 'there',
     sessionTitle: session?.title ?? 'Your Pyre session',
@@ -61,7 +46,7 @@ export async function sendBookingConfirmationEmails({
     location: session?.location ?? 'Pyre Sauna',
     // manageUrl: `${siteUrl}/account`,
     sessionImageUrl: session?.imageUrl,
-    faqs: getFaqsForSessionType(sessionType),
+    sessionType,
   };
 
   // --- Confirmation (always; idempotent per booking) ---
@@ -72,15 +57,15 @@ export async function sendBookingConfirmationEmails({
     log.info(`Confirmation already sent for booking ${sessionBookingId} — skipping`);
   } else {
     await tracer.span(
-      `Send ${template}`,
+      'Send confirmation',
       async () => {
-        const result = await sendTemplate({ to: member.email, template, props });
+        const result = await sendTemplate({ to: member.email, template: 'confirmation', props });
         if (result.status === 'sent') {
           await markSent(confirmationKey);
         }
         return result;
       },
-      { to: member.email, template, sessionType }
+      { to: member.email, sessionType }
     );
   }
 

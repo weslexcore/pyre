@@ -1,7 +1,8 @@
 import { Column, Img, Row, Section, Text } from '@react-email/components';
+import { getConfirmationContent } from '@/lib/email/confirmation-content';
 import type { ConfirmationEmailProps } from '../types';
-import { proxyImageUrl } from './assets';
-import { COLORS, type EmailBackground, EmailLayout, text } from './EmailLayout';
+import { ASSET_BASE, proxyImageUrl } from './assets';
+import { COLORS, EmailLayout, text } from './EmailLayout';
 
 const headerImage = {
   width: '100%',
@@ -39,17 +40,10 @@ const valueStyle = {
   margin: '0 0 14px',
 };
 
-interface BaseProps extends ConfirmationEmailProps {
-  preview: string;
-  headingText: string;
-  intro: string;
-  headerImageUrl?: string;
-  background?: EmailBackground;
-}
-
 /**
- * Shared confirmation shell. The guided / social / general templates wrap this
- * with their own preview text, heading, and intro copy.
+ * The single confirmation email. All per-session-type copy (heading, intro,
+ * header image, background, FAQs) is resolved from `confirmation-content.ts`
+ * via `sessionType`; this component owns the shared structure.
  */
 export function ConfirmationEmail({
   firstName,
@@ -59,18 +53,16 @@ export function ConfirmationEmail({
   location,
   // manageUrl,
   sessionImageUrl,
-  preview,
-  headingText,
-  intro,
-  headerImageUrl,
-  background = 'clouds',
-  faqs = [],
-}: BaseProps) {
+  sessionType,
+}: ConfirmationEmailProps) {
+  const content = getConfirmationContent(sessionType);
+  const preview = `You're booked for ${sessionTitle}`;
+  const intro = `You're all set for ${sessionTitle} on ${dateLabel} from ${timeLabel}. \n\n${content.introBody}`;
   // Prefer the event's own image (the one shown on the landing page) over the
-  // template's stock header.
-  const imageUrl = proxyImageUrl(sessionImageUrl) || headerImageUrl;
+  // type's stock header.
+  const imageUrl = proxyImageUrl(sessionImageUrl) || `${ASSET_BASE}/${content.headerImage}`;
   return (
-    <EmailLayout preview={preview} background={background}>
+    <EmailLayout preview={preview} background={content.background ?? 'clouds'}>
       {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>
@@ -95,12 +87,17 @@ export function ConfirmationEmail({
         <Text style={labelStyle}>Location</Text>
         <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
       </Section>
-      {faqs.length > 0 && (
+      {content.faqs.length > 0 && (
         <Section style={detailsSection}>
-          {faqs.map((faq, index) => (
+          {content.faqs.map((faq, index) => (
             <Section key={faq.question}>
               <Text style={faqLabelStyle}>{faq.question}</Text>
-              <Text style={{ ...valueStyle, margin: index === faqs.length - 1 ? 0 : '0 0 14px' }}>
+              <Text
+                style={{
+                  ...valueStyle,
+                  margin: index === content.faqs.length - 1 ? 0 : '0 0 14px',
+                }}
+              >
                 {faq.answer}
               </Text>
             </Section>
@@ -117,5 +114,6 @@ export const sampleConfirmationProps: ConfirmationEmailProps = {
   dateLabel: 'Sat, June 20, 2026',
   timeLabel: '10:00 AM - 12:00 PM',
   location: '1000 Westover Hills Blvd, Richmond, VA 23225',
+  sessionType: 'guided',
   // manageUrl: 'https://momence.com/sign-in',
 };

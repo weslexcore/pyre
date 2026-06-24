@@ -1,9 +1,9 @@
 // Momence v1 Events API client — used to resolve a booked session's type and
 // display fields (title / date / time / location) for confirmation emails.
 //
-// Type resolution is TAG-FIRST (an explicit "Guided"/"Social" tag on the event),
-// falling back to deriving the type from the session name — the same heuristic
-// used by the data-dashboard (apps/data-dashboard/lib/data.ts), ported here.
+// Type resolution is TAG-DRIVEN: the session type comes from an explicit Momence
+// tag on the event (a controlled vocabulary), not the free-form title. Events
+// without a recognized tag fall back to the generic "special event" type.
 
 import { createWebhookLogger } from '@pyre/webhook-core';
 
@@ -35,41 +35,38 @@ export interface ResolvedSession {
   imageUrl?: string;
 }
 
-/**
- * Derive a session type from its name. Ported from apps/data-dashboard/lib/data.ts.
- * Returns a lowercase key so it can route directly to email templates.
- */
-export function deriveSessionType(sessionName: string): string {
-  const name = sessionName.toLowerCase();
-  if (name.includes('open hours') || name.includes('quiet flow')) return 'open hours';
-  if (name.includes('guided')) return 'guided';
-  if (name.includes('private')) return 'private';
-  if (name.includes('sound')) return 'sound';
-  if (name.includes('social') || name.includes('dj')) return 'social';
-  if (
-    name.includes('pilates') ||
-    name.includes('yoga') ||
-    name.includes('run') ||
-    name.includes('hiit') ||
-    name.includes('fitness') ||
-    name.includes('tabata') ||
-    name.includes('lolu fit') ||
-    name.includes('boxing')
-  ) {
-    return 'fitness';
-  }
-  if (name.includes('maintenance')) return 'maintenance';
-  return 'special event';
-}
+// Type used when an event carries no recognized type tag. It is intentionally
+// absent from CONFIRMATION_BY_TYPE / FAQS_BY_TYPE, so it routes to the general
+// confirmation template + DEFAULT_FAQS.
+const DEFAULT_SESSION_TYPE = 'general';
+
+// Explicit Momence tags -> canonical session type. Tags are a controlled
+// vocabulary set on the event, so we key off them rather than parsing the
+// free-form title. Match is case-insensitive; add new tag spellings here.
+// Canonical types must match the keys in FAQS_BY_TYPE (faq-content.ts) and
+// CONFIRMATION_BY_TYPE (booking-confirmation.ts).
+const TAG_TO_TYPE: Record<string, string> = {
+  guided: 'guided',
+  social: 'social',
+  'open hours': 'open hours',
+  private: 'private',
+  'private rental': 'private',
+  sound: 'sound bath',
+  'sound bath': 'sound bath',
+  yoga: 'yoga',
+  pilates: 'fitness',
+  run: 'fitness',
+  hiit: 'fitness',
+  fitness: 'fitness',
+  'special event': 'special event',
+};
 
 function resolveTypeFromEvent(event: MomenceEventLite): string {
-  // Tag-first: an explicit Guided/Social tag wins over the name heuristic.
   for (const tag of event.tags ?? []) {
-    const t = tag.toLowerCase();
-    if (t === 'guided') return 'guided';
-    if (t === 'social') return 'social';
+    const type = TAG_TO_TYPE[tag.toLowerCase().trim()];
+    if (type) return type;
   }
-  return deriveSessionType(event.title);
+  return DEFAULT_SESSION_TYPE;
 }
 
 function formatDate(isoDate: string): string {
