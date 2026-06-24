@@ -1,3 +1,4 @@
+import { FAQS_BY_TYPE } from '@/lib/email/faq-content';
 import { ASSET_BASE } from '../components/assets';
 import { ConfirmationEmail, sampleConfirmationProps } from '../components/ConfirmationEmail';
 import type { ConfirmationEmailProps } from '../types';
@@ -9,6 +10,7 @@ export function SpecialEventConfirmation(props: ConfirmationEmailProps) {
       preview={`You're booked for ${props.sessionTitle}`}
       headingText={"You're in!"}
       headerImageUrl={`${ASSET_BASE}/confirmation-header.jpg`}
+      faqs={FAQS_BY_TYPE['special_event']}
       intro={`You're all set for ${props.sessionTitle} on ${props.dateLabel} from ${props.timeLabel}. \n\nArrive 10-15 minutes early to check in, get changed, and settle in before things kick off.`}
     />
   );

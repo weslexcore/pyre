@@ -78,6 +78,11 @@ FirstTimerWelcome.PreviewProps = {
         'Bring a swimsuit, a water bottle and an optional robe / sandals. We provide towels and all the amenities you need for your session.',
     },
     {
+      question: 'What if I have questions?',
+      answer:
+        "We are two of America's first certified sauna masters and are here to help you get the most out of your session. If at any point during you have questions, just let us know. We are always happy to provide guidance and answer questions.",
+    },
+    {
       question: 'How hot does the sauna get?',
       answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
     },

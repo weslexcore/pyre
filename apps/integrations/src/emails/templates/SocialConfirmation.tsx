@@ -1,6 +1,7 @@
 import { ASSET_BASE } from '../components/assets';
 import { ConfirmationEmail, sampleConfirmationProps } from '../components/ConfirmationEmail';
 import type { ConfirmationEmailProps } from '../types';
+import { FAQS_BY_TYPE } from '@/lib/email/faq-content';
 
 export function SocialConfirmation(props: ConfirmationEmailProps) {
   return (
@@ -9,6 +10,7 @@ export function SocialConfirmation(props: ConfirmationEmailProps) {
       background="lamps"
       preview={`You're booked for ${props.sessionTitle}`}
       headingText="You're in!"
+      faqs={FAQS_BY_TYPE['social']}
       headerImageUrl={`${ASSET_BASE}/social-confirmation-header.jpg`}
       intro={`You're all set for ${props.sessionTitle} on ${props.dateLabel} from ${props.timeLabel}. \n\nSocial sessions are a lively, communal sweat - bring a friend or come meet one.`}
     />

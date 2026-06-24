@@ -1,6 +1,7 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
 import type { EmailTemplateKey } from '@/emails/registry';
-import type { ConfirmationEmailProps, FaqItem } from '@/emails/types';
+import type { ConfirmationEmailProps } from '@/emails/types';
+import { FIRST_TIMER_FAQS, getFaqsForSessionType } from '@/lib/email/faq-content';
 import { resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { alreadySent, markSent } from '../idempotency';
@@ -16,25 +17,6 @@ const CONFIRMATION_BY_TYPE: Record<string, EmailTemplateKey> = {
   'special event': 'special-event-confirmation',
 };
 const DEFAULT_CONFIRMATION: EmailTemplateKey = 'general-confirmation';
-
-// A short curated subset for first-timers (kept here rather than imported from
-// landing-page, which is a separate workspace).
-const FIRST_TIMER_FAQS: FaqItem[] = [
-  {
-    question: 'What should I bring to my session?',
-    answer:
-      'Bring a swimsuit, a water bottle and an optional robe / sandals. We provide towels and all the amenities you need for your session.',
-  },
-  {
-    question: 'How hot does the sauna get?',
-    answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
-  },
-  {
-    question: 'How long should I stay in the sauna and cold plunge?',
-    answer:
-      'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits.',
-  },
-];
 
 function getSiteUrl(): string {
   return import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
@@ -79,6 +61,7 @@ export async function sendBookingConfirmationEmails({
     location: session?.location ?? 'Pyre Sauna',
     // manageUrl: `${siteUrl}/account`,
     sessionImageUrl: session?.imageUrl,
+    faqs: getFaqsForSessionType(sessionType),
   };
 
   // --- Confirmation (always; idempotent per booking) ---

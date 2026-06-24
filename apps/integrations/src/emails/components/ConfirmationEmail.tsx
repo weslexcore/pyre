@@ -1,7 +1,7 @@
-import { Button, Column, Img, Row, Section, Text } from '@react-email/components';
+import { Column, Img, Row, Section, Text } from '@react-email/components';
 import type { ConfirmationEmailProps } from '../types';
 import { proxyImageUrl } from './assets';
-import { button, COLORS, type EmailBackground, EmailLayout, heading, text } from './EmailLayout';
+import { COLORS, type EmailBackground, EmailLayout, text } from './EmailLayout';
 
 const headerImage = {
   width: '100%',
@@ -27,10 +27,15 @@ const labelStyle = {
   fontFamily: 'monospace',
 };
 
+const faqLabelStyle = {
+  ...labelStyle,
+  color: COLORS.sky,
+};
+
 const valueStyle = {
   color: COLORS.creme,
   fontSize: '16px',
-  fontWeight: 600,
+  // fontWeight: 600,
   margin: '0 0 14px',
 };
 
@@ -59,6 +64,7 @@ export function ConfirmationEmail({
   intro,
   headerImageUrl,
   background = 'clouds',
+  faqs = [],
 }: BaseProps) {
   // Prefer the event's own image (the one shown on the landing page) over the
   // template's stock header.
@@ -68,6 +74,10 @@ export function ConfirmationEmail({
       {imageUrl && <Img src={imageUrl} width="512" height="512" alt="" style={headerImage} />}
       <Text style={text}>Hi {firstName},</Text>
       <Text style={text}>{intro}</Text>
+
+      <Text style={text}>
+        If you need to update your booking or have any other questions, just reply to this email.
+      </Text>
 
       <Section style={detailsSection}>
         <Text style={labelStyle}>Session</Text>
@@ -85,10 +95,18 @@ export function ConfirmationEmail({
         <Text style={labelStyle}>Location</Text>
         <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
       </Section>
-
-      <Text style={text}>
-        If you need to update your booking or chat with us, just reply to this email.
-      </Text>
+      {faqs.length > 0 && (
+        <Section style={detailsSection}>
+          {faqs.map((faq, index) => (
+            <Section key={faq.question}>
+              <Text style={faqLabelStyle}>{faq.question}</Text>
+              <Text style={{ ...valueStyle, margin: index === faqs.length - 1 ? 0 : '0 0 14px' }}>
+                {faq.answer}
+              </Text>
+            </Section>
+          ))}
+        </Section>
+      )}
     </EmailLayout>
   );
 }

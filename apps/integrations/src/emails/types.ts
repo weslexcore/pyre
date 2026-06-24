@@ -10,6 +10,8 @@ export interface ConfirmationEmailProps {
   // manageUrl: string;
   /** The booked event's own image; templates fall back to a stock header without it. */
   sessionImageUrl?: string;
+  /** FAQ items shown in the confirmation; selected by session type in the dispatcher. */
+  faqs?: FaqItem[];
 }
 
 export interface FaqItem {
