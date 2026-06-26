@@ -509,13 +509,16 @@ const turnstileTheme = isCompact ? 'dark' : 'auto';
 
                 if ((window as any).posthog) {
                   const phSource = form.getAttribute('data-posthog-source') || 'website_form';
+                  const attribution = (window as any).pyreAttribution
+                    ? (window as any).pyreAttribution()
+                    : {};
                   (window as any).posthog.identify(email);
                   (window as any).posthog.people.set({
                     email: email,
                     signup_source: 'mailing_list',
                     signup_date: new Date().toISOString()
                   });
-                  (window as any).posthog.capture('Mailing List Signup', { email, source: phSource });
+                  (window as any).posthog.capture('Mailing List Signup', { email, source: phSource, ...attribution });
                 }
               } else if (response?.msg) {
                 if (successEl) successEl.classList.add('hidden');

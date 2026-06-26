@@ -5,7 +5,9 @@ import {
   upsertSubscriber,
   type WebhookTracer,
 } from '@pyre/webhook-core';
+import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
+import { resolveSession } from '@/lib/momence-events';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
   fetchMomenceMember,
@@ -56,22 +58,40 @@ async function handleBookingEvent(
     }
   );
 
-  // Cancellation emails are intentionally out of scope for now.
-  if (event !== 'session-booked') return;
+  if (event === 'session-booked') {
+    const member = await tracer.span(
+      'Fetch Momence member',
+      () => fetchMomenceMember(String(payload.targetMemberId)),
+      { memberId: payload.targetMemberId }
+    );
 
-  const member = await tracer.span(
-    'Fetch Momence member',
-    () => fetchMomenceMember(String(payload.targetMemberId)),
-    { memberId: payload.targetMemberId }
-  );
+    const session = await tracer.span('Resolve session', () => resolveSession(payload.sessionId), {
+      sessionId: payload.sessionId,
+    });
 
-  await sendBookingConfirmationEmails({
-    sessionId: payload.sessionId,
-    sessionBookingId: payload.sessionBookingId,
-    memberId: payload.targetMemberId,
-    member: { email: member.email, firstName: member.firstName },
-    tracer,
-  });
+    await trackBookingEvent(tracer, 'booking_completed', member, session, payload);
+
+    await sendBookingConfirmationEmails({
+      sessionId: payload.sessionId,
+      sessionBookingId: payload.sessionBookingId,
+      memberId: payload.targetMemberId,
+      member: { email: member.email, firstName: member.firstName },
+      session,
+      tracer,
+    });
+    return;
+  }
+
+  // Cancellation: confirmation emails are intentionally out of scope, but we still
+  // track the event for funnel/churn analysis. Best-effort so it can never 500 the
+  // webhook (which would trigger Momence retries).
+  try {
+    const member = await fetchMomenceMember(String(payload.targetMemberId));
+    const session = await resolveSession(payload.sessionId);
+    await trackBookingEvent(tracer, 'booking_cancelled', member, session, payload);
+  } catch (error) {
+    log.warn(`Failed to track booking_cancelled for booking ${payload.sessionBookingId}`, error);
+  }
 }
 
 async function handleMemberEvent(

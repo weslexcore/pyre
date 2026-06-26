@@ -1,19 +1,20 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
 import type { ConfirmationEmailProps } from '@/emails/types';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
-import { resolveSession } from '@/lib/momence-events';
+import { type ResolvedSession, resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { alreadySent, markSent } from '../idempotency';
 import { sendTemplate } from '../send';
 
 const log = createWebhookLogger('BookingEmail');
 
-
 interface BookingEmailArgs {
   sessionId: number;
   sessionBookingId: number;
   memberId: number;
   member: { email: string; firstName: string };
+  /** Pre-resolved session, if the caller already fetched it (avoids a second API call). */
+  session?: ResolvedSession | null;
   tracer: WebhookTracer;
 }
 
@@ -30,11 +31,15 @@ export async function sendBookingConfirmationEmails({
   sessionBookingId,
   memberId,
   member,
+  session: providedSession,
   tracer,
 }: BookingEmailArgs): Promise<void> {
-  const session = await tracer.span('Resolve session', () => resolveSession(sessionId), {
-    sessionId,
-  });
+  const session =
+    providedSession !== undefined
+      ? providedSession
+      : await tracer.span('Resolve session', () => resolveSession(sessionId), {
+          sessionId,
+        });
 
   const sessionType = session?.sessionType ?? 'unknown';
 

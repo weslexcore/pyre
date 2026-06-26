@@ -4,12 +4,8 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
-import {
-  ALL_TYPES_FILTER,
-  ALL_TYPES_LABEL,
-  CATEGORY_TAGS,
-  WINDOW_DAYS,
-} from '@/lib/events-config';
+import { trackBookingLinkClicked } from '@/lib/analytics';
+import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS, WINDOW_DAYS } from '@/lib/events-config';
 import type { EventItem } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
@@ -250,7 +246,10 @@ function SlotRow({
           target="_blank"
           rel="noopener noreferrer"
           aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            trackBookingLinkClicked(event, 'events_grid_mobile');
+          }}
           className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
         >
           {ctaLabel}
@@ -297,7 +296,10 @@ function SlotRow({
         target="_blank"
         rel="noopener noreferrer"
         aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          trackBookingLinkClicked(event, 'events_grid_desktop');
+        }}
         className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
       >
         {ctaLabel}

@@ -2524,6 +2524,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@posthog/core@npm:^1.37.3":
+  version: 1.37.3
+  resolution: "@posthog/core@npm:1.37.3"
+  dependencies:
+    "@posthog/types": "npm:^1.391.1"
+  checksum: 10c0/6f9d5b15dc3e4979db850e3027ab86222fc028898993f512ae6002ff1f0211dad35e31d8c47dd47029a60f03b564fa8eef5b1e8a8cce136d42131b116bc4fc2b
+  languageName: node
+  linkType: hard
+
+"@posthog/types@npm:^1.391.1":
+  version: 1.391.1
+  resolution: "@posthog/types@npm:1.391.1"
+  checksum: 10c0/e8bf6dd8949df25d7cdb370ee77a62648fa030c0996f4805348a98b2f43eece117cb42d7d604c98f61a69b90cb93b1b91d049bd443313efca27a5c8ddf607736
+  languageName: node
+  linkType: hard
+
 "@pyre/design-system@workspace:packages/design-system":
   version: 0.0.0-use.local
   resolution: "@pyre/design-system@workspace:packages/design-system"
@@ -2559,6 +2575,7 @@ __metadata:
     "@types/react": "npm:^19.1.9"
     "@types/react-dom": "npm:^19.1.7"
     astro: "npm:6.2.1"
+    posthog-node: "npm:^5.38.5"
     react: "npm:^19.1.1"
     react-dom: "npm:^19.1.1"
     react-email: "npm:^6.6.0"
@@ -8231,6 +8248,20 @@ __metadata:
     picocolors: "npm:^1.1.1"
     source-map-js: "npm:^1.2.1"
   checksum: 10c0/48138207cf5ef5581be1bfe2cb65ccfe0ac75e43888ba045afc8ed6043d7b56aeb3b9a9fe5b353ff554be943cd0cc15d826ccb991525159175971e5ee8ab0237
+  languageName: node
+  linkType: hard
+
+"posthog-node@npm:^5.38.5":
+  version: 5.38.5
+  resolution: "posthog-node@npm:5.38.5"
+  dependencies:
+    "@posthog/core": "npm:^1.37.3"
+  peerDependencies:
+    rxjs: ^7.0.0
+  peerDependenciesMeta:
+    rxjs:
+      optional: true
+  checksum: 10c0/419df3c02f727e3e64e9200782b3c0e3d2db88b402442ee7d1cda5ee226885c339fe6baaf3a26e6153600c26e8a53170c0d6487553d05163e2cacbf3fbd3b8f6
   languageName: node
   linkType: hard
 

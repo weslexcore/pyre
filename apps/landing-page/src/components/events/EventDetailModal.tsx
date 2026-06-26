@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { trackBookingLinkClicked } from '@/lib/analytics';
 import type { EventItem } from '@/lib/types';
 
 interface EventDetailModalProps {
@@ -381,6 +382,7 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
               target="_blank"
               rel="noopener noreferrer"
               aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
+              onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
               className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
             >
               {ctaLabel}

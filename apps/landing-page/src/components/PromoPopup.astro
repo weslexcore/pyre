@@ -444,6 +444,9 @@ const hasForm = !!promoConfig.form;
 
                 // PostHog tracking
                 if ((window as any).posthog) {
+                  const attribution = (window as any).pyreAttribution
+                    ? (window as any).pyreAttribution()
+                    : {};
                   (window as any).posthog.identify(email);
                   (window as any).posthog.people.set({
                     email: email,
@@ -453,6 +456,7 @@ const hasForm = !!promoConfig.form;
                   (window as any).posthog.capture('Intro Offer Signup', {
                     email,
                     source: 'promo_popup',
+                    ...attribution,
                   });
                 }
 
