@@ -423,6 +423,18 @@ export interface EventsContent {
   };
 }
 
+// A bookable duration choice for an Open Hours slot (e.g. "Book 1 hour" /
+// "Book 2 hours"), surfaced in the event detail modal. `href` is the Momence
+// session checkout for that duration; `soldOut` covers both a full pool and a
+// missing 2-hour partner session.
+export interface OpenHoursBookingOption {
+  label: string;
+  minutes: number;
+  href: string;
+  spotsLeft: number;
+  soldOut: boolean;
+}
+
 // ------------------------------------------------------------
 // About section types
 // ------------------------------------------------------------
