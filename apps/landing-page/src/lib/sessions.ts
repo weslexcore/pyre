@@ -21,8 +21,8 @@ export interface SessionsContent {
 
 const sessions: SessionsContent = {
   title: 'Credits',
-  subtitle:
-    'Credits can be used for all experiences',
+  // subtitle:
+    // '1',
   note: 'All credits except our "Intro Offer" can be shared with friends & family!',
   items: [
     {
