@@ -38,7 +38,7 @@ const membership: MembershipContent = {
       features: [
         { text: '8 credits per month', highlighted: true },
         { text: '1 guest pass per month' },
-        { text: '5% off drinks + merch' },
+        { text: '10% off drinks + merch' },
         { text: 'Only 30 available', highlighted: true },
       ],
       cta: {

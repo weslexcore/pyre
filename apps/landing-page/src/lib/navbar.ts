@@ -41,11 +41,11 @@ const navbar: NavbarContent = {
         href: withBase('#faq'),
         ariaLabel: 'Frequently asked questions',
       },
-      {
-        label: 'Shop',
-        href: withBase('/shop'),
-        ariaLabel: 'Browse Pyre merchandise',
-      },
+      // {
+      //   label: 'Shop',
+      //   href: withBase('/shop'),
+      //   ariaLabel: 'Browse Pyre merchandise',
+      // },
       {
         label: 'Blog',
         href: withBase('/blog'),
