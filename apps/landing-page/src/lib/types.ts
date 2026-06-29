@@ -405,6 +405,7 @@ export interface EventItem {
   image?: ImageRef;
   cta?: ActionRef;
   isoDate?: string; // ISO 8601 date for client-side filtering
+  durationMinutes?: number; // Session length in minutes (Momence `duration`), used for occupancy math
   spotsRemaining?: number; // Available spots from Momence API
   totalSpots?: number; // Total capacity from Momence API
   isPrivate?: boolean; // Private events hide booking CTAs

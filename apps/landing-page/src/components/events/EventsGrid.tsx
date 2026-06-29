@@ -5,6 +5,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
+import {
+  bookedFromSpots,
+  computeHourlyOccupancy,
+  maxOccupancyForLocation,
+  type OccupancySession,
+  OPEN_HOURS_TAG,
+  poolSpotsLeftForSlot,
+} from '@/lib/capacity';
 import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS, WINDOW_DAYS } from '@/lib/events-config';
 import type { EventItem } from '@/lib/types';
 
@@ -309,15 +317,160 @@ function SlotRow({
   );
 }
 
+// -- Open Hours pairing + gating ---------------------------------------------
+//
+// Open Hours sessions sharing a start time + location are merged into one row
+// offering each available duration (e.g. "Book 1 hour" / "Book 2 hours"). Each
+// duration is gated by the shared occupancy pool AND its own Momence capacity,
+// so a booking is offered only when it actually fits.
+
+interface OpenHoursDuration {
+  minutes: number;
+  label: string;
+  event: EventItem;
+  spotsLeft: number;
+  soldOut: boolean;
+}
+
+type ScheduleRow =
+  | { kind: 'event'; event: EventItem }
+  | { kind: 'open-hours'; key: string; representative: EventItem; durations: OpenHoursDuration[] };
+
+function isOpenHours(event: EventItem): boolean {
+  return !event.isPrivate && eventHasTag(event, OPEN_HOURS_TAG);
+}
+
+function durationLabel(minutes: number): string {
+  if (!minutes) return 'Session';
+  if (minutes === 60) return '1 hour';
+  if (minutes % 60 === 0) return `${minutes / 60} hours`;
+  return `${minutes} min`;
+}
+
+// Build the render list for a date group: normal events pass through as-is,
+// while Open Hours at the same start+location collapse into one multi-duration row.
+function buildScheduleRows(events: EventItem[], occupancy: Map<string, number>): ScheduleRow[] {
+  const rows: ScheduleRow[] = [];
+  const openHoursRowIndex = new Map<string, number>();
+
+  for (const event of events) {
+    if (!isOpenHours(event)) {
+      rows.push({ kind: 'event', event });
+      continue;
+    }
+
+    const minutes = event.durationMinutes ?? 0;
+    const pool = poolSpotsLeftForSlot(event, occupancy, maxOccupancyForLocation(event.location));
+    const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
+    const spotsLeft = Math.max(0, Math.min(pool, sessionRemaining));
+    const duration: OpenHoursDuration = {
+      minutes,
+      label: durationLabel(minutes),
+      event,
+      spotsLeft,
+      soldOut: spotsLeft <= 0,
+    };
+
+    const key = `${event.location}__${event.isoDate ?? event.id}`;
+    const existingIdx = openHoursRowIndex.get(key);
+    if (existingIdx === undefined) {
+      openHoursRowIndex.set(key, rows.length);
+      rows.push({ kind: 'open-hours', key, representative: event, durations: [duration] });
+    } else {
+      const row = rows[existingIdx] as Extract<ScheduleRow, { kind: 'open-hours' }>;
+      row.durations.push(duration);
+      // The longest duration drives the displayed time window + the details modal.
+      if (minutes > (row.representative.durationMinutes ?? 0)) row.representative = event;
+    }
+  }
+
+  for (const row of rows) {
+    if (row.kind === 'open-hours') row.durations.sort((a, b) => a.minutes - b.minutes);
+  }
+  return rows;
+}
+
+function OpenHoursRow({
+  row,
+  onViewDetails,
+}: {
+  row: Extract<ScheduleRow, { kind: 'open-hours' }>;
+  onViewDetails: (event: EventItem) => void;
+}) {
+  const { representative, durations } = row;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onViewDetails(representative)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onViewDetails(representative);
+        }
+      }}
+      className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
+    >
+      {/* Title */}
+      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] sm:w-72 shrink-0 truncate">
+        {representative.title}
+      </span>
+
+      {/* Time */}
+      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+        <span className="inline-flex items-center gap-1.5">
+          <ClockIcon className="w-3.5 h-3.5" />
+          {representative.time}
+        </span>
+      </span>
+
+      {/* Duration CTAs — each gated by the shared occupancy pool */}
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: stops row-click while keeping button taps */}
+      <div
+        className="flex flex-wrap items-start gap-x-3 gap-y-2 sm:justify-end shrink-0"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {durations.map((d) => {
+          const label = d.soldOut ? 'Join Waitlist' : `Book ${d.label}`;
+          return (
+            <a
+              key={d.minutes}
+              href={d.event.cta?.href ?? '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${label} — ${representative.title} (${d.label})`}
+              onClick={() => trackBookingLinkClicked(d.event, 'events_grid_open_hours')}
+              className="inline-flex flex-col items-center gap-0.5"
+            >
+              <span className="inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap">
+                {label}
+                <ArrowIcon />
+              </span>
+              <span className={`text-xs ${spotsColor(d.soldOut ? 0 : d.spotsLeft)}`}>
+                {d.soldOut ? 'Full — waitlist' : `${d.spotsLeft} left`}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DateGroup({
   dateLabel,
   events,
+  occupancy,
   onViewDetails,
 }: {
   dateLabel: string;
   events: EventItem[];
+  occupancy: Map<string, number>;
   onViewDetails: (event: EventItem) => void;
 }) {
+  const rows = buildScheduleRows(events, occupancy);
   return (
     <div className="mb-6">
       {/* Date header */}
@@ -330,9 +483,13 @@ function DateGroup({
 
       {/* Slot rows */}
       <div>
-        {events.map((event) => (
-          <SlotRow key={event.id} event={event} onViewDetails={onViewDetails} />
-        ))}
+        {rows.map((row) =>
+          row.kind === 'event' ? (
+            <SlotRow key={row.event.id} event={row.event} onViewDetails={onViewDetails} />
+          ) : (
+            <OpenHoursRow key={row.key} row={row} onViewDetails={onViewDetails} />
+          )
+        )}
       </div>
     </div>
   );
@@ -485,6 +642,21 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   // Hard 2-week window — the base set everything else derives from.
   const windowedEvents = useMemo(() => filterEventsByWindow(displayEvents), [displayEvents]);
 
+  // Shared occupancy pool across all Open Hours in the window. Computed from the
+  // full window (not the type-filtered subset) so the cap is correct regardless
+  // of which type chip is active.
+  const occupancy = useMemo(() => {
+    const sessions: OccupancySession[] = windowedEvents
+      .filter((e) => !e.isPrivate && eventHasTag(e, OPEN_HOURS_TAG))
+      .map((e) => ({
+        isoDate: e.isoDate,
+        durationMinutes: e.durationMinutes,
+        location: e.location,
+        booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
+      }));
+    return computeHourlyOccupancy(sessions);
+  }, [windowedEvents]);
+
   // Dynamic type chips, built from the tags present on the upcoming events.
   const typeFilters = useMemo(() => deriveTypeFilters(windowedEvents), [windowedEvents]);
 
@@ -541,6 +713,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
               key={dateKey}
               dateLabel={groupEvents[0].date}
               events={groupEvents}
+              occupancy={occupancy}
               onViewDetails={setSelectedEvent}
             />
           ))}

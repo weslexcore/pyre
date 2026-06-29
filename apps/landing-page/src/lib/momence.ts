@@ -169,6 +169,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
           ariaLabel: ctaAriaLabel,
         },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
+    durationMinutes: event.duration, // Minutes; drives the open-hours occupancy math
     spotsRemaining: isPrivate ? undefined : event.spotsRemaining,
     totalSpots: isPrivate ? undefined : event.capacity,
     isPrivate,
