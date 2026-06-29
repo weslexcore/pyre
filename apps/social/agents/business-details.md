@@ -60,7 +60,7 @@ Credits work for Open Hours, Guided Sessions, and most Special Events. They're s
 
 - Sauna: **traditional Finnish**, 170–195°F.
 - Cold plunge: 39–50°F.
-- **Sessions are 2 hours** of access. Within that window the common cadence is 10–20 min sauna → 1–3 min cold plunge → repeat 2–4 rounds. When referencing session length in copy, say "two hours" — not "one hour" or "ninety minutes."
+- **Sessions are 1-2 hours** of access. Within that window the common cadence is 10–20 min sauna → 1–3 min cold plunge → repeat 2–4 rounds.
 
 ## Contact
 
