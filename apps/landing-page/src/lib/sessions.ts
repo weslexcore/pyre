@@ -4,6 +4,7 @@ export interface SessionItem {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number;
   description: string;
   savings?: number;
   highlighted?: boolean;
@@ -20,48 +21,53 @@ export interface SessionsContent {
 
 const sessions: SessionsContent = {
   title: 'Credits',
-  subtitle: 'Can be used for any 2 hour open hours, guided class or select special events.',
-  note: 'Credits can be shared with friends & family! 2-Pack Intro is non-transferrable. ',
+  subtitle:
+    '1 credit = 1 hour session',
+  note: 'All credits except our "Intro Offer" can be shared with friends & family!',
   items: [
     {
       id: 'intro',
-      name: 'Buy 1, Get 1 Free - 2 Credits',
-      price: 39,
+      name: 'Intro - 2 Credits',
+      price: 25,
+      originalPrice: 50,
       description:
-        'New here? Start with two sessions and see how it feels. Available once per customer + non-transferrable.',
-      savings: 39,
+        'New here? Start with two credits and see how it feels. Available once per customer. Not shareable.',
+      savings: 25,
       highlighted: true,
       href: 'https://momence.com/m/630918',
     },
     {
       id: 'single',
       name: 'Single - 1 Credit',
-      price: 39,
+      price: 25,
       description: 'Drop-in visit',
       href: '/events',
     },
     {
       id: 'pack-2',
       name: 'Duo - 2 Credits',
-      price: 72,
+      price: 45,
+      originalPrice: 50,
       description: 'Come once, then come back - or bring someone along.',
-      savings: 6,
+      savings: 5,
 
       href: 'https://momence.com/m/702636',
     },
     {
       id: 'pack-4',
       name: 'Circle - 4 Credits',
-      price: 129,
+      price: 85,
+      originalPrice: 100,
       description: 'Build momentum - come back often or bring your circle.',
-      savings: 27,
+      savings: 15,
       href: 'https://momence.com/m/630915',
     },
     {
       id: 'pack-8',
       name: 'Ritual - 8 Credits',
-      price: 229,
-      savings: 83,
+      price: 165,
+      originalPrice: 200,
+      savings: 35,
       highlighted: true,
       description: 'Our best value - designed for consistency, connection, and shared experiences.',
       href: 'https://momence.com/m/630916',

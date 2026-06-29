@@ -3,7 +3,7 @@ import type { MembershipContent } from './types';
 const membership: MembershipContent = {
   title: 'Memberships',
   // subtitle: 'Founding Member offer: $199/mo for life (normally $249). Only 30 available.',
-  note: 'Pay once today. Monthly billing pauses until Grand Opening (Fall 2026). Memberships are nontransferrable.',
+  note: 'Founding rates are locked in for life. Memberships are nontransferrable.',
   tiers: [
     // {
     //   id: '4-sessions',
@@ -29,21 +29,40 @@ const membership: MembershipContent = {
       price: 199,
       period: '/month for life (normally $249)',
       description:
-        'Unlimited access for life. Every pre-opening and soft-open session now, plus unlimited monthly access at Grand Opening — locked at the founding rate forever.',
+        'Unlimited access, locked at the founding rate for life. The deepest way to make Pyre part of your routine.',
       savings: 50,
       popular: true,
       features: [
-        { text: '$199/mo locked in for life — only 30 available', highlighted: true },
-        { text: 'Unlimited pre-opening + soft-open sessions', highlighted: true },
-        { text: 'First charge today, monthly billing pauses until opening' },
-        { text: 'Free Pyre tote bag' },
-        { text: '4 guest passes per month at opening ($156 value)' },
-        { text: '10% off extra guest sessions' },
+        { text: 'Unlimited access — $199/mo for life', highlighted: true },
+        { text: 'Free bathhouse tote' },
+        { text: '4 guest passes per month' },
+        { text: '10% off drinks + merch' },
+        { text: 'Only 30 available', highlighted: true },
       ],
       cta: {
         label: 'Claim Founding Membership',
         href: 'https://momence.com/m/756341',
         ariaLabel: 'Claim Founding Unlimited membership — $199 per month for life',
+      },
+    },
+    {
+      id: 'founding-limited',
+      name: 'Founding Limited',
+      price: 119,
+      period: '/month (normally $200)',
+      description:
+        '8 credits every month at the founding rate for life. A steady rhythm without the unlimited commitment.',
+      savings: 81,
+      features: [
+        { text: '8 credits per month', highlighted: true },
+        { text: '1 guest pass per month' },
+        { text: '5% off drinks + merch' },
+        { text: 'Only 30 available', highlighted: true },
+      ],
+      cta: {
+        label: 'Claim Founding Membership',
+        href: 'https://momence.com/m/633377',
+        ariaLabel: 'Claim Founding Limited membership — $119 per month',
       },
     },
   ],
