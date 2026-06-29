@@ -398,7 +398,7 @@ export default function EventDetailModal({
                       key={option.minutes}
                       aria-disabled="true"
                       title="Not available"
-                      className="flex flex-1 items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)]/35 cursor-not-allowed"
+                      className="flex flex-1 items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-2.5 py-3 sm:px-4 font-mono-bold text-xs sm:text-sm uppercase tracking-normal sm:tracking-wide whitespace-nowrap text-[var(--pyre-creme)]/35 cursor-not-allowed"
                     >
                       {option.label}
                     </span>
@@ -412,10 +412,12 @@ export default function EventDetailModal({
                       onClick={() =>
                         trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
                       }
-                      className="flex flex-1 items-center justify-center rounded-full bg-[var(--pyre-red)] px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+                      className="flex flex-1 items-center justify-center rounded-full bg-[var(--pyre-red)] px-2.5 py-3 sm:px-4 font-mono-bold text-xs sm:text-sm uppercase tracking-normal sm:tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
                     >
                       {option.label}
-                      <ArrowIcon />
+                      <span className="hidden sm:inline-flex items-center">
+                        <ArrowIcon />
+                      </span>
                     </a>
                   )
                 )}
