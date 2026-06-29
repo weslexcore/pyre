@@ -9,20 +9,20 @@ export const menu: MenuSheetData = {
       items: [
         {
           name: 'intro // 2 credits',
-          price: '$39',
-          originalPrice: '$78',
+          price: '$25',
+          originalPrice: '$50',
           description: 'first-timers · once per customer, non-transferrable',
         },
-        { name: 'single // 1 credit', price: '$39' }, // description: 'drop-in visit' },
-        { name: 'duo // 2 credits', price: '$72', originalPrice: '$78' },
-        { name: 'circle // 4 credits', price: '$129', originalPrice: '$156' },
+        { name: 'single // 1 credit', price: '$25' }, // description: 'drop-in visit' },
+        { name: 'duo // 2 credits', price: '$45', originalPrice: '$50' },
+        { name: 'circle // 4 credits', price: '$85', originalPrice: '$100' },
         {
           name: 'ritual // 8 credits',
-          price: '$229',
-          originalPrice: '$312',
+          price: '$165',
+          originalPrice: '$200',
           description: 'best value',
           highlighted: true,
-        },
+        }
       ],
     },
     {
@@ -33,10 +33,21 @@ export const menu: MenuSheetData = {
           price: '$199/mo',
           originalPrice: '$249',
           chips: [
-            // 'unlimited for life',
-            'free tote',
+            'free bathhouse tote',
             '4 guest passes/mo',
-            '10% off extra guests',
+            '10% off drinks + merch',
+            'only 30 available',
+          ],
+          description: 'discount for life · billing begins july 2026',
+        },
+        {
+          name: 'founding limited',
+          price: '$119/mo',
+          originalPrice: '$200',
+          chips: [
+            "8 credits/mo",
+            '1 guest pass/mo',
+            '10% off drinks + merch',
             'only 30 available',
           ],
           description: 'discount for life · billing begins july 2026',

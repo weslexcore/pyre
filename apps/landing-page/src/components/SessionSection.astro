@@ -49,8 +49,11 @@ import SectionDivider from './SectionDivider.astro';
             <p class="text-sm opacity-70 mt-1 lg:mt-0.5">{item.description}</p>
           </div>
           <div class="flex items-center justify-between lg:justify-end gap-4">
-            <div class={`font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
-              ${item.price}
+            <div class={`flex items-baseline gap-2 font-primary-semibold text-3xl lg:text-2xl ${item.highlighted ? 'text-[var(--pyre-muted-gold)]' : ''}`}>
+              {item.originalPrice && (
+                <span class="text-lg lg:text-base opacity-50 line-through">${item.originalPrice}</span>
+              )}
+              <span>${item.price}</span>
             </div>
             {item.href && (
               <a
