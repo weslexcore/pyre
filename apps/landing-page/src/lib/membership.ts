@@ -3,26 +3,8 @@ import type { MembershipContent } from './types';
 const membership: MembershipContent = {
   title: 'Memberships',
   // subtitle: 'Founding Member offer: $199/mo for life (normally $249). Only 30 available.',
-  note: 'Founding rates are locked in for life. Memberships are nontransferrable.',
+  note: 'Founding rates are locked in for life. Membership is not shareable.',
   tiers: [
-    // {
-    //   id: '4-sessions',
-    //   name: 'Limited',
-    //   price: 99,
-    //   period: '/month',
-    //   description: '4 sessions per month',
-    //   savings: 57,
-    //   features: [
-    //     { text: '4 sauna & cold plunge sessions' },
-    //     { text: 'Credits rollover 1 month', highlighted: true },
-    //     { text: '10% off extra sessions', highlighted: true },
-    //   ],
-    //   cta: {
-    //     label: 'Get Started',
-    //     href: 'https://momence.com/m/633377',
-    //     ariaLabel: 'Sign up for 4 sessions per month membership',
-    //   },
-    // },
     {
       id: 'unlimited',
       name: 'Founding Unlimited',
