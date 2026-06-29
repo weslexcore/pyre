@@ -22,7 +22,7 @@ export interface SessionsContent {
 const sessions: SessionsContent = {
   title: 'Credits',
   subtitle:
-    '1 credit = 1 hour session',
+    'Credits can be used for all experiences',
   note: 'All credits except our "Intro Offer" can be shared with friends & family!',
   items: [
     {
@@ -40,7 +40,7 @@ const sessions: SessionsContent = {
       id: 'single',
       name: 'Single // 1 Credit',
       price: 25,
-      description: 'Drop-in visit',
+      description: 'Drop-in for an hour',
       href: '/events',
     },
     {
@@ -48,7 +48,7 @@ const sessions: SessionsContent = {
       name: 'Duo // 2 Credits',
       price: 45,
       originalPrice: 50,
-      description: 'Come twice, stay for a longer session, or bring along a friend.',
+      description: 'Come twice, stay a while longer, or bring along a friend.',
       savings: 5,
 
       href: 'https://momence.com/m/702636',
