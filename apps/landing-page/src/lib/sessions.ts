@@ -27,7 +27,7 @@ const sessions: SessionsContent = {
   items: [
     {
       id: 'intro',
-      name: 'Intro - 2 Credits',
+      name: 'Intro // 2 Credits',
       price: 25,
       originalPrice: 50,
       description:
@@ -38,24 +38,24 @@ const sessions: SessionsContent = {
     },
     {
       id: 'single',
-      name: 'Single - 1 Credit',
+      name: 'Single // 1 Credit',
       price: 25,
       description: 'Drop-in visit',
       href: '/events',
     },
     {
       id: 'pack-2',
-      name: 'Duo - 2 Credits',
+      name: 'Duo // 2 Credits',
       price: 45,
       originalPrice: 50,
-      description: 'Come once, then come back - or bring someone along.',
+      description: 'Come twice, stay for a longer session, or bring along a friend.',
       savings: 5,
 
       href: 'https://momence.com/m/702636',
     },
     {
       id: 'pack-4',
-      name: 'Circle - 4 Credits',
+      name: 'Circle // 4 Credits',
       price: 85,
       originalPrice: 100,
       description: 'Build momentum - come back often or bring your circle.',
@@ -64,7 +64,7 @@ const sessions: SessionsContent = {
     },
     {
       id: 'pack-8',
-      name: 'Ritual - 8 Credits',
+      name: 'Ritual // 8 Credits',
       price: 165,
       originalPrice: 200,
       savings: 35,
