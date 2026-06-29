@@ -4,11 +4,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { trackBookingLinkClicked } from '@/lib/analytics';
-import type { EventItem } from '@/lib/types';
+import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
 
 interface EventDetailModalProps {
   event: EventItem | null;
   isOpen: boolean;
+  // When present, the footer shows these gated duration choices (Book 1 hour /
+  // Book 2 hours) instead of the single Book Now CTA.
+  bookingOptions?: OpenHoursBookingOption[];
   onClose: () => void;
 }
 
@@ -150,7 +153,12 @@ function spotsLabel(
 
 // -- Modal component ----------------------------------------------------------
 
-export default function EventDetailModal({ event, isOpen, onClose }: EventDetailModalProps) {
+export default function EventDetailModal({
+  event,
+  isOpen,
+  bookingOptions,
+  onClose,
+}: EventDetailModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -212,6 +220,9 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
+  // Open Hours sessions surface gated 1hr/2hr choices in the footer; their raw
+  // per-session spots are replaced by the per-option "N left" counts.
+  const hasBookingOptions = !!bookingOptions && bookingOptions.length > 0;
 
   // Build a deep-link to this event (with UTM tags) and share via the native
   // share sheet when available, otherwise copy it to the clipboard.
@@ -342,8 +353,8 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
                 <span>{event.location}</span>
               </div>
 
-              {/* Spots */}
-              {spots && (
+              {/* Spots (hidden for Open Hours — the footer shows per-option counts) */}
+              {spots && !hasBookingOptions && (
                 <div
                   className={`flex items-center gap-2 text-sm ${spotsColor(event.spotsRemaining)}`}
                 >
@@ -375,19 +386,61 @@ export default function EventDetailModal({ event, isOpen, onClose }: EventDetail
             {copied ? 'Copied!' : 'Share'}
           </button>
 
-          {/* Book Now CTA */}
-          {!event.isPrivate && event.cta && (
-            <a
-              href={event.cta.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
-              onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
-              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-            >
-              {ctaLabel}
-              <ArrowIcon />
-            </a>
+          {/* Booking CTAs */}
+          {hasBookingOptions ? (
+            // Open Hours: gated 1hr / 2hr choices (grayed out when unavailable)
+            <div className="flex flex-1 gap-2">
+              {bookingOptions?.map((option) =>
+                option.soldOut ? (
+                  <span
+                    key={option.minutes}
+                    aria-disabled="true"
+                    title="Not available"
+                    className="flex flex-1 flex-col items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-4 py-2.5 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)]/35 cursor-not-allowed"
+                  >
+                    <span>{option.label}</span>
+                    <span className="text-[10px] tracking-normal normal-case opacity-80">
+                      Unavailable
+                    </span>
+                  </span>
+                ) : (
+                  <a
+                    key={option.minutes}
+                    href={option.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${option.label} — ${event.title}`}
+                    onClick={() =>
+                      trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
+                    }
+                    className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full bg-[var(--pyre-red)] px-4 py-2.5 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+                  >
+                    <span className="inline-flex items-center">
+                      {option.label}
+                      <ArrowIcon />
+                    </span>
+                    <span className="text-[10px] tracking-normal normal-case opacity-80">
+                      {option.spotsLeft} left
+                    </span>
+                  </a>
+                )
+              )}
+            </div>
+          ) : (
+            !event.isPrivate &&
+            event.cta && (
+              <a
+                href={event.cta.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
+                onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+              >
+                {ctaLabel}
+                <ArrowIcon />
+              </a>
+            )
           )}
         </div>
       </div>

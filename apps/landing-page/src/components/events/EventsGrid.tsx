@@ -9,12 +9,11 @@ import {
   bookedFromSpots,
   computeHourlyOccupancy,
   maxOccupancyForLocation,
-  type OccupancySession,
   OPEN_HOURS_TAG,
   poolSpotsLeftForSlot,
 } from '@/lib/capacity';
 import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS, WINDOW_DAYS } from '@/lib/events-config';
-import type { EventItem } from '@/lib/types';
+import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
 
@@ -317,29 +316,30 @@ function SlotRow({
   );
 }
 
-// -- Open Hours pairing + gating ---------------------------------------------
+// -- Open Hours: hourly schedule + in-modal 1hr / 2hr booking -----------------
 //
-// Open Hours sessions sharing a start time + location are merged into one row
-// offering each available duration (e.g. "Book 1 hour" / "Book 2 hours"). Each
-// duration is gated by the shared occupancy pool AND its own Momence capacity,
-// so a booking is offered only when it actually fits.
+// The schedule shows only 1-hour Open Hours slots. A matching 2-hour session
+// (same start + location) is kept in Momence but hidden from the schedule; it
+// surfaces as the "Book 2 hours" option in the details modal so the whole
+// 2-hour visit stays a single Momence checkout. Standalone 2-hour Open Hours
+// sessions (no 1-hour counterpart) still render as their own row. Every option
+// is gated by the shared occupancy pool AND its own Momence capacity.
 
-interface OpenHoursDuration {
-  minutes: number;
-  label: string;
-  event: EventItem;
-  spotsLeft: number;
-  soldOut: boolean;
-}
-
-type ScheduleRow =
-  | { kind: 'event'; event: EventItem }
-  | { kind: 'open-hours'; key: string; representative: EventItem; durations: OpenHoursDuration[] };
+const TWO_HOUR_MIN_MINUTES = 90;
 
 function isOpenHours(event: EventItem): boolean {
   return !event.isPrivate && eventHasTag(event, OPEN_HOURS_TAG);
 }
-
+function isTwoHourOpenHours(event: EventItem): boolean {
+  return isOpenHours(event) && (event.durationMinutes ?? 0) >= TWO_HOUR_MIN_MINUTES;
+}
+function isOneHourOpenHours(event: EventItem): boolean {
+  const minutes = event.durationMinutes ?? 0;
+  return isOpenHours(event) && minutes > 0 && minutes < TWO_HOUR_MIN_MINUTES;
+}
+function openHoursStartKey(event: EventItem): string {
+  return `${event.location}__${event.isoDate ?? event.id}`;
+}
 function durationLabel(minutes: number): string {
   if (!minutes) return 'Session';
   if (minutes === 60) return '1 hour';
@@ -347,114 +347,152 @@ function durationLabel(minutes: number): string {
   return `${minutes} min`;
 }
 
-// Build the render list for a date group: normal events pass through as-is,
-// while Open Hours at the same start+location collapse into one multi-duration row.
-function buildScheduleRows(events: EventItem[], occupancy: Map<string, number>): ScheduleRow[] {
-  const rows: ScheduleRow[] = [];
-  const openHoursRowIndex = new Map<string, number>();
+function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): number {
+  const pool = poolSpotsLeftForSlot(event, occupancy, maxOccupancyForLocation(event.location));
+  const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
+  return Math.max(0, Math.min(pool, sessionRemaining));
+}
+function toBookingOption(event: EventItem, occupancy: Map<string, number>): OpenHoursBookingOption {
+  const minutes = event.durationMinutes ?? 0;
+  const spotsLeft = gatedSpotsLeft(event, occupancy);
+  return {
+    label: `Book ${durationLabel(minutes)}`,
+    minutes,
+    href: event.cta?.href ?? '#',
+    spotsLeft,
+    soldOut: spotsLeft <= 0,
+  };
+}
 
-  for (const event of events) {
-    if (!isOpenHours(event)) {
-      rows.push({ kind: 'event', event });
-      continue;
-    }
+interface OpenHoursModel {
+  // Booking options for each *displayed* Open Hours event, keyed by event id.
+  optionsById: Map<string, OpenHoursBookingOption[]>;
+  // 2-hour sessions hidden from the schedule (they back a 1-hour slot's option).
+  hiddenIds: Set<string>;
+}
 
-    const minutes = event.durationMinutes ?? 0;
-    const pool = poolSpotsLeftForSlot(event, occupancy, maxOccupancyForLocation(event.location));
-    const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
-    const spotsLeft = Math.max(0, Math.min(pool, sessionRemaining));
-    const duration: OpenHoursDuration = {
-      minutes,
-      label: durationLabel(minutes),
-      event,
-      spotsLeft,
-      soldOut: spotsLeft <= 0,
-    };
+function buildOpenHoursModel(events: EventItem[]): OpenHoursModel {
+  const openHours = events.filter(isOpenHours);
 
-    const key = `${event.location}__${event.isoDate ?? event.id}`;
-    const existingIdx = openHoursRowIndex.get(key);
-    if (existingIdx === undefined) {
-      openHoursRowIndex.set(key, rows.length);
-      rows.push({ kind: 'open-hours', key, representative: event, durations: [duration] });
+  const occupancy = computeHourlyOccupancy(
+    openHours.map((e) => ({
+      isoDate: e.isoDate,
+      durationMinutes: e.durationMinutes,
+      location: e.location,
+      booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
+    }))
+  );
+
+  const twoHourByStart = new Map<string, EventItem>();
+  const oneHourStarts = new Set<string>();
+  for (const e of openHours) {
+    if (isTwoHourOpenHours(e)) twoHourByStart.set(openHoursStartKey(e), e);
+    else if (isOneHourOpenHours(e)) oneHourStarts.add(openHoursStartKey(e));
+  }
+
+  // Hide a 2-hour session when a 1-hour slot shares its start — it becomes that
+  // slot's "Book 2 hours" option instead of its own row.
+  const hiddenIds = new Set<string>();
+  for (const e of openHours) {
+    if (isTwoHourOpenHours(e) && oneHourStarts.has(openHoursStartKey(e))) hiddenIds.add(e.id);
+  }
+
+  const optionsById = new Map<string, OpenHoursBookingOption[]>();
+  for (const e of openHours) {
+    if (hiddenIds.has(e.id)) continue;
+    if (isOneHourOpenHours(e)) {
+      const partner = twoHourByStart.get(openHoursStartKey(e));
+      const twoHourOption: OpenHoursBookingOption = partner
+        ? toBookingOption(partner, occupancy)
+        : { label: 'Book 2 hours', minutes: 120, href: '#', spotsLeft: 0, soldOut: true };
+      optionsById.set(e.id, [toBookingOption(e, occupancy), twoHourOption]);
     } else {
-      const row = rows[existingIdx] as Extract<ScheduleRow, { kind: 'open-hours' }>;
-      row.durations.push(duration);
-      // The longest duration drives the displayed time window + the details modal.
-      if (minutes > (row.representative.durationMinutes ?? 0)) row.representative = event;
+      // Standalone 2-hour (or odd-duration) Open Hours session — single option.
+      optionsById.set(e.id, [toBookingOption(e, occupancy)]);
     }
   }
 
-  for (const row of rows) {
-    if (row.kind === 'open-hours') row.durations.sort((a, b) => a.minutes - b.minutes);
-  }
-  return rows;
+  return { optionsById, hiddenIds };
 }
 
 function OpenHoursRow({
-  row,
+  event,
+  options,
   onViewDetails,
 }: {
-  row: Extract<ScheduleRow, { kind: 'open-hours' }>;
+  event: EventItem;
+  options: OpenHoursBookingOption[];
   onViewDetails: (event: EventItem) => void;
 }) {
-  const { representative, durations } = row;
+  const rowSpots = options.length ? Math.max(...options.map((o) => o.spotsLeft)) : 0;
+  const allSoldOut = options.length > 0 && options.every((o) => o.soldOut);
+  const spotsText = allSoldOut ? 'Waitlist' : `${rowSpots} left`;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onViewDetails(representative)}
+      onClick={() => onViewDetails(event)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onViewDetails(representative);
+          onViewDetails(event);
         }
       }}
       className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
       {/* Title */}
-      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] sm:w-72 shrink-0 truncate">
-        {representative.title}
+      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-72 shrink-0">
+        <span className="truncate">{event.title}</span>
+        {/* Mobile book pill — opens the modal to choose duration */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDetails(event);
+          }}
+          className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
+        >
+          Book
+          <ArrowIcon />
+        </button>
       </span>
 
       {/* Time */}
       <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
         <span className="inline-flex items-center gap-1.5">
           <ClockIcon className="w-3.5 h-3.5" />
-          {representative.time}
+          {event.time}
         </span>
       </span>
 
-      {/* Duration CTAs — each gated by the shared occupancy pool */}
-      {/** biome-ignore lint/a11y/noStaticElementInteractions: stops row-click while keeping button taps */}
-      <div
-        className="flex flex-wrap items-start gap-x-3 gap-y-2 sm:justify-end shrink-0"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
+      {/* Spots (desktop) */}
+      <span
+        className={`hidden sm:inline-flex items-center gap-1.5 text-sm shrink-0 ${spotsColor(allSoldOut ? 0 : rowSpots)}`}
       >
-        {durations.map((d) => {
-          const label = d.soldOut ? 'Join Waitlist' : `Book ${d.label}`;
-          return (
-            <a
-              key={d.minutes}
-              href={d.event.cta?.href ?? '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${label} — ${representative.title} (${d.label})`}
-              onClick={() => trackBookingLinkClicked(d.event, 'events_grid_open_hours')}
-              className="inline-flex flex-col items-center gap-0.5"
-            >
-              <span className="inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap">
-                {label}
-                <ArrowIcon />
-              </span>
-              <span className={`text-xs ${spotsColor(d.soldOut ? 0 : d.spotsLeft)}`}>
-                {d.soldOut ? 'Full — waitlist' : `${d.spotsLeft} left`}
-              </span>
-            </a>
-          );
-        })}
-      </div>
+        <UsersIcon className="w-3.5 h-3.5" />
+        {spotsText}
+      </span>
+      {/* Spots (mobile) */}
+      <span
+        className={`sm:hidden inline-flex items-center gap-1.5 text-sm ${spotsColor(allSoldOut ? 0 : rowSpots)}`}
+      >
+        <UsersIcon className="w-3.5 h-3.5" />
+        {spotsText}
+      </span>
+
+      {/* Book pill (desktop) — opens the modal to choose duration */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onViewDetails(event);
+        }}
+        className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-4 py-1.5 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
+      >
+        Book
+        <ArrowIcon />
+      </button>
     </div>
   );
 }
@@ -462,15 +500,14 @@ function OpenHoursRow({
 function DateGroup({
   dateLabel,
   events,
-  occupancy,
+  optionsById,
   onViewDetails,
 }: {
   dateLabel: string;
   events: EventItem[];
-  occupancy: Map<string, number>;
+  optionsById: Map<string, OpenHoursBookingOption[]>;
   onViewDetails: (event: EventItem) => void;
 }) {
-  const rows = buildScheduleRows(events, occupancy);
   return (
     <div className="mb-6">
       {/* Date header */}
@@ -483,13 +520,19 @@ function DateGroup({
 
       {/* Slot rows */}
       <div>
-        {rows.map((row) =>
-          row.kind === 'event' ? (
-            <SlotRow key={row.event.id} event={row.event} onViewDetails={onViewDetails} />
+        {events.map((event) => {
+          const options = optionsById.get(event.id);
+          return options ? (
+            <OpenHoursRow
+              key={event.id}
+              event={event}
+              options={options}
+              onViewDetails={onViewDetails}
+            />
           ) : (
-            <OpenHoursRow key={row.key} row={row} onViewDetails={onViewDetails} />
-          )
-        )}
+            <SlotRow key={event.id} event={event} onViewDetails={onViewDetails} />
+          );
+        })}
       </div>
     </div>
   );
@@ -642,20 +685,11 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   // Hard 2-week window — the base set everything else derives from.
   const windowedEvents = useMemo(() => filterEventsByWindow(displayEvents), [displayEvents]);
 
-  // Shared occupancy pool across all Open Hours in the window. Computed from the
-  // full window (not the type-filtered subset) so the cap is correct regardless
-  // of which type chip is active.
-  const occupancy = useMemo(() => {
-    const sessions: OccupancySession[] = windowedEvents
-      .filter((e) => !e.isPrivate && eventHasTag(e, OPEN_HOURS_TAG))
-      .map((e) => ({
-        isoDate: e.isoDate,
-        durationMinutes: e.durationMinutes,
-        location: e.location,
-        booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
-      }));
-    return computeHourlyOccupancy(sessions);
-  }, [windowedEvents]);
+  // Open Hours model: shared occupancy pool + per-slot 1hr/2hr booking options +
+  // the set of 2-hour sessions hidden from the schedule. Built from the full
+  // window (not the type-filtered subset) so the cap is correct regardless of
+  // which type chip is active.
+  const openHoursModel = useMemo(() => buildOpenHoursModel(windowedEvents), [windowedEvents]);
 
   // Dynamic type chips, built from the tags present on the upcoming events.
   const typeFilters = useMemo(() => deriveTypeFilters(windowedEvents), [windowedEvents]);
@@ -667,17 +701,18 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
       ? selectedType
       : ALL_TYPES_FILTER;
 
-  const filteredEvents = useMemo(
-    () =>
+  const filteredEvents = useMemo(() => {
+    const base =
       effectiveType === ALL_TYPES_FILTER
         ? windowedEvents
-        : windowedEvents.filter((event) => eventHasTag(event, effectiveType)),
-    [windowedEvents, effectiveType]
-  );
+        : windowedEvents.filter((event) => eventHasTag(event, effectiveType));
+    // Drop the 2-hour sessions that are hidden behind a 1-hour slot's option.
+    return base.filter((event) => !openHoursModel.hiddenIds.has(event.id));
+  }, [windowedEvents, effectiveType, openHoursModel]);
   const grouped = useMemo(() => groupEventsByDate(filteredEvents), [filteredEvents]);
 
   const visibleCount = filteredEvents.length;
-  const totalCount = windowedEvents.length;
+  const totalCount = windowedEvents.length - openHoursModel.hiddenIds.size;
 
   // Update the results count in the DOM (for the Astro-rendered count element)
   useEffect(() => {
@@ -713,7 +748,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
               key={dateKey}
               dateLabel={groupEvents[0].date}
               events={groupEvents}
-              occupancy={occupancy}
+              optionsById={openHoursModel.optionsById}
               onViewDetails={setSelectedEvent}
             />
           ))}
@@ -723,6 +758,9 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
         <EventDetailModal
           event={selectedEvent}
           isOpen={!!selectedEvent}
+          bookingOptions={
+            selectedEvent ? openHoursModel.optionsById.get(selectedEvent.id) : undefined
+          }
           onClose={() => setSelectedEvent(null)}
         />
       </Suspense>
