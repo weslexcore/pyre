@@ -374,7 +374,7 @@ export default function EventDetailModal({
         </div>
 
         {/* Fixed footer — Share + Book Now stay anchored at the bottom */}
-        <div className="relative z-20 flex items-center gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
+        <div className="relative z-20 flex items-start gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
           {/* Share button */}
           <button
             type="button"
@@ -388,43 +388,49 @@ export default function EventDetailModal({
 
           {/* Booking CTAs */}
           {hasBookingOptions ? (
-            // Open Hours: gated 1hr / 2hr choices (grayed out when unavailable)
-            <div className="flex flex-1 gap-2">
-              {bookingOptions?.map((option) =>
-                option.soldOut ? (
-                  <span
-                    key={option.minutes}
-                    aria-disabled="true"
-                    title="Not available"
-                    className="flex flex-1 flex-col items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-4 py-2.5 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)]/35 cursor-not-allowed"
-                  >
-                    <span>{option.label}</span>
-                    <span className="text-[10px] tracking-normal normal-case opacity-80">
-                      Unavailable
+            // Open Hours: gated 1hr / 2hr choices, with the spots count beneath
+            // each button (grayed out when unavailable)
+            <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex gap-2">
+                {bookingOptions?.map((option) =>
+                  option.soldOut ? (
+                    <span
+                      key={option.minutes}
+                      aria-disabled="true"
+                      title="Not available"
+                      className="flex flex-1 items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)]/35 cursor-not-allowed"
+                    >
+                      {option.label}
                     </span>
-                  </span>
-                ) : (
-                  <a
-                    key={option.minutes}
-                    href={option.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`${option.label} — ${event.title}`}
-                    onClick={() =>
-                      trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
-                    }
-                    className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full bg-[var(--pyre-red)] px-4 py-2.5 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-                  >
-                    <span className="inline-flex items-center">
+                  ) : (
+                    <a
+                      key={option.minutes}
+                      href={option.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${option.label} — ${event.title}`}
+                      onClick={() =>
+                        trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
+                      }
+                      className="flex flex-1 items-center justify-center rounded-full bg-[var(--pyre-red)] px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+                    >
                       {option.label}
                       <ArrowIcon />
-                    </span>
-                    <span className="text-[10px] tracking-normal normal-case opacity-80">
-                      {option.spotsLeft} left
-                    </span>
-                  </a>
-                )
-              )}
+                    </a>
+                  )
+                )}
+              </div>
+              {/* Spots count row — aligned under each button */}
+              <div className="flex gap-2">
+                {bookingOptions?.map((option) => (
+                  <span
+                    key={option.minutes}
+                    className={`flex-1 text-center text-[11px] ${option.soldOut ? 'text-[var(--pyre-creme)]/40' : spotsColor(option.spotsLeft)}`}
+                  >
+                    {option.soldOut ? 'Unavailable' : `${option.spotsLeft} left`}
+                  </span>
+                ))}
+              </div>
             </div>
           ) : (
             !event.isPrivate &&
