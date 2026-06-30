@@ -200,11 +200,11 @@ function BookingRow({
             {credits} Credit{credits > 1 ? 's' : ''}
           </span>
         )}
-        {priceUsd !== undefined && priceUsd > 0 && (
+        {/* {priceUsd !== undefined && priceUsd > 0 && (
           <span className="text-[var(--pyre-creme)]/50">
             {credits !== null ? ' / ' : ''}${priceUsd}
           </span>
-        )}
+        )} */}
       </span>
       <span className={`text-[11px] whitespace-nowrap ${spotsColor(spotsLeft)}`}>
         {spotsLeft !== undefined ? `${spotsLeft} left` : ''}
