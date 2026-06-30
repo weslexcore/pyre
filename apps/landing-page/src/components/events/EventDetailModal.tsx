@@ -151,6 +151,21 @@ function spotsLabel(
   return `${spotsRemaining} open`;
 }
 
+// Duration-only label for a booking row, e.g. "1 Hour" / "2 Hours". Falls back
+// to stripping the "Book " prefix from the option label for odd durations.
+function durationRowLabel(minutes: number, fallbackLabel: string): string {
+  if (minutes > 0 && minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} Hour${hours > 1 ? 's' : ''}`;
+  }
+  return fallbackLabel.replace(/^Book\s+/i, '');
+}
+
+// Credits required for a booking option — 1 credit per hour.
+function creditsForMinutes(minutes: number): number {
+  return Math.max(1, Math.min(2, Math.round(minutes / 60)));
+}
+
 // -- Modal component ----------------------------------------------------------
 
 export default function EventDetailModal({
@@ -223,6 +238,12 @@ export default function EventDetailModal({
   // Open Hours sessions surface gated 1hr/2hr choices in the footer; their raw
   // per-session spots are replaced by the per-option "N left" counts.
   const hasBookingOptions = !!bookingOptions && bookingOptions.length > 0;
+  // Special (non-Open-Hours) events show their credit cost next to Book Now,
+  // derived from the session length (1 credit per hour) when known.
+  const specialCredits =
+    !hasBookingOptions && event.durationMinutes && event.durationMinutes > 0
+      ? creditsForMinutes(event.durationMinutes)
+      : null;
 
   // Build a deep-link to this event (with UTM tags) and share via the native
   // share sheet when available, otherwise copy it to the clipboard.
@@ -301,6 +322,18 @@ export default function EventDetailModal({
           </svg>
         </button>
 
+        {/* Share button — mirrors the close button in the top-left corner */}
+        <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Share this event"
+          title={copied ? 'Copied!' : 'Share'}
+          className="font-mono-bold text-sm uppercase items-center gap-1 tracking-wide absolute inline-flex top-3 left-3 z-30 rounded-full border border-[var(--pyre-gold)]/70 bg-black/40 backdrop-blur-sm p-1.5 text-[var(--pyre-creme)] hover:bg-black/60 hover:border-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+        >
+          {copied ? <CheckIcon /> : <ShareIcon />} 
+          { copied ? 'Copied!' : 'Share'}
+        </button>
+
         {/* Pinned event image (sits behind the scrolling content) */}
         {event.image && (
           <img
@@ -373,84 +406,86 @@ export default function EventDetailModal({
           </div>
         </div>
 
-        {/* Fixed footer — Share + Book Now stay anchored at the bottom */}
-        <div className="relative z-20 flex items-start gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-4">
-          {/* Share button */}
-          <button
-            type="button"
-            onClick={handleShare}
-            aria-label="Share this event"
-            className={`inline-flex items-center justify-center gap-2 rounded-full border border-[var(--pyre-creme)]/25 px-4 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:bg-[var(--pyre-creme)]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50 ${!event.isPrivate && event.cta ? 'shrink-0' : 'w-full'}`}
-          >
-            {copied ? <CheckIcon /> : <ShareIcon />}
-            {copied ? 'Copied!' : 'Share'}
-          </button>
-
+        {/* Fixed footer — Book Now stays anchored at the bottom */}
+        {(hasBookingOptions || (!event.isPrivate && event.cta)) && (
+        <div className="relative z-20 flex flex-col gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-2">
           {/* Booking CTAs */}
           {hasBookingOptions ? (
-            // Open Hours: gated 1hr / 2hr choices, with the spots count beneath
-            // each button (grayed out when unavailable)
-            <div className="flex flex-1 flex-col gap-1.5">
-              <div className="flex gap-2">
-                {bookingOptions?.map((option) =>
-                  option.soldOut ? (
-                    <span
-                      key={option.minutes}
-                      aria-disabled="true"
-                      title="Not available"
-                      className="flex flex-1 items-center justify-center rounded-full border border-[var(--pyre-creme)]/15 px-2.5 py-3 sm:px-4 font-mono-bold text-xs sm:text-sm uppercase tracking-normal sm:tracking-wide whitespace-nowrap text-[var(--pyre-creme)]/35 cursor-not-allowed"
-                    >
-                      {option.label}
-                    </span>
-                  ) : (
-                    <a
-                      key={option.minutes}
-                      href={option.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${option.label} — ${event.title}`}
-                      onClick={() =>
-                        trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
-                      }
-                      className="flex flex-1 items-center justify-center rounded-full bg-[var(--pyre-red)] px-2.5 py-3 sm:px-4 font-mono-bold text-xs sm:text-sm uppercase tracking-normal sm:tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-                    >
-                      {option.label}
-                      <span className="hidden sm:inline-flex items-center">
-                        <ArrowIcon />
-                      </span>
-                    </a>
-                  )
-                )}
-              </div>
-              {/* Spots count row — aligned under each button */}
-              <div className="flex gap-2">
-                {bookingOptions?.map((option) => (
-                  <span
+            // Open Hours: gated 1hr / 2hr choices, one row per duration showing
+            // [Duration] [Credits] [slots left] [Book Now].
+            <div className="flex flex-col">
+              {bookingOptions?.map((option) => {
+                const credits = creditsForMinutes(option.minutes);
+                return (
+                  <div
                     key={option.minutes}
-                    className={`flex-1 text-center text-[11px] ${option.soldOut ? 'text-[var(--pyre-creme)]/40' : spotsColor(option.spotsLeft)}`}
+                    className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0"
                   >
-                    {option.soldOut ? 'Unavailable' : `${option.spotsLeft} left`}
-                  </span>
-                ))}
-              </div>
+                    <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
+                      {durationRowLabel(option.minutes, option.label)}
+                    </span>
+                    <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
+                      {credits} Credit{credits > 1 ? 's' : ''}
+                    </span>
+                    <span
+                      className={`text-[11px] whitespace-nowrap ${spotsColor(option.spotsLeft)}`}
+                    >
+                      {option.spotsLeft} left
+                    </span>
+                    {option.soldOut ? (
+                      <span
+                        aria-disabled="true"
+                        title="Not available"
+                        className="flex items-center justify-center justify-self-end rounded-full border border-[var(--pyre-creme)]/15 px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)]/35 cursor-not-allowed"
+                      >
+                        Sold Out
+                      </span>
+                    ) : (
+                      <a
+                        href={option.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${option.label} — ${event.title}`}
+                        onClick={() =>
+                          trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
+                        }
+                        className="flex items-center justify-center gap-1 justify-self-end rounded-full bg-[var(--pyre-red)] px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+                      >
+                        Book Now
+                        <span className="hidden sm:inline-flex items-center">
+                          <ArrowIcon />
+                        </span>
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             !event.isPrivate &&
             event.cta && (
-              <a
-                href={event.cta.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
-                onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-              >
-                {ctaLabel}
-                <ArrowIcon />
-              </a>
+              <div className="flex items-center gap-3">
+                {specialCredits !== null && (
+                  <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
+                    {specialCredits} Credit{specialCredits > 1 ? 's' : ''}
+                  </span>
+                )}
+                <a
+                  href={event.cta.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
+                  onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+                >
+                  {ctaLabel}
+                  <ArrowIcon />
+                </a>
+              </div>
             )
           )}
         </div>
+        )}
       </div>
     </div>
   );
