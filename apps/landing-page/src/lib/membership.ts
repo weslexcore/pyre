@@ -9,15 +9,15 @@ const membership: MembershipContent = {
       id: 'unlimited',
       name: 'Founding Unlimited',
       price: 199,
-      period: '/month for life (normally $249)',
+      period: '/month for life',
       description:
         'Unlimited access, locked at the founding rate for life. The deepest way to make Pyre part of your routine.',
-      savings: 50,
+      savings: 250,
       popular: true,
       features: [
-        { text: 'Unlimited access — $199/mo for life', highlighted: true },
+        { text: "Unlimited access - use 12 credits and you'll save over $250", highlighted: true },
         { text: 'Free bathhouse tote' },
-        { text: '4 guest passes per month' },
+        { text: '4 guest passes per month ($100+ value)' },
         { text: '10% off drinks + merch' },
         { text: 'Only 30 available', highlighted: true },
       ],
@@ -31,7 +31,7 @@ const membership: MembershipContent = {
       id: 'founding-limited',
       name: 'Founding Limited',
       price: 119,
-      period: '/month (normally $200)',
+      period: '/month',
       description:
         '8 credits every month at the founding rate for life. A steady rhythm without the unlimited commitment.',
       savings: 81,
