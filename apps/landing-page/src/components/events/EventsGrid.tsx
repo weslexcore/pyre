@@ -366,6 +366,7 @@ function toBookingOption(event: EventItem, occupancy: Map<string, number>): Open
     spotsLeft,
     soldOut: spotsLeft <= 0,
     credits,
+    priceUsd: event.priceUsd,
   };
 }
 
