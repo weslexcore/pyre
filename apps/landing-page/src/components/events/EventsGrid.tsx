@@ -5,7 +5,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
-import { creditsForPriceUsd } from '@/lib/credits';
 import {
   bookedFromSpots,
   computeHourlyOccupancy,
@@ -13,7 +12,14 @@ import {
   OPEN_HOURS_TAG,
   poolSpotsLeftForSlot,
 } from '@/lib/capacity';
-import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS, WINDOW_DAYS } from '@/lib/events-config';
+import { creditsForPriceUsd } from '@/lib/credits';
+import {
+  ALL_TYPES_FILTER,
+  ALL_TYPES_LABEL,
+  CATEGORY_TAGS,
+  isSpecialEvent,
+  WINDOW_DAYS,
+} from '@/lib/events-config';
 import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
@@ -410,7 +416,14 @@ function buildOpenHoursModel(events: EventItem[]): OpenHoursModel {
       const partner = twoHourByStart.get(openHoursStartKey(e));
       const twoHourOption: OpenHoursBookingOption = partner
         ? toBookingOption(partner, occupancy)
-        : { label: 'Book 2 hours', minutes: 120, href: '#', spotsLeft: 0, soldOut: true, credits: 2 };
+        : {
+            label: 'Book 2 hours',
+            minutes: 120,
+            href: '#',
+            spotsLeft: 0,
+            soldOut: true,
+            credits: 2,
+          };
       optionsById.set(e.id, [toBookingOption(e, occupancy), twoHourOption]);
     } else {
       // Standalone 2-hour (or odd-duration) Open Hours session — single option.
@@ -563,6 +576,8 @@ function groupEventsByDate(events: EventItem[]): Map<string, EventItem[]> {
 // -- Window + type filter logic ----------------------------------------------
 
 // Keep only events that fall within the next WINDOW_DAYS (the hard 2-week limit).
+// Special events are exempt: any published special event shows regardless of how
+// far out it is.
 function filterEventsByWindow(events: EventItem[]): EventItem[] {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -573,6 +588,7 @@ function filterEventsByWindow(events: EventItem[]): EventItem[] {
 
   return events.filter((event) => {
     if (!event.isoDate) return true;
+    if (isSpecialEvent(event)) return true;
     const eventDate = new Date(event.isoDate);
     return eventDate >= now && eventDate <= endDate;
   });

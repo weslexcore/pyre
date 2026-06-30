@@ -2,6 +2,7 @@
 // This enables server-side fetching with edge caching for fresh data
 
 import type { APIRoute } from 'astro';
+import { isSpecialEvent } from '@/lib/events-config';
 import {
   excludeVolunteerEvents,
   filterValidEvents,
@@ -52,7 +53,9 @@ function filterEventsByWindow(
   let outsideWindowCount = 0;
 
   for (const event of events) {
-    if (!event.isoDate) {
+    // Special events bypass the window entirely — always surface them, and don't
+    // count them as "outside the window" (so they never falsely trigger hasMore).
+    if (!event.isoDate || isSpecialEvent(event)) {
       eventsInWindow.push(event);
       continue;
     }
