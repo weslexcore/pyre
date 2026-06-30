@@ -4,7 +4,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EventItem } from '@/lib/types';
 
-const CACHE_KEY = 'pyre-events-cache';
+// Bump the version suffix whenever the cached EventItem shape changes so stale
+// entries are abandoned rather than served (v2 added `priceUsd`).
+const CACHE_KEY = 'pyre-events-cache-v2';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface CacheEntry {
