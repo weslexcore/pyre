@@ -27,7 +27,7 @@ const sessions: SessionsContent = {
   items: [
     {
       id: 'intro',
-      name: 'Intro // 2 Credits',
+      name: 'Intro // Buy 1, Get 1 Free',
       price: 25,
       originalPrice: 50,
       description:
@@ -48,9 +48,8 @@ const sessions: SessionsContent = {
       name: 'Duo // 2 Credits',
       price: 45,
       originalPrice: 50,
-      description: 'Come twice, stay a while longer, or bring along a friend.',
+      description: 'Come for a special event, stay for 2 hours, or come back again.',
       savings: 5,
-
       href: 'https://momence.com/m/702636',
     },
     {
