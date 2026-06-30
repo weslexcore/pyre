@@ -435,6 +435,7 @@ export interface OpenHoursBookingOption {
   spotsLeft: number;
   soldOut: boolean;
   credits: number; // Credit cost, derived from the Momence drop-in price
+  priceUsd?: number; // Momence drop-in price in USD, shown alongside the credits
 }
 
 // ------------------------------------------------------------

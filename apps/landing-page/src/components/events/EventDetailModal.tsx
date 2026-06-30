@@ -178,12 +178,14 @@ function BookingRow({
   minutes,
   fallbackLabel,
   credits,
+  priceUsd,
   spotsLeft,
   action,
 }: {
   minutes: number;
   fallbackLabel?: string;
   credits: number | null;
+  priceUsd?: number;
   spotsLeft: number | undefined;
   action: BookingRowAction;
 }) {
@@ -192,8 +194,17 @@ function BookingRow({
       <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
         {durationRowLabel(minutes, fallbackLabel)}
       </span>
-      <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
-        {credits !== null ? `${credits} Credit${credits > 1 ? 's' : ''}` : ''}
+      <span className="font-mono-bold text-xs uppercase tracking-wide whitespace-nowrap">
+        {credits !== null && (
+          <span className="text-[var(--pyre-muted-gold)]">
+            {credits} Credit{credits > 1 ? 's' : ''}
+          </span>
+        )}
+        {priceUsd !== undefined && priceUsd > 0 && (
+          <span className="text-[var(--pyre-creme)]/50">
+            {credits !== null ? ' / ' : ''}${priceUsd}
+          </span>
+        )}
       </span>
       <span className={`text-[11px] whitespace-nowrap ${spotsColor(spotsLeft)}`}>
         {spotsLeft !== undefined ? `${spotsLeft} left` : ''}
@@ -480,6 +491,7 @@ export default function EventDetailModal({
                   minutes={option.minutes}
                   fallbackLabel={option.label}
                   credits={option.credits}
+                  priceUsd={option.priceUsd}
                   spotsLeft={option.spotsLeft}
                   action={
                     option.soldOut
@@ -506,6 +518,7 @@ export default function EventDetailModal({
                 <BookingRow
                   minutes={event.durationMinutes ?? 0}
                   credits={specialCredits}
+                  priceUsd={event.priceUsd}
                   spotsLeft={event.spotsRemaining}
                   action={{
                     kind: 'link',
