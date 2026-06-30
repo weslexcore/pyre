@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { trackBookingLinkClicked } from '@/lib/analytics';
+import { creditsForPriceUsd } from '@/lib/credits';
 import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
 
 interface EventDetailModalProps {
@@ -151,19 +152,77 @@ function spotsLabel(
   return `${spotsRemaining} open`;
 }
 
-// Duration-only label for a booking row, e.g. "1 Hour" / "2 Hours". Falls back
-// to stripping the "Book " prefix from the option label for odd durations.
-function durationRowLabel(minutes: number, fallbackLabel: string): string {
+// Duration-only label for a booking row, e.g. "1 Hour" / "2 Hours". Non-whole
+// hours fall back to a minutes label, then to stripping the "Book " prefix from
+// the option label when the duration is unknown.
+function durationRowLabel(minutes: number, fallbackLabel = ''): string {
   if (minutes > 0 && minutes % 60 === 0) {
     const hours = minutes / 60;
     return `${hours} Hour${hours > 1 ? 's' : ''}`;
   }
+  if (minutes > 0) return `${minutes} Min`;
   return fallbackLabel.replace(/^Book\s+/i, '');
 }
 
-// Credits required for a booking option — 1 credit per hour.
-function creditsForMinutes(minutes: number): number {
-  return Math.max(1, Math.min(2, Math.round(minutes / 60)));
+// -- Booking row --------------------------------------------------------------
+
+// The action shown at the end of a booking row: either a live checkout link or
+// a disabled placeholder (e.g. a sold-out Open Hours duration).
+type BookingRowAction =
+  | { kind: 'link'; href: string; label: string; ariaLabel: string; onClick: () => void }
+  | { kind: 'disabled'; label: string };
+
+// A single bookable row: [Duration] [Credits] [slots left] [Book Now]. Shared by
+// Open Hours duration choices and special-event CTAs so they stay identical.
+function BookingRow({
+  minutes,
+  fallbackLabel,
+  credits,
+  spotsLeft,
+  action,
+}: {
+  minutes: number;
+  fallbackLabel?: string;
+  credits: number | null;
+  spotsLeft: number | undefined;
+  action: BookingRowAction;
+}) {
+  return (
+    <div className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0">
+      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
+        {durationRowLabel(minutes, fallbackLabel)}
+      </span>
+      <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
+        {credits !== null ? `${credits} Credit${credits > 1 ? 's' : ''}` : ''}
+      </span>
+      <span className={`text-[11px] whitespace-nowrap ${spotsColor(spotsLeft)}`}>
+        {spotsLeft !== undefined ? `${spotsLeft} left` : ''}
+      </span>
+      {action.kind === 'link' ? (
+        <a
+          href={action.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={action.ariaLabel}
+          onClick={action.onClick}
+          className="flex items-center justify-center gap-1 justify-self-end rounded-full bg-[var(--pyre-red)] px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+        >
+          {action.label}
+          <span className="hidden sm:inline-flex items-center">
+            <ArrowIcon />
+          </span>
+        </a>
+      ) : (
+        <span
+          aria-disabled="true"
+          title="Not available"
+          className="flex items-center justify-center justify-self-end rounded-full border border-[var(--pyre-creme)]/15 px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)]/35 cursor-not-allowed"
+        >
+          {action.label}
+        </span>
+      )}
+    </div>
+  );
 }
 
 // -- Modal component ----------------------------------------------------------
@@ -239,11 +298,11 @@ export default function EventDetailModal({
   // per-session spots are replaced by the per-option "N left" counts.
   const hasBookingOptions = !!bookingOptions && bookingOptions.length > 0;
   // Special (non-Open-Hours) events show their credit cost next to Book Now,
-  // derived from the session length (1 credit per hour) when known.
-  const specialCredits =
-    !hasBookingOptions && event.durationMinutes && event.durationMinutes > 0
-      ? creditsForMinutes(event.durationMinutes)
-      : null;
+  // derived from the Momence drop-in price when known.
+  const specialCredits = hasBookingOptions ? null : creditsForPriceUsd(event.priceUsd);
+  // True when the footer renders at least one booking row (Open Hours choices or
+  // a single special-event CTA). Drives the footer and the grid spots fallback.
+  const footerHasBookingRow = hasBookingOptions || (!event.isPrivate && !!event.cta);
 
   // Build a deep-link to this event (with UTM tags) and share via the native
   // share sheet when available, otherwise copy it to the clipboard.
@@ -386,8 +445,9 @@ export default function EventDetailModal({
                 <span>{event.location}</span>
               </div>
 
-              {/* Spots (hidden for Open Hours — the footer shows per-option counts) */}
-              {spots && !hasBookingOptions && (
+              {/* Spots — hidden whenever a footer booking row already shows the
+                  slots-left count (Open Hours and special events). */}
+              {spots && !footerHasBookingRow && (
                 <div
                   className={`flex items-center gap-2 text-sm ${spotsColor(event.spotsRemaining)}`}
                 >
@@ -407,80 +467,54 @@ export default function EventDetailModal({
         </div>
 
         {/* Fixed footer — Book Now stays anchored at the bottom */}
-        {(hasBookingOptions || (!event.isPrivate && event.cta)) && (
+        {footerHasBookingRow && (
         <div className="relative z-20 flex flex-col gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-2">
-          {/* Booking CTAs */}
+          {/* Booking CTAs — one shared row layout for every bookable choice:
+              [Duration] [Credits] [slots left] [Book Now]. */}
           {hasBookingOptions ? (
-            // Open Hours: gated 1hr / 2hr choices, one row per duration showing
-            // [Duration] [Credits] [slots left] [Book Now].
+            // Open Hours: gated 1hr / 2hr duration choices.
             <div className="flex flex-col">
-              {bookingOptions?.map((option) => {
-                const credits = creditsForMinutes(option.minutes);
-                return (
-                  <div
-                    key={option.minutes}
-                    className="grid grid-cols-[auto_auto_auto_1fr] items-center gap-3 border-t border-[var(--pyre-creme)]/10 py-2.5 first:border-t-0"
-                  >
-                    <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] whitespace-nowrap">
-                      {durationRowLabel(option.minutes, option.label)}
-                    </span>
-                    <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
-                      {credits} Credit{credits > 1 ? 's' : ''}
-                    </span>
-                    <span
-                      className={`text-[11px] whitespace-nowrap ${spotsColor(option.spotsLeft)}`}
-                    >
-                      {option.spotsLeft} left
-                    </span>
-                    {option.soldOut ? (
-                      <span
-                        aria-disabled="true"
-                        title="Not available"
-                        className="flex items-center justify-center justify-self-end rounded-full border border-[var(--pyre-creme)]/15 px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)]/35 cursor-not-allowed"
-                      >
-                        Sold Out
-                      </span>
-                    ) : (
-                      <a
-                        href={option.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`${option.label} — ${event.title}`}
-                        onClick={() =>
-                          trackBookingLinkClicked(event, `event_detail_modal_${option.minutes}min`)
+              {bookingOptions?.map((option) => (
+                <BookingRow
+                  key={option.minutes}
+                  minutes={option.minutes}
+                  fallbackLabel={option.label}
+                  credits={option.credits}
+                  spotsLeft={option.spotsLeft}
+                  action={
+                    option.soldOut
+                      ? { kind: 'disabled', label: 'Sold Out' }
+                      : {
+                          kind: 'link',
+                          href: option.href,
+                          label: 'Book Now',
+                          ariaLabel: `${option.label} — ${event.title}`,
+                          onClick: () =>
+                            trackBookingLinkClicked(
+                              event,
+                              `event_detail_modal_${option.minutes}min`
+                            ),
                         }
-                        className="flex items-center justify-center gap-1 justify-self-end rounded-full bg-[var(--pyre-red)] px-4 py-2 font-mono-bold text-xs sm:text-sm uppercase tracking-wide whitespace-nowrap text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-                      >
-                        Book Now
-                        <span className="hidden sm:inline-flex items-center">
-                          <ArrowIcon />
-                        </span>
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
+                  }
+                />
+              ))}
             </div>
           ) : (
             !event.isPrivate &&
             event.cta && (
-              <div className="flex items-center gap-3">
-                {specialCredits !== null && (
-                  <span className="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] whitespace-nowrap">
-                    {specialCredits} Credit{specialCredits > 1 ? 's' : ''}
-                  </span>
-                )}
-                <a
-                  href={event.cta.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={event.cta.ariaLabel ?? `Book ${event.title}`}
-                  onClick={() => trackBookingLinkClicked(event, 'event_detail_modal')}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
-                >
-                  {ctaLabel}
-                  <ArrowIcon />
-                </a>
+              <div className="flex flex-col">
+                <BookingRow
+                  minutes={event.durationMinutes ?? 0}
+                  credits={specialCredits}
+                  spotsLeft={event.spotsRemaining}
+                  action={{
+                    kind: 'link',
+                    href: event.cta.href,
+                    label: ctaLabel,
+                    ariaLabel: event.cta.ariaLabel ?? `Book ${event.title}`,
+                    onClick: () => trackBookingLinkClicked(event, 'event_detail_modal'),
+                  }}
+                />
               </div>
             )
           )}

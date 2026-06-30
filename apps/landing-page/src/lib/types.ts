@@ -406,6 +406,7 @@ export interface EventItem {
   cta?: ActionRef;
   isoDate?: string; // ISO 8601 date for client-side filtering
   durationMinutes?: number; // Session length in minutes (Momence `duration`), used for occupancy math
+  priceUsd?: number; // Drop-in price in USD (Momence `fixedPrice`); credit cost is derived from this
   spotsRemaining?: number; // Available spots from Momence API
   totalSpots?: number; // Total capacity from Momence API
   isPrivate?: boolean; // Private events hide booking CTAs
@@ -433,6 +434,7 @@ export interface OpenHoursBookingOption {
   href: string;
   spotsLeft: number;
   soldOut: boolean;
+  credits: number; // Credit cost, derived from the Momence drop-in price
 }
 
 // ------------------------------------------------------------

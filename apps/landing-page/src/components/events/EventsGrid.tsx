@@ -5,6 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
+import { creditsForPriceUsd } from '@/lib/credits';
 import {
   bookedFromSpots,
   computeHourlyOccupancy,
@@ -355,12 +356,16 @@ function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): numbe
 function toBookingOption(event: EventItem, occupancy: Map<string, number>): OpenHoursBookingOption {
   const minutes = event.durationMinutes ?? 0;
   const spotsLeft = gatedSpotsLeft(event, occupancy);
+  // Credit cost comes from the Momence drop-in price; fall back to 1 credit per
+  // hour only when the price is missing.
+  const credits = creditsForPriceUsd(event.priceUsd) ?? Math.max(1, Math.round(minutes / 60));
   return {
     label: `Book ${durationLabel(minutes)}`,
     minutes,
     href: event.cta?.href ?? '#',
     spotsLeft,
     soldOut: spotsLeft <= 0,
+    credits,
   };
 }
 
@@ -404,7 +409,7 @@ function buildOpenHoursModel(events: EventItem[]): OpenHoursModel {
       const partner = twoHourByStart.get(openHoursStartKey(e));
       const twoHourOption: OpenHoursBookingOption = partner
         ? toBookingOption(partner, occupancy)
-        : { label: 'Book 2 hours', minutes: 120, href: '#', spotsLeft: 0, soldOut: true };
+        : { label: 'Book 2 hours', minutes: 120, href: '#', spotsLeft: 0, soldOut: true, credits: 2 };
       optionsById.set(e.id, [toBookingOption(e, occupancy), twoHourOption]);
     } else {
       // Standalone 2-hour (or odd-duration) Open Hours session — single option.
