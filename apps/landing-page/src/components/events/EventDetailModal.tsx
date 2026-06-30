@@ -420,6 +420,9 @@ export default function EventDetailModal({
               image bottom and only overlaps once the user scrolls */}
           {event.image && <div className="h-48 sm:h-56" aria-hidden="true" />}
 
+          {/* No image: reserve space at the top so the Share / close buttons don't overlap the title */}
+          {!event.image && <div className="h-12" aria-hidden="true" />}
+
           {/* Content card */}
           <div className="relative bg-[var(--pyre-black)] rounded-t-2xl px-6 pt-8 pb-6">
             {/* Gradient drop-shadow glow on the top edge as the card slides over the image */}

@@ -7,6 +7,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import {
   bookedFromSpots,
+  bypassesPool,
   computeHourlyOccupancy,
   maxOccupancyForLocation,
   OPEN_HOURS_TAG,
@@ -355,8 +356,13 @@ function durationLabel(minutes: number): string {
 }
 
 function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): number {
-  const pool = poolSpotsLeftForSlot(event, occupancy, maxOccupancyForLocation(event.location));
+  const max = maxOccupancyForLocation(event.location);
   const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
+  if (bypassesPool(event.totalSpots, max)) {
+    // High-capacity event (e.g. social): limited only by its own Momence capacity.
+    return Math.max(0, sessionRemaining);
+  }
+  const pool = poolSpotsLeftForSlot(event, occupancy, max);
   return Math.max(0, Math.min(pool, sessionRemaining));
 }
 function toBookingOption(event: EventItem, occupancy: Map<string, number>): OpenHoursBookingOption {
@@ -387,12 +393,16 @@ function buildOpenHoursModel(events: EventItem[]): OpenHoursModel {
   const openHours = events.filter(isOpenHours);
 
   const occupancy = computeHourlyOccupancy(
-    openHours.map((e) => ({
-      isoDate: e.isoDate,
-      durationMinutes: e.durationMinutes,
-      location: e.location,
-      booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
-    }))
+    openHours
+      // High-capacity events bypass the pool entirely — their attendees don't
+      // count against overlapping regular sessions.
+      .filter((e) => !bypassesPool(e.totalSpots, maxOccupancyForLocation(e.location)))
+      .map((e) => ({
+        isoDate: e.isoDate,
+        durationMinutes: e.durationMinutes,
+        location: e.location,
+        booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
+      }))
   );
 
   const twoHourByStart = new Map<string, EventItem>();
