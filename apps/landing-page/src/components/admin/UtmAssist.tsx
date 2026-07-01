@@ -39,8 +39,18 @@ const EMPTY_UTM: UtmFields = {
 // Curated, built-in presets seeded for the team. Users can add their own on top
 // of these (persisted to localStorage); curated ones can't be removed.
 const CURATED_PRESETS: Record<keyof UtmFields, string[]> = {
-  source: ['instagram', 'facebook', 'email', 'newsletter', 'qr', 'print', 'google', 'linkedin'],
-  medium: ['social', 'paid_social', 'email', 'cpc', 'referral', 'qr', 'print'],
+  source: [
+    'sms',
+    'instagram',
+    'facebook',
+    'email',
+    'newsletter',
+    'qr',
+    'print',
+    'google',
+    'linkedin',
+  ],
+  medium: ['sms', 'social', 'paid_social', 'email', 'cpc', 'referral', 'qr', 'print'],
   campaign: [],
   term: [],
   content: ['header', 'footer', 'cta-button', 'bio-link', 'story-link'],
@@ -61,6 +71,8 @@ const FIELD_INFO: Record<string, string> = {
   term: 'Optional. The paid-search keyword you are bidding on.',
   content: 'Optional. Tells apart two links to the same place. e.g. header-button vs footer-link.',
   link: 'The finished tracked URL. Copy it and share.',
+  shorten:
+    'Turns the tracked link into a short pyresauna.com/s/… link. The texted message stays clean while the UTM tags still load on the destination, so attribution keeps working.',
 };
 
 // User-created presets are persisted per browser so campaigns/terms can be
@@ -227,6 +239,31 @@ interface SavedLink {
 interface CampaignWithLinks {
   campaign: SavedCampaign;
   links: SavedLink[];
+}
+
+// One row of the "Recent short links" list (mirrors the server ShortLink shape,
+// minus fields the UI doesn't render).
+interface ShortLinkRow {
+  code: string;
+  url: string;
+  label: string;
+  createdAt: number;
+  clicks: number;
+}
+
+function shortErrorMessage(code: unknown): string {
+  switch (code) {
+    case 'alias_taken':
+      return 'That custom alias is already taken.';
+    case 'invalid_alias':
+      return 'Alias can only contain letters, numbers, - and _.';
+    case 'storage_unavailable':
+      return 'Link storage is unavailable right now.';
+    case 'URL must point to this site':
+      return 'Can only shorten links to this site.';
+    default:
+      return 'Failed to create short link.';
+  }
 }
 
 // ── QR styling ──────────────────────────────────────────────────────────────
@@ -594,6 +631,26 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Inline relabel of a saved campaign link, and per-link QR visibility (QRs are
+  // hidden by default and revealed on demand to keep long campaigns light).
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [editLinkLabel, setEditLinkLabel] = useState('');
+  const [shownQr, setShownQr] = useState<Record<string, boolean>>({});
+
+  // Short-link creation + recent-links list. The result/error carry the exact URL
+  // they belong to (`forUrl`) so they auto-hide once the built URL changes.
+  const [shortLabel, setShortLabel] = useState('');
+  const [shortAlias, setShortAlias] = useState('');
+  const [shortResult, setShortResult] = useState<{ shortUrl: string; forUrl: string } | null>(null);
+  const [shortLoading, setShortLoading] = useState(false);
+  const [shortError, setShortError] = useState<{ message: string; forUrl: string } | null>(null);
+  const [shortCopied, setShortCopied] = useState(false);
+  const [recent, setRecent] = useState<ShortLinkRow[] | null>(null);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -820,6 +877,174 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
     }
   }, []);
 
+  const startEditLink = useCallback((link: SavedLink) => {
+    setEditingLinkId(link.id);
+    setEditLinkLabel(link.label);
+  }, []);
+
+  const cancelEditLink = useCallback(() => {
+    setEditingLinkId(null);
+    setEditLinkLabel('');
+  }, []);
+
+  // Relabel a saved campaign link, then patch the new label into local state.
+  const saveEditLink = useCallback(
+    async (id: string) => {
+      const label = editLinkLabel.trim();
+      try {
+        const res = await fetch('/api/admin/utm-links', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, label }),
+        });
+        if (!res.ok) throw new Error();
+        setCampaigns((prev) =>
+          prev
+            ? prev.map((c) => ({
+                ...c,
+                links: c.links.map((l) => (l.id === id ? { ...l, label } : l)),
+              }))
+            : prev
+        );
+      } catch {
+        // Leave the link unchanged on failure.
+      } finally {
+        setEditingLinkId(null);
+        setEditLinkLabel('');
+      }
+    },
+    [editLinkLabel]
+  );
+
+  const toggleQr = useCallback((id: string) => {
+    setShownQr((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const loadRecent = useCallback(async () => {
+    setRecentLoading(true);
+    try {
+      const res = await fetch('/api/admin/shortlinks?limit=25');
+      if (!res.ok) throw new Error();
+      const data = (await res.json()) as { links?: ShortLinkRow[] };
+      setRecent(Array.isArray(data.links) ? data.links : []);
+    } catch {
+      setRecent([]);
+    } finally {
+      setRecentLoading(false);
+    }
+  }, []);
+
+  const toggleRecent = useCallback(() => {
+    setRecentOpen((open) => {
+      const next = !open;
+      if (next && recent === null) void loadRecent();
+      return next;
+    });
+  }, [recent, loadRecent]);
+
+  const createShort = useCallback(async () => {
+    if (!generatedUrl) return;
+    const forUrl = generatedUrl;
+    setShortLoading(true);
+    setShortError(null);
+    setShortResult(null);
+    try {
+      const res = await fetch('/api/admin/shortlinks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: forUrl,
+          label: shortLabel.trim() || undefined,
+          alias: shortAlias.trim() || undefined,
+        }),
+      });
+      const data = (await res.json()) as { shortUrl?: string; error?: string };
+      if (!res.ok || !data.shortUrl) throw new Error(shortErrorMessage(data.error));
+      setShortResult({ shortUrl: data.shortUrl, forUrl });
+      setShortAlias('');
+      if (recent !== null) void loadRecent();
+    } catch (err) {
+      setShortError({
+        message: err instanceof Error ? err.message : shortErrorMessage(undefined),
+        forUrl,
+      });
+    } finally {
+      setShortLoading(false);
+    }
+  }, [generatedUrl, shortLabel, shortAlias, recent, loadRecent]);
+
+  const copyShort = useCallback(async () => {
+    if (!shortResult) return;
+    try {
+      await navigator.clipboard.writeText(shortResult.shortUrl);
+      setShortCopied(true);
+      setTimeout(() => setShortCopied(false), 1500);
+    } catch {
+      // Clipboard not available
+    }
+  }, [shortResult]);
+
+  const copyRow = useCallback(async (code: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1500);
+    } catch {
+      // Clipboard not available
+    }
+  }, []);
+
+  const startEditRow = useCallback((row: ShortLinkRow) => {
+    setEditingCode(row.code);
+    setEditLabel(row.label);
+  }, []);
+
+  const cancelEditRow = useCallback(() => {
+    setEditingCode(null);
+    setEditLabel('');
+  }, []);
+
+  // Rename/retag: persist the new label, then patch it into the local list.
+  const saveEditRow = useCallback(
+    async (code: string) => {
+      const label = editLabel.trim();
+      try {
+        const res = await fetch('/api/admin/shortlinks', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, label }),
+        });
+        if (!res.ok) throw new Error();
+        setRecent((prev) => prev?.map((r) => (r.code === code ? { ...r, label } : r)) ?? prev);
+      } catch {
+        // Leave the row unchanged on failure.
+      } finally {
+        setEditingCode(null);
+        setEditLabel('');
+      }
+    },
+    [editLabel]
+  );
+
+  const deleteRow = useCallback(
+    async (code: string) => {
+      if (!window.confirm(`Delete short link /s/${code}? Any texts using it will stop working.`)) {
+        return;
+      }
+      // Remove from view immediately; only re-sync if the delete fails.
+      setRecent((prev) => prev?.filter((r) => r.code !== code) ?? prev);
+      try {
+        const res = await fetch(`/api/admin/shortlinks?code=${encodeURIComponent(code)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error();
+      } catch {
+        void loadRecent();
+      }
+    },
+    [loadRecent]
+  );
+
   if (authLoading || gate === 'checking') {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -950,6 +1175,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                 <option key={event.id} value={event.id}>
                   {event.title}
                   {event.date ? ` — ${event.date}` : ''}
+                  {event.time ? ` at ${event.time}` : ''}
                 </option>
               ))}
             </select>
@@ -1071,6 +1297,160 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
         )}
       </div>
 
+      {/* Short link (for SMS) */}
+      <div className="mt-8 pt-6 border-t border-white/10">
+        <FieldLabel info={FIELD_INFO.shorten}>Short link (for SMS)</FieldLabel>
+        <p className="text-xs text-white/40 -mt-1 mb-3">
+          Hides the UTM params in the texted message. Tracking still works when the link opens.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2 mb-2">
+          <input
+            value={shortLabel}
+            onChange={(e) => setShortLabel(e.target.value)}
+            placeholder="Label (optional, e.g. July SMS blast)"
+            autoComplete="off"
+            className={inputClass}
+          />
+          <input
+            value={shortAlias}
+            onChange={(e) => setShortAlias(e.target.value)}
+            placeholder="Custom alias (optional)"
+            autoComplete="off"
+            className={inputClass}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={createShort}
+          disabled={!generatedUrl || shortLoading}
+          className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors disabled:opacity-40"
+        >
+          {shortLoading ? 'Creating…' : 'Create short link'}
+        </button>
+        {shortError?.forUrl === generatedUrl && (
+          <p className="mt-2 text-sm text-[var(--pyre-red)]">{shortError.message}</p>
+        )}
+        {shortResult?.forUrl === generatedUrl && (
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
+              {shortResult.shortUrl}
+            </output>
+            <button
+              type="button"
+              onClick={copyShort}
+              className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap"
+            >
+              {shortCopied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        )}
+
+        {/* Recent short links */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={toggleRecent}
+            aria-expanded={recentOpen}
+            className="flex items-center gap-2 text-xs font-mono-bold uppercase tracking-wide text-white/40 hover:text-white transition-colors"
+          >
+            <span aria-hidden>{recentOpen ? '▾' : '▸'}</span> Recent short links
+          </button>
+          {recentOpen && (
+            <div className="mt-3">
+              {recentLoading && <p className="text-sm text-white/40">Loading…</p>}
+              {!recentLoading && recent && recent.length === 0 && (
+                <p className="text-sm text-white/40">No short links yet.</p>
+              )}
+              {!recentLoading && recent && recent.length > 0 && (
+                <ul className="flex flex-col gap-2">
+                  {recent.map((row) => {
+                    const rowUrl = `${origin}/s/${row.code}`;
+                    const isEditing = editingCode === row.code;
+                    const btnClass =
+                      'shrink-0 px-3 py-1.5 rounded border border-white/20 text-xs font-mono-bold uppercase tracking-wide text-white/60 hover:text-white hover:border-white/40 transition-colors';
+                    return (
+                      <li
+                        key={row.code}
+                        className="flex items-center gap-3 rounded border border-white/10 bg-white/5 px-3 py-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm text-[var(--pyre-creme)] truncate">
+                              /s/{row.code}
+                            </span>
+                            {isEditing ? (
+                              <input
+                                value={editLabel}
+                                onChange={(e) => setEditLabel(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void saveEditRow(row.code);
+                                  if (e.key === 'Escape') cancelEditRow();
+                                }}
+                                placeholder="Label"
+                                // biome-ignore lint/a11y/noAutofocus: focus the field the admin just opened
+                                autoFocus
+                                className="min-w-0 flex-1 px-2 py-0.5 rounded bg-white/5 border border-white/20 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/40"
+                              />
+                            ) : (
+                              row.label && (
+                                <span className="text-xs text-white/40 truncate">{row.label}</span>
+                              )
+                            )}
+                          </div>
+                          <div className="text-xs text-white/30 truncate">{row.url}</div>
+                        </div>
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void saveEditRow(row.code)}
+                              className={btnClass}
+                            >
+                              Save
+                            </button>
+                            <button type="button" onClick={cancelEditRow} className={btnClass}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="shrink-0 text-xs text-white/40">
+                              {row.clicks} {row.clicks === 1 ? 'click' : 'clicks'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyRow(row.code, rowUrl)}
+                              className={btnClass}
+                            >
+                              {copiedCode === row.code ? 'Copied' : 'Copy'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditRow(row)}
+                              className={btnClass}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteRow(row.code)}
+                              aria-label={`Delete short link ${row.code}`}
+                              className="shrink-0 px-3 py-1.5 rounded border border-white/20 text-xs font-mono-bold uppercase tracking-wide text-white/40 hover:text-[var(--pyre-red)] hover:border-[var(--pyre-red)]/50 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Save to a shared campaign — grouped by the utm_campaign value */}
       <div className="mt-8 pt-6 border-t border-white/10">
         <FieldLabel info="Saves this link into the shared campaign named by its utm_campaign value, so the whole team can reuse it.">
@@ -1155,44 +1535,105 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                     {links.length === 0 && (
                       <p className="px-3 py-3 text-sm text-white/40">No links saved yet.</p>
                     )}
-                    {links.map((link) => (
-                      <div key={link.id} className="px-3 py-3 flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1 min-w-0">
-                          {link.label && (
-                            <p className="text-sm text-[var(--pyre-creme)] mb-0.5">{link.label}</p>
-                          )}
-                          <p className="text-xs font-mono text-white/50 break-all">{link.url}</p>
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => copyLink(link.url)}
-                              className="px-2 py-1 rounded border border-white/20 text-xs text-white/60 hover:text-white hover:border-white/40 transition-colors"
-                            >
-                              Copy
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteLink(link.id)}
-                              className="px-2 py-1 rounded border border-white/20 text-xs text-white/40 hover:text-[var(--pyre-red)] hover:border-[var(--pyre-red)]/50 transition-colors"
-                            >
-                              Delete
-                            </button>
+                    {links.map((link) => {
+                      const isEditingLink = editingLinkId === link.id;
+                      const qrShown = shownQr[link.id] ?? false;
+                      const linkBtn =
+                        'px-2 py-1 rounded border border-white/20 text-xs text-white/60 hover:text-white hover:border-white/40 transition-colors';
+                      return (
+                        <div key={link.id} className="px-3 py-3 flex flex-col sm:flex-row gap-3">
+                          <div className="flex-1 min-w-0">
+                            {isEditingLink ? (
+                              <input
+                                value={editLinkLabel}
+                                onChange={(e) => setEditLinkLabel(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void saveEditLink(link.id);
+                                  if (e.key === 'Escape') cancelEditLink();
+                                }}
+                                placeholder="Label"
+                                // biome-ignore lint/a11y/noAutofocus: focus the field the admin just opened
+                                autoFocus
+                                className="w-full mb-1 px-2 py-1 rounded bg-white/5 border border-white/20 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/40"
+                              />
+                            ) : (
+                              link.label && (
+                                <p className="text-sm text-[var(--pyre-creme)] mb-0.5">
+                                  {link.label}
+                                </p>
+                              )
+                            )}
+                            <p className="text-xs font-mono text-white/50 break-all">{link.url}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {isEditingLink ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => void saveEditLink(link.id)}
+                                    className={linkBtn}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditLink}
+                                    className={linkBtn}
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyLink(link.url)}
+                                    className={linkBtn}
+                                  >
+                                    Copy
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditLink(link)}
+                                    className={linkBtn}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleQr(link.id)}
+                                    aria-expanded={qrShown}
+                                    className={linkBtn}
+                                  >
+                                    {qrShown ? 'Hide QR' : 'Show QR'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteLink(link.id)}
+                                    className="px-2 py-1 rounded border border-white/20 text-xs text-white/40 hover:text-[var(--pyre-red)] hover:border-[var(--pyre-red)]/50 transition-colors"
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
+                          {qrShown && (
+                            <div className="shrink-0">
+                              <QrCode
+                                url={link.url}
+                                filename={qrFilename([
+                                  campaign.name,
+                                  link.label,
+                                  link.source,
+                                  link.medium,
+                                ])}
+                                style={qrStyle}
+                              />
+                            </div>
+                          )}
                         </div>
-                        <div className="shrink-0">
-                          <QrCode
-                            url={link.url}
-                            filename={qrFilename([
-                              campaign.name,
-                              link.label,
-                              link.source,
-                              link.medium,
-                            ])}
-                            style={qrStyle}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
