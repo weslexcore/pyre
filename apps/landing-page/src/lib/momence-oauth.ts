@@ -203,71 +203,42 @@ export async function refreshAccessToken(currentRefreshToken: string): Promise<M
 }
 
 /**
- * Fetch user profile using access token
- * Tries multiple endpoints since Momence API structure may vary
+ * Fetch the currently authenticated user's profile.
+ *
+ * Uses Momence's single documented endpoint for the OAuth authorization-code
+ * (customer) flow: GET /api/v2/auth/profile. Per the official OpenAPI schema
+ * (https://static.momence.com/schema/api-v2-schema.yaml) this returns a flat
+ * `AuthProfileDto` with required fields `userId`, `email`, `firstName`,
+ * `lastName` (and nullable `memberId`), so email is always present.
  */
 export async function fetchUserProfile(accessToken: string): Promise<MomenceUserProfile> {
-  // List of endpoints to try for fetching user profile
-  const endpoints = [
-    'https://api.momence.com/api/v2/member',
-    'https://api.momence.com/api/v2/members/me',
-    'https://api.momence.com/api/v2/user',
-    'https://api.momence.com/api/v2/users/me',
-    'https://api.momence.com/api/v2/me',
-    'https://api.momence.com/api/v2/auth/me',
-  ];
+  const endpoint = 'https://api.momence.com/api/v2/auth/profile';
+  console.log('[OAuth] Fetching profile from:', endpoint);
 
-  for (const endpoint of endpoints) {
-    console.log('[OAuth] Trying profile endpoint:', endpoint);
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
 
-    try {
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-        },
-      });
+  console.log('[OAuth] Profile response status:', response.status);
 
-      console.log('[OAuth] Profile response from', endpoint, '- status:', response.status);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[OAuth] Profile data from', endpoint, ':', JSON.stringify(data, null, 2));
-
-        // Handle different response structures
-        const profile = data.user || data.member || data;
-
-        return {
-          id: profile.id || profile.userId || profile.memberId,
-          email: profile.email || profile.emailAddress || '',
-          firstName:
-            profile.firstName || profile.first_name || profile.name?.split(' ')[0] || 'User',
-          lastName:
-            profile.lastName ||
-            profile.last_name ||
-            profile.name?.split(' ').slice(1).join(' ') ||
-            '',
-          phone: profile.phone || profile.phoneNumber || profile.phone_number,
-          avatarUrl: profile.avatarUrl || profile.avatar || profile.profileImage || profile.image,
-        };
-      }
-
-      // Log non-200 responses but continue trying other endpoints
-      const errorText = await response.text();
-      console.log(
-        '[OAuth] Profile endpoint returned',
-        response.status,
-        ':',
-        errorText.substring(0, 200)
-      );
-    } catch (err) {
-      console.log('[OAuth] Error fetching from', endpoint, ':', err);
-    }
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[OAuth] Profile fetch failed:', response.status, errorText.substring(0, 200));
+    throw new Error(`Profile fetch failed: ${response.status}`);
   }
 
-  // If no endpoint worked, throw an error
-  console.error('[OAuth] All profile endpoints failed');
-  throw new Error('Could not fetch user profile from any endpoint');
+  const data = await response.json();
+  console.log('[OAuth] Profile data:', JSON.stringify(data, null, 2));
+
+  return {
+    id: data.userId,
+    email: data.email || '',
+    firstName: data.firstName || 'User',
+    lastName: data.lastName || '',
+  };
 }
 
 /**

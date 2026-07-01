@@ -3,6 +3,7 @@ import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 import location from '../lib/location';
 import navbar from '../lib/navbar';
 import { withBase } from '../lib/paths';
+import { AdminNav } from './admin/AdminNav';
 import Button from './Button.astro';
 import GradientOverlay from './GradientOverlay.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
@@ -52,6 +53,11 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
         ]}>PYRE</p>
       )}
     </a>
+
+    {minimal && (
+    <!-- Admin navigation (logout + home) -->
+    <AdminNav client:load />
+    )}
 
     {!minimal && (
     <!-- Desktop navigation links -->

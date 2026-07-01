@@ -17,10 +17,19 @@ export const GET: APIRoute = async ({ cookies }) => {
   }
 
   if (!session.user.email || !isAdminEmail(session.user.email)) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: JSON_HEADERS,
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Forbidden',
+        detected: {
+          email: session.user.email || null,
+          userId: session.user.id || null,
+        },
+      }),
+      {
+        status: 403,
+        headers: JSON_HEADERS,
+      }
+    );
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS });

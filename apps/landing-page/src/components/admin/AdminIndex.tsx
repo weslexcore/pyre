@@ -28,9 +28,20 @@ const ADMIN_LINKS: AdminLink[] = [
 type GateState = 'checking' | 'ok' | 'unauthenticated' | 'forbidden' | 'error';
 
 export function AdminIndex() {
-  const { isAuthenticated, user, loading: authLoading, login } = useAuth();
+  // On a fresh OAuth return (?auth=success), bypass the stale sessionStorage
+  // cache so we re-fetch the now-authenticated session instead of showing Sign In.
+  const searchParams =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+  const freshAuth = searchParams.get('auth') === 'success';
+
+  const { isAuthenticated, user, loading: authLoading, login } = useAuth({ skipCache: freshAuth });
   const [gate, setGate] = useState<GateState>('checking');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [detected, setDetected] = useState<{ email: string | null; userId: number | null } | null>(
+    null
+  );
 
   useEffect(() => {
     if (authLoading) return;
@@ -49,6 +60,8 @@ export function AdminIndex() {
           return;
         }
         if (res.status === 403) {
+          const body = await res.json().catch(() => null);
+          setDetected(body?.detected ?? null);
           setGate('forbidden');
           return;
         }
@@ -101,6 +114,12 @@ export function AdminIndex() {
           Unauthorized
         </h1>
         <p className="text-white/60">You do not have access to this page.</p>
+        {detected && (
+          <p className="mt-4 text-xs text-white/40">
+            Signed in as {detected.email || '(no email)'}
+            {detected.userId ? ` (id ${detected.userId})` : ''}
+          </p>
+        )}
       </div>
     );
   }
