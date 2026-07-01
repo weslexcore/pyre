@@ -1,4 +1,4 @@
-import { createCampaign, deleteLink, saveLink } from '@pyre/webhook-core';
+import { createCampaign, deleteLink, saveLink, updateLinkLabel } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { isAdminEmail } from '@/lib/admin';
 import { validateSession } from '@/lib/auth-session';
@@ -78,6 +78,30 @@ export const DELETE: APIRoute = async ({ cookies, url }) => {
   try {
     await deleteLink(id);
     return json({ ok: true });
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+  }
+};
+
+// Relabel a saved link (only the friendly label changes).
+export const PATCH: APIRoute = async ({ cookies, request }) => {
+  const auth = await requireAdmin(cookies);
+  if ('error' in auth) return auth.error;
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const id = str(body.id);
+  if (!id) return json({ error: 'id is required' }, 400);
+
+  try {
+    const link = await updateLinkLabel(id, str(body.label));
+    if (!link) return json({ error: 'Link not found' }, 404);
+    return json({ link });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
   }

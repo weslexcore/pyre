@@ -171,6 +171,20 @@ export async function saveLink(
   return link;
 }
 
+/** Relabel a saved link. Only the friendly label changes; the URL/UTM params and
+ * campaign membership are untouched. Returns the updated link, or null if it's
+ * gone or storage is unavailable. */
+export async function updateLinkLabel(id: string, label: string): Promise<UtmLink | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  const exists = await redis.exists(`${LINK_PREFIX}${id}`);
+  if (!exists) return null;
+
+  await redis.hset(`${LINK_PREFIX}${id}`, { label: label.trim() });
+  return (await redis.hgetall(`${LINK_PREFIX}${id}`)) as UtmLink | null;
+}
+
 /** Delete a single saved link, removing it from its campaign's link set. */
 export async function deleteLink(id: string): Promise<void> {
   const redis = getRedis();

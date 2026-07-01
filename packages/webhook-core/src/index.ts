@@ -21,9 +21,23 @@ export {
   listCampaignsWithLinks,
   saveLink,
   slugifyCampaign,
+  updateLinkLabel,
   type UtmCampaign,
   type UtmLink,
 } from './utm-campaign-store';
+export {
+  codeExists,
+  createShortLink,
+  type CreateShortLinkInput,
+  deleteShortLink,
+  getShortLink,
+  incrementClickCount,
+  isValidAlias,
+  listShortLinks,
+  type ShortLink,
+  ShortLinkError,
+  updateShortLinkLabel,
+} from './shortlinks';
 export { type TraceStep, WebhookTracer } from './tracer';
 export { createWebhookLogger, type WebhookLogger } from './logger';
 export {
