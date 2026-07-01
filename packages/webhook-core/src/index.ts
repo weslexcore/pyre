@@ -13,6 +13,17 @@ export {
   recordExecution,
   type WebhookExecution,
 } from './execution-store';
+export {
+  type CampaignWithLinks,
+  createCampaign,
+  deleteCampaign,
+  deleteLink,
+  listCampaignsWithLinks,
+  saveLink,
+  slugifyCampaign,
+  type UtmCampaign,
+  type UtmLink,
+} from './utm-campaign-store';
 export { type TraceStep, WebhookTracer } from './tracer';
 export { createWebhookLogger, type WebhookLogger } from './logger';
 export {
