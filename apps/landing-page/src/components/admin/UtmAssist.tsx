@@ -1,5 +1,7 @@
-import * as QRCode from 'qrcode';
+import type QRCodeStyling from 'qr-code-styling';
+import type { Options as QrCodeStylingOptions } from 'qr-code-styling';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import pyreLogoRaw from '@/assets/logos/pyre_logo.svg?raw';
 import { useAuth } from '@/hooks/useAuth';
 import { withBase } from '@/lib/paths';
 import type { EventItem } from '@/lib/types';
@@ -227,40 +229,334 @@ interface CampaignWithLinks {
   links: SavedLink[];
 }
 
-/** Renders a scannable QR for `url` with a download-as-PNG link. */
-function QrCode({ url, filename }: { url: string; filename: string }) {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
+// ── QR styling ──────────────────────────────────────────────────────────────
+// The look of every QR (preview + saved links) is driven by this shared style,
+// persisted per-browser so an admin's chosen look sticks between visits.
+type DotType = 'square' | 'dots' | 'rounded' | 'extra-rounded' | 'classy' | 'classy-rounded';
+type CornerSquareType = 'square' | 'dot' | 'extra-rounded';
+type CornerDotType = 'square' | 'dot';
 
+interface QrStyle {
+  dark: string;
+  light: string;
+  transparent: boolean;
+  dotType: DotType;
+  cornerSquareType: CornerSquareType;
+  cornerDotType: CornerDotType;
+  size: number;
+  margin: number;
+  logo: boolean;
+}
+
+const DOT_TYPES: DotType[] = [
+  'square',
+  'dots',
+  'rounded',
+  'extra-rounded',
+  'classy',
+  'classy-rounded',
+];
+const CORNER_SQUARE_TYPES: CornerSquareType[] = ['square', 'dot', 'extra-rounded'];
+const CORNER_DOT_TYPES: CornerDotType[] = ['square', 'dot'];
+
+// Pyre brand palette (hex from src/styles/global.css). Offered as one-click
+// swatches for the QR dot and background colors.
+const PYRE_COLORS: Array<{ name: string; hex: string }> = [
+  { name: 'Black', hex: '#23221c' },
+  { name: 'Creme', hex: '#f5f1e9' },
+  { name: 'Red', hex: '#d15232' },
+  { name: 'Blue', hex: '#274868' },
+  { name: 'Gold', hex: '#dbb155' },
+  { name: 'Sage', hex: '#839770' },
+  { name: 'Sky', hex: '#3991b7' },
+  { name: 'Burnt orange', hex: '#cb6b34' },
+];
+
+const DEFAULT_QR_STYLE: QrStyle = {
+  dark: '#23221c', // Pyre black
+  light: '#f5f1e9', // Pyre creme
+  transparent: false,
+  dotType: 'classy-rounded',
+  cornerSquareType: 'extra-rounded',
+  cornerDotType: 'dot',
+  size: 240,
+  margin: 8,
+  logo: true,
+};
+
+// The Pyre mark uses fill="currentColor"; recolor it to `color` and inline it as
+// a data URL so qr-code-styling can drop it in the center.
+function pyreLogoDataUrl(color: string): string {
+  const svg = pyreLogoRaw.replace(/currentColor/g, color);
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const QR_STYLE_KEY = 'pyre-utm-qr-style';
+
+// Build a readable download filename, always led by the campaign name, with the
+// remaining parts (source/medium/etc.) appended to keep sibling files distinct.
+function qrFilename(parts: Array<string | undefined>): string {
+  const slug = parts
+    .map((p) => (p ?? '').trim())
+    .filter(Boolean)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `pyre-qr-${slug}` : 'pyre-qr';
+}
+
+function loadQrStyle(): QrStyle {
+  if (typeof window === 'undefined') return DEFAULT_QR_STYLE;
+  try {
+    const raw = window.localStorage.getItem(QR_STYLE_KEY);
+    if (!raw) return DEFAULT_QR_STYLE;
+    return { ...DEFAULT_QR_STYLE, ...(JSON.parse(raw) as Partial<QrStyle>) };
+  } catch {
+    return DEFAULT_QR_STYLE;
+  }
+}
+
+function saveQrStyle(style: QrStyle): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(QR_STYLE_KEY, JSON.stringify(style));
+  } catch {
+    // Best-effort persistence.
+  }
+}
+
+const TRANSPARENT = 'rgba(0,0,0,0)';
+
+function buildQrOptions(url: string, style: QrStyle): QrCodeStylingOptions {
+  return {
+    width: style.size,
+    height: style.size,
+    type: 'canvas',
+    data: url,
+    margin: style.margin,
+    // Highest error correction when a center logo covers part of the code.
+    qrOptions: { errorCorrectionLevel: style.logo ? 'H' : 'M' },
+    // Recolor the logo to match the dots; empty string clears it on toggle-off.
+    image: style.logo ? pyreLogoDataUrl(style.dark) : '',
+    imageOptions: { imageSize: 0.3, margin: 4, hideBackgroundDots: true, crossOrigin: 'anonymous' },
+    dotsOptions: { color: style.dark, type: style.dotType },
+    backgroundOptions: { color: style.transparent ? TRANSPARENT : style.light },
+    cornersSquareOptions: { color: style.dark, type: style.cornerSquareType },
+    cornersDotOptions: { color: style.dark, type: style.cornerDotType },
+  };
+}
+
+/**
+ * Renders a scannable, styled QR for `url` with a download-as-PNG button.
+ * qr-code-styling touches the DOM, so it is imported lazily (client-only) to
+ * keep the prerendered Astro shell from importing browser APIs.
+ */
+function QrCode({ url, filename, style }: { url: string; filename: string; style: QrStyle }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const instanceRef = useRef<QRCodeStyling | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const options = useMemo(() => buildQrOptions(url, style), [url, style]);
+
+  // Instantiate once on mount (browser only). Options are applied by the update
+  // effect below, so this intentionally runs a single time.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only init
   useEffect(() => {
     let cancelled = false;
-    QRCode.toDataURL(url, { margin: 1, width: 240, color: { dark: '#000000', light: '#ffffff' } })
-      .then((out) => {
-        if (!cancelled) setDataUrl(out);
-      })
-      .catch(() => {
-        if (!cancelled) setDataUrl(null);
-      });
+    import('qr-code-styling').then((mod) => {
+      if (cancelled) return;
+      const QRCodeStylingCtor = mod.default;
+      instanceRef.current = new QRCodeStylingCtor(options);
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+        instanceRef.current.append(containerRef.current);
+      }
+      setReady(true);
+    });
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, []);
 
-  if (!dataUrl) return null;
+  // Re-render whenever the URL or style changes.
+  useEffect(() => {
+    if (ready) instanceRef.current?.update(options);
+  }, [ready, options]);
+
+  const download = useCallback(() => {
+    void instanceRef.current?.download({ name: filename, extension: 'png' });
+  }, [filename]);
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <img
-        src={dataUrl}
-        alt="QR code for the generated link"
-        className="w-40 h-40 rounded bg-white p-2"
-      />
-      <a
-        href={dataUrl}
-        download={`${filename}.png`}
+      <div ref={containerRef} className="overflow-hidden rounded [&>canvas]:block" />
+      <button
+        type="button"
+        onClick={download}
         className="text-xs font-mono-bold uppercase tracking-wide text-white/50 hover:text-[var(--pyre-creme)] transition-colors"
       >
         Download PNG
-      </a>
+      </button>
+    </div>
+  );
+}
+
+/** Compact controls that mutate the shared QR style. */
+function QrStyleControls({
+  style,
+  onChange,
+}: {
+  style: QrStyle;
+  onChange: (next: QrStyle) => void;
+}) {
+  const set = <K extends keyof QrStyle>(key: K, value: QrStyle[K]) =>
+    onChange({ ...style, [key]: value });
+
+  const selectClass =
+    'w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
+  const labelClass = 'text-[10px] font-mono-bold uppercase tracking-wide text-white/40 mb-1 block';
+
+  // One-click Pyre brand-color swatches for a color field.
+  const Swatches = ({ onPick }: { onPick: (hex: string) => void }) => (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {PYRE_COLORS.map((c) => (
+        <button
+          key={c.hex}
+          type="button"
+          title={c.name}
+          aria-label={c.name}
+          onClick={() => onPick(c.hex)}
+          style={{ backgroundColor: c.hex }}
+          className="h-4 w-4 rounded-sm border border-white/25 transition-transform hover:scale-110"
+        />
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 rounded border border-white/10 bg-white/5 p-3">
+      <div>
+        <span className={labelClass}>Dot color</span>
+        <input
+          type="color"
+          value={style.dark}
+          onChange={(e) => set('dark', e.target.value)}
+          className="h-8 w-full rounded bg-transparent"
+          aria-label="Dot color"
+        />
+        <Swatches onPick={(hex) => set('dark', hex)} />
+      </div>
+      <div>
+        <span className={labelClass}>Background</span>
+        <input
+          type="color"
+          value={style.light}
+          onChange={(e) => set('light', e.target.value)}
+          disabled={style.transparent}
+          className="h-8 w-full rounded bg-transparent disabled:opacity-30"
+          aria-label="Background color"
+        />
+        <Swatches onPick={(hex) => set('light', hex)} />
+      </div>
+      <div className="flex flex-col justify-end gap-1.5 pb-1.5">
+        <label className="flex items-center gap-1.5 text-xs text-white/60">
+          <input
+            type="checkbox"
+            checked={style.transparent}
+            onChange={(e) => set('transparent', e.target.checked)}
+          />
+          Transparent bg
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-white/60">
+          <input
+            type="checkbox"
+            checked={style.logo}
+            onChange={(e) => set('logo', e.target.checked)}
+          />
+          Center logo
+        </label>
+      </div>
+      <div>
+        <span className={labelClass}>Dot shape</span>
+        <select
+          value={style.dotType}
+          onChange={(e) => set('dotType', e.target.value as DotType)}
+          className={selectClass}
+          aria-label="Dot shape"
+        >
+          {DOT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <span className={labelClass}>Corner shape</span>
+        <select
+          value={style.cornerSquareType}
+          onChange={(e) => set('cornerSquareType', e.target.value as CornerSquareType)}
+          className={selectClass}
+          aria-label="Corner shape"
+        >
+          {CORNER_SQUARE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <span className={labelClass}>Corner dot</span>
+        <select
+          value={style.cornerDotType}
+          onChange={(e) => set('cornerDotType', e.target.value as CornerDotType)}
+          className={selectClass}
+          aria-label="Corner dot shape"
+        >
+          {CORNER_DOT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <span className={labelClass}>Size {style.size}px</span>
+        <input
+          type="range"
+          min={120}
+          max={600}
+          step={20}
+          value={style.size}
+          onChange={(e) => set('size', Number(e.target.value))}
+          className="w-full"
+          aria-label="Size"
+        />
+      </div>
+      <div>
+        <span className={labelClass}>Quiet zone {style.margin}</span>
+        <input
+          type="range"
+          min={0}
+          max={40}
+          step={2}
+          value={style.margin}
+          onChange={(e) => set('margin', Number(e.target.value))}
+          className="w-full"
+          aria-label="Quiet zone margin"
+        />
+      </div>
+      <div className="flex items-end pb-0.5">
+        <button
+          type="button"
+          onClick={() => onChange(DEFAULT_QR_STYLE)}
+          className="text-[10px] font-mono-bold uppercase tracking-wide text-white/40 hover:text-white transition-colors"
+        >
+          Reset
+        </button>
+      </div>
     </div>
   );
 }
@@ -281,6 +577,14 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
   const [copied, setCopied] = useState(false);
   const [customPresets, setCustomPresets] = useState<FieldPresets>(() => loadCustomPresets());
+
+  // Shared QR look (persisted per browser), plus a toggle for the style panel.
+  const [qrStyle, setQrStyle] = useState<QrStyle>(() => loadQrStyle());
+  const [showQrStyle, setShowQrStyle] = useState(false);
+  const updateQrStyle = useCallback((next: QrStyle) => {
+    setQrStyle(next);
+    saveQrStyle(next);
+  }, []);
 
   // Shared campaigns (KV-backed, visible to every admin). Which campaign a link
   // belongs to is determined by its utm_campaign value — no separate picker.
@@ -475,11 +779,18 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
   const deleteLink = useCallback(
     async (id: string) => {
+      // Remove from view immediately; only re-sync from the server if the
+      // delete fails (an immediate refetch can briefly return the stale row).
+      setCampaigns((prev) =>
+        prev ? prev.map((c) => ({ ...c, links: c.links.filter((l) => l.id !== id) })) : prev
+      );
       try {
-        await fetch(`/api/admin/utm-links?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-        await refreshCampaigns();
+        const res = await fetch(`/api/admin/utm-links?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       } catch {
-        // Best-effort; the list refresh will reflect the true state.
+        await refreshCampaigns();
       }
     },
     [refreshCampaigns]
@@ -488,11 +799,14 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   const deleteCampaign = useCallback(
     async (id: string, name: string) => {
       if (!window.confirm(`Delete campaign "${name}" and all its links?`)) return;
+      setCampaigns((prev) => (prev ? prev.filter((c) => c.campaign.id !== id) : prev));
       try {
-        await fetch(`/api/admin/utm-campaigns?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-        await refreshCampaigns();
+        const res = await fetch(`/api/admin/utm-campaigns?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(`Delete failed (${res.status})`);
       } catch {
-        // Best-effort; the list refresh will reflect the true state.
+        await refreshCampaigns();
       }
     },
     [refreshCampaigns]
@@ -734,8 +1048,25 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
 
         {/* QR code for the generated link */}
         {generatedUrl && (
-          <div className="mt-4 flex justify-center">
-            <QrCode url={generatedUrl} filename={utm.campaign.trim() || 'pyre-utm'} />
+          <div className="mt-4">
+            <div className="flex justify-center">
+              <QrCode
+                url={generatedUrl}
+                filename={qrFilename([utm.campaign, utm.source, utm.medium, utm.content])}
+                style={qrStyle}
+              />
+            </div>
+            <div className="mt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowQrStyle((s) => !s)}
+                aria-expanded={showQrStyle}
+                className="text-xs font-mono-bold uppercase tracking-wide text-white/40 hover:text-white transition-colors"
+              >
+                {showQrStyle ? 'Hide QR style' : 'Customize QR'}
+              </button>
+            </div>
+            {showQrStyle && <QrStyleControls style={qrStyle} onChange={updateQrStyle} />}
           </div>
         )}
       </div>
@@ -851,7 +1182,13 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                         <div className="shrink-0">
                           <QrCode
                             url={link.url}
-                            filename={`${campaign.slug}-${link.id.slice(0, 8)}`}
+                            filename={qrFilename([
+                              campaign.name,
+                              link.label,
+                              link.source,
+                              link.medium,
+                            ])}
+                            style={qrStyle}
                           />
                         </div>
                       </div>

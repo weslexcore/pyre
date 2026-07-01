@@ -2598,7 +2598,6 @@ __metadata:
     "@pyre/webhook-core": "workspace:^"
     "@tailwindcss/vite": "npm:^4.1.3"
     "@types/node": "npm:^22.10.1"
-    "@types/qrcode": "npm:^1.5.6"
     "@types/react": "npm:^19.1.9"
     "@types/react-dom": "npm:^19.1.7"
     "@upstash/redis": "npm:^1.37.0"
@@ -2606,7 +2605,7 @@ __metadata:
     baseline-browser-mapping: "npm:^2.10.24"
     chart.js: "npm:^4.5.0"
     fuse.js: "npm:^7.1.0"
-    qrcode: "npm:^1.5.4"
+    qr-code-styling: "npm:^1.9.2"
     react: "npm:^19.1.1"
     react-dom: "npm:^19.1.1"
     sharp: "npm:^0.33.5"
@@ -8327,6 +8326,22 @@ __metadata:
   version: 2.3.1
   resolution: "punycode@npm:2.3.1"
   checksum: 10c0/14f76a8206bc3464f794fb2e3d3cc665ae416c01893ad7a02b23766eb07159144ee612ad67af5e84fa4479ccfe67678c4feb126b0485651b302babf66f04f9e9
+  languageName: node
+  linkType: hard
+
+"qr-code-styling@npm:^1.9.2":
+  version: 1.9.2
+  resolution: "qr-code-styling@npm:1.9.2"
+  dependencies:
+    qrcode-generator: "npm:^1.4.4"
+  checksum: 10c0/6296e115776ec7788dacc62f2ec0e54d861cfa2a82676bcf9adc693e8bce33552bd6bd92c9ff0478d2bff8610243f7010d7bd7bf85cf96fb41d8b60a36fa56e0
+  languageName: node
+  linkType: hard
+
+"qrcode-generator@npm:^1.4.4":
+  version: 1.5.2
+  resolution: "qrcode-generator@npm:1.5.2"
+  checksum: 10c0/4e0a43ba1c0212cf8ec39654cc7a5bebda96ee00453dc5732e98af4cf681c6786d2c189d4657d8d4fa6486f07573c1edb85fbb7af5e78972f843b7db8457a9b7
   languageName: node
   linkType: hard
 
