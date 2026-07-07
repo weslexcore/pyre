@@ -9,10 +9,20 @@
 export { getRedis } from './redis';
 export {
   getExecution,
+  getExecutionSummariesSince,
   getRecentExecutions,
   recordExecution,
   type WebhookExecution,
+  type WebhookExecutionSummary,
 } from './execution-store';
+export {
+  appendDailyStats,
+  backfillDailyStats,
+  type DailyStat,
+  getDailyStats,
+  STATS_TIMEZONE,
+  type StatsInput,
+} from './webhook-stats';
 export {
   type CampaignWithLinks,
   createCampaign,

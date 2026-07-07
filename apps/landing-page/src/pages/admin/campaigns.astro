@@ -1,0 +1,19 @@
+---
+import { CampaignPerformance } from '@/components/admin/CampaignPerformance';
+import MainLayout from '@/layouts/main.astro';
+
+export const prerender = true;
+---
+
+<MainLayout
+  title="Admin: Campaign Performance"
+  description=""
+  transparentNav={true}
+  noIndex={true}
+>
+  <div class="min-h-screen bg-[var(--pyre-black)]">
+    <div class="pt-24 pb-16">
+      <CampaignPerformance client:load />
+    </div>
+  </div>
+</MainLayout>

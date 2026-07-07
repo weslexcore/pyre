@@ -23,6 +23,11 @@ const ADMIN_LINKS: AdminLink[] = [
     title: 'UTM Assist',
     description: 'Build tracked links to the site, a blog post, the events page, or an event.',
   },
+  {
+    href: '/admin/campaigns',
+    title: 'Campaign Performance',
+    description: 'Clicks, visits, signups, and bookings per campaign, attributed via PostHog.',
+  },
 ];
 
 type GateState = 'checking' | 'ok' | 'unauthenticated' | 'forbidden' | 'error';

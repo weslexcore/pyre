@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { WebhookHealthPanel } from '@/components/admin/WebhookHealthPanel';
 import { useAuth } from '@/hooks/useAuth';
 
 interface TraceStep {
@@ -303,6 +304,8 @@ export function WebhookDashboard() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [offset, setOffset] = useState(0);
+  // Bumped on every log fetch so the health panel refreshes in lockstep.
+  const [refreshSignal, setRefreshSignal] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const limit = 50;
 
@@ -325,6 +328,7 @@ export function WebhookDashboard() {
       }
       const json: LogsResponse = await res.json();
       setData(json);
+      setRefreshSignal((s) => s + 1);
     } catch {
       setError('Network error');
     } finally {
@@ -453,6 +457,10 @@ export function WebhookDashboard() {
             Log Out
           </button>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <WebhookHealthPanel refreshSignal={refreshSignal} />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 mt-4 mb-4">

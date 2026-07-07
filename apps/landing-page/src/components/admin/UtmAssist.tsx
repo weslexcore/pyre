@@ -18,7 +18,7 @@ interface UtmAssistProps {
 
 type GateState = 'checking' | 'ok' | 'unauthenticated' | 'forbidden' | 'error';
 
-type Destination = 'home' | 'events' | 'blog' | 'event';
+type Destination = 'home' | 'events' | 'blog' | 'event' | 'custom';
 
 interface UtmFields {
   source: string;
@@ -62,6 +62,10 @@ const FIELD_INFO: Record<string, string> = {
     'The page this link opens. The UTM tags below are appended to whichever destination you choose.',
   blog: 'Which published blog article the link opens.',
   event: 'Which upcoming event the link opens. Loaded live from Momence.',
+  customUrl:
+    'Any external page (Eventbrite, a partner site…). The generated link routes through pyresauna.com so the click is captured, then forwards here with the UTM tags appended.',
+  tracked:
+    'The pyresauna.com link to share. Clicks are captured on our domain (with the UTM tags) before forwarding to your URL. You can keep editing the UTM fields — the link updates without recreating it.',
   source:
     'Where the visitor comes from — the platform or referrer. e.g. instagram, newsletter, qr.',
   medium:
@@ -189,12 +193,11 @@ function FieldLabel({
 }
 
 /**
- * Builds an absolute, UTM-tagged URL for the given internal path.
- * Empty UTM fields are omitted. Uses the URL API so params merge cleanly with
- * any existing query string (e.g. the `?event=<id>` deep-link).
+ * Appends the non-empty UTM fields to a URL. Uses the URL API so params merge
+ * cleanly with any existing query string (e.g. the `?event=<id>` deep-link or
+ * an Eventbrite `?aff=` param).
  */
-function buildUrl(origin: string, path: string, utm: UtmFields): string {
-  const url = new URL(withBase(path), origin);
+function applyUtm(url: URL, utm: UtmFields): string {
   const params: Array<[string, string]> = [
     ['utm_source', utm.source],
     ['utm_medium', utm.medium],
@@ -209,6 +212,37 @@ function buildUrl(origin: string, path: string, utm: UtmFields): string {
     }
   }
   return url.toString();
+}
+
+/** Builds an absolute, UTM-tagged URL for the given internal path. */
+function buildUrl(origin: string, path: string, utm: UtmFields): string {
+  return applyUtm(new URL(withBase(path), origin), utm);
+}
+
+/**
+ * Parses a free-text destination into an http(s) URL, or null when it isn't
+ * one (yet). A missing scheme is assumed to be https for convenience.
+ */
+function parseExternalUrl(raw: string): URL | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  // Reject hostnames without a dot ("https://foo") — almost certainly mid-typing.
+  if (!url.hostname.includes('.')) return null;
+  return url;
+}
+
+// Returns '' while the URL is invalid so the copy/QR/short-link sections
+// (which all key off generatedUrl) stay hidden until it's usable.
+function buildExternalUrl(raw: string, utm: UtmFields): string {
+  const parsed = parseExternalUrl(raw);
+  return parsed ? applyUtm(parsed, utm) : '';
 }
 
 // Shared campaign shapes returned by /api/admin/utm-campaigns (mirror the
@@ -259,8 +293,8 @@ function shortErrorMessage(code: unknown): string {
       return 'Alias can only contain letters, numbers, - and _.';
     case 'storage_unavailable':
       return 'Link storage is unavailable right now.';
-    case 'URL must point to this site':
-      return 'Can only shorten links to this site.';
+    case 'invalid_url':
+      return 'Short links need a valid http(s) URL.';
     default:
       return 'Failed to create short link.';
   }
@@ -606,6 +640,16 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   const [destination, setDestination] = useState<Destination>('home');
   const [blogSlug, setBlogSlug] = useState<string>(blogPosts[0]?.slug ?? '');
   const [eventId, setEventId] = useState<string>('');
+  const [customUrl, setCustomUrl] = useState<string>('');
+  // External destinations route through /s/<code> so the click is captured on
+  // our domain before redirecting. `forDest` pins the code to the bare
+  // destination it was minted for — editing the URL invalidates it, editing
+  // UTM fields doesn't (the params ride the tracked link's query string).
+  const [tracked, setTracked] = useState<{
+    code: string;
+    shortUrl: string;
+    forDest: string;
+  } | null>(null);
   const [utm, setUtm] = useState<UtmFields>(EMPTY_UTM);
 
   const [events, setEvents] = useState<EventItem[] | null>(null);
@@ -716,6 +760,16 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
       });
   }, [destination]);
 
+  // The bare (untagged) external destination, and the same with UTM params —
+  // the latter is what gets stored behind the tracked link's short code.
+  const bareCustom = useMemo(() => parseExternalUrl(customUrl)?.toString() ?? '', [customUrl]);
+  const externalTagged = useMemo(
+    () => (destination === 'custom' ? buildExternalUrl(customUrl, utm) : ''),
+    [destination, customUrl, utm]
+  );
+  const trackedActive =
+    destination === 'custom' && tracked?.forDest === bareCustom ? tracked : null;
+
   const generatedUrl = useMemo(() => {
     switch (destination) {
       case 'home':
@@ -726,10 +780,18 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
         return blogSlug ? buildUrl(origin, `/blog/${blogSlug}`, utm) : '';
       case 'event':
         return eventId ? buildUrl(origin, `/events?event=${encodeURIComponent(eventId)}`, utm) : '';
+      case 'custom':
+        // The shareable link is on our domain; the UTM params ride its query
+        // string and are passed through to the destination at redirect time.
+        return trackedActive ? applyUtm(new URL(trackedActive.shortUrl), utm) : '';
       default:
         return '';
     }
-  }, [destination, origin, utm, blogSlug, eventId]);
+  }, [destination, origin, utm, blogSlug, eventId, trackedActive]);
+
+  // The URL the short-link section acts on: custom destinations shorten the
+  // UTM-tagged external URL; everything else shortens the generated link itself.
+  const shortSource = destination === 'custom' ? externalTagged : generatedUrl;
 
   const copyUrl = useCallback(async () => {
     if (!generatedUrl) return;
@@ -943,8 +1005,12 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
   }, [recent, loadRecent]);
 
   const createShort = useCallback(async () => {
-    if (!generatedUrl) return;
-    const forUrl = generatedUrl;
+    // For a custom destination the short code IS the tracked link's backbone,
+    // so it's minted from the UTM-tagged external URL (the params are also
+    // baked into storage so the bare /s/<code> keeps attribution in SMS).
+    const isCustom = destination === 'custom';
+    const forUrl = shortSource;
+    if (!forUrl) return;
     setShortLoading(true);
     setShortError(null);
     setShortResult(null);
@@ -952,14 +1018,23 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
       const res = await fetch('/api/admin/shortlinks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: forUrl,
-          label: shortLabel.trim() || undefined,
-          alias: shortAlias.trim() || undefined,
-        }),
+        // Tracked links are created inline (no label/alias inputs in that flow),
+        // so the campaign name doubles as the label in the recent-links list.
+        body: JSON.stringify(
+          isCustom
+            ? { url: forUrl, label: utm.campaign.trim() || undefined }
+            : {
+                url: forUrl,
+                label: shortLabel.trim() || undefined,
+                alias: shortAlias.trim() || undefined,
+              }
+        ),
       });
-      const data = (await res.json()) as { shortUrl?: string; error?: string };
-      if (!res.ok || !data.shortUrl) throw new Error(shortErrorMessage(data.error));
+      const data = (await res.json()) as { shortUrl?: string; code?: string; error?: string };
+      if (!res.ok || !data.shortUrl || !data.code) throw new Error(shortErrorMessage(data.error));
+      if (isCustom) {
+        setTracked({ code: data.code, shortUrl: data.shortUrl, forDest: bareCustom });
+      }
       setShortResult({ shortUrl: data.shortUrl, forUrl });
       setShortAlias('');
       if (recent !== null) void loadRecent();
@@ -971,7 +1046,16 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
     } finally {
       setShortLoading(false);
     }
-  }, [generatedUrl, shortLabel, shortAlias, recent, loadRecent]);
+  }, [
+    destination,
+    shortSource,
+    bareCustom,
+    utm.campaign,
+    shortLabel,
+    shortAlias,
+    recent,
+    loadRecent,
+  ]);
 
   const copyShort = useCallback(async () => {
     if (!shortResult) return;
@@ -1096,7 +1180,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
       <div className="mb-8">
         <h1 className="font-primary-semibold text-2xl text-[var(--pyre-creme)]">UTM Assist</h1>
         <p className="text-xs text-white/40 mt-1">
-          Build a tracked link to the site, a blog post, the events page, or a specific event.
+          Build a tracked link to the site, a blog post, an event, or any external URL.
         </p>
       </div>
 
@@ -1110,6 +1194,7 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
               ['events', 'Events page'],
               ['blog', 'Blog post'],
               ['event', 'Specific event'],
+              ['custom', 'Custom URL'],
             ] as Array<[Destination, string]>
           ).map(([value, label]) => (
             <button
@@ -1179,6 +1264,28 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                 </option>
               ))}
             </select>
+          )}
+        </div>
+      )}
+
+      {/* Custom external URL */}
+      {destination === 'custom' && (
+        <div className="mb-6">
+          <FieldLabel htmlFor="utm-custom-url" info={FIELD_INFO.customUrl}>
+            External URL
+          </FieldLabel>
+          <input
+            id="utm-custom-url"
+            type="url"
+            inputMode="url"
+            value={customUrl}
+            onChange={(e) => setCustomUrl(e.target.value)}
+            placeholder="https://www.eventbrite.com/e/…"
+            autoComplete="off"
+            className={inputClass}
+          />
+          {customUrl.trim() !== '' && !parseExternalUrl(customUrl) && (
+            <p className="mt-1 text-sm text-[var(--pyre-red)]">Enter a valid http(s) URL.</p>
           )}
         </div>
       )}
@@ -1255,22 +1362,63 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
         ))}
       </div>
 
-      {/* Generated link */}
+      {/* Generated link (for external destinations: the tracked pyresauna.com link) */}
       <div>
-        <FieldLabel info={FIELD_INFO.link}>Generated link</FieldLabel>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
-            {generatedUrl || <span className="text-white/30">Select a destination…</span>}
-          </output>
-          <button
-            type="button"
-            onClick={copyUrl}
-            disabled={!generatedUrl}
-            className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity disabled:opacity-40 whitespace-nowrap"
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        </div>
+        <FieldLabel info={destination === 'custom' ? FIELD_INFO.tracked : FIELD_INFO.link}>
+          {destination === 'custom' ? 'Tracked link' : 'Generated link'}
+        </FieldLabel>
+        {destination === 'custom' && externalTagged && !trackedActive ? (
+          <div>
+            <button
+              type="button"
+              onClick={createShort}
+              disabled={shortLoading}
+              className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              {shortLoading ? 'Creating…' : 'Create tracked link'}
+            </button>
+            <p className="mt-2 text-xs text-white/40">
+              Routes the click through pyresauna.com so it&apos;s counted, then forwards to your URL
+              with the UTM tags.
+            </p>
+            {shortError?.forUrl === shortSource && (
+              <p className="mt-2 text-sm text-[var(--pyre-red)]">{shortError.message}</p>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
+              {generatedUrl || (
+                <span className="text-white/30">
+                  {destination === 'custom'
+                    ? 'Enter an external URL above…'
+                    : 'Select a destination…'}
+                </span>
+              )}
+            </output>
+            <button
+              type="button"
+              onClick={copyUrl}
+              disabled={!generatedUrl}
+              className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity disabled:opacity-40 whitespace-nowrap"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        )}
+        {trackedActive && generatedUrl && (
+          <p className="mt-2 text-xs text-white/40">
+            Clean version for SMS (params hidden, still tracked):{' '}
+            <button
+              type="button"
+              onClick={() => copyRow(trackedActive.code, trackedActive.shortUrl)}
+              title="Copy"
+              className="font-mono text-white/60 hover:text-white underline decoration-white/30 transition-colors"
+            >
+              {copiedCode === trackedActive.code ? 'Copied!' : trackedActive.shortUrl}
+            </button>
+          </p>
+        )}
 
         {/* QR code for the generated link */}
         {generatedUrl && (
@@ -1297,52 +1445,58 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
         )}
       </div>
 
-      {/* Short link (for SMS) */}
+      {/* Short link (for SMS). Hidden for external destinations — there the
+          tracked link is created inline in the section above, and its bare
+          /s/<code> form already serves the SMS use case. */}
       <div className="mt-8 pt-6 border-t border-white/10">
-        <FieldLabel info={FIELD_INFO.shorten}>Short link (for SMS)</FieldLabel>
-        <p className="text-xs text-white/40 -mt-1 mb-3">
-          Hides the UTM params in the texted message. Tracking still works when the link opens.
-        </p>
-        <div className="grid sm:grid-cols-2 gap-2 mb-2">
-          <input
-            value={shortLabel}
-            onChange={(e) => setShortLabel(e.target.value)}
-            placeholder="Label (optional, e.g. July SMS blast)"
-            autoComplete="off"
-            className={inputClass}
-          />
-          <input
-            value={shortAlias}
-            onChange={(e) => setShortAlias(e.target.value)}
-            placeholder="Custom alias (optional)"
-            autoComplete="off"
-            className={inputClass}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={createShort}
-          disabled={!generatedUrl || shortLoading}
-          className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors disabled:opacity-40"
-        >
-          {shortLoading ? 'Creating…' : 'Create short link'}
-        </button>
-        {shortError?.forUrl === generatedUrl && (
-          <p className="mt-2 text-sm text-[var(--pyre-red)]">{shortError.message}</p>
-        )}
-        {shortResult?.forUrl === generatedUrl && (
-          <div className="mt-3 flex flex-col sm:flex-row gap-2">
-            <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
-              {shortResult.shortUrl}
-            </output>
+        {destination !== 'custom' && (
+          <>
+            <FieldLabel info={FIELD_INFO.shorten}>Short link (for SMS)</FieldLabel>
+            <p className="text-xs text-white/40 -mt-1 mb-3">
+              Hides the UTM params in the texted message. Tracking still works when the link opens.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-2 mb-2">
+              <input
+                value={shortLabel}
+                onChange={(e) => setShortLabel(e.target.value)}
+                placeholder="Label (optional, e.g. July SMS blast)"
+                autoComplete="off"
+                className={inputClass}
+              />
+              <input
+                value={shortAlias}
+                onChange={(e) => setShortAlias(e.target.value)}
+                placeholder="Custom alias (optional)"
+                autoComplete="off"
+                className={inputClass}
+              />
+            </div>
             <button
               type="button"
-              onClick={copyShort}
-              className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap"
+              onClick={createShort}
+              disabled={!shortSource || shortLoading}
+              className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors disabled:opacity-40"
             >
-              {shortCopied ? 'Copied' : 'Copy'}
+              {shortLoading ? 'Creating…' : 'Create short link'}
             </button>
-          </div>
+            {shortError?.forUrl === shortSource && (
+              <p className="mt-2 text-sm text-[var(--pyre-red)]">{shortError.message}</p>
+            )}
+            {shortResult?.forUrl === shortSource && (
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <output className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm font-mono text-[var(--pyre-creme)] break-all min-h-[2.5rem]">
+                  {shortResult.shortUrl}
+                </output>
+                <button
+                  type="button"
+                  onClick={copyShort}
+                  className="px-4 py-2 rounded font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap"
+                >
+                  {shortCopied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Recent short links */}

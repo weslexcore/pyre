@@ -43,6 +43,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'utm_campaign and url are required' }, 400);
   }
 
+  // The UI now accepts free-text destinations, so re-validate here: only store
+  // well-formed http(s) URLs.
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return json({ error: 'url must be a valid http(s) URL' }, 400);
+  }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return json({ error: 'url must be a valid http(s) URL' }, 400);
+  }
+
   try {
     // The campaign a link belongs to is determined by its utm_campaign value:
     // upsert the campaign for that name/slug, then file the link under it.

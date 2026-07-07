@@ -56,16 +56,16 @@ export const POST: APIRoute = async ({ cookies, request, url }) => {
   const targetUrl = (body.url ?? '').trim();
   if (!targetUrl) return json({ error: 'Missing url' }, 400);
 
-  // Only shorten links back to our own site — never let this become an open
-  // redirector to arbitrary external hosts.
+  // Any http(s) destination is allowed — creation is admin-gated (requireAdmin
+  // above), so this is not an open redirector: only admins can mint codes.
   let parsed: URL;
   try {
     parsed = new URL(targetUrl);
   } catch {
-    return json({ error: 'Invalid url' }, 400);
+    return json({ error: 'invalid_url' }, 400);
   }
-  if (parsed.origin !== url.origin) {
-    return json({ error: 'URL must point to this site' }, 400);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return json({ error: 'invalid_url' }, 400);
   }
 
   try {
