@@ -14,6 +14,7 @@ import {
   poolSpotsLeftForSlot,
 } from '@/lib/capacity';
 import { creditsForPriceUsd } from '@/lib/credits';
+import { eventsLoadError } from '@/lib/events';
 import {
   ALL_TYPES_FILTER,
   ALL_TYPES_LABEL,
@@ -161,6 +162,27 @@ function NoEventsMessage() {
       <p className="font-sans text-lg text-[var(--pyre-creme)]/70">
         No upcoming sessions at this time. Check back soon!
       </p>
+    </div>
+  );
+}
+
+function LoadErrorMessage({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="text-center py-12">
+      <div className="mx-auto max-w-md space-y-4">
+        <h2 className="font-sans text-xl font-semibold text-[var(--pyre-creme)]">
+          {eventsLoadError.message}
+        </h2>
+        <p className="font-sans text-base text-[var(--pyre-creme)]/70">{eventsLoadError.hint}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          aria-label={eventsLoadError.retryAriaLabel}
+          className="inline-flex items-center gap-2 rounded-md bg-[var(--pyre-burnt-orange)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:bg-[var(--pyre-burnt-orange)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-burnt-orange)] focus-visible:ring-offset-2"
+        >
+          {eventsLoadError.retryLabel}
+        </button>
+      </div>
     </div>
   );
 }
@@ -662,7 +684,7 @@ function TypeFilter({
 // -- Main component ----------------------------------------------------------
 
 export default function EventsGrid({ fallback = [] }: EventsGridProps) {
-  const { events, loading } = useEvents(fallback);
+  const { events, loading, error, refetch } = useEvents(fallback);
   const [selectedType, setSelectedType] = useState<string>(ALL_TYPES_FILTER);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
@@ -759,7 +781,9 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   }
 
   if (windowedEvents.length === 0) {
-    return <NoEventsMessage />;
+    // A fetch failure with nothing to show is not the same as an empty
+    // calendar — surface it and let the user retry.
+    return error ? <LoadErrorMessage onRetry={refetch} /> : <NoEventsMessage />;
   }
 
   return (

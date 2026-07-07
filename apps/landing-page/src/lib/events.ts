@@ -25,3 +25,12 @@ export default fallbackEvents;
 
 // Named export for backward compatibility
 export { fallbackEvents };
+
+// Shown when the events fetch fails and no cached data is available —
+// distinct from the genuine "no upcoming sessions" empty state.
+export const eventsLoadError = {
+  message: "We couldn't load upcoming sessions.",
+  hint: 'Please try again in a moment.',
+  retryLabel: 'Try Again',
+  retryAriaLabel: 'Retry loading upcoming sessions',
+};

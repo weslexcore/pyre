@@ -1,6 +1,7 @@
 // Runtime API endpoint for fetching events from Momence
 // This enables server-side fetching with edge caching for fresh data
 
+import { getRedis } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { isSpecialEvent } from '@/lib/events-config';
 import {
@@ -71,13 +72,49 @@ function filterEventsByWindow(
   return { eventsInWindow, outsideWindowCount };
 }
 
+// Last-known-good snapshot of the raw Momence events, so intermittent Momence
+// outages (e.g. 502s) don't blank the events page. The transform pipeline drops
+// past events by date, so a slightly stale snapshot still renders correctly.
+const EVENTS_SNAPSHOT_KEY = 'events:momence:last-good';
+const EVENTS_SNAPSHOT_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+interface EventsSnapshot {
+  events: MomenceEvent[];
+  fetchedAt: string;
+}
+
+async function saveEventsSnapshot(events: MomenceEvent[]): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+
+  try {
+    const snapshot: EventsSnapshot = { events, fetchedAt: new Date().toISOString() };
+    await redis.set(EVENTS_SNAPSHOT_KEY, snapshot, { ex: EVENTS_SNAPSHOT_TTL_SECONDS });
+  } catch (error) {
+    console.warn('[Events API] Failed to save events snapshot:', error);
+  }
+}
+
+async function readEventsSnapshot(): Promise<EventsSnapshot | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  try {
+    const snapshot = await redis.get<EventsSnapshot>(EVENTS_SNAPSHOT_KEY);
+    if (!snapshot || !Array.isArray(snapshot.events)) return null;
+    return snapshot;
+  } catch (error) {
+    console.warn('[Events API] Failed to read events snapshot:', error);
+    return null;
+  }
+}
+
 async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
   if (!hostId || !apiToken) {
-    console.warn('[Events API] Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)');
-    return [];
+    throw new Error('Missing credentials (MOMENCE_HOST_ID or MOMENCE_API_TOKEN)');
   }
 
   const url = `${MOMENCE_API_BASE}/Events?hostId=${hostId}&token=${apiToken}`;
@@ -89,8 +126,7 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
   });
 
   if (!response.ok) {
-    console.error(`[Events API] Momence returned ${response.status}: ${response.statusText}`);
-    return [];
+    throw new Error(`Momence returned ${response.status}: ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -103,8 +139,7 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
     return data.events as MomenceEvent[];
   }
 
-  console.warn('[Events API] Unexpected response format');
-  return [];
+  throw new Error('Unexpected response format from Momence');
 }
 
 export const GET: APIRoute = async ({ url }) => {
@@ -114,7 +149,44 @@ export const GET: APIRoute = async ({ url }) => {
     const windowDays = parseWindowDays(daysParam);
     const limit = parseLimit(url.searchParams.get('limit'));
 
-    const rawEvents = await fetchMomenceEventsServer();
+    let rawEvents: MomenceEvent[];
+    let servedFromSnapshot = false;
+
+    try {
+      rawEvents = await fetchMomenceEventsServer();
+      // Awaited (serverless may kill work after the response), but never fatal.
+      await saveEventsSnapshot(rawEvents);
+    } catch (fetchError) {
+      console.error('[Events API] Momence fetch failed:', fetchError);
+
+      const snapshot = await readEventsSnapshot();
+      if (!snapshot) {
+        // No fallback available — return an explicit, uncacheable error so the
+        // edge never caches an empty list as if it were a real result.
+        return new Response(
+          JSON.stringify({
+            events: [],
+            cached: false,
+            timestamp: new Date().toISOString(),
+            hasMore: false,
+            totalUpcoming: 0,
+            error: 'Events are temporarily unavailable',
+          }),
+          {
+            status: 503,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
+
+      console.warn(`[Events API] Serving last-known-good snapshot from ${snapshot.fetchedAt}`);
+      rawEvents = snapshot.events;
+      servedFromSnapshot = true;
+    }
+
     const validEvents = filterValidEvents(rawEvents);
     const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
     const sortedEvents = sortEventsByDate(nonVolunteerEvents);
@@ -139,7 +211,7 @@ export const GET: APIRoute = async ({ url }) => {
 
     const response: EventsApiResponse = {
       events,
-      cached: false,
+      cached: servedFromSnapshot,
       timestamp: new Date().toISOString(),
       hasMore,
       totalUpcoming: allEvents.length,
@@ -149,8 +221,12 @@ export const GET: APIRoute = async ({ url }) => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        // Vercel edge caching: 1 min fresh, serve stale up to 2 min while revalidating
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        // Vercel edge caching: 1 min fresh, serve stale up to 2 min while
+        // revalidating. Snapshot fallbacks cache for less so recovery from a
+        // Momence outage is picked up quickly.
+        'Cache-Control': servedFromSnapshot
+          ? 'public, s-maxage=30, stale-while-revalidate=60'
+          : 'public, s-maxage=60, stale-while-revalidate=120',
       },
     });
   } catch (error) {

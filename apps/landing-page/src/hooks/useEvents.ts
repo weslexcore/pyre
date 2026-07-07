@@ -55,6 +55,9 @@ function readCache(): CacheEntry | null {
 
 function writeCache(events: EventItem[], hasMore: boolean): void {
   if (typeof window === 'undefined') return;
+  // Never cache an empty list — it may be a transient upstream failure, and
+  // caching it would suppress refetches for the full TTL.
+  if (events.length === 0) return;
 
   try {
     const entry: CacheEntry = {
