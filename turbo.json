@@ -13,6 +13,7 @@
     "CLOUDFLARE_*",
     "ADMIN_EMAILS",
     "KV_*",
+    "POSTHOG_*",
     "REDIS_URL",
     "RESEND_*",
     "EMAIL_*"

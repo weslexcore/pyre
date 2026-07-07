@@ -22,6 +22,12 @@ interface ImportMetaEnv {
   readonly KV_REST_API_TOKEN: string;
   // Admin
   readonly ADMIN_EMAILS: string;
+  // PostHog project token (client snippet + shared with integrations service)
+  readonly POSTHOG_API_KEY: string;
+  // PostHog query API (admin campaign performance)
+  readonly POSTHOG_PERSONAL_API_KEY: string;
+  readonly POSTHOG_PROJECT_ID: string;
+  readonly POSTHOG_HOST: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

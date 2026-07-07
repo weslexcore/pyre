@@ -11,14 +11,16 @@ let client: PostHog | null = null;
 export function getPostHog(): PostHog | null {
   if (client) return client;
 
-  const apiKey = import.meta.env.POSTHOG_API_KEY;
+  // process.env fallback: import.meta.env is inlined at build time, so a value
+  // added to Vercel after the cached build was compiled only exists at runtime.
+  const apiKey = import.meta.env.POSTHOG_API_KEY ?? process.env.POSTHOG_API_KEY;
   if (!apiKey) {
     console.warn('[PostHog] POSTHOG_API_KEY not configured');
     return null;
   }
 
   client = new PostHog(apiKey, {
-    host: import.meta.env.POSTHOG_HOST || 'https://us.posthog.com',
+    host: import.meta.env.POSTHOG_HOST || process.env.POSTHOG_HOST || 'https://us.posthog.com',
     flushAt: 1,
     flushInterval: 0,
   });

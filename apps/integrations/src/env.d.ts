@@ -19,6 +19,9 @@ interface ImportMetaEnv {
   // Upstash Redis (shared with landing-page admin dashboard)
   readonly KV_REST_API_URL?: string;
   readonly KV_REST_API_TOKEN?: string;
+  // PostHog server-side event capture
+  readonly POSTHOG_API_KEY?: string;
+  readonly POSTHOG_HOST?: string;
   // Resend transactional email
   readonly RESEND_API_KEY?: string;
   readonly RESEND_FROM?: string;
