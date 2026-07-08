@@ -4,21 +4,29 @@
 
 const DEFAULT_HOST = 'https://us.posthog.com';
 
+// process.env fallback: import.meta.env is inlined at build time, so values added
+// to Vercel after the build only exist at runtime.
+function getApiKey(): string | undefined {
+  return import.meta.env.POSTHOG_PERSONAL_API_KEY ?? process.env.POSTHOG_PERSONAL_API_KEY;
+}
+
+function getProjectId(): string | undefined {
+  return import.meta.env.POSTHOG_PROJECT_ID ?? process.env.POSTHOG_PROJECT_ID;
+}
+
 export function isPostHogQueryConfigured(): boolean {
-  return Boolean(
-    import.meta.env.POSTHOG_PERSONAL_API_KEY && import.meta.env.POSTHOG_PROJECT_ID
-  );
+  return Boolean(getApiKey() && getProjectId());
 }
 
 /** Run a HogQL query and return raw result rows. Throws if unconfigured or on API errors. */
 export async function queryHogQL(query: string): Promise<unknown[][]> {
-  const apiKey = import.meta.env.POSTHOG_PERSONAL_API_KEY;
-  const projectId = import.meta.env.POSTHOG_PROJECT_ID;
+  const apiKey = getApiKey();
+  const projectId = getProjectId();
   if (!apiKey || !projectId) {
     throw new Error('PostHog query API not configured');
   }
 
-  const host = import.meta.env.POSTHOG_HOST || DEFAULT_HOST;
+  const host = import.meta.env.POSTHOG_HOST || process.env.POSTHOG_HOST || DEFAULT_HOST;
   const res = await fetch(`${host}/api/projects/${projectId}/query`, {
     method: 'POST',
     headers: {
