@@ -121,8 +121,7 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
     WHAT_TO_BRING['regular'],
     {
       question: 'When should I arrive?',
-      answer:
-       WHEN_TO_ARRIVE['early']
+      answer: WHEN_TO_ARRIVE['early'],
     },
     {
       question: 'What happens during a guided session?',
@@ -150,8 +149,7 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
     WHAT_TO_BRING['regular'],
     {
       question: 'When should I arrive?',
-      answer:
-       WHEN_TO_ARRIVE['early']
+      answer: WHEN_TO_ARRIVE['early'],
     },
     // SAUNA_TEMP,
     // SAUNA_PLUNGE_TIMING,

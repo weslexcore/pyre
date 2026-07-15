@@ -1,6 +1,12 @@
 import type { ComponentType } from 'react';
 import { ConfirmationEmail } from './components/ConfirmationEmail';
+import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
+import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
+import { IntroFollowUp } from './templates/IntroFollowUp';
+import { MembershipPitch } from './templates/MembershipPitch';
+import { ReviewRequest } from './templates/ReviewRequest';
+import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
 interface TemplateEntry<K extends EmailTemplateKey> {
@@ -20,6 +26,30 @@ export const EMAIL_TEMPLATES: Registry = {
   'first-timer-welcome': {
     subject: () => 'Welcome to Pyre — what to expect',
     Component: FirstTimerWelcome,
+  },
+  'intro-follow-up': {
+    subject: (p) => `How was it, ${p.firstName}?`,
+    Component: IntroFollowUp,
+  },
+  'credit-pack-pitch': {
+    subject: () => 'Make the sauna a ritual — credit packs',
+    Component: CreditPackPitch,
+  },
+  'membership-pitch': {
+    subject: () => 'Founding memberships — lock in your rate for life',
+    Component: MembershipPitch,
+  },
+  'review-request': {
+    subject: () => 'Mind sharing the heat?',
+    Component: ReviewRequest,
+  },
+  'credit-expiry-reminder': {
+    subject: (p) => `Your ${p.creditsLabel} expire ${p.expiresOn}`,
+    Component: CreditExpiryReminder,
+  },
+  'unused-credit-reminder': {
+    subject: (p) => `You still have ${p.creditsLabel} at Pyre`,
+    Component: UnusedCreditReminder,
   },
 };
 

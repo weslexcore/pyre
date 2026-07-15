@@ -6,8 +6,10 @@ import {
   type WebhookTracer,
 } from '@pyre/webhook-core';
 import { trackBookingEvent } from '@/lib/analytics/track-booking';
+import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { resolveSession } from '@/lib/momence-events';
+import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
   fetchMomenceMember,
@@ -79,6 +81,17 @@ async function handleBookingEvent(
       session,
       tracer,
     });
+
+    // Journey triggers (best-effort by contract — dispatchTrigger never throws).
+    await dispatchTrigger({
+      type: 'session-booked',
+      memberId: payload.targetMemberId,
+      email: member.email,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      sessionId: payload.sessionId,
+      sessionBookingId: payload.sessionBookingId,
+    });
     return;
   }
 
@@ -127,6 +140,17 @@ async function handleMemberEvent(
       email,
       tags: tags.map((t) => t.name),
     });
+  }
+
+  // Best-effort so a Resend outage never 500s the webhook (Mailchimp already synced).
+  try {
+    await tracer.span(
+      'Upsert Resend contact',
+      () => upsertResendContact({ email, firstName, lastName }),
+      { email }
+    );
+  } catch (error) {
+    log.warn(`Resend contact upsert failed for ${email}`, error);
   }
 }
 

@@ -2571,6 +2571,7 @@ __metadata:
     "@pyre/webhook-core": "workspace:^"
     "@react-email/components": "npm:^1.0.12"
     "@react-email/ui": "npm:6.6.0"
+    "@supabase/supabase-js": "npm:^2.110.5"
     "@types/node": "npm:^22.10.1"
     "@types/react": "npm:^19.1.9"
     "@types/react-dom": "npm:^19.1.7"
@@ -2579,7 +2580,7 @@ __metadata:
     react: "npm:^19.1.1"
     react-dom: "npm:^19.1.1"
     react-email: "npm:^6.6.0"
-    resend: "npm:^4.6.0"
+    resend: "npm:^6.17.2"
     typescript: "npm:^5.9.2"
   languageName: unknown
   linkType: soft
@@ -2830,20 +2831,6 @@ __metadata:
   peerDependencies:
     react: ^18.0 || ^19.0 || ^19.0.0-rc
   checksum: 10c0/af9b8b618121af3f28699a240851dcc8f25448fa4bc47c04b5931d25330052a5bcbf45d7cd4da845e64bf91db5dc32108f471553fe20c54b1410443de850ef71
-  languageName: node
-  linkType: hard
-
-"@react-email/render@npm:1.1.2":
-  version: 1.1.2
-  resolution: "@react-email/render@npm:1.1.2"
-  dependencies:
-    html-to-text: "npm:^9.0.5"
-    prettier: "npm:^3.5.3"
-    react-promise-suspense: "npm:^0.3.4"
-  peerDependencies:
-    react: ^18.0 || ^19.0 || ^19.0.0-rc
-    react-dom: ^18.0 || ^19.0 || ^19.0.0-rc
-  checksum: 10c0/def0039a24b797d962d7dcb3a3401c093aa0115545284e00863de4066a826a3e4977b8f2c65b1f3bf77352bee5595e0dedf166ea52467dcb7080e14785e1c3ac
   languageName: node
   linkType: hard
 
@@ -3264,6 +3251,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@stablelib/base64@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "@stablelib/base64@npm:1.0.1"
+  checksum: 10c0/6330720f021819d19cecfe274111b79a256caa81df478d6b0ae7effc8842b96915b6aeed85926ff05b4d48ec1fc78ad043d928b730ee4e6cc6e8cba6aa097bed
+  languageName: node
+  linkType: hard
+
 "@storybook/addon-a11y@npm:^10.4.6":
   version: 10.4.6
   resolution: "@storybook/addon-a11y@npm:10.4.6"
@@ -3393,6 +3387,73 @@ __metadata:
     typescript:
       optional: true
   checksum: 10c0/8785d8665c47db86591964fdbde3601fa08f177cd81b85b99b01e2c89b3a0ef5635d71114836afc73944c1009a3fcb6157fe5fb6ef3a6b806eaaed601bb05ee0
+  languageName: node
+  linkType: hard
+
+"@supabase/auth-js@npm:2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/auth-js@npm:2.110.5"
+  dependencies:
+    tslib: "npm:2.8.1"
+  checksum: 10c0/88a0e3c1b9414283497212300a46377da17ae9f062e3f7d19c59e15944db601fcb5d1f15fa55ecc7c721a31bdb464c91f71b447b08095f44544d1b6db61cded9
+  languageName: node
+  linkType: hard
+
+"@supabase/functions-js@npm:2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/functions-js@npm:2.110.5"
+  dependencies:
+    tslib: "npm:2.8.1"
+  checksum: 10c0/b605996d68fcab121eadc8fa1b9b648aaa2302ea31042adf093994a64c9f19012341e307207386465e98df4c4ceb6f434db54975b859e1e83fbc776ba5820747
+  languageName: node
+  linkType: hard
+
+"@supabase/phoenix@npm:0.4.4":
+  version: 0.4.4
+  resolution: "@supabase/phoenix@npm:0.4.4"
+  checksum: 10c0/b4ba930c82b20d412358826aa87ce0735147fd168efb817bfc34e31d78605220947dc7c5844726268ac6bf338f0cd081f9908a7bab87aaff4058cb80bf71ab5b
+  languageName: node
+  linkType: hard
+
+"@supabase/postgrest-js@npm:2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/postgrest-js@npm:2.110.5"
+  dependencies:
+    tslib: "npm:2.8.1"
+  checksum: 10c0/52ed96bfce168e530807b06b8f4766eff1e22e0428e8d313e8ef6d0fbad26e1d2a9026bdf9e2fac81ff8e547597db209b349630375f78553a1e0cda4c60e8135
+  languageName: node
+  linkType: hard
+
+"@supabase/realtime-js@npm:2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/realtime-js@npm:2.110.5"
+  dependencies:
+    "@supabase/phoenix": "npm:0.4.4"
+    tslib: "npm:2.8.1"
+  checksum: 10c0/b5a6b174c80a0fb341ae724fb1238593be5ff54005be74f265b08cbb3913b7948792de0ec6b31b9b5eda97f7c2e6cdc335c55f12040bb4d9f1f03338eeba2089
+  languageName: node
+  linkType: hard
+
+"@supabase/storage-js@npm:2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/storage-js@npm:2.110.5"
+  dependencies:
+    iceberg-js: "npm:^0.8.1"
+    tslib: "npm:2.8.1"
+  checksum: 10c0/67667d9d94823cdd851dcc161edf6e2f33dfaf0db9be5f6be78b078301f1b6adb14f1027974793badc1d12d88322622832b9df9d2403a0527cf0308676093f8c
+  languageName: node
+  linkType: hard
+
+"@supabase/supabase-js@npm:^2.110.5":
+  version: 2.110.5
+  resolution: "@supabase/supabase-js@npm:2.110.5"
+  dependencies:
+    "@supabase/auth-js": "npm:2.110.5"
+    "@supabase/functions-js": "npm:2.110.5"
+    "@supabase/postgrest-js": "npm:2.110.5"
+    "@supabase/realtime-js": "npm:2.110.5"
+    "@supabase/storage-js": "npm:2.110.5"
+  checksum: 10c0/dc7726c3f9bf084f4ed77a234755d6912c7874cb91be1c0701f940c3bff70814df578a79974a1b1f0c0dcfbcd96f88b74dba4368ce484a253eef878f1ff81660
   languageName: node
   linkType: hard
 
@@ -5779,13 +5840,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-deep-equal@npm:^2.0.1":
-  version: 2.0.1
-  resolution: "fast-deep-equal@npm:2.0.1"
-  checksum: 10c0/1602e0d6ed63493c865cc6b03f9070d6d3926e8cd086a123060b58f80a295f3f08b1ecfb479ae7c45b7fd45535202aea7cf5b49bc31bffb81c20b1502300be84
-  languageName: node
-  linkType: hard
-
 "fast-deep-equal@npm:^3.1.1, fast-deep-equal@npm:^3.1.3":
   version: 3.1.3
   resolution: "fast-deep-equal@npm:3.1.3"
@@ -5797,6 +5851,13 @@ __metadata:
   version: 2.1.0
   resolution: "fast-json-stable-stringify@npm:2.1.0"
   checksum: 10c0/7f081eb0b8a64e0057b3bb03f974b3ef00135fbf36c1c710895cd9300f13c94ba809bb3a81cf4e1b03f6e5285610a61abbd7602d0652de423144dfee5a389c9b
+  languageName: node
+  linkType: hard
+
+"fast-sha256@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "fast-sha256@npm:1.3.0"
+  checksum: 10c0/87f9e4baa7639576cf60a2b6235c9f436e1a1c52323abbd8a705b5bea8355500acf176f2aed0c14f2ecd6d6007e26151461bab2f27b8953bcca8d9d6b76a86e4
   languageName: node
   linkType: hard
 
@@ -6294,6 +6355,13 @@ __metadata:
     agent-base: "npm:^7.1.2"
     debug: "npm:4"
   checksum: 10c0/f729219bc735edb621fa30e6e84e60ee5d00802b8247aac0d7b79b0bd6d4b3294737a337b93b86a0bd9e68099d031858a39260c976dc14cdbba238ba1f8779ac
+  languageName: node
+  linkType: hard
+
+"iceberg-js@npm:^0.8.1":
+  version: 0.8.1
+  resolution: "iceberg-js@npm:0.8.1"
+  checksum: 10c0/e504da64cc26e8ad7c5344353a7203c671a740c14eb6086f20505f5e9739cab774493e616032530c962df97f2a855115cc2e89a47dd81581df5917b21a69ec48
   languageName: node
   linkType: hard
 
@@ -8230,6 +8298,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"postal-mime@npm:2.7.4":
+  version: 2.7.4
+  resolution: "postal-mime@npm:2.7.4"
+  checksum: 10c0/836220ef876b8e3ae7236341a4fbff5b8bf6618952a1208966a4e3040c9f51c14572fa695b1863bd445e8d7894536d2eb4e5001f50795c3f7fbfe39c8946ba09
+  languageName: node
+  linkType: hard
+
 "postcss@npm:8.4.31":
   version: 8.4.31
   resolution: "postcss@npm:8.4.31"
@@ -8435,15 +8510,6 @@ __metadata:
   bin:
     email: ./dist/cli/index.mjs
   checksum: 10c0/0a8126636a1610f867946eac3be86b57425da4ae6f66baa04e3ab41ef5bcf043b211f1b3d03481d1af3ed91c3a3604ef8de83a056445b173c8dff9a1f4e701c4
-  languageName: node
-  linkType: hard
-
-"react-promise-suspense@npm:^0.3.4":
-  version: 0.3.4
-  resolution: "react-promise-suspense@npm:0.3.4"
-  dependencies:
-    fast-deep-equal: "npm:^2.0.1"
-  checksum: 10c0/ab7a22f5400f9e9933995537bf6430a4c79e33a121aedb51864968e7604e5c40421fd539ead62554f32300b7d49755c79636de06caa36fe52973b626b4ddfebf
   languageName: node
   linkType: hard
 
@@ -8743,12 +8809,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"resend@npm:^4.6.0":
-  version: 4.8.0
-  resolution: "resend@npm:4.8.0"
+"resend@npm:^6.17.2":
+  version: 6.17.2
+  resolution: "resend@npm:6.17.2"
   dependencies:
-    "@react-email/render": "npm:1.1.2"
-  checksum: 10c0/8836b529abe3188592c2df120f18c40b6378707cec86bcd28000e912b51dc9304080d8876fa4e4a52d328aa0390a5ca5362de53331e9317bce9bd29bff6c2b41
+    postal-mime: "npm:2.7.4"
+    standardwebhooks: "npm:1.0.0"
+  peerDependencies:
+    "@react-email/render": "*"
+  peerDependenciesMeta:
+    "@react-email/render":
+      optional: true
+  checksum: 10c0/589159fb124e8c154d99154efc12521ad3b31823baf60f31722a55ccc9397b7d3ee385480519846433124b7b5f3b0cbad826be3c2a9d7e2fd91275da13473db5
   languageName: node
   linkType: hard
 
@@ -9269,6 +9341,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"standardwebhooks@npm:1.0.0":
+  version: 1.0.0
+  resolution: "standardwebhooks@npm:1.0.0"
+  dependencies:
+    "@stablelib/base64": "npm:^1.0.0"
+    fast-sha256: "npm:^1.3.0"
+  checksum: 10c0/aee097d0f3c05172c19b80df1ed9596a2ce92f8956957650d0bbe47c2ca6d36515796b51d523333cb4a48c889b2ab130d789e7879e14975c4381bc7a61274327
+  languageName: node
+  linkType: hard
+
 "storybook@npm:^10.4.6":
   version: 10.4.6
   resolution: "storybook@npm:10.4.6"
@@ -9613,7 +9695,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.0.1, tslib@npm:^2.4.0, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
+"tslib@npm:2.8.1, tslib@npm:^2.0.1, tslib@npm:^2.4.0, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62

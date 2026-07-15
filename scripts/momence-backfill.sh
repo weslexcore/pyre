@@ -11,7 +11,7 @@ set -euo pipefail
 #   MOMENCE_BACKFILL_SECRET - required, auth token for the backfill endpoint
 #   BACKFILL_URL            - optional, defaults to production
 
-BACKFILL_URL="${BACKFILL_URL:-https://pyresauna.com/api/webhooks/momence-backfill}"
+BACKFILL_URL="${BACKFILL_URL:-https://integration.pyresauna.com/api/webhooks/momence-backfill}"
 
 if [ -z "${MOMENCE_BACKFILL_SECRET:-}" ]; then
   echo "Error: MOMENCE_BACKFILL_SECRET is not set"

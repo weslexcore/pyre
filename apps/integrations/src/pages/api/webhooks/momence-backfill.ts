@@ -4,6 +4,7 @@ import {
   upsertSubscriber,
   type WebhookTracer,
 } from '@pyre/webhook-core';
+import { upsertResendContact } from '@/lib/email/audience';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/webhooks/momence';
 
@@ -13,32 +14,58 @@ const log = createWebhookLogger('Momence Backfill');
 
 const DEFAULT_LIMIT = 25;
 
+type BackfillTarget = 'mailchimp' | 'resend' | 'both';
+
 async function syncMember(
   member: MomenceMemberData,
+  target: BackfillTarget,
+  dryRun: boolean,
   tracer: WebhookTracer
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await tracer.span(
-      `Upsert subscriber: ${member.email}`,
-      () =>
-        upsertSubscriber({
-          email: member.email,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          phone: member.phone,
-          birthday: member.birthday,
-        }),
-      { email: member.email }
-    );
+    if (dryRun) {
+      log.info(`[dry run] Would sync ${member.email} to ${target}`, {
+        tags: member.tags,
+      });
+      return { success: true };
+    }
 
-    const tags = [
-      { name: 'Active Guest', status: 'active' as const },
-      ...member.tags.map((name) => ({ name, status: 'active' as const })),
-    ];
-    await tracer.span(`Set tags: ${member.email}`, () => setSubscriberTags(member.email, tags), {
-      email: member.email,
-      tags: tags.map((t) => t.name),
-    });
+    if (target === 'mailchimp' || target === 'both') {
+      await tracer.span(
+        `Upsert subscriber: ${member.email}`,
+        () =>
+          upsertSubscriber({
+            email: member.email,
+            firstName: member.firstName,
+            lastName: member.lastName,
+            phone: member.phone,
+            birthday: member.birthday,
+          }),
+        { email: member.email }
+      );
+
+      const tags = [
+        { name: 'Active Guest', status: 'active' as const },
+        ...member.tags.map((name) => ({ name, status: 'active' as const })),
+      ];
+      await tracer.span(`Set tags: ${member.email}`, () => setSubscriberTags(member.email, tags), {
+        email: member.email,
+        tags: tags.map((t) => t.name),
+      });
+    }
+
+    if (target === 'resend' || target === 'both') {
+      await tracer.span(
+        `Upsert Resend contact: ${member.email}`,
+        () =>
+          upsertResendContact({
+            email: member.email,
+            firstName: member.firstName,
+            lastName: member.lastName,
+          }),
+        { email: member.email }
+      );
+    }
 
     return { success: true };
   } catch (error) {
@@ -69,8 +96,18 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
 
   const offset = Number.parseInt(url.searchParams.get('offset') ?? '0', 10);
   const limit = Number.parseInt(url.searchParams.get('limit') ?? String(DEFAULT_LIMIT), 10);
+  const targetParam = url.searchParams.get('target') ?? 'both';
+  const dryRun = url.searchParams.get('dryRun') === 'true';
 
-  log.info(`Starting backfill: offset=${offset} limit=${limit}`);
+  if (targetParam !== 'mailchimp' && targetParam !== 'resend' && targetParam !== 'both') {
+    return new Response(
+      JSON.stringify({ error: 'Invalid target — use mailchimp, resend, or both' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  const target: BackfillTarget = targetParam;
+
+  log.info(`Starting backfill: offset=${offset} limit=${limit} target=${target} dryRun=${dryRun}`);
 
   try {
     const page = Math.floor(offset / limit);
@@ -85,7 +122,7 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
     const results: { email: string; success: boolean; error?: string }[] = [];
 
     for (const member of members) {
-      const result = await syncMember(member, tracer);
+      const result = await syncMember(member, target, dryRun, tracer);
       results.push({ email: member.email, ...result });
     }
 
@@ -97,6 +134,8 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
     return new Response(
       JSON.stringify({
         totalInMomence: totalCount,
+        target,
+        dryRun,
         processed: results.length,
         successes,
         failures,

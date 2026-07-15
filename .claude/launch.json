@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "integrations",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && CRON_SECRET=local-test-secret EMAIL_DEV_MODE=true yarn workspace @pyre/integrations dev --port 4330"],
+      "port": 4330
+    },
+    {
       "name": "landing-page",
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/landing-page dev"],
