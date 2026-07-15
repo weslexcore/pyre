@@ -1,8 +1,9 @@
 import { Button, Hr, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
+import { emailLink } from '../components/utm';
 import type { IntroFollowUpProps } from '../types';
 
-const BOOK_URL = 'https://pyresauna.com/events';
+const BOOK_URL = emailLink('https://pyresauna.com/events', 'post-intro-offer', 'book-next-session');
 
 export function IntroFollowUp({ firstName, unsubscribeUrl }: IntroFollowUpProps) {
   return (
@@ -17,8 +18,8 @@ export function IntroFollowUp({ firstName, unsubscribeUrl }: IntroFollowUpProps)
         - clear-headed and a little bit invincible.
       </Text>
       <Text style={text}>
-        If you started with our intro offer, your second credit is already on your account - no
-        expiration pressure, just pick a session that fits your week.
+        If you started with our intro offer, your second credit is already on your account - just
+        pick a session that fits your week.
       </Text>
 
       <Button href={BOOK_URL} style={button}>

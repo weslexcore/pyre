@@ -1,8 +1,9 @@
 import { Button, Hr, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
+import { emailLink } from '../components/utm';
 import type { CreditExpiryReminderProps } from '../types';
 
-const BOOK_URL = 'https://pyresauna.com/events';
+const BOOK_URL = emailLink('https://pyresauna.com/events', 'credit-expiry', 'book-before-expiry');
 
 export function CreditExpiryReminder({
   firstName,

@@ -1,5 +1,6 @@
 import { Button, Hr, Section, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
+import { emailLink } from '../components/utm';
 import type { CreditPackPitchProps } from '../types';
 
 // Pack lineup mirrors the landing page (apps/landing-page/src/lib/sessions.ts) -
@@ -9,19 +10,19 @@ const PACKS = [
     name: 'Duo // 2 credits',
     price: '$45',
     detail: 'Come for a special event, stay for 2 hours, or come back again.',
-    href: 'https://momence.com/m/702636',
+    href: emailLink('https://momence.com/m/702636', 'post-intro-offer', 'pack-duo'),
   },
   {
     name: 'Circle // 4 credits',
     price: '$85',
     detail: 'Build momentum - come back often or bring your circle.',
-    href: 'https://momence.com/m/630915',
+    href: emailLink('https://momence.com/m/630915', 'post-intro-offer', 'pack-circle'),
   },
   {
     name: 'Ritual // 8 credits',
     price: '$165',
     detail: 'Our best value - designed for consistency, connection, and shared experiences.',
-    href: 'https://momence.com/m/630916',
+    href: emailLink('https://momence.com/m/630916', 'post-intro-offer', 'pack-ritual'),
   },
 ];
 
@@ -65,7 +66,10 @@ export function CreditPackPitch({ firstName, unsubscribeUrl }: CreditPackPitchPr
         ))}
       </Section>
 
-      <Button href="https://momence.com/m/630916" style={button}>
+      <Button
+        href={emailLink('https://momence.com/m/630916', 'post-intro-offer', 'ritual-cta')}
+        style={button}
+      >
         Get the Ritual pack
       </Button>
 
