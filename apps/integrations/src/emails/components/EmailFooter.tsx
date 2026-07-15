@@ -1,9 +1,13 @@
 import { Img, Link, Section, Text } from '@react-email/components';
 import { ASSET_BASE } from './assets';
 import { COLORS } from './colors';
+import { emailLink } from './utm';
 
+// Instagram stays bare: a third-party profile link where utm params are noise.
 const INSTAGRAM_URL = 'https://instagram.com/pyre_sauna';
-const WEBSITE_URL = 'https://pyresauna.com';
+// The footer is shared by every template (transactional included), so it gets
+// a generic campaign rather than a per-journey one.
+const WEBSITE_URL = emailLink('https://pyresauna.com', 'email-footer', 'website-badge');
 const MAILING_ADDRESS = '1000 Westover Hills Blvd. Richmond, VA 23225 USA';
 
 const footer = {

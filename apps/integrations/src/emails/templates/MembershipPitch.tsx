@@ -1,5 +1,6 @@
 import { Button, Hr, Section, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
+import { emailLink } from '../components/utm';
 import type { MembershipPitchProps } from '../types';
 
 // Mirrors apps/landing-page/src/lib/membership.ts - update both together.
@@ -7,7 +8,7 @@ const TIERS = [
   {
     name: 'Founding Limited - $119/month',
     detail: '8 credits every month, plus 1 guest pass per month and 10% off other purchases.',
-    href: 'https://momence.com/m/633377',
+    href: emailLink('https://momence.com/m/633377', 'post-intro-offer', 'founding-limited'),
     buttonColor: COLORS.sky,
     buttonText: 'BECOME A FOUNDING MEMBER',
     buttonTextColor: COLORS.creme,
@@ -16,11 +17,11 @@ const TIERS = [
     name: 'Founding Unlimited - $199/month for life',
     detail:
       "Unlimited access - use 12 credits and you'll save over $250. Includes 4 guest passes per month (up to $180 value) and 10% off other purchases. ",
-    href: 'https://momence.com/m/756341',
+    href: emailLink('https://momence.com/m/756341', 'post-intro-offer', 'founding-unlimited'),
     buttonColor: COLORS.red,
     buttonText: 'BECOME A FOUNDING MEMBER',
     buttonTextColor: COLORS.creme,
-    },
+  },
 ];
 
 const tierName = {
@@ -47,8 +48,7 @@ export function MembershipPitch({ firstName, unsubscribeUrl }: MembershipPitchPr
       <Text style={heading}>Ready to make it official, {firstName}?</Text>
       <Text style={text}>
         If the sauna is becoming part of your rhythm, a founding membership is the best way to keep
-        it - locked-in pricing, guest passes to share the heat, and no math before every
-        visit.
+        it - locked-in pricing, guest passes to share the heat, and no math before every visit.
       </Text>
 
       <Section>
@@ -56,9 +56,12 @@ export function MembershipPitch({ firstName, unsubscribeUrl }: MembershipPitchPr
           <Section key={tier.name}>
             <Text style={tierName}>{tier.name}</Text>
             <Text style={tierDetail}>{tier.detail}</Text>
-            <Button href={tier.href} style={{ ...button, backgroundColor: tier.buttonColor, color: tier.buttonTextColor }}>
+            <Button
+              href={tier.href}
+              style={{ ...button, backgroundColor: tier.buttonColor, color: tier.buttonTextColor }}
+            >
               {tier.buttonText}
-            </Button> 
+            </Button>
           </Section>
         ))}
       </Section>

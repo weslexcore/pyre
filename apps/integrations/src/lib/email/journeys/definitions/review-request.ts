@@ -13,6 +13,9 @@ const REQUESTED_TAG = 'Review Requested';
 
 function getReviewUrl(): string {
   // Source: apps/social/posts/google-review-card (the QR postcard).
+  // Deliberately NO utm params: it's a Google deep link we don't control —
+  // extra query params can break the write-a-review flow, and we get click
+  // attribution from Resend's click webhook instead.
   return import.meta.env.GOOGLE_REVIEW_URL ?? 'https://g.page/r/CbPLgfm6vte6EAI/review';
 }
 

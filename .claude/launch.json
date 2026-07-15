@@ -8,6 +8,12 @@
       "port": 4330
     },
     {
+      "name": "integrations-email-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/integrations email"],
+      "port": 3030
+    },
+    {
       "name": "landing-page",
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/landing-page dev"],
