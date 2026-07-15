@@ -5,7 +5,7 @@ import type { ReviewRequestProps } from '../types';
 export function ReviewRequest({ firstName, reviewUrl, unsubscribeUrl }: ReviewRequestProps) {
   return (
     <EmailLayout
-      preview="You know Pyre by now — mind sharing the heat?"
+      preview="You know Pyre by now - mind sharing the heat?"
       background="trees"
       unsubscribeUrl={unsubscribeUrl}
     >
@@ -16,7 +16,7 @@ export function ReviewRequest({ firstName, reviewUrl, unsubscribeUrl }: ReviewRe
       </Text>
       <Text style={text}>
         If Pyre has earned a place in your week, would you take a minute to say so in a Google
-        review? It's the single biggest thing that helps new people find us — and it genuinely keeps
+        review? It's the single biggest thing that helps new people find us - and it genuinely keeps
         the fire going.
       </Text>
 
@@ -27,7 +27,7 @@ export function ReviewRequest({ firstName, reviewUrl, unsubscribeUrl }: ReviewRe
       <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
       <Text style={text}>
         And if anything about your visits hasn't been right, skip the review and reply here instead
-        — we want to fix it.
+        - we want to fix it.
       </Text>
       <Text style={text}>Thank you. Wes + Julien</Text>
     </EmailLayout>

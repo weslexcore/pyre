@@ -13,17 +13,17 @@ export function CreditExpiryReminder({
 }: CreditExpiryReminderProps) {
   return (
     <EmailLayout
-      preview={`Your ${creditsLabel} expire${daysLeft === 1 ? 's tomorrow' : ` on ${expiresOn}`} — come use them`}
+      preview={`Your ${creditsLabel} expire${daysLeft === 1 ? 's tomorrow' : ` on ${expiresOn}`} - come use them`}
       background="lamps"
       unsubscribeUrl={unsubscribeUrl}
     >
       <Text style={heading}>Don't let the heat go to waste, {firstName}</Text>
       <Text style={text}>
         You still have {creditsLabel} on your account, and they expire on {expiresOn}
-        {daysLeft <= 3 ? ` — that's only ${daysLeft} day${daysLeft === 1 ? '' : 's'} away` : ''}.
+        {daysLeft <= 3 ? ` - that's only ${daysLeft} day${daysLeft === 1 ? '' : 's'} away` : ''}.
       </Text>
       <Text style={text}>
-        Grab a spot at any upcoming session — social, silent, or guided — and put them to good use.
+        Grab a spot at any upcoming session - social, silent, or guided - and put them to good use.
       </Text>
 
       <Button href={BOOK_URL} style={button}>
@@ -32,7 +32,7 @@ export function CreditExpiryReminder({
 
       <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
       <Text style={text}>
-        Can't make it in time? Reply and we'll see what we can do — we'd rather you sweat than lose
+        Can't make it in time? Reply and we'll see what we can do - we'd rather you sweat than lose
         them.
       </Text>
       <Text style={text}>Wes + Julien</Text>

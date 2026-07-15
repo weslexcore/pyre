@@ -14,10 +14,10 @@ export function IntroFollowUp({ firstName, unsubscribeUrl }: IntroFollowUpProps)
       <Text style={heading}>How was it, {firstName}?</Text>
       <Text style={text}>
         We hope your first session left you feeling like we do after a good sweat and a cold plunge
-        — clear-headed and a little bit invincible.
+        - clear-headed and a little bit invincible.
       </Text>
       <Text style={text}>
-        If you started with our intro offer, your second credit is already on your account — no
+        If you started with our intro offer, your second credit is already on your account - no
         expiration pressure, just pick a session that fits your week.
       </Text>
 
@@ -27,7 +27,7 @@ export function IntroFollowUp({ firstName, unsubscribeUrl }: IntroFollowUpProps)
 
       <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
       <Text style={text}>
-        Questions about heat, cold, breathwork, or anything in between? Just reply — one of us will
+        Questions about heat, cold, breathwork, or anything in between? Just reply - one of us will
         answer personally.
       </Text>
       <Text style={text}>Wes + Julien</Text>

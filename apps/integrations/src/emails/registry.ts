@@ -24,7 +24,7 @@ export const EMAIL_TEMPLATES: Registry = {
     Component: ConfirmationEmail,
   },
   'first-timer-welcome': {
-    subject: () => 'Welcome to Pyre — what to expect',
+    subject: () => 'Welcome to Pyre - what to expect',
     Component: FirstTimerWelcome,
   },
   'intro-follow-up': {
@@ -32,11 +32,11 @@ export const EMAIL_TEMPLATES: Registry = {
     Component: IntroFollowUp,
   },
   'credit-pack-pitch': {
-    subject: () => 'Make the sauna a ritual — credit packs',
+    subject: () => 'Make the sauna a ritual - credit packs',
     Component: CreditPackPitch,
   },
   'membership-pitch': {
-    subject: () => 'Founding memberships — lock in your rate for life',
+    subject: () => 'Founding memberships - lock in your rate for life',
     Component: MembershipPitch,
   },
   'review-request': {
