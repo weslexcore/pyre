@@ -17,7 +17,7 @@ export function UnusedCreditReminder({
     >
       <Text style={heading}>The sauna misses you, {firstName}</Text>
       <Text style={text}>
-        It's been a little while — and you still have {creditsLabel} on your account, ready whenever
+        It's been a little while - and you still have {creditsLabel} on your account, ready whenever
         you are.
       </Text>
       <Text style={text}>
@@ -31,7 +31,7 @@ export function UnusedCreditReminder({
 
       <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
       <Text style={text}>
-        Life gets busy — no guilt here. If something kept you away that we can fix, reply and tell
+        Life gets busy - no guilt here. If something kept you away that we can fix, reply and tell
         us.
       </Text>
       <Text style={text}>Wes + Julien</Text>

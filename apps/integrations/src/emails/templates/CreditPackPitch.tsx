@@ -2,7 +2,7 @@ import { Button, Hr, Section, Text } from '@react-email/components';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { CreditPackPitchProps } from '../types';
 
-// Pack lineup mirrors the landing page (apps/landing-page/src/lib/sessions.ts) —
+// Pack lineup mirrors the landing page (apps/landing-page/src/lib/sessions.ts) -
 // update both together when pricing changes.
 const PACKS = [
   {
@@ -14,13 +14,13 @@ const PACKS = [
   {
     name: 'Circle // 4 credits',
     price: '$85',
-    detail: 'Build momentum — come back often or bring your circle.',
+    detail: 'Build momentum - come back often or bring your circle.',
     href: 'https://momence.com/m/630915',
   },
   {
     name: 'Ritual // 8 credits',
     price: '$165',
-    detail: 'Our best value — designed for consistency, connection, and shared experiences.',
+    detail: 'Our best value - designed for consistency, connection, and shared experiences.',
     href: 'https://momence.com/m/630916',
   },
 ];
@@ -42,13 +42,13 @@ const packDetail = {
 export function CreditPackPitch({ firstName, unsubscribeUrl }: CreditPackPitchProps) {
   return (
     <EmailLayout
-      preview="Credit packs — the easiest way to make the sauna a habit"
+      preview="Credit packs - the easiest way to make the sauna a habit"
       background="lamps"
       unsubscribeUrl={unsubscribeUrl}
     >
       <Text style={heading}>Make it a ritual, {firstName}</Text>
       <Text style={text}>
-        The benefits of sauna and cold plunge compound with consistency — better sleep, faster
+        The benefits of sauna and cold plunge compound with consistency - better sleep, faster
         recovery, a calmer baseline. Credit packs make coming back easy (and cheaper than single
         sessions).
       </Text>
@@ -58,7 +58,7 @@ export function CreditPackPitch({ firstName, unsubscribeUrl }: CreditPackPitchPr
         {PACKS.map((pack) => (
           <Section key={pack.name}>
             <Text style={packName}>
-              {pack.name} — {pack.price}
+              {pack.name} - {pack.price}
             </Text>
             <Text style={packDetail}>{pack.detail}</Text>
           </Section>
@@ -71,7 +71,7 @@ export function CreditPackPitch({ firstName, unsubscribeUrl }: CreditPackPitchPr
 
       <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />
       <Text style={text}>
-        Not sure which fits? Reply and tell us how often you want to come — we'll point you to the
+        Not sure which fits? Reply and tell us how often you want to come - we'll point you to the
         right one.
       </Text>
       <Text style={text}>Wes + Julien</Text>
