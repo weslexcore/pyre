@@ -1,15 +1,9 @@
-// STRUCTURE-ONLY STUB — not wired up yet.
-//
-// Future: the catalog of tag-based journeys. A scheduler will walk enrolled
-// members and advance them through each journey's steps.
-
+import { postIntroOffer } from './definitions/post-intro-offer';
+import { reviewRequest } from './definitions/review-request';
 import type { Journey } from './types';
 
-export const JOURNEYS: Journey[] = [
-  // Example shape (disabled until journeys are built):
-  // {
-  //   id: 'new-member-welcome',
-  //   enrollTag: 'Active Guest',
-  //   steps: [{ delayHours: 24, template: 'first-timer-welcome' }],
-  // },
-];
+// The journey catalog. Journeys are ENROLLMENT-based (one row per member,
+// unique forever — suits once-per-lifetime flows). Repeatable per-pack sends
+// (credit expiry, unused credits) are direct sweep jobs instead — see
+// lib/email/triggers/credit-reminders.ts.
+export const JOURNEYS: Journey[] = [postIntroOffer, reviewRequest];

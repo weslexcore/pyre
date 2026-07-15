@@ -26,9 +26,45 @@ export interface FirstTimerEmailProps {
   directionsUrl: string;
 }
 
+// Marketing templates all carry unsubscribeUrl — sendTemplate() injects it for
+// kind: 'marketing' sends and EmailLayout renders it in the footer.
+export interface MarketingEmailBaseProps {
+  firstName: string;
+  unsubscribeUrl?: string;
+}
+
+export type IntroFollowUpProps = MarketingEmailBaseProps;
+
+export type CreditPackPitchProps = MarketingEmailBaseProps;
+
+export type MembershipPitchProps = MarketingEmailBaseProps;
+
+export interface ReviewRequestProps extends MarketingEmailBaseProps {
+  reviewUrl: string;
+}
+
+export interface CreditExpiryReminderProps extends MarketingEmailBaseProps {
+  /** e.g. "3 credits" or "$50 in credit" */
+  creditsLabel: string;
+  /** e.g. "August 12" */
+  expiresOn: string;
+  daysLeft: number;
+}
+
+export interface UnusedCreditReminderProps extends MarketingEmailBaseProps {
+  /** e.g. "2 credits" or "$25 in credit" */
+  creditsLabel: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
+  'intro-follow-up': IntroFollowUpProps;
+  'credit-pack-pitch': CreditPackPitchProps;
+  'membership-pitch': MembershipPitchProps;
+  'review-request': ReviewRequestProps;
+  'credit-expiry-reminder': CreditExpiryReminderProps;
+  'unused-credit-reminder': UnusedCreditReminderProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

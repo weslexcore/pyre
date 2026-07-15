@@ -25,7 +25,8 @@ const DEFAULT_HEADER = 'confirmation-header.jpg';
 
 const DEFAULT_CONTENT: ConfirmationContent = {
   headingText: "You're booked",
-  introBody: "We've got your session reserved. Arrive anytime during the first hour of your session.",
+  introBody:
+    "We've got your session reserved. Arrive anytime during the first hour of your session.",
   headerImage: DEFAULT_HEADER,
   faqs: DEFAULT_FAQS,
 };
@@ -54,7 +55,8 @@ export const CONFIRMATION_CONTENT: Record<string, ConfirmationContent> = {
   },
   'open hours': {
     headingText: "You're booked",
-    introBody: "We've got your session reserved. Arrive anytime during the first hour of your session.",
+    introBody:
+      "We've got your session reserved. Arrive anytime during the first hour of your session.",
     headerImage: DEFAULT_HEADER,
     faqs: FAQS_BY_TYPE['open hours'],
   },

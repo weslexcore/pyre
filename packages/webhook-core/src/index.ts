@@ -53,6 +53,7 @@ export { createWebhookLogger, type WebhookLogger } from './logger';
 export {
   listTags,
   type MailchimpTag,
+  setSubscriberStatus,
   setSubscriberTags,
   type SubscriberAddress,
   type SubscriberTag,

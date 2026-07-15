@@ -16,7 +16,12 @@
     "POSTHOG_*",
     "REDIS_URL",
     "RESEND_*",
-    "EMAIL_*"
+    "EMAIL_*",
+    "SUPABASE_*",
+    "CRON_SECRET",
+    "UNSUBSCRIBE_SECRET",
+    "GOOGLE_REVIEW_URL",
+    "JOURNEY_FAST_MODE"
   ],
   "tasks": {
     "build": {

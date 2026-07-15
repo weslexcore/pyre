@@ -81,6 +81,37 @@ export async function upsertSubscriber({
   log.info(`Subscriber ${email} upserted successfully`);
 }
 
+// Set a member's subscription status (e.g. mirror an unsubscribe collected
+// elsewhere — the integrations app's suppression list is the source of truth).
+// 404 (never was a subscriber) is treated as success.
+export async function setSubscriberStatus(
+  email: string,
+  status: 'subscribed' | 'unsubscribed'
+): Promise<void> {
+  const { baseUrl, audienceId, headers } = getConfig();
+  const hash = getSubscriberHash(email);
+
+  log.info(`Setting status=${status} on ${email}`);
+
+  const response = await fetch(`${baseUrl}/lists/${audienceId}/members/${hash}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ status }),
+  });
+
+  if (response.status === 404) {
+    log.info(`Subscriber ${email} not in audience — nothing to update`);
+    return;
+  }
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Mailchimp status update failed (${response.status}): ${error.detail}`);
+  }
+
+  log.info(`Status set to ${status} for ${email}`);
+}
+
 // --- Tags ---
 
 export interface SubscriberTag {
