@@ -1,7 +1,6 @@
-// The cron job registry. A single hourly Vercel cron hits /api/cron/tick,
+// The cron job registry. A single hourly QStash schedule hits /api/cron/tick,
 // which runs every registered job sequentially inside a shared time budget —
-// one cron entry to stay within Vercel cron limits, one code path for
-// staggering and dry runs.
+// one schedule entry, one code path for staggering and dry runs.
 //
 // Job contract: read the world (Momence is the source of truth), decide, act
 // idempotently (send-log claims / redis cursors make repeat runs no-ops), and

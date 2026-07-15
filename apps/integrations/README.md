@@ -23,7 +23,7 @@ flowchart LR
         MOM["Momence<br/>(bookings, members)"]
         RESWH["Resend<br/>(email events)"]
         MCWH["Mailchimp<br/>(unsubscribes)"]
-        CRON["Vercel Cron<br/>(hourly)"]
+        CRON["Upstash QStash<br/>schedule (hourly)"]
         USER["Email recipient<br/>(unsubscribe click)"]
     end
 
@@ -103,8 +103,8 @@ Key design decisions:
 | `/api/webhooks/momence` | POST | Shared secret + optional HMAC signature | Member, address, and booking events from Momence |
 | `/api/webhooks/momence-backfill` | POST | `MOMENCE_BACKFILL_SECRET` | Manual bulk sync of Momence members to Mailchimp/Resend |
 | `/api/webhooks/resend` | POST | Svix HMAC signature | Email engagement events + bounce/complaint suppression |
-| `/api/webhooks/mailchimp` | GET/POST | URL secret param | Mailchimp unsubscribes/cleans into the suppression store |
-| `/api/cron/tick` | GET | `Bearer CRON_SECRET` | Hourly cron entry point — runs all registered jobs |
+| `/api/webhooks/mailchimp` | GET/POST | URL secret param + HMAC signature | Mailchimp unsubscribes/cleans into the suppression store |
+| `/api/cron/tick` | GET/POST | `Bearer CRON_SECRET` | Hourly cron entry point (QStash schedule) — runs all registered jobs |
 | `/api/unsubscribe` | GET/POST | HMAC-signed token | Footer-link (GET) and RFC 8058 one-click (POST) unsubscribe |
 | `/api/img/[...path]` | GET | none | Caching proxy for Momence session images used in emails |
 
@@ -115,14 +115,17 @@ landing-page admin dashboard reads those traces for observability.
 
 ## The hourly cron
 
-A single Vercel cron entry (`vercel.json`) hits `/api/cron/tick` once an hour. The
+An Upstash QStash schedule (cron `0 * * * *`) POSTs to `/api/cron/tick` once an
+hour, forwarding the auth header via `Upstash-Forward-Authorization: Bearer
+$CRON_SECRET`. (Vercel's own crons require the Pro plan; QStash schedules are free
+and Upstash is already part of the stack.) The
 tick runs every job in [src/lib/cron/jobs.ts](src/lib/cron/jobs.ts) sequentially
 inside a shared ~50s time budget. Jobs that run out of time persist a Redis cursor
 and resume next tick.
 
 ```mermaid
 flowchart TD
-    TICK["/api/cron/tick (hourly)"] --> J1
+    TICK["/api/cron/tick<br/>(hourly QStash schedule)"] --> J1
     subgraph jobs["Jobs, in order, sharing one time budget"]
         J1["1 · sales-poll<br/>poll Momence /host/sales for new purchases"]
         J2["2 · journey-sweeps<br/>scan member audiences, enroll matches"]

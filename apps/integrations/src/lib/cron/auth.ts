@@ -1,5 +1,5 @@
-// Cron route auth. Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}`
-// to cron paths when the CRON_SECRET env var is set on the project; the same
+// Cron route auth. The QStash schedule forwards `Authorization: Bearer
+// ${CRON_SECRET}` via its `Upstash-Forward-Authorization` header; the same
 // header works for manual curl testing.
 
 export function isCronAuthorized(request: Request): boolean {

@@ -89,7 +89,7 @@ Redis cursor and resumes on the next tick.
 
 ```mermaid
 flowchart TD
-    CRON["Vercel cron: 0 * * * *"] --> AUTH{"Bearer CRON_SECRET valid?"}
+    CRON["Upstash QStash schedule: 0 * * * *<br/>POST with forwarded Authorization header"] --> AUTH{"Bearer CRON_SECRET valid?"}
     AUTH -- no --> DENY["401"]
     AUTH -- yes --> SP
 
