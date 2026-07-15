@@ -32,10 +32,12 @@ interface ImportMetaEnv {
   readonly RESEND_WEBHOOK_SECRET?: string;
   // Mailchimp audience webhook shared secret (query param)
   readonly MAILCHIMP_WEBHOOK_SECRET?: string;
+  // Mailchimp webhook signing secret (X-Mailchimp-Signature HMAC verification)
+  readonly MAILCHIMP_WEBHOOK_SIGNING_SECRET?: string;
   // Supabase durable engine state (journeys, send log, suppressions) — service-role, server-only
   readonly SUPABASE_URL?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
-  // Vercel cron auth (Vercel sends "Authorization: Bearer ${CRON_SECRET}")
+  // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)
   readonly UNSUBSCRIBE_SECRET?: string;
