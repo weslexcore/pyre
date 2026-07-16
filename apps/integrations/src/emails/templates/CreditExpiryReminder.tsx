@@ -20,7 +20,7 @@ export function CreditExpiryReminder({
     >
       <Text style={heading}>Don't let the heat go to waste, {firstName}</Text>
       <Text style={text}>
-        You still have {creditsLabel} on your account, and they expire on {expiresOn}
+        You still have {creditsLabel}, and they expire on {expiresOn}
         {daysLeft <= 3 ? ` - that's only ${daysLeft} day${daysLeft === 1 ? '' : 's'} away` : ''}.
       </Text>
       <Text style={text}>
