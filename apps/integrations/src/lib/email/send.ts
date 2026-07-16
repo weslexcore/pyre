@@ -155,6 +155,14 @@ export async function sendTemplate<K extends EmailTemplateKey>({
   } catch (error) {
     // Free the claim so a later sweep can retry (at-most-once semantics).
     if (claimedId) await releaseSend(claimedId);
+    // Durable failure record for the admin dashboard — without the send_key so
+    // the retry path stays open (the claim above is the only dedupe holder).
+    await recordSend(
+      { ...logEntry, sendKey: undefined },
+      'failed',
+      undefined,
+      error instanceof Error ? error.message : String(error)
+    );
     throw error;
   }
 }

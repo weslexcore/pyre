@@ -69,14 +69,15 @@ export async function attachResendId(id: string, resendId: string | undefined): 
 export async function recordSend(
   entry: SendLogEntry,
   status: 'sent' | 'skipped' | 'suppressed' | 'failed',
-  resendId?: string
+  resendId?: string,
+  errorMessage?: string
 ): Promise<void> {
   const db = getDb();
   if (!db) return;
 
   const { error } = await db
     .from('email_sends')
-    .insert({ ...toRow(entry, status), resend_id: resendId ?? null });
+    .insert({ ...toRow(entry, status), resend_id: resendId ?? null, error: errorMessage ?? null });
 
   if (error) {
     console.error(`[SendLog] Record failed for ${entry.email}/${entry.template}: ${error.message}`);

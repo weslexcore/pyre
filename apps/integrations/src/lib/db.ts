@@ -33,6 +33,7 @@ export interface EmailSendRow {
   send_key: string | null;
   resend_id: string | null;
   status: 'sent' | 'skipped' | 'suppressed' | 'failed';
+  error: string | null;
   sent_at: string;
 }
 

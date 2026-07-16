@@ -37,6 +37,8 @@ interface ImportMetaEnv {
   // Supabase durable engine state (journeys, send log, suppressions) — service-role, server-only
   readonly SUPABASE_URL?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
+  // Admin dashboard allowlist (comma-separated emails, same contract as landing-page)
+  readonly ADMIN_EMAILS?: string;
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)

@@ -1,0 +1,11 @@
+/* Admin dashboard styles — Tailwind v4 plus the Pyre brand variables the
+ * landing-page admin pages use, so the two dashboards read as one family. */
+@import "tailwindcss";
+
+:root {
+  --pyre-black: oklch(0.2509 0.0111 99.35); /* #23221c */
+  --pyre-creme: oklch(0.959 0.0115 84.58); /* #f5f1e9 */
+  --pyre-red: oklch(0.6015 0.1676 35.22); /* #d15232 */
+  --pyre-blue: oklch(0.392 0.0671 249.22); /* #274868 */
+  --pyre-gold: oklch(0.78 0.12 85); /* #dbb155 */
+}
