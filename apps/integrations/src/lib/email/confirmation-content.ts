@@ -82,6 +82,9 @@ export const CONFIRMATION_CONTENT: Record<string, ConfirmationContent> = {
   },
 };
 
+/** Canonical session types with dedicated confirmation copy (admin preview presets). */
+export const CONFIRMATION_SESSION_TYPES = Object.keys(CONFIRMATION_CONTENT);
+
 /** Returns the confirmation copy for a session type, or DEFAULT_CONTENT. */
 export function getConfirmationContent(sessionType: string): ConfirmationContent {
   return CONFIRMATION_CONTENT[sessionType] ?? DEFAULT_CONTENT;

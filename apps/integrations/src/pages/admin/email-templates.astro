@@ -1,10 +1,15 @@
 ---
-// Email monitoring dashboard. Gated server-side: the page never renders data
-// for non-admins, and the /api/admin/* routes it calls re-check the session on
-// every request (the page gate is UX; the API gate is the security boundary).
-import { EmailDashboard } from '@/components/admin/EmailDashboard';
+// Email template browser. Same server-side gate as /admin: the page never
+// renders for non-admins, and the /api/admin/email-preview route it calls
+// re-checks the session on every request (the page gate is UX; the API gate is
+// the security boundary).
+import { EmailTemplatePreview } from '@/components/admin/EmailTemplatePreview';
+import { EMAIL_PREVIEW_PROPS } from '@/emails/preview-props';
+import { EMAIL_TEMPLATES } from '@/emails/registry';
+import type { EmailTemplateKey } from '@/emails/types';
 import { isAdminEmail } from '@/lib/auth/admin';
 import { validateSession } from '@/lib/auth/session';
+import { CONFIRMATION_SESSION_TYPES } from '@/lib/email/confirmation-content';
 import '@/styles/admin.css';
 
 Astro.response.headers.set('Cache-Control', 'private, no-store');
@@ -13,7 +18,12 @@ const { session } = await validateSession(Astro.cookies);
 const user = session.isAuthenticated ? session.user : null;
 const isAdmin = !!user?.email && isAdminEmail(user.email);
 
-const authError = Astro.url.searchParams.get('error');
+// Registry order; each entry pre-filled with the same sample props the React
+// Email dev server (`yarn email`) uses.
+const templates = (Object.keys(EMAIL_TEMPLATES) as EmailTemplateKey[]).map((key) => ({
+  key,
+  defaultProps: EMAIL_PREVIEW_PROPS[key] as unknown as Record<string, unknown>,
+}));
 ---
 
 <!doctype html>
@@ -22,22 +32,17 @@ const authError = Astro.url.searchParams.get('error');
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Pyre Email Admin</title>
+    <title>Pyre Email Templates</title>
   </head>
   <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
-    <main class="mx-auto max-w-6xl px-4 py-10">
+    <main class="mx-auto max-w-7xl px-4 py-10">
       {
         !user ? (
           <div class="mx-auto max-w-md py-16 text-center">
-            <h1 class="mb-4 text-2xl font-semibold">Pyre Email Admin</h1>
+            <h1 class="mb-4 text-2xl font-semibold">Pyre Email Templates</h1>
             <p class="mb-6 text-white/60">Sign in with your Momence account to continue.</p>
-            {authError && (
-              <p class="mb-4 font-mono text-xs text-[var(--pyre-red)]">
-                Sign-in failed ({authError}). Try again.
-              </p>
-            )}
             <a
-              href="/api/auth/login?returnUrl=/admin"
+              href="/api/auth/login?returnUrl=/admin/email-templates"
               class="inline-block rounded-md bg-[var(--pyre-red)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90"
             >
               Log In
@@ -58,17 +63,18 @@ const authError = Astro.url.searchParams.get('error');
           <>
             <header class="mb-8 flex items-start justify-between gap-4">
               <div>
-                <h1 class="text-2xl font-semibold">Email</h1>
+                <h1 class="text-2xl font-semibold">Email Templates</h1>
                 <p class="mt-1 font-mono text-xs text-white/40">
-                  Sends, errors, deliverability, and journeys — Pyre integrations service.
+                  Every registered template, rendered with editable props — Pyre integrations
+                  service.
                 </p>
               </div>
               <div class="flex items-center gap-3 font-mono text-xs uppercase tracking-wide">
                 <a
-                  href="/admin/email-templates"
+                  href="/admin"
                   class="rounded-md border border-white/20 px-3 py-1.5 font-bold text-[var(--pyre-creme)] transition-colors hover:border-white/40 hover:bg-white/10"
                 >
-                  Email Templates
+                  ← Email Admin
                 </a>
                 <span class="text-white/40">{user.email}</span>
                 <a
@@ -79,7 +85,11 @@ const authError = Astro.url.searchParams.get('error');
                 </a>
               </div>
             </header>
-            <EmailDashboard client:load />
+            <EmailTemplatePreview
+              client:load
+              templates={templates}
+              confirmationSessionTypes={CONFIRMATION_SESSION_TYPES}
+            />
           </>
         )
       }
