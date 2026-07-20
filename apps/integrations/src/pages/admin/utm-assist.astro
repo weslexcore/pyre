@@ -1,0 +1,32 @@
+---
+// UTM link builder. Blog posts come from the landing site's public
+// /api/blog-posts.json (fetched server-side at request time); events load
+// lazily in the client via the admin-gated /api/admin/events proxy.
+import { UtmAssist } from '@/components/admin/UtmAssist';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const landingOrigin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+
+interface BlogPostRef {
+  slug: string;
+  title: string;
+}
+
+let posts: BlogPostRef[] = [];
+try {
+  const res = await fetch(`${landingOrigin}/api/blog-posts.json`);
+  if (res.ok) {
+    const json = (await res.json()) as { posts?: BlogPostRef[] };
+    posts = Array.isArray(json.posts) ? json.posts : [];
+  }
+} catch {
+  // The blog selector shows an empty state; every other destination still works.
+}
+---
+
+<AdminLayout
+  title="UTM Assist"
+  subtitle="Build a tracked link to the site, a blog post, an event, or any external URL."
+>
+  <UtmAssist client:load origin={landingOrigin} blogPosts={posts} />
+</AdminLayout>
