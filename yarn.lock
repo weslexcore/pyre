@@ -2578,6 +2578,7 @@ __metadata:
     "@types/react-dom": "npm:^19.1.7"
     astro: "npm:6.2.1"
     posthog-node: "npm:^5.38.5"
+    qr-code-styling: "npm:^1.9.2"
     react: "npm:^19.1.1"
     react-dom: "npm:^19.1.1"
     react-email: "npm:^6.6.0"
