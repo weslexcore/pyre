@@ -1,0 +1,14 @@
+---
+// Email monitoring dashboard (moved here from /admin when that became the tool
+// directory). The /api/admin/* routes it calls re-check the session on every
+// request — the AdminLayout gate is UX; the API gate is the security boundary.
+import { EmailDashboard } from '@/components/admin/EmailDashboard';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Email Performance"
+  subtitle="Sends, errors, deliverability, and journeys — Pyre integrations service."
+>
+  <EmailDashboard client:load />
+</AdminLayout>

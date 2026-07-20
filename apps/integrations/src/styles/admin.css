@@ -8,4 +8,18 @@
   --pyre-red: oklch(0.6015 0.1676 35.22); /* #d15232 */
   --pyre-blue: oklch(0.392 0.0671 249.22); /* #274868 */
   --pyre-gold: oklch(0.78 0.12 85); /* #dbb155 */
+  --pyre-sage: oklch(0.65 0.06 130); /* #839770 */
+}
+
+/* Font utilities the admin components ported from the landing page rely on.
+ * The landing page binds these to its brand webfonts; here they fall back to
+ * system stacks with matching weights. */
+@layer utilities {
+  .font-mono-bold {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+  }
+  .font-primary-semibold {
+    font-weight: 600;
+  }
 }

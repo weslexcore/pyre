@@ -1,0 +1,82 @@
+---
+// Shared shell for every /admin page: head boilerplate, the allowlist check,
+// and the sticky header with the tool nav (mobile hamburger included).
+// Unauthenticated visitors never reach this layout — src/middleware.ts
+// redirects them to the login page at the site root and stores the validated
+// user in locals. The /api/admin/* routes each page calls re-check the session
+// on every request (this gate is UX; the API gate is the security boundary).
+import { AdminNav } from '@/components/admin/AdminNav';
+import { isAdminEmail } from '@/lib/auth/admin';
+import '@/styles/admin.css';
+
+interface Props {
+  title: string;
+  subtitle?: string;
+  /** Widens the content column (email templates preview needs the room). */
+  wide?: boolean;
+}
+
+const { title, subtitle, wide = false } = Astro.props;
+
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+const user = Astro.locals.adminUser ?? null;
+const isAdmin = !!user?.email && isAdminEmail(user.email);
+const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Pyre Admin</title>
+  </head>
+  <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
+    {
+      !isAdmin || !user ? (
+        <main class="mx-auto max-w-md px-4 py-16 text-center">
+          <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
+          <p class="text-white/60">You do not have access to this page.</p>
+          <p class="mt-4 font-mono text-xs text-white/40">
+            Signed in as {user?.email || '(no email)'} (id {user?.id ?? 'unknown'})
+          </p>
+          <a
+            href="/api/auth/logout"
+            class="mt-6 inline-block font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
+          >
+            Log out
+          </a>
+        </main>
+      ) : (
+        <>
+          <header class="sticky top-0 z-40 border-b border-white/10 bg-[var(--pyre-black)]">
+            <div
+              class={`relative mx-auto flex ${widthClass} items-center justify-between gap-4 px-4 py-3`}
+            >
+              <a
+                href="/admin"
+                class="shrink-0 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] hover:text-white"
+              >
+                Pyre Admin
+              </a>
+              <AdminNav
+                client:load
+                currentPath={Astro.url.pathname}
+                userEmail={user.email ?? ''}
+              />
+            </div>
+          </header>
+          <main class={`mx-auto ${widthClass} px-4 py-6`}>
+            <div class="mb-8">
+              <h1 class="text-2xl font-semibold">{title}</h1>
+              {subtitle && <p class="mt-1 font-mono text-xs text-white/40">{subtitle}</p>}
+            </div>
+            <slot />
+          </main>
+        </>
+      )
+    }
+  </body>
+</html>

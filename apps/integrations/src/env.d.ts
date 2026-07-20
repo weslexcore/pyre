@@ -22,6 +22,11 @@ interface ImportMetaEnv {
   // PostHog server-side event capture
   readonly POSTHOG_API_KEY?: string;
   readonly POSTHOG_HOST?: string;
+  // PostHog HogQL querying for the campaign-performance admin tool (personal
+  // API key with Query Read scope + numeric project id — the phc_ capture
+  // token cannot run queries)
+  readonly POSTHOG_PERSONAL_API_KEY?: string;
+  readonly POSTHOG_PROJECT_ID?: string;
   // Resend transactional + marketing email
   readonly RESEND_API_KEY?: string;
   readonly RESEND_FROM?: string;
@@ -52,7 +57,9 @@ interface ImportMetaEnv {
   // Dev-mode email whitelist gate
   readonly EMAIL_DEV_MODE?: string;
   readonly EMAIL_DEV_WHITELIST?: string;
-  // Public base URL for links in emails (e.g. https://pyresauna.com)
+  // Public base URL of the landing site (e.g. https://pyresauna.com). Used for
+  // links in emails, and by the admin tools for short-link origins, event
+  // links, and the blog-posts/events feeds.
   readonly PUBLIC_SITE_URL?: string;
   // Base URL for hosted email images (defaults to this app's production deployment)
   readonly PUBLIC_EMAIL_ASSET_BASE?: string;
@@ -60,4 +67,12 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+declare namespace App {
+  interface Locals {
+    // Set by src/middleware.ts for /admin/* pages: the authenticated Momence
+    // user (not yet allowlist-checked — AdminLayout enforces isAdminEmail).
+    adminUser?: import('./lib/auth/types').MomenceUserProfile;
+  }
 }
