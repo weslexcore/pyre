@@ -111,7 +111,30 @@ Key design decisions:
 Every webhook route is wrapped by `instrumentWebhook()`
 ([src/lib/webhooks/instrument.ts](src/lib/webhooks/instrument.ts)), which records a
 full execution trace (event type, per-step spans, duration, errors) to Redis. The
-landing-page admin dashboard reads those traces for observability.
+admin dashboard reads those traces for observability.
+
+### Admin dashboard
+
+`/` is the admin sign-in page (Momence OAuth + `ADMIN_EMAILS` allowlist); `/admin`
+is the tool directory. Every `/admin/*` page shares `AdminLayout` (server-side
+gate + responsive nav) and every `/api/admin/*` route re-checks the session via
+`requireAdmin`.
+
+| Route | Purpose |
+| --- | --- |
+| `/admin` | Tool directory |
+| `/admin/email` | Email performance — sends, errors, deliverability, journeys |
+| `/admin/email-templates` | Every registered template rendered with editable props |
+| `/admin/utm-assist` | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
+| `/admin/webhooks` | Webhook execution log + health stats |
+| `/admin/campaigns` | Campaign performance (short-link clicks + PostHog attribution) |
+
+The UTM/webhook/campaign tools were ported from the landing-page admin and read
+the same shared Upstash store via `@pyre/webhook-core`. Campaign performance
+additionally needs `POSTHOG_PERSONAL_API_KEY` (Query Read scope) and
+`POSTHOG_PROJECT_ID` set on this deployment. `PUBLIC_SITE_URL` supplies the
+landing-site origin for short links (`/s/<code>` redirects stay on the landing
+site), event links, and the blog-posts/events feeds UTM Assist consumes.
 
 ## The hourly cron
 
