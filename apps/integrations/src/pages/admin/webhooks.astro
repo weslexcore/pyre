@@ -1,0 +1,16 @@
+---
+// Webhook execution log. The /api/admin/webhook-* routes it calls re-check the
+// session on every request — the AdminLayout gate is UX; the API gate is the
+// security boundary.
+import { WebhookDashboard } from '@/components/admin/WebhookDashboard';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const siteOrigin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+---
+
+<AdminLayout
+  title="Webhook Executions"
+  subtitle="Webhook events from the last 14 days. Expand a row to see the full trace, payload, and headers."
+>
+  <WebhookDashboard client:load siteOrigin={siteOrigin} />
+</AdminLayout>
