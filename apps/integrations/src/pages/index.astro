@@ -1,18 +1,69 @@
 ---
-// Backend service — no public UI.
+// Admin sign-in for the Pyre integrations service. All /admin pages redirect
+// unauthenticated visitors here; after Momence OAuth the callback returns the
+// user to returnUrl. Signed-in admins skip straight to the dashboard.
+import { isAdminEmail } from '@/lib/auth/admin';
+import { validateSession } from '@/lib/auth/session';
+import '@/styles/admin.css';
+
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+// Only ever bounce back to local admin paths (avoids open redirects).
+const rawReturnUrl = Astro.url.searchParams.get('returnUrl') ?? '/admin';
+const returnUrl = /^\/admin(\/|\?|$)/.test(rawReturnUrl) ? rawReturnUrl : '/admin';
+const authError = Astro.url.searchParams.get('error');
+
+const { session } = await validateSession(Astro.cookies);
+const user = session.isAuthenticated ? session.user : null;
+
+if (user?.email && isAdminEmail(user.email)) {
+  return Astro.redirect(returnUrl, 302);
+}
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="robots" content="noindex" />
-    <title>Pyre Integrations</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Pyre Admin</title>
   </head>
-  <body>
-    <main>
-      <h1>Pyre Integrations</h1>
-      <p>Webhook + transactional email service. No public UI.</p>
+  <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
+    <main class="mx-auto max-w-md px-4 py-16 text-center">
+      {
+        user ? (
+          <>
+            <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
+            <p class="text-white/60">You do not have access to the admin tools.</p>
+            <p class="mt-4 font-mono text-xs text-white/40">
+              Signed in as {user.email || '(no email)'} (id {user.id})
+            </p>
+            <a
+              href="/api/auth/logout"
+              class="mt-6 inline-block font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
+            >
+              Log out
+            </a>
+          </>
+        ) : (
+          <>
+            <h1 class="mb-4 text-2xl font-semibold">Pyre Admin</h1>
+            <p class="mb-6 text-white/60">Sign in with your Momence account to continue.</p>
+            {authError && (
+              <p class="mb-4 font-mono text-xs text-[var(--pyre-red)]">
+                Sign-in failed ({authError}). Try again.
+              </p>
+            )}
+            <a
+              href={`/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`}
+              class="inline-block rounded-md bg-[var(--pyre-red)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90"
+            >
+              Log In
+            </a>
+          </>
+        )
+      }
     </main>
   </body>
 </html>
