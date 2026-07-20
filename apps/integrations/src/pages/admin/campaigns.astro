@@ -1,0 +1,14 @@
+---
+// Campaign performance report. The /api/admin/campaign-performance route it
+// calls re-checks the session on every request — the AdminLayout gate is UX;
+// the API gate is the security boundary.
+import { CampaignPerformance } from '@/components/admin/CampaignPerformance';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Campaign Performance"
+  subtitle="Short-link clicks from Redis; visits, signups, and bookings attributed by first-touch utm_campaign in PostHog."
+>
+  <CampaignPerformance client:load />
+</AdminLayout>

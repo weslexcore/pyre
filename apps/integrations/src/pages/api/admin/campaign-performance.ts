@@ -1,0 +1,213 @@
+// Campaign performance report, ported from the landing-page admin. Short-link
+// clicks come from the shared Upstash store; visits, signups, and bookings are
+// attributed by first-touch utm_campaign in PostHog.
+
+import { getRedis, listCampaignsWithLinks, listShortLinks } from '@pyre/webhook-core';
+import type { APIRoute } from 'astro';
+import { isPostHogQueryConfigured, queryHogQL } from '@/lib/analytics/posthog-query';
+import { requireAdmin } from '@/lib/auth/admin';
+
+const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+
+const CACHE_PREFIX = 'cache:campaign-perf:';
+const CACHE_TTL_SECONDS = 5 * 60;
+const ALLOWED_DAYS = [7, 30, 90];
+
+// Conversion events attributed via the person's first-touch utm_campaign.
+const SIGNUP_INTRO = 'Intro Offer Signup';
+const SIGNUP_MAILING = 'Mailing List Signup';
+const BOOKING = 'booking_completed';
+const CONVERSION_EVENTS = [SIGNUP_INTRO, SIGNUP_MAILING, BOOKING];
+
+interface CampaignRow {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: number;
+  linkCount: number;
+  shortlinks: Array<{ code: string; label: string; clicks: number }>;
+  shortlinkClicks: number;
+  pageviews: number;
+  visitors: number;
+  introOfferSignups: number;
+  mailingListSignups: number;
+  bookings: number;
+}
+
+interface PerformanceResponse {
+  generatedAt: string;
+  days: number;
+  cached: boolean;
+  campaigns: CampaignRow[];
+  unattributed: Array<{ slug: string; pageviews: number; visitors: number }>;
+  posthog: { configured: boolean; missingEvents: string[]; error: string | null };
+}
+
+function utmCampaignOf(url: string): string | null {
+  try {
+    return new URL(url).searchParams.get('utm_campaign')?.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function buildReport(days: number): Promise<PerformanceResponse> {
+  const posthog: PerformanceResponse['posthog'] = {
+    configured: isPostHogQueryConfigured(),
+    missingEvents: [],
+    error: null,
+  };
+
+  // slug (lowercase) -> traffic / conversion rollups from PostHog
+  const traffic = new Map<string, { pageviews: number; visitors: number }>();
+  const conversions = new Map<string, Map<string, number>>();
+
+  const posthogQueries = posthog.configured
+    ? Promise.all([
+        // Traffic: pageviews carrying utm_campaign, grouped by campaign value.
+        queryHogQL(
+          `SELECT lower(toString(properties.utm_campaign)) AS campaign,
+                  count() AS pageviews,
+                  count(DISTINCT person_id) AS visitors
+           FROM events
+           WHERE event = '$pageview'
+             AND properties.utm_campaign IS NOT NULL
+             AND properties.utm_campaign != ''
+             AND timestamp >= now() - INTERVAL ${days} DAY
+           GROUP BY campaign`
+        ),
+        // Conversions: first-touch attribution via $initial_utm_campaign.
+        queryHogQL(
+          `SELECT lower(toString(person.properties.$initial_utm_campaign)) AS campaign,
+                  event,
+                  count() AS conversions
+           FROM events
+           WHERE event IN (${CONVERSION_EVENTS.map((e) => `'${e}'`).join(', ')})
+             AND person.properties.$initial_utm_campaign IS NOT NULL
+             AND person.properties.$initial_utm_campaign != ''
+             AND timestamp >= now() - INTERVAL ${days} DAY
+           GROUP BY campaign, event`
+        ),
+        // Which conversion events exist at all (any attribution) — used to flag
+        // instrumentation gaps like booking_completed never reaching PostHog.
+        queryHogQL(
+          `SELECT event, count()
+           FROM events
+           WHERE event IN (${CONVERSION_EVENTS.map((e) => `'${e}'`).join(', ')})
+             AND timestamp >= now() - INTERVAL 180 DAY
+           GROUP BY event`
+        ),
+      ])
+    : null;
+
+  const [campaignsWithLinks, shortlinkPage, posthogResults] = await Promise.all([
+    listCampaignsWithLinks(),
+    listShortLinks(500, 0),
+    posthogQueries?.catch((err: unknown) => {
+      posthog.error = err instanceof Error ? err.message : 'PostHog query failed';
+      return null;
+    }) ?? Promise.resolve(null),
+  ]);
+
+  if (posthogResults) {
+    const [trafficRows, conversionRows, presenceRows] = posthogResults;
+    for (const row of trafficRows) {
+      const [slug, pageviews, visitors] = row as [string, number, number];
+      if (slug) traffic.set(slug, { pageviews: Number(pageviews), visitors: Number(visitors) });
+    }
+    for (const row of conversionRows) {
+      const [slug, event, count] = row as [string, string, number];
+      if (!slug) continue;
+      const byEvent = conversions.get(slug) ?? new Map<string, number>();
+      byEvent.set(event, Number(count));
+      conversions.set(slug, byEvent);
+    }
+    const seenEvents = new Set(presenceRows.map((row) => (row as [string, number])[0]));
+    posthog.missingEvents = CONVERSION_EVENTS.filter((e) => !seenEvents.has(e));
+  }
+
+  // Group shortlinks by the utm_campaign baked into their destination URL.
+  const shortlinksBySlug = new Map<
+    string,
+    Array<{ code: string; label: string; clicks: number }>
+  >();
+  for (const link of shortlinkPage.links) {
+    const slug = utmCampaignOf(link.url);
+    if (!slug) continue;
+    const list = shortlinksBySlug.get(slug) ?? [];
+    list.push({ code: link.code, label: link.label, clicks: Number(link.clicks) || 0 });
+    shortlinksBySlug.set(slug, list);
+  }
+
+  const knownSlugs = new Set<string>();
+  const campaigns: CampaignRow[] = campaignsWithLinks.map(({ campaign, links }) => {
+    const slug = campaign.slug.toLowerCase();
+    knownSlugs.add(slug);
+    const shortlinks = shortlinksBySlug.get(slug) ?? [];
+    const byEvent = conversions.get(slug);
+    return {
+      id: campaign.id,
+      name: campaign.name,
+      slug: campaign.slug,
+      createdAt: Number(campaign.createdAt),
+      linkCount: links.length,
+      shortlinks,
+      shortlinkClicks: shortlinks.reduce((sum, s) => sum + s.clicks, 0),
+      pageviews: traffic.get(slug)?.pageviews ?? 0,
+      visitors: traffic.get(slug)?.visitors ?? 0,
+      introOfferSignups: byEvent?.get(SIGNUP_INTRO) ?? 0,
+      mailingListSignups: byEvent?.get(SIGNUP_MAILING) ?? 0,
+      bookings: byEvent?.get(BOOKING) ?? 0,
+    };
+  });
+
+  // utm_campaign values seen in PostHog with no stored campaign — usually links
+  // built by hand outside UTM Assist.
+  const unattributed = [...traffic.entries()]
+    .filter(([slug]) => !knownSlugs.has(slug))
+    .map(([slug, t]) => ({ slug, pageviews: t.pageviews, visitors: t.visitors }))
+    .sort((a, b) => b.pageviews - a.pageviews);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    days,
+    cached: false,
+    campaigns,
+    unattributed,
+    posthog,
+  };
+}
+
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const gate = await requireAdmin(cookies);
+  if (gate instanceof Response) return gate;
+
+  const daysRaw = Number.parseInt(url.searchParams.get('days') ?? '', 10);
+  const days = ALLOWED_DAYS.includes(daysRaw) ? daysRaw : 30;
+
+  try {
+    const redis = getRedis();
+    const cacheKey = `${CACHE_PREFIX}${days}`;
+
+    if (url.searchParams.get('fresh') !== '1') {
+      const cachedReport = await redis?.get<PerformanceResponse>(cacheKey);
+      if (cachedReport) {
+        return new Response(JSON.stringify({ ...cachedReport, cached: true }), {
+          status: 200,
+          headers: JSON_HEADERS,
+        });
+      }
+    }
+
+    const report = await buildReport(days);
+    await redis?.set(cacheKey, report, { ex: CACHE_TTL_SECONDS });
+
+    return new Response(JSON.stringify(report), { status: 200, headers: JSON_HEADERS });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
+};
