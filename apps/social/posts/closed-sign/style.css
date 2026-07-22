@@ -1,0 +1,53 @@
+/* Printable 11×8.5 landscape CLOSED sign. Borrows the menu-sheet visual language:
+   creme page, red mono eyebrow, display heading, squiggle divider, centered pine
+   mark at the bottom. Single export size (letter-landscape, 3300×2550), so all
+   values are sized for that canvas directly. */
+
+.closed-sign {
+  width: 100vw;
+  height: 100vh;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: var(--space-8);
+  padding: 180px 200px 150px;
+  text-align: center;
+}
+
+.closed-sign__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  min-height: 0;
+}
+
+.closed-sign__heading {
+  font-family: var(--font-display);
+  font-size: 560px;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--pyre-black);
+}
+
+/* Squiggle divider under the heading, matching the page's red accent. */
+.closed-sign__heading::after {
+  content: "";
+  display: block;
+  width: 1200px;
+  height: 90px;
+  margin: var(--space-8) auto 0;
+  background: url("/shared/dividers/red/divider-squiggle.svg") no-repeat center;
+  background-size: 100% 100%;
+}
+
+/* Single centered pine-tree logo in place of a text footer, as on the menu sheets. */
+.closed-sign__pine {
+  height: 240px;
+  background-image: url("/shared/textures/single-pine-tree.png");
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: auto 100%;
+}

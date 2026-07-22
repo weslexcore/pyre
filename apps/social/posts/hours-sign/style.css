@@ -1,0 +1,90 @@
+/* Printable 8.5×11 portrait hours sign. Same family as posts/closed-sign: creme
+   page, display heading with red squiggle divider, red mono accents, thin black
+   rules between rows, centered pine mark at the bottom. Single export size
+   (letter, 2550×3300), so all values are sized for that canvas directly. */
+
+.hours-sign {
+  width: 100vw;
+  height: 100vh;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-8);
+  padding: 200px 240px 150px;
+  text-align: center;
+}
+
+.hours-sign__heading {
+  font-family: var(--font-display);
+  font-size: 260px;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--pyre-black);
+}
+
+.hours-sign__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-12);
+  min-height: 0;
+}
+
+.hours-sign__list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+}
+
+.hours-sign__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: 70px 0;
+  border-top: 2px solid var(--pyre-black);
+}
+
+.hours-sign__row:first-child {
+  border-top: none;
+}
+
+.hours-sign__row dt {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 96px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+}
+
+.hours-sign__row dd {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 110px;
+  letter-spacing: -0.01em;
+  color: var(--pyre-black);
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours-sign__note {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pyre-black);
+  margin: 0;
+}
+
+/* Single centered pine-tree logo in place of a text footer, as on the menu sheets. */
+.hours-sign__pine {
+  height: 240px;
+  background-image: url("/shared/textures/single-pine-tree.png");
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: auto 100%;
+}
