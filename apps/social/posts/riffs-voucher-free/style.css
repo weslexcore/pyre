@@ -1,0 +1,181 @@
+/* 15%-off voucher — a PRINT business card, not the usual 1080px social grid.
+   Canvas: 1125×675px = 3.75×2.25in at 300dpi (3.5×2in trim + 0.125in bleed per edge).
+   1in = 300px. Keep all content at least 75px (0.25in) from the canvas edge:
+   37px of bleed gets trimmed away, plus ~38px of cutting-tolerance safety. */
+
+.card {
+  width: 100vw;
+  height: 100vh;
+  font-family: var(--font-sans);
+}
+
+/* ── Front: brand mark on black ─────────────────────────────── */
+
+/* All front artwork must stay ≥75px from the canvas edge (safe area). The 420px
+   wordmark spans ~960px, leaving ~80px on the tight (right) side; the 100px bottom
+   padding keeps the cite line's glyphs (which paint below their box) clear. */
+.card--front {
+  background: var(--pyre-black);
+  color: var(--pyre-creme);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: 48px 48px 100px;
+}
+
+/* Wordmark matches the landing-page hero: Eckmannpsych, uppercase, tight tracking.
+   Eckmannpsych only ships a 400 weight — keep the h1 from synthesizing bold.
+   Sized so "PYRE" alone spans the full content width. */
+.front__wordmark {
+  font-family: var(--font-logo);
+  font-weight: 400;
+  font-size: 420px;
+  line-height: 0.85;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* Full-bleed-width tagline: justify the single line so the words spread edge to edge. */
+.front__tagline {
+  width: 90%;
+  font-family: var(--font-mono);
+  margin: 0 auto;
+  font-size: 56px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: justify;
+  text-align-last: justify;
+  white-space: nowrap;
+}
+
+.front__tagline-plus {
+  color: var(--pyre-sky);
+}
+
+.offer__scope-plus {
+  color: var(--pyre-sky);
+}
+
+.front__cite {
+  margin-top: auto;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  color: var(--pyre-creme);
+}
+
+/* ── Back: the offer + QR ───────────────────────────────────── */
+
+.card--back {
+  background: transparent;
+  color: var(--pyre-black);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: 85px 95px;
+}
+
+/* Row height comes from the QR figure (the tallest item), so stretching the
+   offer column against it lets the code chip bottom-align with the caption. */
+.back__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch;
+}
+
+/* Same ruled red mono label family as the review card / menu sheets. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  white-space: nowrap;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-top: 50px;
+  font-size: 54px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  max-width: 520px;
+}
+
+.offer__scope {
+  font-size: 40px;
+  line-height: 1.3;
+  color: var(--pyre-black);
+  margin-top: var(--space-2);
+}
+
+/* Gold squiggle from the landing page, floated in the gap between the headline
+   and the code chip. Its own margin-top: auto splits the leftover column space
+   evenly with the chip's, so the squiggle sits centered between the two. */
+.offer__divider {
+  width: 460px;
+  height: auto;
+  margin-top: auto;
+}
+
+/* Ticket-style code chip: mono inside a black rule, echoing the menu ledger lines. */
+.code {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 3px solid var(--pyre-black);
+  border-radius: 14px;
+  padding: var(--space-2) var(--space-3);
+  /* Pin to the column bottom so the chip's border matches the visible bottom of
+     "scan to book"; the 7px offset skips the caption's empty descender space. */
+  margin-top: auto;
+  margin-bottom: 7px;
+}
+
+.code__value {
+  font-weight: 700;
+  color: var(--pyre-red);
+  letter-spacing: 0.14em;
+}
+
+.card__qr {
+  /* shared/reset.css doesn't zero <figure>'s default 16px margins; without this
+     the figure hangs below the top-aligned headline. */
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* The styled QR PNG sits borderless straight on the creme card; the creme is light
+   enough to serve as the quiet zone. */
+.qr-panel img {
+  width: 380px;
+  height: 380px;
+  display: block;
+}
+
+.qr-caption {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pyre-red);
+  margin-top: var(--space-2);
+}
