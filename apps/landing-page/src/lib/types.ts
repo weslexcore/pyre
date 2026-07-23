@@ -424,11 +424,11 @@ export interface EventsContent {
   };
 }
 
-// A bookable duration choice for an Open Hours slot (e.g. "Book 1 hour" /
-// "Book 2 hours"), surfaced in the event detail modal. `href` is the Momence
-// session checkout for that duration; `soldOut` covers both a full pool and a
-// missing 2-hour partner session.
-export interface OpenHoursBookingOption {
+// A bookable duration choice for a pooled slot (e.g. "Book 1 hour" / "Book 2
+// hours" for Open Hours, "Book 3 hours" for a social evening), surfaced in the
+// event detail modal. `href` is the Momence session checkout for that duration;
+// `soldOut` covers both a full pool and a missing full-length partner session.
+export interface PooledBookingOption {
   label: string;
   minutes: number;
   href: string;
