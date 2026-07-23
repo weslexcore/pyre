@@ -5,15 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
-import {
-  bookedFromSpots,
-  bypassesPool,
-  computeHourlyOccupancy,
-  maxOccupancyForLocation,
-  OPEN_HOURS_TAG,
-  poolSpotsLeftForSlot,
-} from '@/lib/capacity';
-import { creditsForPriceUsd } from '@/lib/credits';
+import { buildPooledBookingModel, eventHasTag } from '@/lib/booking-model';
 import { eventsLoadError } from '@/lib/events';
 import {
   ALL_TYPES_FILTER,
@@ -22,7 +14,7 @@ import {
   isSpecialEvent,
   WINDOW_DAYS,
 } from '@/lib/events-config';
-import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
+import type { EventItem, PooledBookingOption } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
 
@@ -346,133 +338,19 @@ function SlotRow({
   );
 }
 
-// -- Open Hours: hourly schedule + in-modal 1hr / 2hr booking -----------------
+// -- Pooled slots: hourly schedule + in-modal duration choices ----------------
 //
-// The schedule shows only 1-hour Open Hours slots. A matching 2-hour session
-// (same start + location) is kept in Momence but hidden from the schedule; it
-// surfaces as the "Book 2 hours" option in the details modal so the whole
-// 2-hour visit stays a single Momence checkout. Standalone 2-hour Open Hours
-// sessions (no 1-hour counterpart) still render as their own row. Every option
-// is gated by the shared occupancy pool AND its own Momence capacity.
+// Grouping/occupancy logic lives in @/lib/booking-model (see its header for the
+// full model). Rows with booking options render as PooledSlotRow — a "Book"
+// pill that opens the modal to choose a duration.
 
-const TWO_HOUR_MIN_MINUTES = 90;
-
-function isOpenHours(event: EventItem): boolean {
-  return !event.isPrivate && eventHasTag(event, OPEN_HOURS_TAG);
-}
-function isTwoHourOpenHours(event: EventItem): boolean {
-  return isOpenHours(event) && (event.durationMinutes ?? 0) >= TWO_HOUR_MIN_MINUTES;
-}
-function isOneHourOpenHours(event: EventItem): boolean {
-  const minutes = event.durationMinutes ?? 0;
-  return isOpenHours(event) && minutes > 0 && minutes < TWO_HOUR_MIN_MINUTES;
-}
-function openHoursStartKey(event: EventItem): string {
-  return `${event.location}__${event.isoDate ?? event.id}`;
-}
-function durationLabel(minutes: number): string {
-  if (!minutes) return 'Session';
-  if (minutes === 60) return '1 hour';
-  if (minutes % 60 === 0) return `${minutes / 60} hours`;
-  return `${minutes} min`;
-}
-
-function gatedSpotsLeft(event: EventItem, occupancy: Map<string, number>): number {
-  const max = maxOccupancyForLocation(event.location);
-  const sessionRemaining = event.spotsRemaining ?? Number.POSITIVE_INFINITY;
-  if (bypassesPool(event.totalSpots, max)) {
-    // High-capacity event (e.g. social): limited only by its own Momence capacity.
-    return Math.max(0, sessionRemaining);
-  }
-  const pool = poolSpotsLeftForSlot(event, occupancy, max);
-  return Math.max(0, Math.min(pool, sessionRemaining));
-}
-function toBookingOption(event: EventItem, occupancy: Map<string, number>): OpenHoursBookingOption {
-  const minutes = event.durationMinutes ?? 0;
-  const spotsLeft = gatedSpotsLeft(event, occupancy);
-  // Credit cost comes from the Momence drop-in price; fall back to 1 credit per
-  // hour only when the price is missing.
-  const credits = creditsForPriceUsd(event.priceUsd) ?? Math.max(1, Math.round(minutes / 60));
-  return {
-    label: `Book ${durationLabel(minutes)}`,
-    minutes,
-    href: event.cta?.href ?? '#',
-    spotsLeft,
-    soldOut: spotsLeft <= 0,
-    credits,
-    priceUsd: event.priceUsd,
-  };
-}
-
-interface OpenHoursModel {
-  // Booking options for each *displayed* Open Hours event, keyed by event id.
-  optionsById: Map<string, OpenHoursBookingOption[]>;
-  // 2-hour sessions hidden from the schedule (they back a 1-hour slot's option).
-  hiddenIds: Set<string>;
-}
-
-function buildOpenHoursModel(events: EventItem[]): OpenHoursModel {
-  const openHours = events.filter(isOpenHours);
-
-  const occupancy = computeHourlyOccupancy(
-    openHours
-      // High-capacity events bypass the pool entirely — their attendees don't
-      // count against overlapping regular sessions.
-      .filter((e) => !bypassesPool(e.totalSpots, maxOccupancyForLocation(e.location)))
-      .map((e) => ({
-        isoDate: e.isoDate,
-        durationMinutes: e.durationMinutes,
-        location: e.location,
-        booked: bookedFromSpots(e.totalSpots, e.spotsRemaining),
-      }))
-  );
-
-  const twoHourByStart = new Map<string, EventItem>();
-  const oneHourStarts = new Set<string>();
-  for (const e of openHours) {
-    if (isTwoHourOpenHours(e)) twoHourByStart.set(openHoursStartKey(e), e);
-    else if (isOneHourOpenHours(e)) oneHourStarts.add(openHoursStartKey(e));
-  }
-
-  // Hide a 2-hour session when a 1-hour slot shares its start — it becomes that
-  // slot's "Book 2 hours" option instead of its own row.
-  const hiddenIds = new Set<string>();
-  for (const e of openHours) {
-    if (isTwoHourOpenHours(e) && oneHourStarts.has(openHoursStartKey(e))) hiddenIds.add(e.id);
-  }
-
-  const optionsById = new Map<string, OpenHoursBookingOption[]>();
-  for (const e of openHours) {
-    if (hiddenIds.has(e.id)) continue;
-    if (isOneHourOpenHours(e)) {
-      const partner = twoHourByStart.get(openHoursStartKey(e));
-      const twoHourOption: OpenHoursBookingOption = partner
-        ? toBookingOption(partner, occupancy)
-        : {
-            label: 'Book 2 hours',
-            minutes: 120,
-            href: '#',
-            spotsLeft: 0,
-            soldOut: true,
-            credits: 2,
-          };
-      optionsById.set(e.id, [toBookingOption(e, occupancy), twoHourOption]);
-    } else {
-      // Standalone 2-hour (or odd-duration) Open Hours session — single option.
-      optionsById.set(e.id, [toBookingOption(e, occupancy)]);
-    }
-  }
-
-  return { optionsById, hiddenIds };
-}
-
-function OpenHoursRow({
+function PooledSlotRow({
   event,
   options,
   onViewDetails,
 }: {
   event: EventItem;
-  options: OpenHoursBookingOption[];
+  options: PooledBookingOption[];
   onViewDetails: (event: EventItem) => void;
 }) {
   const rowSpots = options.length ? Math.max(...options.map((o) => o.spotsLeft)) : 0;
@@ -556,7 +434,7 @@ function DateGroup({
 }: {
   dateLabel: string;
   events: EventItem[];
-  optionsById: Map<string, OpenHoursBookingOption[]>;
+  optionsById: Map<string, PooledBookingOption[]>;
   onViewDetails: (event: EventItem) => void;
 }) {
   return (
@@ -574,7 +452,7 @@ function DateGroup({
         {events.map((event) => {
           const options = optionsById.get(event.id);
           return options ? (
-            <OpenHoursRow
+            <PooledSlotRow
               key={event.id}
               event={event}
               options={options}
@@ -594,7 +472,9 @@ function DateGroup({
 function groupEventsByDate(events: EventItem[]): Map<string, EventItem[]> {
   const groups = new Map<string, EventItem[]>();
   for (const event of events) {
-    const key = event.isoDate ? event.isoDate.split('T')[0] : 'unknown';
+    // Group by the Eastern-time display date, not the UTC day of isoDate — an
+    // 8pm ET session is already past midnight UTC and would land on the wrong day.
+    const key = event.date || 'unknown';
     const existing = groups.get(key);
     if (existing) {
       existing.push(event);
@@ -637,12 +517,6 @@ function deriveTypeFilters(events: EventItem[]): string[] {
     }
   }
   return CATEGORY_TAGS.filter((category) => present.has(category.toLowerCase()));
-}
-
-function eventHasTag(event: EventItem, tag: string): boolean {
-  if (!Array.isArray(event.tags)) return false;
-  const lower = tag.toLowerCase();
-  return event.tags.some((t) => t.trim().toLowerCase() === lower);
 }
 
 // -- Filter chips ------------------------------------------------------------
@@ -739,11 +613,11 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   // Hard 2-week window — the base set everything else derives from.
   const windowedEvents = useMemo(() => filterEventsByWindow(displayEvents), [displayEvents]);
 
-  // Open Hours model: shared occupancy pool + per-slot 1hr/2hr booking options +
-  // the set of 2-hour sessions hidden from the schedule. Built from the full
-  // window (not the type-filtered subset) so the cap is correct regardless of
-  // which type chip is active.
-  const openHoursModel = useMemo(() => buildOpenHoursModel(windowedEvents), [windowedEvents]);
+  // Pooled booking model: shared occupancy pool + per-slot duration options +
+  // the set of full-length sessions hidden from the schedule. Built from the
+  // full window (not the type-filtered subset) so the cap is correct regardless
+  // of which type chip is active.
+  const bookingModel = useMemo(() => buildPooledBookingModel(windowedEvents), [windowedEvents]);
 
   // Dynamic type chips, built from the tags present on the upcoming events.
   const typeFilters = useMemo(() => deriveTypeFilters(windowedEvents), [windowedEvents]);
@@ -760,13 +634,13 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
       effectiveType === ALL_TYPES_FILTER
         ? windowedEvents
         : windowedEvents.filter((event) => eventHasTag(event, effectiveType));
-    // Drop the 2-hour sessions that are hidden behind a 1-hour slot's option.
-    return base.filter((event) => !openHoursModel.hiddenIds.has(event.id));
-  }, [windowedEvents, effectiveType, openHoursModel]);
+    // Drop the full-length sessions that are hidden behind an entry slot's option.
+    return base.filter((event) => !bookingModel.hiddenIds.has(event.id));
+  }, [windowedEvents, effectiveType, bookingModel]);
   const grouped = useMemo(() => groupEventsByDate(filteredEvents), [filteredEvents]);
 
   const visibleCount = filteredEvents.length;
-  const totalCount = windowedEvents.length - openHoursModel.hiddenIds.size;
+  const totalCount = windowedEvents.length - bookingModel.hiddenIds.size;
 
   // Update the results count in the DOM (for the Astro-rendered count element)
   useEffect(() => {
@@ -804,7 +678,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
               key={dateKey}
               dateLabel={groupEvents[0].date}
               events={groupEvents}
-              optionsById={openHoursModel.optionsById}
+              optionsById={bookingModel.optionsById}
               onViewDetails={setSelectedEvent}
             />
           ))}
@@ -815,7 +689,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
           event={selectedEvent}
           isOpen={!!selectedEvent}
           bookingOptions={
-            selectedEvent ? openHoursModel.optionsById.get(selectedEvent.id) : undefined
+            selectedEvent ? bookingModel.optionsById.get(selectedEvent.id) : undefined
           }
           onClose={() => setSelectedEvent(null)}
         />

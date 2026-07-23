@@ -5,14 +5,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import { creditsForPriceUsd } from '@/lib/credits';
-import type { EventItem, OpenHoursBookingOption } from '@/lib/types';
+import type { EventItem, PooledBookingOption } from '@/lib/types';
 
 interface EventDetailModalProps {
   event: EventItem | null;
   isOpen: boolean;
-  // When present, the footer shows these gated duration choices (Book 1 hour /
-  // Book 2 hours) instead of the single Book Now CTA.
-  bookingOptions?: OpenHoursBookingOption[];
+  // When present, the footer shows these gated duration choices (e.g. Book 1
+  // hour / Book 2 hours, or Book 3 hours for a social evening) instead of the
+  // single Book Now CTA.
+  bookingOptions?: PooledBookingOption[];
   onClose: () => void;
 }
 
@@ -167,13 +168,13 @@ function durationRowLabel(minutes: number, fallbackLabel = ''): string {
 // -- Booking row --------------------------------------------------------------
 
 // The action shown at the end of a booking row: either a live checkout link or
-// a disabled placeholder (e.g. a sold-out Open Hours duration).
+// a disabled placeholder (e.g. a sold-out duration choice).
 type BookingRowAction =
   | { kind: 'link'; href: string; label: string; ariaLabel: string; onClick: () => void }
   | { kind: 'disabled'; label: string };
 
 // A single bookable row: [Duration] [Credits] [slots left] [Book Now]. Shared by
-// Open Hours duration choices and special-event CTAs so they stay identical.
+// pooled duration choices and special-event CTAs so they stay identical.
 function BookingRow({
   minutes,
   fallbackLabel,
@@ -305,13 +306,13 @@ export default function EventDetailModal({
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
-  // Open Hours sessions surface gated 1hr/2hr choices in the footer; their raw
+  // Pooled sessions surface gated duration choices in the footer; their raw
   // per-session spots are replaced by the per-option "N left" counts.
   const hasBookingOptions = !!bookingOptions && bookingOptions.length > 0;
-  // Special (non-Open-Hours) events show their credit cost next to Book Now,
+  // Special (non-pooled) events show their credit cost next to Book Now,
   // derived from the Momence drop-in price when known.
   const specialCredits = hasBookingOptions ? null : creditsForPriceUsd(event.priceUsd);
-  // True when the footer renders at least one booking row (Open Hours choices or
+  // True when the footer renders at least one booking row (pooled choices or
   // a single special-event CTA). Drives the footer and the grid spots fallback.
   const footerHasBookingRow = hasBookingOptions || (!event.isPrivate && !!event.cta);
 
@@ -460,7 +461,7 @@ export default function EventDetailModal({
               </div>
 
               {/* Spots — hidden whenever a footer booking row already shows the
-                  slots-left count (Open Hours and special events). */}
+                  slots-left count (pooled and special events). */}
               {spots && !footerHasBookingRow && (
                 <div
                   className={`flex items-center gap-2 text-sm ${spotsColor(event.spotsRemaining)}`}
@@ -486,7 +487,7 @@ export default function EventDetailModal({
           {/* Booking CTAs — one shared row layout for every bookable choice:
               [Duration] [Credits] [slots left] [Book Now]. */}
           {hasBookingOptions ? (
-            // Open Hours: gated 1hr / 2hr duration choices.
+            // Pooled sessions: gated duration choices (1hr/2hr, 1hr/3hr, ...).
             <div className="flex flex-col">
               {bookingOptions?.map((option) => (
                 <BookingRow
