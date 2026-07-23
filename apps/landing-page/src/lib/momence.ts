@@ -135,6 +135,20 @@ function formatTimeRange(isoDate: string, durationMinutes: number): string {
 }
 
 /**
+ * Append `skipPreview=true` to a Momence checkout link so customers land
+ * directly in the booking flow instead of the session preview page.
+ */
+function withSkipPreview(link: string): string {
+  try {
+    const url = new URL(link);
+    url.searchParams.set('skipPreview', 'true');
+    return url.toString();
+  } catch {
+    return link;
+  }
+}
+
+/**
  * Transform a Momence event to our EventItem format
  */
 export function transformToEventItem(event: MomenceEvent): EventItem {
@@ -165,7 +179,7 @@ export function transformToEventItem(event: MomenceEvent): EventItem {
       ? undefined
       : {
           label: ctaLabel,
-          href: event.link,
+          href: withSkipPreview(event.link),
           ariaLabel: ctaAriaLabel,
         },
     isoDate: event.dateTime, // Preserve original ISO date for filtering
