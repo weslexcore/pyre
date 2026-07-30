@@ -1,0 +1,43 @@
+---
+export const prerender = true;
+
+import Button from '../components/Button.astro';
+import RepeatingLogoBackground from '../components/RepeatingLogoBackground.astro';
+import Layout from '../layouts/main.astro';
+import notFound from '../lib/not-found';
+import { withBase } from '../lib/paths';
+---
+
+<Layout title={notFound.pageTitle} description={notFound.description} noIndex={true}>
+	<section class="relative flex min-h-[calc(100dvh-5rem)] items-center justify-center overflow-hidden px-4 py-24 bg-[var(--pyre-black)]">
+		<div class="relative flex max-w-2xl flex-col items-center text-center text-[var(--pyre-creme)]">
+			<p class="font-logo text-8xl leading-none text-[var(--pyre-red)] md:text-9xl">
+				{notFound.elements.code}
+			</p>
+			<h1 class="font-primary-semibold mt-6 text-2xl uppercase tracking-wide md:text-4xl">
+				{notFound.elements.heading}
+			</h1>
+			<p class="mt-6 text-base leading-7 md:text-lg">
+				{notFound.elements.body}
+			</p>
+			<div class="mt-10 flex flex-col items-center gap-4 sm:flex-row">
+				<Button
+					variant="primary"
+					size="lg"
+					href={withBase(notFound.actions.primary.href)}
+					ariaLabel={notFound.actions.primary.ariaLabel}
+				>
+					{notFound.actions.primary.label}
+				</Button>
+				<Button
+					variant="outline"
+					size="lg"
+					href={withBase(notFound.actions.secondary.href)}
+					ariaLabel={notFound.actions.secondary.ariaLabel}
+				>
+					{notFound.actions.secondary.label}
+				</Button>
+			</div>
+		</div>
+	</section>
+</Layout>
