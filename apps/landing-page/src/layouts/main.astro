@@ -37,6 +37,7 @@ interface Props {
   isHomePage?: boolean;
   transparentNav?: boolean;
   darkLogoText?: boolean;
+  logoOnly?: boolean;
   noIndex?: boolean;
   hidePromos?: boolean;
 }
@@ -52,6 +53,7 @@ const {
   isHomePage = false,
   transparentNav = false,
   darkLogoText = false,
+  logoOnly = false,
   noIndex = false,
   hidePromos = false,
 } = Astro.props;
@@ -366,7 +368,7 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
     <body class="min-h-screen flex flex-col">
         <div class="fixed inset-x-0 top-0 z-50">
             {!hidePromos && <AnnouncementBanner />}
-            <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} minimal={isAdminRoute} />
+            <Navbar isHomePage={isHomePage} transparentNav={transparentNav || isHomePage} darkLogoText={darkLogoText} logoOnly={logoOnly} minimal={isAdminRoute} />
         </div>
         <div id="nav-sentinel" aria-hidden="true" class="h-px w-0"></div>
 		<main class="flex-1" style="padding-top: var(--banner-height, 0px);">

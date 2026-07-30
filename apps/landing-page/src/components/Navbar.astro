@@ -12,6 +12,7 @@ interface Props {
   isHomePage?: boolean;
   transparentNav?: boolean;
   darkLogoText?: boolean;
+  logoOnly?: boolean;
   minimal?: boolean;
 }
 
@@ -19,10 +20,12 @@ const {
   isHomePage = false,
   transparentNav = false,
   darkLogoText = false,
+  logoOnly = false,
   minimal = false,
 } = Astro.props;
 
 const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
+const showWordmark = !isHomePage && !logoOnly;
 ---
 
 <header
@@ -45,10 +48,18 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
     <a href={withBase('')} aria-label={navbar.elements.ariaLabel} class="inline-flex items-center gap-3 flex-shrink-0">
-      <span class="inline-block h-8 md:h-10 w-auto text-[var(--pyre-red)]" role="img" aria-label="Pyre Sauna logo" set:html={pyreLogo} />
-      {!isHomePage && (
+      <span
+        class:list={[
+          "inline-block h-8 md:h-10 w-auto text-[var(--pyre-red)]",
+          showWordmark && "translate-y-[3px]"
+        ]}
+        role="img"
+        aria-label="Pyre Sauna logo"
+        set:html={pyreLogo}
+      />
+      {showWordmark && (
         <p class:list={[
-          "font-logo text-5xl",
+          "font-logo text-5xl leading-none",
           darkLogoText ? "text-[var(--pyre-black)]" : "text-[var(--pyre-creme)]"
         ]}>PYRE</p>
       )}
