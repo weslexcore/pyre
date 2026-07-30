@@ -372,6 +372,8 @@ export interface MembershipTier {
   id: string;
   name: string;
   price: number;
+  /** Normal (non-founding) monthly rate, shown struck through where applicable */
+  originalPrice?: number;
   period: string;
   description: string;
   savings?: number;

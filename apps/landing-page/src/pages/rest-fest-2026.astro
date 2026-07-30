@@ -186,8 +186,10 @@ const pageDescription =
                 <span class="text-sm opacity-70">/mo for life</span>
               </div>
               <p class="text-xs md:text-sm opacity-60 mb-6">
-                <s>${founding.price + (founding.savings ?? 0)}/mo</s>
-                {founding.savings && <span> · Save ${founding.savings}/mo forever</span>}
+                {founding.originalPrice && <s>${founding.originalPrice}/mo</s>}
+                {founding.originalPrice && (
+                  <span> · Save ${founding.originalPrice - founding.price}/mo forever</span>
+                )}
               </p>
               <Button
                 href={founding.cta.href}
