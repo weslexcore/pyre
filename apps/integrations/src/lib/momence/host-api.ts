@@ -18,7 +18,7 @@ interface Paginated<T> {
 }
 
 async function momenceRequest<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   options: { query?: Record<string, string>; body?: unknown } = {}
 ): Promise<T> {
@@ -108,6 +108,8 @@ export interface MemberListFilter {
 export interface FetchMembersFilteredParams {
   page: number;
   pageSize?: number;
+  /** Fuzzy name/email search (Momence's list-view search box). */
+  query?: string;
   filter?: MemberListFilter;
   filterPreset?: 'with-active-membership';
   sortBy?: 'lastSeenAt' | 'firstSeenAt' | 'firstName' | 'lastName' | 'email';
@@ -122,6 +124,7 @@ export interface FetchMembersFilteredResult {
 export async function fetchMembersFiltered({
   page,
   pageSize = 100,
+  query,
   filter,
   filterPreset,
   sortBy = 'lastSeenAt',
@@ -133,6 +136,7 @@ export async function fetchMembersFiltered({
       pageSize,
       sortBy,
       sortOrder,
+      ...(query && { query }),
       ...(filterPreset && { filterPreset }),
       ...(filter && { filter }),
     },
@@ -146,6 +150,43 @@ export async function fetchMembersFiltered({
 
 export async function fetchHostMember(memberId: number): Promise<HostMember> {
   return momenceRequest<HostMember>('GET', `/host/members/${memberId}`);
+}
+
+/**
+ * Exact-match lookup by email. The `query` search is fuzzy (name OR email
+ * substring), so filter the first page down to a case-insensitive exact hit.
+ */
+export async function findMemberByEmail(email: string): Promise<HostMember | null> {
+  const target = email.trim().toLowerCase();
+  const { members } = await fetchMembersFiltered({ page: 0, pageSize: 25, query: target });
+  return members.find((m) => m.email?.toLowerCase() === target) ?? null;
+}
+
+/** Create a bare member record so it can be tagged before any purchase exists. */
+export async function createMember(params: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber?: string;
+}): Promise<number> {
+  const data = await momenceRequest<{ memberId: number }>('POST', '/host/members', {
+    body: {
+      email: params.email.trim().toLowerCase(),
+      firstName: params.firstName,
+      lastName: params.lastName,
+      ...(params.phoneNumber && { phoneNumber: params.phoneNumber }),
+    },
+  });
+  return data.memberId;
+}
+
+export async function updateMemberPhoneNumber(
+  memberId: number,
+  phoneNumber: string
+): Promise<void> {
+  await momenceRequest<void>('PUT', `/host/members/${memberId}/phone-number`, {
+    body: { phoneNumber },
+  });
 }
 
 // --- Bought memberships (subscriptions + credit packs) ---

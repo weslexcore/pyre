@@ -41,4 +41,10 @@ export const CRON_JOBS: CronJob[] = [
     run: async (ctx) =>
       (await import('@/lib/email/triggers/credit-reminders')).runCreditReminders(ctx),
   },
+  {
+    // Partner verification upkeep: expire stale requests, quarterly
+    // reconciliation email (send_key-gated, so hourly runs are no-ops).
+    name: 'partner-maintenance',
+    run: async (ctx) => (await import('@/lib/partner/verification')).runPartnerMaintenance(ctx),
+  },
 ];

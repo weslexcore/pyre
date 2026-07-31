@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailPropsByTemplate, EmailTemplateKey } from '@/emails/types';
-import { isAllowedRecipient, isDevMode } from './dev-mode';
+import { isAllowedRecipient, isDevMode, isLiveTemplate } from './dev-mode';
 import { getResend } from './resend';
 import { attachResendId, claimSend, recordSend, releaseSend } from './send-log';
 import { isSuppressed } from './suppression';
@@ -16,6 +16,13 @@ export type EmailKind = 'transactional' | 'marketing';
 
 interface SendTemplateArgs<K extends EmailTemplateKey> {
   to: string;
+  /**
+   * CC recipients delivered on the same message (e.g. Pyre staff copied on
+   * partner-facing verification email). Not consulted for suppression or the
+   * dev-mode whitelist — only `to` gates the send — and not part of send_key
+   * idempotency.
+   */
+  cc?: string | string[];
   template: K;
   props: EmailPropsByTemplate[K];
   /**
@@ -46,6 +53,7 @@ interface SendTemplateArgs<K extends EmailTemplateKey> {
  */
 export async function sendTemplate<K extends EmailTemplateKey>({
   to,
+  cc,
   template,
   props,
   kind = 'transactional',
@@ -61,10 +69,18 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     return { status: 'skipped', reason: 'resend-not-configured' };
   }
 
-  if (isDevMode() && !isAllowedRecipient(to)) {
+  // EMAIL_LIVE_TEMPLATES exempts specific templates from the dev-mode gate so
+  // one feature can ship while the rest of the email system stays whitelisted.
+  const devGated = isDevMode() && !isLiveTemplate(template);
+  if (devGated && !isAllowedRecipient(to)) {
     console.info(`[Email] Dev mode: suppressing ${template} to ${to} (not whitelisted)`);
     return { status: 'suppressed', reason: 'dev-mode-not-whitelisted' };
   }
+
+  // CC addresses go through the same dev-mode gate individually so a test send
+  // can never copy a real partner contact.
+  const ccList = cc == null ? [] : Array.isArray(cc) ? cc : [cc];
+  const effectiveCc = devGated ? ccList.filter((addr) => isAllowedRecipient(addr)) : ccList;
 
   const logEntry = {
     email: to,
@@ -135,6 +151,7 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     const { data, error } = await resend.emails.send({
       from,
       to,
+      ...(effectiveCc.length > 0 && { cc: effectiveCc }),
       subject: entry.subject(props),
       react: createElement(entry.Component, renderProps),
       ...(Object.keys(headers).length > 0 && { headers }),
