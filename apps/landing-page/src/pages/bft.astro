@@ -4,6 +4,7 @@ export const prerender = true;
 import { Image } from 'astro:assets';
 import BftLogo from '../components/BftLogo.astro';
 import Button from '../components/Button.astro';
+import PartnerVerifyForm from '../components/PartnerVerifyForm.astro';
 import SectionDivider from '../components/SectionDivider.astro';
 import SignupForm from '../components/SignupForm.astro';
 import Layout from '../layouts/main.astro';
@@ -19,7 +20,7 @@ const packHref = (id: string, href?: string): string =>
 
 const pageTitle = 'BFT Carytown x Pyre | 15% Off Sauna + Cold Plunge';
 const pageDescription =
-  'BFT Carytown members get 15% off Pyre sessions and credit packs with code BFT15. Train hard, recover at Pyre. Now open at Living Water.';
+  'BFT Carytown members get 15% off Pyre sessions and credit packs — verify your membership once and the discount applies automatically. Train hard, recover at Pyre.';
 ---
 
 <Layout
@@ -35,7 +36,7 @@ const pageDescription =
 >
   <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
     <!-- Hero -->
-    <section class="relative w-full min-h-[90dvh] flex items-center justify-center overflow-hidden">
+    <section class="relative w-full min-h-dvh flex items-center justify-center overflow-hidden">
       <Image
         src={bft.hero.image.src}
         alt={bft.hero.image.alt}
@@ -87,7 +88,7 @@ const pageDescription =
       </div>
     </section>
 
-    <!-- Offer / promo code -->
+    <!-- Offer / membership verification -->
     <section id="offer" aria-labelledby="offer-heading" class="py-16 md:py-24 px-4 scroll-mt-24">
       <div class="max-w-4xl mx-auto">
         <div
@@ -96,7 +97,7 @@ const pageDescription =
           <div
             class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] md:text-xs font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
           >
-            {bft.offer.pillLabel}
+            {bft.verify.pillLabel}
           </div>
 
           <div class="text-center mb-8">
@@ -104,33 +105,17 @@ const pageDescription =
               id="offer-heading"
               class="font-primary-semibold text-[clamp(1.75rem,4vw,3rem)] tracking-[-0.02em] uppercase mb-2"
             >
-              {bft.offer.title}
+              {bft.verify.title}
             </h2>
-            <p class="text-base md:text-lg opacity-80">{bft.offer.subtitle}</p>
+            <p class="text-base md:text-lg opacity-80">{bft.verify.subtitle}</p>
           </div>
 
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
-            <span
-              class="font-mono-bold text-3xl md:text-4xl tracking-[0.15em] uppercase border border-dashed border-[var(--pyre-muted-gold)] rounded-md px-6 py-3 text-[var(--pyre-muted-gold)]"
-            >
-              {bft.promoCode}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              id="bft-copy-code"
-              ariaLabel={`Copy promo code ${bft.promoCode}`}
-              data-code={bft.promoCode}
-              data-copy-label={bft.offer.copyLabel}
-              data-copied-label={bft.offer.copiedLabel}
-            >
-              {bft.offer.copyLabel}
-            </Button>
+          <div class="mb-10">
+            <PartnerVerifyForm partnerSlug="bft" copy={bft.verify.form} />
           </div>
 
           <ol class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-            {bft.offer.steps.map((step, index) => (
+            {bft.verify.steps.map((step, index) => (
               <li class="border border-current/20 rounded-lg bg-[var(--pyre-creme)]/5 p-5">
                 <span class="font-primary-semibold text-3xl text-[var(--pyre-muted-gold)] leading-none block mb-2">
                   {index + 1}
@@ -236,13 +221,13 @@ const pageDescription =
               <span class="text-sm opacity-70">for 2 credits</span>
             </div>
             <p class="font-mono-bold text-[10px] uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-5">
-              {bft.packs.withCodeLabel}
+              {bft.packs.withDiscountLabel}
             </p>
             <Button
               href={intro.href}
               variant="primary"
               size="lg"
-              ariaLabel={`${bft.intro.ctaLabel} with code ${bft.promoCode}`}
+              ariaLabel={`${bft.intro.ctaLabel} with the BFT member discount`}
               data-track-placement="bft_intro"
             >
               {bft.intro.ctaLabel}
@@ -261,14 +246,14 @@ const pageDescription =
                 <s class="text-sm opacity-60">${item.price}</s>
               </div>
               <p class="font-mono-bold text-[10px] uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-3">
-                {bft.packs.withCodeLabel}
+                {bft.packs.withDiscountLabel}
               </p>
               <p class="text-sm opacity-70 mb-5 flex-1">{item.description}</p>
               <Button
                 href={packHref(item.id, item.href)}
                 variant="outline"
                 size="md"
-                ariaLabel={`Get ${item.name} with code ${bft.promoCode}`}
+                ariaLabel={`Get ${item.name} with the BFT member discount`}
                 data-track-placement="bft_credit_packs"
               >
                 {item.id === 'single' ? 'Book a session' : 'Get this pack'}
@@ -278,7 +263,7 @@ const pageDescription =
         </ul>
 
         <p class="mt-6 text-xs md:text-sm opacity-60 text-center italic">
-          {bft.packs.codeReminder}
+          {bft.packs.discountReminder}
           {sessions.note && ` ${sessions.note}`}
         </p>
       </div>
@@ -407,24 +392,6 @@ const pageDescription =
       ...(analyticsWindow.pyreAttribution?.() ?? {}),
     });
   };
-
-  const copyButton = document.getElementById('bft-copy-code');
-
-  copyButton?.addEventListener('click', async () => {
-    const code = copyButton.getAttribute('data-code');
-    if (!code) return;
-
-    try {
-      await navigator.clipboard.writeText(code);
-      copyButton.textContent = copyButton.getAttribute('data-copied-label') ?? 'Copied!';
-      setTimeout(() => {
-        copyButton.textContent = copyButton.getAttribute('data-copy-label') ?? 'Copy code';
-      }, 2000);
-      capture('promo_code_copied', { code, source: 'bft' });
-    } catch (err) {
-      console.error('Failed to copy promo code:', err);
-    }
-  });
 
   document.querySelectorAll<HTMLAnchorElement>('a[data-track-placement]').forEach((link) => {
     link.addEventListener('click', () => {

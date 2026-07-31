@@ -169,6 +169,27 @@ export interface BreakSectionContent {
   };
 }
 
+// Copy for the partner-membership verification form (PartnerVerifyForm.astro).
+// Lives with each partner page's content config (e.g. bft.ts) so a second
+// partner is just another config object.
+export interface PartnerVerifyCopy {
+  firstNameLabel: string;
+  firstNamePlaceholder: string;
+  lastNameLabel: string;
+  lastNamePlaceholder: string;
+  emailLabel: string;
+  emailPlaceholder: string;
+  emailHelp: string;
+  phoneLabel: string;
+  phonePlaceholder: string;
+  partnerEmailLabel: string;
+  partnerEmailPlaceholder: string;
+  submitLabel: string;
+  submittingLabel: string;
+  successMessage: string;
+  errorMessage: string;
+}
+
 export interface SignupFormContent {
   elements: {
     title: string;

@@ -3,7 +3,7 @@ import type { ImageMetadata } from 'astro';
 import bftKettlebellsImg from '../assets/images/bft/bft-kettlebells.png';
 import bftTrainingImg from '../assets/images/bft/bft-training.png';
 import warmSaunaImg from '../assets/images/warm_sauna.webp';
-import type { ActionRef } from './types';
+import type { ActionRef, PartnerVerifyCopy } from './types';
 
 export interface BftImage {
   src: ImageMetadata;
@@ -21,7 +21,6 @@ export interface BftRecoveryCard {
 }
 
 export interface BftContent {
-  promoCode: string;
   discountPercent: number;
   posthogSource: string;
   eventsUrl: string;
@@ -32,12 +31,11 @@ export interface BftContent {
     primaryCta: ActionRef;
     secondaryCta: ActionRef;
   };
-  offer: {
+  verify: {
     pillLabel: string;
     title: string;
     subtitle: string;
-    copyLabel: string;
-    copiedLabel: string;
+    form: PartnerVerifyCopy;
     steps: BftStep[];
   };
   recovery: {
@@ -56,8 +54,8 @@ export interface BftContent {
   packs: {
     title: string;
     subtitle: string;
-    withCodeLabel: string;
-    codeReminder: string;
+    withDiscountLabel: string;
+    discountReminder: string;
   };
   membershipSection: {
     eyebrow: string;
@@ -83,7 +81,6 @@ export interface BftContent {
 export const bftPrice = (price: number): number => Math.round(price * 0.85);
 
 const bft: BftContent = {
-  promoCode: 'BFT15',
   discountPercent: 15,
   posthogSource: 'bft',
   eventsUrl: '/events?utm_source=bft&utm_medium=partner&utm_campaign=bft-15',
@@ -103,25 +100,40 @@ const bft: BftContent = {
       ariaLabel: 'Learn why sauna and cold plunge help recovery after strength training',
     },
   },
-  offer: {
+  verify: {
     pillLabel: 'BFT Carytown exclusive',
     title: '15% off sauna + cold plunge',
-    subtitle: 'Three steps between you and a proper cooldown.',
-    copyLabel: 'Copy code',
-    copiedLabel: 'Copied!',
+    subtitle: 'Verify your membership to receive your discount automatically.',
+    form: {
+      firstNameLabel: 'First name',
+      firstNamePlaceholder: 'First name',
+      lastNameLabel: 'Last name',
+      lastNamePlaceholder: 'Last name',
+      emailLabel: 'The email you book with at Pyre',
+      emailPlaceholder: 'you@example.com',
+      emailHelp: 'Your discount attaches to this email — book with it and 15% comes off.',
+      phoneLabel: 'Phone number',
+      phonePlaceholder: '(804) 555-0123',
+      partnerEmailLabel: 'Email on your BFT account (if different)',
+      partnerEmailPlaceholder: 'Optional',
+      submitLabel: 'Verify my membership',
+      submittingLabel: 'Sending…',
+      successMessage:
+        "Request sent! We'll email you as soon as BFT Carytown confirms your membership — usually within a day or two.",
+      errorMessage: 'Something went wrong. Please try again.',
+    },
     steps: [
       {
-        title: 'Copy code BFT15',
-        description: "It's yours because you train at BFT Carytown.",
+        title: 'Tell us who you are',
+        description: 'Your name and booking email. Takes 10 seconds.',
       },
       {
-        title: 'Pick a credit pack or book a session',
-        description:
-          'Credits work for any session. Every pack except the Intro is shareable with friends & family.',
+        title: 'BFT confirms your membership',
+        description: "One click on their end. We'll email you the moment it lands.",
       },
       {
-        title: 'Enter the code at checkout',
-        description: "15% comes off. That's it.",
+        title: '15% comes off automatically',
+        description: 'Every session and credit pack, at checkout. No code needed.',
       },
     ],
   },
@@ -154,15 +166,15 @@ const bft: BftContent = {
     pillLabel: 'New here?',
     title: 'Start with the Intro',
     subtitle:
-      'Buy 1 credit, get 1 free, and code BFT15 still applies. Two sessions to see how the heat and cold treat you.',
+      'Buy 1 credit, get 1 free — and your BFT discount still applies. Two sessions to see how the heat and cold treat you.',
     ctaLabel: 'Get the Intro Offer',
   },
   packs: {
     title: 'Sessions + credit packs',
     subtitle:
-      'One credit is one session of sauna + cold plunge. Code BFT15 takes 15% off all of it.',
-    withCodeLabel: 'with BFT15',
-    codeReminder: 'Enter code BFT15 at checkout to get your discount.',
+      'One credit is one session of sauna + cold plunge. Verified BFT members save 15% on all of it.',
+    withDiscountLabel: 'with BFT discount',
+    discountReminder: "Once you're verified, 15% comes off automatically at checkout.",
   },
   membershipSection: {
     eyebrow: 'Founding Memberships',
@@ -180,7 +192,7 @@ const bft: BftContent = {
   closing: {
     title: 'Train hard. Recover at Pyre.',
     subtitle:
-      "We're open now at Living Water. Book a session, bring your BFT crew, and let code BFT15 take 15% off.",
+      "We're open now at Living Water. Verify your membership, book a session, and bring your BFT crew — 15% off, every time.",
     cta: {
       label: 'Book a session',
       href: '/events?utm_source=bft&utm_medium=partner&utm_campaign=bft-15',
@@ -189,7 +201,7 @@ const bft: BftContent = {
     image: { src: warmSaunaImg, alt: '' },
   },
   disclaimer:
-    'Offer for BFT Carytown members. Enter code BFT15 at checkout for 15% off sessions and credit packs.',
+    'Offer for verified BFT Carytown members. The 15% discount applies automatically to sessions and credit packs at checkout after verification. Pyre may confirm membership status with BFT Carytown quarterly.',
 };
 
 export default bft;
