@@ -16,11 +16,14 @@ export interface PartnerConfig {
   discountPercent: number;
 }
 
+// process.env fallbacks throughout: import.meta.env inlines at build time, so
+// env vars added to Vercel after the cached build only exist at runtime.
 export const PARTNERS: Record<string, PartnerConfig> = {
   bft: {
     slug: 'bft',
     name: 'BFT Carytown',
-    contactEmail: import.meta.env.PARTNER_BFT_CONTACT_EMAIL ?? null,
+    contactEmail:
+      import.meta.env.PARTNER_BFT_CONTACT_EMAIL ?? process.env.PARTNER_BFT_CONTACT_EMAIL ?? null,
     tagName: 'partner-bft',
     discountPercent: 15,
   },
@@ -32,5 +35,5 @@ export function getPartner(slug: string): PartnerConfig | null {
 
 /** Pyre staff address CC'd on all partner-facing email (visibility, replies). */
 export function getPartnerCcEmail(): string | null {
-  return import.meta.env.PARTNER_CC_EMAIL ?? null;
+  return import.meta.env.PARTNER_CC_EMAIL ?? process.env.PARTNER_CC_EMAIL ?? null;
 }

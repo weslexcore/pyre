@@ -16,7 +16,14 @@ interface DecisionPayload {
 }
 
 function getSecret(): string | null {
-  return import.meta.env.PARTNER_LINK_SECRET ?? import.meta.env.CRON_SECRET ?? null;
+  // process.env fallback: vars added after the cached build only exist at runtime.
+  return (
+    import.meta.env.PARTNER_LINK_SECRET ??
+    process.env.PARTNER_LINK_SECRET ??
+    import.meta.env.CRON_SECRET ??
+    process.env.CRON_SECRET ??
+    null
+  );
 }
 
 function sign(payload: string, secret: string): string {

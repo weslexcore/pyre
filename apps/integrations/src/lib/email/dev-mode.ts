@@ -13,7 +13,8 @@ export function isDevMode(): boolean {
 }
 
 export function isLiveTemplate(template: string): boolean {
-  const patterns = (import.meta.env.EMAIL_LIVE_TEMPLATES ?? '')
+  // process.env fallback: vars added after the cached build only exist at runtime.
+  const patterns = (import.meta.env.EMAIL_LIVE_TEMPLATES ?? process.env.EMAIL_LIVE_TEMPLATES ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

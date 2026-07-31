@@ -19,7 +19,9 @@ function normalizePhone(raw: string): string | null {
 }
 
 function isAuthorized(request: Request): boolean {
-  const secret = import.meta.env.PARTNER_API_SECRET;
+  // process.env fallback: import.meta.env inlines at build time; vars added
+  // after the cached build only exist at runtime.
+  const secret = import.meta.env.PARTNER_API_SECRET ?? process.env.PARTNER_API_SECRET;
   if (!secret) {
     console.error('[Partner] PARTNER_API_SECRET not configured — rejecting all requests');
     return false;

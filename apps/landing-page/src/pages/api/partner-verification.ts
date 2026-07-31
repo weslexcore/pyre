@@ -99,8 +99,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     return json(429, { ok: false, error: 'Too many requests — please try again later.' });
   }
 
-  const integrationsUrl = import.meta.env.INTEGRATIONS_API_URL;
-  const apiSecret = import.meta.env.PARTNER_API_SECRET;
+  // process.env fallback: import.meta.env is inlined at build time, so values
+  // added to Vercel after the cached build was compiled only exist at runtime.
+  const integrationsUrl = import.meta.env.INTEGRATIONS_API_URL ?? process.env.INTEGRATIONS_API_URL;
+  const apiSecret = import.meta.env.PARTNER_API_SECRET ?? process.env.PARTNER_API_SECRET;
   if (!integrationsUrl || !apiSecret) {
     console.error('[Partner] INTEGRATIONS_API_URL / PARTNER_API_SECRET not configured');
     return json(503, { ok: false, error: 'Verification is temporarily unavailable.' });
