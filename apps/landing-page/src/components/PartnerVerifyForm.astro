@@ -1,0 +1,389 @@
+---
+import signupForm from '../lib/signupForm';
+import type { PartnerVerifyCopy } from '../lib/types';
+import Button from './Button.astro';
+
+// Partner-membership verification form (reciprocal discount program). Same
+// lazy-Turnstile + honeypot + timing mechanics as SignupForm, but submits JSON
+// to /api/partner-verification, which relays to the integrations service.
+
+interface Props {
+  partnerSlug: string;
+  copy: PartnerVerifyCopy;
+  turnstileTheme?: 'light' | 'dark' | 'auto';
+}
+
+const { partnerSlug, copy, turnstileTheme = 'dark' } = Astro.props;
+
+const firstNameId = `partner-verify-first-name-${partnerSlug}`;
+const lastNameId = `partner-verify-last-name-${partnerSlug}`;
+const emailId = `partner-verify-email-${partnerSlug}`;
+const phoneId = `partner-verify-phone-${partnerSlug}`;
+const partnerEmailId = `partner-verify-partner-email-${partnerSlug}`;
+
+const inputClass =
+  'w-full rounded-md border border-current/20 bg-[var(--pyre-creme)]/10 px-4 py-3 text-base text-[var(--pyre-creme)] placeholder:text-[var(--pyre-creme)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--pyre-muted-gold)]';
+const labelClass = 'block font-mono-bold text-xs uppercase tracking-wide mb-1.5 text-left';
+---
+
+<div class="max-w-md mx-auto">
+  <form
+    class="flex flex-col gap-4"
+    novalidate
+    data-partner-verify-form
+    data-partner={partnerSlug}
+    data-turnstile-theme={turnstileTheme}
+    data-antispam={JSON.stringify(signupForm.antiSpam)}
+    data-turnstile={JSON.stringify(signupForm.turnstile)}
+    data-submit-label={copy.submitLabel}
+    data-submitting-label={copy.submittingLabel}
+    data-success-message={copy.successMessage}
+    data-error-message={copy.errorMessage}
+  >
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for={firstNameId} class={labelClass}>{copy.firstNameLabel}</label>
+        <input
+          id={firstNameId}
+          name="firstName"
+          type="text"
+          required
+          autocomplete="given-name"
+          maxlength="60"
+          placeholder={copy.firstNamePlaceholder}
+          class={inputClass}
+          data-partner-verify-first-name
+        />
+      </div>
+      <div>
+        <label for={lastNameId} class={labelClass}>{copy.lastNameLabel}</label>
+        <input
+          id={lastNameId}
+          name="lastName"
+          type="text"
+          required
+          autocomplete="family-name"
+          maxlength="60"
+          placeholder={copy.lastNamePlaceholder}
+          class={inputClass}
+          data-partner-verify-last-name
+        />
+      </div>
+    </div>
+    <div>
+      <label for={emailId} class={labelClass}>{copy.emailLabel}</label>
+      <input
+        id={emailId}
+        name="email"
+        type="email"
+        required
+        inputmode="email"
+        autocomplete="email"
+        placeholder={copy.emailPlaceholder}
+        class={inputClass}
+        data-partner-verify-email
+      />
+      <p class="mt-1.5 text-xs opacity-60 text-left">{copy.emailHelp}</p>
+    </div>
+    <div>
+      <label for={phoneId} class={labelClass}>{copy.phoneLabel}</label>
+      <input
+        id={phoneId}
+        name="phone"
+        type="tel"
+        required
+        inputmode="tel"
+        autocomplete="tel"
+        placeholder={copy.phonePlaceholder}
+        class={inputClass}
+        data-partner-verify-phone
+      />
+    </div>
+    <div>
+      <label for={partnerEmailId} class={labelClass}>{copy.partnerEmailLabel}</label>
+      <input
+        id={partnerEmailId}
+        name="partnerEmail"
+        type="email"
+        inputmode="email"
+        placeholder={copy.partnerEmailPlaceholder}
+        class={inputClass}
+        data-partner-verify-partner-email
+      />
+    </div>
+
+    <!-- Honeypot fields (subset of the signup form's; the phone honeypot is
+         deliberately omitted — a real phone input sits above and autofill
+         would trip a hidden field named phone_number) -->
+    <input type="text" name={signupForm.antiSpam.honeypotFields.website} tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only" />
+    <input type="email" name={signupForm.antiSpam.honeypotFields.confirmEmail} tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; visibility: hidden;" />
+    <input type="hidden" name={signupForm.antiSpam.timestampField} value="" />
+
+    <Button type="submit" variant="primary" size="lg" class="w-full">
+      {copy.submitLabel}
+    </Button>
+  </form>
+
+  <div class="flex justify-center mt-4" data-turnstile-container></div>
+
+  <p aria-live="polite" class="mt-3 text-sm text-[var(--pyre-burnt-orange)]" data-partner-verify-error></p>
+  <div role="status" class="mt-3 text-sm text-green-400 hidden" data-partner-verify-success></div>
+</div>
+
+<script>
+  (() => {
+    interface TurnstileApi {
+      render(
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          theme?: string;
+          size?: string;
+          callback?: (token: string) => void;
+          'error-callback'?: () => void;
+          'expired-callback'?: () => void;
+        }
+      ): string;
+      reset(widgetId?: string): void;
+      remove(widgetId?: string): void;
+    }
+    const w = window as unknown as Window & { turnstile?: TurnstileApi };
+
+    const widgetIds = new Map<HTMLElement, string>();
+    let turnstileScriptPromise: Promise<void> | null = null;
+
+    function loadTurnstileScript(): Promise<void> {
+      if (typeof w.turnstile !== 'undefined') return Promise.resolve();
+      if (turnstileScriptPromise) return turnstileScriptPromise;
+
+      turnstileScriptPromise = new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector<HTMLScriptElement>('script[data-turnstile-loader]');
+        const target = existing ?? document.createElement('script');
+        if (!existing) {
+          target.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+          target.async = true;
+          target.defer = true;
+          target.dataset.turnstileLoader = 'true';
+        } else if (existing.dataset.turnstileLoaded === 'true') {
+          if (typeof w.turnstile !== 'undefined') resolve();
+          else reject(new Error('Turnstile loaded but unavailable'));
+          return;
+        } else if (existing.dataset.turnstileError === 'true') {
+          reject(new Error('Turnstile failed to load'));
+          return;
+        }
+        target.addEventListener('load', () => {
+          target.dataset.turnstileLoaded = 'true';
+          if (typeof w.turnstile !== 'undefined') resolve();
+          else reject(new Error('Turnstile loaded but unavailable'));
+        }, { once: true });
+        target.addEventListener('error', () => {
+          target.dataset.turnstileError = 'true';
+          reject(new Error('Turnstile failed to load'));
+        }, { once: true });
+        if (!existing) document.head.appendChild(target);
+      }).catch((error) => {
+        turnstileScriptPromise = null;
+        throw error;
+      });
+
+      return turnstileScriptPromise;
+    }
+
+    function initPartnerVerifyForms() {
+      const forms = document.querySelectorAll<HTMLFormElement>('[data-partner-verify-form]');
+
+      forms.forEach((form) => {
+        if (form.dataset.partnerVerifyInit === 'true') return;
+        form.dataset.partnerVerifyInit = 'true';
+
+        const antiSpamConfig = JSON.parse(form.getAttribute('data-antispam') || '{}');
+        const turnstileConfig = JSON.parse(form.getAttribute('data-turnstile') || '{}');
+        const turnstileTheme = form.getAttribute('data-turnstile-theme') || 'auto';
+        let turnstileToken = '';
+        let turnstileRequested = false;
+
+        const timestampField = form.querySelector(
+          `input[name="${antiSpamConfig.timestampField}"]`
+        ) as HTMLInputElement | null;
+        if (timestampField) timestampField.value = Date.now().toString();
+
+        const container = form.parentElement!;
+        const firstNameInput = form.querySelector(
+          '[data-partner-verify-first-name]'
+        ) as HTMLInputElement;
+        const lastNameInput = form.querySelector(
+          '[data-partner-verify-last-name]'
+        ) as HTMLInputElement;
+        const emailInput = form.querySelector('[data-partner-verify-email]') as HTMLInputElement;
+        const phoneInput = form.querySelector('[data-partner-verify-phone]') as HTMLInputElement;
+        const partnerEmailInput = form.querySelector(
+          '[data-partner-verify-partner-email]'
+        ) as HTMLInputElement;
+        const errorEl = container.querySelector('[data-partner-verify-error]') as HTMLElement;
+        const successEl = container.querySelector('[data-partner-verify-success]') as HTMLElement;
+        const turnstileContainer = container.querySelector('[data-turnstile-container]') as HTMLElement;
+
+        function initTurnstile() {
+          if (typeof w.turnstile === 'undefined' || !turnstileConfig.siteKey || !turnstileContainer) return;
+          const existingId = widgetIds.get(turnstileContainer);
+          if (existingId) {
+            try { w.turnstile.remove(existingId); } catch {}
+          }
+          turnstileContainer.innerHTML = '';
+          const wId = w.turnstile.render(turnstileContainer, {
+            sitekey: turnstileConfig.siteKey,
+            theme: turnstileTheme as 'light' | 'dark' | 'auto',
+            size: turnstileConfig.size || 'normal',
+            callback: (token: string) => { turnstileToken = token; },
+            'error-callback': () => { turnstileToken = ''; },
+            'expired-callback': () => { turnstileToken = ''; },
+          });
+          widgetIds.set(turnstileContainer, wId);
+        }
+
+        function requestTurnstile() {
+          if (turnstileRequested || !turnstileConfig.siteKey || !turnstileContainer) return;
+          turnstileRequested = true;
+          loadTurnstileScript()
+            .then(initTurnstile)
+            .catch(() => {
+              if (errorEl) errorEl.textContent = 'Security check could not load. Please try again.';
+            });
+        }
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+              observer.disconnect();
+              requestTurnstile();
+            }
+          },
+          { rootMargin: '200px 0px', threshold: 0 }
+        );
+        observer.observe(form);
+        form.addEventListener('focusin', requestTurnstile, { passive: true });
+
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          errorEl.textContent = '';
+
+          const firstName = firstNameInput.value.trim();
+          const lastName = lastNameInput.value.trim();
+          const email = emailInput.value.trim();
+          const phone = phoneInput.value.trim();
+          const partnerEmail = partnerEmailInput.value.trim();
+          const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+          const phoneValid = /^\+?[\d\s().-]{10,20}$/.test(phone);
+
+          if (!firstName) {
+            errorEl.textContent = 'Please enter your first name.';
+            firstNameInput.focus();
+            return;
+          }
+          if (!lastName) {
+            errorEl.textContent = 'Please enter your last name.';
+            lastNameInput.focus();
+            return;
+          }
+          if (!emailValid) {
+            errorEl.textContent = 'Please enter a valid email.';
+            emailInput.focus();
+            return;
+          }
+          if (!phoneValid) {
+            errorEl.textContent = 'Please enter a valid phone number.';
+            phoneInput.focus();
+            return;
+          }
+          if (turnstileConfig.siteKey && !turnstileToken) {
+            requestTurnstile();
+            errorEl.textContent = 'Please complete the security check.';
+            return;
+          }
+
+          const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = form.getAttribute('data-submitting-label') || 'Sending…';
+          }
+
+          const payload: Record<string, string> = {
+            partner: form.getAttribute('data-partner') || '',
+            firstName,
+            lastName,
+            email,
+            phone,
+            turnstileToken,
+          };
+          if (partnerEmail) payload.partnerEmail = partnerEmail;
+          // Only the honeypots this form renders (no phone honeypot here).
+          for (const field of [
+            antiSpamConfig.honeypotFields?.website,
+            antiSpamConfig.honeypotFields?.confirmEmail,
+          ]) {
+            if (!field) continue;
+            const input = form.querySelector(`input[name="${field}"]`) as HTMLInputElement | null;
+            payload[field as string] = input?.value ?? '';
+          }
+          if (timestampField) payload[antiSpamConfig.timestampField] = timestampField.value;
+
+          try {
+            const response = await fetch('/api/partner-verification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const result = await response.json().catch(() => ({}));
+
+            if (response.ok && result.ok) {
+              form.classList.add('hidden');
+              if (turnstileContainer) turnstileContainer.classList.add('hidden');
+              successEl.textContent = form.getAttribute('data-success-message') || 'Request sent!';
+              successEl.classList.remove('hidden');
+
+              const analyticsWindow = window as {
+                posthog?: {
+                  identify: (id: string) => void;
+                  capture: (event: string, properties?: Record<string, unknown>) => void;
+                };
+                pyreAttribution?: () => Record<string, unknown>;
+              };
+              if (analyticsWindow.posthog) {
+                analyticsWindow.posthog.identify(email);
+                analyticsWindow.posthog.capture('partner_verification_requested', {
+                  partner: payload.partner,
+                  email,
+                  ...(analyticsWindow.pyreAttribution?.() ?? {}),
+                });
+              }
+            } else {
+              errorEl.textContent =
+                result.error || form.getAttribute('data-error-message') || 'Something went wrong.';
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = form.getAttribute('data-submit-label') || 'Submit';
+              }
+              if (typeof w.turnstile !== 'undefined') w.turnstile.reset();
+              turnstileToken = '';
+            }
+          } catch {
+            errorEl.textContent =
+              form.getAttribute('data-error-message') || 'Something went wrong. Please try again.';
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = form.getAttribute('data-submit-label') || 'Submit';
+            }
+          }
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPartnerVerifyForms, { once: true });
+    } else {
+      initPartnerVerifyForms();
+    }
+    document.addEventListener('astro:page-load', initPartnerVerifyForms);
+  })();
+</script>
