@@ -16,7 +16,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Formatting characters allowed; 10-15 digits with optional leading +.
 const PHONE_RE = /^\+?[\d\s().-]{10,20}$/;
 
-const IP_LIMIT = 5; // per hour
+// Generous per-IP: partner-gym members often share one NAT (gym wifi).
+const IP_LIMIT = 20; // per hour
 const EMAIL_LIMIT = 3; // per day
 
 function json(status: number, body: Record<string, unknown>): Response {
@@ -92,12 +93,27 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   }
 
   const ip = clientAddress ?? request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+  const ipKey = `partner:rl:ip:${ip}`;
+  const emailKey = `partner:rl:email:${email}`;
   if (
-    (await isRateLimited(`partner:rl:ip:${ip}`, IP_LIMIT, 60 * 60)) ||
-    (await isRateLimited(`partner:rl:email:${email}`, EMAIL_LIMIT, 24 * 60 * 60))
+    (await isRateLimited(ipKey, IP_LIMIT, 60 * 60)) ||
+    (await isRateLimited(emailKey, EMAIL_LIMIT, 24 * 60 * 60))
   ) {
     return json(429, { ok: false, error: 'Too many requests — please try again later.' });
   }
+
+  // A failure on our side (misconfig, integrations down) shouldn't burn the
+  // caller's quota — refund what the checks above just incremented.
+  const refundRateLimit = async () => {
+    const redis = getRedis();
+    if (!redis) return;
+    try {
+      await redis.decr(ipKey);
+      await redis.decr(emailKey);
+    } catch {
+      // best-effort
+    }
+  };
 
   // process.env fallback: import.meta.env is inlined at build time, so values
   // added to Vercel after the cached build was compiled only exist at runtime.
@@ -105,6 +121,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   const apiSecret = import.meta.env.PARTNER_API_SECRET ?? process.env.PARTNER_API_SECRET;
   if (!integrationsUrl || !apiSecret) {
     console.error('[Partner] INTEGRATIONS_API_URL / PARTNER_API_SECRET not configured');
+    await refundRateLimit();
     return json(503, { ok: false, error: 'Verification is temporarily unavailable.' });
   }
 
@@ -127,11 +144,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     if (!response.ok) {
       console.error(`[Partner] Integrations request failed: ${response.status}`);
+      await refundRateLimit();
       return json(502, { ok: false, error: 'Something went wrong. Please try again later.' });
     }
     return json(200, { ok: true });
   } catch (error) {
     console.error('[Partner] Integrations request errored', error);
+    await refundRateLimit();
     return json(502, { ok: false, error: 'Something went wrong. Please try again later.' });
   }
 };
