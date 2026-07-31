@@ -9,6 +9,10 @@ import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { IntroFollowUp } from './templates/IntroFollowUp';
 import { MembershipPitch } from './templates/MembershipPitch';
+import { PartnerDenied } from './templates/PartnerDenied';
+import { PartnerReconciliation } from './templates/PartnerReconciliation';
+import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
+import { PartnerVerified } from './templates/PartnerVerified';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate } from './types';
@@ -22,4 +26,8 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'review-request': ReviewRequest.PreviewProps,
   'credit-expiry-reminder': CreditExpiryReminder.PreviewProps,
   'unused-credit-reminder': UnusedCreditReminder.PreviewProps,
+  'partner-verification-request': PartnerVerificationRequest.PreviewProps,
+  'partner-verified': PartnerVerified.PreviewProps,
+  'partner-denied': PartnerDenied.PreviewProps,
+  'partner-reconciliation': PartnerReconciliation.PreviewProps,
 };

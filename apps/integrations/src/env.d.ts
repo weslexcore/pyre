@@ -48,6 +48,14 @@ interface ImportMetaEnv {
   readonly CRON_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)
   readonly UNSUBSCRIBE_SECRET?: string;
+  // Partner verification: shared secret the landing page sends on /api/partner/request
+  readonly PARTNER_API_SECRET?: string;
+  // HMAC secret for signed confirm/deny links (defaults to CRON_SECRET if unset)
+  readonly PARTNER_LINK_SECRET?: string;
+  // Per-partner contact addresses for confirm/deny + quarterly reconciliation
+  readonly PARTNER_BFT_CONTACT_EMAIL?: string;
+  // Pyre staff address CC'd on all partner-facing verification email
+  readonly PARTNER_CC_EMAIL?: string;
   // Momence membership ids that count as the intro offer (comma-separated)
   readonly MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS?: string;
   // Google review deep link used by the review-request journey
@@ -57,6 +65,8 @@ interface ImportMetaEnv {
   // Dev-mode email whitelist gate
   readonly EMAIL_DEV_MODE?: string;
   readonly EMAIL_DEV_WHITELIST?: string;
+  // Template keys / prefix globs (e.g. "partner-*") that send for real even in dev mode
+  readonly EMAIL_LIVE_TEMPLATES?: string;
   // Public base URL of the landing site (e.g. https://pyresauna.com). Used for
   // links in emails, and by the admin tools for short-link origins, event
   // links, and the blog-posts/events feeds.

@@ -37,6 +37,21 @@ export interface EmailSendRow {
   sent_at: string;
 }
 
+export interface PartnerVerificationRow {
+  id: string;
+  partner_slug: string;
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_email: string;
+  partner_member_email: string | null;
+  customer_phone: string | null;
+  status: 'pending' | 'confirmed' | 'denied' | 'expired';
+  momence_member_id: number | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmailSuppressionRow {
   id: string;
   email: string;

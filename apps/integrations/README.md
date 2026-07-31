@@ -106,6 +106,8 @@ Key design decisions:
 | `/api/webhooks/mailchimp` | GET/POST | URL secret param + HMAC signature | Mailchimp unsubscribes/cleans into the suppression store |
 | `/api/cron/tick` | GET/POST | `Bearer CRON_SECRET` | Hourly cron entry point (QStash schedule) — runs all registered jobs |
 | `/api/unsubscribe` | GET/POST | HMAC-signed token | Footer-link (GET) and RFC 8058 one-click (POST) unsubscribe |
+| `/api/partner/request` | POST | `Bearer PARTNER_API_SECRET` | Partner-discount verification intake, relayed server-to-server from the landing page |
+| `/api/partner/decision` | GET | HMAC-signed token | One-click partner confirm/deny — tags the member in Momence on confirm |
 | `/api/img/[...path]` | GET | none | Caching proxy for Momence session images used in emails |
 
 Every webhook route is wrapped by `instrumentWebhook()`
@@ -266,6 +268,31 @@ flowchart LR
 The check **fails closed**: if the suppression store is unreachable, every marketing
 send is treated as suppressed. Compliance beats reach.
 
+### Partner verification (reciprocal discounts)
+
+Members of partner businesses (BFT Carytown first) get 15% off via a Momence
+**customer tag + price rule** — no discount code. The flow: a customer submits the
+form on the landing page's partner page → landing page relays to
+`/api/partner/request` → we email the partner contact signed one-click
+Confirm/Deny links (`/api/partner/decision`) → on confirm, the member is
+found-or-created in Momence and tagged, and the price rule applies the discount
+automatically at checkout. The `partner-maintenance` cron job expires requests
+older than 14 days and emails each partner a quarterly reconciliation list of
+tagged members (send_key-gated). Code: `src/lib/partner/`, config in
+`src/lib/partner/config.ts`.
+
+Adding a partner requires manual Momence dashboard setup **before** launch:
+
+1. Create the customer tag named in the partner's config (e.g. `partner-bft`) —
+   the tag map is Redis-cached for 24h, so create it first.
+2. Create a Price Rule keyed on that tag: 15% off single sessions + credit packs.
+3. Set the partner's contact-email env var (e.g. `PARTNER_BFT_CONTACT_EMAIL`) and
+   add the entry to `PARTNERS` in `src/lib/partner/config.ts`.
+
+Shared env: `PARTNER_API_SECRET` (also set on the landing page along with
+`INTEGRATIONS_API_URL`), `PARTNER_LINK_SECRET` (falls back to `CRON_SECRET`),
+`PARTNER_CC_EMAIL` (Pyre address CC'd on partner-facing email).
+
 ## Data & state
 
 | Store | What lives there |
@@ -273,6 +300,7 @@ send is treated as suppressed. Compliance beats reach.
 | **Supabase** `journey_enrollments` | One row per journey+member (unique, never deleted): current step, `next_at`, status, exit reason |
 | **Supabase** `email_sends` | Append-only send log + long-horizon dedupe via unique `send_key` |
 | **Supabase** `email_suppressions` | Marketing suppression source of truth (unique lowercase email, reason, source) |
+| **Supabase** `partner_verifications` | Partner-discount verification workflow/audit state (pending → confirmed/denied/expired); the Momence tag itself stays the discount's source of truth |
 | **Upstash Redis** | Sweep/sales cursors (`sales:cursor`, `sweep:*:cursor`), webhook-retry idempotency keys, short-TTL Momence caches (member packs, tag map), webhook execution traces (shared with the landing-page admin dashboard) |
 | **PostHog** | `booking_completed/cancelled`, `purchase_completed`, `journey_*`, `email_delivered/opened/clicked/bounced/complained` — all keyed by lowercase email as distinct id |
 

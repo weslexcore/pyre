@@ -56,6 +56,39 @@ export interface UnusedCreditReminderProps extends MarketingEmailBaseProps {
   creditsLabel: string;
 }
 
+// Partner verification lifecycle (all transactional — no unsubscribeUrl).
+
+export interface PartnerVerificationRequestProps {
+  partnerName: string;
+  customerName: string;
+  customerEmail: string;
+  partnerMemberEmail: string | null;
+  confirmUrl: string;
+  denyUrl: string;
+  expiresDays: number;
+}
+
+export interface PartnerVerifiedProps {
+  firstName: string;
+  partnerName: string;
+  discountPercent: number;
+  bookUrl: string;
+}
+
+export interface PartnerDeniedProps {
+  firstName: string;
+  partnerName: string;
+  /** 'denied' = partner said no; 'expired' = nobody responded in time. */
+  reason: 'denied' | 'expired';
+}
+
+export interface PartnerReconciliationProps {
+  partnerName: string;
+  /** e.g. "2026-q3" */
+  quarterLabel: string;
+  members: { name: string; email: string }[];
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -65,6 +98,10 @@ export interface EmailPropsByTemplate {
   'review-request': ReviewRequestProps;
   'credit-expiry-reminder': CreditExpiryReminderProps;
   'unused-credit-reminder': UnusedCreditReminderProps;
+  'partner-verification-request': PartnerVerificationRequestProps;
+  'partner-verified': PartnerVerifiedProps;
+  'partner-denied': PartnerDeniedProps;
+  'partner-reconciliation': PartnerReconciliationProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

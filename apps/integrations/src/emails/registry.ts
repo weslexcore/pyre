@@ -5,6 +5,10 @@ import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { IntroFollowUp } from './templates/IntroFollowUp';
 import { MembershipPitch } from './templates/MembershipPitch';
+import { PartnerDenied } from './templates/PartnerDenied';
+import { PartnerReconciliation } from './templates/PartnerReconciliation';
+import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
+import { PartnerVerified } from './templates/PartnerVerified';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
@@ -50,6 +54,22 @@ export const EMAIL_TEMPLATES: Registry = {
   'unused-credit-reminder': {
     subject: (p) => `You still have ${p.creditsLabel} at Pyre`,
     Component: UnusedCreditReminder,
+  },
+  'partner-verification-request': {
+    subject: (p) => `Membership check: ${p.customerName} - Pyre x ${p.partnerName}`,
+    Component: PartnerVerificationRequest,
+  },
+  'partner-verified': {
+    subject: (p) => `You're verified - ${p.discountPercent}% off at Pyre`,
+    Component: PartnerVerified,
+  },
+  'partner-denied': {
+    subject: () => 'About your Pyre partner discount request',
+    Component: PartnerDenied,
+  },
+  'partner-reconciliation': {
+    subject: (p) => `Quarterly member check - Pyre x ${p.partnerName}`,
+    Component: PartnerReconciliation,
   },
 };
 
