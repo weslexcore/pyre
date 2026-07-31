@@ -62,6 +62,7 @@ export interface PartnerVerificationRequestProps {
   partnerName: string;
   customerName: string;
   customerEmail: string;
+  customerPhone: string | null;
   partnerMemberEmail: string | null;
   confirmUrl: string;
   denyUrl: string;

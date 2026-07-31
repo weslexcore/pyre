@@ -19,7 +19,7 @@ export function PartnerVerified({
         credit packs is now live at Pyre.
       </Text>
       <Text style={text}>
-        There's no code to enter - just book with the same email you used to verify, and the
+        Just sign up for a session with the same email you used to verify, and the
         discount comes off automatically at checkout.
       </Text>
       <Button href={bookUrl} style={button}>

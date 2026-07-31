@@ -40,7 +40,7 @@ function decisionUrl(requestId: string, action: DecisionAction): string | null {
 }
 
 function bookUrl(partner: PartnerConfig): string {
-  const site = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
   return `${site}/events?utm_source=${partner.slug}&utm_medium=partner&utm_campaign=${partner.slug}-verified`;
 }
 
@@ -115,6 +115,7 @@ export async function createVerificationRequest(params: {
         partnerName: partner.name,
         customerName: `${params.customerFirstName.trim()} ${params.customerLastName.trim()}`,
         customerEmail,
+        customerPhone: params.customerPhone?.trim() || null,
         partnerMemberEmail,
         confirmUrl,
         denyUrl,

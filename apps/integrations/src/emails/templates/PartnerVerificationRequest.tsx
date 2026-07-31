@@ -21,6 +21,7 @@ export function PartnerVerificationRequest({
   partnerName,
   customerName,
   customerEmail,
+  customerPhone,
   partnerMemberEmail,
   confirmUrl,
   denyUrl,
@@ -30,16 +31,23 @@ export function PartnerVerificationRequest({
     <EmailLayout preview={`Is ${customerName} a ${partnerName} member?`}>
       <Text style={heading}>Membership check from Pyre</Text>
       <Text style={text}>
-        Someone asked for the {partnerName} member discount at Pyre. If they're an active member,
-        one click below verifies them - they'll get their discount automatically at our checkout.
+        {customerName} asked for the {partnerName} member discount at Pyre. If they're an active member,
+        one click below verifies them and they'll get their discount automatically at our checkout.
       </Text>
 
       <Text style={detail}>
         <strong>Name:</strong> {customerName}
       </Text>
-      <Text style={{ ...detail, margin: partnerMemberEmail ? '0 0 4px' : '0 0 20px' }}>
+      <Text
+        style={{ ...detail, margin: customerPhone || partnerMemberEmail ? '0 0 4px' : '0 0 20px' }}
+      >
         <strong>Email:</strong> {customerEmail}
       </Text>
+      {customerPhone && (
+        <Text style={{ ...detail, margin: partnerMemberEmail ? '0 0 4px' : '0 0 20px' }}>
+          <strong>Phone:</strong> {customerPhone}
+        </Text>
+      )}
       {partnerMemberEmail && (
         <Text style={{ ...detail, margin: '0 0 20px' }}>
           <strong>Email on their {partnerName} account:</strong> {partnerMemberEmail}
@@ -68,6 +76,7 @@ PartnerVerificationRequest.PreviewProps = {
   partnerName: 'BFT Carytown',
   customerName: 'Jane Doe',
   customerEmail: 'jane@example.com',
+  customerPhone: '+18045550123',
   partnerMemberEmail: 'jane.doe@gmail.com',
   confirmUrl: 'https://pyre-integrations.vercel.app/api/partner/decision?token=preview-confirm',
   denyUrl: 'https://pyre-integrations.vercel.app/api/partner/decision?token=preview-deny',
