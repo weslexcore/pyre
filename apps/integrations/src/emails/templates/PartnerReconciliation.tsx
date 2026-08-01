@@ -36,8 +36,7 @@ export function PartnerReconciliation({
       <Hr style={{ borderColor: COLORS.sky, margin: '16px 0 20px' }} />
 
       <Text style={text}>
-        Thanks for keeping this easy - and for sending your people our way. Wes + Julien, Pyre
-        Sauna
+        Thanks for keeping this easy - and for sending your people our way. Wes + Julien, Pyre Sauna
       </Text>
     </EmailLayout>
   );

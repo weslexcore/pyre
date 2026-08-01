@@ -1,16 +1,10 @@
-// Dev-mode email gate. When EMAIL_DEV_MODE=true, emails are only delivered to
-// addresses on EMAIL_DEV_WHITELIST; everything else is suppressed. Enforced at
-// the single sendTemplate() choke point so ALL emails (confirmations,
-// first-timer, future cron/journeys) honor it automatically.
-//
-// EMAIL_LIVE_TEMPLATES carves template-level exceptions out of dev mode: a
-// comma-separated list of exact template keys and/or `prefix-*` globs (e.g.
-// "partner-*") that deliver for real even while everything else stays gated.
-// Lets one feature go live without opening the floodgates.
-
-export function isDevMode(): boolean {
-  return import.meta.env.EMAIL_DEV_MODE === 'true';
-}
+// Template-level email gate. EMAIL_LIVE_TEMPLATES is the allowlist of what
+// delivers for real: a comma-separated list of exact template keys and/or
+// `prefix-*` globs (e.g. "partner-*"); `*` makes every template live. Templates
+// NOT on the list only reach addresses on EMAIL_DEV_WHITELIST — so emails under
+// development stay dark by default, and whitelisted testers still receive
+// everything. Enforced at the single sendTemplate() choke point so ALL emails
+// (confirmations, first-timer, cron/journeys) honor it automatically.
 
 export function isLiveTemplate(template: string): boolean {
   // process.env fallback: vars added after the cached build only exist at runtime.
@@ -23,7 +17,8 @@ export function isLiveTemplate(template: string): boolean {
 }
 
 export function getWhitelist(): string[] {
-  return (import.meta.env.EMAIL_DEV_WHITELIST ?? '')
+  // process.env fallback: vars added after the cached build only exist at runtime.
+  return (import.meta.env.EMAIL_DEV_WHITELIST ?? process.env.EMAIL_DEV_WHITELIST ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

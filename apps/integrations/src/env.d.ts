@@ -62,10 +62,11 @@ interface ImportMetaEnv {
   readonly GOOGLE_REVIEW_URL?: string;
   // Speed up journey delays for whitelist testing (hours -> minutes)
   readonly JOURNEY_FAST_MODE?: string;
-  // Dev-mode email whitelist gate
-  readonly EMAIL_DEV_MODE?: string;
+  // Addresses that receive ALL emails, including templates not yet live
   readonly EMAIL_DEV_WHITELIST?: string;
-  // Template keys / prefix globs (e.g. "partner-*") that send for real even in dev mode
+  // Allowlist of templates that send for real: comma-separated exact keys
+  // and/or prefix globs (e.g. "partner-*"); "*" = all live. Unlisted templates
+  // deliver only to EMAIL_DEV_WHITELIST addresses; unset = everything gated.
   readonly EMAIL_LIVE_TEMPLATES?: string;
   // Public base URL of the landing site (e.g. https://pyresauna.com). Used for
   // links in emails, and by the admin tools for short-link origins, event

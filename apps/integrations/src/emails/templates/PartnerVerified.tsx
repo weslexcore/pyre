@@ -19,8 +19,8 @@ export function PartnerVerified({
         credit packs is now live at Pyre.
       </Text>
       <Text style={text}>
-        Just sign up for a session with the same email you used to verify, and the
-        discount comes off automatically at checkout.
+        Just sign up for a session with the same email you used to verify, and the discount comes
+        off automatically at checkout.
       </Text>
       <Button href={bookUrl} style={button}>
         Book a session

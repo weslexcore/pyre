@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailPropsByTemplate, EmailTemplateKey } from '@/emails/types';
-import { isAllowedRecipient, isDevMode, isLiveTemplate } from './dev-mode';
+import { isAllowedRecipient, isLiveTemplate } from './dev-mode';
 import { getResend } from './resend';
 import { attachResendId, claimSend, recordSend, releaseSend } from './send-log';
 import { isSuppressed } from './suppression';
@@ -69,12 +69,12 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     return { status: 'skipped', reason: 'resend-not-configured' };
   }
 
-  // EMAIL_LIVE_TEMPLATES exempts specific templates from the dev-mode gate so
-  // one feature can ship while the rest of the email system stays whitelisted.
-  const devGated = isDevMode() && !isLiveTemplate(template);
+  // Templates not on EMAIL_LIVE_TEMPLATES only deliver to EMAIL_DEV_WHITELIST
+  // addresses — emails still in development stay dark for real recipients.
+  const devGated = !isLiveTemplate(template);
   if (devGated && !isAllowedRecipient(to)) {
-    console.info(`[Email] Dev mode: suppressing ${template} to ${to} (not whitelisted)`);
-    return { status: 'suppressed', reason: 'dev-mode-not-whitelisted' };
+    console.info(`[Email] Template not live: suppressing ${template} to ${to} (not whitelisted)`);
+    return { status: 'suppressed', reason: 'template-not-live' };
   }
 
   // CC addresses go through the same dev-mode gate individually so a test send

@@ -353,8 +353,11 @@ yarn workspace @pyre/integrations email   # react-email template preview on :303
 
 Safety rails for testing against real data:
 
-- `EMAIL_DEV_MODE=true` + `EMAIL_DEV_WHITELIST` — only whitelisted recipients get
-  email; everyone else is suppressed with a logged reason.
+- `EMAIL_LIVE_TEMPLATES` — allowlist of templates that send for real
+  (comma-separated exact keys and/or `prefix-*` globs, e.g. `partner-*`; `*` =
+  everything live). Templates not on the list only reach `EMAIL_DEV_WHITELIST`
+  addresses — everyone else is suppressed with a logged reason. Whitelisted
+  recipients receive ALL templates, live or not. Unset = everything gated.
 - `JOURNEY_FAST_MODE=true` — journey step delays run in minutes instead of hours,
   so a multi-week journey can be walked end-to-end in one sitting.
 - `?dryRun=1` on the cron tick — every job reports what it *would* do without

@@ -31,8 +31,9 @@ export function PartnerVerificationRequest({
     <EmailLayout preview={`Is ${customerName} a ${partnerName} member?`}>
       <Text style={heading}>Membership check from Pyre</Text>
       <Text style={text}>
-        {customerName} asked for the {partnerName} member discount at Pyre. If they're an active member,
-        one click below verifies them and they'll get their discount automatically at our checkout.
+        {customerName} asked for the {partnerName} member discount at Pyre. If they're an active
+        member, one click below verifies them and they'll get their discount automatically at our
+        checkout.
       </Text>
 
       <Text style={detail}>

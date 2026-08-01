@@ -40,7 +40,8 @@ function decisionUrl(requestId: string, action: DecisionAction): string | null {
 }
 
 function bookUrl(partner: PartnerConfig): string {
-  const site = import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site =
+    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
   return `${site}/events?utm_source=${partner.slug}&utm_medium=partner&utm_campaign=${partner.slug}-verified`;
 }
 
@@ -225,7 +226,11 @@ export async function applyDecision(
     await captureEvent({
       distinctId: row.customer_email,
       event: 'partner_verification_confirmed',
-      properties: { partner: partner.slug, momence_member_id: memberId, member_created: memberCreated },
+      properties: {
+        partner: partner.slug,
+        momence_member_id: memberId,
+        member_created: memberCreated,
+      },
     });
 
     return { outcome: 'confirmed' };
@@ -346,7 +351,10 @@ async function runReconciliation(
       const { members: batch } = await fetchMembersFiltered({
         page,
         pageSize: RECONCILIATION_PAGE_SIZE,
-        filter: { type: 'and', customerTags: { type: 'or', tags: [tagId], customerHaveTag: 'have' } },
+        filter: {
+          type: 'and',
+          customerTags: { type: 'or', tags: [tagId], customerHaveTag: 'have' },
+        },
       });
       members.push(
         ...batch.map((m) => ({ name: `${m.firstName} ${m.lastName}`.trim(), email: m.email }))
@@ -388,9 +396,7 @@ async function runReconciliation(
   return { sent, skipped };
 }
 
-export async function runPartnerMaintenance(
-  ctx: CronJobContext
-): Promise<Record<string, unknown>> {
+export async function runPartnerMaintenance(ctx: CronJobContext): Promise<Record<string, unknown>> {
   const expiry = await expirePendingRequests(ctx);
   const reconciliation = await runReconciliation(ctx);
   return {

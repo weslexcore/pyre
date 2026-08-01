@@ -10,12 +10,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export interface TemplateOption {
   key: string;
   defaultProps: Record<string, unknown>;
+  /** Matches EMAIL_LIVE_TEMPLATES — delivers to real recipients. */
+  live: boolean;
 }
 
 interface EmailTemplatePreviewProps {
   templates: TemplateOption[];
   /** Session types with dedicated confirmation copy — preset chips. */
   confirmationSessionTypes: string[];
+  /** Raw EMAIL_LIVE_TEMPLATES value, for the config summary. */
+  liveTemplatesConfig: string;
+  /** EMAIL_DEV_WHITELIST addresses — receive ALL templates, live or gated. */
+  whitelist: string[];
 }
 
 interface PreviewState {
@@ -26,6 +32,8 @@ interface PreviewState {
 export function EmailTemplatePreview({
   templates,
   confirmationSessionTypes,
+  liveTemplatesConfig,
+  whitelist,
 }: EmailTemplatePreviewProps) {
   const [selectedKey, setSelectedKey] = useState(templates[0]?.key ?? '');
   const [propsJson, setPropsJson] = useState(() =>
@@ -119,110 +127,160 @@ export function EmailTemplatePreview({
     }
   })();
 
+  const liveCount = templates.filter((t) => t.live).length;
+
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      {/* Template list */}
-      <nav className="shrink-0 lg:w-56">
-        <p className="mb-2 font-mono text-xs uppercase tracking-wide text-white/40">Templates</p>
-        <ul className="flex flex-row flex-wrap gap-1 lg:flex-col">
-          {templates.map((option) => (
-            <li key={option.key}>
-              <button
-                type="button"
-                onClick={() => selectTemplate(option)}
-                className={`w-full rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
-                  option.key === selectedKey
-                    ? 'bg-white/10 text-[var(--pyre-creme)]'
-                    : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-                }`}
-              >
-                {option.key}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      {/* Props editor */}
-      <section className="flex flex-col gap-3 lg:w-96 lg:shrink-0">
-        <div className="flex items-center justify-between">
-          <p className="font-mono text-xs uppercase tracking-wide text-white/40">Props</p>
-          <button
-            type="button"
-            onClick={resetToDefaults}
-            className="font-mono text-xs uppercase tracking-wide text-white/50 underline transition-colors hover:text-white"
-          >
-            Reset to defaults
-          </button>
-        </div>
-
-        {selectedKey === 'confirmation' && (
-          <div className="flex flex-wrap gap-1.5">
-            {confirmationSessionTypes.map((sessionType) => (
-              <button
-                key={sessionType}
-                type="button"
-                onClick={() => applySessionType(sessionType)}
-                className={`rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
-                  sessionType === currentSessionType
-                    ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/20 text-[var(--pyre-creme)]'
-                    : 'border-white/20 text-white/50 hover:border-white/40 hover:text-white/80'
-                }`}
-              >
-                {sessionType}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <textarea
-          value={propsJson}
-          onChange={(e) => setPropsJson(e.target.value)}
-          spellCheck={false}
-          rows={18}
-          className="w-full resize-y rounded-md border border-white/10 bg-white/5 p-3 font-mono text-xs leading-relaxed text-[var(--pyre-creme)] outline-none transition-colors focus:border-white/30"
-        />
-
-        <button
-          type="button"
-          onClick={() => void renderTemplate(selectedKey, propsJson)}
-          disabled={loading}
-          className="rounded-md bg-[var(--pyre-red)] px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {loading ? 'Rendering…' : 'Render'}
-        </button>
-
-        {error && (
-          <p className="rounded-md border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 p-3 font-mono text-xs text-[var(--pyre-red)]">
-            {error}
+    <div className="flex flex-col gap-6">
+      {/* Delivery gate status: which templates send for real, and who receives
+          gated templates anyway. Display-only — source of truth is the env. */}
+      <section className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-wide text-white/40">Delivery gate</p>
+          <p className="mt-1 text-sm text-[var(--pyre-creme)]">
+            {liveCount} of {templates.length} templates live
           </p>
-        )}
+          <p className="mt-1 font-mono text-xs text-white/50">
+            EMAIL_LIVE_TEMPLATES={liveTemplatesConfig}
+          </p>
+        </div>
+        <div className="lg:max-w-md lg:text-right">
+          <p className="font-mono text-xs uppercase tracking-wide text-white/40">
+            Whitelist recipients
+          </p>
+          <p className="mt-1 text-xs text-white/50">
+            These addresses receive all templates, live or gated:
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 lg:justify-end">
+            {whitelist.length > 0 ? (
+              whitelist.map((email) => (
+                <span
+                  key={email}
+                  className="rounded-full border border-white/20 px-2.5 py-1 font-mono text-[11px] text-white/70"
+                >
+                  {email}
+                </span>
+              ))
+            ) : (
+              <span className="font-mono text-[11px] uppercase tracking-wide text-white/30">
+                (none — gated templates deliver to no one)
+              </span>
+            )}
+          </div>
+        </div>
       </section>
 
-      {/* Rendered preview */}
-      <section className="min-w-0 flex-1">
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="font-mono text-xs uppercase tracking-wide text-white/40">Subject</span>
-          <span className="truncate text-sm text-[var(--pyre-creme)]">
-            {preview?.subject ?? '—'}
-          </span>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
-          {preview ? (
-            // Empty sandbox: styles render, scripts in the email HTML don't.
-            <iframe
-              title="Email preview"
-              srcDoc={preview.html}
-              sandbox=""
-              className="h-[75vh] w-full border-0 bg-white"
-            />
-          ) : (
-            <div className="flex h-[75vh] items-center justify-center font-mono text-xs uppercase tracking-wide text-white/30">
-              {loading ? 'Rendering…' : 'No preview'}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Template list */}
+        <nav className="shrink-0 lg:w-56">
+          <p className="mb-2 font-mono text-xs uppercase tracking-wide text-white/40">Templates</p>
+          <ul className="flex flex-row flex-wrap gap-1 lg:flex-col">
+            {templates.map((option) => (
+              <li key={option.key}>
+                <button
+                  type="button"
+                  onClick={() => selectTemplate(option)}
+                  className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
+                    option.key === selectedKey
+                      ? 'bg-white/10 text-[var(--pyre-creme)]'
+                      : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                  }`}
+                >
+                  <span
+                    title={
+                      option.live ? 'Live — delivers to real recipients' : 'Gated — whitelist only'
+                    }
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      option.live ? 'bg-emerald-400' : 'bg-white/20'
+                    }`}
+                  />
+                  <span className="min-w-0 truncate">{option.key}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Props editor */}
+        <section className="flex flex-col gap-3 lg:w-96 lg:shrink-0">
+          <div className="flex items-center justify-between">
+            <p className="font-mono text-xs uppercase tracking-wide text-white/40">Props</p>
+            <button
+              type="button"
+              onClick={resetToDefaults}
+              className="font-mono text-xs uppercase tracking-wide text-white/50 underline transition-colors hover:text-white"
+            >
+              Reset to defaults
+            </button>
+          </div>
+
+          {selectedKey === 'confirmation' && (
+            <div className="flex flex-wrap gap-1.5">
+              {confirmationSessionTypes.map((sessionType) => (
+                <button
+                  key={sessionType}
+                  type="button"
+                  onClick={() => applySessionType(sessionType)}
+                  className={`rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                    sessionType === currentSessionType
+                      ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/20 text-[var(--pyre-creme)]'
+                      : 'border-white/20 text-white/50 hover:border-white/40 hover:text-white/80'
+                  }`}
+                >
+                  {sessionType}
+                </button>
+              ))}
             </div>
           )}
-        </div>
-      </section>
+
+          <textarea
+            value={propsJson}
+            onChange={(e) => setPropsJson(e.target.value)}
+            spellCheck={false}
+            rows={18}
+            className="w-full resize-y rounded-md border border-white/10 bg-white/5 p-3 font-mono text-xs leading-relaxed text-[var(--pyre-creme)] outline-none transition-colors focus:border-white/30"
+          />
+
+          <button
+            type="button"
+            onClick={() => void renderTemplate(selectedKey, propsJson)}
+            disabled={loading}
+            className="rounded-md bg-[var(--pyre-red)] px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? 'Rendering…' : 'Render'}
+          </button>
+
+          {error && (
+            <p className="rounded-md border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 p-3 font-mono text-xs text-[var(--pyre-red)]">
+              {error}
+            </p>
+          )}
+        </section>
+
+        {/* Rendered preview */}
+        <section className="min-w-0 flex-1">
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="font-mono text-xs uppercase tracking-wide text-white/40">Subject</span>
+            <span className="truncate text-sm text-[var(--pyre-creme)]">
+              {preview?.subject ?? '—'}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
+            {preview ? (
+              // Empty sandbox: styles render, scripts in the email HTML don't.
+              <iframe
+                title="Email preview"
+                srcDoc={preview.html}
+                sandbox=""
+                className="h-[75vh] w-full border-0 bg-white"
+              />
+            ) : (
+              <div className="flex h-[75vh] items-center justify-center font-mono text-xs uppercase tracking-wide text-white/30">
+                {loading ? 'Rendering…' : 'No preview'}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
