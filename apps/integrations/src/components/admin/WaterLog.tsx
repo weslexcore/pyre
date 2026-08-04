@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import { type EntryType, SHOCK_DOSES, TARGETS, TUBS, type Tub } from '@/lib/water/charts';
+import { INSTRUCTIONS } from '@/lib/water/instructions';
 import {
   classifyReading,
   getRecommendations,
@@ -98,6 +99,35 @@ function ReadingChips({ record }: { record: WaterTestRow }) {
   );
 }
 
+function InstructionsPanel({ entryType }: { entryType: keyof typeof INSTRUCTIONS }) {
+  const instructions = INSTRUCTIONS[entryType];
+  if (!instructions) return null;
+  return (
+    <details className="mb-4 rounded border border-[var(--pyre-blue)]/30 bg-[var(--pyre-blue)]/5">
+      <summary className="cursor-pointer select-none px-3 py-2.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-blue)] hover:opacity-80">
+        {instructions.title}
+      </summary>
+      <div className="space-y-3 px-3 pt-1 pb-3 text-sm text-white/70">
+        {instructions.sections.map((section) => (
+          <div key={section.heading ?? 'steps'}>
+            {section.heading && (
+              <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-white/40">
+                {section.heading}
+              </div>
+            )}
+            <ol className="list-decimal space-y-1 pl-5">
+              {section.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
+        {instructions.footnote && <p className="text-xs text-white/40">{instructions.footnote}</p>}
+      </div>
+    </details>
+  );
+}
+
 function parseReading(raw: string): number | null | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -105,7 +135,7 @@ function parseReading(raw: string): number | null | undefined {
   return Number.isFinite(value) ? value : undefined; // undefined = invalid input
 }
 
-export function WaterLog() {
+export function WaterLog({ userEmail }: { userEmail: string }) {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   // --- entry form ---
@@ -131,6 +161,7 @@ export function WaterLog() {
   const [filter, setFilter] = useState<'all' | Tub>('all');
   const [logLoading, setLogLoading] = useState(false);
   const [logError, setLogError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadLog = useCallback(async (offset: number, tubFilter: 'all' | Tub) => {
     setLogLoading(true);
@@ -171,7 +202,9 @@ export function WaterLog() {
     return readings as Readings;
   };
 
-  const startShockOrRefill = (type: EntryType) => {
+  const SHOCK_NOTE = 'Tub closed for shock. Cover off 20+ min, retest before reopening.';
+
+  const switchEntryType = (type: EntryType) => {
     setEntryType(type);
     setPhase('entering');
     setRecommendations([]);
@@ -186,10 +219,12 @@ export function WaterLog() {
           accepted: true,
         }))
       );
-      setNotes('Tub closed for shock — cover off 20+ min, retest before reopening.');
+      setNotes((prev) => prev.trim() || SHOCK_NOTE);
     } else {
       setDoseDrafts([]);
-      if (type === 'refill') setNotes('');
+      // Drop the prefilled shock note when leaving shock, but never notes the
+      // employee typed themselves.
+      setNotes((prev) => (prev === SHOCK_NOTE ? '' : prev));
     }
   };
 
@@ -281,6 +316,31 @@ export function WaterLog() {
     }
   };
 
+  const deleteEntry = async (record: WaterTestRow) => {
+    if (!window.confirm(`Delete this ${record.tub} tub entry? This can't be undone.`)) return;
+    setDeletingId(record.id);
+    setLogError('');
+    try {
+      const res = await fetch(`/api/admin/water-tests?id=${encodeURIComponent(record.id)}`, {
+        method: 'DELETE',
+      });
+      if (res.status === 401) {
+        setSessionExpired(true);
+        return;
+      }
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setRecords((prev) => prev.filter((r) => r.id !== record.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Failed to delete entry');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (sessionExpired) {
     return (
       <div className="max-w-md mx-auto text-center py-16 px-4">
@@ -334,7 +394,7 @@ export function WaterLog() {
               <button
                 key={value}
                 type="button"
-                onClick={() => startShockOrRefill(value)}
+                onClick={() => switchEntryType(value)}
                 disabled={reviewing}
                 className={pillClass(entryType === value)}
               >
@@ -343,6 +403,8 @@ export function WaterLog() {
             ))}
           </div>
         </div>
+
+        {entryType !== 'test' && <InstructionsPanel entryType={entryType} />}
 
         <div className="mb-4 grid grid-cols-2 gap-3">
           {READING_FIELDS.map((field) => (
@@ -594,7 +656,19 @@ export function WaterLog() {
           )}
 
           {record.notes && <div className="mt-2 text-sm text-white/50">{record.notes}</div>}
-          <div className="mt-2 font-mono text-xs text-white/30">{record.recorded_by}</div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <span className="font-mono text-xs text-white/30">{record.recorded_by}</span>
+            {record.recorded_by.toLowerCase() === userEmail.toLowerCase() && (
+              <button
+                type="button"
+                onClick={() => void deleteEntry(record)}
+                disabled={deletingId === record.id}
+                className="font-mono text-xs uppercase tracking-wide text-white/30 transition-colors hover:text-[var(--pyre-red)] disabled:opacity-50"
+              >
+                {deletingId === record.id ? 'Deleting…' : 'Delete'}
+              </button>
+            )}
+          </div>
         </div>
       ))}
 

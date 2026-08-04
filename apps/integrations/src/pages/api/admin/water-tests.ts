@@ -1,9 +1,10 @@
 // Cold-tub water testing log API for the /admin/water staff tool: GET lists
 // entries newest-first (optionally per tub), POST records a new entry with
-// readings and the chemicals actually added. Staff-gated (requireStaff), and —
-// as the app's first cookie-authed mutating route — CSRF-guarded in-route via
-// the JSON content-type requirement plus assertSameOrigin (global checkOrigin
-// stays off for the Mailchimp webhook; see astro.config.mjs).
+// readings and the chemicals actually added, DELETE removes an entry the
+// caller recorded themselves. Staff-gated (requireStaff), and — as the app's
+// first cookie-authed mutating routes — CSRF-guarded in-route via
+// assertSameOrigin plus (on POST) the JSON content-type requirement (global
+// checkOrigin stays off for the Mailchimp webhook; see astro.config.mjs).
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
@@ -162,4 +163,38 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   return json({ record: data as WaterTestRow }, 201);
+};
+
+export const DELETE: APIRoute = async ({ cookies, request, url }) => {
+  const gate = await requireStaff(cookies);
+  if (gate instanceof Response) return gate;
+
+  const crossOrigin = assertSameOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const id = url.searchParams.get('id');
+  if (!id) return json({ error: 'id is required' }, 400);
+
+  const { data: existing, error: fetchError } = await db
+    .from('water_tests')
+    .select('id, recorded_by')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!existing) return json({ error: 'Entry not found' }, 404);
+
+  // Only the person who logged an entry can remove it — the log is an audit
+  // record, so no editing others' entries, admins included.
+  const email = (gate.user.email ?? '').toLowerCase();
+  if ((existing.recorded_by ?? '').toLowerCase() !== email) {
+    return json({ error: 'You can only delete entries you recorded' }, 403);
+  }
+
+  const { error } = await db.from('water_tests').delete().eq('id', id);
+  if (error) return json({ error: error.message }, 500);
+
+  return json({ ok: true });
 };

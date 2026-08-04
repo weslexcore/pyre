@@ -4,6 +4,10 @@
 // AdminLayout gate is UX, the API gate is the security boundary.
 import { WaterLog } from '@/components/admin/WaterLog';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+
+// Lets the island show the delete button only on the viewer's own entries
+// (the API re-checks ownership server-side).
+const userEmail = Astro.locals.adminUser?.email ?? '';
 ---
 
 <AdminLayout
@@ -11,5 +15,5 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
   subtitle="Test in order: TA → pH → chlorine → salt. Dose in that order too; run pumps ~15 min after dosing and retest."
   staffOk
 >
-  <WaterLog client:load />
+  <WaterLog client:load userEmail={userEmail} />
 </AdminLayout>
