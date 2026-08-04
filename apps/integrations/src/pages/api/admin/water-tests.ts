@@ -156,8 +156,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (!chemical || chemical.length > 64) {
       return json({ error: 'each dose needs a chemical name (max 64 chars)' }, 400);
     }
-    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 500) {
-      return json({ error: 'each dose needs grams between 0 and 500' }, 400);
+    // Sanity bound only — a fresh salt fill is ~920 g, and dosing badly
+    // depleted salt water can top 1 kg.
+    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 2000) {
+      return json({ error: 'each dose needs grams between 0 and 2000' }, 400);
     }
     const dose: DoseRecord = { chemical, grams };
     if (typeof d.reason === 'string' && d.reason) dose.reason = d.reason.slice(0, 200);
