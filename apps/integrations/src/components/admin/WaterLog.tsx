@@ -13,6 +13,20 @@ import {
   type Readings,
   type Recommendation,
 } from '@/lib/water/recommendations';
+import { WaterTrends } from './WaterTrends';
+
+const RANGES = [
+  { key: '7d', label: '7d', days: 7 },
+  { key: '30d', label: '30d', days: 30 },
+  { key: 'all', label: 'All', days: null },
+] as const;
+
+type RangeKey = (typeof RANGES)[number]['key'];
+
+const sinceIso = (rangeKey: RangeKey): string | null => {
+  const days = RANGES.find((r) => r.key === rangeKey)?.days ?? null;
+  return days == null ? null : new Date(Date.now() - days * 86_400_000).toISOString();
+};
 
 interface LogResponse {
   records: WaterTestRow[];
@@ -163,31 +177,58 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const [logError, setLogError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadLog = useCallback(async (offset: number, tubFilter: 'all' | Tub) => {
-    setLogLoading(true);
-    setLogError('');
-    try {
-      const params = new URLSearchParams({ limit: '25', offset: String(offset) });
-      if (tubFilter !== 'all') params.set('tub', tubFilter);
-      const res = await fetch(`/api/admin/water-tests?${params}`);
-      if (res.status === 401 || res.status === 403) {
-        setSessionExpired(true);
-        return;
+  // --- trends chart ---
+  const [range, setRange] = useState<RangeKey>('30d');
+  const [chartRecords, setChartRecords] = useState<WaterTestRow[]>([]);
+
+  const loadLog = useCallback(
+    async (offset: number, tubFilter: 'all' | Tub, rangeKey: RangeKey) => {
+      setLogLoading(true);
+      setLogError('');
+      try {
+        const params = new URLSearchParams({ limit: '25', offset: String(offset) });
+        if (tubFilter !== 'all') params.set('tub', tubFilter);
+        const since = sinceIso(rangeKey);
+        if (since) params.set('since', since);
+        const res = await fetch(`/api/admin/water-tests?${params}`);
+        if (res.status === 401 || res.status === 403) {
+          setSessionExpired(true);
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as LogResponse;
+        setRecords((prev) => (offset === 0 ? data.records : [...prev, ...data.records]));
+        setTotal(data.total);
+      } catch (err) {
+        setLogError(err instanceof Error ? err.message : 'Failed to load log');
+      } finally {
+        setLogLoading(false);
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    },
+    []
+  );
+
+  // The chart wants the whole window in one fetch (up to the API's 100-row
+  // cap), not the log's 25-row pages.
+  const loadChart = useCallback(async (tubFilter: 'all' | Tub, rangeKey: RangeKey) => {
+    try {
+      const params = new URLSearchParams({ limit: '100' });
+      if (tubFilter !== 'all') params.set('tub', tubFilter);
+      const since = sinceIso(rangeKey);
+      if (since) params.set('since', since);
+      const res = await fetch(`/api/admin/water-tests?${params}`);
+      if (!res.ok) return; // the log surfaces fetch problems; the chart stays quiet
       const data = (await res.json()) as LogResponse;
-      setRecords((prev) => (offset === 0 ? data.records : [...prev, ...data.records]));
-      setTotal(data.total);
-    } catch (err) {
-      setLogError(err instanceof Error ? err.message : 'Failed to load log');
-    } finally {
-      setLogLoading(false);
+      setChartRecords(data.records);
+    } catch {
+      // ignore — chart is supplementary
     }
   }, []);
 
   useEffect(() => {
-    void loadLog(0, filter);
-  }, [loadLog, filter]);
+    void loadLog(0, filter, range);
+    void loadChart(filter, range);
+  }, [loadLog, loadChart, filter, range]);
 
   const collectReadings = (): Readings | null => {
     const readings: Record<string, number | null> = {};
@@ -297,6 +338,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       if (filter === 'all' || filter === tub) {
         setRecords((prev) => [data.record as WaterTestRow, ...prev]);
         setTotal((prev) => prev + 1);
+        setChartRecords((prev) => [data.record as WaterTestRow, ...prev]);
       }
       setSavedReminder(
         doses.length > 0
@@ -334,6 +376,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       }
       setRecords((prev) => prev.filter((r) => r.id !== record.id));
       setTotal((prev) => Math.max(0, prev - 1));
+      setChartRecords((prev) => prev.filter((r) => r.id !== record.id));
     } catch (err) {
       setLogError(err instanceof Error ? err.message : 'Failed to delete entry');
     } finally {
@@ -596,10 +639,21 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         </div>
       </div>
 
-      {/* ---- Log ---- */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="font-primary-semibold text-lg">Log</h2>
+      {/* ---- Filters (scope the trends chart and the log) ---- */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex gap-2">
+          {RANGES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => setRange(r.key)}
+              className={pillClass(range === r.key)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2">
           {(['all', ...TUBS] as const).map((value) => (
             <button
               key={value}
@@ -612,6 +666,15 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           ))}
         </div>
       </div>
+
+      {/* ---- Trends ---- */}
+      <div className="mb-8 rounded-lg border border-white/10 bg-white/[0.02] p-4">
+        <h2 className="mb-3 font-primary-semibold text-lg">Trends</h2>
+        <WaterTrends records={chartRecords} visibleTubs={filter === 'all' ? [...TUBS] : [filter]} />
+      </div>
+
+      {/* ---- Log ---- */}
+      <h2 className="mb-4 font-primary-semibold text-lg">Log</h2>
 
       {logError && <p className="mb-3 text-sm text-[var(--pyre-red)]">{logError}</p>}
       {!logError && records.length === 0 && !logLoading && (
@@ -675,7 +738,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       {records.length < total && (
         <button
           type="button"
-          onClick={() => void loadLog(records.length, filter)}
+          onClick={() => void loadLog(records.length, filter, range)}
           disabled={logLoading}
           className="w-full rounded-md border border-white/20 px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white disabled:opacity-50"
         >

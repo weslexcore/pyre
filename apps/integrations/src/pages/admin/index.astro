@@ -1,26 +1,35 @@
 ---
-// Admin home: directory of every internal tool. Auth + header live in
-// AdminLayout; the card grid is static markup over ADMIN_TOOLS.
-import { ADMIN_TOOLS } from '@/components/admin/adminTools';
+// Admin home: directory of every internal tool, grouped by section. Auth +
+// header live in AdminLayout; the card grids are static markup over ADMIN_TOOLS.
+import { ADMIN_TOOL_SECTIONS, ADMIN_TOOLS } from '@/components/admin/adminTools';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
 <AdminLayout title="Admin" subtitle="Internal tools for the Pyre team.">
-  <ul class="grid gap-3 sm:grid-cols-2">
+  <div class="space-y-8">
     {
-      ADMIN_TOOLS.map((tool) => (
-        <li>
-          <a
-            href={tool.href}
-            class="block rounded-lg border border-white/10 bg-white/5 px-4 py-4 transition-colors hover:border-white/30 hover:bg-white/10"
-          >
-            <div class="font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
-              {tool.title}
-            </div>
-            <p class="mt-1 text-xs text-white/50">{tool.description}</p>
-          </a>
-        </li>
+      ADMIN_TOOL_SECTIONS.map((section) => (
+        <section>
+          <h2 class="border-b border-white/10 pb-2 font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+            {section.label}
+          </h2>
+          <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+            {ADMIN_TOOLS.filter((tool) => tool.section === section.key).map((tool) => (
+              <li>
+                <a
+                  href={tool.href}
+                  class="block rounded-lg border border-white/10 bg-white/5 px-4 py-4 transition-colors hover:border-white/30 hover:bg-white/10"
+                >
+                  <div class="font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
+                    {tool.title}
+                  </div>
+                  <p class="mt-1 text-xs text-white/50">{tool.description}</p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       ))
     }
-  </ul>
+  </div>
 </AdminLayout>

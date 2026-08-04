@@ -50,6 +50,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
   }
 
+  const since = url.searchParams.get('since');
+  if (since && Number.isNaN(Date.parse(since))) {
+    return json({ error: 'since must be an ISO date' }, 400);
+  }
+
   const limit = Math.min(
     Math.max(Number.parseInt(url.searchParams.get('limit') ?? '', 10) || DEFAULT_LIMIT, 1),
     MAX_LIMIT
@@ -62,6 +67,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
   if (tub) query = query.eq('tub', tub);
+  if (since) query = query.gte('created_at', since);
 
   const { data, error, count } = await query;
   if (error) return json({ error: error.message }, 500);

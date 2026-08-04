@@ -122,14 +122,18 @@ is the tool directory. Every `/admin/*` page shares `AdminLayout` (server-side
 gate + responsive nav) and every `/api/admin/*` route re-checks the session via
 `requireAdmin`.
 
-| Route | Purpose |
-| --- | --- |
-| `/admin` | Tool directory |
-| `/admin/email` | Email performance — sends, errors, deliverability, journeys |
-| `/admin/email-templates` | Every registered template rendered with editable props |
-| `/admin/utm-assist` | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
-| `/admin/webhooks` | Webhook execution log + health stats |
-| `/admin/campaigns` | Campaign performance (short-link clicks + PostHog attribution) |
+The directory groups tools into three sections: Operations, Marketing, and
+Monitoring.
+
+| Route | Section | Purpose |
+| --- | --- | --- |
+| `/admin` | — | Tool directory |
+| `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
+| `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
+| `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
+| `/admin/campaigns` | Marketing | Campaign performance (short-link clicks + PostHog attribution) |
+| `/admin/email` | Monitoring | Email performance — sends, errors, deliverability, journeys |
+| `/admin/webhooks` | Monitoring | Webhook execution log + health stats |
 
 The UTM/webhook/campaign tools were ported from the landing-page admin and read
 the same shared Upstash store via `@pyre/webhook-core`. Campaign performance
