@@ -17,11 +17,20 @@ create table public.water_tests (
   entry_type text not null default 'test'
     check (entry_type in ('test', 'shock', 'refill')),
   -- readings in the order they're tested (TA -> pH -> chlorine -> salt);
-  -- nullable because shock/refill entries may not include a full panel
+  -- nullable because shock/refill entries may not include a full panel.
+  -- free_chlorine_ppm is FC — the active sanitizer, what strips report and
+  -- what the 1-3 ppm target and 5 ppm hard limit refer to.
+  -- combined_chlorine_ppm is CC — spent sanitizer (chloramines), computed as
+  -- total minus free on strips with both pads; high CC means shock.
   ta_ppm numeric check (ta_ppm >= 0 and ta_ppm <= 1000),
   ph numeric check (ph >= 0 and ph <= 14),
-  chlorine_ppm numeric check (chlorine_ppm >= 0 and chlorine_ppm <= 50),
+  free_chlorine_ppm numeric check (free_chlorine_ppm >= 0 and free_chlorine_ppm <= 50),
+  combined_chlorine_ppm numeric
+    check (combined_chlorine_ppm >= 0 and combined_chlorine_ppm <= 50),
   salt_ppm numeric check (salt_ppm >= 0 and salt_ppm <= 20000),
+  -- how the readings were taken
+  test_method text
+    check (test_method in ('strips', 'digital_meter', 'tf_pro_salt')),
   -- chemicals actually added with this entry, e.g.
   -- [{"chemical": "Cold Water Balance", "grams": 23,
   --   "reason": "TA 70 ppm is below the 80-120 target", "recommended_grams": 23}]

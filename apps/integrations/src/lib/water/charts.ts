@@ -14,7 +14,19 @@ export type Tub = (typeof TUBS)[number];
 export const ENTRY_TYPES = ['test', 'shock', 'refill'] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
 
-export type Parameter = 'ta' | 'ph' | 'chlorine' | 'salt';
+export const TEST_METHODS = ['strips', 'digital_meter', 'tf_pro_salt'] as const;
+export type TestMethod = (typeof TEST_METHODS)[number];
+
+export const TEST_METHOD_LABELS: Record<TestMethod, string> = {
+  strips: 'Test strips',
+  digital_meter: 'Digital meter',
+  tf_pro_salt: 'TF-Pro Salt',
+};
+
+// 'chlorine' throughout the engine means FREE chlorine (FC) — the active
+// sanitizer that strips report and the dosing chart targets. 'cc' is combined
+// chlorine (chloramines) — spent sanitizer, total minus free.
+export type Parameter = 'ta' | 'ph' | 'chlorine' | 'cc' | 'salt';
 
 export const PRODUCTS = {
   taRaise: 'Cold Water Balance',
@@ -26,11 +38,14 @@ export const PRODUCTS = {
 } as const;
 
 // Target ranges [min, max]. TA and pH are house-adjusted (manual prints
-// 120–180 and 7.2–7.6); chlorine and salt are as printed.
+// 120–180 and 7.2–7.6); chlorine (FC) and salt are as printed. The CC ceiling
+// is the standard pool-operator shock threshold (0.5 ppm), not from the
+// printed manual — CC's ideal is zero.
 export const TARGETS: Record<Parameter, readonly [number, number]> = {
   ta: [80, 120],
   ph: [7.2, 7.8],
   chlorine: [1, 3],
+  cc: [0, 0.5],
   salt: [2200, 2500],
 };
 

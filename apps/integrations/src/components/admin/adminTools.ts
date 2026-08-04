@@ -21,6 +21,14 @@ export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
 
 export const ADMIN_TOOLS: AdminTool[] = [
   {
+    href: '/admin/schedule',
+    title: 'Staff Schedule',
+    navLabel: 'Schedule',
+    description:
+      'Weekly shift board with coverage status, availability-aware assignment, time off, and hours.',
+    section: 'operations',
+  },
+  {
     href: '/admin/water',
     title: 'Cold Tub Water Log',
     navLabel: 'Water',

@@ -1,0 +1,15 @@
+---
+// Time off: trips and recurring weekly unavailability. Auto-approves;
+// conflicts with existing assignments are flagged, never auto-fixed.
+import { ScheduleTimeOff } from '@/components/admin/ScheduleTimeOff';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Time Off"
+  subtitle="Trips use dates; standing patterns use weekly days. No times = whole day."
+>
+  <ScheduleTabs current="/admin/schedule/time-off" />
+  <ScheduleTimeOff client:load />
+</AdminLayout>

@@ -22,7 +22,8 @@ const SURFACE = '#23221c'; // --pyre-black; ring color so dots stay legible
 const PANELS = [
   { key: 'ta', label: 'Total Alkalinity (ppm)', column: 'ta_ppm' },
   { key: 'ph', label: 'pH', column: 'ph' },
-  { key: 'chlorine', label: 'Chlorine (ppm)', column: 'chlorine_ppm' },
+  { key: 'chlorine', label: 'Free Chlorine (ppm)', column: 'free_chlorine_ppm' },
+  { key: 'cc', label: 'Combined Chlorine (ppm)', column: 'combined_chlorine_ppm' },
   { key: 'salt', label: 'Salt (ppm)', column: 'salt_ppm' },
 ] as const;
 

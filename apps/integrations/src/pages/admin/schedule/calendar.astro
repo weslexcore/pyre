@@ -1,0 +1,16 @@
+---
+// Month calendar: shifts as coverage-colored blocks in each day cell, time
+// off as per-person colored markers. Read-only; edit on the Week board.
+import { ScheduleCalendar } from '@/components/admin/ScheduleCalendar';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Calendar"
+  subtitle="The whole month at a glance — blocks are shifts, lettered chips are time off."
+  wide
+>
+  <ScheduleTabs current="/admin/schedule/calendar" />
+  <ScheduleCalendar client:load />
+</AdminLayout>

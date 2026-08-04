@@ -1,0 +1,16 @@
+---
+// Weekly staff scheduling board (replaces the staffing spreadsheet). Admin
+// only — the /api/admin/* routes it calls re-check the session on every
+// request; the AdminLayout gate is UX, the API gate is the security boundary.
+import { ScheduleBoard } from '@/components/admin/ScheduleBoard';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Staff Schedule"
+  subtitle="Red = nobody scheduled · Gold = under staffed · Green = covered. Click a shift to assign."
+>
+  <ScheduleTabs current="/admin/schedule" />
+  <ScheduleBoard client:load />
+</AdminLayout>

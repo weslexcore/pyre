@@ -9,7 +9,14 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
-import { ENTRY_TYPES, type EntryType, TUBS, type Tub } from '@/lib/water/charts';
+import {
+  ENTRY_TYPES,
+  type EntryType,
+  TEST_METHODS,
+  type TestMethod,
+  TUBS,
+  type Tub,
+} from '@/lib/water/charts';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -25,7 +32,8 @@ const DEFAULT_LIMIT = 25;
 const READING_BOUNDS = {
   ta_ppm: [0, 1000],
   ph: [0, 14],
-  chlorine_ppm: [0, 50],
+  free_chlorine_ppm: [0, 50],
+  combined_chlorine_ppm: [0, 50],
   salt_ppm: [0, 20000],
 } as const;
 
@@ -34,7 +42,8 @@ type ReadingColumn = keyof typeof READING_BOUNDS;
 const READING_KEYS: Record<ReadingColumn, string> = {
   ta_ppm: 'ta',
   ph: 'ph',
-  chlorine_ppm: 'chlorine',
+  free_chlorine_ppm: 'chlorine',
+  combined_chlorine_ppm: 'cc',
   salt_ppm: 'salt',
 };
 
@@ -128,6 +137,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'A test entry needs at least one reading' }, 400);
   }
 
+  const testMethod = body.testMethod ?? null;
+  if (testMethod != null) {
+    if (typeof testMethod !== 'string' || !TEST_METHODS.includes(testMethod as TestMethod)) {
+      return json({ error: `testMethod must be one of: ${TEST_METHODS.join(', ')}` }, 400);
+    }
+  }
+
   const rawDoses = body.doses ?? [];
   if (!Array.isArray(rawDoses) || rawDoses.length > 8) {
     return json({ error: 'doses must be an array of at most 8 items' }, 400);
@@ -159,6 +175,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       tub,
       entry_type: entryType,
       ...readings,
+      test_method: testMethod,
       doses,
       notes: notes || null,
       // Always the authenticated session's email — never trusted from the body.

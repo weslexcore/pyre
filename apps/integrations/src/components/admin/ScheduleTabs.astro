@@ -1,0 +1,32 @@
+---
+// Sub-nav shared by the /admin/schedule pages.
+interface Props {
+  current: string;
+}
+const { current } = Astro.props;
+
+const tabs = [
+  { href: '/admin/schedule', label: 'Week' },
+  { href: '/admin/schedule/calendar', label: 'Calendar' },
+  { href: '/admin/schedule/hours', label: 'Hours' },
+  { href: '/admin/schedule/time-off', label: 'Time Off' },
+  { href: '/admin/schedule/staff', label: 'Roster' },
+];
+---
+
+<nav class="mb-6 flex flex-wrap gap-2">
+  {
+    tabs.map((tab) => (
+      <a
+        href={tab.href}
+        class={`px-3 py-1.5 rounded border text-xs font-mono uppercase tracking-wide transition-colors ${
+          current === tab.href
+            ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
+            : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+        }`}
+      >
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>

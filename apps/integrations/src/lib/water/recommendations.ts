@@ -21,7 +21,10 @@ import {
 export interface Readings {
   ta?: number | null;
   ph?: number | null;
+  /** Free chlorine (FC) — the active sanitizer. */
   chlorine?: number | null;
+  /** Combined chlorine (CC) — spent sanitizer (chloramines). */
+  cc?: number | null;
   salt?: number | null;
 }
 
@@ -82,7 +85,7 @@ const range = (parameter: Parameter): string => {
  * produce nothing; all-in-range produces an empty array.
  */
 export function getRecommendations(readings: Readings): Recommendation[] {
-  const { ta, ph, chlorine, salt } = readings;
+  const { ta, ph, chlorine, cc, salt } = readings;
   const criticals: Recommendation[] = [];
   const doses: Recommendation[] = [];
 
@@ -92,7 +95,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
       severity: 'critical',
       chemical: null,
       grams: null,
-      reason: `Chlorine ${chlorine} ppm is above the ${HARD_LIMITS.chlorine} ppm safety limit`,
+      reason: `Free chlorine ${chlorine} ppm is above the ${HARD_LIMITS.chlorine} ppm safety limit`,
       instruction:
         'CLOSE TUB — no guests in the water. Keep pumps running and retest every 30 minutes until chlorine is back in range.',
     });
@@ -167,7 +170,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         severity: 'action',
         chemical: PRODUCTS.sanitizer,
         grams: CHLORINE_RAISE_GRAMS,
-        reason: `Chlorine ${chlorine} ppm is at or below the ${range('chlorine')} ppm target floor`,
+        reason: `Free chlorine ${chlorine} ppm is at or below the ${range('chlorine')} ppm target floor`,
       });
     } else if (chlorine > chlorineMax) {
       doses.push({
@@ -175,9 +178,21 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         severity: 'info',
         chemical: null,
         grams: null,
-        reason: `Chlorine ${chlorine} ppm is above the ${range('chlorine')} ppm target — no product lowers it; keep pumps running and retest.`,
+        reason: `Free chlorine ${chlorine} ppm is above the ${range('chlorine')} ppm target — no product lowers it; keep pumps running and retest.`,
       });
     }
+  }
+
+  // CC has no dose — shocking is the remedy (it burns off the chloramines
+  // tying up the sanitizer). 0.5 ppm is the standard shock threshold.
+  if (cc != null && !inTarget('cc', cc)) {
+    doses.push({
+      parameter: 'cc',
+      severity: 'info',
+      chemical: null,
+      grams: null,
+      reason: `Combined chlorine ${cc} ppm is above 0.5 ppm — spent sanitizer is building up; the tub is due for a shock.`,
+    });
   }
 
   if (salt != null && salt <= HARD_LIMITS.salt && !inTarget('salt', salt)) {

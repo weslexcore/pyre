@@ -1,0 +1,11 @@
+---
+// Per-person hours by week (the sheet's "Total Hours"), with CSV export.
+import { ScheduleHours } from '@/components/admin/ScheduleHours';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Hours" subtitle="Scheduled hours per person, Monday–Sunday weeks. ✦ = founder.">
+  <ScheduleTabs current="/admin/schedule/hours" />
+  <ScheduleHours client:load />
+</AdminLayout>

@@ -139,6 +139,19 @@ describe('getRecommendations', () => {
     });
   });
 
+  describe('combined chlorine (shock threshold 0.5)', () => {
+    it('returns nothing at or below 0.5 ppm', () => {
+      expect(getRecommendations({ cc: 0 })).toEqual([]);
+      expect(getRecommendations({ cc: 0.5 })).toEqual([]);
+    });
+
+    it('is an info-level shock prompt above 0.5 ppm (no dose)', () => {
+      const rec = only({ cc: 1 });
+      expect(rec).toMatchObject({ parameter: 'cc', severity: 'info', chemical: null, grams: null });
+      expect(rec.reason).toContain('shock');
+    });
+  });
+
   describe('salt (target 2200–2500, hard limit 3000)', () => {
     it('doses toward the 2350 midpoint in 24 g / 50 ppm steps, rounded down', () => {
       expect(only({ salt: 2100 }).grams).toBe(120); // floor(250/50) = 5 steps
@@ -159,9 +172,9 @@ describe('getRecommendations', () => {
   });
 
   describe('ordering', () => {
-    it('emits doses in correction order: TA, then pH, then chlorine, then salt', () => {
-      const recs = getRecommendations({ ta: 70, ph: 7.9, chlorine: 0.5, salt: 2100 });
-      expect(recs.map((r) => r.parameter)).toEqual(['ta', 'ph', 'chlorine', 'salt']);
+    it('emits doses in correction order: TA, then pH, then FC, then CC, then salt', () => {
+      const recs = getRecommendations({ ta: 70, ph: 7.9, chlorine: 0.5, cc: 1, salt: 2100 });
+      expect(recs.map((r) => r.parameter)).toEqual(['ta', 'ph', 'chlorine', 'cc', 'salt']);
     });
 
     it('puts criticals before doses', () => {
@@ -191,6 +204,8 @@ describe('classifyReading', () => {
     expect(classifyReading('chlorine', 2)).toBe('ok');
     expect(classifyReading('chlorine', 4)).toBe('out-of-target');
     expect(classifyReading('chlorine', 6)).toBe('critical');
+    expect(classifyReading('cc', 0.2)).toBe('ok');
+    expect(classifyReading('cc', 1)).toBe('out-of-target');
     expect(classifyReading('salt', 2300)).toBe('ok');
     expect(classifyReading('salt', 2000)).toBe('out-of-target');
     expect(classifyReading('salt', 3200)).toBe('critical');

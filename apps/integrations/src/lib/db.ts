@@ -68,11 +68,75 @@ export interface WaterTestRow {
   entry_type: 'test' | 'shock' | 'refill';
   ta_ppm: number | null;
   ph: number | null;
-  chlorine_ppm: number | null;
+  /** Free chlorine (FC) — the active sanitizer; the 1–3 ppm target. */
+  free_chlorine_ppm: number | null;
+  /** Combined chlorine (CC) — spent sanitizer; high CC means shock. */
+  combined_chlorine_ppm: number | null;
   salt_ppm: number | null;
+  test_method: 'strips' | 'digital_meter' | 'tf_pro_salt' | null;
   doses: DoseRecord[];
   notes: string | null;
   recorded_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Staff scheduling rows (see the staff_scheduling migration and
+// docs/staff-scheduling-scope.md). Dates are YYYY-MM-DD and times are local
+// wall-clock 'HH:MM:SS' strings — America/New_York, never UTC.
+
+export interface ScheduleStaffRow {
+  id: string;
+  display_name: string;
+  /** Join key against the Momence OAuth profile email; null until confirmed. */
+  momence_email: string | null;
+  role: 'admin' | 'staff';
+  is_founder: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftRow {
+  id: string;
+  shift_date: string;
+  label: string;
+  starts_at: string;
+  ends_at: string;
+  staff_needed: number;
+  source: 'momence' | 'manual';
+  momence_session_ids: Array<{ type: string; id: number }>;
+  sync_locked: boolean;
+  notes: string | null;
+  status: 'active' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftAssignmentRow {
+  id: string;
+  shift_id: string;
+  staff_id: string;
+  starts_at: string;
+  ends_at: string;
+  role: 'full' | 'setup' | 'partial';
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TimeOffRow {
+  id: string;
+  staff_id: string;
+  kind: 'range' | 'recurring';
+  start_date: string | null;
+  end_date: string | null;
+  /** 0 = Sunday .. 6 = Saturday (matches JS Date.getDay()). */
+  days_of_week: number[];
+  starts_at: string | null;
+  ends_at: string | null;
+  note: string | null;
+  created_by: 'staff' | 'admin';
   created_at: string;
   updated_at: string;
 }

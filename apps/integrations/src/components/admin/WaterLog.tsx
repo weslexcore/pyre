@@ -5,7 +5,16 @@
 // 401/403 from the API mid-session renders a re-login prompt.
 import { useCallback, useEffect, useState } from 'react';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
-import { type EntryType, SHOCK_DOSES, TARGETS, TUBS, type Tub } from '@/lib/water/charts';
+import {
+  type EntryType,
+  SHOCK_DOSES,
+  TARGETS,
+  TEST_METHOD_LABELS,
+  TEST_METHODS,
+  type TestMethod,
+  TUBS,
+  type Tub,
+} from '@/lib/water/charts';
 import { INSTRUCTIONS } from '@/lib/water/instructions';
 import {
   classifyReading,
@@ -54,10 +63,23 @@ const pillClass = (active: boolean) =>
   }`;
 
 const READING_FIELDS = [
-  { key: 'ta', label: 'Total Alkalinity', unit: 'ppm', column: 'ta_ppm' },
-  { key: 'ph', label: 'pH', unit: '', column: 'ph' },
-  { key: 'chlorine', label: 'Chlorine', unit: 'ppm', column: 'chlorine_ppm' },
-  { key: 'salt', label: 'Salt', unit: 'ppm', column: 'salt_ppm' },
+  { key: 'ta', label: 'Total Alkalinity', chip: 'TA', unit: 'ppm', column: 'ta_ppm' },
+  { key: 'ph', label: 'pH', chip: 'pH', unit: '', column: 'ph' },
+  {
+    key: 'chlorine',
+    label: 'Free Chlorine (FC)',
+    chip: 'FC',
+    unit: 'ppm',
+    column: 'free_chlorine_ppm',
+  },
+  {
+    key: 'cc',
+    label: 'Combined Chlorine (CC)',
+    chip: 'CC',
+    unit: 'ppm',
+    column: 'combined_chlorine_ppm',
+  },
+  { key: 'salt', label: 'Salt', chip: 'Salt', unit: 'ppm', column: 'salt_ppm' },
 ] as const;
 
 type ReadingKey = (typeof READING_FIELDS)[number]['key'];
@@ -101,7 +123,7 @@ function ReadingChips({ record }: { record: WaterTestRow }) {
         const value = record[f.column] as number;
         return (
           <span key={f.key} className="whitespace-nowrap">
-            <span className="text-white/40">{f.key === 'ph' ? 'pH' : f.label}</span>{' '}
+            <span className="text-white/40">{f.chip}</span>{' '}
             <span className={statusTint[classifyReading(f.key, value)]}>
               {value}
               {f.unit ? ` ${f.unit}` : ''}
@@ -159,8 +181,10 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     ta: '',
     ph: '',
     chlorine: '',
+    cc: '',
     salt: '',
   });
+  const [testMethod, setTestMethod] = useState<TestMethod>('strips');
   const [notes, setNotes] = useState('');
   const [phase, setPhase] = useState<'entering' | 'reviewing'>('entering');
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -326,7 +350,15 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       const res = await fetch('/api/admin/water-tests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tub, entryType, readings, doses, notes: fullNotes }),
+        body: JSON.stringify({
+          tub,
+          entryType,
+          readings,
+          // Only meaningful when something was actually measured.
+          testMethod: Object.values(readings).some((v) => v != null) ? testMethod : null,
+          doses,
+          notes: fullNotes,
+        }),
       });
       if (res.status === 401 || res.status === 403) {
         setSessionExpired(true);
@@ -345,7 +377,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           ? 'Saved. Run pumps ~15 minutes, then retest and log the new readings.'
           : 'Saved.'
       );
-      setReadingInputs({ ta: '', ph: '', chlorine: '', salt: '' });
+      setReadingInputs({ ta: '', ph: '', chlorine: '', cc: '', salt: '' });
       setNotes('');
       setRecommendations([]);
       setDoseDrafts([]);
@@ -469,6 +501,23 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
               />
             </label>
           ))}
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+              Test method
+            </span>
+            <select
+              value={testMethod}
+              onChange={(e) => setTestMethod(e.target.value as TestMethod)}
+              disabled={reviewing}
+              className={inputClass}
+            >
+              {TEST_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {TEST_METHOD_LABELS[method]}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         {entryType === 'test' && !reviewing && (
           <p className="mb-4 -mt-2 font-mono text-xs text-white/30">
@@ -720,7 +769,10 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
           {record.notes && <div className="mt-2 text-sm text-white/50">{record.notes}</div>}
           <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="font-mono text-xs text-white/30">{record.recorded_by}</span>
+            <span className="font-mono text-xs text-white/30">
+              {record.recorded_by}
+              {record.test_method && ` · ${TEST_METHOD_LABELS[record.test_method]}`}
+            </span>
             {record.recorded_by.toLowerCase() === userEmail.toLowerCase() && (
               <button
                 type="button"
