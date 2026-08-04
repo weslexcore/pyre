@@ -6,7 +6,7 @@
 // user in locals. The /api/admin/* routes each page calls re-check the session
 // on every request (this gate is UX; the API gate is the security boundary).
 import { AdminNav } from '@/components/admin/AdminNav';
-import { isAdminEmail } from '@/lib/auth/admin';
+import { isAdminEmail, isStaffEmail } from '@/lib/auth/admin';
 import '@/styles/admin.css';
 
 interface Props {
@@ -14,14 +14,16 @@ interface Props {
   subtitle?: string;
   /** Widens the content column (email templates preview needs the room). */
   wide?: boolean;
+  /** Staff-facing page: gate on the wider STAFF_EMAILS allowlist instead. */
+  staffOk?: boolean;
 }
 
-const { title, subtitle, wide = false } = Astro.props;
+const { title, subtitle, wide = false, staffOk = false } = Astro.props;
 
 Astro.response.headers.set('Cache-Control', 'private, no-store');
 
 const user = Astro.locals.adminUser ?? null;
-const isAdmin = !!user?.email && isAdminEmail(user.email);
+const allowed = !!user?.email && (staffOk ? isStaffEmail(user.email) : isAdminEmail(user.email));
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
 ---
 
@@ -35,7 +37,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
   </head>
   <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
     {
-      !isAdmin || !user ? (
+      !allowed || !user ? (
         <main class="mx-auto max-w-md px-4 py-16 text-center">
           <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
           <p class="text-white/60">You do not have access to this page.</p>

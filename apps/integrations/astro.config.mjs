@@ -11,11 +11,13 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   trailingSlash: 'never',
   output: 'server',
-  // Cookie/session auth exists only on /admin + /api/admin (Momence OAuth,
-  // read-only GETs — no cookie-authed route mutates state). Everything else is
-  // secured by shared secrets or signatures, so CSRF origin checking only
-  // breaks server-to-server webhooks that POST form-encoded bodies without an
-  // Origin header (Mailchimp's audience webhook does exactly that).
+  // Cookie/session auth exists only on /admin + /api/admin (Momence OAuth).
+  // Global CSRF origin checking stays off because it breaks server-to-server
+  // webhooks that POST form-encoded bodies without an Origin header
+  // (Mailchimp's audience webhook does exactly that). Cookie-authed routes
+  // that mutate state must instead defend in-route: require a JSON
+  // content-type and call assertSameOrigin() from lib/auth/admin —
+  // api/admin/water-tests.ts is the template.
   security: { checkOrigin: false },
   // maxDuration: the hourly cron tick sweeps Momence + sends email inside a
   // 50s budget (see api/cron/tick.ts), so give functions 60s headroom.

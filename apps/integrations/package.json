@@ -14,7 +14,8 @@
     "lint:fix": "biome lint --write .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "type-check": "astro check"
+    "type-check": "astro check",
+    "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/check": "0.9.9",
@@ -40,6 +41,7 @@
     "@biomejs/biome": "^2.2.2",
     "@react-email/ui": "6.6.0",
     "@types/node": "^22.10.1",
-    "react-email": "^6.6.0"
+    "react-email": "^6.6.0",
+    "vitest": "^4.1.10"
   }
 }

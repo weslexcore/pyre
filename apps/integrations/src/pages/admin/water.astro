@@ -1,0 +1,15 @@
+---
+// Cold-tub water testing log. Staff-gated (STAFF_EMAILS, admins included) —
+// the /api/admin/water-tests route re-checks the session on every request; the
+// AdminLayout gate is UX, the API gate is the security boundary.
+import { WaterLog } from '@/components/admin/WaterLog';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Cold Tub Water Log"
+  subtitle="Test in order: TA → pH → chlorine → salt. Dose in that order too; run pumps ~15 min after dosing and retest."
+  staffOk
+>
+  <WaterLog client:load />
+</AdminLayout>

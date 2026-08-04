@@ -40,4 +40,11 @@ export const ADMIN_TOOLS: AdminTool[] = [
     navLabel: 'Campaigns',
     description: 'Clicks, visits, signups, and bookings per campaign, attributed via PostHog.',
   },
+  {
+    href: '/admin/water',
+    title: 'Cold Tub Water Log',
+    navLabel: 'Water',
+    description:
+      'Log tub test results and chemical doses, with chart-based dosing recommendations.',
+  },
 ];

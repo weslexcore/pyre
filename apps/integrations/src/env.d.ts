@@ -44,6 +44,9 @@ interface ImportMetaEnv {
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
   // Admin dashboard allowlist (comma-separated emails, same contract as landing-page)
   readonly ADMIN_EMAILS?: string;
+  // Staff allowlist for staff-facing tools like /admin/water (comma-separated
+  // emails; admins are implicitly staff)
+  readonly STAFF_EMAILS?: string;
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)

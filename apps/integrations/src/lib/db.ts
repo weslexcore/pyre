@@ -52,6 +52,31 @@ export interface PartnerVerificationRow {
   updated_at: string;
 }
 
+// One chemical actually added to a tub with a water_tests entry. `grams` is
+// what went in the water; `recommended_grams` is what the dosing chart said,
+// so deviations stay auditable in the log.
+export interface DoseRecord {
+  chemical: string;
+  grams: number;
+  reason?: string;
+  recommended_grams?: number;
+}
+
+export interface WaterTestRow {
+  id: string;
+  tub: 'left' | 'right';
+  entry_type: 'test' | 'shock' | 'refill';
+  ta_ppm: number | null;
+  ph: number | null;
+  chlorine_ppm: number | null;
+  salt_ppm: number | null;
+  doses: DoseRecord[];
+  notes: string | null;
+  recorded_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmailSuppressionRow {
   id: string;
   email: string;
