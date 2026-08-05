@@ -9,7 +9,7 @@
 // time off are deactivated instead of deleted, so schedule history survives.
 
 import type { APIRoute } from 'astro';
-import { ADMIN_TOOLS, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
+import { ADMIN_TOOLS, PARTNERS_MANAGE, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb, type StaffRow } from '@/lib/db';
@@ -23,8 +23,19 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-// Tool hrefs plus the schedule manage capability (see adminTools.ts).
-const GRANTABLE_PAGES = new Set([...ADMIN_TOOLS.map((t) => t.href), SCHEDULE_MANAGE]);
+// Tool hrefs plus the manage capabilities (see adminTools.ts).
+const GRANTABLE_PAGES = new Set([
+  ...ADMIN_TOOLS.map((t) => t.href),
+  SCHEDULE_MANAGE,
+  PARTNERS_MANAGE,
+]);
+
+// Each manage capability implies view access to the page it governs, so a row
+// can never hold manage without the matching page grant.
+const MANAGE_IMPLIED_PAGE: Record<string, string> = {
+  [SCHEDULE_MANAGE]: '/admin/schedule',
+  [PARTNERS_MANAGE]: '/admin/partners',
+};
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,9 +49,9 @@ function parsePages(value: unknown): string[] | Response {
   if (unknown.length > 0) {
     return json({ error: `Unknown pages: ${unknown.join(', ')}` }, 400);
   }
-  // schedule:manage implies the schedule view grant — keep rows consistent.
-  if (pages.includes(SCHEDULE_MANAGE) && !pages.includes('/admin/schedule')) {
-    pages.push('/admin/schedule');
+  // A manage capability implies its page grant — keep rows consistent.
+  for (const [capability, page] of Object.entries(MANAGE_IMPLIED_PAGE)) {
+    if (pages.includes(capability) && !pages.includes(page)) pages.push(page);
   }
   return pages;
 }

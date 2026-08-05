@@ -331,6 +331,17 @@ export async function assignMemberTag(memberId: number, tagId: number): Promise<
   await momenceRequest<void>('POST', `/host/members/${memberId}/tags/${tagId}`);
 }
 
+/**
+ * Drop the cached name->id map. A tag created in the Momence dashboard is
+ * otherwise invisible here for up to 24h, which makes every partner confirm
+ * throw "tag not found" — so /admin/partners clears it whenever a partner's
+ * tag name changes, and offers a manual refresh.
+ */
+export async function invalidateTagCache(): Promise<void> {
+  const redis = getRedis();
+  if (redis) await redis.del(TAGS_CACHE_KEY);
+}
+
 // --- Intro-offer identification ---
 
 export function getIntroOfferMembershipIds(): number[] {

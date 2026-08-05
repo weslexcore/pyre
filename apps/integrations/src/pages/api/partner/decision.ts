@@ -61,6 +61,14 @@ export const GET: APIRoute = async ({ url }) => {
         );
       case 'not-found':
         return page('Not found', 'We couldn’t find this verification request.', 404);
+      case 'partner-missing':
+        // The partner row was deleted after this link went out, so we can't
+        // know which Momence tag to assign. Nothing the clicker can fix.
+        return page(
+          'No longer active',
+          'This partnership is no longer set up on our end. Please reply to the original email and we’ll sort it out.',
+          410
+        );
     }
   } catch (error) {
     console.error('[Partner] Decision failed', error);
