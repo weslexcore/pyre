@@ -1,0 +1,28 @@
+{
+  "name": "pyre-agents",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Eve agent app for Pyre: the staff-scheduling drafter (first of the agent use cases). Reads Supabase directly; writes proposals through the integrations app.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "eve dev",
+    "build": "echo 'pyre-agents builds via eve on Vercel (yarn build:eve locally)'",
+    "build:eve": "eve build",
+    "eval": "eve eval",
+    "test": "echo 'evals run via yarn eval against a dev server'"
+  },
+  "dependencies": {
+    "@pyre/schedule-core": "workspace:^",
+    "@supabase/supabase-js": "^2.110.5",
+    "ai": "7.0.34",
+    "eve": "0.27.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
