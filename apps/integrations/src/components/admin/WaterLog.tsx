@@ -1,9 +1,11 @@
 // Cold-tub water testing log: staff enter readings for the Left/Right tubs,
 // get chart-based dosing recommendations (computed locally via
 // lib/water/recommendations — no network round-trip), and save entries with
-// the doses actually added. Auth is handled server-side by AdminLayout; a
-// 401/403 from the API mid-session renders a re-login prompt.
-import { useCallback, useEffect, useState } from 'react';
+// the doses actually added. Feedback is live: each reading field tints and
+// shows its recommendation as soon as a value is typed, before "Check
+// readings" opens the review step. Auth is handled server-side by
+// AdminLayout; a 401/403 from the API mid-session renders a re-login prompt.
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import {
   type EntryType,
@@ -20,6 +22,7 @@ import {
   classifyReading,
   getRecommendations,
   type Readings,
+  type ReadingStatus,
   type Recommendation,
 } from '@/lib/water/recommendations';
 import { WaterTrends } from './WaterTrends';
@@ -54,6 +57,23 @@ interface DoseDraft {
 
 const inputClass =
   'w-full px-3 py-3 rounded bg-white/5 border border-white/10 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+
+// Reading inputs tint their border by live status so a problem value is
+// visible the moment it's typed. Border color is baked into one string per
+// state (rather than appended to inputClass) so two border-color utilities
+// never compete on the same element.
+const inputBase =
+  'w-full px-3 py-3 rounded bg-white/5 border text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none';
+
+const readingInputClass = (status: ReadingStatus | null, invalid: boolean): string => {
+  if (invalid || status === 'critical')
+    return `${inputBase} border-[var(--pyre-red)] focus:border-[var(--pyre-red)]`;
+  if (status === 'out-of-target')
+    return `${inputBase} border-[var(--pyre-gold)]/70 focus:border-[var(--pyre-gold)]`;
+  if (status === 'ok')
+    return `${inputBase} border-[var(--pyre-sage)]/60 focus:border-[var(--pyre-sage)]`;
+  return `${inputBase} border-white/10 focus:border-white/30`;
+};
 
 const pillClass = (active: boolean) =>
   `px-3 py-2.5 rounded text-xs font-mono-bold uppercase tracking-wide border transition-colors ${
@@ -132,6 +152,54 @@ function ReadingChips({ record }: { record: WaterTestRow }) {
         );
       })}
     </div>
+  );
+}
+
+// Inline feedback under a reading input, shown as soon as the value parses.
+// Mirrors the review panel's severity styling at note scale: criticals lead
+// with the safety instruction, actions with the dose to add.
+function LiveFieldNote({
+  rec,
+  status,
+  invalid,
+}: {
+  rec: Recommendation | undefined;
+  status: ReadingStatus | null;
+  invalid: boolean;
+}) {
+  let content: ReactNode = null;
+  if (invalid) {
+    content = (
+      <span className="text-[var(--pyre-red)]">Not a number — leave blank if not tested.</span>
+    );
+  } else if (rec?.severity === 'critical') {
+    content = (
+      <span className="text-[var(--pyre-red)]">
+        <span className="font-mono-bold uppercase tracking-wide">{rec.instruction}</span>{' '}
+        <span className="text-white/60">{rec.reason}</span>
+      </span>
+    );
+  } else if (rec?.severity === 'action' && rec.chemical && rec.grams != null) {
+    content = (
+      <span className="text-[var(--pyre-gold)]">
+        <span className="font-mono-bold">
+          Add {rec.grams} g {rec.chemical}
+        </span>{' '}
+        <span className="text-white/60">— {rec.reason}</span>
+      </span>
+    );
+  } else if (rec) {
+    content = <span className="text-white/60">{rec.reason}</span>;
+  } else if (status === 'ok') {
+    content = <span className="text-[var(--pyre-sage)]">✓ In range</span>;
+  }
+
+  // Always render the (aria-live) container so screen readers announce notes
+  // as they appear.
+  return (
+    <span aria-live="polite" className="mt-1 block text-xs leading-snug">
+      {content}
+    </span>
   );
 }
 
@@ -253,6 +321,25 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     void loadLog(0, filter, range);
     void loadChart(filter, range);
   }, [loadLog, loadChart, filter, range]);
+
+  // Live per-field feedback: the recommendation engine is pure and local, so
+  // rerunning it on every keystroke is free. Invalid text is treated as
+  // not-tested here (the field flags it inline); recommendations compose
+  // across fields (e.g. pH advice knows whether a TA dose is also pending).
+  const liveReadings = useMemo<Readings>(() => {
+    const readings: Record<string, number | null> = {};
+    for (const field of READING_FIELDS) {
+      const parsed = parseReading(readingInputs[field.key]);
+      readings[field.key] = parsed === undefined ? null : parsed;
+    }
+    return readings as Readings;
+  }, [readingInputs]);
+
+  const liveRecByParam = useMemo(() => {
+    const map = new Map<ReadingKey, Recommendation>();
+    for (const rec of getRecommendations(liveReadings)) map.set(rec.parameter, rec);
+    return map;
+  }, [liveReadings]);
 
   const collectReadings = (): Readings | null => {
     const readings: Record<string, number | null> = {};
@@ -482,25 +569,34 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         {entryType !== 'test' && <InstructionsPanel entryType={entryType} />}
 
         <div className="mb-4 grid grid-cols-2 gap-3">
-          {READING_FIELDS.map((field) => (
-            <label key={field.key} className="block">
-              <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
-                {field.label}
-                {field.unit ? ` (${field.unit})` : ''}
-              </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={readingInputs[field.key]}
-                onChange={(e) =>
-                  setReadingInputs((prev) => ({ ...prev, [field.key]: e.target.value }))
-                }
-                disabled={reviewing}
-                placeholder={targetHint(field.key)}
-                className={inputClass}
-              />
-            </label>
-          ))}
+          {READING_FIELDS.map((field) => {
+            const parsed = parseReading(readingInputs[field.key]);
+            const invalid = parsed === undefined;
+            const status = typeof parsed === 'number' ? classifyReading(field.key, parsed) : null;
+            // During review the panel below carries the full recommendations;
+            // keep the border tint but drop the per-field notes.
+            const rec = typeof parsed === 'number' ? liveRecByParam.get(field.key) : undefined;
+            return (
+              <label key={field.key} className="block">
+                <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                  {field.label}
+                  {field.unit ? ` (${field.unit})` : ''}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={readingInputs[field.key]}
+                  onChange={(e) =>
+                    setReadingInputs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                  disabled={reviewing}
+                  placeholder={targetHint(field.key)}
+                  className={readingInputClass(status, invalid)}
+                />
+                {!reviewing && <LiveFieldNote rec={rec} status={status} invalid={invalid} />}
+              </label>
+            );
+          })}
           <label className="block">
             <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
               Test method
