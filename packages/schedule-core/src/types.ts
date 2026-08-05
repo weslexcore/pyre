@@ -1,0 +1,84 @@
+// Row shapes for the staff-scheduling tables (see the staff_scheduling and
+// schedule_proposals migrations in apps/supabase). Dates are YYYY-MM-DD and
+// times are local wall-clock 'HH:MM' / 'HH:MM:SS' strings — America/New_York,
+// never UTC. Shared by apps/integrations (which re-exports them from lib/db)
+// and apps/agents.
+
+export interface ScheduleStaffRow {
+  id: string;
+  display_name: string;
+  /** Join key against the Momence OAuth profile email; null until confirmed. */
+  momence_email: string | null;
+  role: 'admin' | 'staff';
+  is_founder: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftRow {
+  id: string;
+  shift_date: string;
+  label: string;
+  starts_at: string;
+  ends_at: string;
+  staff_needed: number;
+  source: 'momence' | 'manual';
+  momence_session_ids: Array<{ type: string; id: number }>;
+  sync_locked: boolean;
+  notes: string | null;
+  status: 'active' | 'cancelled';
+  /** Set when this row belongs (or belonged) to an agent draft batch. */
+  proposal_id: string | null;
+  /** Draft rows are only visible to the review UI until approved. */
+  is_draft: boolean;
+  /** Momence divergence the sync couldn't silently fix — needs admin eyes. */
+  sync_flag: 'sessions_cancelled' | 'times_changed' | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftAssignmentRow {
+  id: string;
+  shift_id: string;
+  staff_id: string;
+  starts_at: string;
+  ends_at: string;
+  role: 'full' | 'setup' | 'partial';
+  notes: string | null;
+  proposal_id: string | null;
+  is_draft: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TimeOffRow {
+  id: string;
+  staff_id: string;
+  kind: 'range' | 'recurring';
+  start_date: string | null;
+  end_date: string | null;
+  /** 0 = Sunday .. 6 = Saturday (matches JS Date.getDay()). */
+  days_of_week: number[];
+  starts_at: string | null;
+  ends_at: string | null;
+  note: string | null;
+  created_by: 'staff' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleProposalRow {
+  id: string;
+  /** Monday of the drafted week. */
+  week_start: string;
+  status: 'draft' | 'approved' | 'superseded' | 'discarded';
+  /** Agent's markdown summary shown on the board. */
+  rationale: string | null;
+  summary: Record<string, unknown>;
+  source: 'cron' | 'manual';
+  agent_session_id: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
