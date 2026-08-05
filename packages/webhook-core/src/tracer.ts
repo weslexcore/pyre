@@ -60,6 +60,11 @@ function summarizeResult(value: unknown): Record<string, unknown> | undefined {
   if (obj.tags) summary.tags = obj.tags;
   if (obj.totalCount) summary.totalCount = obj.totalCount;
   if (obj.members && Array.isArray(obj.members)) summary.memberCount = obj.members.length;
+  if (obj.attribution_method) summary.attribution_method = obj.attribution_method;
+  if (obj.attributed_utm_campaign) summary.attributed_utm_campaign = obj.attributed_utm_campaign;
+  if (obj.attributed_web_person_id) {
+    summary.attributed_web_person_id = obj.attributed_web_person_id;
+  }
   if (Object.keys(summary).length === 0) return undefined;
   return summary;
 }

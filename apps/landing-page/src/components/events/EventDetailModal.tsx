@@ -508,7 +508,8 @@ export default function EventDetailModal({
                           onClick: () =>
                             trackBookingLinkClicked(
                               event,
-                              `event_detail_modal_${option.minutes}min`
+                              `event_detail_modal_${option.minutes}min`,
+                              option.href
                             ),
                         }
                   }

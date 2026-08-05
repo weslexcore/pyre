@@ -1,5 +1,6 @@
 import type { WebhookTracer } from '@pyre/webhook-core';
 import type { ResolvedSession } from '@/lib/momence-events';
+import type { BookingAttribution } from './booking-attribution';
 import { captureEvent } from './posthog';
 
 interface BookingMember {
@@ -19,7 +20,9 @@ interface BookingPayload {
  * it stitches to the same person as the web `Intro Offer Signup` / `Mailing List
  * Signup` (which call `posthog.identify(email)`). This closes the funnel:
  * visit -> /events -> booking_link_clicked -> booking_completed. Campaign
- * attribution comes for free via the person's $initial_utm_* properties.
+ * attribution comes for free via the person's $initial_utm_* properties, and
+ * `attribution` (click→booking inference, see booking-attribution.ts) fills in
+ * for bookers who never identified on the site.
  *
  * Best-effort: `captureEvent` swallows its own errors.
  */
@@ -28,7 +31,8 @@ export async function trackBookingEvent(
   event: 'booking_completed' | 'booking_cancelled',
   member: BookingMember,
   session: ResolvedSession | null,
-  payload: BookingPayload
+  payload: BookingPayload,
+  attribution?: BookingAttribution | null
 ): Promise<void> {
   await tracer.span(
     'Track booking event',
@@ -46,6 +50,7 @@ export async function trackBookingEvent(
           ...(event === 'booking_cancelled' && {
             is_late_cancellation: payload.isLateCancellation ?? false,
           }),
+          ...(attribution ?? {}),
           $set: {
             email: member.email,
             ...(member.firstName ? { first_name: member.firstName } : {}),
