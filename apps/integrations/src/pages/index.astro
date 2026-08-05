@@ -2,7 +2,7 @@
 // Admin sign-in for the Pyre integrations service. All /admin pages redirect
 // unauthenticated visitors here; after Momence OAuth the callback returns the
 // user to returnUrl. Signed-in admins skip straight to the dashboard.
-import { isAdminEmail } from '@/lib/auth/admin';
+import { getAccess } from '@/lib/auth/access';
 import { validateSession } from '@/lib/auth/session';
 import '@/styles/admin.css';
 
@@ -16,7 +16,9 @@ const authError = Astro.url.searchParams.get('error');
 const { session } = await validateSession(Astro.cookies);
 const user = session.isAuthenticated ? session.user : null;
 
-if (user?.email && isAdminEmail(user.email)) {
+// Anyone with dashboard access (admin or page-granted) goes through; the
+// middleware and per-route gates enforce which pages they can actually open.
+if (user?.email && (await getAccess(user.email))) {
   return Astro.redirect(returnUrl, 302);
 }
 ---

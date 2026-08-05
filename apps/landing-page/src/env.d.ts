@@ -6,10 +6,9 @@ declare module '*.astro' {
   export default Component;
 }
 
-// Minimal env typing to satisfy lints without pulling in full Astro types
+// Project-specific env typing; BASE_URL/PROD and other built-ins come from
+// Astro's own types (astro/client, referenced via .astro/types.d.ts)
 interface ImportMetaEnv {
-  readonly BASE_URL: string;
-  readonly PROD: boolean;
   readonly PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY: string;
   readonly CLOUDFLARE_TURNSTILE_SECRET_KEY: string;
   readonly MOMENCE_HOST_ID: string;
@@ -52,21 +51,6 @@ interface Turnstile {
   remove(widgetId?: string): void;
 }
 
-declare global {
-  interface Window {
-    turnstile?: Turnstile;
-  }
-}
-
-// Minimal declaration to satisfy editor/linter for astro:assets Image component usage
-declare module 'astro:assets' {
-  export const Image: any;
-  export const Picture: any;
-  export const getImage: any;
-}
-
-// Minimal declarations for static asset imports used by astro:assets pipeline
-declare module '*.png' {
-  const metadata: any;
-  export default metadata;
+interface Window {
+  turnstile?: Turnstile;
 }

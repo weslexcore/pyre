@@ -11,7 +11,7 @@ import {
   updateShortLinkLabel,
 } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -22,7 +22,7 @@ function json(body: unknown, status: number): Response {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   const limit = Math.min(Number(url.searchParams.get('limit') ?? '50'), 200);
@@ -33,7 +33,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   let body: { url?: string; label?: string; alias?: string };
@@ -46,8 +46,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const targetUrl = (body.url ?? '').trim();
   if (!targetUrl) return json({ error: 'Missing url' }, 400);
 
-  // Any http(s) destination is allowed — creation is admin-gated (requireAdmin
-  // above), so this is not an open redirector: only admins can mint codes.
+  // Any http(s) destination is allowed — creation is gated on the
+  // /admin/utm-assist page grant (requirePage above), so this is not an open
+  // redirector: only trusted dashboard users can mint codes.
   let parsed: URL;
   try {
     parsed = new URL(targetUrl);
@@ -78,7 +79,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
 // Rename/retag: change only the label of an existing short link.
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   let body: { code?: string; label?: string };
@@ -98,7 +99,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
 // Remove a short link that's no longer needed.
 export const DELETE: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   const code = (url.searchParams.get('code') ?? '').trim();

@@ -81,65 +81,15 @@ export interface WaterTestRow {
   updated_at: string;
 }
 
-// Staff scheduling rows (see the staff_scheduling migration and
-// docs/staff-scheduling-scope.md). Dates are YYYY-MM-DD and times are local
-// wall-clock 'HH:MM:SS' strings — America/New_York, never UTC.
-
-export interface ScheduleStaffRow {
-  id: string;
-  display_name: string;
-  /** Join key against the Momence OAuth profile email; null until confirmed. */
-  momence_email: string | null;
-  role: 'admin' | 'staff';
-  is_founder: boolean;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ShiftRow {
-  id: string;
-  shift_date: string;
-  label: string;
-  starts_at: string;
-  ends_at: string;
-  staff_needed: number;
-  source: 'momence' | 'manual';
-  momence_session_ids: Array<{ type: string; id: number }>;
-  sync_locked: boolean;
-  notes: string | null;
-  status: 'active' | 'cancelled';
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ShiftAssignmentRow {
-  id: string;
-  shift_id: string;
-  staff_id: string;
-  starts_at: string;
-  ends_at: string;
-  role: 'full' | 'setup' | 'partial';
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TimeOffRow {
-  id: string;
-  staff_id: string;
-  kind: 'range' | 'recurring';
-  start_date: string | null;
-  end_date: string | null;
-  /** 0 = Sunday .. 6 = Saturday (matches JS Date.getDay()). */
-  days_of_week: number[];
-  starts_at: string | null;
-  ends_at: string | null;
-  note: string | null;
-  created_by: 'staff' | 'admin';
-  created_at: string;
-  updated_at: string;
-}
+// Staff scheduling row types live in @pyre/schedule-core (shared with the
+// agents app); re-exported here so app code keeps one import for row shapes.
+export type {
+  ScheduleProposalRow,
+  ScheduleStaffRow,
+  ShiftAssignmentRow,
+  ShiftRow,
+  TimeOffRow,
+} from '@pyre/schedule-core';
 
 export interface EmailSuppressionRow {
   id: string;
@@ -157,7 +107,8 @@ export function getDb(): SupabaseClient | null {
   const url = import.meta.env.SUPABASE_URL;
   // Prefer the revocable sb_secret_* key; SUPABASE_SERVICE_ROLE_KEY is the
   // legacy fallback until it's removed from the environment.
-  const secretKey = import.meta.env.SUPABASE_SECRET_KEY ?? import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secretKey =
+    import.meta.env.SUPABASE_SECRET_KEY ?? import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !secretKey) {
     console.warn('[DB] Supabase not configured (SUPABASE_URL / SUPABASE_SECRET_KEY)');

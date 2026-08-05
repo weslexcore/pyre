@@ -2,16 +2,23 @@
 // trip date-ranges, both optionally time-bounded. Entries auto-approve; the
 // panel at the top surfaces any that collide with existing assignments over
 // the coming weeks so the admin can re-staff.
+
+import {
+  addDays,
+  DOW_LABELS,
+  findAssignmentConflicts,
+  type TimeOffKind,
+} from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
-import { findAssignmentConflicts } from '@/lib/schedule/availability';
-import { DOW_LABELS, type TimeOffKind } from '@/lib/schedule/constants';
-import { addDays } from '@/lib/schedule/hours';
 
 interface BoardData {
   staff: ScheduleStaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
+  /** Manage side (schedule:manage / admin) — false = self-service only. */
+  canManage?: boolean;
+  selfStaffId?: string | null;
 }
 
 const inputClass =
@@ -94,6 +101,19 @@ export function ScheduleTimeOff() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const canManage = data?.canManage ?? false;
+  const selfId = data?.selfStaffId ?? null;
+
+  // Employees only ever file time off for themselves — pin the person field.
+  useEffect(() => {
+    if (data && !canManage) setStaffId(selfId ?? '');
+  }, [data, canManage, selfId]);
+
+  const canTouch = useCallback(
+    (entry: TimeOffRow) => canManage || (!!selfId && entry.staff_id === selfId),
+    [canManage, selfId]
+  );
 
   const staffById = useMemo(() => new Map((data?.staff ?? []).map((s) => [s.id, s])), [data]);
 
@@ -195,24 +215,26 @@ export function ScheduleTimeOff() {
       <span className="font-medium">{staffById.get(entry.staff_id)?.display_name ?? '?'}</span>
       <span className="font-mono text-xs text-white/60">{describeEntry(entry)}</span>
       {entry.note && <span className="font-mono text-xs text-white/40">{entry.note}</span>}
-      <span className="ml-auto flex gap-3">
-        <button
-          type="button"
-          className="font-mono text-xs text-white/50 underline hover:text-white"
-          disabled={busy}
-          onClick={() => startEditing(entry)}
-        >
-          edit
-        </button>
-        <button
-          type="button"
-          className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
-          disabled={busy}
-          onClick={() => void remove(entry.id)}
-        >
-          remove
-        </button>
-      </span>
+      {canTouch(entry) && (
+        <span className="ml-auto flex gap-3">
+          <button
+            type="button"
+            className="font-mono text-xs text-white/50 underline hover:text-white"
+            disabled={busy}
+            onClick={() => startEditing(entry)}
+          >
+            edit
+          </button>
+          <button
+            type="button"
+            className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
+            disabled={busy}
+            onClick={() => void remove(entry.id)}
+          >
+            remove
+          </button>
+        </span>
+      )}
     </li>
   );
 
@@ -226,7 +248,7 @@ export function ScheduleTimeOff() {
         </p>
       )}
 
-      {conflicts.length > 0 && (
+      {canManage && conflicts.length > 0 && (
         <section className="rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/5 p-3">
           <h2 className="mb-2 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-red)]">
             ⚠ Assignments that overlap time off (next 6 weeks)
@@ -250,133 +272,146 @@ export function ScheduleTimeOff() {
         </section>
       )}
 
-      <section
-        ref={formRef}
-        className={`space-y-2 rounded-lg border p-3 ${
-          editingId
-            ? 'border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/5'
-            : 'border-white/10 bg-white/[0.03]'
-        }`}
-      >
-        <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/50">
-          {editingId
-            ? `Edit time off — ${staffById.get(staffId)?.display_name ?? ''}`
-            : 'Add time off'}
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            className={inputClass}
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            aria-label="Person"
-          >
-            <option value="">Person…</option>
-            {(data?.staff ?? [])
-              .filter((s) => s.active)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.display_name}
-                </option>
-              ))}
-          </select>
-          <button
-            type="button"
-            className={pillClass(kind === 'range')}
-            onClick={() => setKind('range')}
-          >
-            Dates
-          </button>
-          <button
-            type="button"
-            className={pillClass(kind === 'recurring')}
-            onClick={() => setKind('recurring')}
-          >
-            Weekly
-          </button>
-        </div>
+      {!canManage && !selfId && (
+        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
+          Your login isn't linked to a roster entry yet, so you can't add blackout dates — ask an
+          admin to set your Momence email on the roster.
+        </p>
+      )}
 
-        {kind === 'recurring' && (
-          <div className="flex flex-wrap gap-1.5">
-            {DOW_LABELS.map((label, i) => (
-              <button
-                key={label}
-                type="button"
-                className={pillClass(days.includes(i))}
-                onClick={() =>
-                  setDays(days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort())
-                }
+      {(canManage || selfId) && (
+        <section
+          ref={formRef}
+          className={`space-y-2 rounded-lg border p-3 ${
+            editingId
+              ? 'border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/5'
+              : 'border-white/10 bg-white/[0.03]'
+          }`}
+        >
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/50">
+            {editingId
+              ? `Edit time off — ${staffById.get(staffId)?.display_name ?? ''}`
+              : canManage
+                ? 'Add time off'
+                : `Add your time off — ${staffById.get(selfId ?? '')?.display_name ?? 'you'}`}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage && (
+              <select
+                className={inputClass}
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+                aria-label="Person"
               >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            className={inputClass}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            aria-label={kind === 'range' ? 'First day' : 'Starting (optional)'}
-          />
-          <span className="font-mono text-xs text-white/40">to</span>
-          <input
-            type="date"
-            className={inputClass}
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            aria-label={kind === 'range' ? 'Last day (blank = single day)' : 'Until (optional)'}
-          />
-          {kind === 'recurring' && (
-            <span className="font-mono text-[10px] text-white/40">dates optional</span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="time"
-            step={1800}
-            className={inputClass}
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            aria-label="From time (optional)"
-          />
-          <span className="font-mono text-xs text-white/40">to</span>
-          <input
-            type="time"
-            step={1800}
-            className={inputClass}
-            value={endsAt}
-            onChange={(e) => setEndsAt(e.target.value)}
-            aria-label="To time (optional)"
-          />
-          <span className="font-mono text-[10px] text-white/40">no times = whole day</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className={`${inputClass} flex-1`}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Note (trip, class, …)"
-            aria-label="Note"
-          />
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() => void submit()}
-            disabled={busy}
-          >
-            {editingId ? 'Save changes' : 'Add'}
-          </button>
-          {editingId && (
-            <button type="button" className={buttonClass} onClick={resetForm} disabled={busy}>
-              Cancel edit
+                <option value="">Person…</option>
+                {(data?.staff ?? [])
+                  .filter((s) => s.active)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.display_name}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <button
+              type="button"
+              className={pillClass(kind === 'range')}
+              onClick={() => setKind('range')}
+            >
+              Dates
             </button>
+            <button
+              type="button"
+              className={pillClass(kind === 'recurring')}
+              onClick={() => setKind('recurring')}
+            >
+              Weekly
+            </button>
+          </div>
+
+          {kind === 'recurring' && (
+            <div className="flex flex-wrap gap-1.5">
+              {DOW_LABELS.map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={pillClass(days.includes(i))}
+                  onClick={() =>
+                    setDays(days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort())
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
-        </div>
-      </section>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              className={inputClass}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              aria-label={kind === 'range' ? 'First day' : 'Starting (optional)'}
+            />
+            <span className="font-mono text-xs text-white/40">to</span>
+            <input
+              type="date"
+              className={inputClass}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              aria-label={kind === 'range' ? 'Last day (blank = single day)' : 'Until (optional)'}
+            />
+            {kind === 'recurring' && (
+              <span className="font-mono text-[10px] text-white/40">dates optional</span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="time"
+              step={1800}
+              className={inputClass}
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              aria-label="From time (optional)"
+            />
+            <span className="font-mono text-xs text-white/40">to</span>
+            <input
+              type="time"
+              step={1800}
+              className={inputClass}
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              aria-label="To time (optional)"
+            />
+            <span className="font-mono text-[10px] text-white/40">no times = whole day</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className={`${inputClass} flex-1`}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Note (trip, class, …)"
+              aria-label="Note"
+            />
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => void submit()}
+              disabled={busy}
+            >
+              {editingId ? 'Save changes' : 'Add'}
+            </button>
+            {editingId && (
+              <button type="button" className={buttonClass} onClick={resetForm} disabled={busy}>
+                Cancel edit
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 font-mono text-xs font-bold uppercase tracking-wide text-white/50">

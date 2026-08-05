@@ -1,6 +1,7 @@
 export interface WebhookLogger {
   info(message: string, data?: Record<string, unknown>): void;
-  warn(message: string, data?: Record<string, unknown>): void;
+  /** `data` accepts caught errors (`unknown`) as well as detail records. */
+  warn(message: string, data?: unknown): void;
   error(message: string, error?: unknown, data?: Record<string, unknown>): void;
 }
 

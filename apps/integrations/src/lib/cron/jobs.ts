@@ -47,4 +47,15 @@ export const CRON_JOBS: CronJob[] = [
     name: 'partner-maintenance',
     run: async (ctx) => (await import('@/lib/partner/verification')).runPartnerMaintenance(ctx),
   },
+  {
+    // Momence → shifts coverage-window sync for staff scheduling. Idempotent;
+    // never touches sync_locked/staffed shifts beyond flagging them.
+    name: 'sync-shifts',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/schedule/sync')).syncShifts({
+        dryRun: ctx.dryRun,
+      });
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
 ];

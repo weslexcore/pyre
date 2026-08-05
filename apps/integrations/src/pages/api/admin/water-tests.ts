@@ -1,13 +1,14 @@
 // Cold-tub water testing log API for the /admin/water staff tool: GET lists
 // entries newest-first (optionally per tub), POST records a new entry with
 // readings and the chemicals actually added, DELETE removes an entry the
-// caller recorded themselves. Staff-gated (requireStaff), and — as the app's
+// caller recorded themselves. Gated on the /admin/water page grant
+// (requirePage), and — as the app's
 // first cookie-authed mutating routes — CSRF-guarded in-route via
 // assertSameOrigin plus (on POST) the JSON content-type requirement (global
 // checkOrigin stays off for the Mailchimp webhook; see astro.config.mjs).
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
+import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
 import {
   ENTRY_TYPES,
@@ -48,7 +49,7 @@ const READING_KEYS: Record<ReadingColumn, string> = {
 };
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireStaff(cookies);
+  const gate = await requirePage(cookies, '/admin/water');
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -85,7 +86,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireStaff(cookies);
+  const gate = await requirePage(cookies, '/admin/water');
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);
@@ -191,7 +192,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireStaff(cookies);
+  const gate = await requirePage(cookies, '/admin/water');
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);

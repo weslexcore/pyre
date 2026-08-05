@@ -65,13 +65,13 @@ import breakSection from '../lib/breakSection';
         let timerId: number | null = null;
         const FADE_DURATION = 350;
 
-        function fadeToWord(nextWord: string) {
+        const fadeToWord = (nextWord: string) => {
           rotatingSpan.style.opacity = '0';
           setTimeout(() => {
             rotatingSpan.textContent = nextWord;
             rotatingSpan.style.opacity = '1';
           }, FADE_DURATION);
-        }
+        };
 
         const updateWord = (fade = false) => {
           const next = WORDS[currentIndex] ?? '';

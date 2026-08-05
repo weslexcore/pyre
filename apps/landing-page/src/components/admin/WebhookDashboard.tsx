@@ -576,7 +576,7 @@ export function WebhookDashboard() {
             </table>
           </div>
 
-          {totalPages > 1 && (
+          {data && totalPages > 1 && (
             <div className="flex items-center justify-between mt-4 text-sm text-white/50">
               <span>
                 {data.total} total &middot; Page {currentPage} of {totalPages}

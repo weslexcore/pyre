@@ -22,7 +22,7 @@ export const GET: APIRoute = async ({ site }) => {
   const blogSection = sortedPosts
     .map(
       (post) =>
-        `### ${post.data.title}\n\n- **URL**: ${baseUrl}/blog/${post.slug}\n- **Author**: ${post.data.author}\n- **Date**: ${post.data.date.toISOString().split('T')[0]}\n- **Tags**: ${post.data.tags.join(', ')}\n\n${post.data.description}`
+        `### ${post.data.title}\n\n- **URL**: ${baseUrl}/blog/${post.id}\n- **Author**: ${post.data.author}\n- **Date**: ${post.data.date.toISOString().split('T')[0]}\n- **Tags**: ${post.data.tags.join(', ')}\n\n${post.data.description}`
     )
     .join('\n\n');
 
@@ -94,7 +94,7 @@ Capacity: ${groupBooking.capacity.label}
 
 ### Available For
 
-${groupBooking.occasions.map((o) => `- ${o.label}`).join('\n')}
+${(groupBooking.occasions ?? []).map((o) => `- ${o.label}`).join('\n')}
 
 Contact: groups@pyresauna.com
 

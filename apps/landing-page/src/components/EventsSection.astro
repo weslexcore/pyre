@@ -285,7 +285,7 @@ const isCompact = variant === 'compact';
           const response = await fetch(`/api/events?limit=${limit}`);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
-          events = Array.isArray(data.events) ? data.events : [];
+          events = Array.isArray(data.events) ? (data.events as EventItem[]) : [];
           writeCache(limit, events);
         } catch {
           fetchFailed = true;

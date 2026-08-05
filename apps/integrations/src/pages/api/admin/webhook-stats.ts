@@ -9,7 +9,7 @@ import {
   type WebhookExecutionSummary,
 } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -41,7 +41,7 @@ function summarizeLast24h(records: WebhookExecutionSummary[]) {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/webhooks');
   if (gate instanceof Response) return gate;
 
   const daysRaw = Number.parseInt(url.searchParams.get('days') ?? '', 10);

@@ -133,10 +133,10 @@ export function setOAuthState(cookies: AstroCookies, state: OAuthState): void {
 export function getAndClearOAuthState(cookies: AstroCookies): OAuthState | null {
   const stateStr = cookies.get(OAUTH_STATE_COOKIE)?.value;
 
-  // Clear the state cookie immediately after reading
+  // Clear the state cookie immediately after reading (delete expires the
+  // cookie itself; Astro 7's AstroCookieDeleteOptions no longer takes maxAge)
   cookies.delete(OAUTH_STATE_COOKIE, {
     ...COOKIE_OPTIONS,
-    maxAge: 0,
   });
 
   if (!stateStr) {

@@ -117,10 +117,13 @@ admin dashboard reads those traces for observability.
 
 ### Admin dashboard
 
-`/` is the admin sign-in page (Momence OAuth + `ADMIN_EMAILS` allowlist); `/admin`
-is the tool directory. Every `/admin/*` page shares `AdminLayout` (server-side
+`/` is the admin sign-in page (Momence OAuth); `/admin` is the tool directory.
+Access is managed from `/admin/users` (the `dashboard_users` table): admins see
+every page, other users see only the pages granted to them. The `ADMIN_EMAILS`
+/ `STAFF_EMAILS` env vars are a bootstrap fallback only, applied while the
+table has no admin row. Every `/admin/*` page shares `AdminLayout` (server-side
 gate + responsive nav) and every `/api/admin/*` route re-checks the session via
-`requireAdmin`.
+`requireAdmin` or `requirePage`.
 
 The directory groups tools into three sections: Operations, Marketing, and
 Monitoring.

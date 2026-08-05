@@ -1,10 +1,10 @@
 // Aggregated email-system stats for the admin dashboard (/admin).
 // Reads the three durable stores the email engine writes — email_sends,
 // email_suppressions, journey_enrollments — via the service-role client, so
-// the route itself must stay behind requireAdmin. Read-only.
+// the route itself must stay behind requirePage. Read-only.
 
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 import { JOURNEYS } from '@/lib/email/journeys/registry';
 
@@ -40,7 +40,7 @@ function dayKey(iso: string): string {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/email');
   if (gate instanceof Response) return gate;
 
   const db = getDb();

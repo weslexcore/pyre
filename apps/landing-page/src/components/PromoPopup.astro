@@ -313,14 +313,14 @@ const hasForm = !!promoConfig.form;
         setTimeout(onDone, 350);
       }
 
-      function removeAll() {
+      const removeAll = () => {
         // Fully remove everything (offer taken)
         try {
           localStorage.setItem(takenKey, '1');
         } catch {}
         document.body.style.overflow = '';
         root.remove();
-      }
+      };
 
       // Event listeners — must be before the early return so they work
       // when the popup is re-opened from the tab

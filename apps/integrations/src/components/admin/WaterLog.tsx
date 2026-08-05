@@ -21,8 +21,8 @@ import { INSTRUCTIONS } from '@/lib/water/instructions';
 import {
   classifyReading,
   getRecommendations,
-  type Readings,
   type ReadingStatus,
+  type Readings,
   type Recommendation,
 } from '@/lib/water/recommendations';
 import { WaterTrends } from './WaterTrends';

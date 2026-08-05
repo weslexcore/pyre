@@ -441,7 +441,9 @@ export interface EventsContent {
   subtitle?: string;
   items: EventItem[];
   viewAllCta?: ActionRef;
-  emptyState?: {
+  // Required: EventsSection renders the empty state unconditionally when no
+  // events are available.
+  emptyState: {
     message: string;
     cta?: ActionRef;
   };

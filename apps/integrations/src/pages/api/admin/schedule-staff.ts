@@ -4,7 +4,7 @@
 // active off instead.
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin, requireStaff } from '@/lib/auth/admin';
+import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ScheduleStaffRow } from '@/lib/db';
 
 export const prerender = false;
@@ -59,7 +59,7 @@ async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<Response | null> {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
@@ -67,7 +67,7 @@ async function gateMutation(
 }
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requireStaff(cookies);
+  const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
 
   const db = getDb();

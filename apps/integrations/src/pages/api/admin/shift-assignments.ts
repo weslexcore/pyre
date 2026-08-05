@@ -4,10 +4,11 @@
 // about time-off overlaps but the API doesn't block them (the admin may have
 // confirmed with the person, as the sheet's notes show).
 
+import type { AssignmentRole } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
-import { ASSIGNMENT_ROLES, type AssignmentRole } from '@/lib/schedule/constants';
+import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
@@ -17,13 +18,11 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
-
 async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<Response | null> {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
@@ -39,31 +38,6 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown> |
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
-}
-
-function parseTimesAndRole(body: Record<string, unknown>): Record<string, unknown> | string {
-  const fields: Record<string, unknown> = {};
-  for (const [key, column] of [
-    ['startsAt', 'starts_at'],
-    ['endsAt', 'ends_at'],
-  ] as const) {
-    const value = body[key];
-    if (value !== undefined) {
-      if (typeof value !== 'string' || !TIME_RE.test(value)) return `${key} must be HH:MM`;
-      fields[column] = value;
-    }
-  }
-  if (body.role !== undefined) {
-    if (typeof body.role !== 'string' || !ASSIGNMENT_ROLES.includes(body.role as AssignmentRole)) {
-      return `role must be one of: ${ASSIGNMENT_ROLES.join(', ')}`;
-    }
-    fields.role = body.role;
-  }
-  if (body.notes !== undefined) {
-    if (body.notes !== null && typeof body.notes !== 'string') return 'notes must be a string';
-    fields.notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) || null : null;
-  }
-  return fields;
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -82,7 +56,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'shiftId and staffId are required' }, 400);
   }
 
-  const fields = parseTimesAndRole(body);
+  const fields = parseAssignmentFields(body);
   if (typeof fields === 'string') return json({ error: fields }, 400);
 
   const { data: shift, error: shiftError } = await db
@@ -134,7 +108,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = body.id;
   if (typeof id !== 'string' || !id) return json({ error: 'id is required' }, 400);
 
-  const fields = parseTimesAndRole(body);
+  const fields = parseAssignmentFields(body);
   if (typeof fields === 'string') return json({ error: fields }, 400);
   if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
 

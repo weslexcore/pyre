@@ -339,3 +339,66 @@ export function getIntroOfferMembershipIds(): number[] {
     .map((s) => Number.parseInt(s.trim(), 10))
     .filter((n) => Number.isFinite(n));
 }
+
+// --- Schedule feed for the staff-scheduling sync (sessions + appointments) ---
+
+export interface HostSession {
+  id: number;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  isDraft: boolean;
+  isCancelled?: boolean;
+}
+
+export interface AppointmentReservation {
+  id: number;
+  startsAt: string;
+  endsAt: string | null;
+  serviceName?: string;
+  isCancelled?: boolean;
+}
+
+async function fetchAllPages<T>(path: string, query: Record<string, string>): Promise<T[]> {
+  const items: T[] = [];
+  let page = 0;
+  for (;;) {
+    const data = await momenceRequest<Paginated<T>>('GET', path, {
+      query: { ...query, page: String(page), pageSize: '100' },
+    });
+    const batch = data.payload ?? [];
+    items.push(...batch);
+    if (batch.length < 100) break;
+    page += 1;
+  }
+  return items;
+}
+
+/** Upcoming classes in a UTC window, drafts and cancellations filtered out. */
+export async function fetchHostSessions(params: {
+  startAfter: string;
+  startBefore: string;
+}): Promise<HostSession[]> {
+  const sessions = await fetchAllPages<HostSession>('/host/sessions', {
+    startAfter: params.startAfter,
+    startBefore: params.startBefore,
+    sortBy: 'startsAt',
+    sortOrder: 'ASC',
+  });
+  return sessions.filter((s) => !s.isDraft && !s.isCancelled);
+}
+
+/** Upcoming private appointment reservations in a UTC window. */
+export async function fetchAppointmentReservations(params: {
+  startAfter: string;
+  startBefore: string;
+}): Promise<AppointmentReservation[]> {
+  const reservations = await fetchAllPages<AppointmentReservation>(
+    '/host/appointments/reservations',
+    {
+      startAfter: params.startAfter,
+      startBefore: params.startBefore,
+    }
+  );
+  return reservations.filter((r) => !r.isCancelled);
+}

@@ -4,8 +4,9 @@
 // sync_locked so the Phase-3 sync won't overwrite the admin's adjustment.
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftRow } from '@/lib/db';
+import { parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
@@ -15,68 +16,11 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
-
-function parseCommonFields(body: Record<string, unknown>): Record<string, unknown> | string {
-  const fields: Record<string, unknown> = {};
-
-  if (body.shiftDate !== undefined) {
-    if (typeof body.shiftDate !== 'string' || !DATE_RE.test(body.shiftDate)) {
-      return 'shiftDate must be YYYY-MM-DD';
-    }
-    fields.shift_date = body.shiftDate;
-  }
-  if (body.label !== undefined) {
-    if (typeof body.label !== 'string' || !body.label.trim() || body.label.length > 40) {
-      return 'label must be 1-40 characters';
-    }
-    fields.label = body.label.trim();
-  }
-  for (const [key, column] of [
-    ['startsAt', 'starts_at'],
-    ['endsAt', 'ends_at'],
-  ] as const) {
-    const value = body[key];
-    if (value !== undefined) {
-      if (typeof value !== 'string' || !TIME_RE.test(value)) return `${key} must be HH:MM`;
-      fields[column] = value;
-    }
-  }
-  if (body.staffNeeded !== undefined) {
-    const n = body.staffNeeded;
-    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > 20) {
-      return 'staffNeeded must be an integer between 0 and 20';
-    }
-    fields.staff_needed = n;
-  }
-  if (body.notes !== undefined) {
-    if (body.notes !== null && typeof body.notes !== 'string') return 'notes must be a string';
-    fields.notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) || null : null;
-  }
-  if (body.status !== undefined) {
-    if (body.status !== 'active' && body.status !== 'cancelled') {
-      return "status must be 'active' or 'cancelled'";
-    }
-    fields.status = body.status;
-  }
-
-  if (
-    typeof fields.starts_at === 'string' &&
-    typeof fields.ends_at === 'string' &&
-    fields.ends_at <= fields.starts_at
-  ) {
-    return 'endsAt must be after startsAt';
-  }
-
-  return fields;
-}
-
 async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<Response | null> {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
@@ -104,7 +48,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const body = await readJsonBody(request);
   if (body instanceof Response) return body;
 
-  const fields = parseCommonFields(body);
+  const fields = parseShiftFields(body);
   if (typeof fields === 'string') return json({ error: fields }, 400);
   for (const required of ['shift_date', 'label', 'starts_at', 'ends_at'] as const) {
     if (fields[required] === undefined) {
@@ -135,7 +79,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = body.id;
   if (typeof id !== 'string' || !id) return json({ error: 'id is required' }, 400);
 
-  const fields = parseCommonFields(body);
+  const fields = parseShiftFields(body);
   if (typeof fields === 'string') return json({ error: fields }, 400);
   if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
 

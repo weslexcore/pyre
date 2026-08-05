@@ -1,11 +1,21 @@
 ---
 // Per-person hours by week (the sheet's "Total Hours"), with CSV export.
+// Manage side sees everyone; employees see only their own hours.
+import { hasScheduleManage } from '@/components/admin/adminTools';
 import { ScheduleHours } from '@/components/admin/ScheduleHours';
 import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const access = Astro.locals.adminAccess ?? null;
+const canManage = !!access && hasScheduleManage(access);
 ---
 
-<AdminLayout title="Hours" subtitle="Scheduled hours per person, Monday–Sunday weeks. ✦ = founder.">
+<AdminLayout
+  title="Hours"
+  subtitle={canManage
+    ? 'Scheduled hours per person, Monday–Sunday weeks. ✦ = founder.'
+    : 'Your scheduled hours, Monday–Sunday weeks.'}
+>
   <ScheduleTabs current="/admin/schedule/hours" />
   <ScheduleHours client:load />
 </AdminLayout>

@@ -1,37 +1,25 @@
-// Admin gate: Momence OAuth session + ADMIN_EMAILS allowlist (same contract as
-// the landing-page admin dashboard — set ADMIN_EMAILS on this deployment too).
-// Staff-facing tools (e.g. /admin/water) use the wider STAFF_EMAILS allowlist;
-// admins are implicitly staff.
+// Admin gates: Momence OAuth session + the dashboard_users table (managed
+// from /admin/users; env allowlists are only the bootstrap fallback — see
+// ./access.ts). requireAdmin gates admin-only routes; requirePage gates a
+// route on view access to the admin page it serves.
 
 import type { AstroCookies } from 'astro';
+import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
+import { type DashboardAccess, getAccess } from './access';
 import { validateSession } from './session';
 import type { MomenceUserProfile } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-function inAllowlist(email: string, allowlistEnv: string | undefined): boolean {
-  if (!allowlistEnv) return false;
-
-  const allowlist = allowlistEnv
-    .split(',')
-    .map((e: string) => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  return allowlist.includes(email.toLowerCase());
+export interface AdminGate {
+  user: MomenceUserProfile;
+  access: DashboardAccess;
 }
 
-export function isAdminEmail(email: string): boolean {
-  return inAllowlist(email, import.meta.env.ADMIN_EMAILS);
-}
-
-export function isStaffEmail(email: string): boolean {
-  return inAllowlist(email, import.meta.env.STAFF_EMAILS) || isAdminEmail(email);
-}
-
-async function requireAllowlisted(
+async function requireAccess(
   cookies: AstroCookies,
-  isAllowed: (email: string) => boolean
-): Promise<{ user: MomenceUserProfile } | Response> {
+  isAllowed: (access: DashboardAccess) => boolean
+): Promise<AdminGate | Response> {
   const { session } = await validateSession(cookies);
 
   if (!session.isAuthenticated || !session.user) {
@@ -41,7 +29,8 @@ async function requireAllowlisted(
     });
   }
 
-  if (!session.user.email || !isAllowed(session.user.email)) {
+  const access = session.user.email ? await getAccess(session.user.email) : null;
+  if (!access || !isAllowed(access)) {
     return new Response(
       JSON.stringify({
         error: 'Forbidden',
@@ -51,25 +40,38 @@ async function requireAllowlisted(
     );
   }
 
-  return { user: session.user };
+  return { user: session.user, access };
 }
 
 /**
- * The 401/403 preamble every admin API route needs. Returns the authenticated
- * admin user, or a ready-to-return JSON error Response (check with
- * `instanceof Response`).
+ * The 401/403 preamble every admin-only API route needs. Returns the
+ * authenticated admin user, or a ready-to-return JSON error Response (check
+ * with `instanceof Response`).
  */
-export async function requireAdmin(
-  cookies: AstroCookies
-): Promise<{ user: MomenceUserProfile } | Response> {
-  return requireAllowlisted(cookies, isAdminEmail);
+export async function requireAdmin(cookies: AstroCookies): Promise<AdminGate | Response> {
+  return requireAccess(cookies, (access) => access.isAdmin);
 }
 
-/** Same contract as requireAdmin, against the wider staff allowlist. */
-export async function requireStaff(
-  cookies: AstroCookies
-): Promise<{ user: MomenceUserProfile } | Response> {
-  return requireAllowlisted(cookies, isStaffEmail);
+/**
+ * Same contract as requireAdmin, for routes serving one admin page: passes
+ * admins, and any user granted view access to `page` (a tool href from
+ * adminTools.ts, e.g. '/admin/water'). schedule:manage implies the schedule
+ * view grant.
+ */
+export async function requirePage(
+  cookies: AstroCookies,
+  page: string
+): Promise<AdminGate | Response> {
+  return requireAccess(cookies, (access) => canViewPage(access, page));
+}
+
+/**
+ * Gate for the schedule's manage side (shift/assignment mutations, roster,
+ * Momence sync, AI drafts, other people's time off): passes admins and users
+ * holding the schedule:manage capability.
+ */
+export async function requireScheduleManage(cookies: AstroCookies): Promise<AdminGate | Response> {
+  return requireAccess(cookies, hasScheduleManage);
 }
 
 /**

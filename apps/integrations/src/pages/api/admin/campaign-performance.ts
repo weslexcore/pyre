@@ -7,10 +7,15 @@
 // slugified name ("instagram-bio-links"). Every campaign value is normalized
 // through slugifyCampaign before joining so the variants roll up together.
 
-import { getRedis, listCampaignsWithLinks, listShortLinks, slugifyCampaign } from '@pyre/webhook-core';
+import {
+  getRedis,
+  listCampaignsWithLinks,
+  listShortLinks,
+  slugifyCampaign,
+} from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { isPostHogQueryConfigured, queryHogQL } from '@/lib/analytics/posthog-query';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -194,7 +199,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/campaigns');
   if (gate instanceof Response) return gate;
 
   const daysRaw = Number.parseInt(url.searchParams.get('days') ?? '', 10);

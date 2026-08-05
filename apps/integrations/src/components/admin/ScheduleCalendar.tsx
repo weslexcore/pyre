@@ -3,10 +3,16 @@
 // off as per-person colored markers along the cell bottom — so the month's
 // shape and everyone's availability read at a glance. Read-only; editing
 // happens on the Week board.
+
+import {
+  addDays,
+  busyIntervalsFor,
+  minutesToTime,
+  timeToMinutes,
+  weekStartOf,
+} from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
-import { busyIntervalsFor, minutesToTime, timeToMinutes } from '@/lib/schedule/availability';
-import { addDays, weekStartOf } from '@/lib/schedule/hours';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -142,7 +148,9 @@ export function ScheduleCalendar() {
 
   const personColor = useMemo(() => {
     const map = new Map<string, string>();
-    (data?.staff ?? []).forEach((s, i) => map.set(s.id, PERSON_COLORS[i % PERSON_COLORS.length]));
+    (data?.staff ?? []).forEach((s, i) => {
+      map.set(s.id, PERSON_COLORS[i % PERSON_COLORS.length]);
+    });
     return map;
   }, [data]);
 
