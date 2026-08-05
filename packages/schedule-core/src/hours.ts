@@ -2,7 +2,7 @@
 // date and by week, plus the sheet's "% founders" coverage metric. Weeks run
 // Monday–Sunday. Pure functions, pinned down in hours.test.ts.
 
-import type { ScheduleStaffRow, ShiftAssignmentRow } from './types';
+import type { StaffRow, ShiftAssignmentRow } from './types';
 import { timeToMinutes } from './availability';
 
 export function assignmentHours(startsAt: string, endsAt: string): number {
@@ -99,6 +99,6 @@ export function rollupHours(
     });
 }
 
-export function founderIdsOf(staff: ScheduleStaffRow[]): Set<string> {
+export function founderIdsOf(staff: StaffRow[]): Set<string> {
   return new Set(staff.filter((s) => s.is_founder).map((s) => s.id));
 }

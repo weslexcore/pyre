@@ -1,15 +1,15 @@
 ---
-// Dashboard access management. Admin-only (canViewPath never grants
-// /admin/users to non-admins); the /api/admin/users routes re-check
-// requireAdmin on every request — this page gate is UX, the API gate is the
-// security boundary.
+// People: dashboard access and the scheduling roster in one list. Admin-only
+// (canViewPath never grants /admin/users to non-admins); the /api/admin/users
+// routes re-check requireAdmin on every request — this page gate is UX, the
+// API gate is the security boundary.
 import { UsersManager } from '@/components/admin/UsersManager';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
 <AdminLayout
-  title="User Access"
-  subtitle="Who can use this dashboard. Emails must match the person's Momence login; admins see every page, everyone else sees only the pages checked here."
+  title="People"
+  subtitle="Everyone at Pyre. Emails must match the person's Momence login — that's how they sign in and how the schedule finds them; admins see every page, everyone else sees only the pages checked here."
 >
   <UsersManager client:load />
 </AdminLayout>

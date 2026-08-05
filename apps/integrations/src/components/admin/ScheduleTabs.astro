@@ -1,22 +1,17 @@
 ---
-// Sub-nav shared by the /admin/schedule pages. The Roster tab is manage-side
-// only (staff emails live there); canViewPath blocks the page itself too.
-import { hasScheduleManage } from '@/components/admin/adminTools';
-
+// Sub-nav shared by the /admin/schedule pages. The roster itself lives on
+// /admin/users (people, access, founders, and who is available to schedule
+// are all one list) — admin-only, so it isn't linked from here.
 interface Props {
   current: string;
 }
 const { current } = Astro.props;
-
-const access = Astro.locals.adminAccess ?? null;
-const canManage = !!access && hasScheduleManage(access);
 
 const tabs = [
   { href: '/admin/schedule', label: 'Week' },
   { href: '/admin/schedule/calendar', label: 'Calendar' },
   { href: '/admin/schedule/hours', label: 'Hours' },
   { href: '/admin/schedule/time-off', label: 'Time Off' },
-  ...(canManage ? [{ href: '/admin/schedule/staff', label: 'Roster' }] : []),
 ];
 ---
 

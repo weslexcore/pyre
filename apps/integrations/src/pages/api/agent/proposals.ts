@@ -10,7 +10,7 @@
 
 import {
   availabilityFor,
-  type ScheduleStaffRow,
+  type StaffRow,
   type TimeOffRow,
   timeToMinutes,
   weekStartOf,
@@ -108,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   // --- Load reference data ---
   const [staffRes, liveShiftsRes, timeOffRes] = await Promise.all([
-    db.from('schedule_staff').select('*'),
+    db.from('staff').select('*'),
     db
       .from('shifts')
       .select('id, shift_date, starts_at, ends_at, status, is_draft')
@@ -119,7 +119,7 @@ export const POST: APIRoute = async ({ request }) => {
   const refError = staffRes.error ?? liveShiftsRes.error ?? timeOffRes.error;
   if (refError) return json({ error: refError.message }, 500);
 
-  const staff = (staffRes.data ?? []) as ScheduleStaffRow[];
+  const staff = (staffRes.data ?? []) as StaffRow[];
   const staffById = new Map(staff.map((s) => [s.id, s]));
   const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
   const liveShiftById = new Map(
@@ -145,7 +145,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (typeof staffId !== 'string' || !staffById.has(staffId)) {
       return json({ error: `assignments[${i}]: unknown staffId` }, 400);
     }
-    if (!(staffById.get(staffId) as ScheduleStaffRow).active) {
+    if (!(staffById.get(staffId) as StaffRow).active) {
       return json({ error: `assignments[${i}]: staff member is inactive` }, 400);
     }
 

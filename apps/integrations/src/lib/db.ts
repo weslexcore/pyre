@@ -85,9 +85,9 @@ export interface WaterTestRow {
 // agents app); re-exported here so app code keeps one import for row shapes.
 export type {
   ScheduleProposalRow,
-  ScheduleStaffRow,
   ShiftAssignmentRow,
   ShiftRow,
+  StaffRow,
   TimeOffRow,
 } from '@pyre/schedule-core';
 

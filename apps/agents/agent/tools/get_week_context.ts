@@ -8,7 +8,7 @@ import {
   availabilityFor,
   addDays,
   rollupHours,
-  type ScheduleStaffRow,
+  type StaffRow,
   type ShiftAssignmentRow,
   type ShiftRow,
   type TimeOffRow,
@@ -43,7 +43,7 @@ export default defineTool({
     const historyStart = addDays(weekStart, -7 * HISTORY_WEEKS);
 
     const [staffRes, shiftsRes, timeOffRes] = await Promise.all([
-      db.from('schedule_staff').select('*').eq('active', true).order('display_name'),
+      db.from('staff').select('*').eq('active', true).order('display_name'),
       db
         .from('shifts')
         .select('*')
@@ -57,7 +57,7 @@ export default defineTool({
       if (res.error) throw new Error(res.error.message);
     }
 
-    const staff = (staffRes.data ?? []) as ScheduleStaffRow[];
+    const staff = (staffRes.data ?? []) as StaffRow[];
     const shifts = (shiftsRes.data ?? []) as ShiftRow[];
     const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
 

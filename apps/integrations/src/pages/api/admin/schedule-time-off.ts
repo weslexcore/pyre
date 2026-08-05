@@ -3,13 +3,13 @@
 // workflow; conflicts with existing assignments are surfaced by the UI, not
 // blocked here. Managers (schedule:manage / admins) work on anyone's entries;
 // everyone else with the schedule page manages only their own — "own" means
-// the schedule_staff row whose momence_email matches their login.
+// the staff row whose email matches their login.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { getDb, type ScheduleStaffRow, type TimeOffRow } from '@/lib/db';
+import { getDb, type StaffRow, type TimeOffRow } from '@/lib/db';
 
 export const prerender = false;
 
@@ -113,17 +113,17 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
 }
 
 /**
- * The schedule_staff row belonging to the caller's login email, or null when
- * their login isn't linked to the roster. Employees may only touch entries
- * for this row.
+ * The staff row belonging to the caller's login email, or null when their
+ * login isn't linked to the roster. Employees may only touch entries for this
+ * row.
  */
 async function selfStaffId(db: SupabaseClient, gate: AdminGate): Promise<string | null> {
   const email = (gate.user.email ?? '').toLowerCase();
   if (!email) return null;
 
-  const { data } = await db.from('schedule_staff').select('id, momence_email');
-  const rows = (data ?? []) as Pick<ScheduleStaffRow, 'id' | 'momence_email'>[];
-  return rows.find((s) => (s.momence_email ?? '').toLowerCase() === email)?.id ?? null;
+  const { data } = await db.from('staff').select('id, email');
+  const rows = (data ?? []) as Pick<StaffRow, 'id' | 'email'>[];
+  return rows.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null;
 }
 
 /**

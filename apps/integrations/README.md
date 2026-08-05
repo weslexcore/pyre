@@ -118,10 +118,12 @@ admin dashboard reads those traces for observability.
 ### Admin dashboard
 
 `/` is the admin sign-in page (Momence OAuth); `/admin` is the tool directory.
-Access is managed from `/admin/users` (the `dashboard_users` table): admins see
-every page, other users see only the pages granted to them. The `ADMIN_EMAILS`
-/ `STAFF_EMAILS` env vars are a bootstrap fallback only, applied while the
-table has no admin row. Every `/admin/*` page shares `AdminLayout` (server-side
+People are managed from `/admin/users` (the `staff` table — one row per person,
+covering both dashboard access and the scheduling roster): admins see every
+page, other users see only the pages granted to them, and the same row carries
+`is_founder` and `active` ("available to schedule"). The `ADMIN_EMAILS` /
+`STAFF_EMAILS` env vars are a bootstrap fallback only, applied while the table
+has no admin row. Every `/admin/*` page shares `AdminLayout` (server-side
 gate + responsive nav) and every `/api/admin/*` route re-checks the session via
 `requireAdmin` or `requirePage`.
 

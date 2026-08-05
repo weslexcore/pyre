@@ -1,4 +1,4 @@
-// Admin gates: Momence OAuth session + the dashboard_users table (managed
+// Admin gates: Momence OAuth session + the staff table (managed
 // from /admin/users; env allowlists are only the bootstrap fallback — see
 // ./access.ts). requireAdmin gates admin-only routes; requirePage gates a
 // route on view access to the admin page it serves.

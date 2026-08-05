@@ -46,7 +46,7 @@ interface ImportMetaEnv {
   readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
   // Bootstrap admin allowlist (comma-separated emails). Access is managed in
-  // the dashboard_users table via /admin/users; this env var only applies
+  // the staff table via /admin/users; this env var only applies
   // while that table has no admin row (or Supabase is unreachable).
   readonly ADMIN_EMAILS?: string;
   // Bootstrap staff allowlist — same fallback-only contract as ADMIN_EMAILS
@@ -93,7 +93,7 @@ declare namespace App {
     // Set by src/middleware.ts for /admin/* pages: the authenticated Momence
     // user (not yet access-checked — AdminLayout enforces adminAccess).
     adminUser?: import('./lib/auth/types').MomenceUserProfile;
-    // Their dashboard_users access (null = no dashboard access at all).
+    // Their dashboard access (null = no dashboard access at all).
     adminAccess?: import('./lib/auth/access').DashboardAccess | null;
   }
 }

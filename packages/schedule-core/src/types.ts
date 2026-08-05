@@ -4,14 +4,30 @@
 // never UTC. Shared by apps/integrations (which re-exports them from lib/db)
 // and apps/agents.
 
-export interface ScheduleStaffRow {
+/**
+ * A person: one row covers both the scheduling roster and dashboard access
+ * (the two used to be separate tables — see the merge migration). Managed from
+ * /admin/users.
+ */
+export interface StaffRow {
   id: string;
   display_name: string;
-  /** Join key against the Momence OAuth profile email; null until confirmed. */
-  momence_email: string | null;
-  role: 'admin' | 'staff';
+  /**
+   * Momence account email — the join key against the OAuth profile, for both
+   * "whose schedule is this" and "may they use the dashboard". Null until the
+   * person's account email is confirmed.
+   */
+  email: string | null;
   is_founder: boolean;
+  /** Available to be scheduled; false = off the roster, history preserved. */
   active: boolean;
+  /** Dashboard: sees every admin page and manages people. */
+  is_admin: boolean;
+  /** Admin page hrefs / capability keys granted to a non-admin. */
+  pages: string[];
+  momence_member_id: number | null;
+  /** Email of the admin who added them. */
+  added_by: string | null;
   created_at: string;
   updated_at: string;
 }
