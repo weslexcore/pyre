@@ -42,24 +42,33 @@ describe('utcToEastern', () => {
 });
 
 describe('deriveCoverageWindows', () => {
-  it('pads a single session by lead/close and rounds to :30', () => {
-    // 16:00–17:15 session → 15:00 lead, 17:45 close → ceil to 18:00
+  it('pads a single session by 1.5h setup / 30min shutdown and rounds to :30', () => {
+    // 16:00–17:15 session → 14:30 setup lead, 17:45 close → ceil to 18:00
     const [w] = deriveCoverageWindows([event({ startMin: min('16:00'), endMin: min('17:15') })]);
-    expect(w.startMin).toBe(min('15:00'));
+    expect(w.startMin).toBe(min('14:30'));
     expect(w.endMin).toBe(min('18:00'));
     expect(w.label).toBe('Evening');
   });
 
   it('merges back-to-back sessions into one window', () => {
-    // The sheet's classic evening: 16:00 and 18:30 sessions → one 15:00–20:30 shift
+    // Classic evening: 16:00 and 18:30 sessions → one 14:30–20:30 shift
     const windows = deriveCoverageWindows([
       event({ id: 1, startMin: min('16:00'), endMin: min('17:00') }),
       event({ id: 2, startMin: min('18:30'), endMin: min('20:00') }),
     ]);
     expect(windows).toHaveLength(1);
-    expect(windows[0].startMin).toBe(min('15:00'));
+    expect(windows[0].startMin).toBe(min('14:30'));
     expect(windows[0].endMin).toBe(min('20:30'));
     expect(windows[0].sessionRefs).toHaveLength(2);
+  });
+
+  it('drops duplicate events (same kind + id) instead of double-counting', () => {
+    const windows = deriveCoverageWindows([
+      event({ id: 1, startMin: min('16:00'), endMin: min('17:00') }),
+      event({ id: 1, startMin: min('16:00'), endMin: min('17:00') }),
+    ]);
+    expect(windows).toHaveLength(1);
+    expect(windows[0].sessionRefs).toEqual([{ type: 'session', id: 1 }]);
   });
 
   it('splits sessions separated by more than the merge gap', () => {
@@ -184,6 +193,24 @@ describe('planShiftSync', () => {
     const plan = planShiftSync([morningReplacement], [shift({ assignmentCount: 1 })]);
     expect(plan.create).toHaveLength(1);
     expect(plan.flag).toEqual([{ shiftId: 'shift-1', flag: 'sessions_cancelled' }]);
+  });
+
+  it('does not duplicate a window an active manual shift already covers', () => {
+    // e.g. sheet-imported or admin-entered shift over the same session/time
+    const plan = planShiftSync(
+      [window()],
+      [shift({ id: 'manual-1', source: 'manual', momence_session_ids: [] })]
+    );
+    expect(plan.create).toHaveLength(0);
+    expect(plan.update).toHaveLength(0);
+  });
+
+  it('still creates the window when the overlapping manual shift is cancelled', () => {
+    const plan = planShiftSync(
+      [window()],
+      [shift({ id: 'manual-1', source: 'manual', momence_session_ids: [], status: 'cancelled' })]
+    );
+    expect(plan.create).toHaveLength(1);
   });
 
   it('ignores manual, draft, and already-cancelled shifts', () => {
