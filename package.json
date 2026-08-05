@@ -18,7 +18,7 @@
     "type-check": "turbo run type-check"
   },
   "devDependencies": {
-    "turbo": "^2.5.8"
+    "turbo": "^2.10.5"
   },
   "resolutions": {
     "@vercel/routing-utils": "5.2.0",
