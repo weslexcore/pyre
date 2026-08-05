@@ -39,8 +39,11 @@ interface ImportMetaEnv {
   readonly MAILCHIMP_WEBHOOK_SECRET?: string;
   // Mailchimp webhook signing secret (X-Mailchimp-Signature HMAC verification)
   readonly MAILCHIMP_WEBHOOK_SIGNING_SECRET?: string;
-  // Supabase durable engine state (journeys, send log, suppressions) — service-role, server-only
+  // Supabase durable engine state (journeys, send log, suppressions) — server-only.
+  // SUPABASE_SECRET_KEY is the current sb_secret_* key; SERVICE_ROLE_KEY is the
+  // legacy JWT fallback, kept until removed from all environments.
   readonly SUPABASE_URL?: string;
+  readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
   // Admin dashboard allowlist (comma-separated emails, same contract as landing-page)
   readonly ADMIN_EMAILS?: string;

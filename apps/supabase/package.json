@@ -2,7 +2,7 @@
   "name": "@pyre/supabase",
   "version": "0.0.1",
   "private": true,
-  "packageManager": "yarn@4.13.0",
+  "packageManager": "yarn@4.18.0",
   "scripts": {
     "start": "supabase start",
     "stop": "supabase stop",

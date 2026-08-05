@@ -155,15 +155,17 @@ export function getDb(): SupabaseClient | null {
   if (client !== undefined) return client;
 
   const url = import.meta.env.SUPABASE_URL;
-  const serviceRoleKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Prefer the revocable sb_secret_* key; SUPABASE_SERVICE_ROLE_KEY is the
+  // legacy fallback until it's removed from the environment.
+  const secretKey = import.meta.env.SUPABASE_SECRET_KEY ?? import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) {
-    console.warn('[DB] Supabase not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)');
+  if (!url || !secretKey) {
+    console.warn('[DB] Supabase not configured (SUPABASE_URL / SUPABASE_SECRET_KEY)');
     client = null;
     return client;
   }
 
-  client = createClient(url, serviceRoleKey, {
+  client = createClient(url, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return client;
