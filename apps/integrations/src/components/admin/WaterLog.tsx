@@ -812,11 +812,18 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         </div>
       </div>
 
-      {/* ---- Trends ---- */}
-      <div className="mb-8 rounded-lg border border-white/10 bg-white/[0.02] p-4">
-        <h2 className="mb-3 font-primary-semibold text-lg">Trends</h2>
-        <WaterTrends records={chartRecords} visibleTubs={filter === 'all' ? [...TUBS] : [filter]} />
-      </div>
+      {/* ---- Trends (collapsed by default; the log below carries every number) ---- */}
+      <details className="group mb-8 rounded-lg border border-white/10 bg-white/[0.02]">
+        <summary className="flex cursor-pointer select-none items-center gap-2 p-4 font-primary-semibold text-lg hover:opacity-80">
+          <span className="font-mono text-sm text-white/40 transition-transform group-open:rotate-90">
+            ›
+          </span>
+          Trends
+        </summary>
+        <div className="px-4 pb-4">
+          <WaterTrends records={chartRecords} visibleTubs={filter === 'all' ? [...TUBS] : [filter]} />
+        </div>
+      </details>
 
       {/* ---- Log ---- */}
       <h2 className="mb-4 font-primary-semibold text-lg">Log</h2>
