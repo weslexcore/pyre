@@ -1,14 +1,19 @@
 // Hours report (the sheet's "Total Hours" tab): per-person hours by
 // Monday–Sunday week over a picked range, with the % founders metric and a
-// CSV export for payroll.
+// CSV export for payroll. Manage side sees everyone; employees see only
+// their own column (no team totals or founder share).
+
+import { addDays, founderIdsOf, rollupHours, weekStartOf } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
-import { addDays, founderIdsOf, rollupHours, weekStartOf } from '@/lib/schedule/hours';
 
 interface BoardData {
   staff: ScheduleStaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
+  /** Manage side (schedule:manage / admin) — false = own hours only. */
+  canManage?: boolean;
+  selfStaffId?: string | null;
 }
 
 const inputClass =
@@ -52,6 +57,9 @@ export function ScheduleHours() {
     void load();
   }, [load]);
 
+  const canManage = data?.canManage ?? false;
+  const selfId = data?.selfStaffId ?? null;
+
   const { staffColumns, weeks } = useMemo(() => {
     if (!data) return { staffColumns: [] as ScheduleStaffRow[], weeks: [] };
     const assignments = data.shifts
@@ -60,13 +68,15 @@ export function ScheduleHours() {
         shift.assignments.map((assignment) => ({ assignment, shiftDate: shift.shift_date }))
       );
     const rolled = rollupHours(assignments, founderIdsOf(data.staff));
-    // Only show people with any hours in range, in roster order.
+    // Managers see everyone with hours in range (roster order); employees see
+    // only themselves.
+    const visible = canManage ? data.staff : data.staff.filter((s) => s.id === selfId);
     const withHours = new Set(rolled.flatMap((w) => Object.keys(w.byStaff)));
     return {
-      staffColumns: data.staff.filter((s) => withHours.has(s.id)),
+      staffColumns: visible.filter((s) => withHours.has(s.id)),
       weeks: rolled,
     };
-  }, [data]);
+  }, [data, canManage, selfId]);
 
   const totals = useMemo(() => {
     const byStaff: Record<string, number> = {};
@@ -81,18 +91,26 @@ export function ScheduleHours() {
   }, [weeks]);
 
   const exportCsv = () => {
-    const header = ['Week of', ...staffColumns.map((s) => s.display_name), 'Total', '% Founders'];
+    // Team totals and founder share are payroll aggregates — manage side only.
+    const header = [
+      'Week of',
+      ...staffColumns.map((s) => s.display_name),
+      ...(canManage ? ['Total', '% Founders'] : []),
+    ];
     const rows = weeks.map((week) => [
       week.weekStart,
       ...staffColumns.map((s) => fmt(week.byStaff[s.id] ?? 0)),
-      fmt(week.total),
-      week.founderShare == null ? '' : `${(week.founderShare * 100).toFixed(1)}%`,
+      ...(canManage
+        ? [
+            fmt(week.total),
+            week.founderShare == null ? '' : `${(week.founderShare * 100).toFixed(1)}%`,
+          ]
+        : []),
     ]);
     rows.push([
       'Total',
       ...staffColumns.map((s) => fmt(totals.byStaff[s.id] ?? 0)),
-      fmt(totals.total),
-      '',
+      ...(canManage ? [fmt(totals.total), ''] : []),
     ]);
     const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -138,7 +156,14 @@ export function ScheduleHours() {
         </p>
       )}
 
-      {weeks.length === 0 && !loading ? (
+      {!canManage && !selfId && !loading && (
+        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
+          Your login isn't linked to a roster entry yet, so there are no hours to show — ask an
+          admin to set your Momence email on the roster.
+        </p>
+      )}
+
+      {(weeks.length === 0 || staffColumns.length === 0) && !loading ? (
         <p className="font-mono text-sm text-white/40">No scheduled hours in this range.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -152,8 +177,12 @@ export function ScheduleHours() {
                     {s.is_founder && <span title="Founder"> ✦</span>}
                   </th>
                 ))}
-                <th className="py-2 pr-3 text-right">Total</th>
-                <th className="py-2 text-right">% Founders</th>
+                {canManage && (
+                  <>
+                    <th className="py-2 pr-3 text-right">Total</th>
+                    <th className="py-2 text-right">% Founders</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -171,10 +200,18 @@ export function ScheduleHours() {
                       </td>
                     );
                   })}
-                  <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(week.total)}</td>
-                  <td className="py-2 text-right font-mono text-white/60">
-                    {week.founderShare == null ? '—' : `${(week.founderShare * 100).toFixed(0)}%`}
-                  </td>
+                  {canManage && (
+                    <>
+                      <td className="py-2 pr-3 text-right font-mono font-bold">
+                        {fmt(week.total)}
+                      </td>
+                      <td className="py-2 text-right font-mono text-white/60">
+                        {week.founderShare == null
+                          ? '—'
+                          : `${(week.founderShare * 100).toFixed(0)}%`}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
               <tr>
@@ -184,8 +221,14 @@ export function ScheduleHours() {
                     {fmt(totals.byStaff[s.id] ?? 0)}
                   </td>
                 ))}
-                <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(totals.total)}</td>
-                <td />
+                {canManage && (
+                  <>
+                    <td className="py-2 pr-3 text-right font-mono font-bold">
+                      {fmt(totals.total)}
+                    </td>
+                    <td />
+                  </>
+                )}
               </tr>
             </tbody>
           </table>

@@ -3,22 +3,29 @@
 // assignment picker that shows each person's availability — computed locally
 // via lib/schedule/availability from the same time-off data the API returns —
 // plus their hours already scheduled that week.
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
-import {
-  type Availability,
-  availabilityFor,
-  minutesToTime,
-  timeToMinutes,
-} from '@/lib/schedule/availability';
+
 import {
   ASSIGNMENT_ROLE_LABELS,
   ASSIGNMENT_ROLES,
   type AssignmentRole,
+  type Availability,
+  addDays,
+  assignmentHours,
+  availabilityFor,
   DOW_LABELS,
+  minutesToTime,
   SHIFT_LABEL_SUGGESTIONS,
-} from '@/lib/schedule/constants';
-import { addDays, assignmentHours, weekStartOf } from '@/lib/schedule/hours';
+  timeToMinutes,
+  weekStartOf,
+} from '@pyre/schedule-core';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  ScheduleProposalRow,
+  ScheduleStaffRow,
+  ShiftAssignmentRow,
+  ShiftRow,
+  TimeOffRow,
+} from '@/lib/db';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -28,7 +35,16 @@ interface BoardData {
   staff: ScheduleStaffRow[];
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
+  proposals?: ScheduleProposalRow[];
+  /** Manage side (schedule:manage / admin) — false renders a read-only board. */
+  canManage?: boolean;
+  selfStaffId?: string | null;
 }
+
+const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
+  sessions_cancelled: 'Momence sessions cancelled',
+  times_changed: 'Momence times changed',
+};
 
 const inputClass =
   'w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
@@ -141,18 +157,24 @@ export function ScheduleBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Read-only view: every shift starts expanded so assigned hours are visible
+  // without clicking through; this tracks the ones the viewer closed.
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
   // Shift form: 'new:<date>' or 'edit:<shiftId>'
   const [formTarget, setFormTarget] = useState<string | null>(null);
   const [form, setForm] = useState<ShiftFormState>(emptyShiftForm);
   const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
+  // Agent drafting: set while waiting for a new proposal to appear.
+  const [drafting, setDrafting] = useState(false);
+  const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(
-        `/api/admin/schedule-board?start=${weekStart}&end=${addDays(weekStart, 6)}`
+        `/api/admin/schedule-board?start=${weekStart}&end=${addDays(weekStart, 6)}&includeDrafts=1`
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData((await res.json()) as BoardData);
@@ -166,6 +188,8 @@ export function ScheduleBoard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const canManage = data?.canManage ?? false;
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -224,6 +248,86 @@ export function ScheduleBoard() {
     setFormTarget(`edit:${shift.id}`);
   };
 
+  const proposal = useMemo(
+    () => (data?.proposals ?? []).find((p) => p.week_start === weekStart) ?? null,
+    [data, weekStart]
+  );
+
+  const syncMomence = async () => {
+    await run(async () => {
+      const res = await fetch('/api/admin/sync-shifts', { method: 'POST' });
+      if (!res.ok) {
+        try {
+          return {
+            error: ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`,
+          };
+        } catch {
+          return { error: `HTTP ${res.status}` };
+        }
+      }
+      return {};
+    });
+  };
+
+  const draftSchedule = async () => {
+    setDrafting(true);
+    setError(null);
+    const res = await fetch('/api/admin/schedule-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekStart }),
+    });
+    if (!res.ok) {
+      try {
+        setError(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
+      } catch {
+        setError(`HTTP ${res.status}`);
+      }
+      setDrafting(false);
+      return;
+    }
+    // Poll for the new draft proposal (the agent runs async); ~3min budget.
+    const before = proposal?.id ?? null;
+    const startedAt = Date.now();
+    if (draftPollRef.current) clearInterval(draftPollRef.current);
+    draftPollRef.current = setInterval(async () => {
+      const boardRes = await fetch(
+        `/api/admin/schedule-board?start=${weekStart}&end=${addDays(weekStart, 6)}&includeDrafts=1`
+      );
+      if (boardRes.ok) {
+        const board = (await boardRes.json()) as BoardData;
+        const fresh = (board.proposals ?? []).find(
+          (p) => p.week_start === weekStart && p.id !== before
+        );
+        if (fresh) {
+          if (draftPollRef.current) clearInterval(draftPollRef.current);
+          draftPollRef.current = null;
+          setData(board);
+          setDrafting(false);
+          return;
+        }
+      }
+      if (Date.now() - startedAt > 180_000) {
+        if (draftPollRef.current) clearInterval(draftPollRef.current);
+        draftPollRef.current = null;
+        setDrafting(false);
+        setError(
+          'The agent is taking longer than expected — refresh in a minute or check the agent logs.'
+        );
+      }
+    }, 5000);
+  };
+
+  useEffect(
+    () => () => {
+      if (draftPollRef.current) clearInterval(draftPollRef.current);
+    },
+    []
+  );
+
+  const proposalAction = (body: Record<string, unknown>) =>
+    run(() => api('POST', '/api/admin/schedule-proposals', body));
+
   const submitShiftForm = async () => {
     if (!formTarget) return;
     const staffNeeded = Number.parseInt(form.staffNeeded, 10);
@@ -274,6 +378,26 @@ export function ScheduleBoard() {
         <span className="font-mono text-sm text-white/60">
           {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
         </span>
+        {canManage && (
+          <span className="ml-auto flex gap-2">
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => void syncMomence()}
+              disabled={busy || drafting}
+            >
+              Sync Momence
+            </button>
+            <button
+              type="button"
+              className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+              onClick={() => void draftSchedule()}
+              disabled={busy || drafting}
+            >
+              {drafting ? 'Drafting…' : '✦ Draft schedule'}
+            </button>
+          </span>
+        )}
         {busy && <span className="font-mono text-xs text-white/40">Saving…</span>}
       </div>
 
@@ -282,6 +406,15 @@ export function ScheduleBoard() {
           {error}
         </p>
       )}
+
+      {drafting && (
+        <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+          Syncing Momence and drafting the week — the proposal will appear here (usually under a
+          minute)…
+        </p>
+      )}
+
+      {proposal && <ProposalBanner proposal={proposal} busy={busy} onAction={proposalAction} />}
 
       <div className="space-y-4">
         {days.map((date) => {
@@ -292,9 +425,11 @@ export function ScheduleBoard() {
                 <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-white/70">
                   {formatDay(date)}
                 </h2>
-                <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
-                  + Shift
-                </button>
+                {canManage && (
+                  <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
+                    + Shift
+                  </button>
+                )}
               </div>
 
               {formTarget === `new:${date}` && (
@@ -314,35 +449,95 @@ export function ScheduleBoard() {
               <div className="space-y-2">
                 {shifts.map((shift) => {
                   const tone = coverageTone(shift);
-                  const expanded = expandedId === shift.id;
+                  const expanded = canManage
+                    ? expandedId === shift.id
+                    : !collapsedIds.has(shift.id);
+                  const toggleExpanded = () => {
+                    if (canManage) {
+                      setExpandedId(expanded ? null : shift.id);
+                    } else {
+                      const next = new Set(collapsedIds);
+                      if (expanded) next.add(shift.id);
+                      else next.delete(shift.id);
+                      setCollapsedIds(next);
+                    }
+                  };
                   return (
                     <div
                       key={shift.id}
-                      className={`rounded border bg-white/[0.03] ${toneBorder[tone]}`}
+                      className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''}`}
                     >
-                      <button
-                        type="button"
-                        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left"
-                        onClick={() => setExpandedId(expanded ? null : shift.id)}
-                      >
-                        <span className="font-semibold">{shift.label}</span>
-                        <span className="font-mono text-sm text-white/60">
-                          {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
-                        </span>
-                        <span className={`rounded px-2 py-0.5 font-mono text-xs ${toneChip[tone]}`}>
-                          {shift.status === 'cancelled'
-                            ? 'cancelled'
-                            : `${shift.assignments.length}/${shift.staff_needed}`}
-                        </span>
-                        <span className="text-sm text-white/70">
-                          {shift.assignments
-                            .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
-                            .join(', ')}
-                        </span>
-                        {shift.notes && (
-                          <span className="font-mono text-xs text-white/40">{shift.notes}</span>
+                      <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                        <button
+                          type="button"
+                          className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
+                          onClick={toggleExpanded}
+                        >
+                          <span className="font-semibold">{shift.label}</span>
+                          <span className="font-mono text-sm text-white/60">
+                            {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
+                          </span>
+                          <span
+                            className={`rounded px-2 py-0.5 font-mono text-xs ${toneChip[tone]}`}
+                          >
+                            {shift.status === 'cancelled'
+                              ? 'cancelled'
+                              : `${shift.assignments.length}/${shift.staff_needed}`}
+                          </span>
+                          {shift.is_draft && (
+                            <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
+                              ✦ AI draft
+                            </span>
+                          )}
+                          {shift.sync_flag && (
+                            <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]">
+                              ⚠ {SYNC_FLAG_LABELS[shift.sync_flag]}
+                            </span>
+                          )}
+                          <span className="text-sm text-white/70">
+                            {shift.assignments
+                              .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
+                              .join(', ')}
+                          </span>
+                          {shift.notes && (
+                            <span className="font-mono text-xs text-white/40">{shift.notes}</span>
+                          )}
+                        </button>
+                        {shift.is_draft && (
+                          <span className="flex gap-1">
+                            <button
+                              type="button"
+                              className={buttonClass}
+                              title="Accept this shift"
+                              disabled={busy}
+                              onClick={() =>
+                                void proposalAction({
+                                  action: 'accept-item',
+                                  kind: 'shift',
+                                  id: shift.id,
+                                })
+                              }
+                            >
+                              ✓
+                            </button>
+                            <button
+                              type="button"
+                              className={`${buttonClass} text-[var(--pyre-red)]`}
+                              title="Reject this shift"
+                              disabled={busy}
+                              onClick={() =>
+                                void proposalAction({
+                                  action: 'reject-item',
+                                  kind: 'shift',
+                                  id: shift.id,
+                                })
+                              }
+                            >
+                              ✗
+                            </button>
+                          </span>
                         )}
-                      </button>
+                      </div>
 
                       {expanded && (
                         <ShiftDetail
@@ -352,9 +547,11 @@ export function ScheduleBoard() {
                           weekHours={weekHours}
                           busy={busy}
                           run={run}
+                          canManage={canManage}
                           onEdit={() => openEditShift(shift)}
                           editingAssignment={editingAssignment}
                           setEditingAssignment={setEditingAssignment}
+                          proposalAction={proposalAction}
                         />
                       )}
 
@@ -507,9 +704,11 @@ function ShiftDetail({
   weekHours,
   busy,
   run,
+  canManage,
   onEdit,
   editingAssignment,
   setEditingAssignment,
+  proposalAction,
 }: {
   shift: BoardShift;
   data: BoardData;
@@ -517,9 +716,11 @@ function ShiftDetail({
   weekHours: Record<string, number>;
   busy: boolean;
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;
+  canManage: boolean;
   onEdit: () => void;
   editingAssignment: string | null;
   setEditingAssignment: (id: string | null) => void;
+  proposalAction: (body: Record<string, unknown>) => Promise<void>;
 }) {
   const startMin = timeToMinutes(shift.starts_at);
   const endMin = timeToMinutes(shift.ends_at);
@@ -548,6 +749,11 @@ function ShiftDetail({
                     {formatTime(a.starts_at)}–{formatTime(a.ends_at)} ·{' '}
                     {assignmentHours(a.starts_at, a.ends_at)}h · {ASSIGNMENT_ROLE_LABELS[a.role]}
                   </span>
+                  {a.is_draft && (
+                    <span className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]">
+                      ✦ AI draft
+                    </span>
+                  )}
                   {availability.status !== 'free' && (
                     <span className="font-mono text-xs text-[var(--pyre-red)]">
                       ⚠ time off:{' '}
@@ -555,24 +761,62 @@ function ShiftDetail({
                     </span>
                   )}
                   {a.notes && <span className="font-mono text-xs text-white/40">{a.notes}</span>}
-                  <span className="ml-auto flex gap-2">
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-white/50 underline hover:text-white"
-                      onClick={() => setEditingAssignment(editing ? null : a.id)}
-                    >
-                      {editing ? 'close' : 'edit'}
-                    </button>
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`))
-                      }
-                    >
-                      remove
-                    </button>
+                  <span className="ml-auto flex items-center gap-2">
+                    {canManage && a.is_draft && (
+                      <>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-[var(--pyre-sage)] underline"
+                          title="Accept this assignment"
+                          disabled={busy}
+                          onClick={() =>
+                            void proposalAction({
+                              action: 'accept-item',
+                              kind: 'assignment',
+                              id: a.id,
+                            })
+                          }
+                        >
+                          accept
+                        </button>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-[var(--pyre-red)] underline"
+                          title="Reject this assignment"
+                          disabled={busy}
+                          onClick={() =>
+                            void proposalAction({
+                              action: 'reject-item',
+                              kind: 'assignment',
+                              id: a.id,
+                            })
+                          }
+                        >
+                          reject
+                        </button>
+                      </>
+                    )}
+                    {canManage && (
+                      <>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-white/50 underline hover:text-white"
+                          onClick={() => setEditingAssignment(editing ? null : a.id)}
+                        >
+                          {editing ? 'close' : 'edit'}
+                        </button>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`))
+                          }
+                        >
+                          remove
+                        </button>
+                      </>
+                    )}
                   </span>
                 </div>
                 {editing && (
@@ -593,7 +837,7 @@ function ShiftDetail({
         </ul>
       )}
 
-      {candidates.length > 0 && shift.status === 'active' && (
+      {canManage && candidates.length > 0 && shift.status === 'active' && (
         <div>
           <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
             Add person
@@ -653,9 +897,11 @@ function ShiftDetail({
         </div>
       )}
 
-      <button type="button" className={buttonClass} onClick={onEdit}>
-        Edit shift
-      </button>
+      {canManage && (
+        <button type="button" className={buttonClass} onClick={onEdit}>
+          Edit shift
+        </button>
+      )}
     </div>
   );
 }
@@ -705,5 +951,97 @@ function AssignmentEditor({
         Save
       </button>
     </div>
+  );
+}
+
+function ProposalBanner({
+  proposal,
+  busy,
+  onAction,
+}: {
+  proposal: ScheduleProposalRow;
+  busy: boolean;
+  onAction: (body: Record<string, unknown>) => Promise<void>;
+}) {
+  const [showRationale, setShowRationale] = useState(true);
+  const summary = proposal.summary as {
+    uncoveredShifts?: number;
+    partialAvailabilityPlacements?: number;
+    warnings?: string[];
+  };
+
+  return (
+    <section className="rounded-lg border border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
+          ✦ AI draft for this week
+        </span>
+        <span className="font-mono text-[10px] text-white/50">
+          {proposal.source === 'cron' ? 'weekly auto-draft' : 'manual draft'} ·{' '}
+          {new Date(proposal.created_at).toLocaleString()}
+        </span>
+        {(summary.uncoveredShifts ?? 0) > 0 && (
+          <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] text-[var(--pyre-gold)]">
+            {summary.uncoveredShifts} under-staffed
+          </span>
+        )}
+        {(summary.partialAvailabilityPlacements ?? 0) > 0 && (
+          <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] text-[var(--pyre-gold)]">
+            {summary.partialAvailabilityPlacements} partial-availability
+          </span>
+        )}
+        <span className="ml-auto flex gap-2">
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() => setShowRationale(!showRationale)}
+          >
+            {showRationale ? 'Hide notes' : 'Notes'}
+          </button>
+          <button
+            type="button"
+            className={`${buttonClass} border-[var(--pyre-sage)]/60 text-[var(--pyre-sage)]`}
+            disabled={busy}
+            onClick={() => void onAction({ action: 'approve', proposalId: proposal.id })}
+          >
+            Approve week
+          </button>
+          <button
+            type="button"
+            className={`${buttonClass} text-[var(--pyre-red)]`}
+            disabled={busy}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Discard the whole draft? Individual ✓/✗ is also available on each item.'
+                )
+              ) {
+                void onAction({ action: 'discard', proposalId: proposal.id });
+              }
+            }}
+          >
+            Discard
+          </button>
+        </span>
+      </div>
+      {(summary.warnings ?? []).length > 0 && (
+        <ul className="mt-2 space-y-0.5">
+          {(summary.warnings ?? []).map((w) => (
+            <li key={w} className="font-mono text-[10px] text-[var(--pyre-gold)]">
+              ⚠ {w}
+            </li>
+          ))}
+        </ul>
+      )}
+      {showRationale && proposal.rationale && (
+        <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-black/20 p-2 font-mono text-xs leading-relaxed text-white/80">
+          {proposal.rationale}
+        </pre>
+      )}
+      <p className="mt-2 font-mono text-[10px] text-white/40">
+        Dashed cards and "AI draft" chips are proposals — edit them like normal entries, ✓/✗
+        individually, or approve the whole week. Nothing is live until accepted.
+      </p>
+    </section>
   );
 }

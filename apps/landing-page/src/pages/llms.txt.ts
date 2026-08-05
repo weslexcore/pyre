@@ -28,7 +28,7 @@ export const GET: APIRoute = async ({ site }) => {
     .join('\n');
 
   const blogList = sortedPosts
-    .map((post) => `- [${post.data.title}](${baseUrl}/blog/${post.slug}): ${post.data.description}`)
+    .map((post) => `- [${post.data.title}](${baseUrl}/blog/${post.id}): ${post.data.description}`)
     .join('\n');
 
   const faqList = faqs.items.map((faq) => `- ${faq.question}: ${faq.answer}`).join('\n');

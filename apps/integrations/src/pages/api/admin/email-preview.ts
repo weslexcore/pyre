@@ -8,7 +8,7 @@ import type { APIRoute } from 'astro';
 import { type ComponentType, createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailTemplateKey } from '@/emails/types';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -17,7 +17,7 @@ function isTemplateKey(value: unknown): value is EmailTemplateKey {
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/email-templates');
   if (gate instanceof Response) return gate;
 
   let body: unknown;

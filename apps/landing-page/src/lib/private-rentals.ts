@@ -6,11 +6,11 @@ const privateRentals: PrivateRentalsContent = {
   description: [
     'Bring the bathhouse home for a day or longer. We offer one or two fully equipped units—each with a six-person sauna and cold plunge—for private events, recovery weekends, and backyard escapes.',
   ],
-  // unitSummary:
-  //   'Every unit is sized for up to six people and includes a traditional sauna paired with a cold plunge.',
+  unitSummary:
+    'Every unit is sized for up to six people and includes a traditional sauna paired with a cold plunge.',
   periodLabel: '24-hour rental (drop-off to pick-up)',
   logistics: ['We handle drop-off and pick-up. You get a full day with the equipment on site.'],
-  // addonSummary: 'Add extra days: +$150 per day for one unit, +$250 per day for two units.',
+  addonSummary: 'Add extra days: +$150 per day for one unit, +$250 per day for two units.',
   tiers: [
     {
       name: 'One unit (6-12 people)',

@@ -1,12 +1,15 @@
 // Time-off entries (trip ranges + recurring weekly patterns) for
 // /admin/schedule/time-off. Entries auto-approve — there is no status
 // workflow; conflicts with existing assignments are surfaced by the UI, not
-// blocked here. Admin-only in Phase 1; the Phase-2 employee self-service
-// routes will reuse the same table with self-scoping.
+// blocked here. Managers (schedule:manage / admins) work on anyone's entries;
+// everyone else with the schedule page manages only their own — "own" means
+// the schedule_staff row whose momence_email matches their login.
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin, requireStaff } from '@/lib/auth/admin';
-import { getDb, type TimeOffRow } from '@/lib/db';
+import { hasScheduleManage } from '@/components/admin/adminTools';
+import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { getDb, type ScheduleStaffRow, type TimeOffRow } from '@/lib/db';
 
 export const prerender = false;
 
@@ -20,7 +23,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireStaff(cookies);
+  const gate = await requirePage(cookies, '/admin/schedule');
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -109,20 +112,46 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
   };
 }
 
-async function gateAndParse(
+/**
+ * The schedule_staff row belonging to the caller's login email, or null when
+ * their login isn't linked to the roster. Employees may only touch entries
+ * for this row.
+ */
+async function selfStaffId(db: SupabaseClient, gate: AdminGate): Promise<string | null> {
+  const email = (gate.user.email ?? '').toLowerCase();
+  if (!email) return null;
+
+  const { data } = await db.from('schedule_staff').select('id, momence_email');
+  const rows = (data ?? []) as Pick<ScheduleStaffRow, 'id' | 'momence_email'>[];
+  return rows.find((s) => (s.momence_email ?? '').toLowerCase() === email)?.id ?? null;
+}
+
+/**
+ * Gate for mutations: any schedule-page holder passes, but non-managers get
+ * back the single staff id they may act on (ownStaffId; null = their login
+ * has no roster row, so they may touch nothing).
+ */
+async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
-  request: Request
-): Promise<Record<string, unknown> | Response> {
-  const gate = await requireAdmin(cookies);
+  request: Request,
+  db: SupabaseClient
+): Promise<{ gate: AdminGate; canManage: boolean; ownStaffId: string | null } | Response> {
+  const gate = await requirePage(cookies, '/admin/schedule');
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
 
+  const canManage = hasScheduleManage(gate.access);
+  return { gate, canManage, ownStaffId: canManage ? null : await selfStaffId(db, gate) };
+}
+
+const OWN_ONLY_ERROR = 'You can only manage your own time off';
+
+async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
   if (!request.headers.get('content-type')?.includes('application/json')) {
     return json({ error: 'Content-Type must be application/json' }, 415);
   }
-
   try {
     return (await request.json()) as Record<string, unknown>;
   } catch {
@@ -131,18 +160,25 @@ async function gateAndParse(
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const body = await gateAndParse(cookies, request);
-  if (body instanceof Response) return body;
-
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const auth = await gateMutation(cookies, request, db);
+  if (auth instanceof Response) return auth;
+
+  const body = await readJsonBody(request);
+  if (body instanceof Response) return body;
 
   const columns = parseEntryColumns(body);
   if (typeof columns === 'string') return json({ error: columns }, 400);
 
+  if (!auth.canManage && columns.staff_id !== auth.ownStaffId) {
+    return json({ error: OWN_ONLY_ERROR }, 403);
+  }
+
   const { data, error } = await db
     .from('time_off')
-    .insert({ ...columns, created_by: 'admin' })
+    .insert({ ...columns, created_by: auth.canManage ? 'admin' : 'staff' })
     .select('*')
     .single();
   if (error) return json({ error: error.message }, 500);
@@ -151,17 +187,33 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const body = await gateAndParse(cookies, request);
-  if (body instanceof Response) return body;
-
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const auth = await gateMutation(cookies, request, db);
+  if (auth instanceof Response) return auth;
+
+  const body = await readJsonBody(request);
+  if (body instanceof Response) return body;
 
   const id = body.id;
   if (typeof id !== 'string' || !id) return json({ error: 'id is required' }, 400);
 
   const columns = parseEntryColumns(body);
   if (typeof columns === 'string') return json({ error: columns }, 400);
+
+  if (!auth.canManage) {
+    // Both the existing entry and its new shape must stay their own.
+    if (columns.staff_id !== auth.ownStaffId) return json({ error: OWN_ONLY_ERROR }, 403);
+    const { data: existing } = await db
+      .from('time_off')
+      .select('staff_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (existing && existing.staff_id !== auth.ownStaffId) {
+      return json({ error: OWN_ONLY_ERROR }, 403);
+    }
+  }
 
   const { data, error } = await db
     .from('time_off')
@@ -176,17 +228,24 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireAdmin(cookies);
-  if (gate instanceof Response) return gate;
-
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
+  const auth = await gateMutation(cookies, request, db);
+  if (auth instanceof Response) return auth;
+
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id is required' }, 400);
+
+  if (!auth.canManage) {
+    const { data: existing } = await db
+      .from('time_off')
+      .select('staff_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (!existing) return json({ error: 'Entry not found' }, 404);
+    if (existing.staff_id !== auth.ownStaffId) return json({ error: OWN_ONLY_ERROR }, 403);
+  }
 
   const { error, count } = await db.from('time_off').delete({ count: 'exact' }).eq('id', id);
   if (error) return json({ error: error.message }, 500);

@@ -45,10 +45,12 @@ interface ImportMetaEnv {
   readonly SUPABASE_URL?: string;
   readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
-  // Admin dashboard allowlist (comma-separated emails, same contract as landing-page)
+  // Bootstrap admin allowlist (comma-separated emails). Access is managed in
+  // the dashboard_users table via /admin/users; this env var only applies
+  // while that table has no admin row (or Supabase is unreachable).
   readonly ADMIN_EMAILS?: string;
-  // Staff allowlist for staff-facing tools like /admin/water (comma-separated
-  // emails; admins are implicitly staff)
+  // Bootstrap staff allowlist — same fallback-only contract as ADMIN_EMAILS
+  // (grants the schedule + water pages)
   readonly STAFF_EMAILS?: string;
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
@@ -89,7 +91,9 @@ interface ImportMeta {
 declare namespace App {
   interface Locals {
     // Set by src/middleware.ts for /admin/* pages: the authenticated Momence
-    // user (not yet allowlist-checked — AdminLayout enforces isAdminEmail).
+    // user (not yet access-checked — AdminLayout enforces adminAccess).
     adminUser?: import('./lib/auth/types').MomenceUserProfile;
+    // Their dashboard_users access (null = no dashboard access at all).
+    adminAccess?: import('./lib/auth/access').DashboardAccess | null;
   }
 }

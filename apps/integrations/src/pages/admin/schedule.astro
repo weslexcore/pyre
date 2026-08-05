@@ -1,15 +1,20 @@
 ---
-// Weekly staff scheduling board (replaces the staffing spreadsheet). Admin
-// only — the /api/admin/* routes it calls re-check the session on every
-// request; the AdminLayout gate is UX, the API gate is the security boundary.
+// Weekly staff scheduling board (replaces the staffing spreadsheet). Everyone
+// with the schedule page sees the board; editing needs schedule:manage — the
+// /api/admin/* routes it calls re-check the session on every request; the
+// AdminLayout gate is UX, the API gate is the security boundary.
+import { hasScheduleManage } from '@/components/admin/adminTools';
 import { ScheduleBoard } from '@/components/admin/ScheduleBoard';
 import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const access = Astro.locals.adminAccess ?? null;
+const canManage = !!access && hasScheduleManage(access);
 ---
 
 <AdminLayout
   title="Staff Schedule"
-  subtitle="Red = nobody scheduled · Gold = under staffed · Green = covered. Click a shift to assign."
+  subtitle={`Red = nobody scheduled · Gold = under staffed · Green = covered.${canManage ? ' Click a shift to assign.' : ''}`}
 >
   <ScheduleTabs current="/admin/schedule" />
   <ScheduleBoard client:load />

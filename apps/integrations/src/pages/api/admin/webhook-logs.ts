@@ -3,12 +3,12 @@
 
 import { getExecution, getRecentExecutions } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/webhooks');
   if (gate instanceof Response) return gate;
 
   // Single record detail

@@ -233,7 +233,7 @@ const showWordmark = !isHomePage && !logoOnly;
 
       if (!menuButton || !mobileMenu || !hamburgerIcon || !closeIcon) return () => {};
 
-      function toggleMenu(shouldOpen: boolean) {
+      const toggleMenu = (shouldOpen: boolean) => {
         const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
         const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
 
@@ -265,7 +265,7 @@ const showWordmark = !isHomePage && !logoOnly;
           closeIcon.classList.remove('opacity-100', 'scale-100', 'rotate-0');
           closeIcon.classList.add('opacity-0', 'scale-0', 'rotate-90');
         }
-      }
+      };
 
       const handleMenuClick = () => {
         const isExpanded = menuButton.getAttribute('aria-expanded') === 'true';

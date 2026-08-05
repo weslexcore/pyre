@@ -3,14 +3,14 @@
 // avoids adding CORS headers to the public endpoint.
 
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 const LANDING_ORIGIN = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   try {

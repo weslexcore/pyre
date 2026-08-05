@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { ADMIN_TOOLS } from './adminTools';
+import type { AdminTool } from './adminTools';
 
 interface AdminNavProps {
   currentPath: string;
   userEmail: string;
+  /** Pre-filtered by AdminLayout to the tools this user may view. */
+  tools: AdminTool[];
 }
 
 function isActive(currentPath: string, href: string): boolean {
@@ -21,14 +23,14 @@ const LINK_ACTIVE = 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(
  * dropdown panel on mobile. The panel anchors to the sticky header, which
  * AdminLayout marks `position: relative`.
  */
-export function AdminNav({ currentPath, userEmail }: AdminNavProps) {
+export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <nav aria-label="Admin tools">
       {/* Desktop */}
       <div className="hidden items-center gap-2 md:flex">
-        {ADMIN_TOOLS.map((tool) => (
+        {tools.map((tool) => (
           <a
             key={tool.href}
             href={tool.href}
@@ -81,7 +83,7 @@ export function AdminNav({ currentPath, userEmail }: AdminNavProps) {
           className="absolute inset-x-0 top-full border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:hidden"
         >
           <ul className="px-4 py-2">
-            {ADMIN_TOOLS.map((tool) => (
+            {tools.map((tool) => (
               <li key={tool.href} className="border-b border-white/5 last:border-b-0">
                 <a
                   href={tool.href}

@@ -1,0 +1,15 @@
+---
+// Dashboard access management. Admin-only (canViewPath never grants
+// /admin/users to non-admins); the /api/admin/users routes re-check
+// requireAdmin on every request — this page gate is UX, the API gate is the
+// security boundary.
+import { UsersManager } from '@/components/admin/UsersManager';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="User Access"
+  subtitle="Who can use this dashboard. Emails must match the person's Momence login; admins see every page, everyone else sees only the pages checked here."
+>
+  <UsersManager client:load />
+</AdminLayout>

@@ -1,11 +1,13 @@
 // Admin page gate. Redirects have to happen before the page starts streaming,
 // which a layout component can't do — so unauthenticated visitors to /admin/*
-// pages are bounced to the login page here, and the validated user is handed
-// to AdminLayout via locals. /api/admin/* routes are NOT covered (different
-// path prefix): each one re-checks the session via requireAdmin and returns
-// JSON 401/403 instead of redirecting.
+// pages are bounced to the login page here, and the validated user plus their
+// dashboard access (dashboard_users lookup) are handed to AdminLayout via
+// locals. /api/admin/* routes are NOT covered (different path prefix): each
+// one re-checks the session via requireAdmin/requirePage and returns JSON
+// 401/403 instead of redirecting.
 
 import { defineMiddleware } from 'astro/middleware';
+import { getAccess } from '@/lib/auth/access';
 import { validateSession } from '@/lib/auth/session';
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -24,5 +26,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   context.locals.adminUser = session.user;
+  context.locals.adminAccess = session.user.email ? await getAccess(session.user.email) : null;
   return next();
 });

@@ -3,7 +3,7 @@
 
 import { createCampaign, deleteLink, saveLink, updateLinkLabel } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -14,7 +14,7 @@ function json(body: unknown, status = 200): Response {
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
   const email = gate.user.email ?? '';
 
@@ -69,7 +69,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   const id = url.searchParams.get('id');
@@ -85,7 +85,7 @@ export const DELETE: APIRoute = async ({ cookies, url }) => {
 
 // Relabel a saved link (only the friendly label changes).
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, '/admin/utm-assist');
   if (gate instanceof Response) return gate;
 
   let body: Record<string, unknown>;
