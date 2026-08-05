@@ -201,7 +201,9 @@ function applyUtm(url: URL, utm: UtmFields): string {
   const params: Array<[string, string]> = [
     ['utm_source', utm.source],
     ['utm_medium', utm.medium],
-    ['utm_campaign', utm.campaign],
+    // The URL must carry the slug the campaign is filed under — attribution
+    // reports join PostHog utm_campaign values against the stored slug.
+    ['utm_campaign', slugifyCampaign(utm.campaign)],
     ['utm_term', utm.term],
     ['utm_content', utm.content],
   ];

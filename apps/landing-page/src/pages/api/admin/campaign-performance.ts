@@ -1,4 +1,8 @@
-import { getRedis, listCampaignsWithLinks, listShortLinks } from '@pyre/webhook-core';
+// utm_campaign values observed in the wild are free text (e.g. "Instagram Bio
+// Links" from hand-built links), while campaigns are stored under their
+// slugified name ("instagram-bio-links"). Every campaign value is normalized
+// through slugifyCampaign before joining so the variants roll up together.
+import { getRedis, listCampaignsWithLinks, listShortLinks, slugifyCampaign } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { isAdminEmail } from '@/lib/admin';
 import { validateSession } from '@/lib/auth-session';
@@ -44,7 +48,8 @@ interface PerformanceResponse {
 
 function utmCampaignOf(url: string): string | null {
   try {
-    return new URL(url).searchParams.get('utm_campaign')?.toLowerCase() || null;
+    const raw = new URL(url).searchParams.get('utm_campaign');
+    return raw ? slugifyCampaign(raw) || null : null;
   } catch {
     return null;
   }
@@ -110,15 +115,24 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
 
   if (posthogResults) {
     const [trafficRows, conversionRows, presenceRows] = posthogResults;
+    // Sum across raw variants that slugify to the same campaign. Visitors can
+    // double-count a person seen under two variants; acceptable for a report.
     for (const row of trafficRows) {
-      const [slug, pageviews, visitors] = row as [string, number, number];
-      if (slug) traffic.set(slug, { pageviews: Number(pageviews), visitors: Number(visitors) });
+      const [rawSlug, pageviews, visitors] = row as [string, number, number];
+      const slug = rawSlug ? slugifyCampaign(rawSlug) : '';
+      if (!slug) continue;
+      const prev = traffic.get(slug);
+      traffic.set(slug, {
+        pageviews: (prev?.pageviews ?? 0) + Number(pageviews),
+        visitors: (prev?.visitors ?? 0) + Number(visitors),
+      });
     }
     for (const row of conversionRows) {
-      const [slug, event, count] = row as [string, string, number];
+      const [rawSlug, event, count] = row as [string, string, number];
+      const slug = rawSlug ? slugifyCampaign(rawSlug) : '';
       if (!slug) continue;
       const byEvent = conversions.get(slug) ?? new Map<string, number>();
-      byEvent.set(event, Number(count));
+      byEvent.set(event, (byEvent.get(event) ?? 0) + Number(count));
       conversions.set(slug, byEvent);
     }
     const seenEvents = new Set(presenceRows.map((row) => (row as [string, number])[0]));
