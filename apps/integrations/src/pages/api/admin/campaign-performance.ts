@@ -28,6 +28,10 @@ const SIGNUP_INTRO = 'Intro Offer Signup';
 const SIGNUP_MAILING = 'Mailing List Signup';
 const BOOKING = 'booking_completed';
 const CONVERSION_EVENTS = [SIGNUP_INTRO, SIGNUP_MAILING, BOOKING];
+// Companion events from the one-off attribution backfill (see apps/integrations
+// scripts/backfill-booking-attribution.mts). Counted into the bookings bucket;
+// kept out of CONVERSION_EVENTS so the instrumentation-gap check ignores them.
+const BOOKING_BACKFILL = 'booking_attribution_backfill';
 
 interface CampaignRow {
   id: string;
@@ -87,16 +91,28 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
              AND timestamp >= now() - INTERVAL ${days} DAY
            GROUP BY campaign`
         ),
-        // Conversions: first-touch attribution via $initial_utm_campaign.
+        // Conversions: first-touch attribution via $initial_utm_campaign, with
+        // the event-level attributed_utm_campaign fallback for bookings whose
+        // campaign was inferred from a same-session click (the booker never
+        // identified on the site, so their person has no first-touch data).
+        // Backfill events count ONLY by their stamped campaign — their person
+        // properties reflect ingestion (backfill run) time, not booking time.
         queryHogQL(
-          `SELECT lower(toString(person.properties.$initial_utm_campaign)) AS campaign,
+          `SELECT lower(if(event = '${BOOKING_BACKFILL}',
+                    nullif(toString(properties.attributed_utm_campaign), ''),
+                    coalesce(
+                      nullif(toString(person.properties.$initial_utm_campaign), ''),
+                      if(event = '${BOOKING}',
+                         nullif(toString(properties.attributed_utm_campaign), ''),
+                         NULL)
+                    ))) AS campaign,
                   event,
                   count() AS conversions
            FROM events
-           WHERE event IN (${CONVERSION_EVENTS.map((e) => `'${e}'`).join(', ')})
-             AND person.properties.$initial_utm_campaign IS NOT NULL
-             AND person.properties.$initial_utm_campaign != ''
+           WHERE event IN (${[...CONVERSION_EVENTS, BOOKING_BACKFILL].map((e) => `'${e}'`).join(', ')})
              AND timestamp >= now() - INTERVAL ${days} DAY
+             AND campaign IS NOT NULL
+             AND campaign != ''
            GROUP BY campaign, event`
         ),
         // Which conversion events exist at all (any attribution) — used to flag
@@ -138,8 +154,11 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       const [rawSlug, event, count] = row as [string, string, number];
       const slug = rawSlug ? slugifyCampaign(rawSlug) : '';
       if (!slug) continue;
+      // Backfilled attribution counts as a booking. A backfill event only
+      // exists for bookings with no attribution of their own, so no double count.
+      const bucket = event === BOOKING_BACKFILL ? BOOKING : event;
       const byEvent = conversions.get(slug) ?? new Map<string, number>();
-      byEvent.set(event, (byEvent.get(event) ?? 0) + Number(count));
+      byEvent.set(bucket, (byEvent.get(bucket) ?? 0) + Number(count));
       conversions.set(slug, byEvent);
     }
     const seenEvents = new Set(presenceRows.map((row) => (row as [string, number])[0]));

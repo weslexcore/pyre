@@ -5,6 +5,7 @@ import {
   upsertSubscriber,
   type WebhookTracer,
 } from '@pyre/webhook-core';
+import { inferBookingAttribution } from '@/lib/analytics/booking-attribution';
 import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
@@ -71,7 +72,16 @@ async function handleBookingEvent(
       sessionId: payload.sessionId,
     });
 
-    await trackBookingEvent(tracer, 'booking_completed', member, session, payload);
+    // Click→booking inference is best-effort by contract: inferBookingAttribution
+    // never throws and self-limits its latency, so it cannot 500 the webhook or
+    // trigger Momence retries.
+    const attribution = await tracer.span(
+      'Infer booking attribution',
+      () => inferBookingAttribution(payload.sessionId),
+      { sessionId: payload.sessionId }
+    );
+
+    await trackBookingEvent(tracer, 'booking_completed', member, session, payload, attribution);
 
     await sendBookingConfirmationEmails({
       sessionId: payload.sessionId,

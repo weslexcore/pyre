@@ -18,8 +18,12 @@ export function isPostHogQueryConfigured(): boolean {
   return Boolean(getApiKey() && getProjectId());
 }
 
-/** Run a HogQL query and return raw result rows. Throws if unconfigured or on API errors. */
-export async function queryHogQL(query: string): Promise<unknown[][]> {
+/** Run a HogQL query and return raw result rows. Throws if unconfigured or on API errors.
+ * Pass `signal` (e.g. AbortSignal.timeout(ms)) to bound latency-sensitive callers. */
+export async function queryHogQL(
+  query: string,
+  options?: { signal?: AbortSignal }
+): Promise<unknown[][]> {
   const apiKey = getApiKey();
   const projectId = getProjectId();
   if (!apiKey || !projectId) {
@@ -34,6 +38,7 @@ export async function queryHogQL(query: string): Promise<unknown[][]> {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ query: { kind: 'HogQLQuery', query } }),
+    signal: options?.signal,
   });
 
   if (!res.ok) {

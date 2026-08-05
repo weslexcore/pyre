@@ -20,27 +20,41 @@ export function getAttribution(): Attribution {
   }
 }
 
+/** Extract the numeric Momence session id from a checkout href like https://momence.com/s/123456?... */
+function sessionIdFromHref(href: string | undefined): string | null {
+  if (!href) return null;
+  const match = /\/s\/(\d+)/.exec(href);
+  return match ? match[1] : null;
+}
+
 /**
  * Track an outbound click on a Momence booking link. This is the "intent" step of the
  * booking funnel; the completed-booking step arrives server-side from the Momence webhook
  * (see apps/integrations). `placement` distinguishes where the CTA was clicked, e.g.
  * 'events_grid_desktop', 'events_grid_mobile', 'event_detail_modal', 'events_carousel'.
+ *
+ * `session_id` is the join key for click→booking attribution inference (the Momence
+ * webhook's payload.sessionId matches the /s/<id> in the checkout URL). Pass `href` when
+ * the clicked CTA targets a different session than `event` itself — pooled duration
+ * options link to a sibling event's checkout.
  */
-export function trackBookingLinkClicked(event: EventItem, placement: string): void {
+export function trackBookingLinkClicked(event: EventItem, placement: string, href?: string): void {
   if (typeof window === 'undefined') return;
   const posthog = (
     window as { posthog?: { capture: (e: string, p?: Record<string, unknown>) => void } }
   ).posthog;
   if (!posthog) return;
   try {
+    const effectiveHref = href ?? event.cta?.href;
     posthog.capture('booking_link_clicked', {
       placement,
+      session_id: sessionIdFromHref(effectiveHref) ?? event.id,
       session_title: event.title,
       location: event.location,
       iso_date: event.isoDate,
       tags: event.tags,
       spots_remaining: event.spotsRemaining,
-      href: event.cta?.href,
+      href: effectiveHref,
       ...getAttribution(),
     });
   } catch {
