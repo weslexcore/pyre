@@ -25,7 +25,7 @@ admin board ── proposal banner, dashed "AI draft" cards, approve ───�
   `@pyre/schedule-core`.
 - Triggers: the board's "✦ Draft schedule" button (`POST
   /api/admin/schedule-draft` → `POST {this app}/eve/v1/session`) and the
-  weekly schedule in `agent/schedules/weekly_draft.md` (Wed 14:00 UTC →
+  weekly schedule in `agent/schedules/weekly_draft.md` (Mon 14:00 UTC →
   a Vercel Cron Job on deploy).
 - Re-drafting a week supersedes its open draft; accepted rows are never
   touched.

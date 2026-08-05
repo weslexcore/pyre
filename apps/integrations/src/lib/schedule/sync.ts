@@ -100,8 +100,10 @@ export async function syncShifts(
 
   const windows = deriveCoverageWindows(events);
 
-  // Existing momence shifts across the local-date horizon (all statuses so a
-  // re-appearing session doesn't duplicate a cancelled row's window).
+  // Existing non-draft shifts across the local-date horizon: momence shifts
+  // for matching (all statuses, so a re-appearing session doesn't duplicate a
+  // cancelled row's window) and manual shifts so the planner can suppress
+  // momence duplicates of windows an admin-entered shift already covers.
   const rangeStart = utcToEastern(startAfter).date;
   const rangeEnd = utcToEastern(startBefore).date;
   const { data: shiftRows, error: shiftsError } = await db
@@ -109,7 +111,6 @@ export async function syncShifts(
     .select(
       'id, shift_date, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes'
     )
-    .eq('source', 'momence')
     .eq('is_draft', false)
     .gte('shift_date', rangeStart)
     .lte('shift_date', rangeEnd);

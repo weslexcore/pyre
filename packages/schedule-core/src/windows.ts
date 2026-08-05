@@ -27,7 +27,8 @@ export interface WindowOptions {
 }
 
 export const DEFAULT_WINDOW_OPTIONS: WindowOptions = {
-  leadMin: 60,
+  // 1.5h setup before the first session, 30min shutdown after the last.
+  leadMin: 90,
   closeMin: 30,
   mergeGapMin: 90,
   defaultStaffNeeded: 2,
@@ -60,14 +61,19 @@ export function labelForWindow(startMin: number, endMin: number): string {
 
 /**
  * Merge a date-sorted set of events into padded coverage windows. Events on
- * different dates never merge.
+ * different dates never merge; duplicate events (same kind + id) are dropped
+ * so a session can never be counted into a window twice.
  */
 export function deriveCoverageWindows(
   events: CoverageEvent[],
   options: WindowOptions = DEFAULT_WINDOW_OPTIONS
 ): CoverageWindow[] {
   const byDate = new Map<string, CoverageEvent[]>();
+  const seen = new Set<string>();
   for (const event of events) {
+    const key = `${event.kind}:${event.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const list = byDate.get(event.date) ?? [];
     list.push(event);
     byDate.set(event.date, list);
@@ -147,11 +153,16 @@ const refKey = (ref: { type: string; id: number }) => `${ref.type}:${ref.id}`;
 /**
  * Plan the sync for one horizon: match derived windows to existing
  * momence-sourced shifts (session-ref overlap first, then time overlap),
- * then classify every difference. Manual and draft shifts are never touched.
+ * then classify every difference. Manual and draft shifts are never modified
+ * — but an active manual shift that already covers a window (by session ref
+ * or time overlap) suppresses creating a momence duplicate alongside it.
  */
 export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInput[]): SyncPlan {
   const plan: SyncPlan = { create: [], update: [], cancel: [], flag: [], clearFlag: [] };
   const candidates = existing.filter((s) => s.source === 'momence' && !s.is_draft);
+  const manualCover = existing.filter(
+    (s) => s.source === 'manual' && !s.is_draft && s.status === 'active'
+  );
   const matchedShiftIds = new Set<string>();
 
   for (const window of windows) {
@@ -168,7 +179,14 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
       );
 
     if (!match) {
-      plan.create.push(window);
+      const coveredManually = manualCover.some(
+        (s) =>
+          s.shift_date === window.date &&
+          (s.momence_session_ids.some((ref) => windowRefs.has(refKey(ref))) ||
+            (timeToMinutes(s.starts_at) < window.endMin &&
+              timeToMinutes(s.ends_at) > window.startMin))
+      );
+      if (!coveredManually) plan.create.push(window);
       continue;
     }
     matchedShiftIds.add(match.id);
