@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Architecture
 
-This is a Turborepo monorepo with Yarn workspaces containing multiple applications focused on the Pyre sauna business. The project uses Node.js 22 LTS and Yarn 4.9.4 as the package manager.
+This is a Turborepo monorepo with Yarn workspaces containing multiple applications focused on the Pyre sauna business. The project uses Node.js 22 LTS and Yarn 4.18.0 as the package manager.
 
 ### Applications Structure
 
@@ -14,7 +14,7 @@ This is a Turborepo monorepo with Yarn workspaces containing multiple applicatio
 
 ### Core Technologies
 - **Monorepo**: Turborepo for build orchestration and workspace management
-- **Package Manager**: Yarn 4.9.4 (configured via Corepack)
+- **Package Manager**: Yarn 4.18.0 (configured via Corepack)
 - **Node.js**: Version 22 LTS (specified in root .nvmrc)
 - **TypeScript**: Used across all applications
 - **Database**: Supabase (PostgreSQL) with migrations and RLS policies
