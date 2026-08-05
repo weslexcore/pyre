@@ -61,8 +61,9 @@ const hasForm = !!promoConfig.form;
           {promoConfig.body}
         </p>
 
+        <!-- Email signup form when configured, otherwise CTA button -->
         {hasForm ? (
-          <!-- Email signup form -->
+          <>
           <form
             data-popup-form
             class="mt-6 flex flex-col gap-3"
@@ -116,8 +117,9 @@ const hasForm = !!promoConfig.form;
               {promoConfig.dismiss.label}
             </button>
           )}
+          </>
         ) : (
-          <!-- CTA button -->
+          <>
           {promoConfig.cta && (
             <Button
               variant="primary"
@@ -141,6 +143,7 @@ const hasForm = !!promoConfig.form;
               {promoConfig.dismiss.label}
             </button>
           )}
+          </>
         )}
       </div>
     </div>

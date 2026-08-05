@@ -65,13 +65,13 @@ const showWordmark = !isHomePage && !logoOnly;
       )}
     </a>
 
-    {minimal && (
     <!-- Admin navigation (logout + home) -->
+    {minimal && (
     <AdminNav client:load />
     )}
 
-    {!minimal && (
     <!-- Desktop navigation links -->
+    {!minimal && (
     <nav class="hidden md:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
       <!-- Desktop gradient overlay - always visible on desktop nav -->
       <GradientOverlay variant="navbar-desktop" />
@@ -87,8 +87,8 @@ const showWordmark = !isHomePage && !logoOnly;
     </nav>
     )}
 
-    {!minimal && (
     <!-- Desktop CTAs -->
+    {!minimal && (
     <div class="hidden md:flex items-center gap-3">
       <!-- <AuthButtons
         client:load
@@ -110,8 +110,8 @@ const showWordmark = !isHomePage && !logoOnly;
     </div>
     )}
 
-    {!minimal && (
     <!-- Mobile CTA + menu button -->
+    {!minimal && (
     <div class="flex md:hidden items-center gap-2">
       <!-- <Button
         href={navbar.actions?.login?.href}
@@ -153,8 +153,8 @@ const showWordmark = !isHomePage && !logoOnly;
     )}
   </div>
 
-  {!minimal && (
   <!-- Mobile menu -->
+  {!minimal && (
   <nav
     id="mobile-menu"
     aria-label="Mobile navigation"
