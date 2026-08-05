@@ -286,17 +286,27 @@ form on the landing page's partner page → landing page relays to
 Confirm/Deny links (`/api/partner/decision`) → on confirm, the member is
 found-or-created in Momence and tagged, and the price rule applies the discount
 automatically at checkout. The `partner-maintenance` cron job expires requests
-older than 14 days and emails each partner a quarterly reconciliation list of
-tagged members (send_key-gated). Code: `src/lib/partner/`, config in
-`src/lib/partner/config.ts`.
+past each partner's `decision_expiry_days` (default 14) and emails each partner
+a quarterly reconciliation list of tagged members (send_key-gated). Code:
+`src/lib/partner/`; the registry is the Supabase `partners` table, read through
+the 30s cache in `src/lib/partner/registry.ts` and managed from `/admin/partners`.
 
 Adding a partner requires manual Momence dashboard setup **before** launch:
 
-1. Create the customer tag named in the partner's config (e.g. `partner-bft`) —
-   the tag map is Redis-cached for 24h, so create it first.
-2. Create a Price Rule keyed on that tag: 15% off single sessions + credit packs.
-3. Set the partner's contact-email env var (e.g. `PARTNER_BFT_CONTACT_EMAIL`) and
-   add the entry to `PARTNERS` in `src/lib/partner/config.ts`.
+1. Create the customer tag (e.g. `partner-bft`) — the tag map is Redis-cached
+   for 24h, so create it first, or use "Refresh Momence tags" on the admin page.
+2. Create a Price Rule keyed on that tag: N% off single sessions + credit packs.
+3. Add the partner on **`/admin/partners`**: name, slug, tag name, discount, and
+   the contact addresses that receive Confirm/Deny. No deploy needed.
+
+The discount percent is **also hardcoded on the landing page** (`src/lib/bft.ts`
+— `discountPercent`, the price multiplier, and the page copy) and in the Momence
+price rule. Changing it in the dashboard updates the emails only; the other two
+are manual. The admin page warns when they diverge.
+
+`PARTNER_BFT_CONTACT_EMAIL` is a legacy bootstrap fallback, used only while a
+partner row's `contact_emails` is empty. Import it from the admin page, then
+delete the env var.
 
 Shared env: `PARTNER_API_SECRET` (also set on the landing page along with
 `INTEGRATIONS_API_URL`), `PARTNER_LINK_SECRET` (falls back to `CRON_SECRET`),
@@ -309,7 +319,8 @@ Shared env: `PARTNER_API_SECRET` (also set on the landing page along with
 | **Supabase** `journey_enrollments` | One row per journey+member (unique, never deleted): current step, `next_at`, status, exit reason |
 | **Supabase** `email_sends` | Append-only send log + long-horizon dedupe via unique `send_key` |
 | **Supabase** `email_suppressions` | Marketing suppression source of truth (unique lowercase email, reason, source) |
-| **Supabase** `partner_verifications` | Partner-discount verification workflow/audit state (pending → confirmed/denied/expired); the Momence tag itself stays the discount's source of truth |
+| **Supabase** `partners` | Partner registry: name, slug, Momence tag, discount, verifier contact emails, and the enable/expiry/reconciliation levers (managed from `/admin/partners`) |
+| **Supabase** `partner_verifications` | Partner-discount verification workflow/audit state (pending → confirmed/denied/expired/revoked); the Momence tag itself stays the discount's source of truth |
 | **Upstash Redis** | Sweep/sales cursors (`sales:cursor`, `sweep:*:cursor`), webhook-retry idempotency keys, short-TTL Momence caches (member packs, tag map), webhook execution traces (shared with the landing-page admin dashboard) |
 | **PostHog** | `booking_completed/cancelled`, `purchase_completed`, `journey_*`, `email_delivered/opened/clicked/bounced/complained` — all keyed by lowercase email as distinct id |
 

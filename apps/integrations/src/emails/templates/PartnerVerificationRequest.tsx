@@ -26,6 +26,7 @@ export function PartnerVerificationRequest({
   confirmUrl,
   denyUrl,
   expiresDays,
+  otherRecipientCount = 0,
 }: PartnerVerificationRequestProps) {
   return (
     <EmailLayout preview={`Is ${customerName} a ${partnerName} member?`}>
@@ -65,6 +66,13 @@ export function PartnerVerificationRequest({
       </Text>
 
       <Hr style={{ borderColor: COLORS.sky, margin: '4px 0 20px' }} />
+      {otherRecipientCount > 0 && (
+        <Text style={text}>
+          We sent this to {otherRecipientCount} other{' '}
+          {otherRecipientCount === 1 ? 'person' : 'people'} on your team as well — whoever gets to
+          it first is enough, no need to coordinate.
+        </Text>
+      )}
       <Text style={text}>
         These links expire in {expiresDays} days. Questions? Just reply to this email.
       </Text>
@@ -82,6 +90,7 @@ PartnerVerificationRequest.PreviewProps = {
   confirmUrl: 'https://pyre-integrations.vercel.app/api/partner/decision?token=preview-confirm',
   denyUrl: 'https://pyre-integrations.vercel.app/api/partner/decision?token=preview-deny',
   expiresDays: 14,
+  otherRecipientCount: 2,
 } satisfies PartnerVerificationRequestProps;
 
 export default PartnerVerificationRequest;

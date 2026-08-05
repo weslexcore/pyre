@@ -60,6 +60,14 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'marketing',
   },
   {
+    href: '/admin/partners',
+    title: 'Partner Discounts',
+    navLabel: 'Partners',
+    description:
+      'Partner registry, verifier contacts, discount levers, and the membership verification queue.',
+    section: 'operations',
+  },
+  {
     href: '/admin/email',
     title: 'Email Performance',
     navLabel: 'Email',
@@ -104,10 +112,27 @@ export function hasScheduleManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(SCHEDULE_MANAGE);
 }
 
+// Same split for partners: a plain '/admin/partners' grant is read-only —
+// browse the registry and the verification queue. This key (or admin) unlocks
+// editing partners and acting on requests (confirm/deny/resend/revoke), all of
+// which either email a third party or change someone's Momence tags.
+export const PARTNERS_MANAGE = 'partners:manage';
+
+export function hasPartnersManage(access: PageAccess): boolean {
+  return access.isAdmin || access.pages.includes(PARTNERS_MANAGE);
+}
+
+/** Manage capabilities that imply view access to the page they govern. */
+const MANAGE_IMPLIES_VIEW: Record<string, string> = {
+  '/admin/schedule': SCHEDULE_MANAGE,
+  '/admin/partners': PARTNERS_MANAGE,
+};
+
 /** Whether this user may view the tool page at `href` (manage implies view). */
 export function canViewPage(access: PageAccess, href: string): boolean {
   if (access.isAdmin || access.pages.includes(href)) return true;
-  return href === '/admin/schedule' && access.pages.includes(SCHEDULE_MANAGE);
+  const manageKey = MANAGE_IMPLIES_VIEW[href];
+  return manageKey !== undefined && access.pages.includes(manageKey);
 }
 
 /** The tools this user's nav and directory cards should show. */

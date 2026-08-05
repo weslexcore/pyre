@@ -37,6 +37,28 @@ export interface EmailSendRow {
   sent_at: string;
 }
 
+// A reciprocal-discount partner. Managed from /admin/partners and read through
+// the cached registry in lib/partner/registry.ts.
+export interface PartnerRow {
+  id: string;
+  slug: string;
+  name: string;
+  tag_name: string;
+  discount_percent: number;
+  /** Everyone who receives the confirm/deny email; empty = not yet configured. */
+  contact_emails: string[];
+  /** Overrides the global PARTNER_CC_EMAIL when set. */
+  cc_email: string | null;
+  enabled: boolean;
+  decision_expiry_days: number;
+  reconciliation_enabled: boolean;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PartnerVerificationRow {
   id: string;
   partner_slug: string;
@@ -45,9 +67,16 @@ export interface PartnerVerificationRow {
   customer_email: string;
   partner_member_email: string | null;
   customer_phone: string | null;
-  status: 'pending' | 'confirmed' | 'denied' | 'expired';
+  status: 'pending' | 'confirmed' | 'denied' | 'expired' | 'revoked';
   momence_member_id: number | null;
   decided_at: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  /** null = partner link click, an email = admin action, 'cron' = expiry sweep. */
+  decided_by: string | null;
+  /** Partner contacts the request email actually reached; 0 = nobody. */
+  notified_count: number;
+  last_notified_at: string | null;
   created_at: string;
   updated_at: string;
 }
