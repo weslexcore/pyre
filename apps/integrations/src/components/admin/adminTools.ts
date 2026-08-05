@@ -1,7 +1,7 @@
 // Single source of truth for the admin tool directory. The /admin dashboard
 // cards and the AdminNav menu both render from this list, filtered per user:
 // admins see everything, other users see the pages granted to them in
-// dashboard_users (managed from /admin/users).
+// the staff table (managed from /admin/users).
 
 export type AdminToolSection = 'operations' | 'marketing' | 'monitoring';
 
@@ -79,9 +79,10 @@ export const ADMIN_TOOLS: AdminTool[] = [
 // can't show up in the page-permission checkboxes.
 export const USERS_TOOL: AdminTool = {
   href: '/admin/users',
-  title: 'User Access',
-  navLabel: 'Users',
-  description: 'Grant or revoke dashboard access, admin rights, and per-page permissions.',
+  title: 'People',
+  navLabel: 'People',
+  description:
+    'Everyone at Pyre: dashboard access and permissions, founders, and who is available to schedule.',
   section: 'operations',
 };
 
@@ -94,13 +95,10 @@ export interface PageAccess {
 // Capability key stored in the same `pages` array as the tool hrefs. A plain
 // '/admin/schedule' grant is employee-level: view the board/calendar/hours
 // and manage only your own time off. This key (or admin) unlocks the manage
-// side — shift/assignment editing, the roster tab, Momence sync, AI drafts,
-// and everyone's time off.
+// side — shift/assignment editing, Momence sync, AI drafts, staff emails on
+// the board, and everyone's time off. The roster itself (who exists, founder,
+// available to schedule) is edited on the admin-only /admin/users page.
 export const SCHEDULE_MANAGE = 'schedule:manage';
-
-// The roster tab exposes staff emails and drives assignment matching, so it
-// rides on the manage capability rather than the schedule view grant.
-const SCHEDULE_STAFF_PATH = '/admin/schedule/staff';
 
 export function hasScheduleManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(SCHEDULE_MANAGE);
@@ -124,9 +122,6 @@ export function canViewPath(access: PageAccess, pathname: string): boolean {
   // The /admin directory itself is fine for anyone with access — it only
   // shows the cards they hold.
   if (pathname === '/admin' || pathname === '/admin/') return true;
-  if (pathname === SCHEDULE_STAFF_PATH || pathname.startsWith(`${SCHEDULE_STAFF_PATH}/`)) {
-    return hasScheduleManage(access);
-  }
   return ADMIN_TOOLS.some(
     (tool) =>
       canViewPage(access, tool.href) &&

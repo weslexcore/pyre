@@ -3,7 +3,7 @@
 // and the sticky header with the tool nav (mobile hamburger included).
 // Unauthenticated visitors never reach this layout — src/middleware.ts
 // redirects them to the login page at the site root and stores the validated
-// user + their dashboard_users access in locals. Which pages a user may view
+// user + their staff-row access in locals. Which pages a user may view
 // is decided per user on /admin/users; the current pathname is checked here.
 // The /api/admin/* routes each page calls re-check the session on every
 // request (this gate is UX; the API gate is the security boundary).

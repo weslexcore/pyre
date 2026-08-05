@@ -10,10 +10,10 @@ import {
   type TimeOffKind,
 } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
+import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
 interface BoardData {
-  staff: ScheduleStaffRow[];
+  staff: StaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
   /** Manage side (schedule:manage / admin) — false = self-service only. */

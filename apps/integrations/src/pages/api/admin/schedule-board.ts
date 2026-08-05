@@ -10,9 +10,9 @@ import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
   type ScheduleProposalRow,
-  type ScheduleStaffRow,
   type ShiftAssignmentRow,
   type ShiftRow,
+  type StaffRow,
   type TimeOffRow,
 } from '@/lib/db';
 
@@ -27,14 +27,14 @@ function json(body: unknown, status = 200): Response {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface ScheduleBoardPayload {
-  staff: ScheduleStaffRow[];
+  staff: StaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
   /** Open draft proposals covering the range; only with includeDrafts=1, manage-side only. */
   proposals?: ScheduleProposalRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
-  /** The schedule_staff row matching the caller's login email, if any. */
+  /** The staff row matching the caller's login email, if any. */
   selfStaffId: string | null;
 }
 
@@ -67,7 +67,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!includeDrafts) shiftsQuery = shiftsQuery.eq('is_draft', false);
 
   const [staffRes, shiftsRes, timeOffRes] = await Promise.all([
-    db.from('schedule_staff').select('*').order('display_name'),
+    db.from('staff').select('*').order('display_name'),
     shiftsQuery,
     db.from('time_off').select('*').order('created_at'),
   ]);
@@ -98,15 +98,23 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   const email = (gate.user.email ?? '').toLowerCase();
-  const staff = (staffRes.data ?? []) as ScheduleStaffRow[];
+  const staff = (staffRes.data ?? []) as StaffRow[];
   const selfStaffId = email
-    ? (staff.find((s) => (s.momence_email ?? '').toLowerCase() === email)?.id ?? null)
+    ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
     : null;
 
   const payload: ScheduleBoardPayload = {
-    // Employees only need names for the board — keep roster emails on the
-    // manage side.
-    staff: canManage ? staff : staff.map((s) => ({ ...s, momence_email: null })),
+    // Employees only need names for the board — emails and everyone's
+    // dashboard access stay on the manage side.
+    staff: canManage
+      ? staff
+      : staff.map((s) => ({
+          ...s,
+          email: null,
+          pages: [],
+          momence_member_id: null,
+          added_by: null,
+        })),
     shifts,
     timeOff: (timeOffRes.data ?? []) as TimeOffRow[],
     canManage,

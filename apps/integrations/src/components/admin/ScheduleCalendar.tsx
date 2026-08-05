@@ -12,14 +12,14 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
+import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
 }
 
 interface BoardData {
-  staff: ScheduleStaffRow[];
+  staff: StaffRow[];
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
 }
@@ -166,15 +166,12 @@ export function ScheduleCalendar() {
 
   // Per-day time-off markers: every active person with any busy interval.
   const timeOffByDate = useMemo(() => {
-    const map = new Map<
-      string,
-      Array<{ staff: ScheduleStaffRow; color: string; detail: string }>
-    >();
+    const map = new Map<string, Array<{ staff: StaffRow; color: string; detail: string }>>();
     if (!data) return map;
     const activeStaff = data.staff.filter((s) => s.active);
     for (const week of weeks) {
       for (const date of week) {
-        const markers: Array<{ staff: ScheduleStaffRow; color: string; detail: string }> = [];
+        const markers: Array<{ staff: StaffRow; color: string; detail: string }> = [];
         for (const person of activeStaff) {
           const intervals = busyIntervalsFor(data.timeOff, person.id, date);
           if (intervals.length === 0) continue;

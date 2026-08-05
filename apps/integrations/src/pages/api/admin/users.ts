@@ -1,20 +1,18 @@
-// Dashboard access management for /admin/users: list, add, edit, and revoke
-// dashboard_users rows (the source of truth for who may use the admin, which
-// replaced the env allowlists). Admin-only on every method, CSRF-guarded on
-// mutations. Guards: an admin can't demote or delete themselves, and the last
-// admin row can't be demoted or deleted — dashboard revocations must never
-// strand the dashboard without an admin.
+// People management for /admin/users: list, add, edit, and remove `staff`
+// rows — one row per person, covering both dashboard access (is_admin, pages)
+// and the scheduling roster (display_name, is_founder, active). Admin-only on
+// every method, CSRF-guarded on mutations.
+//
+// Guards: an admin can't demote, unlink, or delete themselves; the last admin
+// row can't be demoted or deleted; and access can't be granted to a row with
+// no email (nobody could log in as them). Rows referenced by assignments or
+// time off are deactivated instead of deleted, so schedule history survives.
 
 import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
-import {
-  type DashboardUserRow,
-  getEnvAllowlist,
-  invalidateAccessCache,
-  listDashboardUsers,
-} from '@/lib/auth/access';
+import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
-import { getDb } from '@/lib/db';
+import { getDb, type StaffRow } from '@/lib/db';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 
 export const prerender = false;
@@ -59,8 +57,31 @@ async function gateMutation(
 }
 
 /** True when `row` is the only admin row in the table. */
-function isLastAdmin(rows: DashboardUserRow[], row: DashboardUserRow): boolean {
+function isLastAdmin(rows: StaffRow[], row: StaffRow): boolean {
   return row.is_admin && rows.filter((r) => r.is_admin).length === 1;
+}
+
+/**
+ * Best-effort Momence lookup: people sign in with their Momence account, so
+ * the email has to match their Momence login. A miss doesn't block the write
+ * — staff logins aren't always host members — but the UI surfaces it.
+ */
+async function lookupMember(
+  email: string
+): Promise<{ matched: boolean; displayName: string | null; memberId: number | null }> {
+  try {
+    const member = await findMemberByEmail(email);
+    if (member) {
+      return {
+        matched: true,
+        displayName: `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim() || null,
+        memberId: member.id,
+      };
+    }
+  } catch (e) {
+    console.warn('[users] Momence lookup failed:', e instanceof Error ? e.message : e);
+  }
+  return { matched: false, displayName: null, memberId: null };
 }
 
 export const GET: APIRoute = async ({ cookies }) => {
@@ -70,19 +91,19 @@ export const GET: APIRoute = async ({ cookies }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const users = await listDashboardUsers(true);
-  if (users === null) return json({ error: 'Storage unavailable' }, 503);
+  const staff = await listStaff(true);
+  if (staff === null) return json({ error: 'Storage unavailable' }, 503);
 
-  // Env-allowlisted emails without a dashboard_users row, so the legacy
-  // ADMIN_EMAILS / STAFF_EMAILS entries stay visible and importable. Whether
-  // they actually grant access depends on the bootstrap rule (only while the
-  // table has no admin row) — envActive tells the UI which wording to use.
-  const envUsers = getEnvAllowlist().filter((e) => !users.some((u) => u.email === e.email));
+  // Env-allowlisted emails without a staff row, so the legacy ADMIN_EMAILS /
+  // STAFF_EMAILS entries stay visible and importable. Whether they actually
+  // grant access depends on the bootstrap rule (only while the table has no
+  // admin row) — envActive tells the UI which wording to use.
+  const envUsers = getEnvAllowlist().filter((e) => !staff.some((s) => s.email === e.email));
 
   return json({
-    users,
+    staff,
     envUsers,
-    envActive: !users.some((u) => u.is_admin),
+    envActive: !staff.some((s) => s.is_admin),
     self: (gate.user.email ?? '').toLowerCase(),
     // 'env' means the caller is still on the bootstrap allowlist — the UI
     // shows a nag to add themselves as the first admin row.
@@ -104,55 +125,55 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const email = String(body.email ?? '')
+  const rawEmail = String(body.email ?? '')
     .trim()
     .toLowerCase();
-  if (!EMAIL_RE.test(email)) return json({ error: 'Invalid email' }, 400);
+  if (rawEmail && !EMAIL_RE.test(rawEmail)) return json({ error: 'Invalid email' }, 400);
+  const email = rawEmail || null;
 
   const isAdmin = body.isAdmin === true;
   const pages = parsePages(body.pages);
   if (pages instanceof Response) return pages;
-  if (!isAdmin && pages.length === 0) {
-    return json({ error: 'Grant at least one page, or admin access' }, 400);
+  if (!email && (isAdmin || pages.length > 0)) {
+    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
   }
 
-  // Best-effort Momence lookup: users sign in with their Momence account, so
-  // the email must match their Momence login. A miss doesn't block the add —
-  // staff logins aren't always host members — but the UI surfaces it.
-  let displayName: string | null = null;
-  let momenceMemberId: number | null = null;
-  let momenceMatch = false;
-  try {
-    const member = await findMemberByEmail(email);
-    if (member) {
-      momenceMatch = true;
-      displayName = `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim() || null;
-      momenceMemberId = member.id;
-    }
-  } catch (e) {
-    console.warn('[users] Momence lookup failed:', e instanceof Error ? e.message : e);
-  }
+  let displayName = String(body.displayName ?? '').trim();
+  if (displayName.length > 60) return json({ error: 'Name must be 60 characters or fewer' }, 400);
+
+  const member = email
+    ? await lookupMember(email)
+    : { matched: false, displayName: null, memberId: null };
+
+  // Fall back to the Momence member name, then the email's local part, so
+  // every row has something to show on the schedule board.
+  if (!displayName) displayName = member.displayName ?? (email ? email.split('@')[0] : '');
+  if (!displayName) return json({ error: 'Name or email is required' }, 400);
 
   const { data, error } = await db
-    .from('dashboard_users')
+    .from('staff')
     .insert({
+      display_name: displayName,
       email,
       is_admin: isAdmin,
       pages,
-      display_name: displayName,
-      momence_member_id: momenceMemberId,
+      is_founder: body.isFounder === true,
+      // Default off: someone added for dashboard access alone shouldn't
+      // silently show up as assignable on the schedule board.
+      active: body.active === true,
+      momence_member_id: member.memberId,
       added_by: gate.email,
     })
     .select('*')
     .single();
 
   if (error) {
-    if (error.code === '23505') return json({ error: `${email} already has access` }, 409);
+    if (error.code === '23505') return json({ error: `${email} is already on this list` }, 409);
     return json({ error: error.message }, 500);
   }
 
   invalidateAccessCache();
-  return json({ user: data as DashboardUserRow, momenceMatch }, 201);
+  return json({ person: data as StaffRow, momenceMatch: member.matched }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -172,15 +193,28 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = String(body.id ?? '');
   if (!id) return json({ error: 'Missing id' }, 400);
 
-  const rows = (await listDashboardUsers(true)) ?? [];
+  const rows = (await listStaff(true)) ?? [];
   const row = rows.find((r) => r.id === id);
-  if (!row) return json({ error: 'No such user' }, 404);
+  if (!row) return json({ error: 'No such person' }, 404);
 
-  const fields: Partial<Pick<DashboardUserRow, 'is_admin' | 'pages'>> = {};
+  const isSelf = !!row.email && row.email === gate.email;
+  const fields: Partial<
+    Pick<
+      StaffRow,
+      | 'is_admin'
+      | 'pages'
+      | 'display_name'
+      | 'email'
+      | 'is_founder'
+      | 'active'
+      | 'momence_member_id'
+    >
+  > = {};
+  let momenceMatch: boolean | undefined;
 
   if (body.isAdmin !== undefined) {
     const isAdmin = body.isAdmin === true;
-    if (!isAdmin && row.email === gate.email) {
+    if (!isAdmin && isSelf) {
       return json({ error: 'You cannot remove your own admin access' }, 400);
     }
     if (!isAdmin && isLastAdmin(rows, row)) {
@@ -195,28 +229,52 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     fields.pages = pages;
   }
 
-  if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);
-
-  const willBeAdmin = fields.is_admin ?? row.is_admin;
-  const willHavePages = fields.pages ?? row.pages;
-  if (!willBeAdmin && willHavePages.length === 0) {
-    return json(
-      { error: 'Grant at least one page, or admin access — or revoke them instead' },
-      400
-    );
+  if (body.displayName !== undefined) {
+    const displayName = String(body.displayName ?? '').trim();
+    if (!displayName || displayName.length > 60) {
+      return json({ error: 'Name must be 1-60 characters' }, 400);
+    }
+    fields.display_name = displayName;
   }
 
-  const { data, error } = await db
-    .from('dashboard_users')
-    .update(fields)
-    .eq('id', id)
-    .select('*')
-    .single();
+  if (body.email !== undefined) {
+    const email = body.email === null ? null : String(body.email).trim().toLowerCase() || null;
+    if (email && !EMAIL_RE.test(email)) return json({ error: 'Invalid email' }, 400);
+    if (email !== row.email) {
+      if (isSelf) return json({ error: 'You cannot change your own login email' }, 400);
+      fields.email = email;
+      if (email) {
+        const member = await lookupMember(email);
+        momenceMatch = member.matched;
+        fields.momence_member_id = member.memberId;
+      } else {
+        fields.momence_member_id = null;
+      }
+    }
+  }
 
-  if (error) return json({ error: error.message }, 500);
+  if (body.isFounder !== undefined) fields.is_founder = body.isFounder === true;
+  if (body.active !== undefined) fields.active = body.active === true;
+
+  if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);
+
+  // An access grant with no email is unreachable — nobody can log in as them.
+  const willBeAdmin = fields.is_admin ?? row.is_admin;
+  const willHavePages = fields.pages ?? row.pages;
+  const willHaveEmail = fields.email !== undefined ? fields.email : row.email;
+  if (!willHaveEmail && (willBeAdmin || willHavePages.length > 0)) {
+    return json({ error: 'Dashboard access needs a Momence login email' }, 400);
+  }
+
+  const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
+
+  if (error) {
+    if (error.code === '23505') return json({ error: 'That email is already in use' }, 409);
+    return json({ error: error.message }, 500);
+  }
 
   invalidateAccessCache();
-  return json({ user: data as DashboardUserRow });
+  return json({ person: data as StaffRow, momenceMatch });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -229,16 +287,31 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'Missing id' }, 400);
 
-  const rows = (await listDashboardUsers(true)) ?? [];
+  const rows = (await listStaff(true)) ?? [];
   const row = rows.find((r) => r.id === id);
-  if (!row) return json({ error: 'No such user' }, 404);
+  if (!row) return json({ error: 'No such person' }, 404);
 
-  if (row.email === gate.email) return json({ error: 'You cannot revoke your own access' }, 400);
-  if (isLastAdmin(rows, row)) return json({ error: 'Cannot revoke the last admin' }, 400);
+  if (row.email && row.email === gate.email) {
+    return json({ error: 'You cannot remove your own access' }, 400);
+  }
+  if (isLastAdmin(rows, row)) return json({ error: 'Cannot remove the last admin' }, 400);
 
-  const { error } = await db.from('dashboard_users').delete().eq('id', id);
+  const { error } = await db.from('staff').delete().eq('id', id);
+
+  // 23503 = still referenced by shift_assignments or time_off. Their schedule
+  // history has to stay, so strip access and take them off the roster instead
+  // of deleting the person.
+  if (error?.code === '23503') {
+    const { error: deactivateError } = await db
+      .from('staff')
+      .update({ active: false, is_admin: false, pages: [] })
+      .eq('id', id);
+    if (deactivateError) return json({ error: deactivateError.message }, 500);
+    invalidateAccessCache();
+    return json({ ok: true, deactivated: true });
+  }
   if (error) return json({ error: error.message }, 500);
 
   invalidateAccessCache();
-  return json({ ok: true });
+  return json({ ok: true, deactivated: false });
 };

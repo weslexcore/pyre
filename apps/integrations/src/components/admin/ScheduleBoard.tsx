@@ -21,9 +21,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ScheduleProposalRow,
-  ScheduleStaffRow,
   ShiftAssignmentRow,
   ShiftRow,
+  StaffRow,
   TimeOffRow,
 } from '@/lib/db';
 
@@ -32,7 +32,7 @@ interface BoardShift extends ShiftRow {
 }
 
 interface BoardData {
-  staff: ScheduleStaffRow[];
+  staff: StaffRow[];
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
   proposals?: ScheduleProposalRow[];
@@ -712,7 +712,7 @@ function ShiftDetail({
 }: {
   shift: BoardShift;
   data: BoardData;
-  staffById: Map<string, ScheduleStaffRow>;
+  staffById: Map<string, StaffRow>;
   weekHours: Record<string, number>;
   busy: boolean;
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;

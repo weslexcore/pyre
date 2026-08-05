@@ -5,10 +5,10 @@
 
 import { addDays, founderIdsOf, rollupHours, weekStartOf } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ScheduleStaffRow, ShiftAssignmentRow, ShiftRow, TimeOffRow } from '@/lib/db';
+import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
 interface BoardData {
-  staff: ScheduleStaffRow[];
+  staff: StaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
   /** Manage side (schedule:manage / admin) — false = own hours only. */
@@ -61,7 +61,7 @@ export function ScheduleHours() {
   const selfId = data?.selfStaffId ?? null;
 
   const { staffColumns, weeks } = useMemo(() => {
-    if (!data) return { staffColumns: [] as ScheduleStaffRow[], weeks: [] };
+    if (!data) return { staffColumns: [] as StaffRow[], weeks: [] };
     const assignments = data.shifts
       .filter((s) => s.status === 'active')
       .flatMap((shift) =>

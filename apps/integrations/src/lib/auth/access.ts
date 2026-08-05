@@ -1,28 +1,17 @@
 // Dashboard access lookup: who may see the admin dashboard, and which pages.
-// Source of truth is the dashboard_users table (managed from /admin/users);
-// the ADMIN_EMAILS / STAFF_EMAILS env vars survive only as a bootstrap
-// fallback while the table holds no admin row (or Supabase is unreachable),
-// so a fresh deployment can never lock every admin out.
+// Source of truth is the `staff` table (one row per person — dashboard access
+// and the scheduling roster in one place, managed from /admin/users); the
+// ADMIN_EMAILS / STAFF_EMAILS env vars survive only as a bootstrap fallback
+// while the table holds no admin row (or Supabase is unreachable), so a fresh
+// deployment can never lock every admin out.
 
-import { getDb } from '../db';
-
-export interface DashboardUserRow {
-  id: string;
-  email: string;
-  is_admin: boolean;
-  pages: string[];
-  display_name: string | null;
-  momence_member_id: number | null;
-  added_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import { getDb, type StaffRow } from '../db';
 
 export interface DashboardAccess {
   isAdmin: boolean;
   /** Admin page hrefs this user may view; irrelevant for admins (all pages). */
   pages: string[];
-  /** 'env' = bootstrap allowlist fallback, no dashboard_users row matched. */
+  /** 'env' = bootstrap allowlist fallback, no staff row matched. */
   source: 'db' | 'env';
 }
 
@@ -33,32 +22,34 @@ const ENV_STAFF_PAGES = ['/admin/schedule', '/admin/water'];
 // The roster is tiny (a dozen rows), so cache the whole table briefly rather
 // than querying per request. Mutations in /api/admin/users invalidate it.
 const CACHE_TTL_MS = 30_000;
-let cache: { rows: DashboardUserRow[]; at: number } | null = null;
+let cache: { rows: StaffRow[]; at: number } | null = null;
 
 export function invalidateAccessCache(): void {
   cache = null;
 }
 
-/** All dashboard_users rows (cached ~30s), or null when Supabase is down. */
-export async function listDashboardUsers(force = false): Promise<DashboardUserRow[] | null> {
+/** All staff rows (cached ~30s), or null when Supabase is down. */
+export async function listStaff(force = false): Promise<StaffRow[] | null> {
   const db = getDb();
   if (!db) return null;
 
   if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
 
-  const { data, error } = await db
-    .from('dashboard_users')
-    .select('*')
-    .order('created_at', { ascending: true });
+  const { data, error } = await db.from('staff').select('*').order('display_name');
 
   if (error) {
-    console.error('[access] dashboard_users fetch failed:', error.message);
+    console.error('[access] staff fetch failed:', error.message);
     // A stale roster beats falling back to env vars mid-flight.
     return cache?.rows ?? null;
   }
 
-  cache = { rows: data as DashboardUserRow[], at: Date.now() };
+  cache = { rows: data as StaffRow[], at: Date.now() };
   return cache.rows;
+}
+
+/** Whether this row grants any dashboard access at all (vs roster-only). */
+export function hasDashboardAccess(row: StaffRow): boolean {
+  return row.is_admin || row.pages.length > 0;
 }
 
 function envList(value: string | undefined): string[] {
@@ -77,8 +68,7 @@ export interface EnvAllowlistEntry {
 /**
  * Everyone named by the ADMIN_EMAILS / STAFF_EMAILS env vars, with the access
  * the bootstrap fallback would give them. /admin/users lists these alongside
- * the dashboard_users rows so legacy allowlist entries stay visible and can
- * be imported into the table.
+ * the staff rows so legacy allowlist entries stay visible and can be imported.
  */
 export function getEnvAllowlist(): EnvAllowlistEntry[] {
   const admins = envList(import.meta.env.ADMIN_EMAILS);
@@ -96,9 +86,13 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
 
-  const rows = await listDashboardUsers();
+  const rows = await listStaff();
   const row = rows?.find((r) => r.email === normalized);
-  if (row) return { isAdmin: row.is_admin, pages: row.pages, source: 'db' };
+  // A row without access is a roster-only person (scheduled, but no dashboard)
+  // — they fall through to the same env check as anyone unknown.
+  if (row && hasDashboardAccess(row)) {
+    return { isAdmin: row.is_admin, pages: row.pages, source: 'db' };
+  }
 
   // Env fallback applies only while no admin row exists (bootstrap phase, or
   // Supabase unreachable). Once an admin is in the table, it is authoritative
