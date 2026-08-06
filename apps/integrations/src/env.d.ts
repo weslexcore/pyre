@@ -82,6 +82,14 @@ interface ImportMetaEnv {
   readonly PUBLIC_SITE_URL?: string;
   // Base URL for hosted email images (defaults to this app's production deployment)
   readonly PUBLIC_EMAIL_ASSET_BASE?: string;
+  // pyre-agents (Eve): deployment URL + the bearer the agent's channel auth
+  // expects on POST /eve/v1/session.
+  readonly AGENTS_BASE_URL?: string;
+  readonly EVE_CHANNEL_SECRET?: string;
+  // pyre-agents' Protection Bypass for Automation secret — required only when
+  // AGENTS_BASE_URL is a protected (preview/staging) deployment, which 401s at
+  // the edge before EVE_CHANNEL_SECRET is checked.
+  readonly AGENTS_PROTECTION_BYPASS?: string;
 }
 
 interface ImportMeta {

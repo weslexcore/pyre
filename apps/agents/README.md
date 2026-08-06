@@ -61,9 +61,18 @@ without writing anything, set `AGENT_FORCE_DRY_RUN=1` and run
    AI Gateway enabled, env vars from `.env.example`.
 4. pyre-integrations env additions: `AGENT_API_SECRET`, `AGENTS_BASE_URL`
    (this app's deployment URL), `EVE_CHANNEL_SECRET`.
-5. Verify `GET /eve/v1/health`, then button-draft a future week from
+5. **Protected (preview/staging) deployments only.** Vercel Deployment
+   Protection 401s server-to-server calls at the edge, before either app's
+   own bearer check runs. For each protected side, Settings → Deployment
+   Protection → Protection Bypass for Automation → generate, then hand the
+   secret to the *caller*: pyre-agents' secret becomes
+   `AGENTS_PROTECTION_BYPASS` on pyre-integrations, and pyre-integrations'
+   becomes `INTEGRATIONS_PROTECTION_BYPASS` on pyre-agents. Both hops need it
+   — the button-draft call out and the `save_proposal` write back. Leave both
+   unset in production, where neither deployment is protected.
+6. Verify `GET /eve/v1/health`, then button-draft a future week from
    `/admin/schedule`.
-6. The weekly cron registers automatically on deploy (check Vercel
+7. The weekly cron registers automatically on deploy (check Vercel
    Observability → Cron Jobs). If plan limits block Vercel Cron, delete
    `agent/schedules/weekly_draft.md` and add a QStash schedule (or a
    `CRON_JOBS` entry in integrations) POSTing the same `/eve/v1/session`
