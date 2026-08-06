@@ -249,7 +249,7 @@ export function ScheduleCalendar() {
         >
           Next ›
         </button>
-        <span className="font-mono text-sm font-bold text-white/70">{formatMonth(monthStart)}</span>
+        <span className="font-mono text-xl font-bold text-white/80">{formatMonth(monthStart)}</span>
         {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 

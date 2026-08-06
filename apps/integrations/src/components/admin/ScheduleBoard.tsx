@@ -403,7 +403,7 @@ export function ScheduleBoard() {
         >
           Next ›
         </button>
-        <span className="font-mono text-sm text-white/60">
+        <span className="font-mono text-xl font-bold text-white/80">
           {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
         </span>
         {canManage && (
