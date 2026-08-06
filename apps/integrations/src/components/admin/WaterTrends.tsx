@@ -318,9 +318,10 @@ export function WaterTrends({
               <span className="text-white/40">{p.label}</span>
             </div>
           ))}
+          {/* Gold matches the log's "added to water" block. */}
           {hovered.doses.length > 0 && (
-            <div className="mt-1 font-mono text-xs text-white/40">
-              {hovered.doses.map((d) => `${d.chemical} ${d.grams} g`).join(', ')}
+            <div className="mt-1 font-mono-bold text-xs text-[var(--pyre-gold)]">
+              ＋ {hovered.doses.map((d) => `${d.chemical} ${d.grams} g`).join(', ')}
             </div>
           )}
         </div>
