@@ -821,7 +821,10 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           Trends
         </summary>
         <div className="px-4 pb-4">
-          <WaterTrends records={chartRecords} visibleTubs={filter === 'all' ? [...TUBS] : [filter]} />
+          <WaterTrends
+            records={chartRecords}
+            visibleTubs={filter === 'all' ? [...TUBS] : [filter]}
+          />
         </div>
       </details>
 
@@ -851,22 +854,30 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
           <ReadingChips record={record} />
 
+          {/* Anything put into the water is the entry's most consequential
+           * fact, so it gets its own gold-tinted block — scannable down a
+           * column of cards without reading any of them. */}
           {record.doses.length > 0 && (
-            <div className="mt-2 space-y-0.5">
-              {record.doses.map((dose) => (
-                <div
-                  key={`${record.id}-${dose.chemical}`}
-                  className="font-mono text-sm text-white/70"
-                >
-                  ＋ {dose.chemical} {dose.grams} g
-                  {dose.recommended_grams != null && dose.recommended_grams !== dose.grams && (
-                    <span className="text-[var(--pyre-gold)]">
-                      {' '}
-                      (chart: {dose.recommended_grams} g)
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div className="mt-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-2.5 py-2">
+              <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-gold)]/70">
+                Added to water
+              </div>
+              <div className="space-y-0.5">
+                {record.doses.map((dose) => (
+                  <div
+                    key={`${record.id}-${dose.chemical}`}
+                    className="font-mono-bold text-sm text-[var(--pyre-gold)]"
+                  >
+                    ＋ {dose.chemical} {dose.grams} g
+                    {dose.recommended_grams != null && dose.recommended_grams !== dose.grams && (
+                      <span className="font-mono text-white/50">
+                        {' '}
+                        (chart: {dose.recommended_grams} g)
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
