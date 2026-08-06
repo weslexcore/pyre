@@ -2,7 +2,8 @@
 // status (the sheet's row colors), inline shift create/edit, and an
 // assignment picker that shows each person's availability — computed locally
 // via lib/schedule/availability from the same time-off data the API returns —
-// plus their hours already scheduled that week.
+// plus their hours already scheduled that week. Days the viewer works are
+// picked out in gold, with their own name first in each shift's name list.
 
 import {
   ASSIGNMENT_ROLE_LABELS,
@@ -18,7 +19,7 @@ import {
   timeToMinutes,
   weekStartOf,
 } from '@pyre/schedule-core';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ScheduleProposalRow,
   ShiftAssignmentRow,
@@ -106,6 +107,21 @@ const toneChip: Record<CoverageTone, string> = {
   cancelled: 'bg-white/10 text-white/50',
 };
 
+/**
+ * The viewer's own assignment sorts to the front of a shift's name list so
+ * they find themselves without reading the whole roster. Sort is stable, so
+ * everyone else keeps their existing order.
+ */
+const selfFirst = <T extends { staff_id: string }>(
+  rows: readonly T[],
+  selfId: string | null
+): T[] =>
+  selfId
+    ? [...rows].sort((a, b) => Number(b.staff_id === selfId) - Number(a.staff_id === selfId))
+    : [...rows];
+
+const selfNameClass = 'font-semibold text-[var(--pyre-gold)]';
+
 const availabilityBadge = (availability: Availability): { label: string; className: string } => {
   switch (availability.status) {
     case 'free':
@@ -190,6 +206,7 @@ export function ScheduleBoard() {
   }, [load]);
 
   const canManage = data?.canManage ?? false;
+  const selfId = data?.selfStaffId ?? null;
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -207,6 +224,17 @@ export function ScheduleBoard() {
   }, [data]);
 
   const staffById = useMemo(() => new Map((data?.staff ?? []).map((s) => [s.id, s])), [data]);
+
+  // Days the viewer is on the schedule — those get the gold treatment.
+  const selfDates = useMemo(() => {
+    const dates = new Set<string>();
+    if (!selfId) return dates;
+    for (const shift of data?.shifts ?? []) {
+      if (shift.status === 'cancelled') continue;
+      if (shift.assignments.some((a) => a.staff_id === selfId)) dates.add(shift.shift_date);
+    }
+    return dates;
+  }, [data, selfId]);
 
   // Hours already scheduled this week per staff id (all shifts on the board).
   const weekHours = useMemo(() => {
@@ -419,11 +447,28 @@ export function ScheduleBoard() {
       <div className="space-y-4">
         {days.map((date) => {
           const shifts = shiftsByDate.get(date) ?? [];
+          const selfWorks = selfDates.has(date);
           return (
-            <section key={date} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="font-mono text-sm font-bold uppercase tracking-wide text-white/70">
+            <section
+              key={date}
+              className={`rounded-lg border p-3 ${
+                selfWorks
+                  ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/[0.06]'
+                  : 'border-white/10 bg-white/[0.03]'
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2
+                  className={`flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide ${
+                    selfWorks ? 'text-[var(--pyre-gold)]' : 'text-white/70'
+                  }`}
+                >
                   {formatDay(date)}
+                  {selfWorks && (
+                    <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-gold)]">
+                      you're on
+                    </span>
+                  )}
                 </h2>
                 {canManage && (
                   <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
@@ -495,9 +540,14 @@ export function ScheduleBoard() {
                             </span>
                           )}
                           <span className="text-sm text-white/70">
-                            {shift.assignments
-                              .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
-                              .join(', ')}
+                            {selfFirst(shift.assignments, selfId).map((a, i) => (
+                              <Fragment key={a.id}>
+                                {i > 0 && ', '}
+                                <span className={a.staff_id === selfId ? selfNameClass : undefined}>
+                                  {staffById.get(a.staff_id)?.display_name ?? '?'}
+                                </span>
+                              </Fragment>
+                            ))}
                           </span>
                           {shift.notes && (
                             <span className="font-mono text-xs text-white/40">{shift.notes}</span>
@@ -548,6 +598,7 @@ export function ScheduleBoard() {
                           busy={busy}
                           run={run}
                           canManage={canManage}
+                          selfId={selfId}
                           onEdit={() => openEditShift(shift)}
                           editingAssignment={editingAssignment}
                           setEditingAssignment={setEditingAssignment}
@@ -705,6 +756,7 @@ function ShiftDetail({
   busy,
   run,
   canManage,
+  selfId,
   onEdit,
   editingAssignment,
   setEditingAssignment,
@@ -717,6 +769,7 @@ function ShiftDetail({
   busy: boolean;
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;
   canManage: boolean;
+  selfId: string | null;
   onEdit: () => void;
   editingAssignment: string | null;
   setEditingAssignment: (id: string | null) => void;
@@ -731,8 +784,9 @@ function ShiftDetail({
     <div className="space-y-3 border-t border-white/10 px-3 py-3">
       {shift.assignments.length > 0 && (
         <ul className="space-y-1.5">
-          {shift.assignments.map((a) => {
+          {selfFirst(shift.assignments, selfId).map((a) => {
             const person = staffById.get(a.staff_id);
+            const isSelf = a.staff_id === selfId;
             const availability = availabilityFor(
               data.timeOff,
               a.staff_id,
@@ -742,9 +796,14 @@ function ShiftDetail({
             );
             const editing = editingAssignment === a.id;
             return (
-              <li key={a.id} className="rounded bg-white/5 px-2 py-1.5">
+              <li
+                key={a.id}
+                className={`rounded px-2 py-1.5 ${isSelf ? 'bg-[var(--pyre-gold)]/10' : 'bg-white/5'}`}
+              >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-medium">{person?.display_name ?? '?'}</span>
+                  <span className={isSelf ? selfNameClass : 'font-medium'}>
+                    {person?.display_name ?? '?'}
+                  </span>
                   <span className="font-mono text-xs text-white/60">
                     {formatTime(a.starts_at)}–{formatTime(a.ends_at)} ·{' '}
                     {assignmentHours(a.starts_at, a.ends_at)}h · {ASSIGNMENT_ROLE_LABELS[a.role]}

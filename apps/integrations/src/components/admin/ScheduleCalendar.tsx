@@ -1,7 +1,8 @@
 // Month calendar: the whole month as a Monday-start grid, shifts as
 // coverage-colored blocks in each day cell (label, window, who's on) and time
 // off as per-person colored markers along the cell bottom — so the month's
-// shape and everyone's availability read at a glance. Read-only; editing
+// shape and everyone's availability read at a glance. Days the viewer works
+// are tinted gold, with their own name first in the block. Read-only; editing
 // happens on the Week board.
 
 import {
@@ -11,7 +12,7 @@ import {
   timeToMinutes,
   weekStartOf,
 } from '@pyre/schedule-core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
 interface BoardShift extends ShiftRow {
@@ -22,6 +23,7 @@ interface BoardData {
   staff: StaffRow[];
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
+  selfStaffId?: string | null;
 }
 
 const buttonClass =
@@ -100,6 +102,15 @@ const coverageTone = (shift: BoardShift): CoverageTone => {
   return 'covered';
 };
 
+/** The viewer's own assignment reads first in a shift's name list. */
+const selfFirst = <T extends { staff_id: string }>(
+  rows: readonly T[],
+  selfId: string | null
+): T[] =>
+  selfId
+    ? [...rows].sort((a, b) => Number(b.staff_id === selfId) - Number(a.staff_id === selfId))
+    : [...rows];
+
 const toneBlock: Record<CoverageTone, string> = {
   empty: 'border-[var(--pyre-red)]/70 bg-[var(--pyre-red)]/15',
   under: 'border-[var(--pyre-gold)]/70 bg-[var(--pyre-gold)]/15',
@@ -163,6 +174,19 @@ export function ScheduleCalendar() {
     }
     return map;
   }, [data]);
+
+  const selfId = data?.selfStaffId ?? null;
+
+  // Days the viewer is on the schedule — those cells get the gold treatment.
+  const selfDates = useMemo(() => {
+    const dates = new Set<string>();
+    if (!selfId) return dates;
+    for (const shift of data?.shifts ?? []) {
+      if (shift.status === 'cancelled') continue;
+      if (shift.assignments.some((a) => a.staff_id === selfId)) dates.add(shift.shift_date);
+    }
+    return dates;
+  }, [data, selfId]);
 
   // Per-day time-off markers: every active person with any busy interval.
   const timeOffByDate = useMemo(() => {
@@ -254,16 +278,26 @@ export function ScheduleCalendar() {
                 const inMonth = date.slice(0, 7) === monthStart.slice(0, 7);
                 const shifts = shiftsByDate.get(date) ?? [];
                 const markers = timeOffByDate.get(date) ?? [];
+                const selfWorks = selfDates.has(date);
+                const cellTone = selfWorks
+                  ? 'bg-[var(--pyre-gold)]/[0.08] ring-1 ring-inset ring-[var(--pyre-gold)]/40'
+                  : inMonth
+                    ? ''
+                    : 'bg-white/[0.02]';
                 return (
                   <div
                     key={date}
-                    className={`min-h-[110px] border-b border-l border-white/10 p-1.5 last:border-r ${
-                      inMonth ? '' : 'bg-white/[0.02] opacity-40'
+                    className={`min-h-[110px] border-b border-l border-white/10 p-1.5 last:border-r ${cellTone} ${
+                      inMonth ? '' : 'opacity-40'
                     }`}
                   >
                     <div
                       className={`mb-1 text-right font-mono text-[11px] ${
-                        date === today ? 'font-bold text-[var(--pyre-red)]' : 'text-white/40'
+                        date === today
+                          ? 'font-bold text-[var(--pyre-red)]'
+                          : selfWorks
+                            ? 'font-bold text-[var(--pyre-gold)]'
+                            : 'text-white/40'
                       }`}
                     >
                       {Number(date.slice(8))}
@@ -271,7 +305,8 @@ export function ScheduleCalendar() {
 
                     <div className="space-y-1">
                       {shifts.map((shift) => {
-                        const names = shift.assignments
+                        const assigned = selfFirst(shift.assignments, selfId);
+                        const names = assigned
                           .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
                           .join(', ');
                         return (
@@ -288,7 +323,20 @@ export function ScheduleCalendar() {
                             </span>
                             <span className="block truncate font-mono text-[10px] text-white/70 leading-tight">
                               {shift.assignments.length}/{shift.staff_needed}
-                              {names ? ` · ${names}` : ''}
+                              {assigned.map((a, i) => (
+                                <Fragment key={a.id}>
+                                  {i === 0 ? ' · ' : ', '}
+                                  <span
+                                    className={
+                                      a.staff_id === selfId
+                                        ? 'font-bold text-[var(--pyre-gold)]'
+                                        : undefined
+                                    }
+                                  >
+                                    {staffById.get(a.staff_id)?.display_name ?? '?'}
+                                  </span>
+                                </Fragment>
+                              ))}
                             </span>
                           </a>
                         );
@@ -334,6 +382,12 @@ export function ScheduleCalendar() {
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/15 align-middle" />
           covered
         </span>
+        {selfId && (
+          <span className="text-[var(--pyre-gold)]">
+            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[var(--pyre-gold)]/25 ring-1 ring-inset ring-[var(--pyre-gold)]/60 align-middle" />
+            days you work
+          </span>
+        )}
         <span className="text-white/40">· lettered chips = time off:</span>
         {(data?.staff ?? [])
           .filter((s) => s.active)
