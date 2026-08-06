@@ -8,6 +8,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import {
+  DEFAULT_TEST_METHOD,
   type EntryType,
   SHOCK_DOSES,
   TARGETS,
@@ -252,7 +253,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     cc: '',
     salt: '',
   });
-  const [testMethod, setTestMethod] = useState<TestMethod>('strips');
+  const [testMethod, setTestMethod] = useState<TestMethod>(DEFAULT_TEST_METHOD);
   const [notes, setNotes] = useState('');
   const [phase, setPhase] = useState<'entering' | 'reviewing'>('entering');
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
