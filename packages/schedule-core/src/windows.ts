@@ -41,7 +41,11 @@ export interface CoverageWindow {
   label: string;
   staffNeeded: number;
   sessionRefs: Array<{ type: 'session' | 'appointment'; id: number }>;
-  /** Titles of the covered events, for shift notes/debugging. */
+  /**
+   * Distinct titles of the covered events in first-seen order, for shift
+   * notes/debugging. A day of hourly Open Hours slots is one session type, not
+   * six — the count lives in sessionRefs.
+   */
   titles: string[];
 }
 
@@ -93,7 +97,7 @@ export function deriveCoverageWindows(
         currentPaddedEnd = Math.max(currentPaddedEnd, paddedEnd);
         current.endMin = ceilHalfHour(currentPaddedEnd);
         current.sessionRefs.push({ type: event.kind, id: event.id });
-        current.titles.push(event.title);
+        if (!current.titles.includes(event.title)) current.titles.push(event.title);
       } else {
         current = {
           date,
@@ -117,6 +121,26 @@ export function deriveCoverageWindows(
   }
 
   return windows;
+}
+
+/**
+ * Notes on a Momence-sourced shift are the window's comma-joined session
+ * titles, so the schedule should read "Open Hours, Yoga" however many slots of
+ * each the day holds. Titles are deduped at derivation now, but rows written
+ * before that still repeat — collapse them on the way to the screen. Manual
+ * notes are free text and pass through untouched.
+ */
+export function formatShiftNotes(shift: {
+  source: 'momence' | 'manual';
+  notes: string | null;
+}): string | null {
+  if (!shift.notes || shift.source !== 'momence') return shift.notes;
+  const seen = new Set<string>();
+  for (const part of shift.notes.split(',')) {
+    const title = part.trim();
+    if (title) seen.add(title);
+  }
+  return seen.size > 0 ? [...seen].join(', ') : shift.notes;
 }
 
 // --- Sync planning: diff derived windows against existing shifts ---

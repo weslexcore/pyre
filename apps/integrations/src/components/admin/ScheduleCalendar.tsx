@@ -8,6 +8,7 @@
 import {
   addDays,
   busyIntervalsFor,
+  formatShiftNotes,
   minutesToTime,
   timeToMinutes,
   weekStartOf,
@@ -309,11 +310,12 @@ export function ScheduleCalendar() {
                         const names = assigned
                           .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
                           .join(', ');
+                        const notes = formatShiftNotes(shift);
                         return (
                           <a
                             key={shift.id}
                             href="/admin/schedule"
-                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${shift.notes ? ` · ${shift.notes}` : ''}`}
+                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${notes ? ` · ${notes}` : ''}`}
                             className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]}`}
                           >
                             <span className="block truncate text-[11px] font-semibold leading-tight">

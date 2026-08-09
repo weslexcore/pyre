@@ -113,20 +113,25 @@ const ENTRY_TYPE_LABELS: Array<[EntryType, string]> = [
   ['refill', 'Drain / Refill'],
 ];
 
-function TimeAgo({ iso }: { iso: string }) {
-  const timestamp = Date.parse(iso);
-  const diff = Date.now() - timestamp;
-  const mins = Math.floor(diff / 60_000);
-  const hours = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
+// Staff read the log to answer "when was this tub last tested?", so entries
+// carry the clock time they were taken rather than an elapsed-time marker.
+// Rendered in the viewer's locale/timezone, which differs from the server's on
+// first paint — hence suppressHydrationWarning.
+const TIMESTAMP_FORMAT: Intl.DateTimeFormatOptions = {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+};
 
-  let label: string;
-  if (mins < 1) label = 'just now';
-  else if (mins < 60) label = `${mins}m ago`;
-  else if (hours < 24) label = `${hours}h ago`;
-  else label = `${days}d ago`;
-
-  return <span title={new Date(timestamp).toLocaleString()}>{label}</span>;
+function RecordedAt({ iso }: { iso: string }) {
+  const timestamp = new Date(iso);
+  return (
+    <span suppressHydrationWarning title={timestamp.toLocaleString()}>
+      {timestamp.toLocaleString(undefined, TIMESTAMP_FORMAT)}
+    </span>
+  );
 }
 
 const statusTint: Record<ReturnType<typeof classifyReading>, string> = {
@@ -269,6 +274,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const [logLoading, setLogLoading] = useState(false);
   const [logError, setLogError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // --- trends chart ---
   const [range, setRange] = useState<RangeKey>('30d');
@@ -475,6 +481,38 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       setFormError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // CSV of everything matching the current range/tub filters — not just the
+  // pages loaded below. Fetched rather than linked so an expired session lands
+  // on the re-login prompt instead of downloading an error body.
+  const exportCsv = async () => {
+    setExporting(true);
+    setLogError('');
+    try {
+      const params = new URLSearchParams({ format: 'csv' });
+      if (filter !== 'all') params.set('tub', filter);
+      const since = sinceIso(range);
+      if (since) params.set('since', since);
+      const res = await fetch(`/api/admin/water-tests?${params}`);
+      if (res.status === 401 || res.status === 403) {
+        setSessionExpired(true);
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `water-log-${filter}-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Failed to export CSV');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -830,7 +868,18 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       </details>
 
       {/* ---- Log ---- */}
-      <h2 className="mb-4 font-primary-semibold text-lg">Log</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-primary-semibold text-lg">Log</h2>
+        <button
+          type="button"
+          onClick={() => void exportCsv()}
+          disabled={exporting}
+          title="Downloads every entry matching the range and tub filters above"
+          className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono-bold text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-white/30 hover:text-white disabled:opacity-50"
+        >
+          {exporting ? 'Exporting…' : 'Export CSV'}
+        </button>
+      </div>
 
       {logError && <p className="mb-3 text-sm text-[var(--pyre-red)]">{logError}</p>}
       {!logError && records.length === 0 && !logLoading && (
@@ -849,7 +898,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
               </span>
             )}
             <span className="ml-auto font-mono text-xs text-white/40">
-              <TimeAgo iso={record.created_at} />
+              <RecordedAt iso={record.created_at} />
             </span>
           </div>
 

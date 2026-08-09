@@ -1,8 +1,8 @@
 // Cold-tub water testing log API for the /admin/water staff tool: GET lists
-// entries newest-first (optionally per tub), POST records a new entry with
-// readings and the chemicals actually added, DELETE removes an entry the
-// caller recorded themselves. Gated on the /admin/water page grant
-// (requirePage), and — as the app's
+// entries newest-first (optionally per tub, or as a CSV download with
+// ?format=csv), POST records a new entry with readings and the chemicals
+// actually added, DELETE removes an entry the caller recorded themselves.
+// Gated on the /admin/water page grant (requirePage), and — as the app's
 // first cookie-authed mutating routes — CSRF-guarded in-route via
 // assertSameOrigin plus (on POST) the JSON content-type requirement (global
 // checkOrigin stays off for the Mailchimp webhook; see astro.config.mjs).
@@ -18,6 +18,7 @@ import {
   TUBS,
   type Tub,
 } from '@/lib/water/charts';
+import { waterTestsToCsv } from '@/lib/water/csv';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -27,6 +28,10 @@ function json(body: unknown, status = 200): Response {
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
+// The export ignores the paging limits — one file should hold the whole
+// filtered history — but stays bounded so a runaway table can't blow the
+// function's memory.
+const CSV_MAX_ROWS = 5000;
 
 // Sanity bounds only (mirrors the table's check constraints); target-range
 // logic lives in src/lib/water/.
@@ -63,6 +68,31 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const since = url.searchParams.get('since');
   if (since && Number.isNaN(Date.parse(since))) {
     return json({ error: 'since must be an ISO date' }, 400);
+  }
+
+  // CSV export: same tub/since filters as the log, but the whole matching
+  // history in one file (oldest first — a log people read top-to-bottom or
+  // chart in a spreadsheet).
+  if (url.searchParams.get('format') === 'csv') {
+    let csvQuery = db
+      .from('water_tests')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .limit(CSV_MAX_ROWS);
+    if (tub) csvQuery = csvQuery.eq('tub', tub);
+    if (since) csvQuery = csvQuery.gte('created_at', since);
+
+    const { data: csvRows, error: csvError } = await csvQuery;
+    if (csvError) return json({ error: csvError.message }, 500);
+
+    const filename = `water-log-${tub ?? 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    return new Response(waterTestsToCsv((csvRows ?? []) as WaterTestRow[]), {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
+      },
+    });
   }
 
   const limit = Math.min(
