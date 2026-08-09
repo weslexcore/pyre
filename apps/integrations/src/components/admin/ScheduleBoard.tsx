@@ -14,6 +14,7 @@ import {
   assignmentHours,
   availabilityFor,
   DOW_LABELS,
+  formatShiftNotes,
   minutesToTime,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
@@ -494,6 +495,7 @@ export function ScheduleBoard() {
               <div className="space-y-2">
                 {shifts.map((shift) => {
                   const tone = coverageTone(shift);
+                  const notes = formatShiftNotes(shift);
                   const expanded = canManage
                     ? expandedId === shift.id
                     : !collapsedIds.has(shift.id);
@@ -549,8 +551,8 @@ export function ScheduleBoard() {
                               </Fragment>
                             ))}
                           </span>
-                          {shift.notes && (
-                            <span className="font-mono text-xs text-white/40">{shift.notes}</span>
+                          {notes && (
+                            <span className="font-mono text-xs text-white/40">{notes}</span>
                           )}
                         </button>
                         {shift.is_draft && (
