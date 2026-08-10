@@ -23,6 +23,10 @@ export const TEST_METHOD_LABELS: Record<TestMethod, string> = {
   tf_pro_salt: 'TF-Pro Salt',
 };
 
+// The TF-Pro Salt kit (Taylor reagents) is what staff test with day to day, so
+// the entry form opens on it; strips are the exception, not the norm.
+export const DEFAULT_TEST_METHOD: TestMethod = 'tf_pro_salt';
+
 // 'chlorine' throughout the engine means FREE chlorine (FC) — the active
 // sanitizer that strips report and the dosing chart targets. 'cc' is combined
 // chlorine (chloramines) — spent sanitizer, total minus free.

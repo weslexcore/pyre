@@ -7,6 +7,7 @@ import {
   type CoverageEvent,
   DEFAULT_WINDOW_OPTIONS,
   deriveCoverageWindows,
+  formatShiftNotes,
   labelForWindow,
   planShiftSync,
   type SyncShiftInput,
@@ -92,6 +93,18 @@ describe('deriveCoverageWindows', () => {
     expect(windows[1].startMin).toBe(0);
   });
 
+  it('lists each session type once, however many slots of it the window holds', () => {
+    const windows = deriveCoverageWindows([
+      event({ id: 1, title: 'Open Hours', startMin: min('12:00'), endMin: min('13:00') }),
+      event({ id: 2, title: 'Open Hours', startMin: min('13:00'), endMin: min('14:00') }),
+      event({ id: 3, title: 'Yoga', startMin: min('14:00'), endMin: min('15:00') }),
+      event({ id: 4, title: 'Open Hours', startMin: min('15:00'), endMin: min('16:00') }),
+    ]);
+    expect(windows).toHaveLength(1);
+    expect(windows[0].titles).toEqual(['Open Hours', 'Yoga']);
+    expect(windows[0].sessionRefs).toHaveLength(4);
+  });
+
   it('interleaves appointments with sessions in the same window', () => {
     const windows = deriveCoverageWindows([
       event({ id: 1, startMin: min('16:00'), endMin: min('17:00') }),
@@ -102,6 +115,24 @@ describe('deriveCoverageWindows', () => {
       { type: 'session', id: 1 },
       { type: 'appointment', id: 9 },
     ]);
+  });
+});
+
+describe('formatShiftNotes', () => {
+  it('collapses repeated session titles on momence shifts', () => {
+    expect(
+      formatShiftNotes({
+        source: 'momence',
+        notes: 'Open Hours, Open Hours, Yoga, Open Hours',
+      })
+    ).toBe('Open Hours, Yoga');
+  });
+
+  it('leaves manual notes and empty notes alone', () => {
+    expect(formatShiftNotes({ source: 'manual', notes: 'Deep clean, deep clean' })).toBe(
+      'Deep clean, deep clean'
+    );
+    expect(formatShiftNotes({ source: 'momence', notes: null })).toBeNull();
   });
 });
 

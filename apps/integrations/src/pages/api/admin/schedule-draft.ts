@@ -32,6 +32,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Agent not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
   }
 
+  // Preview/staging deployments of pyre-agents sit behind Vercel Deployment
+  // Protection, which 401s at the edge before EVE_CHANNEL_SECRET is ever
+  // checked. The bypass secret gets us past that layer only — the channel
+  // secret above is still what authenticates us to the agent.
+  const agentsBypass = import.meta.env.AGENTS_PROTECTION_BYPASS;
+
   let body: Record<string, unknown> = {};
   try {
     if (request.headers.get('content-type')?.includes('application/json')) {
@@ -65,6 +71,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     headers: {
       Authorization: `Bearer ${channelSecret}`,
       'Content-Type': 'application/json',
+      ...(agentsBypass ? { 'x-vercel-protection-bypass': agentsBypass } : {}),
     },
     body: JSON.stringify({
       message: `Draft the staffing schedule for the week starting ${weekStart}. Use get_week_context with weekStart "${weekStart}", then save exactly one proposal. Any previous draft for that week is superseded automatically.`,
