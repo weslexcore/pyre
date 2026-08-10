@@ -1,4 +1,5 @@
 import { Button, Hr, Link, Section, Text } from '@react-email/components';
+import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { FirstTimerEmailProps } from '../types';
 
@@ -67,36 +68,13 @@ export function FirstTimerWelcome({
   );
 }
 
+// Preview mirrors the real send path (booking-confirmation.ts), which passes
+// FIRST_TIMER_FAQS — keep them in sync by importing rather than restating.
 FirstTimerWelcome.PreviewProps = {
   firstName: 'Julien',
   // manageUrl: 'https://pyresauna.com/account',
   directionsUrl: 'https://maps.google.com/?q=Pyre+Sauna',
-  faqs: [
-    {
-      question: 'What should I bring to my session?',
-      answer:
-        'Bring a swimsuit, a water bottle and an optional robe / sandals. We provide towels and all the amenities you need for your session.',
-    },
-    {
-      question: 'What if I have questions?',
-      answer:
-        "We are two of America's first certified sauna masters and are here to help you get the most out of your session. If at any point during you have questions, just let us know. We are always happy to provide guidance and answer questions.",
-    },
-    {
-      question: 'How hot does the sauna get?',
-      answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
-    },
-    {
-      question: 'How long should I stay in the sauna and cold plunge?',
-      answer:
-        'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits.',
-    },
-    {
-      question: 'Where should I park?',
-      answer:
-        'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.',
-    },
-  ],
+  faqs: FIRST_TIMER_FAQS,
 } satisfies FirstTimerEmailProps;
 
 export default FirstTimerWelcome;

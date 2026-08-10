@@ -14,12 +14,12 @@ const WHAT_TO_BRING: Record<string, FaqItem> = {
   regular: {
     question: 'What should I bring?',
     answer:
-      'Bring a swimsuit, a water bottle and an optional robe / sandals. We provide towels for your session.',
+      'Bring a swimsuit, a water bottle and an optional robe. We recommend sandals — much of our space is bare ground and stone. We provide towels for your session.',
   },
   yoga: {
     question: 'What should I bring?',
     answer:
-      'Bring a yoga mat, bathing suit, water bottle and an optional robe / sandals. We provide towels for your session.',
+      'Bring a yoga mat, bathing suit, water bottle and an optional robe. We recommend sandals — much of our space is bare ground and stone. We provide towels for your session.',
   },
 };
 
@@ -53,8 +53,20 @@ const PARKING: FaqItem = {
     'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.',
 };
 
-/** First-timer items appended to the end of every confirmation FAQ set. */
-const FIRST_TIMER_TAIL: FaqItem[] = [HAVE_QUESTIONS, PARKING];
+const CANCELLATION: FaqItem = {
+  question: 'What if I need to cancel?',
+  answer:
+    'Cancel at least 1 hour before your session starts and your credits will be returned to your account. Cancellations within 1 hour of start time are not eligible for credit back.',
+};
+
+const WEATHER: FaqItem = {
+  question: 'What happens in bad weather?',
+  answer:
+    "We're open rain or shine — we only close for thunder. If thunder ends your session before you've made it through at least 75% of it, we'll refund your credits.",
+};
+
+/** Shared items appended to the end of every confirmation FAQ set. */
+const FIRST_TIMER_TAIL: FaqItem[] = [HAVE_QUESTIONS, PARKING, CANCELLATION, WEATHER];
 
 /**
  * Curated FAQ set sent with the first-timer welcome email. Kept here (rather
@@ -67,6 +79,8 @@ export const FIRST_TIMER_FAQS: FaqItem[] = [
   SAUNA_TEMP,
   SAUNA_PLUNGE_TIMING,
   PARKING,
+  CANCELLATION,
+  WEATHER,
 ];
 
 /** Used for open hours and any session type without a bespoke set. */

@@ -1,6 +1,14 @@
 // Per-template prop interfaces and the template -> props map that keeps the
 // registry, sendTemplate(), and call sites type-safe.
 
+// Add-to-calendar URLs, built at send time (lib/calendar/links.ts). `ics` is
+// the hosted signed .ics link ("Apple"); absent when no signing secret is set.
+export interface CalendarLinks {
+  google: string;
+  outlook: string;
+  ics?: string;
+}
+
 export interface ConfirmationEmailProps {
   firstName: string;
   sessionTitle: string;
@@ -12,6 +20,8 @@ export interface ConfirmationEmailProps {
   sessionImageUrl?: string;
   /** Canonical session type; selects the per-type copy in confirmation-content.ts. */
   sessionType: string;
+  /** Absent when the session couldn't be resolved — the row simply doesn't render. */
+  calendarLinks?: CalendarLinks;
 }
 
 export interface FaqItem {

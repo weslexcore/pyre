@@ -1,5 +1,5 @@
-import { Column, Img, Row, Section, Text } from '@react-email/components';
-import { getConfirmationContent } from '@/lib/email/confirmation-content';
+import { Column, Img, Link, Row, Section, Text } from '@react-email/components';
+import { DIRECTIONS_URL, getConfirmationContent } from '@/lib/email/confirmation-content';
 import type { ConfirmationEmailProps } from '../types';
 import { ASSET_BASE, proxyImageUrl } from './assets';
 import { COLORS, EmailLayout, text } from './EmailLayout';
@@ -40,6 +40,12 @@ const valueStyle = {
   margin: '0 0 14px',
 };
 
+const calendarLinkStyle = {
+  color: COLORS.creme,
+  fontSize: '14px',
+  textDecoration: 'underline',
+};
+
 /**
  * The single confirmation email. All per-session-type copy (heading, intro,
  * header image, background, FAQs) is resolved from `confirmation-content.ts`
@@ -54,6 +60,7 @@ export function ConfirmationEmail({
   // manageUrl,
   sessionImageUrl,
   sessionType,
+  calendarLinks,
 }: ConfirmationEmailProps) {
   const content = getConfirmationContent(sessionType);
   const preview = `You're booked for ${sessionTitle}`;
@@ -85,7 +92,34 @@ export function ConfirmationEmail({
           </Column>
         </Row>
         <Text style={labelStyle}>Location</Text>
-        <Text style={{ ...valueStyle, margin: 0 }}>{location}</Text>
+        <Text style={{ ...valueStyle, margin: '0 0 4px' }}>{location}</Text>
+        <Text style={{ ...valueStyle, fontSize: '14px', margin: calendarLinks ? '0 0 14px' : 0 }}>
+          <Link href={DIRECTIONS_URL} style={calendarLinkStyle}>
+            Directions &amp; parking
+          </Link>
+        </Text>
+        {calendarLinks && (
+          <>
+            <Text style={labelStyle}>Add to calendar</Text>
+            <Text style={{ ...valueStyle, fontSize: '14px', margin: 0 }}>
+              <Link href={calendarLinks.google} style={calendarLinkStyle}>
+                Google
+              </Link>
+              {calendarLinks.ics && (
+                <>
+                  {' · '}
+                  <Link href={calendarLinks.ics} style={calendarLinkStyle}>
+                    Apple
+                  </Link>
+                </>
+              )}
+              {' · '}
+              <Link href={calendarLinks.outlook} style={calendarLinkStyle}>
+                Outlook
+              </Link>
+            </Text>
+          </>
+        )}
       </Section>
       {content.faqs.length > 0 && (
         <Section style={detailsSection}>
@@ -116,4 +150,11 @@ export const sampleConfirmationProps: ConfirmationEmailProps = {
   location: '1000 Westover Hills Blvd, Richmond, VA 23225',
   sessionType: 'guided',
   // manageUrl: 'https://momence.com/sign-in',
+  calendarLinks: {
+    google:
+      'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Signature+Guided+Class&dates=20260620T140000Z%2F20260620T160000Z&location=Pyre+Sauna%2C+1000+Westover+Hills+Blvd%2C+Richmond%2C+VA+23225',
+    outlook:
+      'https://outlook.live.com/calendar/0/action/compose?rru=addevent&subject=Signature+Guided+Class&startdt=2026-06-20T14%3A00%3A00Z&enddt=2026-06-20T16%3A00%3A00Z',
+    ics: 'https://pyre-integrations.vercel.app/api/calendar/event.ics?d=sample',
+  },
 };
