@@ -23,7 +23,7 @@ describe('buildCalendarLinks', () => {
     const url = new URL(buildCalendarLinks(args).google);
     expect(url.origin + url.pathname).toBe('https://calendar.google.com/calendar/render');
     expect(url.searchParams.get('action')).toBe('TEMPLATE');
-    expect(url.searchParams.get('text')).toBe(args.title);
+    expect(url.searchParams.get('text')).toBe('Signature Guided Class @ Pyre');
     expect(url.searchParams.get('dates')).toBe('20260620T140000Z/20260620T160000Z');
     expect(url.searchParams.get('location')).toBe(VENUE_ADDRESS);
     expect(url.searchParams.get('details')).toContain('utm_campaign=confirmation');
@@ -33,7 +33,7 @@ describe('buildCalendarLinks', () => {
     const url = new URL(buildCalendarLinks(args).outlook);
     expect(url.origin + url.pathname).toBe('https://outlook.live.com/calendar/0/action/compose');
     expect(url.searchParams.get('rru')).toBe('addevent');
-    expect(url.searchParams.get('subject')).toBe(args.title);
+    expect(url.searchParams.get('subject')).toBe('Signature Guided Class @ Pyre');
     expect(url.searchParams.get('startdt')).toBe('2026-06-20T14:00:00Z');
     expect(url.searchParams.get('enddt')).toBe('2026-06-20T16:00:00Z');
     expect(url.searchParams.get('location')).toBe(VENUE_ADDRESS);

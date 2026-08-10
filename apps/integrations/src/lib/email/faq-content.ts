@@ -56,13 +56,13 @@ const PARKING: FaqItem = {
 const CANCELLATION: FaqItem = {
   question: 'What if I need to cancel?',
   answer:
-    'Cancel at least 1 hour before your session starts and your credits will be returned to your account. Cancellations within 1 hour of start time are not eligible for credit back.',
+    'Cancel at least 2 hours before your session starts and your credits will be returned to your account. Cancellations within 2 hours of start time are not eligible for credit back.',
 };
 
 const WEATHER: FaqItem = {
   question: 'What happens in bad weather?',
   answer:
-    "We're open rain or shine — we only close for thunder. If thunder ends your session before you've made it through at least 75% of it, we'll refund your credits.",
+    "We're open rain or shine - we only close for thunder. If thunder ends your session before you've made it through at least 75% of it, we'll refund your credits.",
 };
 
 /** Shared items appended to the end of every confirmation FAQ set. */

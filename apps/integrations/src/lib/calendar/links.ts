@@ -9,6 +9,11 @@ import { toIcsUtc } from './ics';
 
 export const VENUE_ADDRESS = 'Pyre Sauna, 1000 Westover Hills Blvd, Richmond, VA 23225';
 
+/** Calendar-entry title: the session name branded with the venue. */
+export function calendarEventTitle(title: string): string {
+  return `${title} @ Pyre`;
+}
+
 /** Composed server-side (not stored in the token) so old links pick up copy fixes. */
 export function buildEventDescription(title: string): string {
   return [
@@ -26,10 +31,11 @@ export function buildCalendarLinks(args: {
 }): CalendarLinks {
   const { title, startIso, endIso } = args;
   const description = buildEventDescription(title);
+  const eventTitle = calendarEventTitle(title);
 
   const google = `https://calendar.google.com/calendar/render?${new URLSearchParams({
     action: 'TEMPLATE',
-    text: title,
+    text: eventTitle,
     dates: `${toIcsUtc(startIso)}/${toIcsUtc(endIso)}`,
     location: VENUE_ADDRESS,
     details: description,
@@ -39,7 +45,7 @@ export function buildCalendarLinks(args: {
   const outlookIso = (iso: string) => `${new Date(iso).toISOString().slice(0, 19)}Z`;
   const outlook = `https://outlook.live.com/calendar/0/action/compose?${new URLSearchParams({
     rru: 'addevent',
-    subject: title,
+    subject: eventTitle,
     startdt: outlookIso(startIso),
     enddt: outlookIso(endIso),
     location: VENUE_ADDRESS,

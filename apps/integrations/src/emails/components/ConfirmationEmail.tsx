@@ -152,9 +152,9 @@ export const sampleConfirmationProps: ConfirmationEmailProps = {
   // manageUrl: 'https://momence.com/sign-in',
   calendarLinks: {
     google:
-      'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Signature+Guided+Class&dates=20260620T140000Z%2F20260620T160000Z&location=Pyre+Sauna%2C+1000+Westover+Hills+Blvd%2C+Richmond%2C+VA+23225',
+      'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Signature+Guided+Class+%40+Pyre&dates=20260620T140000Z%2F20260620T160000Z&location=Pyre+Sauna%2C+1000+Westover+Hills+Blvd%2C+Richmond%2C+VA+23225',
     outlook:
-      'https://outlook.live.com/calendar/0/action/compose?rru=addevent&subject=Signature+Guided+Class&startdt=2026-06-20T14%3A00%3A00Z&enddt=2026-06-20T16%3A00%3A00Z',
-    ics: 'https://pyre-integrations.vercel.app/api/calendar/event.ics?d=sample',
+      'https://outlook.live.com/calendar/0/action/compose?rru=addevent&subject=Signature+Guided+Class+%40+Pyre&startdt=2026-06-20T14%3A00%3A00Z&enddt=2026-06-20T16%3A00%3A00Z',
+    ics: 'https://integrations.pyresauna.com/api/calendar/event.ics?d=sample',
   },
 };

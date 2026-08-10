@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { verifyCalendarToken } from '@/lib/calendar/event-token';
 import { generateIcs } from '@/lib/calendar/ics';
-import { buildEventDescription, VENUE_ADDRESS } from '@/lib/calendar/links';
+import { buildEventDescription, calendarEventTitle, VENUE_ADDRESS } from '@/lib/calendar/links';
 
 export const prerender = false;
 
@@ -17,7 +17,7 @@ export const GET: APIRoute = async ({ url }) => {
   }
 
   const ics = generateIcs({
-    title: payload.title,
+    title: calendarEventTitle(payload.title),
     startIso: payload.start,
     endIso: payload.end,
     location: VENUE_ADDRESS,
