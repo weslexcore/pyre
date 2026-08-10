@@ -1,0 +1,15 @@
+---
+// Partner discounts: the registry and the membership verification queue.
+// Viewable with the page grant, editable with admin or partners:manage — the
+// /api/admin/partners and /api/admin/partner-requests routes re-check on every
+// request, so this page gate is UX and the API gate is the security boundary.
+import { PartnersManager } from '@/components/admin/PartnersManager';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Partner Discounts"
+  subtitle="Reciprocal-discount partners: who verifies their members, how big the discount is, and every request that came through. Momence still owns the discount itself — the customer tag and its price rule."
+>
+  <PartnersManager client:load />
+</AdminLayout>

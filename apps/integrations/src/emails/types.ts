@@ -67,6 +67,12 @@ export interface PartnerVerificationRequestProps {
   confirmUrl: string;
   denyUrl: string;
   expiresDays: number;
+  /**
+   * How many OTHER partner contacts got their own copy. Recipients can't see
+   * each other (one send per address), so the template says so explicitly.
+   * Optional: 0 or absent renders nothing.
+   */
+  otherRecipientCount?: number;
 }
 
 export interface PartnerVerifiedProps {

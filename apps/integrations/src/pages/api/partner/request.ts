@@ -86,8 +86,16 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     if (result.outcome === 'unavailable') {
-      // Unknown slug is a caller bug; the rest are our config gaps.
-      const status = result.reason === 'unknown-partner' ? 400 : 503;
+      // Unknown slug is a caller bug (400). A disabled partner is a deliberate
+      // admin choice rather than a fault, so it's a 403 the relay can surface
+      // as "not accepting requests". Everything else is our config gap or a
+      // storage outage — 503, retryable.
+      const status =
+        result.reason === 'unknown-partner'
+          ? 400
+          : result.reason === 'partner-disabled'
+            ? 403
+            : 503;
       return json(status, { error: result.reason });
     }
 
