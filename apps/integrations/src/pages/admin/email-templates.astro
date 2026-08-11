@@ -8,20 +8,21 @@ import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailTemplateKey } from '@/emails/types';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { CONFIRMATION_SESSION_TYPES } from '@/lib/email/confirmation-content';
-import { getWhitelist, isLiveTemplate } from '@/lib/email/dev-mode';
+import { getEmailGate } from '@/lib/email/dev-mode';
 
 // Registry order; each entry pre-filled with the same sample props the React
-// Email dev server (`yarn email`) uses. Live status is computed per-request so
-// it reflects the runtime env (including the process.env fallback).
+// Email dev server (`yarn email`) uses. Live status is computed per-request
+// from the effective gate (env baseline + dashboard overrides in Supabase).
+const gate = await getEmailGate();
 const templates = (Object.keys(EMAIL_TEMPLATES) as EmailTemplateKey[]).map((key) => ({
   key,
   defaultProps: EMAIL_PREVIEW_PROPS[key] as unknown as Record<string, unknown>,
-  live: isLiveTemplate(key),
+  live: gate.isLive(key),
+  source: (key in gate.overrides ? 'db' : 'env') as 'db' | 'env',
 }));
 
 const liveTemplatesConfig =
   import.meta.env.EMAIL_LIVE_TEMPLATES ?? process.env.EMAIL_LIVE_TEMPLATES ?? '(unset)';
-const whitelist = getWhitelist();
 ---
 
 <AdminLayout
@@ -34,6 +35,7 @@ const whitelist = getWhitelist();
     templates={templates}
     confirmationSessionTypes={CONFIRMATION_SESSION_TYPES}
     liveTemplatesConfig={liveTemplatesConfig}
-    whitelist={whitelist}
+    whitelist={gate.whitelist}
+    dbAvailable={gate.dbAvailable}
   />
 </AdminLayout>

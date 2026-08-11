@@ -16,7 +16,7 @@ import type { APIRoute } from 'astro';
 import { PARTNERS_MANAGE } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type PartnerRow } from '@/lib/db';
-import { isLiveTemplate } from '@/lib/email/dev-mode';
+import { getEmailGate } from '@/lib/email/dev-mode';
 import { fetchTagMap, invalidateTagCache } from '@/lib/momence/host-api';
 import {
   getLegacyContactEnv,
@@ -197,7 +197,7 @@ export const GET: APIRoute = async ({ cookies }) => {
     ccEmailEnv: getPartnerCcEmail(),
     // Without this, partner email is suppressed to everyone off the dev
     // whitelist — the page banners it rather than letting it fail silently.
-    partnerTemplatesLive: isLiveTemplate('partner-verification-request'),
+    partnerTemplatesLive: (await getEmailGate()).isLive('partner-verification-request'),
     tagStatus,
     counts: await requestCounts(),
     canManage: gate.access.isAdmin || gate.access.pages.includes(PARTNERS_MANAGE),

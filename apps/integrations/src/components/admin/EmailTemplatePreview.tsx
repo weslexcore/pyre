@@ -10,8 +10,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export interface TemplateOption {
   key: string;
   defaultProps: Record<string, unknown>;
-  /** Matches EMAIL_LIVE_TEMPLATES — delivers to real recipients. */
+  /** Effective live status — delivers to real recipients. */
   live: boolean;
+  /** 'db' = dashboard override row; 'env' = EMAIL_LIVE_TEMPLATES pattern. */
+  source: 'db' | 'env';
+}
+
+export interface WhitelistEntry {
+  email: string;
+  /** 'env' entries are read-only; 'db' rows are managed here. */
+  source: 'env' | 'db';
+}
+
+interface GateTemplateState {
+  live: boolean;
+  source: 'db' | 'env';
+}
+
+/** Mirror of the /api/admin/email-gate snapshot every mutation returns. */
+interface GateSnapshot {
+  templates: { key: string; live: boolean; source: 'db' | 'env' }[];
+  whitelist: WhitelistEntry[];
+  dbAvailable: boolean;
 }
 
 interface EmailTemplatePreviewProps {
@@ -20,8 +40,10 @@ interface EmailTemplatePreviewProps {
   confirmationSessionTypes: string[];
   /** Raw EMAIL_LIVE_TEMPLATES value, for the config summary. */
   liveTemplatesConfig: string;
-  /** EMAIL_DEV_WHITELIST addresses — receive ALL templates, live or gated. */
-  whitelist: string[];
+  /** Effective whitelist (env + dashboard) — receives ALL templates. */
+  whitelist: WhitelistEntry[];
+  /** False when Supabase is unreachable — gate editing disabled. */
+  dbAvailable: boolean;
 }
 
 interface PreviewState {
@@ -44,6 +66,7 @@ export function EmailTemplatePreview({
   confirmationSessionTypes,
   liveTemplatesConfig,
   whitelist,
+  dbAvailable,
 }: EmailTemplatePreviewProps) {
   const [selectedKey, setSelectedKey] = useState(templates[0]?.key ?? '');
   const [propsJson, setPropsJson] = useState(() =>
@@ -54,6 +77,16 @@ export function EmailTemplatePreview({
   const [loading, setLoading] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [sendState, setSendState] = useState<SendState>({ phase: 'idle' });
+  // Delivery-gate state, seeded server-side and replaced wholesale by the
+  // snapshot every /api/admin/email-gate mutation returns.
+  const [gateTemplates, setGateTemplates] = useState<Record<string, GateTemplateState>>(() =>
+    Object.fromEntries(templates.map((t) => [t.key, { live: t.live, source: t.source }]))
+  );
+  const [gateWhitelist, setGateWhitelist] = useState<WhitelistEntry[]>(whitelist);
+  const [gateDbAvailable, setGateDbAvailable] = useState(dbAvailable);
+  const [gateBusy, setGateBusy] = useState<string | null>(null);
+  const [gateError, setGateError] = useState<string | null>(null);
+  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   // Drops stale responses when a newer render has been requested.
   const requestSeq = useRef(0);
 
@@ -170,6 +203,60 @@ export function EmailTemplatePreview({
     void renderTemplate(selectedKey, json);
   };
 
+  // One mutation in flight at a time; the returned snapshot replaces all gate
+  // state so the UI can never drift from the server.
+  const postGateAction = async (payload: Record<string, unknown>, busyKey: string) => {
+    setGateBusy(busyKey);
+    setGateError(null);
+    try {
+      const res = await fetch('/api/admin/email-gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setGateError(body.error ?? `Request failed (${res.status})`);
+        return false;
+      }
+      const snapshot = body as GateSnapshot;
+      setGateTemplates(
+        Object.fromEntries(
+          snapshot.templates.map((t) => [t.key, { live: t.live, source: t.source }])
+        )
+      );
+      setGateWhitelist(snapshot.whitelist);
+      setGateDbAvailable(snapshot.dbAvailable);
+      return true;
+    } catch (fetchError) {
+      setGateError(fetchError instanceof Error ? fetchError.message : String(fetchError));
+      return false;
+    } finally {
+      setGateBusy(null);
+    }
+  };
+
+  const toggleTemplateLive = (key: string) => {
+    const current = gateTemplates[key];
+    if (!current) return;
+    void postGateAction({ action: 'set-template', template: key, live: !current.live }, key);
+  };
+
+  const clearTemplateOverride = (key: string) => {
+    void postGateAction({ action: 'set-template', template: key, live: null }, key);
+  };
+
+  const addWhitelist = async () => {
+    const email = newWhitelistEmail.trim();
+    if (!EMAIL_RE.test(email)) return;
+    const ok = await postGateAction({ action: 'add-whitelist', email }, 'whitelist');
+    if (ok) setNewWhitelistEmail('');
+  };
+
+  const removeWhitelist = (email: string) => {
+    void postGateAction({ action: 'remove-whitelist', email }, 'whitelist');
+  };
+
   const currentSessionType = (() => {
     if (selectedKey !== 'confirmation') return null;
     try {
@@ -180,7 +267,8 @@ export function EmailTemplatePreview({
     }
   })();
 
-  const liveCount = templates.filter((t) => t.live).length;
+  const liveCount = Object.values(gateTemplates).filter((t) => t.live).length;
+  const selectedGate = gateTemplates[selectedKey];
 
   const propsValid = (() => {
     try {
@@ -194,8 +282,9 @@ export function EmailTemplatePreview({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Delivery gate status: which templates send for real, and who receives
-          gated templates anyway. Display-only — source of truth is the env. */}
+      {/* Delivery gate: which templates send for real, and who receives gated
+          templates anyway. Editable — toggles and whitelist rows write
+          dashboard overrides on top of the env baseline. */}
       <section className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-wide text-white/40">Delivery gate</p>
@@ -203,8 +292,33 @@ export function EmailTemplatePreview({
             {liveCount} of {templates.length} templates live
           </p>
           <p className="mt-1 font-mono text-xs text-white/50">
-            EMAIL_LIVE_TEMPLATES={liveTemplatesConfig}
+            env baseline: EMAIL_LIVE_TEMPLATES={liveTemplatesConfig}
           </p>
+          {selectedGate?.source === 'db' && (
+            <p className="mt-1.5 flex items-center gap-2 font-mono text-xs text-white/50">
+              <span>
+                {selectedKey}: {selectedGate.live ? 'live' : 'gated'} via dashboard override
+              </span>
+              <button
+                type="button"
+                onClick={() => clearTemplateOverride(selectedKey)}
+                disabled={!gateDbAvailable || gateBusy !== null}
+                className="rounded-full border border-white/20 px-2 py-0.5 text-[11px] uppercase tracking-wide text-white/50 transition-colors hover:border-white/40 hover:text-white/80 disabled:opacity-50"
+              >
+                Use env default
+              </button>
+            </p>
+          )}
+          {!gateDbAvailable && (
+            <p className="mt-1.5 font-mono text-xs text-amber-400/80">
+              Supabase unavailable — env config only, editing disabled.
+            </p>
+          )}
+          {gateError && (
+            <p className="mt-1.5 rounded-md border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 p-2 font-mono text-xs text-[var(--pyre-red)]">
+              {gateError}
+            </p>
+          )}
         </div>
         <div className="lg:max-w-md lg:text-right">
           <p className="font-mono text-xs uppercase tracking-wide text-white/40">
@@ -214,13 +328,33 @@ export function EmailTemplatePreview({
             These addresses receive all templates, live or gated:
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5 lg:justify-end">
-            {whitelist.length > 0 ? (
-              whitelist.map((email) => (
+            {gateWhitelist.length > 0 ? (
+              gateWhitelist.map((entry) => (
                 <span
-                  key={email}
-                  className="rounded-full border border-white/20 px-2.5 py-1 font-mono text-[11px] text-white/70"
+                  key={entry.email}
+                  title={
+                    entry.source === 'env' ? 'From EMAIL_DEV_WHITELIST (read-only)' : undefined
+                  }
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] ${
+                    entry.source === 'env'
+                      ? 'border-white/10 text-white/40'
+                      : 'border-white/20 text-white/70'
+                  }`}
                 >
-                  {email}
+                  {entry.email}
+                  {entry.source === 'env' ? (
+                    <span className="uppercase tracking-wide text-white/25">env</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeWhitelist(entry.email)}
+                      disabled={!gateDbAvailable || gateBusy !== null}
+                      aria-label={`Remove ${entry.email} from whitelist`}
+                      className="text-white/40 transition-colors hover:text-[var(--pyre-red)] disabled:opacity-50"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               ))
             ) : (
@@ -228,6 +362,30 @@ export function EmailTemplatePreview({
                 (none — gated templates deliver to no one)
               </span>
             )}
+          </div>
+          <div className="mt-2 flex gap-1.5 lg:justify-end">
+            <input
+              type="email"
+              value={newWhitelistEmail}
+              onChange={(e) => setNewWhitelistEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void addWhitelist();
+              }}
+              placeholder="add@example.com"
+              spellCheck={false}
+              disabled={!gateDbAvailable}
+              className="w-44 rounded-md border border-white/10 bg-white/5 px-2 py-1 font-mono text-[11px] text-[var(--pyre-creme)] outline-none transition-colors focus:border-white/30 disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => void addWhitelist()}
+              disabled={
+                !gateDbAvailable || gateBusy !== null || !EMAIL_RE.test(newWhitelistEmail.trim())
+              }
+              className="rounded-md border border-white/20 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-white/40 disabled:opacity-50"
+            >
+              Add
+            </button>
           </div>
         </div>
       </section>
@@ -237,29 +395,54 @@ export function EmailTemplatePreview({
         <nav className="shrink-0 lg:w-56">
           <p className="mb-2 font-mono text-xs uppercase tracking-wide text-white/40">Templates</p>
           <ul className="flex flex-row flex-wrap gap-1 lg:flex-col">
-            {templates.map((option) => (
-              <li key={option.key}>
-                <button
-                  type="button"
-                  onClick={() => selectTemplate(option)}
-                  className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
-                    option.key === selectedKey
-                      ? 'bg-white/10 text-[var(--pyre-creme)]'
-                      : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-                  }`}
-                >
-                  <span
-                    title={
-                      option.live ? 'Live — delivers to real recipients' : 'Gated — whitelist only'
-                    }
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      option.live ? 'bg-emerald-400' : 'bg-white/20'
+            {templates.map((option) => {
+              const state = gateTemplates[option.key] ?? {
+                live: option.live,
+                source: option.source,
+              };
+              return (
+                <li key={option.key} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => selectTemplate(option)}
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
+                      option.key === selectedKey
+                        ? 'bg-white/10 text-[var(--pyre-creme)]'
+                        : 'text-white/50 hover:bg-white/5 hover:text-white/80'
                     }`}
-                  />
-                  <span className="min-w-0 truncate">{option.key}</span>
-                </button>
-              </li>
-            ))}
+                  >
+                    <span
+                      title={
+                        state.live ? 'Live — delivers to real recipients' : 'Gated — whitelist only'
+                      }
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        state.live ? 'bg-emerald-400' : 'bg-white/20'
+                      }`}
+                    />
+                    <span className="min-w-0 truncate">{option.key}</span>
+                  </button>
+                  {/* Flips a dashboard override on top of the env baseline;
+                      "Use env default" in the gate panel clears it. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleTemplateLive(option.key)}
+                    disabled={!gateDbAvailable || gateBusy !== null}
+                    title={
+                      state.source === 'db'
+                        ? 'Dashboard override — click to flip'
+                        : 'From env — click to override'
+                    }
+                    className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors disabled:opacity-40 ${
+                      state.live
+                        ? 'border-emerald-400/40 text-emerald-400 hover:border-emerald-400'
+                        : 'border-white/20 text-white/40 hover:border-white/40 hover:text-white/70'
+                    }`}
+                  >
+                    {gateBusy === option.key ? '…' : state.live ? 'live' : 'gated'}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 

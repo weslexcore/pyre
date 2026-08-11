@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailPropsByTemplate, EmailTemplateKey } from '@/emails/types';
-import { isAllowedRecipient, isLiveTemplate } from './dev-mode';
+import { getEmailGate } from './dev-mode';
 import { getResend } from './resend';
 import { attachResendId, claimSend, recordSend, releaseSend } from './send-log';
 import { isSuppressed } from './suppression';
@@ -71,10 +71,12 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     return { status: 'skipped', reason: 'resend-not-configured' };
   }
 
-  // Templates not on EMAIL_LIVE_TEMPLATES only deliver to EMAIL_DEV_WHITELIST
+  // Templates that aren't live (env EMAIL_LIVE_TEMPLATES pattern, overridable
+  // per-template from /admin/email-templates) only deliver to whitelisted
   // addresses — emails still in development stay dark for real recipients.
-  const devGated = !isLiveTemplate(template);
-  if (devGated && !isAllowedRecipient(to)) {
+  const emailGate = await getEmailGate();
+  const devGated = !emailGate.isLive(template);
+  if (devGated && !emailGate.isAllowed(to)) {
     console.info(`[Email] Template not live: suppressing ${template} to ${to} (not whitelisted)`);
     return { status: 'suppressed', reason: 'template-not-live' };
   }
@@ -82,7 +84,7 @@ export async function sendTemplate<K extends EmailTemplateKey>({
   // CC addresses go through the same dev-mode gate individually so a test send
   // can never copy a real partner contact.
   const ccList = cc == null ? [] : Array.isArray(cc) ? cc : [cc];
-  const effectiveCc = devGated ? ccList.filter((addr) => isAllowedRecipient(addr)) : ccList;
+  const effectiveCc = devGated ? ccList.filter((addr) => emailGate.isAllowed(addr)) : ccList;
 
   const logEntry = {
     email: to,
