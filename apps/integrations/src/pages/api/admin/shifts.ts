@@ -4,8 +4,16 @@
 // sync_locked so the Phase-3 sync won't overwrite the admin's adjustment.
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftRow } from '@/lib/db';
+import {
+  actorFromGate,
+  changedFields,
+  describeShift,
+  logScheduleChange,
+  summarizeDiff,
+  timeWindow,
+} from '@/lib/schedule/change-log';
 import { parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -19,12 +27,12 @@ function json(body: unknown, status = 200): Response {
 async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
-): Promise<Response | null> {
+): Promise<AdminGate | Response> {
   const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-  return null;
+  return gate;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
@@ -39,8 +47,8 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown> |
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -63,12 +71,22 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return json({ error: error.message }, 500);
 
-  return json({ shift: data as ShiftRow }, 201);
+  const shift = data as ShiftRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(gate),
+    entityType: 'shift',
+    entityId: shift.id,
+    action: 'create',
+    summary: `Created shift ${describeShift(shift)} (${timeWindow(shift)})`,
+    details: { after: shift },
+  });
+
+  return json({ shift }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -85,7 +103,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const { data: existing, error: fetchError } = await db
     .from('shifts')
-    .select('id, source, starts_at, ends_at')
+    .select('*')
     .eq('id', id)
     .maybeSingle();
   if (fetchError) return json({ error: fetchError.message }, 500);
@@ -102,12 +120,25 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const { data, error } = await db.from('shifts').update(fields).eq('id', id).select('*').single();
   if (error) return json({ error: error.message }, 500);
 
-  return json({ shift: data as ShiftRow });
+  const shift = data as ShiftRow;
+  const diff = changedFields(existing as Record<string, unknown>, fields);
+  if (diff) {
+    await logScheduleChange(db, {
+      actor: actorFromGate(gate),
+      entityType: 'shift',
+      entityId: shift.id,
+      action: 'update',
+      summary: `Updated shift ${describeShift(shift)}: ${summarizeDiff(diff)}`,
+      details: diff,
+    });
+  }
+
+  return json({ shift });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -115,12 +146,31 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id is required' }, 400);
 
+  // Snapshot before the hard delete so the change log can describe the row.
+  const { data: existing, error: fetchError } = await db
+    .from('shifts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!existing) return json({ error: 'Shift not found' }, 404);
+
   // Hard delete (assignments cascade) — for mistakes. Cancelling a real shift
   // that people were scheduled for should PATCH status instead, so the record
   // survives.
   const { error, count } = await db.from('shifts').delete({ count: 'exact' }).eq('id', id);
   if (error) return json({ error: error.message }, 500);
   if (!count) return json({ error: 'Shift not found' }, 404);
+
+  const shift = existing as ShiftRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(gate),
+    entityType: 'shift',
+    entityId: shift.id,
+    action: 'delete',
+    summary: `Deleted shift ${describeShift(shift)} (${timeWindow(shift)})`,
+    details: { before: shift },
+  });
 
   return json({ ok: true });
 };

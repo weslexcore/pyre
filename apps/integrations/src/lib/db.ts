@@ -81,6 +81,73 @@ export interface PartnerVerificationRow {
   updated_at: string;
 }
 
+// A referral tier: which Momence tag (and therefore which manually-created
+// Price Rule) a given percent maps to. Managed from /admin/referrals.
+export interface ReferralTierRow {
+  percent: number;
+  tag_name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+// A referrer — an individual member or a partner business — and their
+// personalized code. Read through the cached registry in lib/referral/registry.ts.
+export interface ReferrerRow {
+  id: string;
+  referrer_type: 'member' | 'partner';
+  momence_member_id: number | null;
+  partner_slug: string | null;
+  email: string | null;
+  display_name: string;
+  code: string;
+  discount_percent: number;
+  enabled: boolean;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralRedemptionRow {
+  id: string;
+  referrer_id: string;
+  code: string;
+  discount_percent: number;
+  tag_name: string;
+  friend_first_name: string;
+  friend_last_name: string;
+  friend_email: string;
+  friend_momence_member_id: number | null;
+  status: 'pending' | 'redeemed' | 'converted' | 'expired' | 'revoked';
+  discount_tag_removed_at: string | null;
+  converted_session_id: number | null;
+  converted_session_booking_id: number | null;
+  converted_at: string | null;
+  cancelled_at: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  /** null = system, an email = admin action, 'cron' = maintenance sweep. */
+  decided_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralRewardRow {
+  id: string;
+  referrer_id: string;
+  redemption_id: string;
+  reward_tag_name: string;
+  status: 'granted' | 'consumed' | 'expired' | 'revoked';
+  granted_at: string;
+  consumed_at: string | null;
+  consumed_session_booking_id: number | null;
+  reward_tag_removed_at: string | null;
+  decided_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // One chemical actually added to a tub with a water_tests entry. `grams` is
 // what went in the water; `recommended_grams` is what the dosing chart said,
 // so deviations stay auditable in the log.

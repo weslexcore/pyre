@@ -1,9 +1,10 @@
 // Agent-facing proposal writer: the pyre-agents scheduler submits one draft
 // batch per week — new shifts plus assignments (which may attach to existing
 // live shifts) — and this route validates everything with the SAME parsers
-// the admin edit routes use, enforces the hard time-off rule server-side,
-// supersedes the week's previous draft, and writes the batch as is_draft
-// rows for review on /admin/schedule.
+// the admin edit routes use, enforces the hard time-off rule and the
+// uncovered-shifts-only rule (no assignments to covered shifts, no
+// overfilling past staff_needed) server-side, supersedes the week's previous
+// draft, and writes the batch as is_draft rows for review on /admin/schedule.
 //
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). dryRun
 // validates and returns the conflict report without writing — used by evals.
@@ -18,6 +19,7 @@ import {
 import type { APIRoute } from 'astro';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
+import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -111,7 +113,7 @@ export const POST: APIRoute = async ({ request }) => {
     db.from('staff').select('*'),
     db
       .from('shifts')
-      .select('id, shift_date, starts_at, ends_at, status, is_draft')
+      .select('id, shift_date, label, starts_at, ends_at, status, is_draft, staff_needed')
       .gte('shift_date', weekStart)
       .lte('shift_date', weekEnd),
     db.from('time_off').select('*'),
@@ -226,6 +228,52 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
+  // --- Drafts fill only uncovered shifts ---
+  // An existing live shift may only receive assignments while it is below its
+  // staff_needed count, and the batch must not push it past that count. (New
+  // draft shifts are uncovered by definition.)
+  const liveCounts = new Map<string, number>();
+  const liveShiftIds = [...liveShiftById.keys()];
+  if (liveShiftIds.length > 0) {
+    const { data: liveAssignments, error: liveError } = await db
+      .from('shift_assignments')
+      .select('shift_id')
+      .in('shift_id', liveShiftIds)
+      .eq('is_draft', false);
+    if (liveError) return json({ error: liveError.message }, 500);
+    for (const a of (liveAssignments ?? []) as Array<{ shift_id: string }>) {
+      liveCounts.set(a.shift_id, (liveCounts.get(a.shift_id) ?? 0) + 1);
+    }
+  }
+  const proposedPerShift = new Map<string, number>();
+  for (const a of draftAssignments) {
+    if (a.shiftId) proposedPerShift.set(a.shiftId, (proposedPerShift.get(a.shiftId) ?? 0) + 1);
+  }
+  const overfilled: string[] = [];
+  for (const [shiftId, proposed] of proposedPerShift) {
+    const shift = liveShiftById.get(shiftId) as {
+      shift_date: string;
+      label: string;
+      staff_needed: number;
+    };
+    const have = liveCounts.get(shiftId) ?? 0;
+    if (have >= shift.staff_needed || have + proposed > shift.staff_needed) {
+      overfilled.push(
+        `'${shift.label}' on ${shift.shift_date} has ${have}/${shift.staff_needed} assigned; proposal adds ${proposed}`
+      );
+    }
+  }
+  if (overfilled.length > 0) {
+    return json(
+      {
+        error:
+          'Drafts may only fill uncovered shifts up to their staffNeeded count — drop these assignments and resubmit',
+        overfilled,
+      },
+      422
+    );
+  }
+
   if (dryRun) {
     return json({
       ok: true,
@@ -308,6 +356,15 @@ export const POST: APIRoute = async ({ request }) => {
     );
     if (error) return json({ error: error.message }, 500);
   }
+
+  await logScheduleChange(db, {
+    actor: AGENT_ACTOR,
+    entityType: 'proposal',
+    entityId: proposalId,
+    action: 'propose',
+    summary: `Proposed draft schedule for week of ${weekStart} (${draftShifts.length} shifts, ${draftAssignments.length} assignments)`,
+    details: { source, agentSessionId, superseded: (openProposals ?? []).map((p) => p.id) },
+  });
 
   return json(
     {

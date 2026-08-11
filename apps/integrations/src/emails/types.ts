@@ -106,6 +106,22 @@ export interface PartnerReconciliationProps {
   members: { name: string; email: string }[];
 }
 
+// Referral program lifecycle (both transactional — no unsubscribeUrl).
+
+export interface ReferralRedeemedProps {
+  firstName: string;
+  /** The referrer as the friend knows them: "Wes" or "BFT Carytown". */
+  referrerName: string;
+  discountPercent: number;
+  bookUrl: string;
+}
+
+export interface ReferralRewardEarnedProps {
+  firstName: string;
+  friendFirstName: string;
+  bookUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -119,6 +135,8 @@ export interface EmailPropsByTemplate {
   'partner-verified': PartnerVerifiedProps;
   'partner-denied': PartnerDeniedProps;
   'partner-reconciliation': PartnerReconciliationProps;
+  'referral-redeemed': ReferralRedeemedProps;
+  'referral-reward-earned': ReferralRewardEarnedProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

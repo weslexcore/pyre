@@ -10,6 +10,12 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import {
+  actorFromGate,
+  describeShift,
+  logScheduleChange,
+  staffNameOf,
+} from '@/lib/schedule/change-log';
 
 export const prerender = false;
 
@@ -51,7 +57,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
     const { data: proposal, error: fetchError } = await db
       .from('schedule_proposals')
-      .select('id, status')
+      .select('id, status, week_start')
       .eq('id', proposalId)
       .maybeSingle();
     if (fetchError) return json({ error: fetchError.message }, 500);
@@ -92,6 +98,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       const { error } = await op;
       if (error) return json({ error: error.message }, 500);
     }
+
+    await logScheduleChange(db, {
+      actor: actorFromGate(gate),
+      entityType: 'proposal',
+      entityId: proposalId,
+      action: action === 'approve' ? 'approve' : 'discard',
+      summary: `${action === 'approve' ? 'Approved' : 'Discarded'} draft schedule for week of ${proposal.week_start}`,
+    });
+
     return json({ ok: true });
   }
 
@@ -106,7 +121,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     // Plain string keeps supabase-js from literal-parsing the ternary select
     // (the union of column lists defeats its parser); shape the row ourselves.
     const columns: string =
-      kind === 'shift' ? 'id, proposal_id, is_draft' : 'id, proposal_id, is_draft, shift_id';
+      kind === 'shift'
+        ? 'id, proposal_id, is_draft, label, shift_date'
+        : 'id, proposal_id, is_draft, shift_id, staff_id';
     const { data, error: fetchError } = await db
       .from(table)
       .select(columns)
@@ -118,6 +135,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       proposal_id: string | null;
       is_draft: boolean;
       shift_id?: string;
+      staff_id?: string;
+      label?: string;
+      shift_date?: string;
     } | null;
     if (!row || !row.is_draft) return json({ error: 'Draft item not found' }, 404);
 
@@ -137,6 +157,20 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       const { error } = await db.from(table).delete().eq('id', id);
       if (error) return json({ error: error.message }, 500);
     }
+
+    const accepted = action === 'accept-item';
+    const itemDescription =
+      kind === 'shift'
+        ? `draft shift ${describeShift(row as { label: string; shift_date: string })}`
+        : `draft assignment for ${await staffNameOf(db, row.staff_id as string)}`;
+    await logScheduleChange(db, {
+      actor: actorFromGate(gate),
+      entityType: kind === 'shift' ? 'shift' : 'assignment',
+      entityId: row.id,
+      action: accepted ? 'accept_item' : 'reject_item',
+      summary: `${accepted ? 'Accepted' : 'Rejected'} ${itemDescription}`,
+      details: { proposalId: row.proposal_id },
+    });
 
     // Auto-resolve the proposal when nothing is left to review.
     const proposalId = row.proposal_id as string | null;

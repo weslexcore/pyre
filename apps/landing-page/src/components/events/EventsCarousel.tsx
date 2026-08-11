@@ -20,7 +20,15 @@ interface EventsCarouselProps {
   fallback?: EventItem[];
   variant?: CarouselVariant;
   emptyState?: EmptyStateConfig;
+  /** Only show events carrying this Momence tag (case-insensitive). */
+  filterTag?: string;
+  /** Max number of events to display, applied after tag filtering. */
+  limit?: number;
 }
+
+// Stable default so useEvents' fallback-derived hooks don't see a new array
+// identity on every render (which would refetch in an infinite loop).
+const NO_FALLBACK: EventItem[] = [];
 
 const variantStyles = {
   default: {
@@ -239,9 +247,11 @@ function EmptyEventsState({
 }
 
 export default function EventsCarousel({
-  fallback = [],
+  fallback = NO_FALLBACK,
   variant = 'default',
   emptyState,
+  filterTag,
+  limit,
 }: EventsCarouselProps) {
   const { events, loading } = useEvents(fallback);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -249,13 +259,20 @@ export default function EventsCarousel({
   const [canScrollRight, setCanScrollRight] = useState(false);
   const styles = variantStyles[variant];
 
-  const displayEvents = events.length > 0 ? events : fallback;
+  const allEvents = events.length > 0 ? events : fallback;
+  const tagMatched = filterTag
+    ? allEvents.filter((event) =>
+        event.tags?.some((tag) => tag.toLowerCase() === filterTag.toLowerCase())
+      )
+    : allEvents;
+  const displayEvents = limit !== undefined ? tagMatched.slice(0, limit) : tagMatched;
   const isEmpty = !loading && displayEvents.length === 0;
 
-  // Dispatch custom event when empty state changes so Astro can hide the default CTA
+  // Dispatch custom event when the empty/loading state changes so Astro
+  // wrappers can show or hide surrounding chrome (headings, CTAs).
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('events-empty-state', { detail: { isEmpty } }));
-  }, [isEmpty]);
+    window.dispatchEvent(new CustomEvent('events-empty-state', { detail: { isEmpty, loading } }));
+  }, [isEmpty, loading]);
 
   const updateArrows = useCallback(() => {
     const container = scrollRef.current;
@@ -290,9 +307,10 @@ export default function EventsCarousel({
     updateArrows();
   }, [events, updateArrows]);
 
-  // Show empty state when no events and emptyState config is provided
-  if (isEmpty && emptyState) {
-    return <EmptyEventsState config={emptyState} variant={variant} />;
+  // Show empty state when no events and emptyState config is provided;
+  // without one, render nothing so surrounding sections can collapse.
+  if (isEmpty) {
+    return emptyState ? <EmptyEventsState config={emptyState} variant={variant} /> : null;
   }
 
   return (
@@ -347,7 +365,7 @@ export default function EventsCarousel({
         >
           {loading
             ? // Show skeletons while loading
-              Array.from({ length: 4 }).map((_, i) => (
+              Array.from({ length: Math.min(limit ?? 4, 4) }).map((_, i) => (
                 <EventCardSkeleton key={`skeleton-${i}`} variant={variant} />
               ))
             : // Show events

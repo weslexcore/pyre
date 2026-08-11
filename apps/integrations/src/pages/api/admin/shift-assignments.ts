@@ -6,8 +6,17 @@
 
 import type { AssignmentRole } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
+import {
+  actorFromGate,
+  changedFields,
+  describeShift,
+  logScheduleChange,
+  staffNameOf,
+  summarizeDiff,
+  timeWindow,
+} from '@/lib/schedule/change-log';
 import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -21,12 +30,26 @@ function json(body: unknown, status = 200): Response {
 async function gateMutation(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
-): Promise<Response | null> {
+): Promise<AdminGate | Response> {
   const gate = await requireScheduleManage(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-  return null;
+  return gate;
+}
+
+/** "'Morning' on 2026-08-14", looked up for log summaries; tolerant of a
+ * just-deleted or missing shift so logging can't fail the mutation. */
+async function shiftDescription(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  shiftId: string
+): Promise<string> {
+  const { data } = await db
+    .from('shifts')
+    .select('label, shift_date')
+    .eq('id', shiftId)
+    .maybeSingle();
+  return data ? describeShift(data as { label: string; shift_date: string }) : 'a shift';
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
@@ -41,8 +64,8 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown> |
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -61,7 +84,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data: shift, error: shiftError } = await db
     .from('shifts')
-    .select('id, starts_at, ends_at, status')
+    .select('id, shift_date, label, starts_at, ends_at, status')
     .eq('id', shiftId)
     .maybeSingle();
   if (shiftError) return json({ error: shiftError.message }, 500);
@@ -92,12 +115,22 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: error.message }, 500);
   }
 
-  return json({ assignment: data as ShiftAssignmentRow }, 201);
+  const assignment = data as ShiftAssignmentRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(gate),
+    entityType: 'assignment',
+    entityId: assignment.id,
+    action: 'create',
+    summary: `Assigned ${await staffNameOf(db, staffId)} to ${describeShift(shift)} (${timeWindow(assignment)})`,
+    details: { after: assignment },
+  });
+
+  return json({ assignment }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -114,7 +147,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const { data: existing, error: fetchError } = await db
     .from('shift_assignments')
-    .select('id, starts_at, ends_at')
+    .select('*')
     .eq('id', id)
     .maybeSingle();
   if (fetchError) return json({ error: fetchError.message }, 500);
@@ -134,12 +167,25 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return json({ error: error.message }, 500);
 
-  return json({ assignment: data as ShiftAssignmentRow });
+  const assignment = data as ShiftAssignmentRow;
+  const diff = changedFields(existing as Record<string, unknown>, fields);
+  if (diff) {
+    await logScheduleChange(db, {
+      actor: actorFromGate(gate),
+      entityType: 'assignment',
+      entityId: assignment.id,
+      action: 'update',
+      summary: `Updated ${await staffNameOf(db, assignment.staff_id)}'s assignment on ${await shiftDescription(db, assignment.shift_id)}: ${summarizeDiff(diff)}`,
+      details: diff,
+    });
+  }
+
+  return json({ assignment });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const denied = await gateMutation(cookies, request);
-  if (denied) return denied;
+  const gate = await gateMutation(cookies, request);
+  if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -147,12 +193,31 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id is required' }, 400);
 
+  // Snapshot before the delete so the change log can describe the row.
+  const { data: existing, error: fetchError } = await db
+    .from('shift_assignments')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!existing) return json({ error: 'Assignment not found' }, 404);
+
   const { error, count } = await db
     .from('shift_assignments')
     .delete({ count: 'exact' })
     .eq('id', id);
   if (error) return json({ error: error.message }, 500);
   if (!count) return json({ error: 'Assignment not found' }, 404);
+
+  const assignment = existing as ShiftAssignmentRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(gate),
+    entityType: 'assignment',
+    entityId: assignment.id,
+    action: 'delete',
+    summary: `Removed ${await staffNameOf(db, assignment.staff_id)} from ${await shiftDescription(db, assignment.shift_id)}`,
+    details: { before: assignment },
+  });
 
   return json({ ok: true });
 };

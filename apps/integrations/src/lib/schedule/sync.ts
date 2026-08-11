@@ -20,6 +20,7 @@ import {
 } from '@pyre/schedule-core';
 import { getDb } from '@/lib/db';
 import { fetchAppointmentReservations, fetchHostSessions } from '@/lib/momence/host-api';
+import { type ChangeActor, logScheduleChange, SYNC_ACTOR } from '@/lib/schedule/change-log';
 
 const DAY_MIN = 24 * 60;
 const DEFAULT_HORIZON_DAYS = 21;
@@ -64,7 +65,9 @@ function toEvent(
 }
 
 export async function syncShifts(
-  options: { dryRun?: boolean; horizonDays?: number } = {}
+  // `actor` attributes the run in the schedule change log; the default is the
+  // hourly cron's system actor, admin triggers pass the clicking user.
+  options: { dryRun?: boolean; horizonDays?: number; actor?: ChangeActor } = {}
 ): Promise<SyncShiftsSummary> {
   const dryRun = options.dryRun ?? false;
   const horizonDays = options.horizonDays ?? DEFAULT_HORIZON_DAYS;
@@ -203,6 +206,27 @@ export async function syncShifts(
   if (plan.clearFlag.length > 0) {
     const { error } = await db.from('shifts').update({ sync_flag: null }).in('id', plan.clearFlag);
     if (error) throw new Error(error.message);
+  }
+
+  // One change-log entry per run that actually changed something — the
+  // no-op hourly runs stay out of the log.
+  const parts = (
+    [
+      ['created', summary.created],
+      ['updated', summary.updated],
+      ['cancelled', summary.cancelled],
+      ['flagged', summary.flagged],
+      ['flags cleared', summary.flagsCleared],
+    ] as const
+  ).filter(([, n]) => n > 0);
+  if (parts.length > 0) {
+    await logScheduleChange(db, {
+      actor: options.actor ?? SYNC_ACTOR,
+      entityType: 'sync',
+      action: 'sync',
+      summary: `Momence sync: ${parts.map(([label, n]) => `${n} ${label}`).join(', ')}`,
+      details: { ...summary },
+    });
   }
 
   return summary;

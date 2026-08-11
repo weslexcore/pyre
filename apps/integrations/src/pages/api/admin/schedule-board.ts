@@ -34,6 +34,8 @@ export interface ScheduleBoardPayload {
   proposals?: ScheduleProposalRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
+  /** Whether the caller is an admin — gates the hours report's cost column. */
+  isAdmin: boolean;
   /** The staff row matching the caller's login email, if any. */
   selfStaffId: string | null;
 }
@@ -118,6 +120,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     shifts,
     timeOff: (timeOffRes.data ?? []) as TimeOffRow[],
     canManage,
+    isAdmin: gate.access.isAdmin,
     selfStaffId,
   };
 

@@ -372,3 +372,44 @@ export async function isMemberFirstBooking(
     return null;
   }
 }
+
+// Same endpoint as isMemberFirstBooking, but asked from the other side: does
+// this member have ANY session booking at all? The referral redemption path
+// uses it to enforce first-time-customers-only. Returns null when the answer
+// can't be determined; the caller decides which way to fail.
+export async function memberHasBookings(memberId: string): Promise<boolean | null> {
+  try {
+    const accessToken = await getHostAccessToken();
+
+    // includeCancelled=true: someone who booked and cancelled has still been a
+    // customer — the referral discount is for people who never booked.
+    const params = new URLSearchParams({
+      page: '0',
+      pageSize: '1',
+      sortOrder: 'DESC',
+      includeCancelled: 'true',
+    });
+    const url = `${MOMENCE_API_V2}/host/members/${memberId}/sessions?${params}`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    const responseText = await response.text();
+    if (!response.ok) {
+      log.warn(
+        `Booking-history check returned ${response.status} for member ${memberId}`,
+        responseText.slice(0, 500)
+      );
+      return null;
+    }
+
+    const data = JSON.parse(responseText);
+    const total: unknown = data.pagination?.total ?? data.pagination?.totalCount;
+    if (typeof total === 'number') return total > 0;
+    if (Array.isArray(data.payload)) return data.payload.length > 0;
+    return null;
+  } catch (error) {
+    log.warn(`Booking-history check failed for member ${memberId}`, error);
+    return null;
+  }
+}

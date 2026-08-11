@@ -1,12 +1,15 @@
 // "Draft schedule" trigger: sync Momence coverage windows first (so the agent
-// sees current reality), then start a pyre-agents Eve session that drafts the
-// requested week. Returns immediately with the session id — the board polls
-// for the resulting proposal rather than holding this request open through
-// the agent run.
+// sees current reality), then start one pyre-agents Eve session per requested
+// week. The week view sends a single week; the month view sends every week
+// that still has uncovered shifts. Drafts only fill uncovered shifts — the
+// agent is instructed to and /api/agent/proposals enforces it. Returns
+// immediately with the session ids — the board polls for the resulting
+// proposals rather than holding this request open through the agent runs.
 
 import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { actorFromGate } from '@/lib/schedule/change-log';
 import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
@@ -18,6 +21,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A month view spans at most 6 Mondays; anything more is a client bug. */
+const MAX_WEEKS = 6;
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requireScheduleManage(cookies);
@@ -47,42 +53,66 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const weekStart = body.weekStart;
-  if (
-    typeof weekStart !== 'string' ||
-    !DATE_RE.test(weekStart) ||
-    weekStartOf(weekStart) !== weekStart
-  ) {
-    return json({ error: 'weekStart must be a Monday as YYYY-MM-DD' }, 400);
+  // One week (weekStart — the original shape) or several (weekStarts — the
+  // month view drafting every week that still has uncovered shifts).
+  const rawWeeks: unknown[] = Array.isArray(body.weekStarts)
+    ? body.weekStarts
+    : body.weekStart !== undefined
+      ? [body.weekStart]
+      : [];
+  const uniqueWeeks = [...new Set(rawWeeks)];
+  if (uniqueWeeks.length === 0 || uniqueWeeks.length > MAX_WEEKS) {
+    return json({ error: `weekStarts must list 1–${MAX_WEEKS} weeks` }, 400);
   }
+  for (const week of uniqueWeeks) {
+    if (typeof week !== 'string' || !DATE_RE.test(week) || weekStartOf(week) !== week) {
+      return json({ error: 'Each week start must be a Monday as YYYY-MM-DD' }, 400);
+    }
+  }
+  const weekStarts = (uniqueWeeks as string[]).sort();
 
   // Fresh windows before drafting — a stale board is the agent's worst input.
   let sync: SyncShiftsSummary | { error: string };
   try {
-    sync = await syncShifts();
+    sync = await syncShifts({ actor: actorFromGate(gate) });
   } catch (error) {
     // Draft anyway on sync failure (Momence hiccups shouldn't block a manual
     // draft of already-synced shifts), but tell the admin.
     sync = { error: error instanceof Error ? error.message : 'Sync failed' };
   }
 
-  const response = await fetch(`${agentsBaseUrl.replace(/\/$/, '')}/eve/v1/session`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${channelSecret}`,
-      'Content-Type': 'application/json',
-      ...(agentsBypass ? { 'x-vercel-protection-bypass': agentsBypass } : {}),
-    },
-    body: JSON.stringify({
-      message: `Draft the staffing schedule for the week starting ${weekStart}. Use get_week_context with weekStart "${weekStart}", then save exactly one proposal. Any previous draft for that week is superseded automatically.`,
-    }),
-  });
+  const sessions: Array<{ weekStart: string; sessionId: string | null }> = [];
+  for (const week of weekStarts) {
+    const response = await fetch(`${agentsBaseUrl.replace(/\/$/, '')}/eve/v1/session`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${channelSecret}`,
+        'Content-Type': 'application/json',
+        ...(agentsBypass ? { 'x-vercel-protection-bypass': agentsBypass } : {}),
+      },
+      body: JSON.stringify({
+        message: `Draft the staffing schedule for the week starting ${week}. Use get_week_context with weekStart "${week}", then save exactly one proposal. Fill only shifts that are still below their staffNeeded count — leave fully staffed shifts untouched, and never add more people than a shift's remaining need. Any previous draft for that week is superseded automatically.`,
+      }),
+    });
 
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    return json({ error: `Agent session failed (HTTP ${response.status}): ${detail}`, sync }, 502);
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      return json(
+        {
+          error: `Agent session for week ${week} failed (HTTP ${response.status}): ${detail}`,
+          sessions,
+          sync,
+        },
+        502
+      );
+    }
+    sessions.push({ weekStart: week, sessionId: response.headers.get('x-eve-session-id') });
   }
 
-  const sessionId = response.headers.get('x-eve-session-id');
-  return json({ ok: true, sessionId, weekStart, sync }, 202);
+  // weekStart/sessionId mirror the first entry for the original single-week
+  // response shape.
+  return json(
+    { ok: true, sessions, weekStart: weekStarts[0], sessionId: sessions[0]?.sessionId, sync },
+    202
+  );
 };
