@@ -168,7 +168,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'A test entry needs at least one reading' }, 400);
   }
 
-  const testMethod = body.testMethod ?? null;
+  // Drain/refill entries record the water change only — tests are logged
+  // separately, so measurements never land on a refill row.
+  if (entryType === 'refill') {
+    for (const column of Object.keys(readings) as ReadingColumn[]) readings[column] = null;
+  }
+
+  let testMethod = body.testMethod ?? null;
+  if (entryType === 'refill') testMethod = null;
   if (testMethod != null) {
     if (typeof testMethod !== 'string' || !TEST_METHODS.includes(testMethod as TestMethod)) {
       return json({ error: `testMethod must be one of: ${TEST_METHODS.join(', ')}` }, 400);
