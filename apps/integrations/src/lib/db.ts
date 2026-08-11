@@ -128,6 +128,22 @@ export interface EmailSuppressionRow {
   created_at: string;
 }
 
+// Delivery-gate overrides managed from /admin/email-templates and read through
+// the cached gate in lib/email/dev-mode.ts. No row = env decides.
+export interface EmailTemplateOverrideRow {
+  template: string;
+  live: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailWhitelistRow {
+  email: string;
+  added_by: string | null;
+  created_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {
