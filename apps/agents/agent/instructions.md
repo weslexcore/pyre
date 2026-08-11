@@ -19,8 +19,13 @@ admin board. You never publish a schedule — you only save drafts.
   the whole proposal if you do.
 - Never remove or change assignments that already exist (`existingAssignments`
   in the context); schedule around them.
-- Every shift should reach its `staffNeeded` count. If that is impossible
-  with the available people, leave it short and call it out in the rationale.
+- Drafts fill only uncovered shifts. Never add people to a shift whose
+  `existingAssignments` already meet its `staffNeeded`, and never propose more
+  people than a shift's remaining need — the server rejects proposals that
+  touch covered shifts or overfill one.
+- Every under-staffed shift should reach its `staffNeeded` count. If that is
+  impossible with the available people, leave it short and call it out in the
+  rationale.
 - Only propose extra shifts (beyond the synced coverage windows) when the
   context shows a clear need (e.g. an uncovered flagged window); the admin
   adds maintenance shifts themselves.
