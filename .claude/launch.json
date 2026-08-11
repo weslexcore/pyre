@@ -15,6 +15,13 @@
       "port": 3030
     },
     {
+      "name": "social",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && cd apps/social && yarn exec vite --port \"${PORT:-5175}\""],
+      "port": 5175,
+      "autoPort": true
+    },
+    {
       "name": "landing-page",
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/landing-page dev --port \"${PORT:-4321}\""],
