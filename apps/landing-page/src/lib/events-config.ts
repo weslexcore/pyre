@@ -15,7 +15,15 @@ export const SPECIAL_EVENT_TAG = 'Special Event';
 // A chip is shown only if at least one upcoming event in the window carries the
 // tag. Matching against events is case-insensitive; these canonical strings are
 // used for the chip label and the ?type= URL value.
-export const CATEGORY_TAGS = ['Guided', 'Social', SPECIAL_EVENT_TAG, 'Yoga', 'Breathwork', 'Open Hours'];
+export const CATEGORY_TAGS = [
+  'Guided',
+  'Social',
+  SPECIAL_EVENT_TAG,
+  'Yoga',
+  'Breathwork',
+  'Qi Gong',
+  'Open Hours',
+];
 
 // Whether an event carries the Special Event tag (case-insensitive). Pure helper
 // shared by the client grid and the /api/events route so special events bypass
