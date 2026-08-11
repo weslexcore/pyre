@@ -9,6 +9,8 @@ import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
+import { ReferralRedeemed } from './templates/ReferralRedeemed';
+import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
@@ -70,6 +72,14 @@ export const EMAIL_TEMPLATES: Registry = {
   'partner-reconciliation': {
     subject: (p) => `Quarterly member check - Pyre x ${p.partnerName}`,
     Component: PartnerReconciliation,
+  },
+  'referral-redeemed': {
+    subject: (p) => `${p.referrerName} gave you ${p.discountPercent}% off at Pyre`,
+    Component: ReferralRedeemed,
+  },
+  'referral-reward-earned': {
+    subject: (p) => `${p.friendFirstName} booked - your Pyre reward is live`,
+    Component: ReferralRewardEarned,
   },
 };
 

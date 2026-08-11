@@ -68,6 +68,14 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/referrals',
+    title: 'Referrals',
+    navLabel: 'Referrals',
+    description:
+      'Referrer codes for members and partners, the redemption queue, reward ledger, and discount tiers.',
+    section: 'marketing',
+  },
+  {
     href: '/admin/email',
     title: 'Email Performance',
     navLabel: 'Email',
@@ -122,10 +130,20 @@ export function hasPartnersManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(PARTNERS_MANAGE);
 }
 
+// Same split for referrals: a plain '/admin/referrals' grant is read-only.
+// This key (or admin) unlocks creating/editing referrers and tiers and
+// revoking redemptions/rewards — all of which change Momence tags.
+export const REFERRALS_MANAGE = 'referrals:manage';
+
+export function hasReferralsManage(access: PageAccess): boolean {
+  return access.isAdmin || access.pages.includes(REFERRALS_MANAGE);
+}
+
 /** Manage capabilities that imply view access to the page they govern. */
 const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/schedule': SCHEDULE_MANAGE,
   '/admin/partners': PARTNERS_MANAGE,
+  '/admin/referrals': REFERRALS_MANAGE,
 };
 
 /** Whether this user may view the tool page at `href` (manage implies view). */

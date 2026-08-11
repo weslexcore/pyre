@@ -1,0 +1,15 @@
+---
+// Referral program: referrer codes, the redemption queue, the reward ledger,
+// and discount tiers. Viewable with the page grant, editable with admin or
+// referrals:manage — the /api/admin/referrals route re-checks on every
+// request, so this page gate is UX and the API gate is the security boundary.
+import { ReferralsManager } from '@/components/admin/ReferralsManager';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Referrals"
+  subtitle="Personal referral codes for members and partner businesses, who redeemed them, and the double-sided rewards. Momence still owns the discounts themselves — the customer tags and their price rules."
+>
+  <ReferralsManager client:load />
+</AdminLayout>
