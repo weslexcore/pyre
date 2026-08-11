@@ -3,7 +3,6 @@
 
 import { getRedis } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { isSpecialEvent } from '@/lib/events-config';
 import {
   excludeVolunteerEvents,
   filterValidEvents,
@@ -25,51 +24,14 @@ interface EventsApiResponse {
   totalUpcoming: number;
 }
 
-const DEFAULT_WINDOW_DAYS = 60;
-const MIN_WINDOW_DAYS = 1;
-const MAX_WINDOW_DAYS = 730;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 50;
-
-function parseWindowDays(raw: string | null): number {
-  if (!raw) return DEFAULT_WINDOW_DAYS;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) return DEFAULT_WINDOW_DAYS;
-  return Math.min(MAX_WINDOW_DAYS, Math.max(MIN_WINDOW_DAYS, parsed));
-}
 
 function parseLimit(raw: string | null): number | null {
   if (!raw) return null;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return null;
   return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, parsed));
-}
-
-function filterEventsByWindow(
-  events: EventItem[],
-  windowDays: number
-): { eventsInWindow: EventItem[]; outsideWindowCount: number } {
-  const cutoff = Date.now() + windowDays * 24 * 60 * 60 * 1000;
-  const eventsInWindow: EventItem[] = [];
-  let outsideWindowCount = 0;
-
-  for (const event of events) {
-    // Special events bypass the window entirely — always surface them, and don't
-    // count them as "outside the window" (so they never falsely trigger hasMore).
-    if (!event.isoDate || isSpecialEvent(event)) {
-      eventsInWindow.push(event);
-      continue;
-    }
-
-    const eventTime = new Date(event.isoDate).getTime();
-    if (Number.isFinite(eventTime) && eventTime > cutoff) {
-      outsideWindowCount += 1;
-    } else {
-      eventsInWindow.push(event);
-    }
-  }
-
-  return { eventsInWindow, outsideWindowCount };
 }
 
 // Last-known-good snapshot of the raw Momence events, so intermittent Momence
@@ -144,9 +106,6 @@ async function fetchMomenceEventsServer(): Promise<MomenceEvent[]> {
 
 export const GET: APIRoute = async ({ url }) => {
   try {
-    const wantsAll = url.searchParams.get('all') === '1';
-    const daysParam = url.searchParams.get('days');
-    const windowDays = parseWindowDays(daysParam);
     const limit = parseLimit(url.searchParams.get('limit'));
 
     let rawEvents: MomenceEvent[];
@@ -192,22 +151,11 @@ export const GET: APIRoute = async ({ url }) => {
     const sortedEvents = sortEventsByDate(nonVolunteerEvents);
     const allEvents = sortedEvents.map(transformToEventItem);
 
-    let events: EventItem[];
-    let hasMore: boolean;
-
-    if (wantsAll) {
-      events = allEvents;
-      hasMore = false;
-    } else if (limit !== null) {
-      const candidateEvents =
-        daysParam === null ? allEvents : filterEventsByWindow(allEvents, windowDays).eventsInWindow;
-      events = candidateEvents.slice(0, limit);
-      hasMore = candidateEvents.length > limit;
-    } else {
-      const { eventsInWindow, outsideWindowCount } = filterEventsByWindow(allEvents, windowDays);
-      events = eventsInWindow;
-      hasMore = outsideWindowCount > 0;
-    }
+    // No date-window filtering here — the calendar is curated on the Momence
+    // side, so every upcoming event Momence returns is surfaced. `limit` only
+    // truncates for compact surfaces like the homepage carousel.
+    const events = limit !== null ? allEvents.slice(0, limit) : allEvents;
+    const hasMore = limit !== null && allEvents.length > limit;
 
     const response: EventsApiResponse = {
       events,

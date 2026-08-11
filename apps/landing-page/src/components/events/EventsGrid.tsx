@@ -1,19 +1,14 @@
 // Date-grouped schedule view for the events page.
-// Shows only sessions within the next 2 weeks and filters them by session type
-// (derived dynamically from the Momence tags present on those upcoming events).
+// Shows every upcoming session Momence publishes (date curation happens on the
+// Momence side) and filters them by session type (derived dynamically from the
+// Momence tags present on those upcoming events).
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import { buildPooledBookingModel, eventHasTag } from '@/lib/booking-model';
 import { eventsLoadError } from '@/lib/events';
-import {
-  ALL_TYPES_FILTER,
-  ALL_TYPES_LABEL,
-  CATEGORY_TAGS,
-  isSpecialEvent,
-  WINDOW_DAYS,
-} from '@/lib/events-config';
+import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS } from '@/lib/events-config';
 import type { EventItem, PooledBookingOption } from '@/lib/types';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
@@ -131,7 +126,7 @@ function EmptyState({ onShowAll }: { onShowAll: () => void }) {
           />
         </svg>
         <h2 className="font-sans text-xl font-semibold text-[var(--pyre-creme)]">
-          No sessions of this type in the next two weeks
+          No upcoming sessions of this type
         </h2>
         <p className="font-sans text-base text-[var(--pyre-creme)]/70">
           Try a different session type to see more upcoming sessions.
@@ -485,29 +480,10 @@ function groupEventsByDate(events: EventItem[]): Map<string, EventItem[]> {
   return groups;
 }
 
-// -- Window + type filter logic ----------------------------------------------
+// -- Type filter logic --------------------------------------------------------
 
-// Keep only events that fall within the next WINDOW_DAYS (the hard 2-week limit).
-// Special events are exempt: any published special event shows regardless of how
-// far out it is.
-function filterEventsByWindow(events: EventItem[]): EventItem[] {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-
-  const endDate = new Date(now);
-  endDate.setDate(now.getDate() + WINDOW_DAYS);
-  endDate.setHours(23, 59, 59, 999);
-
-  return events.filter((event) => {
-    if (!event.isoDate) return true;
-    if (isSpecialEvent(event)) return true;
-    const eventDate = new Date(event.isoDate);
-    return eventDate >= now && eventDate <= endDate;
-  });
-}
-
-// The allowlisted category tags (in display order) that have at least one event
-// in the window. Tags on events are matched case-insensitively.
+// The allowlisted category tags (in display order) that have at least one
+// upcoming event. Tags on events are matched case-insensitively.
 function deriveTypeFilters(events: EventItem[]): string[] {
   const present = new Set<string>();
   for (const event of events) {
@@ -588,7 +564,6 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const handleShowAll = useCallback(() => handleSelectType(ALL_TYPES_FILTER), [handleSelectType]);
 
   // Open modal for event specified in ?event= query param (deep-link from carousel).
-  // Matched against the full fetched list so links to events >2 weeks out still open.
   useEffect(() => {
     if (loading) return;
     const allEvents = events.length > 0 ? events : fallback;
@@ -610,19 +585,16 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
 
   const displayEvents = events.length > 0 ? events : fallback;
 
-  // Hard 2-week window — the base set everything else derives from.
-  const windowedEvents = useMemo(() => filterEventsByWindow(displayEvents), [displayEvents]);
-
   // Pooled booking model: shared occupancy pool + per-slot duration options +
   // the set of full-length sessions hidden from the schedule. Built from the
-  // full window (not the type-filtered subset) so the cap is correct regardless
+  // full list (not the type-filtered subset) so the cap is correct regardless
   // of which type chip is active.
-  const bookingModel = useMemo(() => buildPooledBookingModel(windowedEvents), [windowedEvents]);
+  const bookingModel = useMemo(() => buildPooledBookingModel(displayEvents), [displayEvents]);
 
   // Dynamic type chips, built from the tags present on the upcoming events.
-  const typeFilters = useMemo(() => deriveTypeFilters(windowedEvents), [windowedEvents]);
+  const typeFilters = useMemo(() => deriveTypeFilters(displayEvents), [displayEvents]);
 
-  // If the active type isn't available in the current window, fall back to "all".
+  // If the active type has no upcoming events, fall back to "all".
   const effectiveType =
     selectedType === ALL_TYPES_FILTER ||
     typeFilters.some((t) => t.toLowerCase() === selectedType.toLowerCase())
@@ -632,15 +604,15 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const filteredEvents = useMemo(() => {
     const base =
       effectiveType === ALL_TYPES_FILTER
-        ? windowedEvents
-        : windowedEvents.filter((event) => eventHasTag(event, effectiveType));
+        ? displayEvents
+        : displayEvents.filter((event) => eventHasTag(event, effectiveType));
     // Drop the full-length sessions that are hidden behind an entry slot's option.
     return base.filter((event) => !bookingModel.hiddenIds.has(event.id));
-  }, [windowedEvents, effectiveType, bookingModel]);
+  }, [displayEvents, effectiveType, bookingModel]);
   const grouped = useMemo(() => groupEventsByDate(filteredEvents), [filteredEvents]);
 
   const visibleCount = filteredEvents.length;
-  const totalCount = windowedEvents.length - bookingModel.hiddenIds.size;
+  const totalCount = displayEvents.length - bookingModel.hiddenIds.size;
 
   // Update the results count in the DOM (for the Astro-rendered count element)
   useEffect(() => {
@@ -654,7 +626,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     return <ScheduleSkeleton />;
   }
 
-  if (windowedEvents.length === 0) {
+  if (displayEvents.length === 0) {
     // A fetch failure with nothing to show is not the same as an empty
     // calendar — surface it and let the user retry.
     return error ? <LoadErrorMessage onRetry={refetch} /> : <NoEventsMessage />;
