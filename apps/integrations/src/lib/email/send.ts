@@ -49,7 +49,9 @@ interface SendTemplateArgs<K extends EmailTemplateKey> {
  * whitelist gate, the marketing suppression check, send-log dedupe/audit,
  * renders the registered React Email template, and sends via Resend. Returns a
  * structured result so callers can record it in a tracer span (sent / skipped /
- * suppressed) rather than throwing on no-ops.
+ * suppressed) rather than throwing on no-ops. (One sanctioned exception:
+ * /api/admin/email-test-send calls Resend directly — admin-gated, [TEST]
+ * subject, tagged kind=test so it can't masquerade as production mail.)
  */
 export async function sendTemplate<K extends EmailTemplateKey>({
   to,

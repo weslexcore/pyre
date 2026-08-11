@@ -21,6 +21,9 @@ export interface ConfirmationContent {
   faqs: FaqItem[];
 }
 
+/** Google Maps directions link used across booking emails. */
+export const DIRECTIONS_URL = 'https://maps.google.com/?q=Pyre+Sauna';
+
 const DEFAULT_HEADER = 'confirmation-header.jpg';
 
 const DEFAULT_CONTENT: ConfirmationContent = {

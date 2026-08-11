@@ -29,6 +29,16 @@ interface PreviewState {
   subject: string;
 }
 
+type SendState =
+  | { phase: 'idle' }
+  | { phase: 'sending' }
+  | { phase: 'sent'; id: string | null; to: string }
+  | { phase: 'error'; message: string };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Last-used test address survives reloads.
+const TEST_EMAIL_STORAGE_KEY = 'pyre-admin-test-email';
+
 export function EmailTemplatePreview({
   templates,
   confirmationSessionTypes,
@@ -42,6 +52,8 @@ export function EmailTemplatePreview({
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [sendState, setSendState] = useState<SendState>({ phase: 'idle' });
   // Drops stale responses when a newer render has been requested.
   const requestSeq = useRef(0);
 
@@ -84,13 +96,54 @@ export function EmailTemplatePreview({
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only initial render
   useEffect(() => {
     if (selectedKey) void renderTemplate(selectedKey, propsJson);
+    try {
+      const stored = window.localStorage.getItem(TEST_EMAIL_STORAGE_KEY);
+      if (stored) setTestEmail(stored);
+    } catch {
+      // localStorage unavailable — the field just starts empty.
+    }
   }, []);
 
   const selectTemplate = (option: TemplateOption) => {
     const json = JSON.stringify(option.defaultProps, null, 2);
     setSelectedKey(option.key);
     setPropsJson(json);
+    setSendState({ phase: 'idle' });
     void renderTemplate(option.key, json);
+  };
+
+  const sendTest = async () => {
+    let props: unknown;
+    try {
+      props = JSON.parse(propsJson);
+    } catch {
+      return; // Button is disabled on invalid JSON; guard anyway.
+    }
+    const to = testEmail.trim();
+    setSendState({ phase: 'sending' });
+    try {
+      const res = await fetch('/api/admin/email-test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: selectedKey, props, to }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setSendState({ phase: 'error', message: body.error ?? `Request failed (${res.status})` });
+        return;
+      }
+      setSendState({ phase: 'sent', id: body.id ?? null, to: body.to ?? to });
+      try {
+        window.localStorage.setItem(TEST_EMAIL_STORAGE_KEY, to);
+      } catch {
+        // Best-effort persistence only.
+      }
+    } catch (fetchError) {
+      setSendState({
+        phase: 'error',
+        message: fetchError instanceof Error ? fetchError.message : String(fetchError),
+      });
+    }
   };
 
   const resetToDefaults = () => {
@@ -128,6 +181,16 @@ export function EmailTemplatePreview({
   })();
 
   const liveCount = templates.filter((t) => t.live).length;
+
+  const propsValid = (() => {
+    try {
+      JSON.parse(propsJson);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const emailValid = EMAIL_RE.test(testEmail.trim());
 
   return (
     <div className="flex flex-col gap-6">
@@ -254,6 +317,43 @@ export function EmailTemplatePreview({
               {error}
             </p>
           )}
+
+          {/* Send the current props as a real email — bypasses the delivery
+              gate via /api/admin/email-test-send, so it works for gated
+              templates and any address. */}
+          <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
+            <p className="font-mono text-xs uppercase tracking-wide text-white/40">Send test</p>
+            <p className="text-xs text-white/50">
+              Bypasses the delivery gate — sends to any address, subject prefixed [TEST].
+            </p>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="you@example.com"
+              spellCheck={false}
+              className="w-full rounded-md border border-white/10 bg-white/5 p-2 font-mono text-xs text-[var(--pyre-creme)] outline-none transition-colors focus:border-white/30"
+            />
+            <button
+              type="button"
+              onClick={() => void sendTest()}
+              disabled={!propsValid || !emailValid || sendState.phase === 'sending'}
+              className="rounded-md border border-white/20 px-4 py-2 font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-white/40 disabled:opacity-50"
+            >
+              {sendState.phase === 'sending' ? 'Sending…' : 'Send test'}
+            </button>
+            {sendState.phase === 'sent' && (
+              <p className="rounded-md border border-emerald-400/40 bg-emerald-400/10 p-3 font-mono text-xs text-emerald-400">
+                Sent to {sendState.to}
+                {sendState.id ? ` — Resend id ${sendState.id}` : ''}
+              </p>
+            )}
+            {sendState.phase === 'error' && (
+              <p className="rounded-md border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 p-3 font-mono text-xs text-[var(--pyre-red)]">
+                {sendState.message}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Rendered preview */}

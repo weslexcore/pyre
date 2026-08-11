@@ -1,5 +1,7 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
 import type { ConfirmationEmailProps } from '@/emails/types';
+import { buildCalendarLinks } from '@/lib/calendar/links';
+import { DIRECTIONS_URL } from '@/lib/email/confirmation-content';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { type ResolvedSession, resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
@@ -52,6 +54,13 @@ export async function sendBookingConfirmationEmails({
     // manageUrl: `${siteUrl}/account`,
     sessionImageUrl: session?.imageUrl,
     sessionType,
+    calendarLinks: session
+      ? buildCalendarLinks({
+          title: session.title,
+          startIso: session.isoDate,
+          endIso: session.endIso,
+        })
+      : undefined,
   };
 
   // --- Confirmation (always; idempotent per booking) ---
@@ -104,7 +113,7 @@ export async function sendBookingConfirmationEmails({
             firstName: member.firstName || 'there',
             faqs: FIRST_TIMER_FAQS,
             // manageUrl: `${siteUrl}/account`,
-            directionsUrl: 'https://maps.google.com/?q=Pyre+Sauna',
+            directionsUrl: DIRECTIONS_URL,
           },
         });
         if (result.status === 'sent') {

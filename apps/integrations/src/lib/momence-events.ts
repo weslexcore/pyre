@@ -31,6 +31,8 @@ export interface ResolvedSession {
   timeLabel: string; // e.g. "6:00 PM - 8:00 PM"
   location: string;
   isoDate: string;
+  /** End of the session (`dateTime + duration`), ISO 8601 UTC. */
+  endIso: string;
   /** The event's own image (same one shown on the landing page), if it has one. */
   imageUrl?: string;
 }
@@ -137,6 +139,7 @@ export async function resolveSession(sessionId: number): Promise<ResolvedSession
       timeLabel: formatTimeRange(event.dateTime, event.duration),
       location: event.location || 'Pyre Sauna',
       isoDate: event.dateTime,
+      endIso: new Date(new Date(event.dateTime).getTime() + event.duration * 60_000).toISOString(),
       imageUrl: event.image1 || event.image2 || undefined,
     };
   } catch (error) {
