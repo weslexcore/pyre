@@ -413,7 +413,12 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const save = async () => {
     setFormError('');
-    const readings = collectReadings();
+    // Drain/refill entries record the water change only — tests are logged
+    // separately. Ignore any reading inputs typed before switching type.
+    const readings =
+      entryType === 'refill'
+        ? ({ ta: null, ph: null, chlorine: null, cc: null, salt: null } as Readings)
+        : collectReadings();
     if (!readings) return;
 
     const doses: DoseRecord[] = [];
@@ -607,53 +612,62 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
         {entryType !== 'test' && <InstructionsPanel entryType={entryType} />}
 
-        <div className="mb-4 grid grid-cols-2 gap-3">
-          {READING_FIELDS.map((field) => {
-            const parsed = parseReading(readingInputs[field.key]);
-            const invalid = parsed === undefined;
-            const status = typeof parsed === 'number' ? classifyReading(field.key, parsed) : null;
-            // During review the panel below carries the full recommendations;
-            // keep the border tint but drop the per-field notes.
-            const rec = typeof parsed === 'number' ? liveRecByParam.get(field.key) : undefined;
-            return (
-              <label key={field.key} className="block">
-                <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
-                  {field.label}
-                  {field.unit ? ` (${field.unit})` : ''}
-                </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={readingInputs[field.key]}
-                  onChange={(e) =>
-                    setReadingInputs((prev) => ({ ...prev, [field.key]: e.target.value }))
-                  }
-                  disabled={reviewing}
-                  placeholder={targetHint(field.key)}
-                  className={readingInputClass(status, invalid)}
-                />
-                {!reviewing && <LiveFieldNote rec={rec} status={status} invalid={invalid} />}
-              </label>
-            );
-          })}
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
-              Test method
-            </span>
-            <select
-              value={testMethod}
-              onChange={(e) => setTestMethod(e.target.value as TestMethod)}
-              disabled={reviewing}
-              className={inputClass}
-            >
-              {TEST_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {TEST_METHOD_LABELS[method]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        {entryType === 'refill' && (
+          <p className="mb-4 font-mono text-xs text-white/30">
+            Just log that the tub was drained and refilled — enter water tests separately as a Test
+            entry.
+          </p>
+        )}
+
+        {entryType !== 'refill' && (
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            {READING_FIELDS.map((field) => {
+              const parsed = parseReading(readingInputs[field.key]);
+              const invalid = parsed === undefined;
+              const status = typeof parsed === 'number' ? classifyReading(field.key, parsed) : null;
+              // During review the panel below carries the full recommendations;
+              // keep the border tint but drop the per-field notes.
+              const rec = typeof parsed === 'number' ? liveRecByParam.get(field.key) : undefined;
+              return (
+                <label key={field.key} className="block">
+                  <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                    {field.label}
+                    {field.unit ? ` (${field.unit})` : ''}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={readingInputs[field.key]}
+                    onChange={(e) =>
+                      setReadingInputs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    disabled={reviewing}
+                    placeholder={targetHint(field.key)}
+                    className={readingInputClass(status, invalid)}
+                  />
+                  {!reviewing && <LiveFieldNote rec={rec} status={status} invalid={invalid} />}
+                </label>
+              );
+            })}
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                Test method
+              </span>
+              <select
+                value={testMethod}
+                onChange={(e) => setTestMethod(e.target.value as TestMethod)}
+                disabled={reviewing}
+                className={inputClass}
+              >
+                {TEST_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {TEST_METHOD_LABELS[method]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
         {entryType === 'test' && !reviewing && (
           <p className="mb-4 -mt-2 font-mono text-xs text-white/30">
             Blank = not tested. Targets shown in each field.

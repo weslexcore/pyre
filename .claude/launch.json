@@ -4,8 +4,9 @@
     {
       "name": "integrations",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && CRON_SECRET=local-test-secret EMAIL_DEV_MODE=true yarn workspace @pyre/integrations dev --port 4330"],
-      "port": 4330
+      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && CRON_SECRET=local-test-secret EMAIL_DEV_MODE=true yarn workspace @pyre/integrations dev --port \"${PORT:-4330}\""],
+      "port": 4330,
+      "autoPort": true
     },
     {
       "name": "integrations-email-preview",
@@ -16,8 +17,9 @@
     {
       "name": "landing-page",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/landing-page dev"],
-      "port": 4321
+      "runtimeArgs": ["-c", ". \"$HOME/.nvm/nvm.sh\" && nvm use 22 && yarn workspace @pyre/landing-page dev --port \"${PORT:-4321}\""],
+      "port": 4321,
+      "autoPort": true
     }
   ]
 }

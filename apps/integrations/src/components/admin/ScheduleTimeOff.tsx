@@ -76,6 +76,7 @@ export function ScheduleTimeOff() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [days, setDays] = useState<number[]>([]);
+  const [allDay, setAllDay] = useState(true);
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [note, setNote] = useState('');
@@ -142,6 +143,7 @@ export function ScheduleTimeOff() {
     setStartDate('');
     setEndDate('');
     setDays([]);
+    setAllDay(true);
     setStartsAt('');
     setEndsAt('');
     setNote('');
@@ -154,6 +156,7 @@ export function ScheduleTimeOff() {
     setStartDate(entry.start_date ?? '');
     setEndDate(entry.end_date ?? '');
     setDays([...entry.days_of_week]);
+    setAllDay(!entry.starts_at && !entry.ends_at);
     setStartsAt(hhmm(entry.starts_at));
     setEndsAt(hhmm(entry.ends_at));
     setNote(entry.note ?? '');
@@ -177,8 +180,8 @@ export function ScheduleTimeOff() {
         startDate: startDate || null,
         endDate: endDate || startDate || null,
         daysOfWeek: kind === 'recurring' ? days : [],
-        startsAt: startsAt || null,
-        endsAt: endsAt || null,
+        startsAt: allDay ? null : startsAt || null,
+        endsAt: allDay ? null : endsAt || null,
         note: note.trim() || null,
       }),
     });
@@ -368,24 +371,42 @@ export function ScheduleTimeOff() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="time"
-              step={1800}
-              className={inputClass}
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-              aria-label="From time (optional)"
-            />
-            <span className="font-mono text-xs text-white/40">to</span>
-            <input
-              type="time"
-              step={1800}
-              className={inputClass}
-              value={endsAt}
-              onChange={(e) => setEndsAt(e.target.value)}
-              aria-label="To time (optional)"
-            />
-            <span className="font-mono text-[10px] text-white/40">no times = whole day</span>
+            <label className="flex cursor-pointer items-center gap-2 font-mono text-xs text-white/70">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[var(--pyre-red)]"
+                checked={allDay}
+                onChange={(e) => {
+                  setAllDay(e.target.checked);
+                  if (e.target.checked) {
+                    setStartsAt('');
+                    setEndsAt('');
+                  }
+                }}
+              />
+              All day
+            </label>
+            {!allDay && (
+              <>
+                <input
+                  type="time"
+                  step={1800}
+                  className={inputClass}
+                  value={startsAt}
+                  onChange={(e) => setStartsAt(e.target.value)}
+                  aria-label="From time"
+                />
+                <span className="font-mono text-xs text-white/40">to</span>
+                <input
+                  type="time"
+                  step={1800}
+                  className={inputClass}
+                  value={endsAt}
+                  onChange={(e) => setEndsAt(e.target.value)}
+                  aria-label="To time"
+                />
+              </>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
