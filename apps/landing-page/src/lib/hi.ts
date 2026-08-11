@@ -1,6 +1,6 @@
 // Bio-link page (/hi) configuration — the link-in-bio landing page for
 // social traffic (Instagram/TikTok). Extremely simple, mobile-first, built
-// to convert cold visitors: intro offer up top, special events, link stack,
+// to convert cold visitors: intro offer up top, link stack, special events,
 // email capture.
 import type { ImageMetadata } from 'astro';
 import logoImg from '../assets/logos/creme/single-pine-tree-white.png';
@@ -45,6 +45,11 @@ export interface HiContent {
     limit: number;
   };
   links: HiLink[];
+  contact: {
+    label: string;
+    sublabel: string;
+    methods: HiLink[];
+  };
   socials: HiLink[];
   posthogSource: string;
   signupCopy: {
@@ -81,7 +86,7 @@ const hi: HiContent = {
     },
   },
   events: {
-    heading: 'Coming up at Pyre',
+    heading: 'Upcoming Special Events',
     limit: 3,
   },
   links: [
@@ -125,6 +130,32 @@ const hi: HiContent = {
       external: true,
     },
   ],
+  contact: {
+    label: 'Contact Us',
+    sublabel: 'Questions? Reach out anytime',
+    // Sourced from location.ts so contact details stay in one place. The
+    // phone method only renders once location.phone is filled in.
+    methods: [
+      {
+        id: 'contact-email',
+        label: 'Email',
+        sublabel: location.email,
+        href: `mailto:${location.email}`,
+        ariaLabel: `Email Pyre Sauna at ${location.email}`,
+      },
+      ...(location.phone
+        ? [
+            {
+              id: 'contact-phone',
+              label: 'Call or Text',
+              sublabel: location.phone,
+              href: `tel:${location.phone.replace(/[^0-9+]/g, '')}`,
+              ariaLabel: `Call Pyre Sauna at ${location.phone}`,
+            },
+          ]
+        : []),
+    ],
+  },
   socials: [
     {
       id: 'instagram',

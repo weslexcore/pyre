@@ -92,30 +92,8 @@ import location from '../lib/location';
         </div>
       </section>
 
-      <!-- Special events strip: hidden until the carousel confirms there are
-           matching upcoming events, so the heading never flashes when empty. -->
-      <section
-        id="hi-events"
-        aria-labelledby="hi-events-heading"
-        class="mb-10 hidden"
-        data-track-placement="hi_event_card"
-      >
-        <h2
-          id="hi-events-heading"
-          class="font-mono-bold text-sm uppercase tracking-[0.2em] text-center opacity-70 mb-4"
-        >
-          {hi.events.heading}
-        </h2>
-        <EventsCarousel
-          client:load
-          variant="compact"
-          filterTag={SPECIAL_EVENT_TAG}
-          limit={hi.events.limit}
-        />
-      </section>
-
       <!-- Link stack -->
-      <nav aria-label="Pyre links" class="mb-8">
+      <nav aria-label="Pyre links" class="mb-10">
         <ul class="space-y-3">
           {hi.links.map((link) => (
             <li>
@@ -147,8 +125,76 @@ import location from '../lib/location';
               </a>
             </li>
           ))}
+          <!-- Contact card: expands in place (native <details>, no JS) to
+               reveal tappable email / phone links. -->
+          <li>
+            <details
+              class="group/contact border border-current/20 rounded-lg transition-all duration-200 hover:border-current/50 open:border-current/50"
+            >
+              <summary
+                class="group flex items-center justify-between gap-3 p-4 cursor-pointer list-none [&::-webkit-details-marker]:hidden rounded-lg hover:bg-[var(--pyre-creme)]/5"
+              >
+                <span class="min-w-0">
+                  <span class="block font-mono-bold text-sm uppercase tracking-wide">
+                    {hi.contact.label}
+                  </span>
+                  <span class="block text-xs opacity-60 mt-0.5 truncate">
+                    {hi.contact.sublabel}
+                  </span>
+                </span>
+                <svg
+                  class="w-4 h-4 flex-shrink-0 opacity-40 transition-transform duration-200 group-hover:opacity-70 group-open/contact:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+              <ul class="px-4 pb-4 space-y-2">
+                {hi.contact.methods.map((method) => (
+                  <li>
+                    <a
+                      href={method.href}
+                      aria-label={method.ariaLabel}
+                      class="flex items-center justify-between gap-3 border border-current/15 rounded-md px-3 py-2.5 transition-all duration-200 hover:border-current/50 hover:bg-[var(--pyre-creme)]/5"
+                      data-track-placement={`hi_${method.id.replace(/-/g, '_')}`}
+                    >
+                      <span class="font-mono-bold text-xs uppercase tracking-wide">
+                        {method.label}
+                      </span>
+                      <span class="text-xs opacity-70 truncate">{method.sublabel}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
         </ul>
       </nav>
+
+      <!-- Special events strip: hidden until the carousel confirms there are
+           matching upcoming events, so the heading never flashes when empty. -->
+      <section
+        id="hi-events"
+        aria-labelledby="hi-events-heading"
+        class="mb-10 hidden"
+        data-track-placement="hi_event_card"
+      >
+        <h2
+          id="hi-events-heading"
+          class="font-mono-bold text-sm uppercase tracking-[0.2em] text-center opacity-70 mb-4"
+        >
+          {hi.events.heading}
+        </h2>
+        <EventsCarousel
+          client:load
+          variant="compact"
+          filterTag={SPECIAL_EVENT_TAG}
+          limit={hi.events.limit}
+        />
+      </section>
 
       <!-- Socials -->
       <div class="flex justify-center gap-6 mb-12">
