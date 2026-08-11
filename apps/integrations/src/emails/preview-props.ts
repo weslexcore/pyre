@@ -13,6 +13,8 @@ import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
+import { ReferralRedeemed } from './templates/ReferralRedeemed';
+import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate } from './types';
@@ -30,4 +32,6 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'partner-verified': PartnerVerified.PreviewProps,
   'partner-denied': PartnerDenied.PreviewProps,
   'partner-reconciliation': PartnerReconciliation.PreviewProps,
+  'referral-redeemed': ReferralRedeemed.PreviewProps,
+  'referral-reward-earned': ReferralRewardEarned.PreviewProps,
 };

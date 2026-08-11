@@ -1,0 +1,149 @@
+---
+import { getRedis } from '@pyre/webhook-core';
+import { Image } from 'astro:assets';
+import warmSaunaImg from '../../assets/images/warm_sauna.webp';
+import ReferralRedeemForm from '../../components/ReferralRedeemForm.astro';
+import Layout from '../../layouts/main.astro';
+import referral, { interpolate } from '../../lib/referral';
+
+export const prerender = false;
+
+// Personalized referral landing page: pyresauna.com/r/{CODE}. The referrer's
+// name and discount render server-side (fetched from the integrations service
+// — codes aren't enumerable client-side), and the form claims the discount on
+// the spot. Unknown or disabled codes bounce home rather than 404 so a dead
+// link still lands somewhere useful.
+
+const rawCode = Astro.params.code ?? '';
+
+interface ReferralLookup {
+  code: string;
+  displayName: string;
+  discountPercent: number;
+  referrerType: 'member' | 'partner';
+}
+
+async function lookupCode(code: string): Promise<ReferralLookup | null> {
+  if (!/^[A-Za-z0-9]{3,16}$/.test(code)) return null;
+  const integrationsUrl = import.meta.env.INTEGRATIONS_API_URL ?? process.env.INTEGRATIONS_API_URL;
+  const apiSecret = import.meta.env.REFERRAL_API_SECRET ?? process.env.REFERRAL_API_SECRET;
+  if (!integrationsUrl || !apiSecret) {
+    console.error('[Referral] INTEGRATIONS_API_URL / REFERRAL_API_SECRET not configured');
+    return null;
+  }
+  try {
+    const response = await fetch(
+      `${integrationsUrl}/api/referral/lookup?code=${encodeURIComponent(code)}`,
+      { headers: { Authorization: `Bearer ${apiSecret}` } }
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as ReferralLookup;
+  } catch (error) {
+    console.error('[Referral] Lookup failed', error);
+    return null;
+  }
+}
+
+const lookup = await lookupCode(rawCode);
+if (!lookup) {
+  return Astro.redirect('/', 302);
+}
+
+// Click counter feeds the referrer's /account stats. Best-effort; PostHog gets
+// its own referral_link_clicked event client-side for funnel analysis.
+try {
+  await getRedis()?.incr(`referral:clicks:${lookup.code}`);
+} catch {
+  // A lost click count must never break the page.
+}
+
+const vars = { name: lookup.displayName, percent: lookup.discountPercent };
+const pageTitle = `${lookup.displayName} gave you ${lookup.discountPercent}% off | Pyre Sauna`;
+const pageDescription = interpolate(referral.hero.subtitle, vars);
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  noIndex={true}
+  hidePromos={true}
+  transparentNav={true}
+  logoOnly={true}
+>
+  <div class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+    <section class="relative w-full min-h-dvh flex items-center justify-center overflow-hidden">
+      <Image
+        src={warmSaunaImg}
+        alt=""
+        widths={[768, 1280, 1920]}
+        sizes="100vw"
+        class="absolute inset-0 w-full h-full object-cover object-center"
+        loading="eager"
+        decoding="async"
+      />
+      <div class="absolute inset-0 bg-[var(--pyre-black)]/70"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/40 to-[var(--pyre-black)]/60"></div>
+
+      <div class="relative z-10 max-w-2xl mx-auto px-4 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
+        <p class="inline-block rounded-full border border-[var(--pyre-muted-gold)]/60 px-4 py-1.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-6">
+          {interpolate(referral.claim.pillLabel, vars)}
+        </p>
+        <h1 class="font-primary-semibold text-[clamp(2.25rem,6vw,4rem)] tracking-[-0.02em] uppercase leading-[1.05] mb-4">
+          {interpolate(referral.hero.title, vars)}
+        </h1>
+        <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto mb-10">
+          {interpolate(referral.hero.subtitle, vars)}
+        </p>
+
+        <div class="rounded-xl border border-[var(--pyre-creme)]/15 bg-[var(--pyre-black)]/60 backdrop-blur-sm p-6 md:p-8 text-left">
+          <h2 class="font-primary-semibold text-2xl uppercase tracking-[-0.01em] mb-1 text-center">
+            {interpolate(referral.claim.title, vars)}
+          </h2>
+          <p class="text-sm opacity-70 mb-6 text-center">{referral.claim.subtitle}</p>
+          <ReferralRedeemForm
+            code={lookup.code}
+            discountPercent={lookup.discountPercent}
+            copy={referral.form}
+          />
+        </div>
+
+        <ol class="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-12 text-left">
+          {
+            referral.steps.map((step, index) => (
+              <li>
+                <p class="font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-muted-gold)] mb-1.5">
+                  {String(index + 1).padStart(2, '0')}
+                </p>
+                <p class="font-primary-semibold text-base mb-1">{interpolate(step.title, vars)}</p>
+                <p class="text-sm opacity-70">{interpolate(step.description, vars)}</p>
+              </li>
+            ))
+          }
+        </ol>
+
+        <p class="mt-12 text-xs opacity-50 max-w-lg mx-auto">{referral.disclaimer}</p>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<script is:inline define:vars={{ code: lookup.code, referrerType: lookup.referrerType }}>
+  const capture = () => {
+    if (window.posthog?.capture) {
+      window.posthog.capture('referral_link_clicked', {
+        code,
+        referrer_type: referrerType,
+      });
+      return true;
+    }
+    return false;
+  };
+  // PostHog loads async; retry briefly rather than racing it.
+  if (!capture()) {
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (capture() || attempts > 20) clearInterval(timer);
+    }, 250);
+  }
+</script>

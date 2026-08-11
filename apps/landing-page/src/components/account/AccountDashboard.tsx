@@ -8,6 +8,7 @@ import { CreditsCard } from './CreditsCard';
 import { MemberDataProvider } from './MemberDataProvider';
 import { MembershipCard } from './MembershipCard';
 import { ProfileCard } from './ProfileCard';
+import { ReferralCard } from './ReferralCard';
 import { SessionsList } from './SessionsList';
 
 export function AccountDashboard() {
@@ -91,6 +92,11 @@ export function AccountDashboard() {
           </div>
         </div>
       </MemberDataProvider>
+
+      {/* Referral section */}
+      <div id="referral" className="mt-6">
+        <ReferralCard />
+      </div>
 
       {/* Sessions section */}
       <div id="sessions" className="mt-8">

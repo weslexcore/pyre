@@ -48,6 +48,13 @@ export const CRON_JOBS: CronJob[] = [
     run: async (ctx) => (await import('@/lib/partner/verification')).runPartnerMaintenance(ctx),
   },
   {
+    // Referral program upkeep: reconcile conversions the webhook missed,
+    // expire stale redemptions/rewards (removing their Momence tags), retry
+    // failed tag removals, clean crashed pending rows.
+    name: 'referral-maintenance',
+    run: async (ctx) => (await import('@/lib/referral/maintenance')).runReferralMaintenance(ctx),
+  },
+  {
     // Momence → shifts coverage-window sync for staff scheduling. Idempotent;
     // never touches sync_locked/staffed shifts beyond flagging them.
     name: 'sync-shifts',

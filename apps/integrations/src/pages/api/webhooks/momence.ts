@@ -10,6 +10,7 @@ import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { resolveSession } from '@/lib/momence-events';
+import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
@@ -102,6 +103,20 @@ async function handleBookingEvent(
       sessionId: payload.sessionId,
       sessionBookingId: payload.sessionBookingId,
     });
+
+    // Referral conversion + reward consumption (best-effort by contract —
+    // handleReferralBooking catches its own errors).
+    await tracer.span(
+      'Handle referral booking',
+      () =>
+        handleReferralBooking({
+          sessionId: payload.sessionId,
+          sessionBookingId: payload.sessionBookingId,
+          targetMemberId: payload.targetMemberId,
+          memberEmail: member.email,
+        }),
+      { targetMemberId: payload.targetMemberId }
+    );
     return;
   }
 
@@ -115,6 +130,10 @@ async function handleBookingEvent(
   } catch (error) {
     log.warn(`Failed to track booking_cancelled for booking ${payload.sessionBookingId}`, error);
   }
+
+  // Flag a converted referral whose converting booking was cancelled (admin
+  // decides on clawback). Catches its own errors.
+  await handleReferralCancellation(payload.sessionBookingId);
 }
 
 async function handleMemberEvent(

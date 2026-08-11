@@ -331,6 +331,10 @@ export async function assignMemberTag(memberId: number, tagId: number): Promise<
   await momenceRequest<void>('POST', `/host/members/${memberId}/tags/${tagId}`);
 }
 
+export async function removeMemberTag(memberId: number, tagId: number): Promise<void> {
+  await momenceRequest<void>('DELETE', `/host/members/${memberId}/tags/${tagId}`);
+}
+
 /**
  * Drop the cached name->id map. A tag created in the Momence dashboard is
  * otherwise invisible here for up to 24h, which makes every partner confirm

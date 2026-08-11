@@ -50,6 +50,26 @@ export const accountConfig = {
       missed: 'Missed',
     },
   },
+  referral: {
+    title: 'Give 15%, Get a Discount',
+    subtitle:
+      'Share your personal link. Friends get a discount on their first session — and when they book, you get a discount on your next one.',
+    codeLabel: 'Your code',
+    linkLabel: 'Your link',
+    copyButton: 'Copy link',
+    copiedLabel: 'Copied!',
+    shareButton: 'Share',
+    shareText: (url: string, percent: number) =>
+      `Come sweat with me at Pyre — this link gets you ${percent}% off your first sauna + cold plunge session: ${url}`,
+    stats: {
+      clicksLabel: 'Link opens',
+      redemptionsLabel: 'Claimed',
+      conversionsLabel: 'Booked',
+    },
+    rewardActiveBadge: 'Reward active — discount on your next session',
+    errorState: 'Could not load your referral code. Please try again later.',
+    disabledState: 'Your referral code is currently inactive.',
+  },
   membership: {
     title: 'Membership',
     emptyState: 'No active membership',
