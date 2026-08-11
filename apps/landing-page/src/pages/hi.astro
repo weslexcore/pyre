@@ -1,0 +1,319 @@
+---
+export const prerender = true;
+
+import { Image } from 'astro:assets';
+import EventsCarousel from '../components/events/EventsCarousel';
+import InstagramIcon from '../components/icons/InstagramIcon.astro';
+import SignupForm from '../components/SignupForm.astro';
+import Layout from '../layouts/main.astro';
+import { SPECIAL_EVENT_TAG } from '../lib/events-config';
+import hi from '../lib/hi';
+import location from '../lib/location';
+---
+
+<Layout
+  title={hi.meta.title}
+  description={hi.meta.description}
+  noIndex={true}
+  hidePromos={true}
+  transparentNav={true}
+  logoOnly={true}
+>
+  <div class="dark relative bg-[var(--pyre-black)] text-[var(--pyre-creme)] overflow-x-clip">
+    <!-- Ambient drifting color blobs. Animated via transform only so the
+         effect stays cheap on mobile (no gradient repaints). -->
+    <div class="hi-bg fixed inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      <div class="hi-bg-blob hi-bg-blob--sage"></div>
+      <div class="hi-bg-blob hi-bg-blob--blue"></div>
+      <div class="hi-bg-blob hi-bg-blob--red"></div>
+      <div class="hi-bg-blob hi-bg-blob--gold"></div>
+     
+      
+    </div>
+
+    <div class="relative z-10 max-w-md mx-auto px-4 pt-28 pb-16 md:pt-32">
+      <!-- Header -->
+      <header class="text-center mb-8">
+        <Image
+          src={hi.header.logo.src}
+          alt={hi.header.logo.alt}
+          widths={[240, 480]}
+          sizes="168px"
+          class="mx-auto h-36 md:h-40 w-auto"
+          loading="eager"
+          decoding="async"
+        />
+        <p class="font-logo text-5xl md:text-6xl leading-none -mt-2 mb-3">PYRE</p>
+        <p class="text-sm opacity-80 mb-4">{hi.header.tagline}</p>
+        <div
+          class="inline-flex flex-wrap justify-center gap-x-4 gap-y-1.5 border border-[var(--pyre-gold)]/40 rounded-lg px-4 py-3"
+        >
+          {location.hours.map((h) => (
+            <span class="whitespace-nowrap font-mono-bold text-xs tracking-wide">
+              <span class="text-[var(--pyre-gold)]">{h.day}</span>
+              {` ${h.open}–${h.close}`}
+            </span>
+          ))}
+        </div>
+      </header>
+
+      <!-- Hero CTA: intro offer -->
+      <section aria-labelledby="intro-offer-heading" class="mb-10">
+        <div
+          class="relative border-2 border-[var(--pyre-muted-gold)] bg-[var(--pyre-muted-gold)]/5 rounded-lg p-6 pt-8 text-center"
+        >
+          <div
+            class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] text-[10px] font-mono-bold uppercase tracking-wide rounded-full whitespace-nowrap"
+          >
+            {hi.hero.pillLabel}
+          </div>
+          <h1
+            id="intro-offer-heading"
+            class="font-primary-semibold text-2xl uppercase tracking-[-0.02em] mb-2"
+          >
+            {hi.hero.title}
+          </h1>
+          <p class="text-sm opacity-80 mb-4">{hi.hero.subtitle}</p>
+          <div class="flex items-baseline justify-center gap-2 mb-5">
+            <span class="font-primary-semibold text-4xl text-[var(--pyre-muted-gold)] leading-none">
+              ${hi.hero.price}
+            </span>
+            <s class="text-sm opacity-60">${hi.hero.originalPrice}</s>
+            <span class="text-sm opacity-70">{hi.hero.priceNote}</span>
+          </div>
+          <a
+            href={hi.hero.cta.href}
+            aria-label={hi.hero.cta.ariaLabel}
+            class="inline-flex w-full items-center justify-center font-mono-bold rounded-md font-semibold uppercase tracking-wide px-6 py-3 text-base border-2 border-transparent bg-[var(--primary)] text-[var(--pyre-creme)] hover:opacity-90 transition-colors duration-150"
+            data-track-placement="hi_intro_offer"
+          >
+            {hi.hero.cta.label}
+          </a>
+        </div>
+      </section>
+
+      <!-- Special events strip: hidden until the carousel confirms there are
+           matching upcoming events, so the heading never flashes when empty. -->
+      <section
+        id="hi-events"
+        aria-labelledby="hi-events-heading"
+        class="mb-10 hidden"
+        data-track-placement="hi_event_card"
+      >
+        <h2
+          id="hi-events-heading"
+          class="font-mono-bold text-sm uppercase tracking-[0.2em] text-center opacity-70 mb-4"
+        >
+          {hi.events.heading}
+        </h2>
+        <EventsCarousel
+          client:load
+          variant="compact"
+          filterTag={SPECIAL_EVENT_TAG}
+          limit={hi.events.limit}
+        />
+      </section>
+
+      <!-- Link stack -->
+      <nav aria-label="Pyre links" class="mb-8">
+        <ul class="space-y-3">
+          {hi.links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-label={link.ariaLabel}
+                target={link.external ? '_blank' : undefined}
+                rel={link.external ? 'noopener noreferrer' : undefined}
+                class="group flex items-center justify-between gap-3 border border-current/20 rounded-lg p-4 transition-all duration-200 hover:border-current/50 hover:bg-[var(--pyre-creme)]/5"
+                data-track-placement={`hi_${link.id.replace(/-/g, '_')}`}
+              >
+                <span class="min-w-0">
+                  <span class="block font-mono-bold text-sm uppercase tracking-wide">
+                    {link.label}
+                  </span>
+                  {link.sublabel && (
+                    <span class="block text-xs opacity-60 mt-0.5 truncate">{link.sublabel}</span>
+                  )}
+                </span>
+                <svg
+                  class="w-4 h-4 flex-shrink-0 opacity-40 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:opacity-70"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <!-- Socials -->
+      <div class="flex justify-center gap-6 mb-12">
+        {hi.socials.map((social) => (
+          <a
+            href={social.href}
+            aria-label={social.ariaLabel}
+            target={social.external ? '_blank' : undefined}
+            rel={social.external ? 'noopener noreferrer' : undefined}
+            class="opacity-70 hover:opacity-100 transition-opacity duration-200"
+            data-track-placement={`hi_${social.id}`}
+          >
+            {social.id === 'instagram' && <InstagramIcon class="w-8 h-8" />}
+          </a>
+        ))}
+      </div>
+
+      <!-- Email capture -->
+      <section aria-label="Mailing list signup">
+        <SignupForm
+          variant="compact"
+          formKey="hi"
+          posthogSource={hi.posthogSource}
+          title={hi.signupCopy.title}
+          subtitle={hi.signupCopy.subtitle}
+          successMessage={hi.signupCopy.successMessage}
+        />
+      </section>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  /* Ambient background blobs: brand colors, heavily blurred, drifting slowly.
+     Only `transform` animates (composited — no repaints), so this stays cheap
+     on mobile GPUs. Sized in viewport units so the drift reads at any width. */
+  .hi-bg-blob {
+    position: absolute;
+    width: 70vw;
+    height: 70vw;
+    max-width: 34rem;
+    max-height: 34rem;
+    border-radius: 50%;
+    filter: blur(70px);
+    will-change: transform;
+  }
+
+  .hi-bg-blob--blue {
+    top: -12%;
+    left: -25%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--pyre-sky) 20%, transparent) 0%,
+      transparent 70%
+    );
+    animation: hi-drift-a 26s ease-in-out infinite alternate;
+  }
+
+  .hi-bg-blob--gold {
+    top: 22%;
+    right: -30%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--pyre-gold) 20%, transparent) 0%,
+      transparent 70%
+    );
+    animation: hi-drift-b 34s ease-in-out infinite alternate;
+  }
+
+  .hi-bg-blob--red {
+    bottom: -18%;
+    left: -18%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--pyre-red) 30%, transparent) 0%,
+      transparent 70%
+    );
+    animation: hi-drift-c 30s ease-in-out infinite alternate;
+  }
+
+  .hi-bg-blob--sage {
+    bottom: 28%;
+    right: -22%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--pyre-sage) 30%, transparent) 0%,
+      transparent 70%
+    );
+    animation: hi-drift-a 40s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes hi-drift-a {
+    to {
+      transform: translate(28vw, 18vh) scale(1.2);
+    }
+  }
+
+  @keyframes hi-drift-b {
+    to {
+      transform: translate(-24vw, -14vh) scale(1.15);
+    }
+  }
+
+  @keyframes hi-drift-c {
+    to {
+      transform: translate(20vw, -22vh) scale(1.25);
+    }
+  }
+
+  /* Accessibility: hold a pleasant static composition instead of drifting */
+  @media (prefers-reduced-motion: reduce) {
+    .hi-bg-blob {
+      animation: none;
+      transform: translate(6vw, 4vh);
+    }
+  }
+</style>
+
+<script>
+  // The special-events section starts hidden and is revealed only once the
+  // carousel has loaded and found matching events, so the heading never
+  // flashes on a page that ends up with no special events.
+  window.addEventListener('events-empty-state', (event) => {
+    const { isEmpty, loading } = (event as CustomEvent<{ isEmpty: boolean; loading: boolean }>)
+      .detail;
+    if (loading) return;
+    document.getElementById('hi-events')?.classList.toggle('hidden', isEmpty);
+  });
+
+  const analyticsWindow = window as {
+    posthog?: { capture: (event: string, properties?: Record<string, unknown>) => void };
+    pyreAttribution?: () => Record<string, unknown>;
+  };
+
+  const capture = (event: string, properties: Record<string, unknown>) => {
+    analyticsWindow.posthog?.capture(event, {
+      ...properties,
+      ...(analyticsWindow.pyreAttribution?.() ?? {}),
+    });
+  };
+
+  // Booking-intent links stay in the existing booking funnel; everything else
+  // is a generic bio-link click. Delegated so hydrated event cards are covered.
+  const isBookingHref = (url: URL) =>
+    url.hostname.endsWith('momence.com') || url.pathname.startsWith('/events');
+
+  document.addEventListener('click', (e) => {
+    const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+    if (!link) return;
+
+    const placement =
+      link.dataset.trackPlacement ??
+      link.closest<HTMLElement>('[data-track-placement]')?.dataset.trackPlacement;
+    if (!placement) return;
+
+    let url: URL;
+    try {
+      url = new URL(link.href, window.location.origin);
+    } catch {
+      return;
+    }
+
+    capture(isBookingHref(url) ? 'booking_link_clicked' : 'bio_link_clicked', {
+      placement,
+      href: link.href,
+    });
+  });
+</script>

@@ -10,6 +10,14 @@ import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type StaffRow, type TimeOffRow } from '@/lib/db';
+import {
+  actorFromGate,
+  changedFields,
+  describeTimeOff,
+  logScheduleChange,
+  staffNameOf,
+  summarizeDiff,
+} from '@/lib/schedule/change-log';
 
 export const prerender = false;
 
@@ -183,7 +191,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return json({ error: error.message }, 500);
 
-  return json({ entry: data as TimeOffRow }, 201);
+  const entry = data as TimeOffRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(auth.gate),
+    entityType: 'time_off',
+    entityId: entry.id,
+    action: 'create',
+    summary: `Added time off — ${describeTimeOff(await staffNameOf(db, entry.staff_id), entry)}`,
+    details: { after: entry },
+  });
+
+  return json({ entry }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -202,14 +220,16 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const columns = parseEntryColumns(body);
   if (typeof columns === 'string') return json({ error: columns }, 400);
 
+  const { data: existing, error: fetchError } = await db
+    .from('time_off')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+
   if (!auth.canManage) {
     // Both the existing entry and its new shape must stay their own.
     if (columns.staff_id !== auth.ownStaffId) return json({ error: OWN_ONLY_ERROR }, 403);
-    const { data: existing } = await db
-      .from('time_off')
-      .select('staff_id')
-      .eq('id', id)
-      .maybeSingle();
     if (existing && existing.staff_id !== auth.ownStaffId) {
       return json({ error: OWN_ONLY_ERROR }, 403);
     }
@@ -224,7 +244,20 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
   if (!data) return json({ error: 'Entry not found' }, 404);
 
-  return json({ entry: data as TimeOffRow });
+  const entry = data as TimeOffRow;
+  const diff = existing ? changedFields(existing as Record<string, unknown>, columns) : null;
+  if (diff) {
+    await logScheduleChange(db, {
+      actor: actorFromGate(auth.gate),
+      entityType: 'time_off',
+      entityId: entry.id,
+      action: 'update',
+      summary: `Updated time off — ${describeTimeOff(await staffNameOf(db, entry.staff_id), entry)}: ${summarizeDiff(diff)}`,
+      details: diff,
+    });
+  }
+
+  return json({ entry });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -237,19 +270,32 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id is required' }, 400);
 
-  if (!auth.canManage) {
-    const { data: existing } = await db
-      .from('time_off')
-      .select('staff_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (!existing) return json({ error: 'Entry not found' }, 404);
-    if (existing.staff_id !== auth.ownStaffId) return json({ error: OWN_ONLY_ERROR }, 403);
+  // Snapshot before the delete: ownership check for non-managers, change-log
+  // description for everyone.
+  const { data: existing, error: fetchError } = await db
+    .from('time_off')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!existing) return json({ error: 'Entry not found' }, 404);
+  if (!auth.canManage && existing.staff_id !== auth.ownStaffId) {
+    return json({ error: OWN_ONLY_ERROR }, 403);
   }
 
   const { error, count } = await db.from('time_off').delete({ count: 'exact' }).eq('id', id);
   if (error) return json({ error: error.message }, 500);
   if (!count) return json({ error: 'Entry not found' }, 404);
+
+  const entry = existing as TimeOffRow;
+  await logScheduleChange(db, {
+    actor: actorFromGate(auth.gate),
+    entityType: 'time_off',
+    entityId: entry.id,
+    action: 'delete',
+    summary: `Deleted time off — ${describeTimeOff(await staffNameOf(db, entry.staff_id), entry)}`,
+    details: { before: entry },
+  });
 
   return json({ ok: true });
 };

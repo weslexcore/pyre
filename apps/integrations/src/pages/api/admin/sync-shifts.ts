@@ -4,6 +4,7 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { actorFromGate } from '@/lib/schedule/change-log';
 import { syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
@@ -18,7 +19,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (crossOrigin) return crossOrigin;
 
   try {
-    const summary = await syncShifts();
+    const summary = await syncShifts({ actor: actorFromGate(gate) });
     return new Response(JSON.stringify({ ok: true, sync: summary }), {
       status: 200,
       headers: JSON_HEADERS,

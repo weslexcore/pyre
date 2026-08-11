@@ -7,11 +7,15 @@ interface Props {
 }
 const { current } = Astro.props;
 
+const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
+
 const tabs = [
   { href: '/admin/schedule', label: 'Week' },
   { href: '/admin/schedule/calendar', label: 'Calendar' },
   { href: '/admin/schedule/hours', label: 'Hours' },
   { href: '/admin/schedule/time-off', label: 'Time Off' },
+  // Admin-only: the change log names who did what across the whole team.
+  ...(isAdmin ? [{ href: '/admin/schedule/changes', label: 'Changes' }] : []),
 ];
 ---
 

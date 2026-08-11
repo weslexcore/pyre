@@ -85,6 +85,49 @@ const formatDay = (date: string): string => {
   return `${DOW_LABELS[new Date(`${date}T00:00:00`).getDay()]} ${Number(m)}/${Number(d)}`;
 };
 
+// The board's three ways of slicing the same data: one week (the default),
+// a whole calendar month as the same day list, or every under-staffed shift
+// coming up (manage side only).
+type BoardView = 'week' | 'month' | 'uncovered';
+
+/** How far ahead the uncovered view looks. Momence sync only creates shifts
+ * ~3 weeks out, but manual and drafted shifts can sit further ahead. */
+const UNCOVERED_HORIZON_DAYS = 182;
+
+const monthStartOf = (date: string): string => `${date.slice(0, 7)}-01`;
+
+const addMonths = (monthStart: string, n: number): string => {
+  const [y, m] = monthStart.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+};
+
+const daysInMonth = (monthStart: string): number => {
+  const [y, m] = monthStart.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+};
+
+const monthLabel = (monthStart: string): string =>
+  new Date(`${monthStart}T00:00:00`).toLocaleString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+/**
+ * The Setup role's span from the shift-window start. Windows are derived with
+ * a 90min lead before the first session (leadMin in schedule-core), so window
+ * start + 2h = 30min after sessions begin — the requested setup handoff point.
+ */
+const SETUP_DURATION_MIN = 120;
+
+/** Active, live (non-draft) shift still short of staff_needed — draft
+ * assignments don't count as coverage until accepted. */
+const isUncovered = (shift: BoardShift): boolean =>
+  shift.status === 'active' &&
+  !shift.is_draft &&
+  shift.staff_needed > 0 &&
+  shift.assignments.filter((a) => !a.is_draft).length < shift.staff_needed;
+
 type CoverageTone = 'empty' | 'under' | 'covered' | 'cancelled';
 
 const coverageTone = (shift: BoardShift): CoverageTone => {
@@ -169,7 +212,9 @@ async function api(
 }
 
 export function ScheduleBoard() {
+  const [view, setView] = useState<BoardView>('week');
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayLocal()));
+  const [monthStart, setMonthStart] = useState(() => monthStartOf(todayLocal()));
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,12 +231,29 @@ export function ScheduleBoard() {
   const [drafting, setDrafting] = useState(false);
   const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // What the API is asked for. The uncovered view starts its range on the
+  // current week's Monday (not today) so this week's hours totals in the
+  // assignment picker stay complete; days before today are filtered out of
+  // the list below, which also keeps it to live coverage only (no drafts).
+  // Week and month views fetch drafts for review.
+  const range = useMemo(() => {
+    if (view === 'month')
+      return { start: monthStart, end: addDays(monthStart, daysInMonth(monthStart) - 1) };
+    if (view === 'uncovered') {
+      const start = weekStartOf(todayLocal());
+      return { start, end: addDays(start, UNCOVERED_HORIZON_DAYS) };
+    }
+    return { start: weekStart, end: addDays(weekStart, 6) };
+  }, [view, weekStart, monthStart]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(
-        `/api/admin/schedule-board?start=${weekStart}&end=${addDays(weekStart, 6)}&includeDrafts=1`
+        `/api/admin/schedule-board?start=${range.start}&end=${range.end}${
+          view === 'week' || view === 'month' ? '&includeDrafts=1' : ''
+        }`
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData((await res.json()) as BoardData);
@@ -200,7 +262,7 @@ export function ScheduleBoard() {
     } finally {
       setLoading(false);
     }
-  }, [weekStart]);
+  }, [range, view]);
 
   useEffect(() => {
     void load();
@@ -209,10 +271,23 @@ export function ScheduleBoard() {
   const canManage = data?.canManage ?? false;
   const selfId = data?.selfStaffId ?? null;
 
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
-  );
+  // Uncovered shifts from today forward (the fetched range reaches back to
+  // Monday only for the hours math — past gaps aren't actionable).
+  const uncoveredShifts = useMemo(() => {
+    if (view !== 'uncovered') return [];
+    const today = todayLocal();
+    return (data?.shifts ?? []).filter((s) => s.shift_date >= today && isUncovered(s));
+  }, [view, data]);
+
+  const days = useMemo(() => {
+    if (view === 'month') {
+      return Array.from({ length: daysInMonth(monthStart) }, (_, i) => addDays(monthStart, i));
+    }
+    if (view === 'uncovered') {
+      return [...new Set(uncoveredShifts.map((s) => s.shift_date))].sort();
+    }
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  }, [view, weekStart, monthStart, uncoveredShifts]);
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, BoardShift[]>();
@@ -237,16 +312,21 @@ export function ScheduleBoard() {
     return dates;
   }, [data, selfId]);
 
-  // Hours already scheduled this week per staff id (all shifts on the board).
-  const weekHours = useMemo(() => {
-    const hours: Record<string, number> = {};
+  // Hours already scheduled per staff id, bucketed by Monday week start —
+  // the month and uncovered views span several weeks, and the assignment
+  // picker's "h wk" figure must be the hours of the shift's own week.
+  const weekHoursByWeek = useMemo(() => {
+    const byWeek: Record<string, Record<string, number>> = {};
     for (const shift of data?.shifts ?? []) {
       if (shift.status !== 'active') continue;
+      const week = weekStartOf(shift.shift_date);
+      byWeek[week] ??= {};
+      const bucket = byWeek[week];
       for (const a of shift.assignments) {
-        hours[a.staff_id] = (hours[a.staff_id] ?? 0) + assignmentHours(a.starts_at, a.ends_at);
+        bucket[a.staff_id] = (bucket[a.staff_id] ?? 0) + assignmentHours(a.starts_at, a.ends_at);
       }
     }
-    return hours;
+    return byWeek;
   }, [data]);
 
   const run = useCallback(
@@ -277,10 +357,28 @@ export function ScheduleBoard() {
     setFormTarget(`edit:${shift.id}`);
   };
 
-  const proposal = useMemo(
-    () => (data?.proposals ?? []).find((p) => p.week_start === weekStart) ?? null,
-    [data, weekStart]
-  );
+  // Draft proposals to show banners for: the visible week's in week view,
+  // every fetched one (sorted by week) in month view.
+  const visibleProposals = useMemo(() => {
+    const drafts = (data?.proposals ?? []).filter((p) => p.status === 'draft');
+    if (view === 'week') return drafts.filter((p) => p.week_start === weekStart);
+    if (view === 'month')
+      return [...drafts].sort((a, b) => a.week_start.localeCompare(b.week_start));
+    return [];
+  }, [data, view, weekStart]);
+
+  // Weeks the Draft button targets: the visible week, or in month view every
+  // week that still has an uncovered shift today or later.
+  const draftTargetWeeks = useMemo(() => {
+    if (view === 'week') return [weekStart];
+    if (view !== 'month') return [];
+    const today = todayLocal();
+    const weeks = new Set<string>();
+    for (const s of data?.shifts ?? []) {
+      if (s.shift_date >= today && isUncovered(s)) weeks.add(weekStartOf(s.shift_date));
+    }
+    return [...weeks].sort();
+  }, [view, weekStart, data]);
 
   const syncMomence = async () => {
     await run(async () => {
@@ -299,12 +397,14 @@ export function ScheduleBoard() {
   };
 
   const draftSchedule = async () => {
+    const targetWeeks = draftTargetWeeks;
+    if (targetWeeks.length === 0) return;
     setDrafting(true);
     setError(null);
     const res = await fetch('/api/admin/schedule-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekStart }),
+      body: JSON.stringify({ weekStarts: targetWeeks }),
     });
     if (!res.ok) {
       try {
@@ -315,20 +415,20 @@ export function ScheduleBoard() {
       setDrafting(false);
       return;
     }
-    // Poll for the new draft proposal (the agent runs async); ~3min budget.
-    const before = proposal?.id ?? null;
+    // Poll until every requested week has a new draft proposal (the agent
+    // sessions run async and in parallel); ~3min budget.
+    const beforeIds = new Set((data?.proposals ?? []).map((p) => p.id));
     const startedAt = Date.now();
+    const pollUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}&includeDrafts=1`;
     if (draftPollRef.current) clearInterval(draftPollRef.current);
     draftPollRef.current = setInterval(async () => {
-      const boardRes = await fetch(
-        `/api/admin/schedule-board?start=${weekStart}&end=${addDays(weekStart, 6)}&includeDrafts=1`
-      );
+      const boardRes = await fetch(pollUrl);
       if (boardRes.ok) {
         const board = (await boardRes.json()) as BoardData;
-        const fresh = (board.proposals ?? []).find(
-          (p) => p.week_start === weekStart && p.id !== before
+        const freshWeeks = new Set(
+          (board.proposals ?? []).filter((p) => !beforeIds.has(p.id)).map((p) => p.week_start)
         );
-        if (fresh) {
+        if (targetWeeks.every((w) => freshWeeks.has(w))) {
           if (draftPollRef.current) clearInterval(draftPollRef.current);
           draftPollRef.current = null;
           setData(board);
@@ -383,30 +483,96 @@ export function ScheduleBoard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setWeekStart(addDays(weekStart, -7))}
-        >
-          ‹ Prev
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setWeekStart(weekStartOf(todayLocal()))}
-        >
-          This week
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setWeekStart(addDays(weekStart, 7))}
-        >
-          Next ›
-        </button>
-        <span className="font-mono text-xl font-bold text-white/80">
-          {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
+        <span className="flex gap-1.5">
+          <button
+            type="button"
+            className={pillClass(view === 'week')}
+            onClick={() => setView('week')}
+          >
+            Week
+          </button>
+          <button
+            type="button"
+            className={pillClass(view === 'month')}
+            onClick={() => setView('month')}
+          >
+            Month
+          </button>
+          {canManage && (
+            <button
+              type="button"
+              className={pillClass(view === 'uncovered')}
+              onClick={() => setView('uncovered')}
+            >
+              Uncovered
+            </button>
+          )}
         </span>
+
+        {view === 'week' && (
+          <>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+            >
+              ‹ Prev
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setWeekStart(weekStartOf(todayLocal()))}
+            >
+              This week
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+            >
+              Next ›
+            </button>
+            <span className="font-mono text-xl font-bold text-white/80">
+              {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
+            </span>
+          </>
+        )}
+
+        {view === 'month' && (
+          <>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setMonthStart(addMonths(monthStart, -1))}
+            >
+              ‹ Prev
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setMonthStart(monthStartOf(todayLocal()))}
+            >
+              This month
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setMonthStart(addMonths(monthStart, 1))}
+            >
+              Next ›
+            </button>
+            <span className="font-mono text-xl font-bold text-white/80">
+              {monthLabel(monthStart)}
+            </span>
+          </>
+        )}
+
+        {view === 'uncovered' && (
+          <span className="font-mono text-xl font-bold text-white/80">
+            {uncoveredShifts.length} uncovered through {range.end}
+          </span>
+        )}
+
         {canManage && (
           <span className="ml-auto flex gap-2">
             <button
@@ -417,17 +583,31 @@ export function ScheduleBoard() {
             >
               Sync Momence
             </button>
-            <button
-              type="button"
-              className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
-              onClick={() => void draftSchedule()}
-              disabled={busy || drafting}
-            >
-              {drafting ? 'Drafting…' : '✦ Draft schedule'}
-            </button>
+            {(view === 'week' || view === 'month') && (
+              <button
+                type="button"
+                className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+                onClick={() => void draftSchedule()}
+                disabled={busy || drafting || draftTargetWeeks.length === 0}
+                title={
+                  view === 'month'
+                    ? 'Drafts every week this month that still has uncovered shifts'
+                    : undefined
+                }
+              >
+                {drafting
+                  ? 'Drafting…'
+                  : view === 'month'
+                    ? `✦ Draft uncovered (${draftTargetWeeks.length} wk)`
+                    : '✦ Draft schedule'}
+              </button>
+            )}
           </span>
         )}
         {busy && <span className="font-mono text-xs text-white/40">Saving…</span>}
+        {!busy && loading && data && (
+          <span className="font-mono text-xs text-white/40">Loading…</span>
+        )}
       </div>
 
       {error && (
@@ -438,16 +618,26 @@ export function ScheduleBoard() {
 
       {drafting && (
         <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
-          Syncing Momence and drafting the week — the proposal will appear here (usually under a
-          minute)…
+          Syncing Momence and drafting{' '}
+          {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'} —
+          proposals will appear here (usually under a minute)…
         </p>
       )}
 
-      {proposal && <ProposalBanner proposal={proposal} busy={busy} onAction={proposalAction} />}
+      {visibleProposals.map((p) => (
+        <ProposalBanner key={p.id} proposal={p} busy={busy} onAction={proposalAction} />
+      ))}
+
+      {view === 'uncovered' && days.length === 0 && !loading && (
+        <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
+          Every shift through {range.end} is fully staffed.
+        </p>
+      )}
 
       <div className="space-y-4">
         {days.map((date) => {
-          const shifts = shiftsByDate.get(date) ?? [];
+          const allShifts = shiftsByDate.get(date) ?? [];
+          const shifts = view === 'uncovered' ? allShifts.filter(isUncovered) : allShifts;
           const selfWorks = selfDates.has(date);
           return (
             <section
@@ -471,7 +661,7 @@ export function ScheduleBoard() {
                     </span>
                   )}
                 </h2>
-                {canManage && (
+                {canManage && view !== 'uncovered' && (
                   <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
                     + Shift
                   </button>
@@ -596,7 +786,7 @@ export function ScheduleBoard() {
                           shift={shift}
                           data={data as BoardData}
                           staffById={staffById}
-                          weekHours={weekHours}
+                          weekHours={weekHoursByWeek[weekStartOf(shift.shift_date)] ?? {}}
                           busy={busy}
                           run={run}
                           canManage={canManage}
@@ -883,6 +1073,7 @@ function ShiftDetail({
                 {editing && (
                   <AssignmentEditor
                     assignment={a}
+                    shift={shift}
                     busy={busy}
                     onSave={async (fields) => {
                       setEditingAssignment(null);
@@ -969,16 +1160,36 @@ function ShiftDetail({
 
 function AssignmentEditor({
   assignment,
+  shift,
   busy,
   onSave,
 }: {
   assignment: ShiftAssignmentRow;
+  shift: BoardShift;
   busy: boolean;
   onSave: (fields: { startsAt: string; endsAt: string; role: AssignmentRole }) => Promise<void>;
 }) {
   const [startsAt, setStartsAt] = useState(hhmm(assignment.starts_at));
   const [endsAt, setEndsAt] = useState(hhmm(assignment.ends_at));
   const [role, setRole] = useState<AssignmentRole>(assignment.role);
+
+  // Full/Setup snap the times to the shift window. The window already carries
+  // the buffers (90min lead before the first session, 30min close after the
+  // last — schedule-core's DEFAULT_WINDOW_OPTIONS), so full = the whole
+  // window and setup = its first 2h, i.e. through 30min past session start.
+  // Partial only marks the role — its times stay hand-entered.
+  const applyRole = (r: AssignmentRole) => {
+    setRole(r);
+    if (r === 'full') {
+      setStartsAt(hhmm(shift.starts_at));
+      setEndsAt(hhmm(shift.ends_at));
+    } else if (r === 'setup') {
+      const startMin = timeToMinutes(shift.starts_at);
+      const endMin = timeToMinutes(shift.ends_at);
+      setStartsAt(hhmm(shift.starts_at));
+      setEndsAt(minutesToTime(Math.min(startMin + SETUP_DURATION_MIN, endMin)));
+    }
+  };
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -999,7 +1210,12 @@ function AssignmentEditor({
         aria-label="Assignment end"
       />
       {ASSIGNMENT_ROLES.map((r) => (
-        <button key={r} type="button" className={pillClass(role === r)} onClick={() => setRole(r)}>
+        <button
+          key={r}
+          type="button"
+          className={pillClass(role === r)}
+          onClick={() => applyRole(r)}
+        >
           {ASSIGNMENT_ROLE_LABELS[r]}
         </button>
       ))}
@@ -1035,7 +1251,7 @@ function ProposalBanner({
     <section className="rounded-lg border border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="font-mono text-xs font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
-          ✦ AI draft for this week
+          ✦ AI draft — week of {proposal.week_start}
         </span>
         <span className="font-mono text-[10px] text-white/50">
           {proposal.source === 'cron' ? 'weekly auto-draft' : 'manual draft'} ·{' '}

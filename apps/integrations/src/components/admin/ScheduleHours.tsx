@@ -13,8 +13,15 @@ interface BoardData {
   timeOff: TimeOffRow[];
   /** Manage side (schedule:manage / admin) — false = own hours only. */
   canManage?: boolean;
+  /** Admins additionally see the labor-cost column. */
+  isAdmin?: boolean;
   selfStaffId?: string | null;
 }
+
+/** What non-founder scheduled hours cost; founders draw no hourly wage. */
+const NON_FOUNDER_HOURLY_RATE = 20;
+
+const fmtCost = (cost: number): string => `$${Number.isInteger(cost) ? cost : cost.toFixed(2)}`;
 
 const inputClass =
   'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
@@ -58,6 +65,7 @@ export function ScheduleHours() {
   }, [load]);
 
   const canManage = data?.canManage ?? false;
+  const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
 
   const { staffColumns, weeks } = useMemo(() => {
@@ -90,12 +98,30 @@ export function ScheduleHours() {
     return { byStaff, total };
   }, [weeks]);
 
+  // Labor cost per week: non-founder hours × the hourly rate (admins only).
+  const weekCosts = useMemo(() => {
+    const costs: Record<string, number> = {};
+    if (!data) return costs;
+    const founders = founderIdsOf(data.staff);
+    for (const week of weeks) {
+      let hours = 0;
+      for (const [id, h] of Object.entries(week.byStaff)) {
+        if (!founders.has(id)) hours += h;
+      }
+      costs[week.weekStart] = hours * NON_FOUNDER_HOURLY_RATE;
+    }
+    return costs;
+  }, [data, weeks]);
+
+  const totalCost = useMemo(() => Object.values(weekCosts).reduce((a, b) => a + b, 0), [weekCosts]);
+
   const exportCsv = () => {
-    // Team totals and founder share are payroll aggregates — manage side only.
+    // Team totals and founder share are payroll aggregates — manage side
+    // only; the labor-cost column is admin only.
     const header = [
       'Week of',
       ...staffColumns.map((s) => s.display_name),
-      ...(canManage ? ['Total', '% Founders'] : []),
+      ...(canManage ? ['Total', ...(isAdmin ? ['Cost'] : []), '% Founders'] : []),
     ];
     const rows = weeks.map((week) => [
       week.weekStart,
@@ -103,6 +129,7 @@ export function ScheduleHours() {
       ...(canManage
         ? [
             fmt(week.total),
+            ...(isAdmin ? [fmtCost(weekCosts[week.weekStart] ?? 0)] : []),
             week.founderShare == null ? '' : `${(week.founderShare * 100).toFixed(1)}%`,
           ]
         : []),
@@ -110,7 +137,7 @@ export function ScheduleHours() {
     rows.push([
       'Total',
       ...staffColumns.map((s) => fmt(totals.byStaff[s.id] ?? 0)),
-      ...(canManage ? [fmt(totals.total), ''] : []),
+      ...(canManage ? [fmt(totals.total), ...(isAdmin ? [fmtCost(totalCost)] : []), ''] : []),
     ]);
     const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -180,6 +207,14 @@ export function ScheduleHours() {
                 {canManage && (
                   <>
                     <th className="py-2 pr-3 text-right">Total</th>
+                    {isAdmin && (
+                      <th
+                        className="py-2 pr-3 text-right"
+                        title={`Non-founder hours × $${NON_FOUNDER_HOURLY_RATE}/hr`}
+                      >
+                        Cost
+                      </th>
+                    )}
                     <th className="py-2 text-right">% Founders</th>
                   </>
                 )}
@@ -205,6 +240,11 @@ export function ScheduleHours() {
                       <td className="py-2 pr-3 text-right font-mono font-bold">
                         {fmt(week.total)}
                       </td>
+                      {isAdmin && (
+                        <td className="py-2 pr-3 text-right font-mono text-white/60">
+                          {fmtCost(weekCosts[week.weekStart] ?? 0)}
+                        </td>
+                      )}
                       <td className="py-2 text-right font-mono text-white/60">
                         {week.founderShare == null
                           ? '—'
@@ -226,6 +266,11 @@ export function ScheduleHours() {
                     <td className="py-2 pr-3 text-right font-mono font-bold">
                       {fmt(totals.total)}
                     </td>
+                    {isAdmin && (
+                      <td className="py-2 pr-3 text-right font-mono font-bold">
+                        {fmtCost(totalCost)}
+                      </td>
+                    )}
                     <td />
                   </>
                 )}

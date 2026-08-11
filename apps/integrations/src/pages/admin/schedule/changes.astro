@@ -1,0 +1,19 @@
+---
+// Schedule change log: who changed what (shifts, assignments, time off,
+// draft proposals, Momence sync). Admin-only — non-admin schedule users are
+// bounced back to the board here (UX; the API route's requireAdmin is the
+// security boundary).
+import { ScheduleChanges } from '@/components/admin/ScheduleChanges';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (!Astro.locals.adminAccess?.isAdmin) return Astro.redirect('/admin/schedule');
+---
+
+<AdminLayout
+  title="Change Log"
+  subtitle="Every schedule change and who made it — admins only. Sync and agent activity included."
+>
+  <ScheduleTabs current="/admin/schedule/changes" />
+  <ScheduleChanges client:load />
+</AdminLayout>

@@ -34,7 +34,8 @@ export default defineConfig({
     mdx(),
     react(),
     sitemap({
-      filter: (page) => !page.includes('/api/') && !page.includes('/account/'),
+      filter: (page) =>
+        !page.includes('/api/') && !page.includes('/account/') && !/\/hi\/?$/.test(page),
     }),
   ],
 
