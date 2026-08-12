@@ -53,6 +53,19 @@ export function slugifyCampaign(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * The campaign slug a URL is attributed to, via its utm_campaign param.
+ * Null for unparseable URLs or URLs without a utm_campaign.
+ */
+export function utmCampaignOfUrl(url: string): string | null {
+  try {
+    const raw = new URL(url).searchParams.get('utm_campaign');
+    return raw ? slugifyCampaign(raw) || null : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getAllCampaigns(): Promise<UtmCampaign[]> {
   const redis = getRedis();
   if (!redis) return [];

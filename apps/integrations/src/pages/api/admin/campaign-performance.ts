@@ -12,6 +12,7 @@ import {
   listCampaignsWithLinks,
   listShortLinks,
   slugifyCampaign,
+  utmCampaignOfUrl,
 } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { isPostHogQueryConfigured, queryHogQL } from '@/lib/analytics/posthog-query';
@@ -55,15 +56,6 @@ interface PerformanceResponse {
   campaigns: CampaignRow[];
   unattributed: Array<{ slug: string; pageviews: number; visitors: number }>;
   posthog: { configured: boolean; missingEvents: string[]; error: string | null };
-}
-
-function utmCampaignOf(url: string): string | null {
-  try {
-    const raw = new URL(url).searchParams.get('utm_campaign');
-    return raw ? slugifyCampaign(raw) || null : null;
-  } catch {
-    return null;
-  }
 }
 
 async function buildReport(days: number): Promise<PerformanceResponse> {
@@ -171,7 +163,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
     Array<{ code: string; label: string; clicks: number }>
   >();
   for (const link of shortlinkPage.links) {
-    const slug = utmCampaignOf(link.url);
+    const slug = utmCampaignOfUrl(link.url);
     if (!slug) continue;
     const list = shortlinksBySlug.get(slug) ?? [];
     list.push({ code: link.code, label: link.label, clicks: Number(link.clicks) || 0 });
