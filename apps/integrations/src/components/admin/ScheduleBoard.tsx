@@ -16,6 +16,7 @@ import {
   DOW_LABELS,
   formatShiftNotes,
   minutesToTime,
+  missingShiftLead,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
   weekStartOf,
@@ -24,14 +25,23 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import type {
   ScheduleProposalRow,
   ShiftAssignmentRow,
+  ShiftRequestRow,
   ShiftRow,
   StaffRow,
   TimeOffRow,
 } from '@/lib/db';
+import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
 }
+
+interface BoardSettings {
+  shiftRequestsEnabled: boolean;
+  unableToWorkEnabled: boolean;
+}
+
+const DEFAULT_SETTINGS: BoardSettings = { shiftRequestsEnabled: true, unableToWorkEnabled: true };
 
 interface BoardData {
   staff: StaffRow[];
@@ -40,7 +50,12 @@ interface BoardData {
   proposals?: ScheduleProposalRow[];
   /** Manage side (schedule:manage / admin) — false renders a read-only board. */
   canManage?: boolean;
+  /** Admins additionally see the employee-action toggles. */
+  isAdmin?: boolean;
   selfStaffId?: string | null;
+  /** Pending requests (all of them on the manage side, own only otherwise). */
+  shiftRequests?: ShiftRequestRow[];
+  settings?: BoardSettings;
 }
 
 const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
@@ -230,6 +245,10 @@ export function ScheduleBoard() {
   // Agent drafting: set while waiting for a new proposal to appear.
   const [drafting, setDrafting] = useState(false);
   const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // "My shifts": filter the week/month lists to shifts the viewer is on.
+  const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
+  // Admin-only panel with the employee-action toggles.
+  const [showSettings, setShowSettings] = useState(false);
 
   // What the API is asked for. The uncovered view starts its range on the
   // current week's Monday (not today) so this week's hours totals in the
@@ -269,7 +288,16 @@ export function ScheduleBoard() {
   }, [load]);
 
   const canManage = data?.canManage ?? false;
+  const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
+  const settings = data?.settings ?? DEFAULT_SETTINGS;
+
+  const toggleMineOnly = () => {
+    setMineOnly((v) => {
+      writeMyShiftsPref(!v);
+      return !v;
+    });
+  };
 
   // Uncovered shifts from today forward (the fetched range reaches back to
   // Monday only for the hours math — past gaps aren't actionable).
@@ -300,6 +328,16 @@ export function ScheduleBoard() {
   }, [data]);
 
   const staffById = useMemo(() => new Map((data?.staff ?? []).map((s) => [s.id, s])), [data]);
+
+  const requestsByShift = useMemo(() => {
+    const map = new Map<string, ShiftRequestRow[]>();
+    for (const request of data?.shiftRequests ?? []) {
+      const list = map.get(request.shift_id) ?? [];
+      list.push(request);
+      map.set(request.shift_id, list);
+    }
+    return map;
+  }, [data]);
 
   // Days the viewer is on the schedule — those get the gold treatment.
   const selfDates = useMemo(() => {
@@ -507,6 +545,20 @@ export function ScheduleBoard() {
               Uncovered
             </button>
           )}
+          {selfId && view !== 'uncovered' && (
+            <button
+              type="button"
+              className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+                mineOnly
+                  ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
+                  : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+              }`}
+              title="Only show shifts you're assigned to"
+              onClick={toggleMineOnly}
+            >
+              My shifts
+            </button>
+          )}
         </span>
 
         {view === 'week' && (
@@ -575,6 +627,16 @@ export function ScheduleBoard() {
 
         {canManage && (
           <span className="ml-auto flex gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                className={buttonClass}
+                title="Employee action settings"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                ⚙ Settings
+              </button>
+            )}
             <button
               type="button"
               className={buttonClass}
@@ -624,6 +686,47 @@ export function ScheduleBoard() {
         </p>
       )}
 
+      {isAdmin && showSettings && (
+        <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+            Employee actions
+          </p>
+          <label className="flex items-center gap-2 font-mono text-xs text-white/70">
+            <input
+              type="checkbox"
+              checked={settings.shiftRequestsEnabled}
+              disabled={busy}
+              onChange={(e) =>
+                void run(() =>
+                  api('POST', '/api/admin/schedule-settings', {
+                    key: 'shift_requests',
+                    enabled: e.target.checked,
+                  })
+                )
+              }
+            />
+            Employees can request open shifts (a manager approves before they're assigned)
+          </label>
+          <label className="flex items-center gap-2 font-mono text-xs text-white/70">
+            <input
+              type="checkbox"
+              checked={settings.unableToWorkEnabled}
+              disabled={busy}
+              onChange={(e) =>
+                void run(() =>
+                  api('POST', '/api/admin/schedule-settings', {
+                    key: 'unable_to_work',
+                    enabled: e.target.checked,
+                  })
+                )
+              }
+            />
+            Employees can mark themselves unable to work (comes off the shift, logs time off, and
+            emails the admins)
+          </label>
+        </section>
+      )}
+
       {visibleProposals.map((p) => (
         <ProposalBanner key={p.id} proposal={p} busy={busy} onAction={proposalAction} />
       ))}
@@ -637,7 +740,20 @@ export function ScheduleBoard() {
       <div className="space-y-4">
         {days.map((date) => {
           const allShifts = shiftsByDate.get(date) ?? [];
-          const shifts = view === 'uncovered' ? allShifts.filter(isUncovered) : allShifts;
+          let shifts = view === 'uncovered' ? allShifts.filter(isUncovered) : allShifts;
+          if (mineOnly && view !== 'uncovered' && selfId) {
+            shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
+          }
+          // With the filter on, skip day sections the viewer isn't part of —
+          // a filtered month would otherwise be a wall of "No shifts".
+          if (
+            mineOnly &&
+            view !== 'uncovered' &&
+            shifts.length === 0 &&
+            formTarget !== `new:${date}`
+          ) {
+            return null;
+          }
           const selfWorks = selfDates.has(date);
           return (
             <section
@@ -686,6 +802,9 @@ export function ScheduleBoard() {
                 {shifts.map((shift) => {
                   const tone = coverageTone(shift);
                   const notes = formatShiftNotes(shift);
+                  const requests = requestsByShift.get(shift.id) ?? [];
+                  const noLead =
+                    shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
                   const expanded = canManage
                     ? expandedId === shift.id
                     : !collapsedIds.has(shift.id);
@@ -729,6 +848,21 @@ export function ScheduleBoard() {
                           {shift.sync_flag && (
                             <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]">
                               ⚠ {SYNC_FLAG_LABELS[shift.sync_flag]}
+                            </span>
+                          )}
+                          {noLead && (
+                            <span
+                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                              title="Nobody on this shift is a founder or shift lead"
+                            >
+                              ⚠ no shift lead
+                            </span>
+                          )}
+                          {requests.length > 0 && (
+                            <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
+                              {canManage
+                                ? `${requests.length} request${requests.length > 1 ? 's' : ''}`
+                                : 'requested'}
                             </span>
                           )}
                           <span className="text-sm text-white/70">
@@ -791,6 +925,8 @@ export function ScheduleBoard() {
                           run={run}
                           canManage={canManage}
                           selfId={selfId}
+                          requests={requests}
+                          settings={settings}
                           onEdit={() => openEditShift(shift)}
                           editingAssignment={editingAssignment}
                           setEditingAssignment={setEditingAssignment}
@@ -949,6 +1085,8 @@ function ShiftDetail({
   run,
   canManage,
   selfId,
+  requests,
+  settings,
   onEdit,
   editingAssignment,
   setEditingAssignment,
@@ -962,6 +1100,9 @@ function ShiftDetail({
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;
   canManage: boolean;
   selfId: string | null;
+  /** Pending requests on this shift (own only for non-managers). */
+  requests: ShiftRequestRow[];
+  settings: BoardSettings;
   onEdit: () => void;
   editingAssignment: string | null;
   setEditingAssignment: (id: string | null) => void;
@@ -971,6 +1112,24 @@ function ShiftDetail({
   const endMin = timeToMinutes(shift.ends_at);
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
   const candidates = data.staff.filter((s) => s.active && !assignedIds.has(s.id));
+
+  // Employee self-service: both actions only make sense on live, upcoming
+  // shifts, and each sits behind its admin toggle.
+  const upcoming = shift.status === 'active' && !shift.is_draft && shift.shift_date >= todayLocal();
+  const selfRequest = selfId ? (requests.find((r) => r.staff_id === selfId) ?? null) : null;
+  const canRequest =
+    !canManage && settings.shiftRequestsEnabled && upcoming && !!selfId && !assignedIds.has(selfId);
+
+  const unableToWork = () => {
+    if (
+      !window.confirm(
+        'Take yourself off this shift? The date is added to your time off and the admins are notified by email.'
+      )
+    ) {
+      return;
+    }
+    void run(() => api('POST', '/api/admin/shift-unable', { shiftId: shift.id }));
+  };
 
   return (
     <div className="space-y-3 border-t border-white/10 px-3 py-3">
@@ -1013,6 +1172,17 @@ function ShiftDetail({
                   )}
                   {a.notes && <span className="font-mono text-xs text-white/40">{a.notes}</span>}
                   <span className="ml-auto flex items-center gap-2">
+                    {isSelf && !a.is_draft && upcoming && settings.unableToWorkEnabled && (
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
+                        title="Take yourself off this shift — the date is added to your time off and the admins are emailed"
+                        disabled={busy}
+                        onClick={unableToWork}
+                      >
+                        can't work this
+                      </button>
+                    )}
                     {canManage && a.is_draft && (
                       <>
                         <button
@@ -1087,6 +1257,104 @@ function ShiftDetail({
             );
           })}
         </ul>
+      )}
+
+      {canManage && requests.length > 0 && (
+        <div>
+          <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
+            Shift requests
+          </p>
+          <ul className="space-y-1.5">
+            {requests.map((r) => {
+              const availability = availabilityFor(
+                data.timeOff,
+                r.staff_id,
+                shift.shift_date,
+                startMin,
+                endMin
+              );
+              const badge = availabilityBadge(availability);
+              return (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-[var(--pyre-blue)]/10 px-2 py-1.5"
+                >
+                  <span className="font-medium">
+                    {staffById.get(r.staff_id)?.display_name ?? '?'}
+                  </span>
+                  <span className="font-mono text-xs text-white/50">
+                    asked {new Date(r.created_at).toLocaleDateString()}
+                  </span>
+                  <span className={`font-mono text-xs ${badge.className}`}>{badge.label}</span>
+                  {r.note && <span className="font-mono text-xs text-white/40">{r.note}</span>}
+                  <span className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
+                      title="Approve — puts them on the shift"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() =>
+                          api('PATCH', '/api/admin/shift-requests', {
+                            id: r.id,
+                            action: 'approve',
+                          })
+                        )
+                      }
+                    >
+                      approve
+                    </button>
+                    <button
+                      type="button"
+                      className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() =>
+                          api('PATCH', '/api/admin/shift-requests', { id: r.id, action: 'deny' })
+                        )
+                      }
+                    >
+                      deny
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {canRequest && (
+        <div className="flex flex-wrap items-center gap-2">
+          {selfRequest ? (
+            <>
+              <span className="font-mono text-xs text-[var(--pyre-creme)]">
+                Requested — waiting for a manager to approve.
+              </span>
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={busy}
+                onClick={() =>
+                  void run(() => api('DELETE', `/api/admin/shift-requests?id=${selfRequest.id}`))
+                }
+              >
+                Withdraw request
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+              disabled={busy}
+              onClick={() =>
+                void run(() => api('POST', '/api/admin/shift-requests', { shiftId: shift.id }))
+              }
+            >
+              Request this shift
+            </button>
+          )}
+        </div>
       )}
 
       {canManage && candidates.length > 0 && shift.status === 'active' && (

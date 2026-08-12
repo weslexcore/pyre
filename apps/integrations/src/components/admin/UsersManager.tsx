@@ -110,6 +110,7 @@ export function UsersManager() {
   const [newEmail, setNewEmail] = useState('');
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [newIsFounder, setNewIsFounder] = useState(false);
+  const [newIsShiftLead, setNewIsShiftLead] = useState(false);
   const [newActive, setNewActive] = useState(true);
   // Employee default: view the schedule, manage their own blackout dates.
   const [newPages, setNewPages] = useState<string[]>(['/admin/schedule']);
@@ -227,6 +228,7 @@ export function UsersManager() {
       isAdmin: newIsAdmin,
       pages: newIsAdmin ? [] : newPages,
       isFounder: newIsFounder,
+      isShiftLead: newIsShiftLead,
       active: newActive,
     });
     if (person) {
@@ -234,6 +236,7 @@ export function UsersManager() {
       setNewEmail('');
       setNewIsAdmin(false);
       setNewIsFounder(false);
+      setNewIsShiftLead(false);
       setNewActive(true);
       setNewPages(['/admin/schedule']);
     }
@@ -372,6 +375,18 @@ export function UsersManager() {
                 </label>
                 <label
                   className={checkClass}
+                  title="Can anchor a shift. Anyone without this (or founder) must be scheduled with a founder or shift lead — the boards flag shifts that break the rule."
+                >
+                  <input
+                    type="checkbox"
+                    checked={person.is_shift_lead}
+                    disabled={busy}
+                    onChange={(e) => void patch(person.id, { isShiftLead: e.target.checked })}
+                  />
+                  shift lead
+                </label>
+                <label
+                  className={checkClass}
                   title="Assignable on the shift board. Turn off when someone leaves — their past shifts and hours stay."
                 >
                   <input
@@ -481,6 +496,14 @@ export function UsersManager() {
               onChange={(e) => setNewIsFounder(e.target.checked)}
             />
             founder
+          </label>
+          <label className={checkClass}>
+            <input
+              type="checkbox"
+              checked={newIsShiftLead}
+              onChange={(e) => setNewIsShiftLead(e.target.checked)}
+            />
+            shift lead
           </label>
           <label className={checkClass}>
             <input

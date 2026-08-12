@@ -182,6 +182,7 @@ export interface WaterTestRow {
 export type {
   ScheduleProposalRow,
   ShiftAssignmentRow,
+  ShiftRequestRow,
   ShiftRow,
   StaffRow,
   TimeOffRow,

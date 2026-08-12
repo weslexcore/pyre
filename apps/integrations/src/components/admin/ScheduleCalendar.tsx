@@ -10,11 +10,13 @@ import {
   busyIntervalsFor,
   formatShiftNotes,
   minutesToTime,
+  missingShiftLead,
   timeToMinutes,
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
+import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -124,6 +126,8 @@ export function ScheduleCalendar() {
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // "My shifts": only show shift blocks the viewer is assigned to.
+  const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
 
   // The visible grid runs from the Monday on/before the 1st through the
   // Sunday on/after the month's last day.
@@ -251,6 +255,25 @@ export function ScheduleCalendar() {
           Next ›
         </button>
         <span className="font-mono text-xl font-bold text-white/80">{formatMonth(monthStart)}</span>
+        {selfId && (
+          <button
+            type="button"
+            className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+              mineOnly
+                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
+                : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+            }`}
+            title="Only show shifts you're assigned to"
+            onClick={() =>
+              setMineOnly((v) => {
+                writeMyShiftsPref(!v);
+                return !v;
+              })
+            }
+          >
+            My shifts
+          </button>
+        )}
         {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
@@ -277,7 +300,10 @@ export function ScheduleCalendar() {
             <div key={week[0]} className="grid grid-cols-7">
               {week.map((date) => {
                 const inMonth = date.slice(0, 7) === monthStart.slice(0, 7);
-                const shifts = shiftsByDate.get(date) ?? [];
+                let shifts = shiftsByDate.get(date) ?? [];
+                if (mineOnly && selfId) {
+                  shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
+                }
                 const markers = timeOffByDate.get(date) ?? [];
                 const selfWorks = selfDates.has(date);
                 const cellTone = selfWorks
@@ -311,17 +337,21 @@ export function ScheduleCalendar() {
                           .map((a) => staffById.get(a.staff_id)?.display_name ?? '?')
                           .join(', ');
                         const notes = formatShiftNotes(shift);
+                        const noLead =
+                          shift.status === 'active' &&
+                          missingShiftLead(shift.assignments, staffById);
                         return (
                           <a
                             key={shift.id}
                             href="/admin/schedule"
-                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${notes ? ` · ${notes}` : ''}`}
+                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}`}
                             className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]}`}
                           >
                             <span className="block truncate text-[11px] font-semibold leading-tight">
                               {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}{' '}
                               {shift.label}
                               {shift.status === 'cancelled' && ' ✕'}
+                              {noLead && <span className="text-[var(--pyre-gold)]"> ⚠</span>}
                             </span>
                             <span className="block truncate font-mono text-[10px] text-white/70 leading-tight">
                               {shift.assignments.length}/{shift.staff_needed}
@@ -384,6 +414,7 @@ export function ScheduleCalendar() {
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/15 align-middle" />
           covered
         </span>
+        <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
         {selfId && (
           <span className="text-[var(--pyre-gold)]">
             <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[var(--pyre-gold)]/25 ring-1 ring-inset ring-[var(--pyre-gold)]/60 align-middle" />
