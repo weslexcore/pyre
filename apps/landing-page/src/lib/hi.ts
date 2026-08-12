@@ -154,6 +154,14 @@ const hi: HiContent = {
             },
           ]
         : []),
+      {
+        id: 'contact-instagram',
+        label: 'Instagram',
+        sublabel: location.instagram,
+        href: location.instagramUrl,
+        ariaLabel: 'Message Pyre Sauna on Instagram',
+        external: true,
+      },
     ],
   },
   socials: [
