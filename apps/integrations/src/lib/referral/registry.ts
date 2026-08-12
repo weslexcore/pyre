@@ -117,6 +117,24 @@ export function getRewardTagName(): string {
   );
 }
 
+/**
+ * The Momence Price Rule id behind the reward tag's discount. Transactions
+ * record which rule produced each discount, so with this set, consumption is
+ * exact: the reward is spent only when THIS rule fires. Rules have no list
+ * API — capture the id from a test transaction after creating the rule.
+ */
+export function getRewardPriceRuleId(): number | null {
+  const raw =
+    import.meta.env.REFERRAL_REWARD_PRICE_RULE_ID ?? process.env.REFERRAL_REWARD_PRICE_RULE_ID;
+  const parsed = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** How the reward reads in email/UI copy, e.g. "$15". */
+export function getRewardLabel(): string {
+  return import.meta.env.REFERRAL_REWARD_LABEL ?? process.env.REFERRAL_REWARD_LABEL ?? '$15';
+}
+
 /** How long a redeemed-but-unbooked discount lives before the sweep expires it. */
 export function getRedemptionExpiryDays(): number {
   const raw = import.meta.env.REFERRAL_EXPIRY_DAYS ?? process.env.REFERRAL_EXPIRY_DAYS;

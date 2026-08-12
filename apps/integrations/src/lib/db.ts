@@ -142,6 +142,8 @@ export interface ReferralRewardRow {
   granted_at: string;
   consumed_at: string | null;
   consumed_session_booking_id: number | null;
+  /** The payment transaction where the reward price rule fired. */
+  consumed_payment_transaction_id: number | null;
   reward_tag_removed_at: string | null;
   decided_by: string | null;
   created_at: string;

@@ -78,7 +78,7 @@ export const EMAIL_TEMPLATES: Registry = {
     Component: ReferralRedeemed,
   },
   'referral-reward-earned': {
-    subject: (p) => `${p.friendFirstName} booked - your Pyre reward is live`,
+    subject: (p) => `${p.friendFirstName} booked - your ${p.rewardLabel} reward is live`,
     Component: ReferralRewardEarned,
   },
 };

@@ -119,6 +119,8 @@ export interface ReferralRedeemedProps {
 export interface ReferralRewardEarnedProps {
   firstName: string;
   friendFirstName: string;
+  /** The reward as copy, e.g. "$15" (REFERRAL_REWARD_LABEL). */
+  rewardLabel: string;
   bookUrl: string;
 }
 

@@ -8,20 +8,25 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow, type ReferrerRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
-import { assignMemberTag, getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
+import {
+  assignMemberTag,
+  fetchPaymentTransaction,
+  getTagIdByName,
+  type PaymentTransaction,
+  removeMemberTag,
+} from '@/lib/momence/host-api';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
-import { getReferrer, getReferrerByMemberId, getRewardTagName } from './registry';
+import {
+  getReferrer,
+  getReferrerByMemberId,
+  getRewardLabel,
+  getRewardPriceRuleId,
+  getRewardTagName,
+} from './registry';
 
 const log = createWebhookLogger('Referral Conversion');
 
 const TABLE = 'referral_redemptions';
-
-/**
- * The conversion-granting booking must not also consume the reward it just
- * granted when webhooks arrive out of order — a reward is only consumable
- * this long after it was granted.
- */
-const REWARD_GRACE_MS = 5 * 60 * 1000;
 
 function rewardBookUrl(): string {
   const site =
@@ -97,6 +102,7 @@ async function grantReward(
       props: {
         firstName: referrer.display_name,
         friendFirstName,
+        rewardLabel: getRewardLabel(),
         bookUrl: rewardBookUrl(),
       },
       sendKey: `referral-reward:${redemption.id}`,
@@ -199,67 +205,120 @@ async function revokeNotFirstTime(redemption: ReferralRedemptionRow): Promise<vo
   });
 }
 
-/**
- * The referrer's next booking after a reward grant consumes the reward:
- * remove the reward tag, mark the ledger row. Known v1 approximation — the
- * booking may not have actually used the discount (credit/membership
- * bookings); sales-price inspection is the v2 upgrade.
- */
-async function consumeRewardIfDue(memberId: number, sessionBookingId: number): Promise<void> {
-  const db = getDb();
-  if (!db) return;
+// Charges from these sources are renewals/system jobs — a Price Rule firing
+// there (or a stale-looking discount entry) must not spend the reward.
+const RENEWAL_SOURCES = new Set([
+  'auto-renew-package-membership',
+  'scheduled-job-renew-membership',
+  'scheduled-job-retry-failed-membership-charge',
+  'scheduled-job-payment-plan',
+  'scheduled-job-process-unpaid-transaction',
+  'scheduled-job-pay-for-membership',
+  'scheduled-job-charge-tuition-installments',
+]);
 
-  const referrer = await getReferrerByMemberId(memberId);
-  if (!referrer) return;
-
-  const cutoff = new Date(Date.now() - REWARD_GRACE_MS).toISOString();
-  const { data } = await db
-    .from('referral_rewards')
-    .select('*')
-    .eq('referrer_id', referrer.id)
-    .eq('status', 'granted')
-    .lt('granted_at', cutoff)
-    .order('granted_at', { ascending: true })
-    .limit(1);
-  const reward = data?.[0];
-  if (!reward) return;
-
-  let tagRemoved = false;
-  try {
-    const tagId = await getTagIdByName(reward.reward_tag_name);
-    if (tagId !== null && referrer.momence_member_id) {
-      await removeMemberTag(referrer.momence_member_id, tagId);
-      tagRemoved = true;
+/** Every Price Rule id that discounted an item on this transaction. */
+function appliedPriceRuleIds(transaction: PaymentTransaction): number[] {
+  const ids: number[] = [];
+  for (const sale of transaction.sales ?? []) {
+    for (const item of sale.items ?? []) {
+      if (item.discountCode?.priceRuleId != null) ids.push(item.discountCode.priceRuleId);
     }
-  } catch (error) {
-    log.warn(`Reward tag removal failed for referrer ${referrer.id}`, error);
   }
-
-  const { data: updated } = await db
-    .from('referral_rewards')
-    .update({
-      status: 'consumed',
-      consumed_at: new Date().toISOString(),
-      consumed_session_booking_id: sessionBookingId,
-      ...(tagRemoved && { reward_tag_removed_at: new Date().toISOString() }),
-    })
-    .eq('id', reward.id)
-    .eq('status', 'granted')
-    .select('id');
-  if (!updated || updated.length === 0) return;
-
-  await captureEvent({
-    distinctId: referrer.email ?? referrer.code,
-    event: 'referral_reward_consumed',
-    properties: { code: referrer.code, session_booking_id: sessionBookingId },
-  });
+  return ids;
 }
 
 /**
- * session-booked hook. Two independent questions about the person who just
- * booked: are they a referred friend awaiting their first booking (convert +
- * reward the referrer), and are they a referrer holding an unconsumed reward
- * (consume it)?
+ * payment-transaction-succeeded hook: if the payer is a referrer holding an
+ * unconsumed reward and the reward's Price Rule actually fired on this
+ * transaction, the reward is spent — remove the tag, close the ledger row.
+ *
+ * With REFERRAL_REWARD_PRICE_RULE_ID set the match is exact (other rules,
+ * like the partner discount, firing on the same member never consume the
+ * reward). Without it, any Price Rule discount on a non-renewal charge
+ * counts — good enough until the rule id is captured from a test purchase.
+ */
+export async function handleReferralPaymentTransaction(
+  paymentTransactionId: number
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
+  try {
+    let transaction: PaymentTransaction;
+    try {
+      transaction = await fetchPaymentTransaction(paymentTransactionId);
+    } catch (error) {
+      log.warn(`Payment transaction ${paymentTransactionId} fetch failed`, error);
+      return;
+    }
+
+    if (transaction.paymentStatus !== 'succeeded') return;
+    if (!transaction.payingMember?.id) return;
+    if (RENEWAL_SOURCES.has(transaction.paymentSource)) return;
+
+    const referrer = await getReferrerByMemberId(transaction.payingMember.id);
+    if (!referrer) return;
+
+    const { data } = await db
+      .from('referral_rewards')
+      .select('*')
+      .eq('referrer_id', referrer.id)
+      .eq('status', 'granted')
+      .order('granted_at', { ascending: true })
+      .limit(1);
+    const reward = data?.[0];
+    if (!reward) return;
+
+    const ruleIds = appliedPriceRuleIds(transaction);
+    const expectedRuleId = getRewardPriceRuleId();
+    const rewardRuleFired =
+      expectedRuleId !== null ? ruleIds.includes(expectedRuleId) : ruleIds.length > 0;
+    if (!rewardRuleFired) return;
+
+    let tagRemoved = false;
+    try {
+      const tagId = await getTagIdByName(reward.reward_tag_name);
+      if (tagId !== null && referrer.momence_member_id) {
+        await removeMemberTag(referrer.momence_member_id, tagId);
+        tagRemoved = true;
+      }
+    } catch (error) {
+      log.warn(`Reward tag removal failed for referrer ${referrer.id}`, error);
+    }
+
+    const { data: updated } = await db
+      .from('referral_rewards')
+      .update({
+        status: 'consumed',
+        consumed_at: new Date().toISOString(),
+        consumed_payment_transaction_id: transaction.id,
+        ...(tagRemoved && { reward_tag_removed_at: new Date().toISOString() }),
+      })
+      .eq('id', reward.id)
+      .eq('status', 'granted')
+      .select('id');
+    if (!updated || updated.length === 0) return;
+
+    await captureEvent({
+      distinctId: referrer.email ?? referrer.code,
+      event: 'referral_reward_consumed',
+      properties: {
+        code: referrer.code,
+        payment_transaction_id: transaction.id,
+        purchase_type: transaction.purchaseType,
+        rule_matched: expectedRuleId !== null,
+      },
+    });
+  } catch (error) {
+    log.error('Referral payment-transaction handling failed', error);
+  }
+}
+
+/**
+ * session-booked hook: is the person who just booked a referred friend
+ * awaiting their first booking? Convert the redemption and reward the
+ * referrer if so.
  */
 export async function handleReferralBooking(params: {
   sessionId: number;
@@ -321,11 +380,9 @@ export async function handleReferralBooking(params: {
     log.error('Referral conversion handling failed', error);
   }
 
-  try {
-    await consumeRewardIfDue(params.targetMemberId, params.sessionBookingId);
-  } catch (error) {
-    log.error('Reward consumption handling failed', error);
-  }
+  // Reward consumption is driven by payment-transaction-succeeded (the
+  // transaction records whether the reward's Price Rule actually fired) —
+  // a plain booking must not eat the reward.
 }
 
 /**

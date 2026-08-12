@@ -285,6 +285,55 @@ export async function fetchSales(
   return data.payload ?? [];
 }
 
+// --- Payment transactions (the consumption signal for referral rewards) ---
+
+export interface PaymentTransactionDiscount {
+  id: number;
+  discountCodeId: number | null;
+  /** Set when a dashboard Price Rule produced the discount. */
+  priceRuleId: number | null;
+}
+
+export interface PaymentTransactionSaleItem {
+  id: number;
+  saleItemId: number;
+  itemType: SaleItemType;
+  itemName: string;
+  discountCode: PaymentTransactionDiscount | null;
+}
+
+export interface PaymentTransactionSale {
+  id: number;
+  saleDate: string;
+  items: PaymentTransactionSaleItem[];
+}
+
+export interface PaymentTransaction {
+  id: number;
+  payingMember: SaleMember | null;
+  paymentStatus: 'succeeded' | 'failed' | 'pending' | 'voided' | 'unpaid' | 'incomplete';
+  /** Where the charge came from — renewals arrive as scheduled/auto sources. */
+  paymentSource: string;
+  purchaseType: string;
+  paidInCurrency: string;
+  sales?: PaymentTransactionSale[];
+  createdAt: string;
+}
+
+/**
+ * Full detail for one payment transaction — the payment-transaction-succeeded
+ * webhook only carries the id, so handlers fetch the rest here. Includes which
+ * Price Rule (if any) discounted each sale item.
+ */
+export async function fetchPaymentTransaction(
+  paymentTransactionId: number
+): Promise<PaymentTransaction> {
+  return momenceRequest<PaymentTransaction>(
+    'GET',
+    `/host/payment-transactions/${paymentTransactionId}`
+  );
+}
+
 // --- Tags (name -> id map, plus write-back so staff see journey status) ---
 
 export interface HostTag {

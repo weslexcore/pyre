@@ -10,7 +10,11 @@ import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { resolveSession } from '@/lib/momence-events';
-import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
+import {
+  handleReferralBooking,
+  handleReferralCancellation,
+  handleReferralPaymentTransaction,
+} from '@/lib/referral/conversion';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
@@ -33,6 +37,10 @@ const ADDRESS_EVENTS: MomenceEventType[] = [
   'member-address-deleted',
 ];
 const BOOKING_EVENTS: MomenceEventType[] = ['session-booked', 'session-booking-cancelled'];
+
+interface MomencePaymentTransactionPayload {
+  id: number;
+}
 
 interface MomenceBookingPayload {
   sessionId: number;
@@ -233,6 +241,17 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
       await handleBookingEvent(event as MomenceEventType, payload as MomenceBookingPayload, tracer);
+    } else if (event === 'payment-transaction-succeeded') {
+      // Referral reward consumption. The payload is just the transaction id;
+      // the handler fetches the detail and catches its own errors.
+      const transactionId = (payload as MomencePaymentTransactionPayload)?.id;
+      if (typeof transactionId === 'number') {
+        await tracer.span(
+          'Handle referral payment transaction',
+          () => handleReferralPaymentTransaction(transactionId),
+          { transactionId }
+        );
+      }
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }
