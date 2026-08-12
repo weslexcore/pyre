@@ -27,6 +27,11 @@ export interface MomenceTokenData {
  */
 export interface MomenceUserProfile {
   id: number;
+  /**
+   * Momence host member id (nullable in AuthProfileDto). Distinct from `id`
+   * (the OAuth user id) — host-API calls and webhooks key on THIS id.
+   */
+  memberId?: number | null;
   email: string;
   firstName: string;
   lastName: string;

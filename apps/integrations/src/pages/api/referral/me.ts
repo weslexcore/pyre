@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getDb } from '@/lib/db';
-import { findMemberByEmail } from '@/lib/momence/host-api';
+import { fetchHostMember, findMemberByEmail, type HostMember } from '@/lib/momence/host-api';
 import { isReferralAuthorized } from '@/lib/referral/api-auth';
 import { getReferralClicks } from '@/lib/referral/codes';
 import { getOrCreateMemberReferrer } from '@/lib/referral/referrers';
@@ -40,10 +40,25 @@ export const POST: APIRoute = async ({ request }) => {
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+  const momenceMemberId =
+    typeof body.momenceMemberId === 'number' && Number.isFinite(body.momenceMemberId)
+      ? body.momenceMemberId
+      : null;
   if (!EMAIL_RE.test(email)) return json(400, { error: 'Invalid email' });
 
   try {
-    const member = await findMemberByEmail(email);
+    // The OAuth profile's host member id is authoritative when the caller has
+    // it; the email search is a fuzzy first-page match and can miss members
+    // (it did for staff addresses), so it's only the fallback.
+    let member: HostMember | null = null;
+    if (momenceMemberId !== null) {
+      try {
+        member = await fetchHostMember(momenceMemberId);
+      } catch {
+        member = null;
+      }
+    }
+    if (!member) member = await findMemberByEmail(email);
     if (!member) return json(404, { error: 'member-not-found' });
 
     const result = await getOrCreateMemberReferrer({

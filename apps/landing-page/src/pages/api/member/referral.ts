@@ -37,6 +37,9 @@ export const GET: APIRoute = async ({ cookies }) => {
       body: JSON.stringify({
         email: session.user.email,
         firstName: session.user.firstName,
+        // Host member id from the OAuth profile — lets integrations fetch the
+        // member directly instead of relying on the fuzzy email search.
+        momenceMemberId: session.user.memberId ?? undefined,
       }),
     });
     if (!response.ok) {

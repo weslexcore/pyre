@@ -235,6 +235,7 @@ export async function fetchUserProfile(accessToken: string): Promise<MomenceUser
 
   return {
     id: data.userId,
+    memberId: typeof data.memberId === 'number' ? data.memberId : null,
     email: data.email || '',
     firstName: data.firstName || 'User',
     lastName: data.lastName || '',
