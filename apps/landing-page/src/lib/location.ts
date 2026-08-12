@@ -4,7 +4,7 @@ const location: LocationContent = {
   name: 'PYRE',
   neighborhood: '@ Living Water',
   address: '1000 Westover Hills Blvd, Richmond, VA 23225',
-  phone: '',
+  phone: '(804) 361-7654',
   email: 'hi@pyresauna.com',
   instagram: '@pyre_sauna',
   instagramUrl: 'https://instagram.com/pyre_sauna',
