@@ -53,7 +53,7 @@ export const accountConfig = {
   referral: {
     title: 'Give 15%, Get a Discount',
     subtitle:
-      'Share your personal link. Friends get a discount on their first session — and when they book, you get a discount on your next one.',
+      'Share your personal link. Friends get a discount on their first session — and when they book, your next session gets cheaper (or free).',
     codeLabel: 'Your code',
     linkLabel: 'Your link',
     copyButton: 'Copy link',
@@ -66,7 +66,7 @@ export const accountConfig = {
       redemptionsLabel: 'Claimed',
       conversionsLabel: 'Booked',
     },
-    rewardActiveBadge: 'Reward active — discount on your next session',
+    rewardActiveBadge: 'Reward active — check your email for the details',
     errorState: 'Could not load your referral code. Please try again later.',
     disabledState: 'Your referral code is currently inactive.',
   },

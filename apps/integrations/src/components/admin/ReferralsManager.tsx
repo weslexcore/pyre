@@ -582,11 +582,28 @@ function RewardsSection({
                 {referrer?.display_name ?? row.referrer_id}
               </span>
               {referrer && <span className="font-mono text-xs text-white/40">{referrer.code}</span>}
+              <span className="font-mono text-xs text-white/50">
+                {row.reward_type === 'credit'
+                  ? 'free credit'
+                  : row.reward_type === 'manual'
+                    ? 'front-desk comp'
+                    : 'next-session discount'}
+              </span>
               <span className="ml-auto font-mono text-xs text-white/30">
                 granted {fmtDate(row.granted_at)}
                 {row.consumed_at && ` → used ${fmtDate(row.consumed_at)}`}
               </span>
-              {canManage && row.status === 'granted' && (
+              {canManage && row.status === 'granted' && row.reward_type === 'manual' && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy}
+                  onClick={() => act({ action: 'fulfill-reward', id: row.id }, 'Comp fulfilled')}
+                >
+                  Mark fulfilled
+                </button>
+              )}
+              {canManage && row.status === 'granted' && row.reward_type !== 'credit' && (
                 <button
                   type="button"
                   className={buttonClass}

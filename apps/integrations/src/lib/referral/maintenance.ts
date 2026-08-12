@@ -142,6 +142,9 @@ async function expireRewards(
     .from('referral_rewards')
     .select('*')
     .eq('status', 'granted')
+    // Only tag discounts expire on a timer; manual comps stay visible in the
+    // admin queue until staff fulfill or revoke them.
+    .eq('reward_type', 'discount')
     .lt('granted_at', cutoff)
     .order('granted_at', { ascending: true })
     .limit(BATCH);

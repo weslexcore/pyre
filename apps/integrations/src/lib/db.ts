@@ -137,6 +137,14 @@ export interface ReferralRewardRow {
   id: string;
   referrer_id: string;
   redemption_id: string;
+  /**
+   * How the reward was delivered: 'credit' = event credit added to a pack
+   * (instant, lands consumed), 'manual' = staff-fulfilled comp, 'discount' =
+   * the original tag + price rule.
+   */
+  reward_type: 'discount' | 'credit' | 'manual';
+  credit_bought_membership_id: number | null;
+  credits_granted: number | null;
   reward_tag_name: string;
   status: 'granted' | 'consumed' | 'expired' | 'revoked';
   granted_at: string;

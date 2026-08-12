@@ -8,7 +8,14 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow, type ReferrerRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
-import { assignMemberTag, getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
+import {
+  assignMemberTag,
+  type BoughtMembership,
+  fetchMemberActivePacks,
+  getTagIdByName,
+  removeMemberTag,
+  updateBoughtMembershipEventCredits,
+} from '@/lib/momence/host-api';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { getReferrer, getReferrerByMemberId, getRewardTagName } from './registry';
 
@@ -46,10 +53,33 @@ async function removeDiscountTag(redemption: ReferralRedemptionRow): Promise<boo
   }
 }
 
+/** Prefer the pack with the most runway: no expiry first, then latest endDate. */
+function pickCreditPack(packs: BoughtMembership[]): BoughtMembership | null {
+  const eligible = packs.filter((p) => p.type === 'package-events');
+  if (eligible.length === 0) return null;
+  return eligible.sort((a, b) => {
+    if (a.endDate === null || b.endDate === null) {
+      return a.endDate === b.endDate ? 0 : a.endDate === null ? -1 : 1;
+    }
+    return new Date(b.endDate).getTime() - new Date(a.endDate).getTime();
+  })[0];
+}
+
+const SUBSCRIPTION_TYPES = new Set(['subscription', 'on-demand-subscription', 'patron']);
+
+type RewardKind = 'discount' | 'credit' | 'manual';
+
 /**
- * Grant the referrer their reward: ledger row (the idempotency claim), reward
- * tag, email. Member referrers only — partner conversions are settled
- * manually off the redemption counts.
+ * Grant the referrer their reward, shaped by what they actually buy — a
+ * session discount is worthless to members:
+ *
+ *   credit    active package-events pack -> +1 event credit, instantly
+ *   manual    subscription but no pack (unlimited members) -> staff comp,
+ *             fulfilled from /admin/referrals
+ *   discount  everyone else -> the reward tag + price rule
+ *
+ * Member referrers only — partner conversions are settled manually off the
+ * redemption counts.
  */
 async function grantReward(
   redemption: ReferralRedemptionRow,
@@ -61,34 +91,78 @@ async function grantReward(
   if (referrer.referrer_type !== 'member' || !referrer.momence_member_id || !referrer.email) {
     return;
   }
-
+  const memberId = referrer.momence_member_id;
   const rewardTagName = getRewardTagName();
+
+  let packs: BoughtMembership[] = [];
+  try {
+    // fresh: the 20h cache would happily report a pack that just expired.
+    packs = await fetchMemberActivePacks(memberId, { fresh: true });
+  } catch (error) {
+    log.warn(`Pack lookup failed for referrer ${referrer.id} — defaulting to discount`, error);
+  }
+  const creditPack = pickCreditPack(packs);
+  const hasSubscription = packs.some((p) => SUBSCRIPTION_TYPES.has(p.type));
+  let rewardKind: RewardKind = creditPack ? 'credit' : hasSubscription ? 'manual' : 'discount';
 
   // The unique redemption_id claim makes webhook retries no-ops. Claim before
   // the Momence write: a duplicate insert means another invocation owns this
-  // reward, tag and email included.
-  const { error } = await db.from('referral_rewards').insert({
-    referrer_id: referrer.id,
-    redemption_id: redemption.id,
-    reward_tag_name: rewardTagName,
-  });
-  if (error) {
-    if (error.code !== '23505') log.error('Reward insert failed', error);
+  // reward, delivery and email included.
+  const { data: inserted, error } = await db
+    .from('referral_rewards')
+    .insert({
+      referrer_id: referrer.id,
+      redemption_id: redemption.id,
+      reward_tag_name: rewardTagName,
+      reward_type: rewardKind,
+    })
+    .select('id')
+    .single();
+  if (error || !inserted) {
+    if (error?.code !== '23505') log.error('Reward insert failed', error);
     return;
   }
 
-  try {
-    const tagId = await getTagIdByName(rewardTagName);
-    if (tagId === null) {
-      log.error(`Reward tag "${rewardTagName}" not found — create it in the dashboard first`);
-    } else {
-      await assignMemberTag(referrer.momence_member_id, tagId);
+  if (rewardKind === 'credit' && creditPack) {
+    try {
+      const before = creditPack.eventCreditsLeft ?? 0;
+      await updateBoughtMembershipEventCredits(memberId, creditPack.id, before + 1);
+      // Delivered on the spot — nothing to consume later.
+      await db
+        .from('referral_rewards')
+        .update({
+          status: 'consumed',
+          consumed_at: new Date().toISOString(),
+          credit_bought_membership_id: creditPack.id,
+          credits_granted: 1,
+        })
+        .eq('id', inserted.id);
+    } catch (creditError) {
+      // The pack refused the top-up (expired between read and write, wrong
+      // type, API hiccup) — fall back to the tag discount so the referrer
+      // still gets something.
+      log.error(`Credit grant failed for referrer ${referrer.id} — falling back`, creditError);
+      rewardKind = 'discount';
+      await db.from('referral_rewards').update({ reward_type: 'discount' }).eq('id', inserted.id);
     }
-  } catch (tagError) {
-    // The ledger row exists either way; the admin queue surfaces grant rows
-    // whose tag never landed via the Momence member view.
-    log.error(`Reward tag assignment failed for referrer ${referrer.id}`, tagError);
   }
+
+  if (rewardKind === 'discount') {
+    try {
+      const tagId = await getTagIdByName(rewardTagName);
+      if (tagId === null) {
+        log.error(`Reward tag "${rewardTagName}" not found — create it in the dashboard first`);
+      } else {
+        await assignMemberTag(memberId, tagId);
+      }
+    } catch (tagError) {
+      // The ledger row exists either way; the admin queue surfaces grant rows
+      // whose tag never landed via the Momence member view.
+      log.error(`Reward tag assignment failed for referrer ${referrer.id}`, tagError);
+    }
+  }
+  // rewardKind === 'manual': nothing to write in Momence — the row sits
+  // 'granted' in /admin/referrals until staff fulfill it.
 
   try {
     await sendTemplate({
@@ -97,6 +171,7 @@ async function grantReward(
       props: {
         firstName: referrer.display_name,
         friendFirstName,
+        rewardKind,
         bookUrl: rewardBookUrl(),
       },
       sendKey: `referral-reward:${redemption.id}`,
@@ -108,7 +183,7 @@ async function grantReward(
   await captureEvent({
     distinctId: referrer.email,
     event: 'referral_reward_granted',
-    properties: { code: redemption.code, redemption_id: redemption.id },
+    properties: { code: redemption.code, redemption_id: redemption.id, reward_type: rewardKind },
   });
 }
 
@@ -218,6 +293,9 @@ async function consumeRewardIfDue(memberId: number, sessionBookingId: number): P
     .select('*')
     .eq('referrer_id', referrer.id)
     .eq('status', 'granted')
+    // Only tag discounts consume on the next booking; credit rewards land
+    // consumed and manual comps are fulfilled by staff.
+    .eq('reward_type', 'discount')
     .lt('granted_at', cutoff)
     .order('granted_at', { ascending: true })
     .limit(1);

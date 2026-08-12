@@ -81,6 +81,9 @@ export async function revokeReward(id: string, actorEmail: string): Promise<Revo
     .maybeSingle<ReferralRewardRow>();
   if (!row) return { outcome: 'not-found' };
   if (row.status !== 'granted') return { outcome: 'not-revocable', status: row.status };
+  // Credit rewards are already delivered — pulling the credit back is a
+  // dashboard decision, not a one-click revoke.
+  if (row.reward_type === 'credit') return { outcome: 'not-revocable', status: 'delivered' };
 
   const { data: referrer } = await db
     .from('referrers')
@@ -88,8 +91,9 @@ export async function revokeReward(id: string, actorEmail: string): Promise<Revo
     .eq('id', row.referrer_id)
     .maybeSingle<{ momence_member_id: number | null; email: string | null; code: string }>();
 
+  // Only discount rewards have a tag to pull; manual comps are just status.
   let tagRemoved = false;
-  if (referrer?.momence_member_id) {
+  if (row.reward_type === 'discount' && referrer?.momence_member_id) {
     try {
       const tagId = await getTagIdByName(row.reward_tag_name);
       if (tagId !== null) {
@@ -118,5 +122,37 @@ export async function revokeReward(id: string, actorEmail: string): Promise<Revo
     event: 'referral_reward_revoked',
     properties: { code: referrer?.code },
   });
+  return { outcome: 'revoked' };
+}
+
+/**
+ * Staff delivered a manual comp (e.g. an unlimited member's free session) —
+ * close the ledger row out.
+ */
+export async function fulfillReward(id: string, actorEmail: string): Promise<RevokeResult> {
+  const db = getDb();
+  if (!db) throw new Error('Supabase not configured');
+
+  const { data: row } = await db
+    .from('referral_rewards')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle<ReferralRewardRow>();
+  if (!row) return { outcome: 'not-found' };
+  if (row.status !== 'granted' || row.reward_type !== 'manual') {
+    return { outcome: 'not-revocable', status: row.status };
+  }
+
+  const { data: updated } = await db
+    .from('referral_rewards')
+    .update({
+      status: 'consumed',
+      consumed_at: new Date().toISOString(),
+      decided_by: actorEmail,
+    })
+    .eq('id', id)
+    .eq('status', 'granted')
+    .select('id');
+  if (!updated || updated.length === 0) return { outcome: 'not-revocable', status: row.status };
   return { outcome: 'revoked' };
 }

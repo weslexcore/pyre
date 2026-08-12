@@ -236,6 +236,34 @@ export async function fetchMemberActivePacks(
   return packs;
 }
 
+export async function invalidateMemberPacksCache(memberId: number): Promise<void> {
+  const redis = getRedis();
+  if (redis) await redis.del(`${PACKS_CACHE_PREFIX}${memberId}`);
+}
+
+/**
+ * Set the remaining event credits on a package-events bought membership
+ * (ApiV2HostMembersBoughtMembershipsController_updateClassCredits). The
+ * endpoint SETS the count — no increment op exists — so callers read a fresh
+ * count first, and a booking landing inside the read-then-write window would
+ * be clobbered. Acceptable at Pyre's volume; keep grants rare and small.
+ */
+export async function updateBoughtMembershipEventCredits(
+  memberId: number,
+  boughtMembershipId: number,
+  eventCreditsLeft: number
+): Promise<{ eventCreditsLeft?: number }> {
+  const result = await momenceRequest<{ eventCreditsLeft?: number }>(
+    'PUT',
+    `/host/members/${memberId}/bought-memberships/${boughtMembershipId}/credits`,
+    { body: { eventCreditsLeft } }
+  );
+  // The 20h pack cache would otherwise serve the stale count to the credit
+  // reminder sweeps until tomorrow.
+  await invalidateMemberPacksCache(memberId);
+  return result;
+}
+
 // --- Sales (experimental endpoint — the purchase-trigger source) ---
 
 export type SaleItemType =

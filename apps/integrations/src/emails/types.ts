@@ -119,6 +119,12 @@ export interface ReferralRedeemedProps {
 export interface ReferralRewardEarnedProps {
   firstName: string;
   friendFirstName: string;
+  /**
+   * How the reward was delivered: 'credit' = free session credit already on
+   * the account, 'manual' = comp fulfilled at the front desk, 'discount' =
+   * automatic % off the next session.
+   */
+  rewardKind: 'discount' | 'credit' | 'manual';
   bookUrl: string;
 }
 

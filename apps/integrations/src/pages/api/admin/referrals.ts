@@ -17,7 +17,7 @@ import {
   type ReferrerRow,
 } from '@/lib/db';
 import { findMemberByEmail, getTagIdByName, invalidateTagCache } from '@/lib/momence/host-api';
-import { revokeRedemption, revokeReward } from '@/lib/referral/admin-actions';
+import { fulfillReward, revokeRedemption, revokeReward } from '@/lib/referral/admin-actions';
 import { createPartnerReferrer, getOrCreateMemberReferrer } from '@/lib/referral/referrers';
 import { getRewardTagName, invalidateTierCache } from '@/lib/referral/registry';
 
@@ -270,6 +270,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         if (result.outcome === 'not-found') return json({ error: 'No such reward' }, 404);
         if (result.outcome === 'not-revocable') {
           return json({ error: `Already ${result.status} — nothing to revoke` }, 409);
+        }
+        return json({ ok: true });
+      }
+
+      case 'fulfill-reward': {
+        const id = String(body.id ?? '');
+        if (!id) return json({ error: 'Missing id' }, 400);
+        const result = await fulfillReward(id, actorEmail);
+        if (result.outcome === 'not-found') return json({ error: 'No such reward' }, 404);
+        if (result.outcome === 'not-revocable') {
+          return json({ error: 'Only granted manual comps can be fulfilled' }, 409);
         }
         return json({ ok: true });
       }
