@@ -158,6 +158,8 @@ import location from '../lib/location';
                     <a
                       href={method.href}
                       aria-label={method.ariaLabel}
+                      target={method.external ? '_blank' : undefined}
+                      rel={method.external ? 'noopener noreferrer' : undefined}
                       class="flex items-center justify-between gap-3 border border-current/15 rounded-md px-3 py-2.5 transition-all duration-200 hover:border-current/50 hover:bg-[var(--pyre-creme)]/5"
                       data-track-placement={`hi_${method.id.replace(/-/g, '_')}`}
                     >
