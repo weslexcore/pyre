@@ -33,6 +33,7 @@ export {
   slugifyCampaign,
   updateLinkLabel,
   type UtmCampaign,
+  utmCampaignOfUrl,
   type UtmLink,
 } from './utm-campaign-store';
 export {

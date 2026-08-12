@@ -279,6 +279,9 @@ interface SavedLink {
 interface CampaignWithLinks {
   campaign: SavedCampaign;
   links: SavedLink[];
+  // Short links whose destination carries this campaign's utm_campaign.
+  // Optional so an older payload without the field can't crash the island.
+  shortlinks?: ShortLinkRow[];
 }
 
 // One row of the "Recent short links" list (mirrors the server ShortLink shape,
@@ -1597,8 +1600,9 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
         )}
 
         <div className="space-y-2">
-          {campaigns?.map(({ campaign, links }) => {
+          {campaigns?.map(({ campaign, links, shortlinks }) => {
             const isOpen = expanded[campaign.id] ?? false;
+            const campaignShortlinks = shortlinks ?? [];
             return (
               <div key={campaign.id} className="rounded border border-white/10 bg-white/5">
                 <div className="flex items-center gap-2 px-3 py-2">
@@ -1615,6 +1619,12 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                     <span className="text-xs text-white/40">
                       {links.length} link{links.length === 1 ? '' : 's'}
                     </span>
+                    {campaignShortlinks.length > 0 && (
+                      <span className="text-xs text-white/40">
+                        {campaignShortlinks.length} short link
+                        {campaignShortlinks.length === 1 ? '' : 's'}
+                      </span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -1730,6 +1740,45 @@ export function UtmAssist({ origin, blogPosts }: UtmAssistProps) {
                         </div>
                       );
                     })}
+                    {campaignShortlinks.length > 0 && (
+                      <div className="px-3 py-3">
+                        <p className="mb-2 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                          Short links
+                        </p>
+                        <ul className="flex flex-col gap-2">
+                          {campaignShortlinks.map((sl) => {
+                            const shortUrl = `${origin}/s/${sl.code}`;
+                            return (
+                              <li key={sl.code} className="flex items-center gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-sm text-[var(--pyre-creme)] truncate">
+                                      /s/{sl.code}
+                                    </span>
+                                    {sl.label && (
+                                      <span className="text-xs text-white/40 truncate">
+                                        {sl.label}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-white/30 break-all">→ {sl.url}</p>
+                                </div>
+                                <span className="shrink-0 text-xs text-white/40">
+                                  {sl.clicks} click{sl.clicks === 1 ? '' : 's'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyRow(sl.code, shortUrl)}
+                                  className="shrink-0 px-2 py-1 rounded border border-white/20 text-xs text-white/60 hover:text-white hover:border-white/40 transition-colors"
+                                >
+                                  {copiedCode === sl.code ? 'Copied' : 'Copy'}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
