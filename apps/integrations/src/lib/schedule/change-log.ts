@@ -9,7 +9,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdminGate } from '@/lib/auth/admin';
 
-export type ChangeEntityType = 'shift' | 'assignment' | 'time_off' | 'proposal' | 'sync';
+export type ChangeEntityType =
+  | 'shift'
+  | 'assignment'
+  | 'time_off'
+  | 'proposal'
+  | 'sync'
+  | 'request';
 
 export type ChangeAction =
   | 'create'
@@ -20,7 +26,8 @@ export type ChangeAction =
   | 'discard'
   | 'accept_item'
   | 'reject_item'
-  | 'sync';
+  | 'sync'
+  | 'deny';
 
 export interface ScheduleChangeRow {
   id: string;

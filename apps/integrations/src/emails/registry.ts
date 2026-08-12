@@ -12,6 +12,7 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
+import { ShiftUnableNotice } from './templates/ShiftUnableNotice';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
@@ -80,6 +81,10 @@ export const EMAIL_TEMPLATES: Registry = {
   'referral-reward-earned': {
     subject: (p) => `${p.friendFirstName} booked - your Pyre reward is live`,
     Component: ReferralRewardEarned,
+  },
+  'shift-unable-notice': {
+    subject: (p) => `${p.staffName} can't work ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: ShiftUnableNotice,
   },
 };
 

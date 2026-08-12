@@ -11,10 +11,12 @@ import {
   getDb,
   type ScheduleProposalRow,
   type ShiftAssignmentRow,
+  type ShiftRequestRow,
   type ShiftRow,
   type StaffRow,
   type TimeOffRow,
 } from '@/lib/db';
+import { getScheduleSettings, type ScheduleSettings } from '@/lib/schedule/settings';
 
 export const prerender = false;
 
@@ -38,6 +40,13 @@ export interface ScheduleBoardPayload {
   isAdmin: boolean;
   /** The staff row matching the caller's login email, if any. */
   selfStaffId: string | null;
+  /**
+   * Pending shift requests for the fetched shifts: all of them on the manage
+   * side, only the caller's own otherwise.
+   */
+  shiftRequests: ShiftRequestRow[];
+  /** The admin toggles for the employee-facing actions. */
+  settings: ScheduleSettings;
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -105,6 +114,26 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
     : null;
 
+  // Pending requests on the fetched shifts. Everyone sees enough to render
+  // their own "requested" state; only the manage side sees other people's.
+  let shiftRequests: ShiftRequestRow[] = [];
+  if (shifts.length > 0 && (canManage || selfStaffId)) {
+    let requestsQuery = db
+      .from('shift_requests')
+      .select('*')
+      .eq('status', 'pending')
+      .in(
+        'shift_id',
+        shifts.map((s) => s.id)
+      )
+      .order('created_at');
+    if (!canManage) requestsQuery = requestsQuery.eq('staff_id', selfStaffId as string);
+
+    const { data: requests, error } = await requestsQuery;
+    if (error) return json({ error: error.message }, 500);
+    shiftRequests = (requests ?? []) as ShiftRequestRow[];
+  }
+
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
     // dashboard access stay on the manage side.
@@ -122,6 +151,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     canManage,
     isAdmin: gate.access.isAdmin,
     selfStaffId,
+    shiftRequests,
+    settings: await getScheduleSettings(),
   };
 
   if (includeDrafts) {

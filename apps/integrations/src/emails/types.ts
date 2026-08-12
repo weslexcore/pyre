@@ -122,6 +122,18 @@ export interface ReferralRewardEarnedProps {
   bookUrl: string;
 }
 
+// Staff scheduling (transactional, admin-facing — no unsubscribeUrl).
+
+export interface ShiftUnableNoticeProps {
+  staffName: string;
+  shiftLabel: string;
+  /** e.g. "Thursday, August 14" */
+  dateLabel: string;
+  /** e.g. "2:30p–8:30p" */
+  timeLabel: string;
+  scheduleUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -137,6 +149,7 @@ export interface EmailPropsByTemplate {
   'partner-reconciliation': PartnerReconciliationProps;
   'referral-redeemed': ReferralRedeemedProps;
   'referral-reward-earned': ReferralRewardEarnedProps;
+  'shift-unable-notice': ShiftUnableNoticeProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

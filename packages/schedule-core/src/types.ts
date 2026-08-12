@@ -10,91 +10,116 @@
  * /admin/users.
  */
 export interface StaffRow {
-  id: string;
-  display_name: string;
-  /**
-   * Momence account email — the join key against the OAuth profile, for both
-   * "whose schedule is this" and "may they use the dashboard". Null until the
-   * person's account email is confirmed.
-   */
-  email: string | null;
-  is_founder: boolean;
-  /** Available to be scheduled; false = off the roster, history preserved. */
-  active: boolean;
-  /** Dashboard: sees every admin page and manages people. */
-  is_admin: boolean;
-  /** Admin page hrefs / capability keys granted to a non-admin. */
-  pages: string[];
-  momence_member_id: number | null;
-  /** Email of the admin who added them. */
-  added_by: string | null;
-  created_at: string;
-  updated_at: string;
+	id: string;
+	display_name: string;
+	/**
+	 * Momence account email — the join key against the OAuth profile, for both
+	 * "whose schedule is this" and "may they use the dashboard". Null until the
+	 * person's account email is confirmed.
+	 */
+	email: string | null;
+	is_founder: boolean;
+	/**
+	 * May anchor a shift. Anyone without this (and without is_founder) must be
+	 * scheduled alongside a founder or a shift lead — the boards flag shifts
+	 * whose whole crew is lead-less.
+	 */
+	is_shift_lead: boolean;
+	/** Available to be scheduled; false = off the roster, history preserved. */
+	active: boolean;
+	/** Dashboard: sees every admin page and manages people. */
+	is_admin: boolean;
+	/** Admin page hrefs / capability keys granted to a non-admin. */
+	pages: string[];
+	momence_member_id: number | null;
+	/** Email of the admin who added them. */
+	added_by: string | null;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface ShiftRow {
-  id: string;
-  shift_date: string;
-  label: string;
-  starts_at: string;
-  ends_at: string;
-  staff_needed: number;
-  source: 'momence' | 'manual';
-  momence_session_ids: Array<{ type: string; id: number }>;
-  sync_locked: boolean;
-  notes: string | null;
-  status: 'active' | 'cancelled';
-  /** Set when this row belongs (or belonged) to an agent draft batch. */
-  proposal_id: string | null;
-  /** Draft rows are only visible to the review UI until approved. */
-  is_draft: boolean;
-  /** Momence divergence the sync couldn't silently fix — needs admin eyes. */
-  sync_flag: 'sessions_cancelled' | 'times_changed' | null;
-  created_at: string;
-  updated_at: string;
+	id: string;
+	shift_date: string;
+	label: string;
+	starts_at: string;
+	ends_at: string;
+	staff_needed: number;
+	source: "momence" | "manual";
+	momence_session_ids: Array<{ type: string; id: number }>;
+	sync_locked: boolean;
+	notes: string | null;
+	status: "active" | "cancelled";
+	/** Set when this row belongs (or belonged) to an agent draft batch. */
+	proposal_id: string | null;
+	/** Draft rows are only visible to the review UI until approved. */
+	is_draft: boolean;
+	/** Momence divergence the sync couldn't silently fix — needs admin eyes. */
+	sync_flag: "sessions_cancelled" | "times_changed" | null;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface ShiftAssignmentRow {
-  id: string;
-  shift_id: string;
-  staff_id: string;
-  starts_at: string;
-  ends_at: string;
-  role: 'full' | 'setup' | 'partial';
-  notes: string | null;
-  proposal_id: string | null;
-  is_draft: boolean;
-  created_at: string;
-  updated_at: string;
+	id: string;
+	shift_id: string;
+	staff_id: string;
+	starts_at: string;
+	ends_at: string;
+	role: "full" | "setup" | "partial";
+	notes: string | null;
+	proposal_id: string | null;
+	is_draft: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+/**
+ * An employee's ask to work a shift, decided by a schedule manager. Approval
+ * creates the shift_assignments row; the request row stays as the paper
+ * trail. Only one pending request per (shift, person).
+ */
+export interface ShiftRequestRow {
+	id: string;
+	shift_id: string;
+	staff_id: string;
+	status: "pending" | "approved" | "denied";
+	/** Optional message from the requester. */
+	note: string | null;
+	/** Dashboard email of the manager who decided; null while pending. */
+	decided_by: string | null;
+	decided_at: string | null;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface TimeOffRow {
-  id: string;
-  staff_id: string;
-  kind: 'range' | 'recurring';
-  start_date: string | null;
-  end_date: string | null;
-  /** 0 = Sunday .. 6 = Saturday (matches JS Date.getDay()). */
-  days_of_week: number[];
-  starts_at: string | null;
-  ends_at: string | null;
-  note: string | null;
-  created_by: 'staff' | 'admin';
-  created_at: string;
-  updated_at: string;
+	id: string;
+	staff_id: string;
+	kind: "range" | "recurring";
+	start_date: string | null;
+	end_date: string | null;
+	/** 0 = Sunday .. 6 = Saturday (matches JS Date.getDay()). */
+	days_of_week: number[];
+	starts_at: string | null;
+	ends_at: string | null;
+	note: string | null;
+	created_by: "staff" | "admin";
+	created_at: string;
+	updated_at: string;
 }
 
 export interface ScheduleProposalRow {
-  id: string;
-  /** Monday of the drafted week. */
-  week_start: string;
-  status: 'draft' | 'approved' | 'superseded' | 'discarded';
-  /** Agent's markdown summary shown on the board. */
-  rationale: string | null;
-  summary: Record<string, unknown>;
-  source: 'cron' | 'manual';
-  agent_session_id: string | null;
-  decided_at: string | null;
-  created_at: string;
-  updated_at: string;
+	id: string;
+	/** Monday of the drafted week. */
+	week_start: string;
+	status: "draft" | "approved" | "superseded" | "discarded";
+	/** Agent's markdown summary shown on the board. */
+	rationale: string | null;
+	summary: Record<string, unknown>;
+	source: "cron" | "manual";
+	agent_session_id: string | null;
+	decided_at: string | null;
+	created_at: string;
+	updated_at: string;
 }
