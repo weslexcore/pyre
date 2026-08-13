@@ -120,8 +120,10 @@ export interface ReferralRedeemedProps {
 export interface ReferralRewardEarnedProps {
   firstName: string;
   friendFirstName: string;
-  /** The reward as copy, e.g. "$15" (REFERRAL_REWARD_LABEL). */
+  /** The reward as copy, e.g. "$5" (REFERRAL_REWARD_LABEL). */
   rewardLabel: string;
+  /** Unconsumed rewards including this one — rewards queue, one per purchase. */
+  activeRewardCount: number;
   bookUrl: string;
 }
 

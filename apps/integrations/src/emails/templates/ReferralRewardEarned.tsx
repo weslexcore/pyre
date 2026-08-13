@@ -10,6 +10,7 @@ export function ReferralRewardEarned({
   firstName,
   friendFirstName,
   rewardLabel,
+  activeRewardCount,
   bookUrl,
 }: ReferralRewardEarnedProps) {
   return (
@@ -19,6 +20,12 @@ export function ReferralRewardEarned({
         {friendFirstName} just booked their first session at Pyre — thanks to you. As a thank-you,
         {` ${rewardLabel}`} off your next purchase is now live on your account.
       </Text>
+      {activeRewardCount > 1 && (
+        <Text style={text}>
+          That makes {activeRewardCount} unused rewards — {rewardLabel} comes off each of your next{' '}
+          {activeRewardCount} purchases. They stack up, they don't run out.
+        </Text>
+      )}
       <Text style={text}>
         It comes off automatically at checkout — sessions, credit packs, or memberships. No code
         needed, just use this email address.
@@ -35,6 +42,7 @@ ReferralRewardEarned.PreviewProps = {
   firstName: 'Wes',
   friendFirstName: 'Jane',
   rewardLabel: '$5',
+  activeRewardCount: 3,
   bookUrl: 'https://pyresauna.com/events?utm_source=referral-reward&utm_medium=referral',
 } satisfies ReferralRewardEarnedProps;
 

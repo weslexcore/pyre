@@ -95,6 +95,8 @@ async function grantReward(
     log.error(`Reward tag assignment failed for referrer ${referrer.id}`, tagError);
   }
 
+  const activeRewardCount = await countGrantedRewards(referrer.id);
+
   try {
     await sendTemplate({
       to: referrer.email,
@@ -103,6 +105,7 @@ async function grantReward(
         firstName: referrer.display_name,
         friendFirstName,
         rewardLabel: getRewardLabel(),
+        activeRewardCount,
         bookUrl: rewardBookUrl(),
       },
       sendKey: `referral-reward:${redemption.id}`,
@@ -217,6 +220,18 @@ const RENEWAL_SOURCES = new Set([
   'scheduled-job-charge-tuition-installments',
 ]);
 
+/** How many unconsumed rewards this referrer still holds. */
+export async function countGrantedRewards(referrerId: string): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  const { count } = await db
+    .from('referral_rewards')
+    .select('id', { count: 'exact', head: true })
+    .eq('referrer_id', referrerId)
+    .eq('status', 'granted');
+  return count ?? 0;
+}
+
 /** Every Price Rule id that discounted an item on this transaction. */
 function appliedPriceRuleIds(transaction: PaymentTransaction): number[] {
   const ids: number[] = [];
@@ -276,29 +291,37 @@ export async function handleReferralPaymentTransaction(
       expectedRuleId !== null ? ruleIds.includes(expectedRuleId) : ruleIds.length > 0;
     if (!rewardRuleFired) return;
 
-    let tagRemoved = false;
-    try {
-      const tagId = await getTagIdByName(reward.reward_tag_name);
-      if (tagId !== null && referrer.momence_member_id) {
-        await removeMemberTag(referrer.momence_member_id, tagId);
-        tagRemoved = true;
-      }
-    } catch (error) {
-      log.warn(`Reward tag removal failed for referrer ${referrer.id}`, error);
-    }
-
+    // Consume first, then decide about the tag: rewards queue up ($5 per
+    // conversion), each qualifying purchase burns exactly one, and the tag —
+    // which is what makes the price rule fire — stays on until the LAST
+    // unconsumed reward is spent.
     const { data: updated } = await db
       .from('referral_rewards')
       .update({
         status: 'consumed',
         consumed_at: new Date().toISOString(),
         consumed_payment_transaction_id: transaction.id,
-        ...(tagRemoved && { reward_tag_removed_at: new Date().toISOString() }),
       })
       .eq('id', reward.id)
       .eq('status', 'granted')
       .select('id');
     if (!updated || updated.length === 0) return;
+
+    const remaining = await countGrantedRewards(referrer.id);
+    if (remaining === 0) {
+      try {
+        const tagId = await getTagIdByName(reward.reward_tag_name);
+        if (tagId !== null && referrer.momence_member_id) {
+          await removeMemberTag(referrer.momence_member_id, tagId);
+          await db
+            .from('referral_rewards')
+            .update({ reward_tag_removed_at: new Date().toISOString() })
+            .eq('id', reward.id);
+        }
+      } catch (error) {
+        log.warn(`Reward tag removal failed for referrer ${referrer.id}`, error);
+      }
+    }
 
     await captureEvent({
       distinctId: referrer.email ?? referrer.code,
@@ -308,6 +331,7 @@ export async function handleReferralPaymentTransaction(
         payment_transaction_id: transaction.id,
         purchase_type: transaction.purchaseType,
         rule_matched: expectedRuleId !== null,
+        rewards_remaining: remaining,
       },
     });
   } catch (error) {

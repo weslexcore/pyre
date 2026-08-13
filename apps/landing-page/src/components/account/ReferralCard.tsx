@@ -69,7 +69,7 @@ export function ReferralCard() {
 
       {referral.stats.rewardsActive > 0 && (
         <p className="inline-block rounded-full bg-[var(--pyre-creme)]/15 px-3 py-1 font-mono-bold text-xs uppercase tracking-wide mb-4">
-          {copy.rewardActiveBadge}
+          {copy.rewardActiveBadge(referral.stats.rewardsActive)}
         </p>
       )}
 

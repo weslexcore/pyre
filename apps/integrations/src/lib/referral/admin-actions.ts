@@ -7,6 +7,7 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow, type ReferralRewardRow } from '@/lib/db';
 import { getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
+import { countGrantedRewards } from './conversion';
 
 const log = createWebhookLogger('Referral Admin');
 
@@ -88,30 +89,29 @@ export async function revokeReward(id: string, actorEmail: string): Promise<Revo
     .eq('id', row.referrer_id)
     .maybeSingle<{ momence_member_id: number | null; email: string | null; code: string }>();
 
-  let tagRemoved = false;
-  if (referrer?.momence_member_id) {
+  const { data: updated } = await db
+    .from('referral_rewards')
+    .update({ status: 'revoked', decided_by: actorEmail })
+    .eq('id', id)
+    .eq('status', 'granted')
+    .select('id');
+  if (!updated || updated.length === 0) return { outcome: 'not-revocable', status: row.status };
+
+  // Rewards queue up — the tag only comes off with the last unconsumed one.
+  if (referrer?.momence_member_id && (await countGrantedRewards(row.referrer_id)) === 0) {
     try {
       const tagId = await getTagIdByName(row.reward_tag_name);
       if (tagId !== null) {
         await removeMemberTag(referrer.momence_member_id, tagId);
-        tagRemoved = true;
+        await db
+          .from('referral_rewards')
+          .update({ reward_tag_removed_at: new Date().toISOString() })
+          .eq('id', id);
       }
     } catch (error) {
       log.warn(`Revoke tag removal failed for reward ${id}`, error);
     }
   }
-
-  const { data: updated } = await db
-    .from('referral_rewards')
-    .update({
-      status: 'revoked',
-      decided_by: actorEmail,
-      ...(tagRemoved && { reward_tag_removed_at: new Date().toISOString() }),
-    })
-    .eq('id', id)
-    .eq('status', 'granted')
-    .select('id');
-  if (!updated || updated.length === 0) return { outcome: 'not-revocable', status: row.status };
 
   await captureEvent({
     distinctId: referrer?.email ?? referrer?.code ?? row.referrer_id,

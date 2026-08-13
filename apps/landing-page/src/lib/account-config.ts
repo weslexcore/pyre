@@ -66,7 +66,10 @@ export const accountConfig = {
       redemptionsLabel: 'Claimed',
       conversionsLabel: 'Booked',
     },
-    rewardActiveBadge: 'Reward active — $5 off your next purchase',
+    rewardActiveBadge: (count: number) =>
+      count > 1
+        ? `${count} rewards active — $5 off each of your next ${count} purchases`
+        : 'Reward active — $5 off your next purchase',
     errorState: 'Could not load your referral code. Please try again later.',
     disabledState: 'Your referral code is currently inactive.',
   },

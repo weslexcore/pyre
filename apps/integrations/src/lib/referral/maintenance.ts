@@ -14,7 +14,7 @@ import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb, type ReferralRedemptionRow, type ReferralRewardRow } from '@/lib/db';
 import { getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
 import { memberHasBookings } from '@/lib/webhooks/momence';
-import { convertRedemption } from './conversion';
+import { convertRedemption, countGrantedRewards } from './conversion';
 import { getRedemptionExpiryDays, REWARD_EXPIRY_DAYS } from './registry';
 
 const log = createWebhookLogger('Referral Maintenance');
@@ -159,22 +159,28 @@ async function expireRewards(
       .select('momence_member_id, email, code')
       .eq('id', row.referrer_id)
       .maybeSingle<{ momence_member_id: number | null; email: string | null; code: string }>();
-    const tagRemoved = await removeTagFromMember(
-      referrerRows?.momence_member_id ?? null,
-      row.reward_tag_name
-    );
     const { data: updated } = await db
       .from('referral_rewards')
-      .update({
-        status: 'expired',
-        decided_by: 'cron',
-        ...(tagRemoved && { reward_tag_removed_at: new Date().toISOString() }),
-      })
+      .update({ status: 'expired', decided_by: 'cron' })
       .eq('id', row.id)
       .eq('status', 'granted')
       .select('id');
     if (!updated || updated.length === 0) continue;
     expired += 1;
+    // Rewards queue up — the tag stays as long as any unconsumed reward
+    // remains, so only the last one to go takes the tag with it.
+    if ((await countGrantedRewards(row.referrer_id)) === 0) {
+      const tagRemoved = await removeTagFromMember(
+        referrerRows?.momence_member_id ?? null,
+        row.reward_tag_name
+      );
+      if (tagRemoved) {
+        await db
+          .from('referral_rewards')
+          .update({ reward_tag_removed_at: new Date().toISOString() })
+          .eq('id', row.id);
+      }
+    }
     await captureEvent({
       distinctId: referrerRows?.email ?? referrerRows?.code ?? row.referrer_id,
       event: 'referral_reward_expired',
