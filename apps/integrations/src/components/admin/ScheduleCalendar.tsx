@@ -393,7 +393,7 @@ export function ScheduleCalendar() {
                         return (
                           <a
                             key={shift.id}
-                            href="/admin/schedule"
+                            href={`/admin/schedule?view=month&date=${date}&shift=${shift.id}`}
                             title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}${tentative ? ' · tentative — may change' : ''}`}
                             className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]} ${tentative ? 'border-dashed' : ''}`}
                           >

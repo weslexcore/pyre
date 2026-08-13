@@ -60,6 +60,8 @@ interface BoardData {
   shiftRequests?: ShiftRequestRow[];
   /** Open sub requests — visible to everyone so any teammate can take one. */
   subRequests?: SubRequestRow[];
+  /** Manage side: outstanding requests on upcoming shifts, whole horizon. */
+  pendingRequestCount?: number;
   settings?: BoardSettings;
 }
 
@@ -105,13 +107,14 @@ const formatDay = (date: string): string => {
   return `${DOW_LABELS[new Date(`${date}T00:00:00`).getDay()]} ${Number(m)}/${Number(d)}`;
 };
 
-// The board's three ways of slicing the same data: one week (the default),
-// a whole calendar month as the same day list, or every under-staffed shift
-// coming up (manage side only).
-type BoardView = 'week' | 'month' | 'uncovered';
+// The board's ways of slicing the same data: one week (the default), a whole
+// calendar month as the same day list, or — manage side only — every
+// under-staffed shift coming up, or every shift with an outstanding request.
+type BoardView = 'week' | 'month' | 'uncovered' | 'requests';
 
-/** How far ahead the uncovered view looks. Momence sync only creates shifts
- * ~3 weeks out, but manual and drafted shifts can sit further ahead. */
+/** How far ahead the uncovered and requests views look. Momence sync only
+ * creates shifts ~3 weeks out, but manual and drafted shifts can sit further
+ * ahead. */
 const UNCOVERED_HORIZON_DAYS = 182;
 
 const monthStartOf = (date: string): string => `${date.slice(0, 7)}-01`;
@@ -213,6 +216,26 @@ const emptyShiftForm: ShiftFormState = {
   notes: '',
 };
 
+/**
+ * Deep-link params — /admin/schedule?view=month&date=2026-08-24&shift=<id>
+ * — so the calendar's shift blocks land on the board with the right view and
+ * range, scrolled to the shift. Module scope: read once per page load (SSR
+ * sees no window and falls back to the defaults; the loading placeholder is
+ * identical either way, so hydration stays clean).
+ */
+const initialLink = (() => {
+  const none = { view: null as BoardView | null, date: null as string | null, shift: null };
+  if (typeof window === 'undefined') return none;
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  const date = params.get('date');
+  return {
+    view: view === 'week' || view === 'month' ? (view as BoardView) : null,
+    date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+    shift: params.get('shift'),
+  };
+})();
+
 async function api(
   method: string,
   path: string,
@@ -232,9 +255,11 @@ async function api(
 }
 
 export function ScheduleBoard() {
-  const [view, setView] = useState<BoardView>('week');
-  const [weekStart, setWeekStart] = useState(() => weekStartOf(todayLocal()));
-  const [monthStart, setMonthStart] = useState(() => monthStartOf(todayLocal()));
+  const [view, setView] = useState<BoardView>(initialLink.view ?? 'week');
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(initialLink.date ?? todayLocal()));
+  const [monthStart, setMonthStart] = useState(() =>
+    monthStartOf(initialLink.date ?? todayLocal())
+  );
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -267,7 +292,7 @@ export function ScheduleBoard() {
   const range = useMemo(() => {
     if (view === 'month')
       return { start: monthStart, end: addDays(monthStart, daysInMonth(monthStart) - 1) };
-    if (view === 'uncovered') {
+    if (view === 'uncovered' || view === 'requests') {
       const start = weekStartOf(todayLocal());
       return { start, end: addDays(start, UNCOVERED_HORIZON_DAYS) };
     }
@@ -296,10 +321,26 @@ export function ScheduleBoard() {
     void load();
   }, [load]);
 
+  // Deep link from the calendar: once the linked shift's card is on the
+  // board, scroll it into view (once — reloads after edits shouldn't jump).
+  const scrolledToLinkRef = useRef(false);
+  useEffect(() => {
+    if (scrolledToLinkRef.current || !initialLink.shift || !data) return;
+    const el = document.getElementById(`shift-${initialLink.shift}`);
+    if (el) {
+      scrolledToLinkRef.current = true;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [data]);
+
   const canManage = data?.canManage ?? false;
   const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
   const settings = data?.settings ?? DEFAULT_SETTINGS;
+  const pendingRequestCount = data?.pendingRequestCount ?? 0;
+  // Week and month lay days out as a calendar; the uncovered and requests
+  // views are filtered work lists, so the calendar-only controls hide there.
+  const calendarView = view === 'week' || view === 'month';
 
   const toggleMineOnly = () => {
     setMineOnly((v) => {
@@ -322,6 +363,16 @@ export function ScheduleBoard() {
     return (data?.shifts ?? []).filter((s) => s.shift_date >= today && isUncovered(s));
   }, [view, data]);
 
+  // Shifts with an outstanding request, today forward — the Requests view.
+  // The payload's shiftRequests only ever hold pending rows, so shift-id
+  // membership is enough.
+  const requestShifts = useMemo(() => {
+    if (view !== 'requests') return [];
+    const today = todayLocal();
+    const withRequests = new Set((data?.shiftRequests ?? []).map((r) => r.shift_id));
+    return (data?.shifts ?? []).filter((s) => s.shift_date >= today && withRequests.has(s.id));
+  }, [view, data]);
+
   const days = useMemo(() => {
     if (view === 'month') {
       return Array.from({ length: daysInMonth(monthStart) }, (_, i) => addDays(monthStart, i));
@@ -329,8 +380,11 @@ export function ScheduleBoard() {
     if (view === 'uncovered') {
       return [...new Set(uncoveredShifts.map((s) => s.shift_date))].sort();
     }
+    if (view === 'requests') {
+      return [...new Set(requestShifts.map((s) => s.shift_date))].sort();
+    }
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [view, weekStart, monthStart, uncoveredShifts]);
+  }, [view, weekStart, monthStart, uncoveredShifts, requestShifts]);
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, BoardShift[]>();
@@ -570,7 +624,22 @@ export function ScheduleBoard() {
               Uncovered
             </button>
           )}
-          {selfId && view !== 'uncovered' && (
+          {canManage && (
+            <button
+              type="button"
+              className={pillClass(view === 'requests')}
+              title="Shifts with an outstanding request waiting on a decision"
+              onClick={() => setView('requests')}
+            >
+              Requests
+              {pendingRequestCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-[var(--pyre-red)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pyre-creme)]">
+                  {pendingRequestCount}
+                </span>
+              )}
+            </button>
+          )}
+          {selfId && calendarView && (
             <button
               type="button"
               className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
@@ -584,7 +653,7 @@ export function ScheduleBoard() {
               My shifts
             </button>
           )}
-          {canManage && view !== 'uncovered' && (
+          {canManage && calendarView && (
             <StaffMultiSelect
               staff={data?.staff ?? []}
               selected={staffFilter}
@@ -654,6 +723,12 @@ export function ScheduleBoard() {
         {view === 'uncovered' && (
           <span className="font-mono text-xl font-bold text-white/80">
             {uncoveredShifts.length} uncovered through {range.end}
+          </span>
+        )}
+
+        {view === 'requests' && (
+          <span className="font-mono text-xl font-bold text-white/80">
+            {pendingRequestCount} outstanding request{pendingRequestCount === 1 ? '' : 's'}
           </span>
         )}
 
@@ -782,21 +857,31 @@ export function ScheduleBoard() {
         </p>
       )}
 
+      {view === 'requests' && days.length === 0 && !loading && (
+        <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
+          No outstanding shift requests — all caught up.
+        </p>
+      )}
+
       <div className="space-y-4">
         {days.map((date) => {
           const allShifts = shiftsByDate.get(date) ?? [];
-          let shifts = view === 'uncovered' ? allShifts.filter(isUncovered) : allShifts;
-          if (mineOnly && view !== 'uncovered' && selfId) {
+          let shifts = allShifts;
+          if (view === 'uncovered') shifts = allShifts.filter(isUncovered);
+          if (view === 'requests') {
+            shifts = allShifts.filter((s) => (requestsByShift.get(s.id) ?? []).length > 0);
+          }
+          if (mineOnly && calendarView && selfId) {
             shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
           }
-          if (staffFilter.size > 0 && view !== 'uncovered') {
+          if (staffFilter.size > 0 && calendarView) {
             shifts = shifts.filter((s) => s.assignments.some((a) => staffFilter.has(a.staff_id)));
           }
           // With a filter on, skip day sections nobody selected is part of —
           // a filtered month would otherwise be a wall of "No shifts".
           if (
             (mineOnly || staffFilter.size > 0) &&
-            view !== 'uncovered' &&
+            calendarView &&
             shifts.length === 0 &&
             formTarget !== `new:${date}`
           ) {
@@ -833,7 +918,7 @@ export function ScheduleBoard() {
                     </span>
                   )}
                 </h2>
-                {canManage && view !== 'uncovered' && (
+                {canManage && calendarView && (
                   <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
                     + Shift
                   </button>
@@ -872,7 +957,12 @@ export function ScheduleBoard() {
                   return (
                     <div
                       key={shift.id}
-                      className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''}`}
+                      id={`shift-${shift.id}`}
+                      className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
+                        initialLink.shift === shift.id
+                          ? 'ring-2 ring-[var(--pyre-gold)]/60'
+                          : ''
+                      }`}
                     >
                       <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                         <button
