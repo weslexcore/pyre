@@ -14,7 +14,8 @@ export interface ReferralStats {
 export interface ReferralInfo {
   code: string;
   url: string;
-  discountPercent: number;
+  /** The friend-side discount as copy, e.g. "$5". */
+  discountLabel: string;
   enabled: boolean;
   stats: ReferralStats;
 }

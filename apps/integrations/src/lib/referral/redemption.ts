@@ -164,7 +164,7 @@ export async function redeemReferral(params: {
       props: {
         firstName: params.firstName.trim(),
         referrerName: referrer.display_name,
-        discountPercent: referrer.discount_percent,
+        discountLabel: tier.label,
         bookUrl: bookUrl(referrer.code),
       },
     });

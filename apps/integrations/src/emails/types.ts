@@ -112,7 +112,8 @@ export interface ReferralRedeemedProps {
   firstName: string;
   /** The referrer as the friend knows them: "Wes" or "BFT Carytown". */
   referrerName: string;
-  discountPercent: number;
+  /** The discount as copy, e.g. "$5" (referral_tiers.label). */
+  discountLabel: string;
   bookUrl: string;
 }
 

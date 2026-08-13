@@ -74,7 +74,7 @@ export const EMAIL_TEMPLATES: Registry = {
     Component: PartnerReconciliation,
   },
   'referral-redeemed': {
-    subject: (p) => `${p.referrerName} gave you ${p.discountPercent}% off at Pyre`,
+    subject: (p) => `${p.referrerName} gave you ${p.discountLabel} off at Pyre`,
     Component: ReferralRedeemed,
   },
   'referral-reward-earned': {

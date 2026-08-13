@@ -130,9 +130,9 @@ export function getRewardPriceRuleId(): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** How the reward reads in email/UI copy, e.g. "$15". */
+/** How the reward reads in email/UI copy, e.g. "$5". */
 export function getRewardLabel(): string {
-  return import.meta.env.REFERRAL_REWARD_LABEL ?? process.env.REFERRAL_REWARD_LABEL ?? '$15';
+  return import.meta.env.REFERRAL_REWARD_LABEL ?? process.env.REFERRAL_REWARD_LABEL ?? '$5';
 }
 
 /** How long a redeemed-but-unbooked discount lives before the sweep expires it. */

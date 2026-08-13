@@ -50,7 +50,7 @@ export function ReferralCard() {
   };
 
   const share = async () => {
-    const text = copy.shareText(referral.url, referral.discountPercent);
+    const text = copy.shareText(referral.url, referral.discountLabel);
     if (navigator.share) {
       try {
         await navigator.share({ text, url: referral.url });

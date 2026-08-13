@@ -84,8 +84,11 @@ export interface PartnerVerificationRow {
 // A referral tier: which Momence tag (and therefore which manually-created
 // Price Rule) a given percent maps to. Managed from /admin/referrals.
 export interface ReferralTierRow {
+  /** Tier key. Historically the percent; the amount now lives in `label`. */
   percent: number;
   tag_name: string;
+  /** The discount as copy, e.g. "$5" — what the friend-facing surfaces show. */
+  label: string;
   enabled: boolean;
   created_at: string;
 }

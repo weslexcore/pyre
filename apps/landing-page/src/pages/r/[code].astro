@@ -19,7 +19,7 @@ const rawCode = Astro.params.code ?? '';
 interface ReferralLookup {
   code: string;
   displayName: string;
-  discountPercent: number;
+  discountLabel: string;
   referrerType: 'member' | 'partner';
 }
 
@@ -57,8 +57,8 @@ try {
   // A lost click count must never break the page.
 }
 
-const vars = { name: lookup.displayName, percent: lookup.discountPercent };
-const pageTitle = `${lookup.displayName} gave you ${lookup.discountPercent}% off | Pyre Sauna`;
+const vars = { name: lookup.displayName, discount: lookup.discountLabel };
+const pageTitle = `${lookup.displayName} gave you ${lookup.discountLabel} off | Pyre Sauna`;
 const pageDescription = interpolate(referral.hero.subtitle, vars);
 ---
 
@@ -102,7 +102,7 @@ const pageDescription = interpolate(referral.hero.subtitle, vars);
           <p class="text-sm opacity-70 mb-6 text-center">{referral.claim.subtitle}</p>
           <ReferralRedeemForm
             code={lookup.code}
-            discountPercent={lookup.discountPercent}
+            discountLabel={lookup.discountLabel}
             copy={referral.form}
           />
         </div>

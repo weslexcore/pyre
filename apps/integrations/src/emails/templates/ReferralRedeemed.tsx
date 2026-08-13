@@ -8,15 +8,14 @@ import type { ReferralRedeemedProps } from '../types';
 export function ReferralRedeemed({
   firstName,
   referrerName,
-  discountPercent,
+  discountLabel,
   bookUrl,
 }: ReferralRedeemedProps) {
   return (
-    <EmailLayout preview={`Your ${discountPercent}% off first session at Pyre`} background="trees">
+    <EmailLayout preview={`Your ${discountLabel} off first session at Pyre`} background="trees">
       <Text style={heading}>Welcome, {firstName}</Text>
       <Text style={text}>
-        {referrerName} sent you to us — your {discountPercent}% discount on your first session is
-        now live at Pyre.
+        {referrerName} sent you to us — {discountLabel} off your first session is now live at Pyre.
       </Text>
       <Text style={text}>
         Just sign up for a session with this email address and the discount comes off automatically
@@ -33,7 +32,7 @@ export function ReferralRedeemed({
 ReferralRedeemed.PreviewProps = {
   firstName: 'Jane',
   referrerName: 'Wes',
-  discountPercent: 15,
+  discountLabel: '$5',
   bookUrl: 'https://pyresauna.com/events?utm_source=referral&utm_medium=referral',
 } satisfies ReferralRedeemedProps;
 

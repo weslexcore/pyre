@@ -34,7 +34,7 @@ export function ReferralRewardEarned({
 ReferralRewardEarned.PreviewProps = {
   firstName: 'Wes',
   friendFirstName: 'Jane',
-  rewardLabel: '$15',
+  rewardLabel: '$5',
   bookUrl: 'https://pyresauna.com/events?utm_source=referral-reward&utm_medium=referral',
 } satisfies ReferralRewardEarnedProps;
 

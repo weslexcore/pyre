@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { isReferralAuthorized } from '@/lib/referral/api-auth';
-import { lookupReferrerByCode } from '@/lib/referral/registry';
+import { getTier, lookupReferrerByCode } from '@/lib/referral/registry';
 
 export const prerender = false;
 
@@ -31,10 +31,11 @@ export const GET: APIRoute = async ({ request, url }) => {
     return json(404, { error: 'unknown-code' });
   }
 
+  const tier = await getTier(lookup.referrer.discount_percent);
   return json(200, {
     code: lookup.referrer.code,
     displayName: lookup.referrer.display_name,
-    discountPercent: lookup.referrer.discount_percent,
+    discountLabel: tier?.label ?? `${lookup.referrer.discount_percent}%`,
     referrerType: lookup.referrer.referrer_type,
   });
 };

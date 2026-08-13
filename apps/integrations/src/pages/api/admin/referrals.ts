@@ -215,12 +215,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       case 'create-tier': {
         const percent = Number(body.percent);
         const tagName = String(body.tagName ?? '').trim();
+        // How the discount reads on the landing page and in emails ("$5").
+        const label = String(body.label ?? '').trim() || `${percent}%`;
         if (!Number.isFinite(percent) || percent <= 0 || percent >= 100 || !tagName) {
-          return json({ error: 'Tier needs a percent (1-99) and a Momence tag name' }, 400);
+          return json({ error: 'Tier needs a key (1-99) and a Momence tag name' }, 400);
         }
         const { data, error } = await db
           .from('referral_tiers')
-          .insert({ percent, tag_name: tagName })
+          .insert({ percent, tag_name: tagName, label })
           .select('*')
           .single<ReferralTierRow>();
         if (error) {

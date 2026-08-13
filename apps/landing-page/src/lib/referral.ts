@@ -1,6 +1,6 @@
 // Copy for the referral landing page (/r/{code}) and its redemption form.
 // The referrer's name and discount percent are interpolated at render time —
-// {name} and {percent} placeholders in the strings below.
+// {name} and {discount} placeholders in the strings below.
 
 export interface ReferralFormCopy {
   firstNameLabel: string;
@@ -33,7 +33,7 @@ export interface ReferralStep {
 export interface ReferralPageContent {
   posthogSource: string;
   hero: {
-    /** {name} and {percent} interpolated. */
+    /** {name} and {discount} interpolated. */
     title: string;
     subtitle: string;
   };
@@ -47,24 +47,27 @@ export interface ReferralPageContent {
   disclaimer: string;
 }
 
-export function interpolate(template: string, values: { name?: string; percent?: number }): string {
+export function interpolate(
+  template: string,
+  values: { name?: string; discount?: string }
+): string {
   return template
     .split('{name}')
     .join(values.name ?? '')
-    .split('{percent}')
-    .join(values.percent != null ? String(values.percent) : '');
+    .split('{discount}')
+    .join(values.discount ?? '');
 }
 
 const referral: ReferralPageContent = {
   posthogSource: 'referral',
   hero: {
-    title: '{name} gave you {percent}% off',
+    title: '{name} gave you {discount} off',
     subtitle:
-      "Pyre is Richmond's social sauna + cold plunge. Claim your discount and your first session is {percent}% off — no code needed at checkout.",
+      "Pyre is Richmond's social sauna + cold plunge. Claim your discount and get {discount} off your first session — no code needed at checkout.",
   },
   claim: {
     pillLabel: 'A gift from {name}',
-    title: 'Claim your {percent}% off',
+    title: 'Claim your {discount} off',
     subtitle: 'First time at Pyre? Tell us where to put the discount and it applies automatically.',
   },
   steps: [
@@ -77,7 +80,7 @@ const referral: ReferralPageContent = {
       description: 'Instantly — we’ll email you a booking link the moment it’s live.',
     },
     {
-      title: '{percent}% comes off automatically',
+      title: '{discount} comes off automatically',
       description: 'On your first session, at checkout. No code needed.',
     },
   ],
@@ -88,12 +91,12 @@ const referral: ReferralPageContent = {
     lastNamePlaceholder: 'Last name',
     emailLabel: 'The email you’ll book with',
     emailPlaceholder: 'you@example.com',
-    emailHelp: 'Your discount attaches to this email — book with it and {percent}% comes off.',
+    emailHelp: 'Your discount attaches to this email — book with it and {discount} comes off.',
     submitLabel: 'Claim my discount',
     submittingLabel: 'Claiming…',
     successTitle: 'You’re in!',
     successMessage:
-      'Your discount is live. Check your inbox for a booking link — or book right away and {percent}% comes off at checkout.',
+      'Your discount is live. Check your inbox for a booking link — or book right away and {discount} comes off at checkout.',
     errorMessage: 'Something went wrong. Please try again.',
     rejections: {
       'already-redeemed':

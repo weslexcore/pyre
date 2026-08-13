@@ -4,7 +4,7 @@ import { findMemberByEmail } from '@/lib/momence/host-api';
 import { isReferralAuthorized } from '@/lib/referral/api-auth';
 import { getReferralClicks } from '@/lib/referral/codes';
 import { getOrCreateMemberReferrer } from '@/lib/referral/referrers';
-import { referralUrl } from '@/lib/referral/registry';
+import { getTier, referralUrl } from '@/lib/referral/registry';
 
 export const prerender = false;
 
@@ -80,10 +80,11 @@ export const POST: APIRoute = async ({ request }) => {
       rewardsActive = rewards?.filter((r) => r.status === 'granted').length ?? 0;
     }
 
+    const tier = await getTier(referrer.discount_percent);
     return json(200, {
       code: referrer.code,
       url: referralUrl(referrer.code),
-      discountPercent: referrer.discount_percent,
+      discountLabel: tier?.label ?? `${referrer.discount_percent}%`,
       enabled: referrer.enabled,
       stats: {
         clicks: await getReferralClicks(referrer.code),

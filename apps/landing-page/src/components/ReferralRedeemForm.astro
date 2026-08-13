@@ -11,12 +11,12 @@ import Button from './Button.astro';
 
 interface Props {
   code: string;
-  discountPercent: number;
+  discountLabel: string;
   copy: ReferralFormCopy;
   turnstileTheme?: 'light' | 'dark' | 'auto';
 }
 
-const { code, discountPercent, copy, turnstileTheme = 'dark' } = Astro.props;
+const { code, discountLabel, copy, turnstileTheme = 'dark' } = Astro.props;
 
 const firstNameId = 'referral-redeem-first-name';
 const lastNameId = 'referral-redeem-last-name';
@@ -39,7 +39,7 @@ const labelClass = 'block font-mono-bold text-xs uppercase tracking-wide mb-1.5 
     data-submit-label={copy.submitLabel}
     data-submitting-label={copy.submittingLabel}
     data-success-title={copy.successTitle}
-    data-success-message={interpolate(copy.successMessage, { percent: discountPercent })}
+    data-success-message={interpolate(copy.successMessage, { discount: discountLabel })}
     data-error-message={copy.errorMessage}
     data-rejections={JSON.stringify(copy.rejections)}
   >
@@ -87,7 +87,7 @@ const labelClass = 'block font-mono-bold text-xs uppercase tracking-wide mb-1.5 
         data-referral-redeem-email
       />
       <p class="mt-1.5 text-xs opacity-60 text-left">
-        {interpolate(copy.emailHelp, { percent: discountPercent })}
+        {interpolate(copy.emailHelp, { discount: discountLabel })}
       </p>
     </div>
 

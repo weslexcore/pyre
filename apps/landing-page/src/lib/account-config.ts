@@ -51,22 +51,22 @@ export const accountConfig = {
     },
   },
   referral: {
-    title: 'Give 15%, Get a Discount',
+    title: 'Give $5, Get $5',
     subtitle:
-      'Share your personal link. Friends get a discount on their first session — and when they book, you get $15 off your next purchase.',
+      'Share your personal link. Friends get $5 off their first session — and when they book, you get $5 off your next purchase.',
     codeLabel: 'Your code',
     linkLabel: 'Your link',
     copyButton: 'Copy link',
     copiedLabel: 'Copied!',
     shareButton: 'Share',
-    shareText: (url: string, percent: number) =>
-      `Come sweat with me at Pyre — this link gets you ${percent}% off your first sauna + cold plunge session: ${url}`,
+    shareText: (url: string, discount: string) =>
+      `Come sweat with me at Pyre — this link gets you ${discount} off your first sauna + cold plunge session: ${url}`,
     stats: {
       clicksLabel: 'Link opens',
       redemptionsLabel: 'Claimed',
       conversionsLabel: 'Booked',
     },
-    rewardActiveBadge: 'Reward active — $15 off your next purchase',
+    rewardActiveBadge: 'Reward active — $5 off your next purchase',
     errorState: 'Could not load your referral code. Please try again later.',
     disabledState: 'Your referral code is currently inactive.',
   },

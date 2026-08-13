@@ -207,6 +207,7 @@ function TiersSection({
 }) {
   const [percent, setPercent] = useState('');
   const [tagName, setTagName] = useState('');
+  const [label, setLabel] = useState('');
 
   const tagBadge = (name: string) => {
     const status = tagStatus[name];
@@ -227,7 +228,7 @@ function TiersSection({
       <div className="flex flex-wrap gap-2">
         {tiers.map((tier) => (
           <div key={tier.percent} className={`${card} flex items-center gap-3`}>
-            <span className="font-mono text-sm text-[var(--pyre-creme)]">{tier.percent}%</span>
+            <span className="font-mono text-sm text-[var(--pyre-creme)]">{tier.label}</span>
             <span className="font-mono text-xs text-white/50">{tier.tag_name}</span>
             <span className="font-mono text-xs">{tagBadge(tier.tag_name)}</span>
             {!tier.enabled && <span className="font-mono text-xs text-white/40">disabled</span>}
@@ -262,9 +263,15 @@ function TiersSection({
           />
           <input
             className={`${inputClass} w-48`}
-            placeholder="Momence tag (referral-20)"
+            placeholder="Momence tag (referral)"
             value={tagName}
             onChange={(e) => setTagName(e.target.value)}
+          />
+          <input
+            className={`${inputClass} w-28`}
+            placeholder='Label ("$5")'
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
           />
           <button
             type="button"
@@ -272,12 +279,18 @@ function TiersSection({
             disabled={busy || !percent || !tagName}
             onClick={async () => {
               const ok = await act(
-                { action: 'create-tier', percent: Number(percent), tagName: tagName.trim() },
+                {
+                  action: 'create-tier',
+                  percent: Number(percent),
+                  tagName: tagName.trim(),
+                  label: label.trim(),
+                },
                 'Tier created — now create the tag + price rule in Momence'
               );
               if (ok) {
                 setPercent('');
                 setTagName('');
+                setLabel('');
               }
             }}
           >
