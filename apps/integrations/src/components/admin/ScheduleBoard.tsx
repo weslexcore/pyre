@@ -14,6 +14,7 @@ import {
   assignmentHours,
   availabilityFor,
   DOW_LABELS,
+  firstTentativeDate,
   formatShiftNotes,
   minutesToTime,
   missingShiftLead,
@@ -298,6 +299,11 @@ export function ScheduleBoard() {
       return !v;
     });
   };
+
+  // The two-week commitment boundary (schedule-core): dates from here on get
+  // the "≈ tentative" treatment, and a banner explains it whenever the
+  // visible range reaches past the boundary.
+  const firstTentative = firstTentativeDate(todayLocal());
 
   // Uncovered shifts from today forward (the fetched range reaches back to
   // Monday only for the hours math — past gaps aren't actionable).
@@ -678,6 +684,18 @@ export function ScheduleBoard() {
         </p>
       )}
 
+      {range.end >= firstTentative && (
+        <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+          Set in stone through{' '}
+          <span className="font-bold text-[var(--pyre-creme)]">
+            {formatDay(addDays(firstTentative, -1))}
+          </span>{' '}
+          · days marked <span className="text-white/80">≈ tentative</span> are a working plan —
+          keep requesting shifts and logging time off out there, but times and assignments can
+          still change until a date is inside the two-week window.
+        </p>
+      )}
+
       {drafting && (
         <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
           Syncing Momence and drafting{' '}
@@ -774,6 +792,14 @@ export function ScheduleBoard() {
                   {selfWorks && (
                     <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-gold)]">
                       you're on
+                    </span>
+                  )}
+                  {date >= firstTentative && (
+                    <span
+                      className="rounded bg-white/10 px-2 py-0.5 text-[10px] tracking-wide text-white/50"
+                      title="Beyond the two-week set-in-stone window — this day's schedule can still change"
+                    >
+                      ≈ tentative
                     </span>
                   )}
                 </h2>
