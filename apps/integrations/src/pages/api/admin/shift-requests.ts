@@ -7,12 +7,19 @@
 // (lib/schedule/settings.ts). Deciding is not — a pending request placed
 // before the feature was switched off must still be closable.
 
-import { utcToEastern } from '@pyre/schedule-core';
+import {
+  ASSIGNMENT_ROLE_LABELS,
+  minutesToTime,
+  SETUP_DURATION_MIN,
+  timeToMinutes,
+  utcToEastern,
+} from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow, type ShiftRequestRow, type StaffRow } from '@/lib/db';
+import { sendTemplate } from '@/lib/email/send';
 import {
   actorFromGate,
   describeShift,
@@ -20,6 +27,7 @@ import {
   staffNameOf,
 } from '@/lib/schedule/change-log';
 import { getScheduleSettings } from '@/lib/schedule/settings';
+import { formatDateLabel, formatWindowLabel } from '@/lib/schedule/sub';
 
 export const prerender = false;
 
@@ -88,6 +96,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const shiftId = body.shiftId;
   if (typeof shiftId !== 'string' || !shiftId) return json({ error: 'shiftId is required' }, 400);
+  const role = body.role ?? 'full';
+  if (role !== 'full' && role !== 'setup') {
+    return json({ error: "role must be 'full' or 'setup'" }, 400);
+  }
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
 
   const staffId = await selfStaffId(db, auth.gate);
@@ -118,7 +130,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data, error } = await db
     .from('shift_requests')
-    .insert({ shift_id: shiftId, staff_id: staffId, note: note || null })
+    .insert({ shift_id: shiftId, staff_id: staffId, role, note: note || null })
     .select('*')
     .single();
   if (error) {
@@ -133,7 +145,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     entityType: 'request',
     entityId: request_.id,
     action: 'create',
-    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)}`,
+    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)} (${ASSIGNMENT_ROLE_LABELS[role]})`,
     details: { after: request_ },
   });
 
@@ -175,15 +187,43 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const actor = actorFromGate(auth.gate);
   const requesterName = await staffNameOf(db, pending.staff_id);
 
+  // The shift is needed on both paths — approval assigns into it, and the
+  // decision email describes it. Null (deleted) only blocks approval.
+  const { data: shiftRow, error: shiftError } = await db
+    .from('shifts')
+    .select('id, shift_date, label, starts_at, ends_at, status')
+    .eq('id', pending.shift_id)
+    .maybeSingle();
+  if (shiftError) return json({ error: shiftError.message }, 500);
+  const shift = shiftRow as {
+    id: string;
+    shift_date: string;
+    label: string;
+    starts_at: string;
+    ends_at: string;
+    status: string;
+  } | null;
+
+  // The window the request asked for: the whole shift, or its setup span
+  // (first 2h of the window — same snapping as the board's role buttons).
+  const requestedWindow = shift
+    ? {
+        starts_at: shift.starts_at,
+        ends_at:
+          pending.role === 'setup'
+            ? minutesToTime(
+                Math.min(
+                  timeToMinutes(shift.starts_at) + SETUP_DURATION_MIN,
+                  timeToMinutes(shift.ends_at)
+                )
+              )
+            : shift.ends_at,
+      }
+    : null;
+
   let assignment: ShiftAssignmentRow | null = null;
   if (action === 'approve') {
-    const { data: shift, error: shiftError } = await db
-      .from('shifts')
-      .select('id, shift_date, label, starts_at, ends_at, status')
-      .eq('id', pending.shift_id)
-      .maybeSingle();
-    if (shiftError) return json({ error: shiftError.message }, 500);
-    if (!shift) return json({ error: 'Shift no longer exists' }, 404);
+    if (!shift || !requestedWindow) return json({ error: 'Shift no longer exists' }, 404);
     if (shift.status !== 'active') return json({ error: 'Shift is cancelled' }, 400);
 
     const { data, error } = await db
@@ -191,9 +231,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .insert({
         shift_id: pending.shift_id,
         staff_id: pending.staff_id,
-        starts_at: shift.starts_at,
-        ends_at: shift.ends_at,
-        role: 'full',
+        starts_at: requestedWindow.starts_at,
+        ends_at: requestedWindow.ends_at,
+        role: pending.role,
         notes: null,
       })
       .select('*')
@@ -209,7 +249,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         entityType: 'assignment',
         entityId: assignment.id,
         action: 'create',
-        summary: `Assigned ${requesterName} to ${describeShift(shift)} (approved request)`,
+        summary: `Assigned ${requesterName} to ${describeShift(shift)} (approved request, ${ASSIGNMENT_ROLE_LABELS[pending.role]})`,
         details: { after: assignment },
       });
     }
@@ -237,6 +277,41 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     summary: `${action === 'approve' ? 'Approved' : 'Denied'} ${requesterName}'s shift request`,
     details: { before: pending, after: decided },
   });
+
+  // Close the loop with the requester — best-effort: the decision stands
+  // whether or not the email goes out (no roster email, gated template, or
+  // send failure just logs). Needs the shift for the what/when copy.
+  if (shift && requestedWindow) {
+    const { data: requester } = await db
+      .from('staff')
+      .select('email')
+      .eq('id', pending.staff_id)
+      .maybeSingle();
+    const requesterEmail = (requester?.email as string | null) ?? null;
+    if (requesterEmail) {
+      try {
+        await sendTemplate({
+          to: requesterEmail,
+          template: 'shift-request-decision',
+          props: {
+            firstName: requesterName.split(' ')[0] || requesterName,
+            decision: action === 'approve' ? 'approved' : 'denied',
+            shiftLabel: shift.label,
+            dateLabel: formatDateLabel(shift.shift_date),
+            timeLabel: formatWindowLabel(requestedWindow),
+            roleLabel: ASSIGNMENT_ROLE_LABELS[pending.role],
+            scheduleUrl: `${new URL(request.url).origin}/admin/schedule`,
+          },
+          kind: 'transactional',
+        });
+      } catch (e) {
+        console.error(
+          `[shift-requests] decision notify ${requesterEmail} failed:`,
+          e instanceof Error ? e.message : e
+        );
+      }
+    }
+  }
 
   return json({ request: decided, assignment });
 };

@@ -84,6 +84,8 @@ export interface ShiftRequestRow {
 	shift_id: string;
 	staff_id: string;
 	status: "pending" | "approved" | "denied";
+	/** What they offered to work: the whole shift, or just its setup span. */
+	role: "full" | "setup";
 	/** Optional message from the requester. */
 	note: string | null;
 	/** Dashboard email of the manager who decided; null while pending. */

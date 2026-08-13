@@ -157,6 +157,19 @@ export interface SubClaimedNoticeProps {
   scheduleUrl: string;
 }
 
+export interface ShiftRequestDecisionProps {
+  /** The requester — the employee whose ask was decided. */
+  firstName: string;
+  decision: 'approved' | 'denied';
+  shiftLabel: string;
+  dateLabel: string;
+  /** The window the request covered — the shift's, or its setup span. */
+  timeLabel: string;
+  /** "Full" | "Setup" */
+  roleLabel: string;
+  scheduleUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -175,6 +188,7 @@ export interface EmailPropsByTemplate {
   'sub-request-notice': SubRequestNoticeProps;
   'sub-open-notice': SubOpenNoticeProps;
   'sub-claimed-notice': SubClaimedNoticeProps;
+  'shift-request-decision': ShiftRequestDecisionProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;
