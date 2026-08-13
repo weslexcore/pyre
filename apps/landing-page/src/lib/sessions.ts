@@ -21,9 +21,7 @@ export interface SessionsContent {
 
 const sessions: SessionsContent = {
   title: 'Credits',
-  // subtitle:
-    // '1',
-  note: 'All credits except our "Intro Offer" can be shared with friends & family!',
+  note: 'All credits can be shared with friends & family!',
   items: [
     {
       id: 'intro',
@@ -31,7 +29,7 @@ const sessions: SessionsContent = {
       price: 25,
       originalPrice: 50,
       description:
-        'New here? Start with two credits and see how it feels. Available once per customer. Not shareable.',
+        'New here? Start with two credits and see how it feels. Available once per customer.',
       savings: 25,
       highlighted: true,
       href: 'https://momence.com/m/630918',
