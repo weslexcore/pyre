@@ -3,7 +3,7 @@ import type { MembershipContent } from './types';
 const membership: MembershipContent = {
   title: 'Memberships',
   // subtitle: 'Founding Member offer: $199/mo for life (normally $249). Only 30 available.',
-  note: 'Founding rates are locked in for life. Membership is not shareable.',
+  note: 'Founding rates are locked in for life. Memberships are not shareable.',
   tiers: [
     {
       id: 'unlimited',
