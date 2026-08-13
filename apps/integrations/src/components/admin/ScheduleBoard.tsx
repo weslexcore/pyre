@@ -33,6 +33,7 @@ import type {
   TimeOffRow,
 } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
+import { StaffMultiSelect } from './StaffMultiSelect';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -237,10 +238,12 @@ export function ScheduleBoard() {
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Read-only view: every shift starts expanded so assigned hours are visible
-  // without clicking through; this tracks the ones the viewer closed.
+  // Every shift starts expanded so assigned hours are visible without
+  // clicking through (managers included); this tracks the ones the viewer
+  // closed. Manage controls stay behind the per-shift Edit button below.
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
+  // The shift whose detail is in edit mode (assignment edits, add person).
+  const [editShiftId, setEditShiftId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Shift form: 'new:<date>' or 'edit:<shiftId>'
   const [formTarget, setFormTarget] = useState<string | null>(null);
@@ -251,6 +254,8 @@ export function ScheduleBoard() {
   const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // "My shifts": filter the week/month lists to shifts the viewer is on.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
+  // Manage-side people filter: whose shifts to show (empty = everyone).
+  const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
   // Admin-only panel with the employee-action toggles.
   const [showSettings, setShowSettings] = useState(false);
 
@@ -579,6 +584,13 @@ export function ScheduleBoard() {
               My shifts
             </button>
           )}
+          {canManage && view !== 'uncovered' && (
+            <StaffMultiSelect
+              staff={data?.staff ?? []}
+              selected={staffFilter}
+              onChange={setStaffFilter}
+            />
+          )}
         </span>
 
         {view === 'week' && (
@@ -704,7 +716,8 @@ export function ScheduleBoard() {
           <span className="font-bold text-[var(--pyre-creme)]">
             {formatDay(addDays(firstTentative, -1))}
           </span>{' '}
-          · weeks after that are <span className="text-white/80">≈ tentative</span> — a working
+          · <span className="font-bold text-[var(--pyre-red)]">{formatDay(firstTentative)}</span>{' '}
+          onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a working
           plan to keep requesting shifts and logging time off into, but times and assignments can
           still change until the week locks (every Monday locks the two weeks ahead).
         </p>
@@ -776,10 +789,13 @@ export function ScheduleBoard() {
           if (mineOnly && view !== 'uncovered' && selfId) {
             shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
           }
-          // With the filter on, skip day sections the viewer isn't part of —
+          if (staffFilter.size > 0 && view !== 'uncovered') {
+            shifts = shifts.filter((s) => s.assignments.some((a) => staffFilter.has(a.staff_id)));
+          }
+          // With a filter on, skip day sections nobody selected is part of —
           // a filtered month would otherwise be a wall of "No shifts".
           if (
-            mineOnly &&
+            (mineOnly || staffFilter.size > 0) &&
             view !== 'uncovered' &&
             shifts.length === 0 &&
             formTarget !== `new:${date}`
@@ -810,7 +826,7 @@ export function ScheduleBoard() {
                   )}
                   {date >= firstTentative && (
                     <span
-                      className="rounded bg-white/10 px-2 py-0.5 text-[10px] tracking-wide text-white/50"
+                      className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
                       title="This week hasn't locked yet — its schedule can still change"
                     >
                       ≈ tentative
@@ -846,18 +862,12 @@ export function ScheduleBoard() {
                   const subs = subsByShift.get(shift.id) ?? [];
                   const noLead =
                     shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
-                  const expanded = canManage
-                    ? expandedId === shift.id
-                    : !collapsedIds.has(shift.id);
+                  const expanded = !collapsedIds.has(shift.id);
                   const toggleExpanded = () => {
-                    if (canManage) {
-                      setExpandedId(expanded ? null : shift.id);
-                    } else {
-                      const next = new Set(collapsedIds);
-                      if (expanded) next.add(shift.id);
-                      else next.delete(shift.id);
-                      setCollapsedIds(next);
-                    }
+                    const next = new Set(collapsedIds);
+                    if (expanded) next.add(shift.id);
+                    else next.delete(shift.id);
+                    setCollapsedIds(next);
                   };
                   return (
                     <div
@@ -973,6 +983,10 @@ export function ScheduleBoard() {
                           busy={busy}
                           run={run}
                           canManage={canManage}
+                          editMode={editShiftId === shift.id}
+                          onToggleEditMode={() =>
+                            setEditShiftId(editShiftId === shift.id ? null : shift.id)
+                          }
                           selfId={selfId}
                           requests={requests}
                           subs={subs}
@@ -1134,6 +1148,8 @@ function ShiftDetail({
   busy,
   run,
   canManage,
+  editMode,
+  onToggleEditMode,
   selfId,
   requests,
   subs,
@@ -1150,6 +1166,10 @@ function ShiftDetail({
   busy: boolean;
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;
   canManage: boolean;
+  /** Managers read the detail like everyone else until they click Edit —
+   * only then do assignment edits and the add-person picker appear. */
+  editMode: boolean;
+  onToggleEditMode: () => void;
   selfId: string | null;
   /** Pending requests on this shift (own only for non-managers). */
   requests: ShiftRequestRow[];
@@ -1323,7 +1343,7 @@ function ShiftDetail({
                         </button>
                       </>
                     )}
-                    {canManage && (
+                    {canManage && editMode && (
                       <>
                         <button
                           type="button"
@@ -1481,7 +1501,7 @@ function ShiftDetail({
         </div>
       )}
 
-      {canManage && candidates.length > 0 && shift.status === 'active' && (
+      {canManage && editMode && candidates.length > 0 && shift.status === 'active' && (
         <div>
           <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
             Add person
@@ -1542,9 +1562,27 @@ function ShiftDetail({
       )}
 
       {canManage && (
-        <button type="button" className={buttonClass} onClick={onEdit}>
-          Edit shift
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {editMode ? (
+            <>
+              <button type="button" className={buttonClass} onClick={onEdit}>
+                Edit shift
+              </button>
+              <button type="button" className={buttonClass} onClick={onToggleEditMode}>
+                Done
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={buttonClass}
+              title="Change assignments or add people to this shift"
+              onClick={onToggleEditMode}
+            >
+              Edit
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

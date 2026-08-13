@@ -44,7 +44,15 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const { data, error } = await query;
   if (error) return json({ error: error.message }, 500);
 
-  return json({ entries: (data ?? []) as TimeOffRow[] });
+  // Other people's time off is manage-side information — employees only ever
+  // read their own entries, whatever staffId the request asked for.
+  let entries = (data ?? []) as TimeOffRow[];
+  if (!hasScheduleManage(gate.access)) {
+    const own = await selfStaffId(db, gate);
+    entries = entries.filter((e) => own !== null && e.staff_id === own);
+  }
+
+  return json({ entries });
 };
 
 /**
