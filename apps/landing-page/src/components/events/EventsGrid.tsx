@@ -267,37 +267,39 @@ function SlotRow({
       }}
       className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
-      {/* Title */}
-      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-72 shrink-0">
-        <span className="truncate">{event.title}</span>
-        {/* Mobile-only CTA pill */}
-        <a
-          href={event.cta?.href ?? '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            trackBookingLinkClicked(event, 'events_grid_mobile');
-          }}
-          className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
-        >
-          {ctaLabel}
-          <ArrowIcon />
-        </a>
-      </span>
-
-      {/* Time (second line on mobile, inline on desktop), followed by the
-          guest practitioner credit on special events */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--pyre-creme)]/70 sm:flex-1 min-w-0">
-        <span className="inline-flex items-center gap-1.5">
-          <ClockIcon className="w-3.5 h-3.5" />
-          {event.time}
+      {/* Title, with the guest practitioner credit on its own line beneath it */}
+      <div className="flex flex-col gap-1 min-w-0 sm:w-72 shrink-0">
+        <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start">
+          <span className="truncate">{event.title}</span>
+          {/* Mobile-only CTA pill */}
+          <a
+            href={event.cta?.href ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={event.cta?.ariaLabel ?? `Book ${event.title}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              trackBookingLinkClicked(event, 'events_grid_mobile');
+            }}
+            className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
+          >
+            {ctaLabel}
+            <ArrowIcon />
+          </a>
         </span>
+
         {practitioners.length > 0 && (
           <PractitionerByline practitioners={practitioners} onOpenBio={onOpenPractitioner} />
         )}
       </div>
+
+      {/* Time (second line on mobile, inline on desktop) */}
+      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+        <span className="inline-flex items-center gap-1.5">
+          <ClockIcon className="w-3.5 h-3.5" />
+          {event.time}
+        </span>
+      </span>
 
       {/* Spots - to the left of CTA */}
       {spots && (
