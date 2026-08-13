@@ -190,8 +190,45 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
+  // Two modes: ?id= removes one assignment; ?shiftId= clears the whole
+  // shift's live crew (the board's Clear button) so it can be rebuilt from
+  // scratch. Draft assignments stay — the proposal review flow owns those.
   const id = url.searchParams.get('id');
-  if (!id) return json({ error: 'id is required' }, 400);
+  const shiftId = url.searchParams.get('shiftId');
+  if (!id && !shiftId) return json({ error: 'id or shiftId is required' }, 400);
+
+  if (shiftId) {
+    const { data: rows, error: fetchError } = await db
+      .from('shift_assignments')
+      .select('*')
+      .eq('shift_id', shiftId)
+      .eq('is_draft', false);
+    if (fetchError) return json({ error: fetchError.message }, 500);
+    const assignments = (rows ?? []) as ShiftAssignmentRow[];
+    if (assignments.length === 0) return json({ ok: true, cleared: 0 });
+
+    const { error } = await db
+      .from('shift_assignments')
+      .delete()
+      .eq('shift_id', shiftId)
+      .eq('is_draft', false);
+    if (error) return json({ error: error.message }, 500);
+
+    const shiftDesc = await shiftDescription(db, shiftId);
+    const actor = actorFromGate(gate);
+    for (const assignment of assignments) {
+      await logScheduleChange(db, {
+        actor,
+        entityType: 'assignment',
+        entityId: assignment.id,
+        action: 'delete',
+        summary: `Removed ${await staffNameOf(db, assignment.staff_id)} from ${shiftDesc} (cleared shift)`,
+        details: { before: assignment },
+      });
+    }
+
+    return json({ ok: true, cleared: assignments.length });
+  }
 
   // Snapshot before the delete so the change log can describe the row.
   const { data: existing, error: fetchError } = await db

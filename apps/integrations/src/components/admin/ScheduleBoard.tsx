@@ -1696,6 +1696,26 @@ function ShiftDetail({
               Edit
             </button>
           )}
+          {shift.assignments.some((a) => !a.is_draft) && (
+            <button
+              type="button"
+              className={`${buttonClass} text-[var(--pyre-red)]`}
+              title="Remove everyone from this shift so it can be set up from scratch"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Remove everyone from this shift? All assignments are deleted (the shift itself stays), so it can be set up from scratch.'
+                  )
+                ) {
+                  return;
+                }
+                void run(() => api('DELETE', `/api/admin/shift-assignments?shiftId=${shift.id}`));
+              }}
+            >
+              Clear
+            </button>
+          )}
         </div>
       )}
     </div>
