@@ -5,11 +5,13 @@ import { getRedis } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import {
   excludeVolunteerEvents,
+  fetchMomenceTeachers,
   filterValidEvents,
+  indexTeachersById,
   sortEventsByDate,
   transformToEventItem,
 } from '@/lib/momence';
-import type { MomenceEvent } from '@/lib/momence-types';
+import type { MomenceEvent, MomenceTeacher } from '@/lib/momence-types';
 import type { EventItem } from '@/lib/types';
 
 export const prerender = false;
@@ -42,15 +44,21 @@ const EVENTS_SNAPSHOT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 interface EventsSnapshot {
   events: MomenceEvent[];
+  // Practitioner profiles for the snapshotted events. Absent on snapshots
+  // written before practitioners were surfaced.
+  teachers?: MomenceTeacher[];
   fetchedAt: string;
 }
 
-async function saveEventsSnapshot(events: MomenceEvent[]): Promise<void> {
+async function saveEventsSnapshot(
+  events: MomenceEvent[],
+  teachers: MomenceTeacher[]
+): Promise<void> {
   const redis = getRedis();
   if (!redis) return;
 
   try {
-    const snapshot: EventsSnapshot = { events, fetchedAt: new Date().toISOString() };
+    const snapshot: EventsSnapshot = { events, teachers, fetchedAt: new Date().toISOString() };
     await redis.set(EVENTS_SNAPSHOT_KEY, snapshot, { ex: EVENTS_SNAPSHOT_TTL_SECONDS });
   } catch (error) {
     console.warn('[Events API] Failed to save events snapshot:', error);
@@ -109,12 +117,18 @@ export const GET: APIRoute = async ({ url }) => {
     const limit = parseLimit(url.searchParams.get('limit'));
 
     let rawEvents: MomenceEvent[];
+    let teachers: MomenceTeacher[];
     let servedFromSnapshot = false;
 
     try {
-      rawEvents = await fetchMomenceEventsServer();
+      // The teacher roster carries the practitioner bios/headshots and is
+      // best-effort — it resolves to an empty list instead of throwing.
+      [rawEvents, teachers] = await Promise.all([
+        fetchMomenceEventsServer(),
+        fetchMomenceTeachers(),
+      ]);
       // Awaited (serverless may kill work after the response), but never fatal.
-      await saveEventsSnapshot(rawEvents);
+      await saveEventsSnapshot(rawEvents, teachers);
     } catch (fetchError) {
       console.error('[Events API] Momence fetch failed:', fetchError);
 
@@ -143,13 +157,15 @@ export const GET: APIRoute = async ({ url }) => {
 
       console.warn(`[Events API] Serving last-known-good snapshot from ${snapshot.fetchedAt}`);
       rawEvents = snapshot.events;
+      teachers = Array.isArray(snapshot.teachers) ? snapshot.teachers : [];
       servedFromSnapshot = true;
     }
 
     const validEvents = filterValidEvents(rawEvents);
     const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
     const sortedEvents = sortEventsByDate(nonVolunteerEvents);
-    const allEvents = sortedEvents.map(transformToEventItem);
+    const teachersById = indexTeachersById(teachers);
+    const allEvents = sortedEvents.map((event) => transformToEventItem(event, teachersById));
 
     // No date-window filtering here — the calendar is curated on the Momence
     // side, so every upcoming event Momence returns is surfaced. `limit` only
