@@ -300,9 +300,10 @@ export function ScheduleBoard() {
     });
   };
 
-  // The two-week commitment boundary (schedule-core): dates from here on get
-  // the "≈ tentative" treatment, and a banner explains it whenever the
-  // visible range reaches past the boundary.
+  // The commitment boundary (schedule-core): the schedule locks whole
+  // Mon–Sun weeks covering at least the next two weeks, so this is always a
+  // Monday. Dates from here on get the "≈ tentative" treatment, and a banner
+  // explains it whenever the visible range reaches past the boundary.
   const firstTentative = firstTentativeDate(todayLocal());
 
   // Uncovered shifts from today forward (the fetched range reaches back to
@@ -690,9 +691,9 @@ export function ScheduleBoard() {
           <span className="font-bold text-[var(--pyre-creme)]">
             {formatDay(addDays(firstTentative, -1))}
           </span>{' '}
-          · days marked <span className="text-white/80">≈ tentative</span> are a working plan —
-          keep requesting shifts and logging time off out there, but times and assignments can
-          still change until a date is inside the two-week window.
+          · weeks after that are <span className="text-white/80">≈ tentative</span> — a working
+          plan to keep requesting shifts and logging time off into, but times and assignments can
+          still change until the week locks (whole weeks, always at least two weeks ahead).
         </p>
       )}
 
@@ -797,7 +798,7 @@ export function ScheduleBoard() {
                   {date >= firstTentative && (
                     <span
                       className="rounded bg-white/10 px-2 py-0.5 text-[10px] tracking-wide text-white/50"
-                      title="Beyond the two-week set-in-stone window — this day's schedule can still change"
+                      title="This week hasn't locked yet — its schedule can still change"
                     >
                       ≈ tentative
                     </span>
