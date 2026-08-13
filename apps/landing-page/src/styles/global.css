@@ -357,6 +357,14 @@
   border-radius: calc(var(--radius) - 2px);
 }
 
+/* Selected state (e.g. the active session-type filter chip): keep the animated
+   gradient border but fill the interior gold so the choice reads at a glance.
+   Has to live here — the fill is the ::after pseudo-element, and these rules are
+   unlayered, so they'd beat a Tailwind `after:` utility. */
+.btn-cta-animated.is-selected::after {
+  background: var(--pyre-gold);
+}
+
 /* Accessibility: Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .btn-cta-animated::before {

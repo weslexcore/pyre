@@ -207,6 +207,9 @@ function SlotRow({
 }) {
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
   const practitioners = specialEventPractitioners(event);
+  // A practitioner adds a second line under the title; the time follows the
+  // title's line rather than the row's middle.
+  const timeAlignment = practitioners.length > 0 ? 'sm:self-start' : '';
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
 
@@ -241,10 +244,10 @@ function SlotRow({
           </span>
         </span>
 
-        {/* View Details link (desktop) */}
+        {/* View Details link (desktop)
         <span className="hidden sm:inline-flex items-center text-xs font-mono uppercase tracking-wide text-[var(--pyre-creme)]/50 group-hover:text-[var(--pyre-creme)]/80 transition-colors whitespace-nowrap shrink-0">
           View Details
-        </span>
+        </span> */}
 
         {/* Desktop Private label */}
         <span className="hidden sm:inline-flex items-center text-sm font-mono-bold uppercase tracking-wide border border-current/40 rounded-full px-4 py-1.5 text-[var(--pyre-creme)]/50 whitespace-nowrap shrink-0">
@@ -293,8 +296,12 @@ function SlotRow({
         )}
       </div>
 
-      {/* Time (second line on mobile, inline on desktop) */}
-      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+      {/* Time (second line on mobile, inline on desktop) — rides up to the
+          title's line when a practitioner adds a second line below it, while
+          the spots count and CTA stay centered in the row */}
+      <span
+        className={`flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1 ${timeAlignment}`}
+      >
         <span className="inline-flex items-center gap-1.5">
           <ClockIcon className="w-3.5 h-3.5" />
           {event.time}
@@ -321,10 +328,10 @@ function SlotRow({
         </span>
       )}
 
-      {/* View Details link (desktop) */}
+      {/* View Details link (desktop)
       <span className="hidden sm:inline-flex items-center text-xs font-mono uppercase tracking-wide text-[var(--pyre-creme)]/50 group-hover:text-[var(--pyre-creme)]/80 transition-colors whitespace-nowrap shrink-0">
         View Details
-      </span>
+      </span> */}
 
       {/* Desktop CTA pill */}
       <a
@@ -437,19 +444,25 @@ function DateGroup({
   dateLabel,
   events,
   optionsById,
+  stickyTop,
   onViewDetails,
   onOpenPractitioner,
 }: {
   dateLabel: string;
   events: EventItem[];
   optionsById: Map<string, PooledBookingOption[]>;
+  stickyTop: number;
   onViewDetails: (event: EventItem) => void;
   onOpenPractitioner: (practitioner: Practitioner) => void;
 }) {
   return (
     <div className="mb-6">
-      {/* Date header */}
-      <div className="flex items-center gap-4 mb-1">
+      {/* Date header — sticks under the filter bar until the next date arrives,
+          so the day you're scrolling through stays on screen */}
+      <div
+        className="sticky z-20 flex items-center gap-4 bg-[var(--pyre-black)] py-2"
+        style={{ top: stickyTop }}
+      >
         <span className="font-mono-bold text-sm sm:text-base uppercase tracking-widest text-[var(--pyre-muted-gold)] whitespace-nowrap">
           {dateLabel}
         </span>
@@ -517,7 +530,12 @@ function deriveTypeFilters(events: EventItem[]): string[] {
 // -- Filter chips ------------------------------------------------------------
 
 const CHIP_CLASSES =
-  'inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-4 py-2 text-base btn-cta-animated text-[var(--pyre-creme)]';
+  'text-sm inline-flex items-center justify-center select-none font-mono-bold rounded-md font-semibold uppercase tracking-wide transition-colors duration-150 px-4 py-2 btn-cta-animated';
+
+// The selected chip keeps its animated gradient border but fills gold with
+// black type (`is-selected` paints the interior — see global.css).
+const CHIP_SELECTED_CLASSES = 'is-animating is-selected text-[var(--pyre-black)]';
+const CHIP_IDLE_CLASSES = 'text-[var(--pyre-creme)]';
 
 function TypeFilter({
   types,
@@ -533,6 +551,9 @@ function TypeFilter({
     <div className="flex flex-wrap gap-2" role="group" aria-label="Session type filters">
       {chips.map((type) => {
         const isActive = type === selected;
+        // "All" is the absence of a filter, so it never takes the highlighted
+        // treatment — only a narrowed-down type does.
+        const isHighlighted = isActive && type !== ALL_TYPES_FILTER;
         const label = type === ALL_TYPES_FILTER ? ALL_TYPES_LABEL : type;
         return (
           <button
@@ -540,7 +561,7 @@ function TypeFilter({
             type="button"
             aria-pressed={isActive}
             onClick={() => onSelect(type)}
-            className={isActive ? `${CHIP_CLASSES} is-animating` : CHIP_CLASSES}
+            className={`${CHIP_CLASSES} ${isHighlighted ? CHIP_SELECTED_CLASSES : CHIP_IDLE_CLASSES}`}
           >
             {label}
           </button>
@@ -548,6 +569,40 @@ function TypeFilter({
       })}
     </div>
   );
+}
+
+// -- Sticky offsets -----------------------------------------------------------
+
+// The filter bar parks under the fixed site header (announcement banner +
+// navbar) and each date header parks under the filter bar, so the date you're
+// looking at stays visible while you scroll its sessions. Both heights are
+// measured rather than hard-coded — the banner is dismissible and the navbar
+// is shorter on mobile.
+function useStickyOffsets() {
+  // A callback ref, not useRef: the filter bar mounts after the events load, and
+  // this re-measures the moment it does.
+  const [filterEl, setFilterEl] = useState<HTMLDivElement | null>(null);
+  const [offsets, setOffsets] = useState({ filter: 0, dateHeader: 0 });
+
+  useEffect(() => {
+    const siteHeader = document.querySelector('header')?.parentElement ?? null;
+
+    const measure = () => {
+      const headerHeight = siteHeader?.getBoundingClientRect().height ?? 0;
+      const filterHeight = filterEl?.getBoundingClientRect().height ?? 0;
+      setOffsets({ filter: headerHeight, dateHeader: headerHeight + filterHeight });
+    };
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    if (siteHeader) observer.observe(siteHeader);
+    if (filterEl) observer.observe(filterEl);
+
+    return () => observer.disconnect();
+  }, [filterEl]);
+
+  return { setFilterEl, offsets };
 }
 
 // -- Main component ----------------------------------------------------------
@@ -559,6 +614,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   // Bio modal lives here (not inside the event modal) so it can be opened both
   // from a schedule row and from an open event, and layer above the latter.
   const [selectedPractitioner, setSelectedPractitioner] = useState<Practitioner | null>(null);
+  const { setFilterEl, offsets } = useStickyOffsets();
 
   // Remove server-rendered skeleton once React has hydrated
   useEffect(() => {
@@ -658,7 +714,11 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
     <>
       {/* Only show the filter row when there's more than one type to choose from */}
       {typeFilters.length > 1 && (
-        <div className="mb-8">
+        <div
+          ref={setFilterEl}
+          className="sticky z-30 bg-[var(--pyre-black)] pt-2 pb-4"
+          style={{ top: offsets.filter }}
+        >
           <TypeFilter types={typeFilters} selected={effectiveType} onSelect={handleSelectType} />
         </div>
       )}
@@ -673,6 +733,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
               dateLabel={groupEvents[0].date}
               events={groupEvents}
               optionsById={bookingModel.optionsById}
+              stickyTop={offsets.dateHeader}
               onViewDetails={setSelectedEvent}
               onOpenPractitioner={setSelectedPractitioner}
             />
