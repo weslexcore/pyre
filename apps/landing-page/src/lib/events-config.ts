@@ -20,6 +20,6 @@ export const CATEGORY_TAGS = [
   SPECIAL_EVENT_TAG,
   'Yoga',
   'Breathwork',
-  'Qi Gong',
+  'Qigong',
   'Open Hours',
 ];
