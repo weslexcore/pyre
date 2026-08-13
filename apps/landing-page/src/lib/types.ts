@@ -434,6 +434,20 @@ export interface EventItem {
   totalSpots?: number; // Total capacity from Momence API
   isPrivate?: boolean; // Private events hide booking CTAs
   tags?: string[]; // Momence category tags, used for type filtering on the events page
+  // People leading the session, resolved from the Momence teacher roster (see
+  // `lib/practitioners`). Special events surface these as a practitioner
+  // credit; house-account sessions resolve to an empty list.
+  practitioners?: Practitioner[];
+}
+
+// A guest practitioner who hosts special events. Momence only gives us a name,
+// so the headshot, bio, and links come from the roster in `practitioners.ts`.
+export interface Practitioner {
+  name: string; // Must match the Momence teacher name (matching is case/punctuation-insensitive)
+  role?: string; // Short descriptor, e.g. "Qigong Instructor"
+  photo?: ImageRef; // Headshot; falls back to a monogram avatar when absent
+  bio?: string[]; // One entry per paragraph. Without a bio there is nothing to open.
+  links?: LinkRef[]; // Optional website / social links shown at the bottom of the bio
 }
 
 export interface EventsContent {

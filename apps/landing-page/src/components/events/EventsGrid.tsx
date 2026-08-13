@@ -9,9 +9,12 @@ import { trackBookingLinkClicked } from '@/lib/analytics';
 import { buildPooledBookingModel, eventHasTag } from '@/lib/booking-model';
 import { eventsLoadError } from '@/lib/events';
 import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS } from '@/lib/events-config';
-import type { EventItem, PooledBookingOption } from '@/lib/types';
+import { specialEventPractitioners } from '@/lib/practitioners';
+import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
+import PractitionerByline from './PractitionerByline';
 
 const EventDetailModal = lazy(() => import('./EventDetailModal'));
+const PractitionerBioModal = lazy(() => import('./PractitionerBioModal'));
 
 interface EventsGridProps {
   fallback?: EventItem[];
@@ -196,11 +199,14 @@ function spotsLabel(
 function SlotRow({
   event,
   onViewDetails,
+  onOpenPractitioner,
 }: {
   event: EventItem;
   onViewDetails: (event: EventItem) => void;
+  onOpenPractitioner?: (practitioner: Practitioner) => void;
 }) {
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
+  const practitioners = specialEventPractitioners(event);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
 
@@ -281,13 +287,17 @@ function SlotRow({
         </a>
       </span>
 
-      {/* Time (second line on mobile, inline on desktop) */}
-      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+      {/* Time (second line on mobile, inline on desktop), followed by the
+          guest practitioner credit on special events */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--pyre-creme)]/70 sm:flex-1 min-w-0">
         <span className="inline-flex items-center gap-1.5">
           <ClockIcon className="w-3.5 h-3.5" />
           {event.time}
         </span>
-      </span>
+        {practitioners.length > 0 && (
+          <PractitionerByline practitioners={practitioners} onOpenBio={onOpenPractitioner} />
+        )}
+      </div>
 
       {/* Spots - to the left of CTA */}
       {spots && (
@@ -426,11 +436,13 @@ function DateGroup({
   events,
   optionsById,
   onViewDetails,
+  onOpenPractitioner,
 }: {
   dateLabel: string;
   events: EventItem[];
   optionsById: Map<string, PooledBookingOption[]>;
   onViewDetails: (event: EventItem) => void;
+  onOpenPractitioner: (practitioner: Practitioner) => void;
 }) {
   return (
     <div className="mb-6">
@@ -454,7 +466,12 @@ function DateGroup({
               onViewDetails={onViewDetails}
             />
           ) : (
-            <SlotRow key={event.id} event={event} onViewDetails={onViewDetails} />
+            <SlotRow
+              key={event.id}
+              event={event}
+              onViewDetails={onViewDetails}
+              onOpenPractitioner={onOpenPractitioner}
+            />
           );
         })}
       </div>
@@ -537,6 +554,9 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
   const { events, loading, error, refetch } = useEvents(fallback);
   const [selectedType, setSelectedType] = useState<string>(ALL_TYPES_FILTER);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  // Bio modal lives here (not inside the event modal) so it can be opened both
+  // from a schedule row and from an open event, and layer above the latter.
+  const [selectedPractitioner, setSelectedPractitioner] = useState<Practitioner | null>(null);
 
   // Remove server-rendered skeleton once React has hydrated
   useEffect(() => {
@@ -652,6 +672,7 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
               events={groupEvents}
               optionsById={bookingModel.optionsById}
               onViewDetails={setSelectedEvent}
+              onOpenPractitioner={setSelectedPractitioner}
             />
           ))}
         </div>
@@ -663,7 +684,16 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
           bookingOptions={
             selectedEvent ? bookingModel.optionsById.get(selectedEvent.id) : undefined
           }
+          onOpenPractitioner={setSelectedPractitioner}
+          keyboardPaused={!!selectedPractitioner}
           onClose={() => setSelectedEvent(null)}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PractitionerBioModal
+          practitioner={selectedPractitioner}
+          isOpen={!!selectedPractitioner}
+          onClose={() => setSelectedPractitioner(null)}
         />
       </Suspense>
     </>

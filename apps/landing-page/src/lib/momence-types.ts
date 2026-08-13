@@ -5,6 +5,18 @@ export interface MomenceAdditionalTeacher {
   lastName: string;
 }
 
+// A teacher profile from the Momence `/Teachers` endpoint. This is where the
+// practitioner bios and headshots shown on special events come from — events
+// themselves only carry the teacher's name and id.
+export interface MomenceTeacher {
+  id: number;
+  firstName: string;
+  lastName: string;
+  bio: string | null;
+  profileImage: string | null;
+  isDeleted: boolean;
+}
+
 export interface MomenceEvent {
   id: number;
   title: string;

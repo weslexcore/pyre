@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import { creditsForPriceUsd } from '@/lib/credits';
-import type { EventItem, PooledBookingOption } from '@/lib/types';
+import { specialEventPractitioners } from '@/lib/practitioners';
+import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
+import PractitionerByline from './PractitionerByline';
 
 interface EventDetailModalProps {
   event: EventItem | null;
@@ -14,6 +16,12 @@ interface EventDetailModalProps {
   // hour / Book 2 hours, or Book 3 hours for a social evening) instead of the
   // single Book Now CTA.
   bookingOptions?: PooledBookingOption[];
+  // Opens the practitioner bio modal (owned by the parent so it can layer on
+  // top of this one).
+  onOpenPractitioner?: (practitioner: Practitioner) => void;
+  // True while the bio modal is stacked on top — this modal then hands Escape
+  // and the focus trap over to it.
+  keyboardPaused?: boolean;
   onClose: () => void;
 }
 
@@ -243,12 +251,21 @@ export default function EventDetailModal({
   event,
   isOpen,
   bookingOptions,
+  onOpenPractitioner,
+  keyboardPaused = false,
   onClose,
 }: EventDetailModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Read inside the keydown handler so pausing doesn't tear down the effect
+  // (which would otherwise re-lock scroll and steal focus back from the bio).
+  const keyboardPausedRef = useRef(keyboardPaused);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    keyboardPausedRef.current = keyboardPaused;
+  }, [keyboardPaused]);
 
   // Body scroll lock + keyboard handling + focus management
   useEffect(() => {
@@ -264,6 +281,9 @@ export default function EventDetailModal({
     });
 
     function handleKeyDown(e: KeyboardEvent) {
+      // The bio modal is stacked above us and owns the keyboard while it's open.
+      if (keyboardPausedRef.current) return;
+
       if (e.key === 'Escape') {
         onClose();
         return;
@@ -304,6 +324,7 @@ export default function EventDetailModal({
   if (!isOpen || !event) return null;
 
   const spots = spotsLabel(event.spotsRemaining, event.totalSpots);
+  const practitioners = specialEventPractitioners(event);
   const isWaitlist = event.spotsRemaining === 0;
   const ctaLabel = isWaitlist ? 'Join Waitlist' : (event.cta?.label ?? 'Book Now');
   // Pooled sessions surface gated duration choices in the footer; their raw
@@ -401,8 +422,8 @@ export default function EventDetailModal({
           title={copied ? 'Copied!' : 'Share'}
           className="font-mono-bold text-sm uppercase items-center gap-1 tracking-wide absolute inline-flex top-3 left-3 z-30 rounded-full border border-[var(--pyre-gold)]/70 bg-black/40 backdrop-blur-sm p-1.5 text-[var(--pyre-creme)] hover:bg-black/60 hover:border-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
         >
-          {copied ? <CheckIcon /> : <ShareIcon />} 
-          { copied ? 'Copied!' : 'Share'}
+          {copied ? <CheckIcon /> : <ShareIcon />}
+          {copied ? 'Copied!' : 'Share'}
         </button>
 
         {/* Pinned event image (sits behind the scrolling content) */}
@@ -472,6 +493,18 @@ export default function EventDetailModal({
               )}
             </div>
 
+            {/* Hosted by — guest practitioner(s) on special events. Clicking
+                opens their bio when the roster has one. */}
+            {practitioners.length > 0 && (
+              <div className="mt-5 border-t border-[var(--pyre-creme)]/10 pt-4">
+                <PractitionerByline
+                  practitioners={practitioners}
+                  variant="modal"
+                  onOpenBio={onOpenPractitioner}
+                />
+              </div>
+            )}
+
             {/* Description */}
             {event.description && (
               <p className="mt-5 whitespace-pre-line font-sans text-base leading-relaxed text-[var(--pyre-creme)]/80">
@@ -483,60 +516,60 @@ export default function EventDetailModal({
 
         {/* Fixed footer — Book Now stays anchored at the bottom */}
         {footerHasBookingRow && (
-        <div className="relative z-20 flex flex-col gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-2">
-          {/* Booking CTAs — one shared row layout for every bookable choice:
+          <div className="relative z-20 flex flex-col gap-3 border-t border-[var(--pyre-creme)]/10 bg-[var(--pyre-black)] px-6 py-2">
+            {/* Booking CTAs — one shared row layout for every bookable choice:
               [Duration] [Credits] [slots left] [Book Now]. */}
-          {hasBookingOptions ? (
-            // Pooled sessions: gated duration choices (1hr/2hr, 1hr/3hr, ...).
-            <div className="flex flex-col">
-              {bookingOptions?.map((option) => (
-                <BookingRow
-                  key={option.minutes}
-                  minutes={option.minutes}
-                  fallbackLabel={option.label}
-                  credits={option.credits}
-                  priceUsd={option.priceUsd}
-                  spotsLeft={option.spotsLeft}
-                  action={
-                    option.soldOut
-                      ? { kind: 'disabled', label: 'Sold Out' }
-                      : {
-                          kind: 'link',
-                          href: option.href,
-                          label: 'Book Now',
-                          ariaLabel: `${option.label} — ${event.title}`,
-                          onClick: () =>
-                            trackBookingLinkClicked(
-                              event,
-                              `event_detail_modal_${option.minutes}min`,
-                              option.href
-                            ),
-                        }
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            !event.isPrivate &&
-            event.cta && (
+            {hasBookingOptions ? (
+              // Pooled sessions: gated duration choices (1hr/2hr, 1hr/3hr, ...).
               <div className="flex flex-col">
-                <BookingRow
-                  minutes={event.durationMinutes ?? 0}
-                  credits={specialCredits}
-                  priceUsd={event.priceUsd}
-                  spotsLeft={event.spotsRemaining}
-                  action={{
-                    kind: 'link',
-                    href: event.cta.href,
-                    label: ctaLabel,
-                    ariaLabel: event.cta.ariaLabel ?? `Book ${event.title}`,
-                    onClick: () => trackBookingLinkClicked(event, 'event_detail_modal'),
-                  }}
-                />
+                {bookingOptions?.map((option) => (
+                  <BookingRow
+                    key={option.minutes}
+                    minutes={option.minutes}
+                    fallbackLabel={option.label}
+                    credits={option.credits}
+                    priceUsd={option.priceUsd}
+                    spotsLeft={option.spotsLeft}
+                    action={
+                      option.soldOut
+                        ? { kind: 'disabled', label: 'Sold Out' }
+                        : {
+                            kind: 'link',
+                            href: option.href,
+                            label: 'Book Now',
+                            ariaLabel: `${option.label} — ${event.title}`,
+                            onClick: () =>
+                              trackBookingLinkClicked(
+                                event,
+                                `event_detail_modal_${option.minutes}min`,
+                                option.href
+                              ),
+                          }
+                    }
+                  />
+                ))}
               </div>
-            )
-          )}
-        </div>
+            ) : (
+              !event.isPrivate &&
+              event.cta && (
+                <div className="flex flex-col">
+                  <BookingRow
+                    minutes={event.durationMinutes ?? 0}
+                    credits={specialCredits}
+                    priceUsd={event.priceUsd}
+                    spotsLeft={event.spotsRemaining}
+                    action={{
+                      kind: 'link',
+                      href: event.cta.href,
+                      label: ctaLabel,
+                      ariaLabel: event.cta.ariaLabel ?? `Book ${event.title}`,
+                      onClick: () => trackBookingLinkClicked(event, 'event_detail_modal'),
+                    }}
+                  />
+                </div>
+              )
+            )}
+          </div>
         )}
       </div>
     </div>

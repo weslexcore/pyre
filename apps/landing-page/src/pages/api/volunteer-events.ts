@@ -66,7 +66,8 @@ export const GET: APIRoute = async () => {
     const validEvents = filterValidEvents(rawEvents);
     const volunteerEvents = onlyVolunteerEvents(validEvents);
     const sortedEvents = sortEventsByDate(volunteerEvents);
-    const events = sortedEvents.map(transformToEventItem);
+    // No teacher roster here — volunteer shifts don't credit a practitioner.
+    const events = sortedEvents.map((event) => transformToEventItem(event));
 
     const response: VolunteerEventsApiResponse = {
       events,
