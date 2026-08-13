@@ -8,6 +8,7 @@
 import {
   addDays,
   busyIntervalsFor,
+  firstTentativeDate,
   formatShiftNotes,
   minutesToTime,
   missingShiftLead,
@@ -229,6 +230,11 @@ export function ScheduleCalendar() {
   }
 
   const today = todayLocal();
+  // The two-week commitment boundary (schedule-core): shift blocks on later
+  // dates render dashed, and the banner explains it when the grid reaches
+  // past the boundary.
+  const firstTentative = firstTentativeDate(today);
+  const formatShortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
   return (
     <div className="space-y-4">
@@ -283,6 +289,17 @@ export function ScheduleCalendar() {
         </p>
       )}
 
+      {gridEnd >= firstTentative && (
+        <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+          Set in stone through{' '}
+          <span className="font-bold text-[var(--pyre-creme)]">
+            {formatShortDate(addDays(firstTentative, -1))}
+          </span>{' '}
+          · dashed shifts on ≈ days are a working plan and can still change — but keep requesting
+          shifts and logging time off out there.
+        </p>
+      )}
+
       <div className="overflow-x-auto">
         <div className="min-w-[860px]">
           <div className="grid grid-cols-7">
@@ -327,6 +344,14 @@ export function ScheduleCalendar() {
                             : 'text-white/40'
                       }`}
                     >
+                      {date >= firstTentative && (
+                        <span
+                          className="mr-0.5 text-white/40"
+                          title="Beyond the two-week set-in-stone window — tentative"
+                        >
+                          ≈
+                        </span>
+                      )}
                       {Number(date.slice(8))}
                     </div>
 
@@ -340,12 +365,13 @@ export function ScheduleCalendar() {
                         const noLead =
                           shift.status === 'active' &&
                           missingShiftLead(shift.assignments, staffById);
+                        const tentative = date >= firstTentative;
                         return (
                           <a
                             key={shift.id}
                             href="/admin/schedule"
-                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}`}
-                            className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]}`}
+                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}${tentative ? ' · tentative — may change' : ''}`}
+                            className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]} ${tentative ? 'border-dashed' : ''}`}
                           >
                             <span className="block truncate text-[11px] font-semibold leading-tight">
                               {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}{' '}
@@ -413,6 +439,10 @@ export function ScheduleCalendar() {
         <span>
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/15 align-middle" />
           covered
+        </span>
+        <span>
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-white/50 align-middle" />
+          dashed = tentative (2+ weeks out)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
         {selfId && (
