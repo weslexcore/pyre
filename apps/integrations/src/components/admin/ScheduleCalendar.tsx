@@ -18,6 +18,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
+import { StaffMultiSelect } from './StaffMultiSelect';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -27,6 +28,9 @@ interface BoardData {
   staff: StaffRow[];
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
+  /** Manage side — shows the people filter (employees only get their own
+   * time off back from the API anyway). */
+  canManage?: boolean;
   selfStaffId?: string | null;
 }
 
@@ -129,6 +133,9 @@ export function ScheduleCalendar() {
   const [error, setError] = useState<string | null>(null);
   // "My shifts": only show shift blocks the viewer is assigned to.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
+  // Manage-side people filter: whose shifts and time off to show (empty =
+  // everyone).
+  const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
 
   // The visible grid runs from the Monday on/before the 1st through the
   // Sunday on/after the month's last day.
@@ -281,6 +288,13 @@ export function ScheduleCalendar() {
             My shifts
           </button>
         )}
+        {data?.canManage && (
+          <StaffMultiSelect
+            staff={data?.staff ?? []}
+            selected={staffFilter}
+            onChange={setStaffFilter}
+          />
+        )}
         {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
@@ -296,8 +310,10 @@ export function ScheduleCalendar() {
           <span className="font-bold text-[var(--pyre-creme)]">
             {formatShortDate(addDays(firstTentative, -1))}
           </span>{' '}
-          · dashed shifts in later weeks are a working plan and can still change until the week
-          locks — but keep requesting shifts and logging time off out there.
+          · <span className="font-bold text-[var(--pyre-red)]">{formatShortDate(firstTentative)}</span>{' '}
+          onward is <span className="font-bold text-[var(--pyre-red)]">tentative</span> — dashed
+          shifts are a working plan and can still change until the week locks, but keep requesting
+          shifts and logging time off out there.
         </p>
       )}
 
@@ -322,7 +338,14 @@ export function ScheduleCalendar() {
                 if (mineOnly && selfId) {
                   shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
                 }
-                const markers = timeOffByDate.get(date) ?? [];
+                if (staffFilter.size > 0) {
+                  shifts = shifts.filter((s) =>
+                    s.assignments.some((a) => staffFilter.has(a.staff_id))
+                  );
+                }
+                const markers = (timeOffByDate.get(date) ?? []).filter(
+                  (m) => staffFilter.size === 0 || staffFilter.has(m.staff.id)
+                );
                 const selfWorks = selfDates.has(date);
                 const cellTone = selfWorks
                   ? 'bg-[var(--pyre-gold)]/[0.08] ring-1 ring-inset ring-[var(--pyre-gold)]/40'
@@ -347,7 +370,7 @@ export function ScheduleCalendar() {
                     >
                       {date >= firstTentative && (
                         <span
-                          className="mr-0.5 text-white/40"
+                          className="mr-0.5 text-[var(--pyre-red)]"
                           title="This week hasn't locked yet — tentative"
                         >
                           ≈
@@ -441,8 +464,8 @@ export function ScheduleCalendar() {
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/15 align-middle" />
           covered
         </span>
-        <span>
-          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-white/50 align-middle" />
+        <span className="text-[var(--pyre-red)]">
+          <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-[var(--pyre-red)]/70 align-middle" />
           dashed = tentative (not locked yet)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
@@ -454,7 +477,9 @@ export function ScheduleCalendar() {
         )}
         <span className="text-white/40">· lettered chips = time off:</span>
         {(data?.staff ?? [])
-          .filter((s) => s.active)
+          // Employees only receive their own time off, so only their own
+          // marker color is worth explaining.
+          .filter((s) => s.active && (data?.canManage || s.id === selfId))
           .map((s) => (
             <span key={s.id} style={{ color: personColor.get(s.id) }}>
               ▪ {s.display_name}

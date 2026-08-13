@@ -1,8 +1,9 @@
 // Read side of the staff scheduling admin pages: one GET returns everything
 // the islands need for a date range — the roster, shifts with their
-// assignments, and every time_off row (tiny table; recurring rules apply to
-// any range, so filtering server-side buys nothing). Availability and
-// conflicts are computed locally by the islands via lib/schedule.
+// assignments, and time_off rows (all of them on the manage side; employees
+// only get their own — recurring rules apply to any range, so there's no
+// date filtering, just ownership). Availability and conflicts are computed
+// locally by the islands via lib/schedule.
 
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
@@ -32,6 +33,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export interface ScheduleBoardPayload {
   staff: StaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
+  /** All entries on the manage side; only the caller's own otherwise. */
   timeOff: TimeOffRow[];
   /** Open draft proposals covering the range; only with includeDrafts=1, manage-side only. */
   proposals?: ScheduleProposalRow[];
@@ -168,7 +170,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           added_by: null,
         })),
     shifts,
-    timeOff: (timeOffRes.data ?? []) as TimeOffRow[],
+    // Other people's time off is manage-side information — employees see
+    // only their own entries (availability badges on others read as free).
+    timeOff: ((timeOffRes.data ?? []) as TimeOffRow[]).filter(
+      (t) => canManage || (selfStaffId !== null && t.staff_id === selfStaffId)
+    ),
     canManage,
     isAdmin: gate.access.isAdmin,
     selfStaffId,

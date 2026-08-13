@@ -11,6 +11,7 @@ import {
 } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
+import { StaffMultiSelect } from './StaffMultiSelect';
 
 interface BoardData {
   staff: StaffRow[];
@@ -67,6 +68,8 @@ export function ScheduleTimeOff() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showPast, setShowPast] = useState(false);
+  // Manage-side people filter: whose entries to list (empty = everyone).
+  const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
 
   // Form state — doubles as the edit form when editingId is set.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -129,14 +132,15 @@ export function ScheduleTimeOff() {
   }, [data]);
 
   const { recurring, upcoming, past } = useMemo(() => {
-    const entries = data?.timeOff ?? [];
+    let entries = data?.timeOff ?? [];
+    if (staffFilter.size > 0) entries = entries.filter((e) => staffFilter.has(e.staff_id));
     const today = todayLocal();
     return {
       recurring: entries.filter((e) => e.kind === 'recurring'),
       upcoming: entries.filter((e) => e.kind === 'range' && (e.end_date ?? '') >= today),
       past: entries.filter((e) => e.kind === 'range' && (e.end_date ?? '') < today),
     };
-  }, [data]);
+  }, [data, staffFilter]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -432,6 +436,17 @@ export function ScheduleTimeOff() {
             )}
           </div>
         </section>
+      )}
+
+      {canManage && (
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs uppercase tracking-wide text-white/40">Viewing</span>
+          <StaffMultiSelect
+            staff={data?.staff ?? []}
+            selected={staffFilter}
+            onChange={setStaffFilter}
+          />
+        </div>
       )}
 
       <section>
