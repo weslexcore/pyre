@@ -16,6 +16,7 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
+import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
@@ -40,4 +41,5 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'sub-request-notice': SubRequestNotice.PreviewProps,
   'sub-open-notice': SubOpenNotice.PreviewProps,
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
+  'shift-request-decision': ShiftRequestDecision.PreviewProps,
 };

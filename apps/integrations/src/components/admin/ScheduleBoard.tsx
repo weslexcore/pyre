@@ -18,6 +18,7 @@ import {
   formatShiftNotes,
   minutesToTime,
   missingShiftLead,
+  SETUP_DURATION_MIN,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
   weekStartOf,
@@ -135,13 +136,6 @@ const monthLabel = (monthStart: string): string =>
     month: 'long',
     year: 'numeric',
   });
-
-/**
- * The Setup role's span from the shift-window start. Windows are derived with
- * a 90min lead before the first session (leadMin in schedule-core), so window
- * start + 2h = 30min after sessions begin — the requested setup handoff point.
- */
-const SETUP_DURATION_MIN = 120;
 
 /** Active, live (non-draft) shift still short of staff_needed — draft
  * assignments don't count as coverage until accepted. */
@@ -1498,6 +1492,16 @@ function ShiftDetail({
                   <span className="font-medium">
                     {staffById.get(r.staff_id)?.display_name ?? '?'}
                   </span>
+                  <span
+                    className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/70"
+                    title={
+                      r.role === 'setup'
+                        ? 'Asked to work just the setup (first 2h of the window)'
+                        : 'Asked to work the whole shift'
+                    }
+                  >
+                    {ASSIGNMENT_ROLE_LABELS[r.role]}
+                  </span>
                   <span className="font-mono text-xs text-white/50">
                     asked {new Date(r.created_at).toLocaleDateString()}
                   </span>
@@ -1563,7 +1567,8 @@ function ShiftDetail({
           {selfRequest ? (
             <>
               <span className="font-mono text-xs text-[var(--pyre-creme)]">
-                Requested — waiting for a manager to approve.
+                Requested ({ASSIGNMENT_ROLE_LABELS[selfRequest.role]}) — waiting for a manager to
+                approve.
               </span>
               <button
                 type="button"
@@ -1577,16 +1582,35 @@ function ShiftDetail({
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-              disabled={busy}
-              onClick={() =>
-                void run(() => api('POST', '/api/admin/shift-requests', { shiftId: shift.id }))
-              }
-            >
-              Request this shift
-            </button>
+            <>
+              <span className="font-mono text-xs text-white/50">Request this shift:</span>
+              <button
+                type="button"
+                className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                title="Ask to work the whole shift"
+                disabled={busy}
+                onClick={() =>
+                  void run(() =>
+                    api('POST', '/api/admin/shift-requests', { shiftId: shift.id, role: 'full' })
+                  )
+                }
+              >
+                Full shift
+              </button>
+              <button
+                type="button"
+                className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                title="Ask to work just the setup — the first 2 hours of the window"
+                disabled={busy}
+                onClick={() =>
+                  void run(() =>
+                    api('POST', '/api/admin/shift-requests', { shiftId: shift.id, role: 'setup' })
+                  )
+                }
+              >
+                Setup only
+              </button>
+            </>
           )}
         </div>
       )}

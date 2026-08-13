@@ -25,3 +25,11 @@ export const SHIFT_LABEL_SUGGESTIONS = [
   'Evening',
   'Maintenance',
 ] as const;
+
+/**
+ * The Setup role's span from the shift-window start. Windows are derived
+ * with a 90min lead before the first session (leadMin in windows.ts), so
+ * window start + 2h = 30min after sessions begin — the setup handoff point.
+ * Shared by the board's role snapping and the shift-request approval path.
+ */
+export const SETUP_DURATION_MIN = 120;
