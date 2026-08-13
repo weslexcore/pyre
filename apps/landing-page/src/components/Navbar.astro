@@ -41,9 +41,9 @@ const showWordmark = !isHomePage && !logoOnly;
   ]}
 >
   <!-- Mobile gradient overlay - visible when navbar has dark background (mobile only) -->
-  <div class="lg:hidden">
+  <!-- <div class="lg:hidden">
     <GradientOverlay variant="navbar-mobile" />
-  </div>
+  </div> -->
 
   <div class="w-full px-4 md:px-6 flex items-center justify-between gap-4 py-3 md:py-4">
     <!-- Logo -->
@@ -72,9 +72,9 @@ const showWordmark = !isHomePage && !logoOnly;
 
     <!-- Desktop navigation links -->
     {!minimal && (
-    <nav class="hidden md:flex items-center gap-6 bg-[var(--pyre-black)] px-8 py-4 relative overflow-hidden rounded-xl" aria-label="Main navigation">
+    <nav class="hidden md:flex items-center gap-6 px-8 py-4 relative overflow-hidden rounded-xl bg-[var(--pyre-black)]/70" aria-label="Main navigation">
       <!-- Desktop gradient overlay - always visible on desktop nav -->
-      <GradientOverlay variant="navbar-desktop" />
+      {/* <GradientOverlay variant="navbar-desktop" /> */}
       {navbar.elements.links && navbar.elements.links.map((link) => (
         <a
           href={link.href}
@@ -221,7 +221,7 @@ const showWordmark = !isHomePage && !logoOnly;
     let cleanup: (() => void) | null = null;
 
     function setGradientVisibility(el: HTMLElement, visible: boolean) {
-      el.style.opacity = visible ? '0.2' : '0';
+      el.style.opacity = visible ? '0' : '0';
       el.style.animationPlayState = visible ? 'running' : 'paused';
     }
 
@@ -235,20 +235,20 @@ const showWordmark = !isHomePage && !logoOnly;
 
       const toggleMenu = (shouldOpen: boolean) => {
         const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
-        const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
+        // const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
 
         menuButton.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
         header?.setAttribute('data-menu-open', shouldOpen ? 'true' : 'false');
 
-        if (mobileGradient) {
-          if (shouldOpen) {
-            setGradientVisibility(mobileGradient, true);
-          } else {
-            const transparentNav = header?.dataset.transparentNav === 'true';
-            const atTop = window.scrollY <= 10;
-            setGradientVisibility(mobileGradient, !transparentNav || !atTop);
-          }
-        }
+        // if (mobileGradient) {
+        //   if (shouldOpen) {
+        //     setGradientVisibility(mobileGradient, true);
+        //   } else {
+        //     const transparentNav = header?.dataset.transparentNav === 'true';
+        //     const atTop = window.scrollY <= 10;
+        //     setGradientVisibility(mobileGradient, !transparentNav || !atTop);
+        //   }
+        // }
 
         if (shouldOpen) {
           mobileMenu.classList.remove('max-h-0', 'opacity-0');
@@ -305,7 +305,7 @@ const showWordmark = !isHomePage && !logoOnly;
 
     function setupScrollBehavior() {
       const header = document.querySelector('[data-component="navbar"]') as HTMLElement;
-      const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
+      // const mobileGradient = header?.querySelector('[data-variant="navbar-mobile"]') as HTMLElement;
       if (!header) return () => {};
 
       const transparentNav = header.dataset.transparentNav === 'true';
@@ -314,10 +314,10 @@ const showWordmark = !isHomePage && !logoOnly;
         const atTop = data.scrollY <= 10;
         header.setAttribute('data-at-top', atTop ? 'true' : 'false');
 
-        if (mobileGradient) {
-          const showGradient = !transparentNav || !atTop;
-          setGradientVisibility(mobileGradient, showGradient);
-        }
+        // if (mobileGradient) {
+        //   const showGradient = !transparentNav || !atTop;
+        //   setGradientVisibility(mobileGradient, showGradient);
+        // }
       }
 
       // Run once with current values
