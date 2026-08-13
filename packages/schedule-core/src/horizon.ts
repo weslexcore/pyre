@@ -1,27 +1,33 @@
-// The two-week commitment horizon: the schedule for the next two weeks is
-// set in stone — staff can plan around it. Everything after is a working
+// The commitment horizon: the schedule locks whole Monday–Sunday weeks at a
+// time, and always covers at least the next two weeks — the rolling
+// two-week mark rounds outward to the Sunday that completes its week, so
+// tentative always starts on a Monday and a week is either entirely set in
+// stone or entirely tentative. Beyond the horizon the schedule is a working
 // plan: shifts are still created, drafted, and requested out there, and time
 // off can be logged any distance ahead, but times and assignments may keep
-// moving until a date rolls inside the horizon. Purely a display/vocabulary
-// boundary — nothing blocks edits on either side of it.
+// moving until the week locks. Purely a display/vocabulary boundary —
+// nothing blocks edits on either side of it.
 
-import { addDays } from './hours';
+import { addDays, weekStartOf } from './hours';
 
-/** Days (including today) the published schedule is committed for. */
+/** Minimum days (including today) the published schedule is committed for. */
 export const CONFIRMED_HORIZON_DAYS = 14;
 
-/** Last date (inclusive) the schedule is set in stone for. */
-export function lastConfirmedDate(today: string): string {
-  return addDays(today, CONFIRMED_HORIZON_DAYS - 1);
-}
-
-/** First date whose schedule is still tentative. */
+/**
+ * First date whose schedule is still tentative: the Monday after the week
+ * containing the rolling two-week mark. Always a Monday, 14–20 days out.
+ */
 export function firstTentativeDate(today: string): string {
-  return addDays(today, CONFIRMED_HORIZON_DAYS);
+  return addDays(weekStartOf(addDays(today, CONFIRMED_HORIZON_DAYS - 1)), 7);
 }
 
-/** True when a date is beyond the two-week commitment horizon. Past dates are
- * history, never tentative. */
+/** Last date (inclusive) the schedule is set in stone for. Always a Sunday. */
+export function lastConfirmedDate(today: string): string {
+  return addDays(firstTentativeDate(today), -1);
+}
+
+/** True when a date's week hasn't locked yet. Past dates are history, never
+ * tentative. */
 export function isTentativeDate(date: string, today: string): boolean {
   return date >= firstTentativeDate(today);
 }
