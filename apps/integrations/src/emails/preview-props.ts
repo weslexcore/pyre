@@ -16,7 +16,9 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
-import { ShiftUnableNotice } from './templates/ShiftUnableNotice';
+import { SubClaimedNotice } from './templates/SubClaimedNotice';
+import { SubOpenNotice } from './templates/SubOpenNotice';
+import { SubRequestNotice } from './templates/SubRequestNotice';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate } from './types';
 
@@ -35,5 +37,7 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'partner-reconciliation': PartnerReconciliation.PreviewProps,
   'referral-redeemed': ReferralRedeemed.PreviewProps,
   'referral-reward-earned': ReferralRewardEarned.PreviewProps,
-  'shift-unable-notice': ShiftUnableNotice.PreviewProps,
+  'sub-request-notice': SubRequestNotice.PreviewProps,
+  'sub-open-notice': SubOpenNotice.PreviewProps,
+  'sub-claimed-notice': SubClaimedNotice.PreviewProps,
 };

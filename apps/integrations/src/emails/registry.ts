@@ -12,7 +12,9 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
-import { ShiftUnableNotice } from './templates/ShiftUnableNotice';
+import { SubClaimedNotice } from './templates/SubClaimedNotice';
+import { SubOpenNotice } from './templates/SubOpenNotice';
+import { SubRequestNotice } from './templates/SubRequestNotice';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
@@ -82,9 +84,17 @@ export const EMAIL_TEMPLATES: Registry = {
     subject: (p) => `${p.friendFirstName} booked - your Pyre reward is live`,
     Component: ReferralRewardEarned,
   },
-  'shift-unable-notice': {
-    subject: (p) => `${p.staffName} can't work ${p.shiftLabel} on ${p.dateLabel}`,
-    Component: ShiftUnableNotice,
+  'sub-request-notice': {
+    subject: (p) => `${p.staffName} needs a sub: ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: SubRequestNotice,
+  },
+  'sub-open-notice': {
+    subject: (p) => `Can you cover ${p.shiftLabel} on ${p.dateLabel}?`,
+    Component: SubOpenNotice,
+  },
+  'sub-claimed-notice': {
+    subject: (p) => `${p.takerName} is covering ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: SubClaimedNotice,
   },
 };
 

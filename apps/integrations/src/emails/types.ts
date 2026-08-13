@@ -122,14 +122,37 @@ export interface ReferralRewardEarnedProps {
   bookUrl: string;
 }
 
-// Staff scheduling (transactional, admin-facing — no unsubscribeUrl).
+// Staff scheduling sub requests (all transactional — no unsubscribeUrl).
 
-export interface ShiftUnableNoticeProps {
+export interface SubRequestNoticeProps {
   staffName: string;
   shiftLabel: string;
   /** e.g. "Thursday, August 14" */
   dateLabel: string;
   /** e.g. "2:30p–8:30p" */
+  timeLabel: string;
+  /** How many available people were emailed a claim link. */
+  notifiedCount: number;
+  scheduleUrl: string;
+}
+
+export interface SubOpenNoticeProps {
+  /** The recipient — the person who could take the shift. */
+  firstName: string;
+  requesterName: string;
+  shiftLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  /** Signed one-click claim link bound to this recipient. */
+  claimUrl: string;
+  scheduleUrl: string;
+}
+
+export interface SubClaimedNoticeProps {
+  takerName: string;
+  requesterName: string;
+  shiftLabel: string;
+  dateLabel: string;
   timeLabel: string;
   scheduleUrl: string;
 }
@@ -149,7 +172,9 @@ export interface EmailPropsByTemplate {
   'partner-reconciliation': PartnerReconciliationProps;
   'referral-redeemed': ReferralRedeemedProps;
   'referral-reward-earned': ReferralRewardEarnedProps;
-  'shift-unable-notice': ShiftUnableNoticeProps;
+  'sub-request-notice': SubRequestNoticeProps;
+  'sub-open-notice': SubOpenNoticeProps;
+  'sub-claimed-notice': SubClaimedNoticeProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

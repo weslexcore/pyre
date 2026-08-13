@@ -93,6 +93,31 @@ export interface ShiftRequestRow {
 	updated_at: string;
 }
 
+/**
+ * An employee's ask for a sub on a shift they're assigned to. Creating one
+ * logs their hours as time off (time_off_id) and emails admins plus everyone
+ * available that day; the requester keeps the assignment until a claim swaps
+ * it to the claimer. The window/role are copied from the assignment at
+ * request time so the swap can recreate them.
+ */
+export interface SubRequestRow {
+	id: string;
+	shift_id: string;
+	requester_staff_id: string;
+	starts_at: string;
+	ends_at: string;
+	role: "full" | "setup" | "partial";
+	/** The blackout entry created with the request; null if it was deleted. */
+	time_off_id: string | null;
+	status: "open" | "claimed" | "cancelled";
+	claimed_by_staff_id: string | null;
+	claimed_at: string | null;
+	/** How many available people were emailed a claim link. */
+	notified_count: number;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface TimeOffRow {
 	id: string;
 	staff_id: string;

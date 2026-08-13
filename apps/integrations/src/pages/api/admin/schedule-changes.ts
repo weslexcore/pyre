@@ -19,7 +19,15 @@ function json(body: unknown, status = 200): Response {
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
-const ENTITY_TYPES: ChangeEntityType[] = ['shift', 'assignment', 'time_off', 'proposal', 'sync'];
+const ENTITY_TYPES: ChangeEntityType[] = [
+  'shift',
+  'assignment',
+  'time_off',
+  'proposal',
+  'sync',
+  'request',
+  'sub_request',
+];
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requireAdmin(cookies);

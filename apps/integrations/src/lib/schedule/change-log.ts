@@ -15,7 +15,8 @@ export type ChangeEntityType =
   | 'time_off'
   | 'proposal'
   | 'sync'
-  | 'request';
+  | 'request'
+  | 'sub_request';
 
 export type ChangeAction =
   | 'create'

@@ -16,6 +16,7 @@ const FILTERS: Array<{ value: string; label: string }> = [
   { value: 'time_off', label: 'Time off' },
   { value: 'proposal', label: 'Draft proposals' },
   { value: 'request', label: 'Shift requests' },
+  { value: 'sub_request', label: 'Sub requests' },
   { value: 'sync', label: 'Momence sync' },
 ];
 
@@ -26,6 +27,7 @@ const ENTITY_LABEL: Record<ScheduleChangeRow['entity_type'], string> = {
   proposal: 'Proposal',
   sync: 'Sync',
   request: 'Shift request',
+  sub_request: 'Sub request',
 };
 
 const ACTOR_TINT: Record<ScheduleChangeRow['actor_kind'], string> = {
