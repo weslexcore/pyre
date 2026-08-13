@@ -8,7 +8,12 @@ import { useEvents } from '@/hooks/useEvents';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import { buildPooledBookingModel, eventHasTag } from '@/lib/booking-model';
 import { eventsLoadError } from '@/lib/events';
-import { ALL_TYPES_FILTER, ALL_TYPES_LABEL, CATEGORY_TAGS } from '@/lib/events-config';
+import {
+  ALL_TYPES_FILTER,
+  ALL_TYPES_LABEL,
+  CATEGORY_TAGS,
+  scheduleOutlook,
+} from '@/lib/events-config';
 import { specialEventPractitioners } from '@/lib/practitioners';
 import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
 import PractitionerByline from './PractitionerByline';
@@ -142,6 +147,29 @@ function EmptyState({ onShowAll }: { onShowAll: () => void }) {
           Show All Types
         </button>
       </div>
+    </div>
+  );
+}
+
+// Closes out the schedule: the calendar only runs a few weeks out, so tell
+// people looking further ahead how to reach us instead of leaving a dead end.
+function ScheduleOutlook() {
+  return (
+    <div className="mt-10 rounded-lg border border-[var(--pyre-creme)]/10 bg-[var(--pyre-creme)]/[0.02] px-6 py-8 text-center">
+      <h2 className="font-mono-bold text-sm sm:text-base uppercase tracking-widest text-[var(--pyre-muted-gold)]">
+        {scheduleOutlook.title}
+      </h2>
+      <p className="mx-auto mt-3 max-w-2xl font-sans text-base leading-relaxed text-[var(--pyre-creme)]/70">
+        {scheduleOutlook.body}
+      </p>
+      <a
+        href={scheduleOutlook.cta.href}
+        aria-label={scheduleOutlook.cta.ariaLabel}
+        className="mt-5 inline-flex items-center rounded-full bg-[var(--pyre-red)] px-5 py-2 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-red)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--pyre-black)]"
+      >
+        {scheduleOutlook.cta.label}
+        <ArrowIcon />
+      </a>
     </div>
   );
 }
@@ -740,6 +768,9 @@ export default function EventsGrid({ fallback = [] }: EventsGridProps) {
           ))}
         </div>
       )}
+
+      <ScheduleOutlook />
+
       <Suspense fallback={null}>
         <EventDetailModal
           event={selectedEvent}
