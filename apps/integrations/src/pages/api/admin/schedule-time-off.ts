@@ -67,8 +67,8 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
   const kind = body.kind;
   if (kind !== 'range' && kind !== 'recurring') return "kind must be 'range' or 'recurring'";
 
-  const startDate = body.startDate ?? null;
-  const endDate = body.endDate ?? null;
+  let startDate = body.startDate ?? null;
+  let endDate = body.endDate ?? null;
   for (const [name, value] of [
     ['startDate', startDate],
     ['endDate', endDate],
@@ -77,8 +77,12 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
       return `${name} must be YYYY-MM-DD`;
     }
   }
-  if (kind === 'range' && (!startDate || !endDate)) {
-    return 'A range entry needs startDate and endDate';
+  if (kind === 'range') {
+    // A single-day entry can arrive with only one of the dates filled (the
+    // form leaves the other to default) — mirror the one that's present.
+    if (startDate && !endDate) endDate = startDate;
+    if (endDate && !startDate) startDate = endDate;
+    if (!startDate || !endDate) return 'A range entry needs a date';
   }
   if (startDate && endDate && (endDate as string) < (startDate as string)) {
     return 'endDate must not be before startDate';

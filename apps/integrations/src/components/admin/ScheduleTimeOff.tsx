@@ -181,7 +181,8 @@ export function ScheduleTimeOff() {
         ...(editingId ? { id: editingId } : {}),
         staffId,
         kind,
-        startDate: startDate || null,
+        // Only one date filled = a single-day entry; mirror it to the other.
+        startDate: startDate || endDate || null,
         endDate: endDate || startDate || null,
         daysOfWeek: kind === 'recurring' ? days : [],
         startsAt: allDay ? null : startsAt || null,

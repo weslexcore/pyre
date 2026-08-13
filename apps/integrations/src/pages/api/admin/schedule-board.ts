@@ -5,6 +5,7 @@
 // date filtering, just ownership). Availability and conflicts are computed
 // locally by the islands via lib/schedule.
 
+import { utcToEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
@@ -53,6 +54,11 @@ export interface ScheduleBoardPayload {
    * teammate can take the shift from the board.
    */
   subRequests: SubRequestRow[];
+  /**
+   * Manage side: pending requests on today-or-future shifts across the whole
+   * horizon (not just the fetched range) — the Requests badge. 0 otherwise.
+   */
+  pendingRequestCount: number;
   /** The admin toggles for the employee-facing actions. */
   settings: ScheduleSettings;
 }
@@ -142,6 +148,20 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     shiftRequests = (requests ?? []) as ShiftRequestRow[];
   }
 
+  // The Requests badge: outstanding asks on any upcoming shift, however far
+  // out — a week-sized fetch must not hide requests sitting in later weeks.
+  let pendingRequestCount = 0;
+  if (canManage) {
+    const today = utcToEastern(new Date().toISOString()).date;
+    const { count, error } = await db
+      .from('shift_requests')
+      .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .gte('shifts.shift_date', today);
+    if (error) return json({ error: error.message }, 500);
+    pendingRequestCount = count ?? 0;
+  }
+
   let subRequests: SubRequestRow[] = [];
   if (shifts.length > 0) {
     const { data: subs, error } = await db
@@ -180,6 +200,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     selfStaffId,
     shiftRequests,
     subRequests,
+    pendingRequestCount,
     settings: await getScheduleSettings(),
   };
 
