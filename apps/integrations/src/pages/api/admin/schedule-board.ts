@@ -14,6 +14,7 @@ import {
   type ShiftRequestRow,
   type ShiftRow,
   type StaffRow,
+  type SubRequestRow,
   type TimeOffRow,
 } from '@/lib/db';
 import { getScheduleSettings, type ScheduleSettings } from '@/lib/schedule/settings';
@@ -45,6 +46,11 @@ export interface ScheduleBoardPayload {
    * side, only the caller's own otherwise.
    */
   shiftRequests: ShiftRequestRow[];
+  /**
+   * Open sub requests for the fetched shifts — everyone sees these, so any
+   * teammate can take the shift from the board.
+   */
+  subRequests: SubRequestRow[];
   /** The admin toggles for the employee-facing actions. */
   settings: ScheduleSettings;
 }
@@ -134,6 +140,21 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     shiftRequests = (requests ?? []) as ShiftRequestRow[];
   }
 
+  let subRequests: SubRequestRow[] = [];
+  if (shifts.length > 0) {
+    const { data: subs, error } = await db
+      .from('sub_requests')
+      .select('*')
+      .eq('status', 'open')
+      .in(
+        'shift_id',
+        shifts.map((s) => s.id)
+      )
+      .order('created_at');
+    if (error) return json({ error: error.message }, 500);
+    subRequests = (subs ?? []) as SubRequestRow[];
+  }
+
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
     // dashboard access stay on the manage side.
@@ -152,6 +173,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     isAdmin: gate.access.isAdmin,
     selfStaffId,
     shiftRequests,
+    subRequests,
     settings: await getScheduleSettings(),
   };
 

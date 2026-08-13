@@ -60,6 +60,8 @@ interface ImportMetaEnv {
   readonly PARTNER_API_SECRET?: string;
   // HMAC secret for signed confirm/deny links (defaults to CRON_SECRET if unset)
   readonly PARTNER_LINK_SECRET?: string;
+  // HMAC secret for signed sub-claim links (defaults to CRON_SECRET if unset)
+  readonly SCHEDULE_LINK_SECRET?: string;
   // Per-partner contact addresses for confirm/deny + quarterly reconciliation
   readonly PARTNER_BFT_CONTACT_EMAIL?: string;
   // Pyre staff address CC'd on all partner-facing verification email

@@ -29,6 +29,7 @@ import type {
   ShiftRequestRow,
   ShiftRow,
   StaffRow,
+  SubRequestRow,
   TimeOffRow,
 } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
@@ -39,10 +40,10 @@ interface BoardShift extends ShiftRow {
 
 interface BoardSettings {
   shiftRequestsEnabled: boolean;
-  unableToWorkEnabled: boolean;
+  subRequestsEnabled: boolean;
 }
 
-const DEFAULT_SETTINGS: BoardSettings = { shiftRequestsEnabled: true, unableToWorkEnabled: true };
+const DEFAULT_SETTINGS: BoardSettings = { shiftRequestsEnabled: true, subRequestsEnabled: true };
 
 interface BoardData {
   staff: StaffRow[];
@@ -56,6 +57,8 @@ interface BoardData {
   selfStaffId?: string | null;
   /** Pending requests (all of them on the manage side, own only otherwise). */
   shiftRequests?: ShiftRequestRow[];
+  /** Open sub requests — visible to everyone so any teammate can take one. */
+  subRequests?: SubRequestRow[];
   settings?: BoardSettings;
 }
 
@@ -342,6 +345,16 @@ export function ScheduleBoard() {
       const list = map.get(request.shift_id) ?? [];
       list.push(request);
       map.set(request.shift_id, list);
+    }
+    return map;
+  }, [data]);
+
+  const subsByShift = useMemo(() => {
+    const map = new Map<string, SubRequestRow[]>();
+    for (const sub of data?.subRequests ?? []) {
+      const list = map.get(sub.shift_id) ?? [];
+      list.push(sub);
+      map.set(sub.shift_id, list);
     }
     return map;
   }, [data]);
@@ -729,19 +742,19 @@ export function ScheduleBoard() {
           <label className="flex items-center gap-2 font-mono text-xs text-white/70">
             <input
               type="checkbox"
-              checked={settings.unableToWorkEnabled}
+              checked={settings.subRequestsEnabled}
               disabled={busy}
               onChange={(e) =>
                 void run(() =>
                   api('POST', '/api/admin/schedule-settings', {
-                    key: 'unable_to_work',
+                    key: 'sub_requests',
                     enabled: e.target.checked,
                   })
                 )
               }
             />
-            Employees can mark themselves unable to work (comes off the shift, logs time off, and
-            emails the admins)
+            Employees can request a sub (logs time off, emails the admins, and emails everyone
+            available a one-click link to take the shift)
           </label>
         </section>
       )}
@@ -830,6 +843,7 @@ export function ScheduleBoard() {
                   const tone = coverageTone(shift);
                   const notes = formatShiftNotes(shift);
                   const requests = requestsByShift.get(shift.id) ?? [];
+                  const subs = subsByShift.get(shift.id) ?? [];
                   const noLead =
                     shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
                   const expanded = canManage
@@ -890,6 +904,14 @@ export function ScheduleBoard() {
                               {canManage
                                 ? `${requests.length} request${requests.length > 1 ? 's' : ''}`
                                 : 'requested'}
+                            </span>
+                          )}
+                          {subs.length > 0 && (
+                            <span
+                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                              title="Someone on this shift requested a sub — open the shift to take it"
+                            >
+                              sub needed
                             </span>
                           )}
                           <span className="text-sm text-white/70">
@@ -953,6 +975,7 @@ export function ScheduleBoard() {
                           canManage={canManage}
                           selfId={selfId}
                           requests={requests}
+                          subs={subs}
                           settings={settings}
                           onEdit={() => openEditShift(shift)}
                           editingAssignment={editingAssignment}
@@ -1113,6 +1136,7 @@ function ShiftDetail({
   canManage,
   selfId,
   requests,
+  subs,
   settings,
   onEdit,
   editingAssignment,
@@ -1129,6 +1153,8 @@ function ShiftDetail({
   selfId: string | null;
   /** Pending requests on this shift (own only for non-managers). */
   requests: ShiftRequestRow[];
+  /** Open sub requests on this shift. */
+  subs: SubRequestRow[];
   settings: BoardSettings;
   onEdit: () => void;
   editingAssignment: string | null;
@@ -1140,22 +1166,53 @@ function ShiftDetail({
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
   const candidates = data.staff.filter((s) => s.active && !assignedIds.has(s.id));
 
-  // Employee self-service: both actions only make sense on live, upcoming
-  // shifts, and each sits behind its admin toggle.
+  // Employee self-service: these actions only make sense on live, upcoming
+  // shifts, and requesting sits behind its admin toggle.
   const upcoming = shift.status === 'active' && !shift.is_draft && shift.shift_date >= todayLocal();
   const selfRequest = selfId ? (requests.find((r) => r.staff_id === selfId) ?? null) : null;
   const canRequest =
     !canManage && settings.shiftRequestsEnabled && upcoming && !!selfId && !assignedIds.has(selfId);
 
-  const unableToWork = () => {
+  // The first open sub request someone else made — what "Take this shift"
+  // claims. (In practice there's at most one per shift.)
+  const takeableSub =
+    selfId && upcoming && !assignedIds.has(selfId)
+      ? (subs.find((s) => s.requester_staff_id !== selfId) ?? null)
+      : null;
+
+  const requestSub = () => {
     if (
       !window.confirm(
-        'Take yourself off this shift? The date is added to your time off and the admins are notified by email.'
+        'Request a sub for this shift? Your hours are logged as time off, the admins are emailed, and everyone available that day gets a one-click link to take the shift. You stay on the shift until someone takes it.'
       )
     ) {
       return;
     }
-    void run(() => api('POST', '/api/admin/shift-unable', { shiftId: shift.id }));
+    void run(() => api('POST', '/api/admin/shift-sub', { shiftId: shift.id }));
+  };
+
+  const cancelSub = (sub: SubRequestRow) => {
+    if (
+      !window.confirm(
+        'Cancel this sub request? The time off it logged is removed and the shift stays as-is.'
+      )
+    ) {
+      return;
+    }
+    void run(() => api('DELETE', `/api/admin/shift-sub?id=${sub.id}`));
+  };
+
+  const takeSub = (sub: SubRequestRow) => {
+    if (
+      !window.confirm(
+        `Take this shift (${formatTime(sub.starts_at)}–${formatTime(sub.ends_at)})? You replace ${
+          staffById.get(sub.requester_staff_id)?.display_name ?? 'the requester'
+        } right away.`
+      )
+    ) {
+      return;
+    }
+    void run(() => api('PATCH', '/api/admin/shift-sub', { id: sub.id, action: 'claim' }));
   };
 
   return (
@@ -1165,6 +1222,7 @@ function ShiftDetail({
           {selfFirst(shift.assignments, selfId).map((a) => {
             const person = staffById.get(a.staff_id);
             const isSelf = a.staff_id === selfId;
+            const personSub = subs.find((s) => s.requester_staff_id === a.staff_id) ?? null;
             const availability = availabilityFor(
               data.timeOff,
               a.staff_id,
@@ -1197,17 +1255,38 @@ function ShiftDetail({
                       {availability.conflicts.map((c) => c.note || 'unavailable').join('; ')}
                     </span>
                   )}
+                  {personSub && (
+                    <span className="rounded bg-[var(--pyre-gold)]/20 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-gold)]">
+                      sub requested
+                      {personSub.notified_count > 0 && ` · ${personSub.notified_count} asked`}
+                    </span>
+                  )}
                   {a.notes && <span className="font-mono text-xs text-white/40">{a.notes}</span>}
                   <span className="ml-auto flex items-center gap-2">
-                    {isSelf && !a.is_draft && upcoming && settings.unableToWorkEnabled && (
+                    {isSelf &&
+                      !a.is_draft &&
+                      upcoming &&
+                      settings.subRequestsEnabled &&
+                      !personSub && (
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-[var(--pyre-gold)] underline disabled:opacity-40"
+                          title="Ask for a sub — logs the date as time off, emails the admins, and emails everyone available a link to take the shift"
+                          disabled={busy}
+                          onClick={requestSub}
+                        >
+                          request a sub
+                        </button>
+                      )}
+                    {(isSelf || canManage) && personSub && (
                       <button
                         type="button"
-                        className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
-                        title="Take yourself off this shift — the date is added to your time off and the admins are emailed"
+                        className="font-mono text-xs text-white/50 underline hover:text-white disabled:opacity-40"
+                        title="Cancel the sub request and remove the time off it logged"
                         disabled={busy}
-                        onClick={unableToWork}
+                        onClick={() => cancelSub(personSub)}
                       >
-                        can't work this
+                        cancel sub
                       </button>
                     )}
                     {canManage && a.is_draft && (
@@ -1348,6 +1427,24 @@ function ShiftDetail({
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {takeableSub && (
+        <div className="flex flex-wrap items-center gap-2 rounded bg-[var(--pyre-gold)]/10 px-2 py-1.5">
+          <span className="font-mono text-xs text-[var(--pyre-gold)]">
+            {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'Someone'} needs a sub
+            for {formatTime(takeableSub.starts_at)}–{formatTime(takeableSub.ends_at)} — first come,
+            first served.
+          </span>
+          <button
+            type="button"
+            className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}
+            disabled={busy}
+            onClick={() => takeSub(takeableSub)}
+          >
+            Take this shift
+          </button>
         </div>
       )}
 

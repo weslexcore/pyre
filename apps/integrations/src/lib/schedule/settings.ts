@@ -7,14 +7,14 @@
 
 import { getDb } from '../db';
 
-export const SCHEDULE_SETTING_KEYS = ['shift_requests', 'unable_to_work'] as const;
+export const SCHEDULE_SETTING_KEYS = ['shift_requests', 'sub_requests'] as const;
 export type ScheduleSettingKey = (typeof SCHEDULE_SETTING_KEYS)[number];
 
 export interface ScheduleSettings {
   /** Employees may request open shifts (manager approval creates the assignment). */
   shiftRequestsEnabled: boolean;
-  /** Employees may pull themselves off an assigned shift ("unable to work"). */
-  unableToWorkEnabled: boolean;
+  /** Employees may request a sub for a shift they're assigned to. */
+  subRequestsEnabled: boolean;
 }
 
 const CACHE_TTL_MS = 30_000;
@@ -48,7 +48,7 @@ export async function getScheduleSettings(): Promise<ScheduleSettings> {
   const rows = (await loadRows()) ?? {};
   return {
     shiftRequestsEnabled: rows.shift_requests ?? true,
-    unableToWorkEnabled: rows.unable_to_work ?? true,
+    subRequestsEnabled: rows.sub_requests ?? true,
   };
 }
 
