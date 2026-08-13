@@ -230,9 +230,9 @@ export function ScheduleCalendar() {
   }
 
   const today = todayLocal();
-  // The commitment boundary (schedule-core): the schedule locks whole
-  // Mon–Sun weeks covering at least the next two weeks, so this is always a
-  // Monday. Shift blocks on later dates render dashed, and the banner
+  // The commitment boundary (schedule-core): every Monday locks the week
+  // that just started plus the next, so this is always the Monday after
+  // next. Shift blocks on later dates render dashed, and the banner
   // explains it when the grid reaches past the boundary.
   const firstTentative = firstTentativeDate(today);
   const formatShortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
@@ -443,7 +443,7 @@ export function ScheduleCalendar() {
         </span>
         <span>
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-white/50 align-middle" />
-          dashed = tentative (2+ weeks out)
+          dashed = tentative (not locked yet)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
         {selfId && (

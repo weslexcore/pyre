@@ -303,9 +303,9 @@ export function ScheduleBoard() {
     });
   };
 
-  // The commitment boundary (schedule-core): the schedule locks whole
-  // Mon–Sun weeks covering at least the next two weeks, so this is always a
-  // Monday. Dates from here on get the "≈ tentative" treatment, and a banner
+  // The commitment boundary (schedule-core): every Monday locks the week
+  // that just started plus the next, so this is always the Monday after
+  // next. Dates from here on get the "≈ tentative" treatment, and a banner
   // explains it whenever the visible range reaches past the boundary.
   const firstTentative = firstTentativeDate(todayLocal());
 
@@ -706,7 +706,7 @@ export function ScheduleBoard() {
           </span>{' '}
           · weeks after that are <span className="text-white/80">≈ tentative</span> — a working
           plan to keep requesting shifts and logging time off into, but times and assignments can
-          still change until the week locks (whole weeks, always at least two weeks ahead).
+          still change until the week locks (every Monday locks the two weeks ahead).
         </p>
       )}
 
