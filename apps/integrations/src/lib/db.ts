@@ -189,6 +189,17 @@ export type {
   TimeOffRow,
 } from '@pyre/schedule-core';
 
+/**
+ * Blank the personal calendar-feed secret before a roster row goes out in a
+ * response. That token is the entire auth gate on someone's shift feed, so it
+ * only ever travels back to its own owner (via /api/admin/calendar-feed) —
+ * not to teammates and not to admins. Call this on every path that serializes
+ * `staff` rows.
+ */
+export function redactCalendarToken<T extends { calendar_token?: string | null }>(row: T): T {
+  return { ...row, calendar_token: null };
+}
+
 export interface EmailSuppressionRow {
   id: string;
   email: string;

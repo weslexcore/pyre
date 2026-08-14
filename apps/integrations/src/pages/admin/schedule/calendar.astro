@@ -1,6 +1,7 @@
 ---
 // Month calendar: shifts as coverage-colored blocks in each day cell, time
 // off as per-person colored markers. Read-only; edit on the Week board.
+import { CalendarSubscribe } from '@/components/admin/CalendarSubscribe';
 import { ScheduleCalendar } from '@/components/admin/ScheduleCalendar';
 import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
 import AdminLayout from '@/layouts/AdminLayout.astro';
@@ -13,4 +14,5 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 >
   <ScheduleTabs current="/admin/schedule/calendar" />
   <ScheduleCalendar client:load />
+  <CalendarSubscribe client:load />
 </AdminLayout>
