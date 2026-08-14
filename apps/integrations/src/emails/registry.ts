@@ -12,6 +12,7 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
+import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
@@ -100,6 +101,13 @@ export const EMAIL_TEMPLATES: Registry = {
   'weekly-shifts': {
     subject: (p) => `Your shifts this week — ${p.weekLabel}`,
     Component: WeeklyShifts,
+  },
+  'shift-request-decision': {
+    subject: (p) =>
+      p.decision === 'approved'
+        ? `You're on: ${p.shiftLabel} on ${p.dateLabel}`
+        : `Shift request update: ${p.shiftLabel} on ${p.dateLabel}`,
+    Component: ShiftRequestDecision,
   },
 };
 
