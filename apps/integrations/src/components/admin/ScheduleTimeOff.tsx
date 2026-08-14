@@ -135,12 +135,20 @@ export function ScheduleTimeOff() {
     let entries = data?.timeOff ?? [];
     if (staffFilter.size > 0) entries = entries.filter((e) => staffFilter.has(e.staff_id));
     const today = todayLocal();
+    // The rows arrive in insertion order — sort by date so the lists read as a
+    // timeline: soonest first for upcoming, most recent first for past.
+    const nameOf = (e: TimeOffRow) => staffById.get(e.staff_id)?.display_name ?? '';
+    const byDate = (a: TimeOffRow, b: TimeOffRow) =>
+      (a.start_date ?? '').localeCompare(b.start_date ?? '') ||
+      (a.end_date ?? '').localeCompare(b.end_date ?? '') ||
+      nameOf(a).localeCompare(nameOf(b));
+    const ranges = entries.filter((e) => e.kind === 'range');
     return {
       recurring: entries.filter((e) => e.kind === 'recurring'),
-      upcoming: entries.filter((e) => e.kind === 'range' && (e.end_date ?? '') >= today),
-      past: entries.filter((e) => e.kind === 'range' && (e.end_date ?? '') < today),
+      upcoming: ranges.filter((e) => (e.end_date ?? '') >= today).sort(byDate),
+      past: ranges.filter((e) => (e.end_date ?? '') < today).sort((a, b) => byDate(b, a)),
     };
-  }, [data, staffFilter]);
+  }, [data, staffFilter, staffById]);
 
   const resetForm = () => {
     setEditingId(null);
