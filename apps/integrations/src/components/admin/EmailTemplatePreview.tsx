@@ -416,6 +416,51 @@ export function EmailTemplatePreview({
         </div>
       </section>
 
+      {/* Journeys: pause/resume the multi-step sequences without a deploy.
+          Separate from the template gate above — gating a step's template
+          suppresses the mail but still advances the member's enrollment. */}
+      {gateJourneys.length > 0 && (
+        <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="font-mono text-xs uppercase tracking-wide text-white/40">Journeys</p>
+          <p className="mt-1 text-xs text-white/50">
+            Off pauses the journey — no new enrollments, and members mid-journey hold their place
+            until it's back on.
+          </p>
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {gateJourneys.map((journey) => (
+              <li
+                key={journey.id}
+                className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-xs uppercase tracking-wide text-[var(--pyre-creme)]">
+                    {journey.id}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-white/40">
+                    {journey.kind} · {journey.steps} {journey.steps === 1 ? 'step' : 'steps'} ·{' '}
+                    {journey.enrollSource}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleJourney(journey)}
+                  disabled={!gateDbAvailable || gateBusy !== null}
+                  aria-pressed={journey.enabled}
+                  title={journey.enabled ? 'Running — click to pause' : 'Paused — click to resume'}
+                  className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors disabled:opacity-40 ${
+                    journey.enabled
+                      ? 'border-emerald-400/40 text-emerald-400 hover:border-emerald-400'
+                      : 'border-white/20 text-white/40 hover:border-white/40 hover:text-white/70'
+                  }`}
+                >
+                  {gateBusy === `journey:${journey.id}` ? '…' : journey.enabled ? 'on' : 'off'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Template list */}
         <nav className="shrink-0 lg:w-56">

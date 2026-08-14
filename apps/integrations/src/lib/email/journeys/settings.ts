@@ -62,11 +62,15 @@ export async function setJourneyEnabled(
 
   const { error } = await db
     .from('journey_settings')
-    .upsert({ journey_id: journeyId, enabled, updated_by: updatedBy }, { onConflict: 'journey_id' });
+    .upsert(
+      { journey_id: journeyId, enabled, updated_by: updatedBy },
+      { onConflict: 'journey_id' }
+    );
   if (error) return { error: error.message };
 
   invalidateJourneySettingsCache();
-  if (enabled && !wasEnabled) return { error: null, resumed: await resumeHeldEnrollments(journeyId) };
+  if (enabled && !wasEnabled)
+    return { error: null, resumed: await resumeHeldEnrollments(journeyId) };
   return { error: null };
 }
 
