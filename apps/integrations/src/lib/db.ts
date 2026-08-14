@@ -224,6 +224,17 @@ export interface EmailWhitelistRow {
   created_at: string;
 }
 
+// Per-journey pause switch managed from /admin/email-templates and read
+// through the cached settings in lib/email/journeys/settings.ts. No row =
+// enabled.
+export interface JourneySettingRow {
+  journey_id: string;
+  enabled: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {

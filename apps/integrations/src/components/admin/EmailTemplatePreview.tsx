@@ -16,6 +16,16 @@ export interface TemplateOption {
   source: 'db' | 'env';
 }
 
+export interface JourneyOption {
+  id: string;
+  kind: 'marketing' | 'transactional';
+  /** Step count, for the summary line. */
+  steps: number;
+  enrollSource: 'sweep' | 'event';
+  /** False = paused: no new enrollments, in-flight members hold their step. */
+  enabled: boolean;
+}
+
 export interface WhitelistEntry {
   email: string;
   /** 'env' entries are read-only; 'db' rows are managed here. */
@@ -30,12 +40,15 @@ interface GateTemplateState {
 /** Mirror of the /api/admin/email-gate snapshot every mutation returns. */
 interface GateSnapshot {
   templates: { key: string; live: boolean; source: 'db' | 'env' }[];
+  journeys: JourneyOption[];
   whitelist: WhitelistEntry[];
   dbAvailable: boolean;
 }
 
 interface EmailTemplatePreviewProps {
   templates: TemplateOption[];
+  /** Journeys from the code registry with their current pause state. */
+  journeys: JourneyOption[];
   /** Session types with dedicated confirmation copy — preset chips. */
   confirmationSessionTypes: string[];
   /** Raw EMAIL_LIVE_TEMPLATES value, for the config summary. */
@@ -63,6 +76,7 @@ const TEST_EMAIL_STORAGE_KEY = 'pyre-admin-test-email';
 
 export function EmailTemplatePreview({
   templates,
+  journeys,
   confirmationSessionTypes,
   liveTemplatesConfig,
   whitelist,
@@ -82,6 +96,7 @@ export function EmailTemplatePreview({
   const [gateTemplates, setGateTemplates] = useState<Record<string, GateTemplateState>>(() =>
     Object.fromEntries(templates.map((t) => [t.key, { live: t.live, source: t.source }]))
   );
+  const [gateJourneys, setGateJourneys] = useState<JourneyOption[]>(journeys);
   const [gateWhitelist, setGateWhitelist] = useState<WhitelistEntry[]>(whitelist);
   const [gateDbAvailable, setGateDbAvailable] = useState(dbAvailable);
   const [gateBusy, setGateBusy] = useState<string | null>(null);
@@ -225,6 +240,7 @@ export function EmailTemplatePreview({
           snapshot.templates.map((t) => [t.key, { live: t.live, source: t.source }])
         )
       );
+      setGateJourneys(snapshot.journeys);
       setGateWhitelist(snapshot.whitelist);
       setGateDbAvailable(snapshot.dbAvailable);
       return true;
@@ -244,6 +260,13 @@ export function EmailTemplatePreview({
 
   const clearTemplateOverride = (key: string) => {
     void postGateAction({ action: 'set-template', template: key, live: null }, key);
+  };
+
+  const toggleJourney = (journey: JourneyOption) => {
+    void postGateAction(
+      { action: 'set-journey', journey: journey.id, enabled: !journey.enabled },
+      `journey:${journey.id}`
+    );
   };
 
   const addWhitelist = async () => {
@@ -290,6 +313,9 @@ export function EmailTemplatePreview({
           <p className="font-mono text-xs uppercase tracking-wide text-white/40">Delivery gate</p>
           <p className="mt-1 text-sm text-[var(--pyre-creme)]">
             {liveCount} of {templates.length} templates live
+          </p>
+          <p className="mt-1 text-xs text-white/50">
+            Click a template's pill to switch it — gated templates deliver only to the whitelist.
           </p>
           <p className="mt-1 font-mono text-xs text-white/50">
             env baseline: EMAIL_LIVE_TEMPLATES={liveTemplatesConfig}
@@ -394,45 +420,42 @@ export function EmailTemplatePreview({
         {/* Template list */}
         <nav className="shrink-0 lg:w-56">
           <p className="mb-2 font-mono text-xs uppercase tracking-wide text-white/40">Templates</p>
-          <ul className="flex flex-row flex-wrap gap-1 lg:flex-col">
+          {/* flex-wrap only belongs to the sub-lg row layout — left on in
+              column direction it lets rows spill sideways over the props
+              column. */}
+          <ul className="flex flex-row flex-wrap gap-1 lg:flex-col lg:flex-nowrap">
             {templates.map((option) => {
               const state = gateTemplates[option.key] ?? {
                 live: option.live,
                 source: option.source,
               };
               return (
-                <li key={option.key} className="flex items-center gap-1">
+                <li key={option.key} className="flex min-w-0 flex-col items-start gap-0.5">
                   <button
                     type="button"
                     onClick={() => selectTemplate(option)}
-                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
+                    className={`w-full min-w-0 rounded-md px-3 py-2 text-left font-mono text-xs uppercase tracking-wide transition-colors ${
                       option.key === selectedKey
                         ? 'bg-white/10 text-[var(--pyre-creme)]'
                         : 'text-white/50 hover:bg-white/5 hover:text-white/80'
                     }`}
                   >
-                    <span
-                      title={
-                        state.live ? 'Live — delivers to real recipients' : 'Gated — whitelist only'
-                      }
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        state.live ? 'bg-emerald-400' : 'bg-white/20'
-                      }`}
-                    />
-                    <span className="min-w-0 truncate">{option.key}</span>
+                    <span className="block truncate">{option.key}</span>
                   </button>
                   {/* Flips a dashboard override on top of the env baseline;
-                      "Use env default" in the gate panel clears it. */}
+                      "Use env default" in the gate panel clears it. ml-3
+                      lines it up with the name button's px-3 text. */}
                   <button
                     type="button"
                     onClick={() => toggleTemplateLive(option.key)}
                     disabled={!gateDbAvailable || gateBusy !== null}
+                    aria-pressed={state.live}
                     title={
                       state.source === 'db'
                         ? 'Dashboard override — click to flip'
                         : 'From env — click to override'
                     }
-                    className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors disabled:opacity-40 ${
+                    className={`ml-3 shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors disabled:opacity-40 ${
                       state.live
                         ? 'border-emerald-400/40 text-emerald-400 hover:border-emerald-400'
                         : 'border-white/20 text-white/40 hover:border-white/40 hover:text-white/70'
