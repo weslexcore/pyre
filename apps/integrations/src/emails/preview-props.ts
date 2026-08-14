@@ -20,6 +20,7 @@ import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
+import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate } from './types';
 
 export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailPropsByTemplate[K] } = {
@@ -40,4 +41,5 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'sub-request-notice': SubRequestNotice.PreviewProps,
   'sub-open-notice': SubOpenNotice.PreviewProps,
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
+  'weekly-shifts': WeeklyShifts.PreviewProps,
 };

@@ -157,6 +157,35 @@ export interface SubClaimedNoticeProps {
   scheduleUrl: string;
 }
 
+/** One shift on the Monday roundup, from the recipient's point of view. */
+export interface WeeklyShiftItem {
+  /** e.g. "Mon, Aug 17" */
+  dayLabel: string;
+  /** The shift window name: Morning / Evening / Maintenance... */
+  shiftLabel: string;
+  /** The recipient's own hours, e.g. "2:30p–8:30p" */
+  timeLabel: string;
+  /** Deep link straight to this shift on the board. */
+  shiftUrl: string;
+  /** Set for 'setup'/'partial' assignments — omitted for a full window. */
+  roleLabel?: string;
+  /** The shift's notes, if any (e.g. "Private event — 20 guests"). */
+  notes?: string;
+  /** True while the recipient has an open sub request on this shift. */
+  subRequested?: boolean;
+}
+
+export interface WeeklyShiftsProps {
+  firstName: string;
+  /** e.g. "Aug 17–23" */
+  weekLabel: string;
+  /** Chronological; never empty (people with no shifts aren't emailed). */
+  shifts: WeeklyShiftItem[];
+  /** Total scheduled hours for the week, e.g. "18.5". */
+  totalHours: string;
+  scheduleUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -175,6 +204,7 @@ export interface EmailPropsByTemplate {
   'sub-request-notice': SubRequestNoticeProps;
   'sub-open-notice': SubOpenNoticeProps;
   'sub-claimed-notice': SubClaimedNoticeProps;
+  'weekly-shifts': WeeklyShiftsProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;
