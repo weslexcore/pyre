@@ -9,16 +9,28 @@ import type { EmailTemplateKey } from '@/emails/types';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { CONFIRMATION_SESSION_TYPES } from '@/lib/email/confirmation-content';
 import { getEmailGate } from '@/lib/email/dev-mode';
+import { JOURNEYS } from '@/lib/email/journeys/registry';
+import { getJourneySettings } from '@/lib/email/journeys/settings';
 
 // Registry order; each entry pre-filled with the same sample props the React
 // Email dev server (`yarn email`) uses. Live status is computed per-request
 // from the effective gate (env baseline + dashboard overrides in Supabase).
-const gate = await getEmailGate();
+const [gate, journeySettings] = await Promise.all([getEmailGate(), getJourneySettings()]);
 const templates = (Object.keys(EMAIL_TEMPLATES) as EmailTemplateKey[]).map((key) => ({
   key,
   defaultProps: EMAIL_PREVIEW_PROPS[key] as unknown as Record<string, unknown>,
   live: gate.isLive(key),
   source: (key in gate.overrides ? 'db' : 'env') as 'db' | 'env',
+}));
+
+// Plain data only — the island never imports the server-side journey code.
+// No settings row = enabled, matching the engine's own default.
+const journeys = JOURNEYS.map((journey) => ({
+  id: journey.id,
+  kind: journey.kind,
+  steps: journey.steps.length,
+  enrollSource: journey.enroll.source,
+  enabled: journeySettings[journey.id] ?? true,
 }));
 
 const liveTemplatesConfig =
@@ -33,6 +45,7 @@ const liveTemplatesConfig =
   <EmailTemplatePreview
     client:load
     templates={templates}
+    journeys={journeys}
     confirmationSessionTypes={CONFIRMATION_SESSION_TYPES}
     liveTemplatesConfig={liveTemplatesConfig}
     whitelist={gate.whitelist}

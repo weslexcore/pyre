@@ -189,6 +189,17 @@ export type {
   TimeOffRow,
 } from '@pyre/schedule-core';
 
+/**
+ * Blank the personal calendar-feed secret before a roster row goes out in a
+ * response. That token is the entire auth gate on someone's shift feed, so it
+ * only ever travels back to its own owner (via /api/admin/calendar-feed) —
+ * not to teammates and not to admins. Call this on every path that serializes
+ * `staff` rows.
+ */
+export function redactCalendarToken<T extends { calendar_token?: string | null }>(row: T): T {
+  return { ...row, calendar_token: null };
+}
+
 export interface EmailSuppressionRow {
   id: string;
   email: string;
@@ -211,6 +222,17 @@ export interface EmailWhitelistRow {
   email: string;
   added_by: string | null;
   created_at: string;
+}
+
+// Per-journey pause switch managed from /admin/email-templates and read
+// through the cached settings in lib/email/journeys/settings.ts. No row =
+// enabled.
+export interface JourneySettingRow {
+  journey_id: string;
+  enabled: boolean;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 let client: SupabaseClient | null | undefined;

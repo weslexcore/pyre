@@ -12,7 +12,7 @@ import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, PARTNERS_MANAGE, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
-import { getDb, type StaffRow } from '@/lib/db';
+import { getDb, redactCalendarToken, type StaffRow } from '@/lib/db';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 
 export const prerender = false;
@@ -112,7 +112,9 @@ export const GET: APIRoute = async ({ cookies }) => {
   const envUsers = getEnvAllowlist().filter((e) => !staff.some((s) => s.email === e.email));
 
   return json({
-    staff,
+    // Someone's calendar feed token is a credential, not roster data — an
+    // admin managing people has no reason to hold it.
+    staff: staff.map(redactCalendarToken),
     envUsers,
     envActive: !staff.some((s) => s.is_admin),
     self: (gate.user.email ?? '').toLowerCase(),
@@ -185,7 +187,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   invalidateAccessCache();
-  return json({ person: data as StaffRow, momenceMatch: member.matched }, 201);
+  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch: member.matched }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -288,7 +290,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   invalidateAccessCache();
-  return json({ person: data as StaffRow, momenceMatch });
+  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

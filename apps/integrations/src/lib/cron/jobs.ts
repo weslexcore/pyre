@@ -65,4 +65,16 @@ export const CRON_JOBS: CronJob[] = [
       return summary as unknown as Record<string, unknown>;
     },
   },
+  {
+    // Monday morning: each employee's locked-in shifts for the week ahead,
+    // one deep link per shift. Runs after sync-shifts so the roundup reflects
+    // the latest Momence coverage. No-op on every other day/hour.
+    name: 'weekly-shifts',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/schedule/weekly-shifts')).runWeeklyShiftEmails(
+        ctx
+      );
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
 ];

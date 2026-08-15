@@ -17,6 +17,7 @@ import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
 import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
+import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
 interface TemplateEntry<K extends EmailTemplateKey> {
@@ -96,6 +97,10 @@ export const EMAIL_TEMPLATES: Registry = {
   'sub-claimed-notice': {
     subject: (p) => `${p.takerName} is covering ${p.shiftLabel} on ${p.dateLabel}`,
     Component: SubClaimedNotice,
+  },
+  'weekly-shifts': {
+    subject: (p) => `Your shifts this week — ${p.weekLabel}`,
+    Component: WeeklyShifts,
   },
   'shift-request-decision': {
     subject: (p) =>

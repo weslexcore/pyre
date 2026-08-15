@@ -13,6 +13,7 @@ import {
 } from '@/lib/momence/host-api';
 import type { TriggerEvent } from '@/lib/triggers/dispatch';
 import { JOURNEYS } from './registry';
+import { getDisabledJourneyIds, getJourneySettings } from './settings';
 import type { Journey, JourneyContext } from './types';
 
 const log = createWebhookLogger('Journeys');
@@ -23,6 +24,11 @@ const log = createWebhookLogger('Journeys');
 //   advanceDueJourneys()   — hourly cron job sending due steps
 // State lives in Supabase journey_enrollments (unique per journey+member, rows
 // never deleted); send dedupe rides email_sends.send_key inside sendTemplate.
+//
+// All three consult the journey_settings pause switch (/admin/email-templates,
+// see ./settings). A paused journey neither enrolls nor advances, so members
+// mid-journey hold their step until it's switched back on — gating the step's
+// template is NOT equivalent, since a suppressed send still advances the row.
 
 // --- Timing ---
 
@@ -124,9 +130,12 @@ export async function enrollMember(
 }
 
 export async function enrollFromEvent(event: TriggerEvent): Promise<void> {
+  const settings = await getJourneySettings();
+
   for (const journey of JOURNEYS) {
     if (journey.enroll.source !== 'event') continue;
     if (!journey.enroll.events.includes(event.type)) continue;
+    if (settings[journey.id] === false) continue;
 
     const ctx = buildContext(event);
     try {
@@ -148,10 +157,17 @@ const SWEEP_MIN_REMAINING_MS = 20_000;
 
 export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<string, unknown>> {
   const redis = getRedis();
+  const settings = await getJourneySettings();
   const summary: Record<string, unknown> = {};
 
   for (const journey of JOURNEYS) {
     if (journey.enroll.source !== 'sweep') continue;
+    if (settings[journey.id] === false) {
+      // Leave the Redis cursor alone — the sweep resumes mid-audience when the
+      // journey comes back on.
+      summary[journey.id] = { skipped: 'disabled' };
+      continue;
+    }
     if (ctx.timeRemainingMs() < SWEEP_MIN_REMAINING_MS) {
       summary[journey.id] = { skipped: 'out-of-time' };
       continue;
@@ -226,11 +242,22 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
   const db = getDb();
   if (!db) return { skipped: 'supabase-not-configured' };
 
-  const { data: due, error } = await db
+  // Paused journeys are filtered out in the query rather than skipped in the
+  // loop below: their rows stay due and sort oldest-first, so an in-loop skip
+  // would let one paused journey's backlog eat the whole batch and stall every
+  // other journey.
+  const disabled = await getDisabledJourneyIds();
+
+  let query = db
     .from('journey_enrollments')
     .select('*')
     .eq('status', 'active')
-    .lte('next_at', new Date().toISOString())
+    .lte('next_at', new Date().toISOString());
+  if (disabled.length > 0) {
+    query = query.not('journey_id', 'in', `(${disabled.map((id) => `"${id}"`).join(',')})`);
+  }
+
+  const { data: due, error } = await query
     .order('next_at', { ascending: true })
     .limit(ADVANCE_BATCH_SIZE);
 
@@ -346,6 +373,7 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
     skippedSteps,
     exited,
     completed,
+    ...(disabled.length > 0 && { disabled }),
     ...(ctx.dryRun && { wouldSend }),
   };
 }

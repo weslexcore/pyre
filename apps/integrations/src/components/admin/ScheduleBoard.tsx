@@ -786,9 +786,10 @@ export function ScheduleBoard() {
             {formatDay(addDays(firstTentative, -1))}
           </span>{' '}
           · <span className="font-bold text-[var(--pyre-red)]">{formatDay(firstTentative)}</span>{' '}
-          onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a working
-          plan to keep requesting shifts and logging time off into, but times and assignments can
-          still change until the week locks (every Monday locks the two weeks ahead).
+          onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a
+          working plan to keep requesting shifts and logging time off into, but times and
+          assignments can still change until the week locks (every Monday locks the two weeks
+          ahead).
         </p>
       )}
 
@@ -953,9 +954,7 @@ export function ScheduleBoard() {
                       key={shift.id}
                       id={`shift-${shift.id}`}
                       className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
-                        initialLink.shift === shift.id
-                          ? 'ring-2 ring-[var(--pyre-gold)]/60'
-                          : ''
+                        initialLink.shift === shift.id ? 'ring-2 ring-[var(--pyre-gold)]/60' : ''
                       }`}
                     >
                       <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
@@ -1277,6 +1276,10 @@ function ShiftDetail({
   const canRequest =
     !canManage && settings.shiftRequestsEnabled && upcoming && !!selfId && !assignedIds.has(selfId);
 
+  // Add-to-calendar only means something for a shift you're actually on, and
+  // only while it's still ahead of you.
+  const canAddToCalendar = !!selfId && upcoming && assignedIds.has(selfId);
+
   // The first open sub request someone else made — what "Take this shift"
   // claims. (In practice there's at most one per shift.)
   const takeableSub =
@@ -1562,6 +1565,8 @@ function ShiftDetail({
         </div>
       )}
 
+      {canAddToCalendar && <AddToCalendar shiftId={shift.id} />}
+
       {canRequest && (
         <div className="flex flex-wrap items-center gap-2">
           {selfRequest ? (
@@ -1717,6 +1722,44 @@ function ShiftDetail({
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Drop one shift into a personal calendar. All three targets are plain links
+ * to /api/schedule/shift-calendar — the server builds the provider URLs and
+ * the .ics, so nothing about calendars ships in this bundle.
+ *
+ * This is the immediate path; the subscribed feed on the Calendar tab is the
+ * standing one, and Google can take hours to re-poll it.
+ */
+function AddToCalendar({ shiftId }: { shiftId: string }) {
+  const [open, setOpen] = useState(false);
+  const href = (to: string) => `/api/schedule/shift-calendar?shift=${shiftId}&to=${to}`;
+  const linkClass = 'font-mono text-xs text-[var(--pyre-creme)] underline hover:text-white';
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button type="button" className={buttonClass} onClick={() => setOpen(!open)}>
+        {open ? 'Close' : 'Add to calendar'}
+      </button>
+      {open && (
+        <>
+          <a className={linkClass} href={href('google')} target="_blank" rel="noreferrer">
+            Google
+          </a>
+          <a className={linkClass} href={href('outlook')} target="_blank" rel="noreferrer">
+            Outlook
+          </a>
+          <a className={linkClass} href={href('ics')}>
+            Apple / download
+          </a>
+          <span className="font-mono text-[10px] text-white/40">
+            Adds this one shift as it stands now — it won't follow later changes.
+          </span>
+        </>
       )}
     </div>
   );

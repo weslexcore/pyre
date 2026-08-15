@@ -24,20 +24,26 @@ export function buildEventDescription(title: string): string {
   ].join('\n');
 }
 
-export function buildCalendarLinks(args: {
+/**
+ * The Google and Outlook "add this event" URL templates. Shared by the booking
+ * confirmation email and the staff schedule board — both hand over a title,
+ * an instant, and body copy; only where those come from differs.
+ */
+export function providerCalendarLinks(args: {
   title: string;
+  /** ISO 8601 */
   startIso: string;
   endIso: string;
-}): CalendarLinks {
-  const { title, startIso, endIso } = args;
-  const description = buildEventDescription(title);
-  const eventTitle = calendarEventTitle(title);
+  location: string;
+  description: string;
+}): { google: string; outlook: string } {
+  const { title, startIso, endIso, location, description } = args;
 
   const google = `https://calendar.google.com/calendar/render?${new URLSearchParams({
     action: 'TEMPLATE',
-    text: eventTitle,
+    text: title,
     dates: `${toIcsUtc(startIso)}/${toIcsUtc(endIso)}`,
-    location: VENUE_ADDRESS,
+    location,
     details: description,
   })}`;
 
@@ -45,14 +51,31 @@ export function buildCalendarLinks(args: {
   const outlookIso = (iso: string) => `${new Date(iso).toISOString().slice(0, 19)}Z`;
   const outlook = `https://outlook.live.com/calendar/0/action/compose?${new URLSearchParams({
     rru: 'addevent',
-    subject: eventTitle,
+    subject: title,
     startdt: outlookIso(startIso),
     enddt: outlookIso(endIso),
-    location: VENUE_ADDRESS,
+    location,
     body: description,
   })}`;
 
-  const links: CalendarLinks = { google, outlook };
+  return { google, outlook };
+}
+
+export function buildCalendarLinks(args: {
+  title: string;
+  startIso: string;
+  endIso: string;
+}): CalendarLinks {
+  const { title, startIso, endIso } = args;
+  const description = buildEventDescription(title);
+
+  const links: CalendarLinks = providerCalendarLinks({
+    title: calendarEventTitle(title),
+    startIso,
+    endIso,
+    location: VENUE_ADDRESS,
+    description,
+  });
 
   // No signing secret (e.g. preview envs) -> skip the hosted .ics link; the
   // provider links above still work.

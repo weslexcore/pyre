@@ -34,6 +34,13 @@ export interface StaffRow {
 	momence_member_id: number | null;
 	/** Email of the admin who added them. */
 	added_by: string | null;
+	/**
+	 * Secret for their personal shift calendar feed — the whole auth gate on
+	 * /api/schedule/feed.ics, since calendar clients poll without cookies. Null
+	 * until they first open the Subscribe panel. Only ever returned to its
+	 * owner; redacted from every roster payload.
+	 */
+	calendar_token: string | null;
 	created_at: string;
 	updated_at: string;
 }

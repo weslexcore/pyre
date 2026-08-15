@@ -11,6 +11,7 @@ import { hasScheduleManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
+  redactCalendarToken,
   type ScheduleProposalRow,
   type ShiftAssignmentRow,
   type ShiftRequestRow,
@@ -179,11 +180,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
-    // dashboard access stay on the manage side.
+    // dashboard access stay on the manage side. The calendar feed token is
+    // nobody else's business on either side.
     staff: canManage
-      ? staff
+      ? staff.map(redactCalendarToken)
       : staff.map((s) => ({
-          ...s,
+          ...redactCalendarToken(s),
           email: null,
           pages: [],
           momence_member_id: null,
