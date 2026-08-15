@@ -1,0 +1,53 @@
+---
+/**
+ * Swiss "document page" section frame, modeled on the brand guidelines'
+ * running headers: a hairline rule, a mono index + label row, then content.
+ * Reused sections keep their own display headings inside the frame.
+ */
+interface Props {
+  index: string;
+  label: string;
+  note?: string;
+  id?: string;
+  class?: string;
+  defer?: boolean;
+}
+
+const {
+  index,
+  label,
+  note = 'STANDARD IDENTITY PROCEDURES',
+  id,
+  class: className = '',
+  defer = false,
+} = Astro.props;
+---
+
+<section id={id} class:list={['swiss-page', defer && 'swiss-defer', className]}>
+  <div class="border-t border-current/80"></div>
+  <div class="flex items-baseline justify-between gap-4 pt-3 pb-10 md:pb-14 font-mono-bold text-[0.65rem] md:text-xs uppercase tracking-[0.14em]">
+    <span>{index}&nbsp;&nbsp;{label}</span>
+    <span class="hidden md:inline opacity-60">{note}</span>
+    <span class="opacity-60">ESTD. '24</span>
+  </div>
+  <slot />
+</section>
+
+<style>
+  .swiss-page {
+    padding-bottom: 5rem;
+  }
+
+  @media (min-width: 768px) {
+    .swiss-page {
+      padding-bottom: 7rem;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .swiss-defer {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 900px;
+    }
+  }
+</style>

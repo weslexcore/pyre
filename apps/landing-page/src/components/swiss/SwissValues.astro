@@ -1,0 +1,40 @@
+---
+/**
+ * Experiences set in the guidelines' "Core Values" treatment: oversized
+ * uppercase headlines with indented supporting copy, separated by hairlines.
+ */
+import benefits from '../../lib/experiences';
+---
+
+<h2 id="experiences-heading" class="mb-8 text-[clamp(1.75rem,3.5vw,3rem)] leading-tight md:mb-12" style="font-family: var(--font-sans);">
+  {benefits.title}
+</h2>
+
+<div>
+  {benefits.items.map((item, index) => (
+    <div class:list={['grid grid-cols-[auto_1fr] items-start gap-x-4 py-8 md:gap-x-10 md:py-10', index > 0 && 'border-t border-current/20']}>
+      <span class="pt-2 font-mono-bold text-xs tracking-[0.14em] opacity-60 md:pt-4 md:text-sm">
+        0{index + 1}
+      </span>
+      <div>
+        <h3 class="font-primary-semibold text-[clamp(2.25rem,6.5vw,5.5rem)] uppercase leading-[0.9] tracking-[-0.02em]">
+          {item.title}
+        </h3>
+        <p class="mt-3 max-w-xl text-sm leading-relaxed md:mt-4 md:text-base">
+          {item.description}
+        </p>
+      </div>
+    </div>
+  ))}
+</div>
+
+<div class="mt-4 flex flex-col items-start justify-between gap-6 border-t border-current/20 pt-8 md:flex-row md:items-center">
+  {benefits.closing && (
+    <p class="text-sm uppercase tracking-[0.02em] md:text-base">{benefits.closing}</p>
+  )}
+  {benefits.cta && (
+    <a href={benefits.cta.href} class="swiss-btn swiss-btn--red" aria-label={benefits.cta.ariaLabel}>
+      {benefits.cta.label}
+    </a>
+  )}
+</div>

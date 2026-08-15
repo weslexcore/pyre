@@ -1,0 +1,65 @@
+---
+/**
+ * "Introduction" spread, modeled on the guidelines intro page: a posterized
+ * photo beside an oversized display statement, with body copy set in columns.
+ */
+import { Image } from 'astro:assets';
+import warmSauna from '../../assets/images/warm_sauna.webp';
+import about from '../../lib/about';
+import { withBase } from '../../lib/paths';
+
+const [lede, ...rest] = about.body;
+const midpoint = Math.ceil(rest.length / 2);
+const colA = rest.slice(0, midpoint);
+const colB = rest.slice(midpoint);
+---
+
+<h2 class="mb-8 font-sans text-[clamp(1.75rem,3.5vw,3rem)] leading-tight md:mb-12" style="font-family: var(--font-sans);">
+  Introduction
+</h2>
+
+<div class="grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-12">
+  <div class="swiss-photo aspect-[3/4] overflow-hidden">
+    <Image
+      src={warmSauna}
+      format="webp"
+      widths={[400, 600, 800]}
+      sizes="(max-width: 768px) 100vw, 40vw"
+      alt="People enjoying a social sauna session"
+      class="h-full w-full object-cover object-center"
+      loading="lazy"
+      decoding="async"
+    />
+  </div>
+
+  <div class="flex flex-col justify-between gap-8">
+    <p class="font-primary-semibold text-[clamp(1.9rem,4.4vw,4rem)] uppercase leading-[0.95] tracking-[-0.02em]">
+      {lede}
+    </p>
+
+    <div>
+      <div class="grid grid-cols-1 gap-6 text-sm uppercase leading-relaxed tracking-[0.02em] sm:grid-cols-2 md:text-base">
+        <div class="space-y-4">
+          {colA.map((paragraph) => <p>{paragraph}</p>)}
+        </div>
+        <div class="space-y-4">
+          {colB.map((paragraph) => <p>{paragraph}</p>)}
+        </div>
+      </div>
+
+      {about.cta && (
+        <a href={withBase('/events')} class="swiss-btn swiss-btn--black mt-8" aria-label={about.cta.ariaLabel}>
+          {about.cta.label}
+        </a>
+      )}
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Posterized, single-ink photo treatment echoing the guidelines' imagery */
+  .swiss-photo img {
+    filter: grayscale(1) contrast(1.45) brightness(1.08);
+    mix-blend-mode: multiply;
+  }
+</style>

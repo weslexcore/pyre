@@ -1,0 +1,45 @@
+---
+/**
+ * Mission statement band, modeled on the guidelines' mission page:
+ * rows of the repeating pictorial mark framing a black panel of centered type.
+ */
+import pyreLogoRaw from '../../assets/logos/pyre_logo.svg?raw';
+
+const inkSvg = pyreLogoRaw.replace(/currentColor/g, '#23221c');
+const patternUri = `url("data:image/svg+xml,${encodeURIComponent(inkSvg)}")`;
+const markLg = pyreLogoRaw.replace('<svg', '<svg class="h-10 w-auto md:h-12"');
+---
+
+<div class="swiss-pattern-strip" style={`background-image: ${patternUri};`} aria-hidden="true"></div>
+
+<div class="bg-[var(--pyre-black)] px-6 py-16 text-center text-[var(--pyre-creme)] md:py-24">
+  <span class="mb-8 inline-block text-[var(--pyre-creme)]" role="img" aria-label="Pyre logo mark" set:html={markLg} />
+  <p class="mx-auto max-w-3xl text-[clamp(1.4rem,3vw,2.5rem)] leading-snug" style="font-family: var(--font-sans);">
+    Pyre&rsquo;s mission is to build a new social culture, centered around the use of traditional hot and cold
+    therapies.
+  </p>
+  <p class="mt-8 font-mono-bold text-[0.65rem] uppercase tracking-[0.2em] opacity-80 md:text-xs">
+    _From Purge to Plunge_
+  </p>
+  <p class="mt-2 flex items-center justify-center gap-16 font-primary-semibold text-lg uppercase tracking-[0.02em] md:gap-32 md:text-xl">
+    <span>EST.</span>
+    <span>.24</span>
+  </p>
+</div>
+
+<div class="swiss-pattern-strip" style={`background-image: ${patternUri};`} aria-hidden="true"></div>
+
+<style>
+  .swiss-pattern-strip {
+    height: 3.5rem;
+    background-repeat: repeat-x;
+    background-position: center;
+    background-size: auto 100%;
+  }
+
+  @media (min-width: 768px) {
+    .swiss-pattern-strip {
+      height: 4.5rem;
+    }
+  }
+</style>

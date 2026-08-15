@@ -2,317 +2,143 @@
 export const prerender = true;
 
 import ogImg from '../assets/images/cyano_sweat_logo.jpg';
-import AboutSection from '../components/AboutSection.astro';
 import EventsSection from '../components/EventsSection.astro';
-import ExperiencesSection from '../components/ExperiencesSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
 import GiftCardSection from '../components/GiftCardSection.astro';
-import GradientOverlay from '../components/GradientOverlay.astro';
 import GroupBookingSection from '../components/GroupBookingSection.astro';
-import Hero from '../components/Hero.astro';
-import HeroBackground from '../components/HeroBackground.astro';
-import HeroCarousel from '../components/HeroCarousel.astro';
 import MembershipSection from '../components/MembershipSection.astro';
 import SessionSection from '../components/SessionSection.astro';
-import ShaderCanvas from '../components/ShaderCanvas.astro';
 import SignupForm from '../components/SignupForm.astro';
+import SwissHero from '../components/swiss/SwissHero.astro';
+import SwissIntro from '../components/swiss/SwissIntro.astro';
+import SwissMission from '../components/swiss/SwissMission.astro';
+import SwissSection from '../components/swiss/SwissSection.astro';
+import SwissValues from '../components/swiss/SwissValues.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
 import Layout from '../layouts/main.astro';
-import { heroGrainGradient } from '../lib/shader-configs';
 ---
 
 <Layout isHomePage={true} ogImage={ogImg.src} ogImageWidth={ogImg.width} ogImageHeight={ogImg.height}>
-  <div class="dark bg-[var(--pyre-black)]">
-    <svg width="0" height="0" class="absolute" aria-hidden="true">
-      <defs>
-        <clipPath id="hero-wave-clip" clipPathUnits="objectBoundingBox">
-          <path d="M0,0.03 C0.125,0.01 0.25,0.05 0.375,0.03 C0.5,0.01 0.625,0.05 0.75,0.03 C0.875,0.01 1,0.05 1,0.03 L1,1 L0,1 Z" />
-        </clipPath>
-      </defs>
-    </svg>
+  <!-- Cover -->
+  <SwissHero />
 
-    <div class="lg:hidden">
-      <Hero />
-    </div>
+  <!-- Interior document pages -->
+  <div class="bg-[var(--pyre-creme)] text-[var(--pyre-black)]">
+    <div class="mx-auto max-w-[1440px] px-4 pt-16 md:px-8 md:pt-24">
+      <SwissSection index="01" label="Introduction" id="about">
+        <SwissIntro />
+      </SwissSection>
 
-    <div class="mobile-hero-background sticky top-0 z-10 h-[100dvh] hero-wave-mask gpu-layer pointer-events-none lg:hidden" aria-hidden="true">
-      <HeroCarousel />
-    </div>
-
-    <div class="hidden lg:block">
-      <HeroBackground />
-      <ShaderCanvas
-        shader="grain-gradient"
-        config={heroGrainGradient}
-        class="fixed top-0 left-0 w-[40%] h-screen z-[6]"
-        opacity={0.25}
-        blendMode="screen"
-      />
-    </div>
-
-    <div class="relative z-20 px-4 pt-4 pb-4 lg:z-10 lg:ml-[40%] lg:w-[60%] lg:pt-[calc(100vh_+_4rem)] lg:px-6 lg:pb-6 gpu-layer">
-      <div class="home-card home-card--animated card-cta-animated" data-section="about">
-        <AboutSection />
+      <!-- Mission running header (band itself is full-bleed below) -->
+      <div class="border-t border-current/80"></div>
+      <div class="flex items-baseline justify-between gap-4 pt-3 pb-10 font-mono-bold text-[0.65rem] md:text-xs uppercase tracking-[0.14em] md:pb-14">
+        <span>02&nbsp;&nbsp;Mission Statement</span>
+        <span class="hidden md:inline opacity-60">Standard Identity Procedures</span>
+        <span class="opacity-60">ESTD. '24</span>
       </div>
+    </div>
 
-      <div class="home-card home-card--deferred home-card--lg" data-section="benefits">
-        <ExperiencesSection />
-      </div>
+    <SwissMission />
 
-      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="events">
+    <div class="mx-auto max-w-[1440px] px-4 pt-16 md:px-8 md:pt-24">
+      <SwissSection index="03" label="Experiences" id="experiences">
+        <SwissValues />
+      </SwissSection>
+
+      <SwissSection index="04" label="Upcoming Events" defer>
         <EventsSection limit={10} />
-      </div>
+      </SwissSection>
 
-      <div class="home-card home-card--deferred home-card--md" data-section="testimonials">
-        <GradientOverlay variant="card" />
-        <div class="relative z-10">
-          <TestimonialsSection />
-        </div>
-      </div>
+      <SwissSection index="05" label="Community" defer>
+        <TestimonialsSection />
+      </SwissSection>
 
-      <div class="home-card home-card--deferred home-card--md" data-section="sessions">
+      <SwissSection index="06" label="Credits + Passes" defer>
         <SessionSection />
-      </div>
+      </SwissSection>
 
-      <div class="home-card home-card--deferred home-card--lg" data-section="membership">
+      <SwissSection index="07" label="Memberships" defer>
         <MembershipSection />
-      </div>
+      </SwissSection>
 
-      <div class="home-card home-card--animated card-cta-animated home-card--deferred home-card--sm" data-section="group-booking">
-        <GroupBookingSection />
-      </div>
+      <SwissSection index="08" label="Groups + Gifts" defer>
+        <div class="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-12">
+          <GroupBookingSection />
+          <GiftCardSection />
+        </div>
+      </SwissSection>
 
-      <div class="home-card home-card--deferred home-card--sm" data-section="gift-cards">
-        <GiftCardSection />
-      </div>
-
-      <div id="faq" class="home-card home-card--deferred home-card--lg" data-section="faq">
+      <SwissSection index="09" label="Common Questions" id="faq" defer>
         <FAQAccordion />
-      </div>
+      </SwissSection>
+    </div>
 
-      <div id="signup" class="home-card home-card--animated card-cta-animated home-card--deferred home-card--md" data-section="signup">
+    <!-- Join: black plate, mirrors the cover -->
+    <div id="signup" class="dark bg-[var(--pyre-black)] text-[var(--pyre-creme)]">
+      <div class="mx-auto max-w-[1440px] px-4 py-16 md:px-8 md:py-24">
+        <div class="border-t border-[var(--pyre-creme)]/40"></div>
+        <div class="flex items-baseline justify-between gap-4 pt-3 pb-10 font-mono-bold text-[0.65rem] md:text-xs uppercase tracking-[0.14em] md:pb-14">
+          <span>10&nbsp;&nbsp;Join Us</span>
+          <span class="hidden md:inline opacity-60">Standard Identity Procedures</span>
+          <span class="opacity-60">ESTD. '24</span>
+        </div>
         <SignupForm />
+
+        <!-- Running footer: brand taglines -->
+        <div class="mt-16 border-t border-[var(--pyre-creme)]/40 md:mt-24"></div>
+        <div class="flex items-center justify-between gap-4 pt-4 font-mono-bold text-[0.6rem] uppercase tracking-[0.14em] opacity-70 md:text-xs">
+          <span>A Duality</span>
+          <span class="hidden sm:inline">Something Social</span>
+          <span>From Purge to Plunge</span>
+        </div>
       </div>
     </div>
   </div>
 </Layout>
 
-<style>
-  .hero-wave-mask {
-    -webkit-clip-path: url(#hero-wave-clip);
-    clip-path: url(#hero-wave-clip);
+<style is:global>
+  /* Swiss square CTAs — shared across the reworked homepage components */
+  .swiss-btn {
+    display: inline-block;
+    text-align: center;
+    font-family: var(--font-mono-bold);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 1rem 1.75rem;
+    border: 1px solid transparent;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease;
   }
 
-  .mobile-hero-background {
-    margin-bottom: -50dvh;
+  .swiss-btn--red {
+    background: var(--pyre-red);
+    color: var(--pyre-creme);
   }
 
-  [data-hero-video] {
-    pointer-events: none;
+  .swiss-btn--red:hover {
+    background: var(--pyre-creme);
+    color: var(--pyre-black);
   }
 
-  .home-card {
-    position: relative;
-    overflow: hidden;
+  .swiss-btn--black {
     background: var(--pyre-black);
     color: var(--pyre-creme);
-    border-radius: 0.5rem;
-    margin-block: 2rem;
   }
 
-  .home-card--animated {
-    position: relative;
+  .swiss-btn--black:hover {
+    background: var(--pyre-red);
   }
 
-  .home-card--joined-top {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    margin-bottom: 0;
+  .swiss-btn--outline-creme {
+    border-color: color-mix(in srgb, var(--pyre-creme) 45%, transparent);
+    color: var(--pyre-creme);
   }
 
-  .home-card--joined-bottom {
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    margin-top: 0;
-  }
-
-  @media (min-width: 1024px) {
-    .home-card {
-      border-radius: 0.5rem;
-      padding: 3rem 3rem;
-    }
-
-    .home-card--joined-top {
-      border-bottom-left-radius: 0;
-      border-bottom-right-radius: 0;
-    }
-
-    .home-card--joined-bottom {
-      border-top-left-radius: 0;
-      border-top-right-radius: 0;
-    }
-
-    .home-card--animated {
-      isolation: isolate;
-    }
-  }
-
-  @media (max-width: 1023px) {
-    .gpu-layer {
-      will-change: transform;
-      transform: translateZ(0);
-    }
-
-    .home-card {
-      contain: layout style paint;
-    }
-
-    .home-card--deferred {
-      content-visibility: auto;
-      contain-intrinsic-size: auto 900px;
-    }
-
-    .home-card--deferred.home-card--sm {
-      contain-intrinsic-size: auto 600px;
-    }
-
-    .home-card--deferred.home-card--md {
-      contain-intrinsic-size: auto 900px;
-    }
-
-    .home-card--deferred.home-card--lg {
-      contain-intrinsic-size: auto 1400px;
-    }
+  .swiss-btn--outline-creme:hover {
+    background: var(--pyre-creme);
+    color: var(--pyre-black);
   }
 </style>
-
-<script>
-  import { initHeroCurtain } from '../lib/hero-curtain';
-
-  function initSmoothScroll() {
-    const lgBreakpoint = 1024;
-
-    function revealDeferredCards(): (() => void) | null {
-      if (window.innerWidth >= lgBreakpoint) return null;
-
-      const deferred = document.querySelectorAll<HTMLElement>('.home-card--deferred');
-      if (deferred.length === 0) return null;
-
-      for (const el of deferred) {
-        el.style.contentVisibility = 'visible';
-      }
-      document.body.offsetHeight;
-
-      return () => {
-        for (const el of deferred) {
-          el.style.contentVisibility = '';
-        }
-      };
-    }
-
-    function findTarget(sectionId: string): Element | null {
-      if (window.innerWidth >= lgBreakpoint) {
-        const el = document.querySelector(`[data-section="${sectionId}"]`);
-        if (el) return el;
-      }
-      return document.getElementById(sectionId);
-    }
-
-    document.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest('a[href*="#"]') as HTMLAnchorElement | null;
-      if (!anchor) return;
-
-      const href = anchor.getAttribute('href');
-      if (!href) return;
-
-      const hashIndex = href.indexOf('#');
-      if (hashIndex === -1) return;
-
-      const hash = href.slice(hashIndex);
-      if (hash === '#') return;
-
-      const targetElement = findTarget(hash.slice(1));
-      if (!targetElement) return;
-
-      e.preventDefault();
-      const restore = revealDeferredCards();
-      targetElement.scrollIntoView({ behavior: 'smooth' });
-      history.pushState(null, '', hash);
-      if (restore) setTimeout(restore, 1000);
-    });
-
-    if (window.location.hash) {
-      const targetElement = findTarget(window.location.hash.slice(1));
-      if (targetElement) {
-        const restore = revealDeferredCards();
-        requestAnimationFrame(() => {
-          targetElement.scrollIntoView({ behavior: 'smooth' });
-          if (restore) setTimeout(restore, 1000);
-        });
-      }
-    }
-  }
-
-  let animationCleanup: (() => void) | null = null;
-
-  function initAnimationPausing() {
-    if (animationCleanup) {
-      animationCleanup();
-      animationCleanup = null;
-    }
-
-    const canAnimate = window.matchMedia('(min-width: 1024px) and (prefers-reduced-motion: no-preference)').matches;
-    if (!canAnimate) return;
-
-    const animatedEls = document.querySelectorAll<HTMLElement>('.btn-cta-animated, .card-cta-animated');
-    if (animatedEls.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (document.hidden) return;
-        for (const entry of entries) {
-          entry.target.classList.toggle('is-animating', entry.isIntersecting);
-        }
-      },
-      { rootMargin: '0px', threshold: 0 }
-    );
-
-    animatedEls.forEach((el) => observer.observe(el));
-
-    const pauseWhenHidden = () => {
-      if (!document.hidden) return;
-      animatedEls.forEach((el) => el.classList.remove('is-animating'));
-    };
-
-    document.addEventListener('visibilitychange', pauseWhenHidden);
-
-    animationCleanup = () => {
-      observer.disconnect();
-      document.removeEventListener('visibilitychange', pauseWhenHidden);
-      animatedEls.forEach((el) => el.classList.remove('is-animating'));
-    };
-  }
-
-  let curtainCleanup: (() => void) | null = null;
-
-  function bootCurtain() {
-    if (curtainCleanup) {
-      curtainCleanup();
-      curtainCleanup = null;
-    }
-    curtainCleanup = initHeroCurtain();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSmoothScroll, { once: true });
-    document.addEventListener('DOMContentLoaded', initAnimationPausing, { once: true });
-    document.addEventListener('DOMContentLoaded', bootCurtain, { once: true });
-  } else {
-    initSmoothScroll();
-    initAnimationPausing();
-    bootCurtain();
-  }
-
-  document.addEventListener('astro:page-load', initAnimationPausing);
-</script>
