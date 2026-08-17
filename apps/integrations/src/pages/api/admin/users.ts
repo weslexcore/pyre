@@ -39,6 +39,25 @@ const MANAGE_IMPLIED_PAGE: Record<string, string> = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Dollars/hour: finite, 0–9999.99 (numeric(6,2)), coerced to cents. */
+function parsePayRate(value: unknown): number | Response {
+  const rate = typeof value === 'number' ? value : Number(String(value));
+  if (!Number.isFinite(rate) || rate < 0 || rate > 9999.99) {
+    return json({ error: 'Pay rate must be a number between 0 and 9999.99' }, 400);
+  }
+  return Math.round(rate * 100) / 100;
+}
+
+/** Hours/week target: null clears; else finite, >0–168, tenth-hour steps. */
+function parseTargetHours(value: unknown): number | null | Response {
+  if (value === null) return null;
+  const hours = typeof value === 'number' ? value : Number(String(value));
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 168) {
+    return json({ error: 'Target hours must be between 0 and 168 (or empty for no target)' }, 400);
+  }
+  return Math.round(hours * 10) / 10;
+}
+
 function parsePages(value: unknown): string[] | Response {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((p) => typeof p !== 'string')) {
@@ -163,9 +182,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (!displayName) displayName = member.displayName ?? (email ? email.split('@')[0] : '');
   if (!displayName) return json({ error: 'Name or email is required' }, 400);
 
+  // Founders draw no wage, so they default to 0 (the DB default of 20 only
+  // fits everyone else) — an explicit payRate from the form wins either way.
+  let payRate = body.isFounder === true ? 0 : 20;
+  if (body.payRate !== undefined) {
+    const parsed = parsePayRate(body.payRate);
+    if (parsed instanceof Response) return parsed;
+    payRate = parsed;
+  }
+
   const { data, error } = await db
     .from('staff')
     .insert({
+      pay_rate: payRate,
       display_name: displayName,
       email,
       is_admin: isAdmin,
@@ -223,6 +252,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'is_shift_lead'
       | 'active'
       | 'momence_member_id'
+      | 'pay_rate'
+      | 'target_hours_per_week'
     >
   > = {};
   let momenceMatch: boolean | undefined;
@@ -271,6 +302,21 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body.isFounder !== undefined) fields.is_founder = body.isFounder === true;
   if (body.isShiftLead !== undefined) fields.is_shift_lead = body.isShiftLead === true;
   if (body.active !== undefined) fields.active = body.active === true;
+
+  // Deliberately not auto-zeroed when isFounder toggles on an existing row —
+  // admins set rates individually.
+  if (body.payRate !== undefined) {
+    const payRate = parsePayRate(body.payRate);
+    if (payRate instanceof Response) return payRate;
+    fields.pay_rate = payRate;
+  }
+
+  // Explicit null clears the target (no target set).
+  if (body.targetHours !== undefined) {
+    const target = parseTargetHours(body.targetHours);
+    if (target instanceof Response) return target;
+    fields.target_hours_per_week = target;
+  }
 
   if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);
 

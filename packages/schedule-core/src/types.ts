@@ -41,6 +41,17 @@ export interface StaffRow {
 	 * owner; redacted from every roster payload.
 	 */
 	calendar_token: string | null;
+	/**
+	 * Hourly wage in dollars. Never null in the database (default 20; founders
+	 * 0) — null here means "redacted": the API only ships the real value to
+	 * admins and to the row's own person.
+	 */
+	pay_rate: number | null;
+	/**
+	 * Desired scheduled hours per week; null = no target set. Like pay_rate,
+	 * redacted (nulled) for viewers who are neither admin nor the row's owner.
+	 */
+	target_hours_per_week: number | null;
 	created_at: string;
 	updated_at: string;
 }

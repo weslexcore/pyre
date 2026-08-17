@@ -102,9 +102,11 @@ export function UsersManager() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Name/email edits are typed before they're saved, so they live here until
-  // the row's Save button goes.
-  const [drafts, setDrafts] = useState<Record<string, { name: string; email: string }>>({});
+  // Name/email/rate/target edits are typed before they're saved, so they live
+  // here until the row's Save button goes.
+  const [drafts, setDrafts] = useState<
+    Record<string, { name: string; email: string; payRate: string; targetHours: string }>
+  >({});
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -112,6 +114,8 @@ export function UsersManager() {
   const [newIsFounder, setNewIsFounder] = useState(false);
   const [newIsShiftLead, setNewIsShiftLead] = useState(false);
   const [newActive, setNewActive] = useState(true);
+  // Blank = let the API default apply (20, or 0 for founders).
+  const [newPayRate, setNewPayRate] = useState('');
   // Employee default: view the schedule, manage their own blackout dates.
   const [newPages, setNewPages] = useState<string[]>(['/admin/schedule']);
 
@@ -125,7 +129,15 @@ export function UsersManager() {
       setStaff(body.staff);
       setDrafts(
         Object.fromEntries(
-          body.staff.map((s) => [s.id, { name: s.display_name, email: s.email ?? '' }])
+          body.staff.map((s) => [
+            s.id,
+            {
+              name: s.display_name,
+              email: s.email ?? '',
+              payRate: String(s.pay_rate ?? ''),
+              targetHours: String(s.target_hours_per_week ?? ''),
+            },
+          ])
         )
       );
       setEnvUsers(body.envUsers);
@@ -230,6 +242,7 @@ export function UsersManager() {
       isFounder: newIsFounder,
       isShiftLead: newIsShiftLead,
       active: newActive,
+      ...(newPayRate.trim() !== '' ? { payRate: Number(newPayRate) } : {}),
     });
     if (person) {
       setNewName('');
@@ -239,6 +252,7 @@ export function UsersManager() {
       setNewIsShiftLead(false);
       setNewActive(true);
       setNewPages(['/admin/schedule']);
+      setNewPayRate('');
     }
     await load();
     setBusy(false);
@@ -289,13 +303,18 @@ export function UsersManager() {
           const draft = drafts[person.id] ?? {
             name: person.display_name,
             email: person.email ?? '',
+            payRate: String(person.pay_rate ?? ''),
+            targetHours: String(person.target_hours_per_week ?? ''),
           };
           const dirty =
             draft.name.trim() !== person.display_name ||
-            draft.email.trim() !== (person.email ?? '');
+            draft.email.trim() !== (person.email ?? '') ||
+            draft.payRate.trim() !== String(person.pay_rate ?? '') ||
+            draft.targetHours.trim() !== String(person.target_hours_per_week ?? '');
           const isSelf = !!person.email && person.email === self;
-          const setDraft = (fields: Partial<{ name: string; email: string }>) =>
-            setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
+          const setDraft = (
+            fields: Partial<{ name: string; email: string; payRate: string; targetHours: string }>
+          ) => setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
 
           return (
             <li
@@ -321,6 +340,35 @@ export function UsersManager() {
                   onChange={(e) => setDraft({ email: e.target.value })}
                   aria-label={`${person.display_name} Momence email`}
                 />
+                <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+                  <input
+                    className={`${inputClass} w-20`}
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={draft.payRate}
+                    disabled={busy}
+                    onChange={(e) => setDraft({ payRate: e.target.value })}
+                    aria-label={`${person.display_name} hourly pay rate`}
+                  />
+                  $/hr
+                </label>
+                <label
+                  className="flex items-center gap-1.5 font-mono text-xs text-white/60"
+                  title="Desired scheduled hours per week — drives the Insights consistency flags. Leave blank for no target (e.g. founders or truly flexible people)."
+                >
+                  <input
+                    className={`${inputClass} w-20`}
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={draft.targetHours}
+                    disabled={busy}
+                    onChange={(e) => setDraft({ targetHours: e.target.value })}
+                    aria-label={`${person.display_name} target hours per week`}
+                  />
+                  h/wk target
+                </label>
                 {dirty && (
                   <button
                     type="button"
@@ -330,6 +378,12 @@ export function UsersManager() {
                       void patch(person.id, {
                         displayName: draft.name.trim(),
                         email: draft.email.trim() || null,
+                        // Blank keeps the stored rate — Number('') would be 0.
+                        ...(draft.payRate.trim() !== '' ? { payRate: Number(draft.payRate) } : {}),
+                        // Unlike payRate, blank CLEARS the target (the column
+                        // is nullable and "no target" must be settable).
+                        targetHours:
+                          draft.targetHours.trim() === '' ? null : Number(draft.targetHours),
                       })
                     }
                   >
@@ -481,6 +535,19 @@ export function UsersManager() {
             onChange={(e) => setNewEmail(e.target.value)}
             aria-label="Momence login email"
           />
+          <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+            <input
+              className={`${inputClass} w-24`}
+              type="number"
+              min={0}
+              step={0.5}
+              placeholder="20 (0 for founders)"
+              value={newPayRate}
+              onChange={(e) => setNewPayRate(e.target.value)}
+              aria-label="Hourly pay rate"
+            />
+            $/hr
+          </label>
           <label className={checkClass}>
             <input
               type="checkbox"

@@ -102,3 +102,100 @@ export function rollupHours(
 export function founderIdsOf(staff: StaffRow[]): Set<string> {
   return new Set(staff.filter((s) => s.is_founder).map((s) => s.id));
 }
+
+/** staffId -> hourly rate for every row whose pay_rate survived redaction. */
+export function payRatesOf(staff: Array<Pick<StaffRow, 'id' | 'pay_rate'>>): Record<string, number> {
+  const rates: Record<string, number> = {};
+  for (const s of staff) if (s.pay_rate !== null) rates[s.id] = s.pay_rate;
+  return rates;
+}
+
+/**
+ * Amount due per person for one hours map (a week or a pay period): hours ×
+ * rate, cents-rounded. Staff with no known rate (redacted for this viewer)
+ * are omitted from byStaff AND the total — so a self-only viewer gets exactly
+ * their own amount, and an admin (all rates known) gets true labor cost.
+ */
+export function amountsDue(
+  hoursByStaff: Record<string, number>,
+  rates: Record<string, number>
+): { byStaff: Record<string, number>; total: number } {
+  const byStaff: Record<string, number> = {};
+  let total = 0;
+  for (const [staffId, hours] of Object.entries(hoursByStaff)) {
+    const rate = rates[staffId];
+    if (rate === undefined) continue;
+    const amount = Math.round(hours * rate * 100) / 100;
+    byStaff[staffId] = amount;
+    total += amount;
+  }
+  return { byStaff, total: Math.round(total * 100) / 100 };
+}
+
+/**
+ * A payday Monday: pay runs bi-weekly in arrears, so this Monday's check
+ * covers the two Monday-start weeks ending the day before.
+ */
+export const PAY_PERIOD_ANCHOR = '2026-08-17';
+
+export interface PayPeriod {
+  /** First Monday of the period (…2026-08-03, 2026-08-17, ± n×14 days…). */
+  periodStart: string;
+  /** Last covered day: the Sunday 13 days after periodStart. */
+  periodEnd: string;
+  /** periodStart + 14 days — the Monday this period is paid out. */
+  payday: string;
+  byStaff: Record<string, number>;
+  total: number;
+  founderShare: number | null;
+  /** Weeks actually present in the input — 1 means the range clipped the period. */
+  weekCount: number;
+}
+
+/** Monday starting the bi-weekly pay period containing `date`. */
+export function payPeriodStartOf(date: string, anchor = PAY_PERIOD_ANCHOR): string {
+  const week = weekStartOf(date);
+  const diffDays =
+    (Date.parse(`${week}T00:00:00Z`) - Date.parse(`${weekStartOf(anchor)}T00:00:00Z`)) / 86_400_000;
+  const weeksFromAnchor = Math.round(diffDays / 7);
+  // Period starts sit at even week offsets from the anchor (which is both a
+  // payday and a period start). ((x % 2) + 2) % 2 handles pre-anchor dates,
+  // where JS % goes negative.
+  return addDays(week, -7 * (((weeksFromAnchor % 2) + 2) % 2));
+}
+
+/** Collapse Monday-start weeks into two-week pay periods, sorted. */
+export function groupIntoPayPeriods(weeks: WeekHours[], anchor = PAY_PERIOD_ANCHOR): PayPeriod[] {
+  const buckets = new Map<string, WeekHours[]>();
+  for (const week of weeks) {
+    const start = payPeriodStartOf(week.weekStart, anchor);
+    const bucket = buckets.get(start);
+    if (bucket) bucket.push(week);
+    else buckets.set(start, [week]);
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([periodStart, periodWeeks]) => {
+      const byStaff: Record<string, number> = {};
+      for (const week of periodWeeks) {
+        for (const [staffId, hours] of Object.entries(week.byStaff)) {
+          byStaff[staffId] = (byStaff[staffId] ?? 0) + hours;
+        }
+      }
+      const total = Object.values(byStaff).reduce((a, b) => a + b, 0);
+      // founderShare × total is a week's exact founder hours, so the merged
+      // share needs no founderIds parameter.
+      const founderHours = periodWeeks.reduce((a, w) => a + (w.founderShare ?? 0) * w.total, 0);
+
+      return {
+        periodStart,
+        periodEnd: addDays(periodStart, 13),
+        payday: addDays(periodStart, 14),
+        byStaff,
+        total,
+        founderShare: total > 0 ? founderHours / total : null,
+        weekCount: periodWeeks.length,
+      };
+    });
+}

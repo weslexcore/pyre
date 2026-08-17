@@ -41,7 +41,10 @@ export interface ScheduleBoardPayload {
   proposals?: ScheduleProposalRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
-  /** Whether the caller is an admin — gates the hours report's cost column. */
+  /**
+   * Whether the caller is an admin — gates the hours report's cost column,
+   * and only admins receive other people's pay_rate (see redactPay below).
+   */
   isAdmin: boolean;
   /** The staff row matching the caller's login email, if any. */
   selfStaffId: string | null;
@@ -178,14 +181,23 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     subRequests = (subs ?? []) as SubRequestRow[];
   }
 
+  // Pay rate is payroll data: admins see everyone's; each person only their
+  // own. Redacted here, server-side, in BOTH branches below — pay is stricter
+  // than canManage (a non-admin schedule manager gets hours but no rates),
+  // and unlike hours it never reaches the client for other people.
+  const redactPay = (s: StaffRow): StaffRow =>
+    gate.access.isAdmin || s.id === selfStaffId
+      ? s
+      : { ...s, pay_rate: null, target_hours_per_week: null };
+
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's
     // dashboard access stay on the manage side. The calendar feed token is
     // nobody else's business on either side.
     staff: canManage
-      ? staff.map(redactCalendarToken)
+      ? staff.map((s) => redactPay(redactCalendarToken(s)))
       : staff.map((s) => ({
-          ...redactCalendarToken(s),
+          ...redactPay(redactCalendarToken(s)),
           email: null,
           pages: [],
           momence_member_id: null,
