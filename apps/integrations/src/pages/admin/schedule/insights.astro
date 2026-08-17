@@ -1,0 +1,20 @@
+---
+// Staffing insights: labor cost trends and payroll forecast, per-person
+// consistency against their own weekly target, and unmet demand (denied
+// requests, subbed-away shifts). Admin-only — non-admin schedule users are
+// bounced back to the board here (UX; the API route's requireAdmin is the
+// security boundary).
+import { ScheduleInsights } from '@/components/admin/ScheduleInsights';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (!Astro.locals.adminAccess?.isAdmin) return Astro.redirect('/admin/schedule');
+---
+
+<AdminLayout
+  title="Insights"
+  subtitle="Labor cost, payroll forecast, and whether everyone is getting the hours they want — admins only."
+>
+  <ScheduleTabs current="/admin/schedule/insights" />
+  <ScheduleInsights client:load />
+</AdminLayout>

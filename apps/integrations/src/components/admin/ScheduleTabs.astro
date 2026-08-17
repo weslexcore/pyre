@@ -14,8 +14,14 @@ const tabs = [
   { href: '/admin/schedule/calendar', label: 'Calendar' },
   { href: '/admin/schedule/hours', label: 'Hours' },
   { href: '/admin/schedule/time-off', label: 'Time Off' },
-  // Admin-only: the change log names who did what across the whole team.
-  ...(isAdmin ? [{ href: '/admin/schedule/changes', label: 'Changes' }] : []),
+  // Admin-only: insights aggregates everyone's pay, and the change log names
+  // who did what across the whole team.
+  ...(isAdmin
+    ? [
+        { href: '/admin/schedule/insights', label: 'Insights' },
+        { href: '/admin/schedule/changes', label: 'Changes' },
+      ]
+    : []),
 ];
 ---
 

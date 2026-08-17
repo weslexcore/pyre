@@ -1,9 +1,20 @@
 // Hours report (the sheet's "Total Hours" tab): per-person hours by
 // Monday–Sunday week over a picked range, with the % founders metric and a
 // CSV export for payroll. Manage side sees everyone; employees see only
-// their own column (no team totals or founder share).
+// their own column (no team totals or founder share). Amounts due (hours ×
+// pay rate) show wherever the viewer knows the rate — the server only ships
+// each person's own rate unless the viewer is an admin. A toggle regroups
+// the weekly rows into the bi-weekly pay periods payroll actually pays.
 
-import { addDays, founderIdsOf, rollupHours, weekStartOf } from '@pyre/schedule-core';
+import {
+  addDays,
+  amountsDue,
+  founderIdsOf,
+  groupIntoPayPeriods,
+  payRatesOf,
+  rollupHours,
+  weekStartOf,
+} from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
@@ -17,9 +28,6 @@ interface BoardData {
   isAdmin?: boolean;
   selfStaffId?: string | null;
 }
-
-/** What non-founder scheduled hours cost; founders draw no hourly wage. */
-const NON_FOUNDER_HOURLY_RATE = 20;
 
 const fmtCost = (cost: number): string => `$${Number.isInteger(cost) ? cost : cost.toFixed(2)}`;
 
@@ -45,6 +53,7 @@ export function ScheduleHours() {
   const [data, setData] = useState<BoardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [byPeriod, setByPeriod] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,52 +107,91 @@ export function ScheduleHours() {
     return { byStaff, total };
   }, [weeks]);
 
-  // Labor cost per week: non-founder hours × the hourly rate (admins only).
-  const weekCosts = useMemo(() => {
-    const costs: Record<string, number> = {};
-    if (!data) return costs;
-    const founders = founderIdsOf(data.staff);
-    for (const week of weeks) {
-      let hours = 0;
-      for (const [id, h] of Object.entries(week.byStaff)) {
-        if (!founders.has(id)) hours += h;
-      }
-      costs[week.weekStart] = hours * NON_FOUNDER_HOURLY_RATE;
-    }
-    return costs;
-  }, [data, weeks]);
+  // Rates the server let this viewer see: everyone's for admins, only their
+  // own row otherwise (other rows arrive with pay_rate redacted to null).
+  const rates = useMemo(() => payRatesOf(data?.staff ?? []), [data]);
 
-  const totalCost = useMemo(() => Object.values(weekCosts).reduce((a, b) => a + b, 0), [weekCosts]);
+  // One row list the table renders either way: the raw Monday weeks, or the
+  // bi-weekly pay periods payroll pays (arrears — a period's payday is the
+  // Monday after it ends). Range-clipped periods are flagged so a short
+  // date range can't be misread as a full paycheck.
+  const rows = useMemo(() => {
+    if (!byPeriod) {
+      return weeks.map((week) => ({
+        key: week.weekStart,
+        label: week.weekStart,
+        sub: null as string | null,
+        partial: false,
+        byStaff: week.byStaff,
+        total: week.total,
+        founderShare: week.founderShare,
+      }));
+    }
+    return groupIntoPayPeriods(weeks).map((p) => ({
+      key: p.periodStart,
+      label: `${p.periodStart} – ${p.periodEnd}`,
+      sub: `paid ${p.payday}`,
+      partial: p.weekCount < 2 || p.periodStart < weekStartOf(start) || p.periodEnd > end,
+      byStaff: p.byStaff,
+      total: p.total,
+      founderShare: p.founderShare,
+    }));
+  }, [weeks, byPeriod, start, end]);
+
+  // Amount due per row and for the range total: hours × rate, only for
+  // people whose rate this viewer holds — so an admin's row total is true
+  // labor cost, while everyone else can at most price their own column.
+  const rowAmounts = useMemo(
+    () => Object.fromEntries(rows.map((row) => [row.key, amountsDue(row.byStaff, rates)])),
+    [rows, rates]
+  );
+  const totalAmounts = useMemo(() => amountsDue(totals.byStaff, rates), [totals, rates]);
+  const hasPartial = rows.some((row) => row.partial);
 
   const exportCsv = () => {
     // Team totals and founder share are payroll aggregates — manage side
-    // only; the labor-cost column is admin only.
+    // only; the labor-cost column is admin only. "$ due" columns only exist
+    // for people whose rate the server shipped to this viewer. Cells join
+    // with bare commas, so labels and dollar values must stay comma-free.
+    const paid = (s: StaffRow) => rates[s.id] !== undefined;
+    const rowLabel = (row: (typeof rows)[number]) =>
+      `${row.label}${row.sub ? ` ${row.sub}` : ''}${row.partial ? ' (partial)' : ''}`;
     const header = [
-      'Week of',
-      ...staffColumns.map((s) => s.display_name),
+      byPeriod ? 'Pay period' : 'Week of',
+      ...staffColumns.flatMap((s) =>
+        paid(s) ? [s.display_name, `${s.display_name} due`] : [s.display_name]
+      ),
       ...(canManage ? ['Total', ...(isAdmin ? ['Cost'] : []), '% Founders'] : []),
     ];
-    const rows = weeks.map((week) => [
-      week.weekStart,
-      ...staffColumns.map((s) => fmt(week.byStaff[s.id] ?? 0)),
+    const csvRows = rows.map((row) => [
+      rowLabel(row),
+      ...staffColumns.flatMap((s) => {
+        const hours = fmt(row.byStaff[s.id] ?? 0);
+        return paid(s) ? [hours, fmtCost(rowAmounts[row.key]?.byStaff[s.id] ?? 0)] : [hours];
+      }),
       ...(canManage
         ? [
-            fmt(week.total),
-            ...(isAdmin ? [fmtCost(weekCosts[week.weekStart] ?? 0)] : []),
-            week.founderShare == null ? '' : `${(week.founderShare * 100).toFixed(1)}%`,
+            fmt(row.total),
+            ...(isAdmin ? [fmtCost(rowAmounts[row.key]?.total ?? 0)] : []),
+            row.founderShare == null ? '' : `${(row.founderShare * 100).toFixed(1)}%`,
           ]
         : []),
     ]);
-    rows.push([
+    csvRows.push([
       'Total',
-      ...staffColumns.map((s) => fmt(totals.byStaff[s.id] ?? 0)),
-      ...(canManage ? [fmt(totals.total), ...(isAdmin ? [fmtCost(totalCost)] : []), ''] : []),
+      ...staffColumns.flatMap((s) => {
+        const hours = fmt(totals.byStaff[s.id] ?? 0);
+        return paid(s) ? [hours, fmtCost(totalAmounts.byStaff[s.id] ?? 0)] : [hours];
+      }),
+      ...(canManage
+        ? [fmt(totals.total), ...(isAdmin ? [fmtCost(totalAmounts.total)] : []), '']
+        : []),
     ]);
-    const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
+    const csv = [header, ...csvRows].map((r) => r.join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `pyre-hours-${start}-to-${end}.csv`;
+    link.download = `pyre-hours-${start}-to-${end}${byPeriod ? '-by-period' : ''}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -166,6 +214,15 @@ export function ScheduleHours() {
           onChange={(e) => e.target.value && setEnd(e.target.value)}
           aria-label="To"
         />
+        <button
+          type="button"
+          className={`${buttonClass} ${byPeriod ? 'border-white/40 text-white' : ''}`}
+          aria-pressed={byPeriod}
+          onClick={() => setByPeriod((v) => !v)}
+          title="Collapse weeks into the bi-weekly pay periods (paid the Monday after each period ends)"
+        >
+          Group by pay period
+        </button>
         <button
           type="button"
           className={buttonClass}
@@ -197,7 +254,7 @@ export function ScheduleHours() {
           <table className="w-full min-w-[600px] text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left font-mono text-xs uppercase tracking-wide text-white/40">
-                <th className="py-2 pr-3">Week of</th>
+                <th className="py-2 pr-3">{byPeriod ? 'Pay period' : 'Week of'}</th>
                 {staffColumns.map((s) => (
                   <th key={s.id} className="py-2 pr-3 text-right">
                     {s.display_name}
@@ -210,7 +267,7 @@ export function ScheduleHours() {
                     {isAdmin && (
                       <th
                         className="py-2 pr-3 text-right"
-                        title={`Non-founder hours × $${NON_FOUNDER_HOURLY_RATE}/hr`}
+                        title="Sum of each person's hours × their hourly rate"
                       >
                         Cost
                       </th>
@@ -221,34 +278,40 @@ export function ScheduleHours() {
               </tr>
             </thead>
             <tbody>
-              {weeks.map((week) => (
-                <tr key={week.weekStart} className="border-b border-white/5">
-                  <td className="py-2 pr-3 font-mono text-white/70">{week.weekStart}</td>
+              {rows.map((row) => (
+                <tr key={row.key} className="border-b border-white/5">
+                  <td className="py-2 pr-3 font-mono text-white/70">
+                    {row.label}
+                    {row.partial && (
+                      <span title="The picked range doesn't cover this whole pay period"> *</span>
+                    )}
+                    {row.sub && <div className="text-xs text-white/40">{row.sub}</div>}
+                  </td>
                   {staffColumns.map((s) => {
-                    const hours = week.byStaff[s.id] ?? 0;
+                    const hours = row.byStaff[s.id] ?? 0;
+                    const amount = rowAmounts[row.key]?.byStaff[s.id];
                     return (
                       <td
                         key={s.id}
                         className={`py-2 pr-3 text-right font-mono ${hours === 0 ? 'text-white/25' : ''}`}
                       >
                         {fmt(hours)}
+                        {amount !== undefined && hours > 0 && (
+                          <div className="text-xs text-white/40">{fmtCost(amount)}</div>
+                        )}
                       </td>
                     );
                   })}
                   {canManage && (
                     <>
-                      <td className="py-2 pr-3 text-right font-mono font-bold">
-                        {fmt(week.total)}
-                      </td>
+                      <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(row.total)}</td>
                       {isAdmin && (
                         <td className="py-2 pr-3 text-right font-mono text-white/60">
-                          {fmtCost(weekCosts[week.weekStart] ?? 0)}
+                          {fmtCost(rowAmounts[row.key]?.total ?? 0)}
                         </td>
                       )}
                       <td className="py-2 text-right font-mono text-white/60">
-                        {week.founderShare == null
-                          ? '—'
-                          : `${(week.founderShare * 100).toFixed(0)}%`}
+                        {row.founderShare == null ? '—' : `${(row.founderShare * 100).toFixed(0)}%`}
                       </td>
                     </>
                   )}
@@ -256,11 +319,17 @@ export function ScheduleHours() {
               ))}
               <tr>
                 <td className="py-2 pr-3 font-mono font-bold text-white/70">Total</td>
-                {staffColumns.map((s) => (
-                  <td key={s.id} className="py-2 pr-3 text-right font-mono font-bold">
-                    {fmt(totals.byStaff[s.id] ?? 0)}
-                  </td>
-                ))}
+                {staffColumns.map((s) => {
+                  const amount = totalAmounts.byStaff[s.id];
+                  return (
+                    <td key={s.id} className="py-2 pr-3 text-right font-mono font-bold">
+                      {fmt(totals.byStaff[s.id] ?? 0)}
+                      {amount !== undefined && (
+                        <div className="text-xs font-normal text-white/40">{fmtCost(amount)}</div>
+                      )}
+                    </td>
+                  );
+                })}
                 {canManage && (
                   <>
                     <td className="py-2 pr-3 text-right font-mono font-bold">
@@ -268,7 +337,7 @@ export function ScheduleHours() {
                     </td>
                     {isAdmin && (
                       <td className="py-2 pr-3 text-right font-mono font-bold">
-                        {fmtCost(totalCost)}
+                        {fmtCost(totalAmounts.total)}
                       </td>
                     )}
                     <td />
@@ -277,6 +346,11 @@ export function ScheduleHours() {
               </tr>
             </tbody>
           </table>
+          {hasPartial && (
+            <p className="mt-2 font-mono text-xs text-white/40">
+              * the picked range doesn't cover this whole pay period — widen it before paying out.
+            </p>
+          )}
         </div>
       )}
     </div>
