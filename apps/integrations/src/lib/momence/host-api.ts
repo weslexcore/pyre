@@ -17,7 +17,18 @@ interface Paginated<T> {
   pagination?: { totalCount?: number; total?: number };
 }
 
-async function momenceRequest<T>(
+/** Non-2xx from Momence, with the status kept so callers can branch on it. */
+export class MomenceApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number
+  ) {
+    super(message);
+    this.name = 'MomenceApiError';
+  }
+}
+
+export async function momenceRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   options: { query?: Record<string, string>; body?: unknown } = {}
@@ -39,7 +50,10 @@ async function momenceRequest<T>(
   const text = await response.text();
   if (!response.ok) {
     log.error(`${method} ${path} failed: status=${response.status} body=${text.slice(0, 500)}`);
-    throw new Error(`Momence API returned ${response.status} for ${method} ${path}`);
+    throw new MomenceApiError(
+      `Momence API returned ${response.status} for ${method} ${path}`,
+      response.status
+    );
   }
 
   return text ? (JSON.parse(text) as T) : (undefined as T);

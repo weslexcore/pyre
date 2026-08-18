@@ -66,6 +66,16 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Daily (first tick at/after 6am ET): pull Momence business reports
+    // (revenue, memberships, attendance) into Supabase for /admin/business.
+    // Runs after sync-shifts so the dashboard's labor join sees fresh shifts.
+    name: 'business-report-sync',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/reports/sync')).runBusinessReportSync(ctx);
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
+  {
     // Monday morning: each employee's locked-in shifts for the week ahead,
     // one deep link per shift. Runs after sync-shifts so the roundup reflects
     // the latest Momence coverage. No-op on every other day/hour.

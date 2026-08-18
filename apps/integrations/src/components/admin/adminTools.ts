@@ -92,6 +92,18 @@ export const ADMIN_TOOLS: AdminTool[] = [
 ];
 
 // Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
+// can't show up in the page-permission checkboxes. Revenue and labor cost
+// together are the most sensitive numbers in the building.
+export const BUSINESS_TOOL: AdminTool = {
+  href: '/admin/business',
+  title: 'Business Overview',
+  navLabel: 'Business',
+  description:
+    'Revenue, labor cost vs revenue, memberships, and attendance — Momence reports joined with the schedule.',
+  section: 'monitoring',
+};
+
+// Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
 // can't show up in the page-permission checkboxes.
 export const USERS_TOOL: AdminTool = {
   href: '/admin/users',
@@ -155,7 +167,7 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) return [...ADMIN_TOOLS, USERS_TOOL];
+  if (access.isAdmin) return [...ADMIN_TOOLS, BUSINESS_TOOL, USERS_TOOL];
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 
