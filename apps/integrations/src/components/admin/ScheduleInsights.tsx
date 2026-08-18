@@ -274,9 +274,12 @@ export function ScheduleInsights() {
   const completed = data.weeks.filter((w) => !w.future);
   const avgWeeklyCost =
     completed.length > 0 ? completed.reduce((a, w) => a + w.cost, 0) / completed.length : 0;
-  const totalOpen = completed.reduce((a, w) => a + w.openHours, 0);
+  // Weeks with labor but zero open hours (maintenance-only weeks) would pile
+  // cost into the numerator with nothing in the denominator — exclude them.
+  const measured = completed.filter((w) => w.openHours > 0);
+  const totalOpen = measured.reduce((a, w) => a + w.openHours, 0);
   const avgCostPerOpenHour =
-    totalOpen > 0 ? completed.reduce((a, w) => a + w.cost, 0) / totalOpen : null;
+    totalOpen > 0 ? measured.reduce((a, w) => a + w.cost, 0) / totalOpen : null;
 
   const flagged = data.consistency.filter((c) => c.underTarget || c.inconsistent);
   const unflagged = data.consistency.filter((c) => !c.underTarget && !c.inconsistent);
