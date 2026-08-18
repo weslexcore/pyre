@@ -235,6 +235,32 @@ export interface JourneySettingRow {
   updated_at: string;
 }
 
+// Raw Momence report-run results, one row per (report type, ET day), written
+// by the business-report-sync cron job. raw_items is kept verbatim so
+// normalization can be re-run without re-spending the API's report budget.
+export interface MomenceReportSnapshotRow {
+  id: string;
+  report_type: string;
+  snapshot_date: string;
+  range_from: string;
+  range_to: string;
+  report_run_id: number | null;
+  raw_items: unknown[];
+  item_count: number;
+  normalize_status: 'ok' | 'empty' | 'parse-partial';
+  created_at: string;
+}
+
+// The normalized weekly series /admin/business reads (Monday-start ET weeks).
+export interface BusinessMetricRow {
+  week_start: string;
+  metric: string;
+  value: number;
+  source_report_type: string;
+  snapshot_date: string;
+  updated_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {

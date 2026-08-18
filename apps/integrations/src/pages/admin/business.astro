@@ -1,0 +1,18 @@
+---
+// Business overview: weekly revenue vs labor cost, per-open-hour unit
+// economics, membership flows, and attendance — Momence report snapshots
+// joined with the schedule's labor math. Admin-only — non-admins are bounced
+// to the directory here (UX; the API route's requireAdmin is the security
+// boundary).
+import { BusinessOverview } from '@/components/admin/BusinessOverview';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (!Astro.locals.adminAccess?.isAdmin) return Astro.redirect('/admin');
+---
+
+<AdminLayout
+  title="Business Overview"
+  subtitle="Revenue, labor cost vs revenue, memberships, and attendance from Momence — admins only."
+>
+  <BusinessOverview client:load />
+</AdminLayout>
