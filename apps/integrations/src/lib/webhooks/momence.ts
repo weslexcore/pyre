@@ -133,6 +133,9 @@ export async function getHostAccessToken(): Promise<string> {
     grant_type: 'password',
     username: hostEmail,
     password: hostPassword,
+    // Same scope the interactive OAuth flow requests — without it the token
+    // gets Momence's default scope, which 403s on /host/reports.
+    scope: 'public-api-v2',
   });
 }
 
