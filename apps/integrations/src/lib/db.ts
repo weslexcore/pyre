@@ -347,6 +347,21 @@ export interface ShiftNoteRow {
   updated_at: string;
 }
 
+// A photo/video/document backing a shift note (see the shift-note media
+// migration). Objects live in the private shift-note-media bucket and are
+// served via signed URLs minted by /api/admin/shift-note-media.
+export interface ShiftNoteAttachmentRow {
+  id: string;
+  note_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  kind: 'photo' | 'video' | 'document';
+  uploaded_by: string;
+  created_at: string;
+}
+
 // A bathhouse incident report (see the incidents migration). The taxonomy —
 // categories, severities, areas, contributing factors — lives in
 // lib/incidents/types.ts, which the table's check constraints mirror.

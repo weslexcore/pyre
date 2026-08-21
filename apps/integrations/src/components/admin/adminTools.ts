@@ -67,7 +67,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     title: 'Shift Notes',
     navLabel: 'Shift Notes',
     description:
-      'How each shift went, from the person leading it — details worth handing off, feedback, and anything the admins should know.',
+      'How each shift went, from the person leading it — details worth handing off, feedback, and photos or video backing what they saw.',
     section: 'operations',
   },
   {
