@@ -28,6 +28,13 @@ alter table public.sops
 
 -- Backfill: a tier becomes the set of roles that used to satisfy it, so every
 -- existing document keeps exactly the audience it had.
+--
+-- This touches every row, and sops_set_updated_at would stamp all of them as
+-- edited today — telling staff that every procedure changed the morning this
+-- shipped. Re-describing who may read a document is not a content edit, so the
+-- trigger sits out the backfill.
+alter table public.sops disable trigger sops_set_updated_at;
+
 update public.sops
 set
   view_roles = case view_access
@@ -40,6 +47,8 @@ set
     when 'shift_lead' then array['shift_lead', 'admin']
     else array['admin']
   end;
+
+alter table public.sops enable trigger sops_set_updated_at;
 
 -- Only the three known roles, and a cap well above any real grant list so a
 -- malformed request can't store an unbounded array.
