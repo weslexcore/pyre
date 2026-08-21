@@ -25,7 +25,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
-import { canViewSop } from '@/lib/sops/levels';
+import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 
@@ -84,6 +84,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const role = await getSopRole(gate.user.email ?? null, gate.access);
+  const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
 
   // Every unfinished run on a document this role may view, newest first. Runs
   // are shared per document — whoever walks up next continues the open one —
@@ -101,7 +102,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const rows = (data ?? []) as ActiveRunRow[];
     const runs = rows.flatMap((row) => {
       const sop = row.sops;
-      if (!sop || !canViewSop(role, sop)) return [];
+      if (!sop || !canViewSop(viewer, sop)) return [];
       return [
         {
           id: row.id,
@@ -193,7 +194,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .maybeSingle();
     if (sopError) return json({ error: sopError.message }, 500);
     const sop = (sopData as SopRow) ?? null;
-    if (!sop || !canViewSop(role, sop)) return json({ error: 'SOP not found' }, 404);
+    if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
     const { data: runData, error: runError } = await db
       .from('sop_runs')
@@ -233,7 +234,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (runError) return json({ error: runError.message }, 500);
   if (!runData) return json({ error: 'Run not found' }, 404);
   const { sops: sop, ...run } = runData as SopRunRow & { sops: SopRow };
-  if (!sop || !canViewSop(role, sop)) return json({ error: 'Run not found' }, 404);
+  if (!sop || !canViewSop(viewer, sop)) return json({ error: 'Run not found' }, 404);
 
   const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
   if (checksError) return json({ error: checksError.message }, 500);
@@ -282,7 +283,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const sop = (sopData as SopRow) ?? null;
 
   const role = await getSopRole(gate.user.email ?? null, gate.access);
-  if (!sop || !canViewSop(role, sop)) return json({ error: 'SOP not found' }, 404);
+  const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
+  if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
   if (sop.archived) return json({ error: 'This SOP is archived' }, 400);
 
   const taskCount = countTasks(sop.content_md);
@@ -378,7 +380,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const { sops: sop, ...run } = runData as SopRunRow & { sops: SopRow };
 
   const role = await getSopRole(gate.user.email ?? null, gate.access);
-  if (!sop || !canViewSop(role, sop)) return json({ error: 'Run not found' }, 404);
+  const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
+  if (!sop || !canViewSop(viewer, sop)) return json({ error: 'Run not found' }, 404);
   if (run.status !== 'in_progress') {
     return json({ error: 'This run is already finished' }, 409);
   }

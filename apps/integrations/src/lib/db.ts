@@ -269,8 +269,13 @@ export interface SopRow {
   title: string;
   content_md: string;
   category: string;
-  view_access: 'staff' | 'shift_lead' | 'admin';
-  edit_access: 'staff' | 'shift_lead' | 'admin';
+  // Who may read and who may save, each as a set of roles plus a set of
+  // individually named staff emails (see lib/sops/levels.ts). Roles are a set,
+  // not a tier floor.
+  view_roles: ('staff' | 'shift_lead' | 'admin')[];
+  edit_roles: ('staff' | 'shift_lead' | 'admin')[];
+  view_emails: string[];
+  edit_emails: string[];
   sort_order: number;
   archived: boolean;
   current_version: number;

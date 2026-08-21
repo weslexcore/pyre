@@ -6,7 +6,7 @@
 import { SopDocument } from '@/components/admin/SopDocument';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getDb, type SopRow } from '@/lib/db';
-import { canViewSop } from '@/lib/sops/levels';
+import { canViewSop, normalizeEmail } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 const slug = Astro.params.slug ?? '';
@@ -18,7 +18,8 @@ const db = getDb();
 if (db && access) {
   const { data } = await db.from('sops').select('*').eq('slug', slug).maybeSingle();
   const sop = (data as SopRow) ?? null;
-  if (sop && canViewSop(await getSopRole(email, access), sop)) title = sop.title;
+  const viewer = { role: await getSopRole(email, access), email: normalizeEmail(email) };
+  if (sop && canViewSop(viewer, sop)) title = sop.title;
 }
 ---
 

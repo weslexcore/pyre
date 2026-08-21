@@ -6,7 +6,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow } from '@/lib/db';
-import { canViewSop } from '@/lib/sops/levels';
+import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -53,7 +53,8 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     if (sopError) return json({ error: sopError.message }, 500);
     const sop = (sopData as SopRow) ?? null;
     const role = await getSopRole(gate.user.email ?? null, gate.access);
-    if (!sop || !canViewSop(role, sop)) return json({ error: 'SOP not found' }, 404);
+    const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
+    if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
     const { error } = await db
       .from('sop_pins')
