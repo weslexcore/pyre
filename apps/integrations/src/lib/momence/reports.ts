@@ -13,9 +13,10 @@
 
 import { MomenceApiError, momenceRequest } from '@/lib/momence/host-api';
 
-/** The report types the daily sync pulls. Unverified against the live enum —
- * a type Momence rejects surfaces as ReportUnavailableError and degrades
- * per-metric, not per-page. */
+/** The report types the daily sync pulls, named after Momence's internal
+ * enum (the schema's x-enumNames). The wire values are kebab-case — see
+ * WIRE_REPORT_TYPES. A type Momence rejects surfaces as
+ * ReportUnavailableError and degrades per-metric, not per-page. */
 export type MomenceReportType =
   | 'TOTAL_SALES'
   | 'REVENUE_BREAKDOWN'
@@ -48,6 +49,21 @@ export class ReportUnavailableError extends Error {
   }
 }
 
+/** Momence's wire enum is kebab-case (the SCREAMING_SNAKE names above are
+ * their schema's x-enumNames labels). Only `total-sales` appears in the
+ * published enum — the rest are the kebab forms of internal names and may
+ * still be gated server-side (403 → ReportUnavailableError). */
+const WIRE_REPORT_TYPES: Record<MomenceReportType, string> = {
+  TOTAL_SALES: 'total-sales',
+  REVENUE_BREAKDOWN: 'revenue-breakdown',
+  ACTIVE_MEMBERS: 'active-members',
+  NEW_MEMBERS: 'new-members',
+  MEMBERSHIP_CANCELLATIONS: 'membership-cancellations',
+  ATTENDANCE: 'attendance',
+  SESSION_OCCUPANCY: 'session-occupancy',
+  NO_SHOWS: 'no-shows',
+};
+
 function hostId(): number {
   const id = Number(import.meta.env.MOMENCE_HOST_ID);
   if (!Number.isFinite(id)) {
@@ -66,9 +82,13 @@ export async function createReportRun(params: {
     const data = await momenceRequest<{ id: number }>('POST', '/host/reports', {
       body: {
         parameters: {
-          reportType: params.reportType,
+          reportType: WIRE_REPORT_TYPES[params.reportType],
           hostId: hostId(),
-          dateRange: { from: params.from, to: params.to },
+          // DateRangeDto wants date-times; end-of-day keeps `to` inclusive.
+          dateRange: {
+            from: `${params.from}T00:00:00.000Z`,
+            to: `${params.to}T23:59:59.999Z`,
+          },
         },
       },
     });
