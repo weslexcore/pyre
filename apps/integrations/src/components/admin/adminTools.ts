@@ -3,7 +3,7 @@
 // admins see everything, other users see the pages granted to them in
 // the staff table (managed from /admin/users).
 
-export type AdminToolSection = 'operations' | 'marketing' | 'monitoring';
+export type AdminToolSection = 'operations' | 'community' | 'marketing' | 'monitoring' | 'admin';
 
 export interface AdminTool {
   href: string;
@@ -17,8 +17,10 @@ export interface AdminTool {
 // Display order of the sections on the /admin directory page.
 export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
   { key: 'operations', label: 'Operations' },
+  { key: 'community', label: 'Community + Collaborations' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'monitoring', label: 'Monitoring' },
+  { key: 'admin', label: 'Admin' },
 ];
 
 export const ADMIN_TOOLS: AdminTool[] = [
@@ -28,7 +30,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     navLabel: 'Schedule',
     description:
       'Weekly shift board with coverage status, availability-aware assignment, time off, and hours.',
-    section: 'operations',
+    section: 'admin',
   },
   {
     href: '/admin/water',
@@ -81,7 +83,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     navLabel: 'Partners',
     description:
       'Partner registry, verifier contacts, discount levers, and the membership verification queue.',
-    section: 'operations',
+    section: 'community',
   },
   {
     href: '/admin/referrals',
@@ -89,7 +91,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     navLabel: 'Referrals',
     description:
       'Referrer codes for members and partners, the redemption queue, reward ledger, and discount tiers.',
-    section: 'marketing',
+    section: 'community',
   },
   {
     href: '/admin/email',
@@ -116,7 +118,7 @@ export const BUSINESS_TOOL: AdminTool = {
   navLabel: 'Business',
   description:
     'Revenue, labor cost vs revenue, memberships, and attendance — Momence reports joined with the schedule.',
-  section: 'monitoring',
+  section: 'admin',
 };
 
 // Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
@@ -127,7 +129,7 @@ export const USERS_TOOL: AdminTool = {
   navLabel: 'People',
   description:
     'Everyone at Pyre: dashboard access and permissions, founders, and who is available to schedule.',
-  section: 'operations',
+  section: 'admin',
 };
 
 /** The isAdmin/pages half of DashboardAccess (kept client-bundle-safe here). */
@@ -197,7 +199,7 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) return [...ADMIN_TOOLS, BUSINESS_TOOL, USERS_TOOL];
+  if (access.isAdmin) return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL];
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 
