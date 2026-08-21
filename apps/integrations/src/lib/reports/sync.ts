@@ -3,7 +3,7 @@
 // over a trailing window, poll until each completes, and persist:
 //
 //   momence_report_snapshots   raw items, verbatim (re-normalization source)
-//   business_metrics_weekly    normalized weekly series (what the page reads)
+//   business_metrics_daily     normalized daily series (what the page reads)
 //
 // Every run covers the whole trailing window and upserts in place, so late
 // refunds, cancellations, and edited attendance self-heal daily with no
@@ -48,7 +48,7 @@ const DEFAULT_WEEKS_BACK = 12;
 const TIME_FLOOR_MS = 10_000;
 
 /** raw_items cap per snapshot; beyond it the tail is dropped and the
- * snapshot flagged parse-partial (the weekly metrics still use every item). */
+ * snapshot flagged parse-partial (the daily metrics still use every item). */
 const RAW_ITEM_CAP = 5_000;
 
 const DONE_TTL_SECONDS = 60 * 60 * 48;
@@ -232,8 +232,8 @@ export async function runBusinessReportSync(
   return summary;
 }
 
-/** Upsert one completed report: raw snapshot row + normalized weekly rows.
- * Returns how many weekly metric rows were written. */
+/** Upsert one completed report: raw snapshot row + normalized daily rows.
+ * Returns how many daily metric rows were written. */
 async function persistReport(
   run: PendingRun,
   items: unknown[],
@@ -263,15 +263,15 @@ async function persistReport(
 
   if (normalized.metrics.length === 0) return 0;
 
-  const { error: metricsError } = await db.from('business_metrics_weekly').upsert(
+  const { error: metricsError } = await db.from('business_metrics_daily').upsert(
     normalized.metrics.map((m) => ({
-      week_start: m.weekStart,
+      metric_date: m.date,
       metric: m.metric,
       value: m.value,
       source_report_type: run.reportType,
       snapshot_date: cursor.date,
     })),
-    { onConflict: 'week_start,metric' }
+    { onConflict: 'metric_date,metric' }
   );
   if (metricsError) throw new Error(`metrics upsert failed: ${metricsError.message}`);
 

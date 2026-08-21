@@ -251,9 +251,9 @@ export interface MomenceReportSnapshotRow {
   created_at: string;
 }
 
-// The normalized weekly series /admin/business reads (Monday-start ET weeks).
+// The normalized daily series /admin/business reads (ET calendar days).
 export interface BusinessMetricRow {
-  week_start: string;
+  metric_date: string;
   metric: string;
   value: number;
   source_report_type: string;

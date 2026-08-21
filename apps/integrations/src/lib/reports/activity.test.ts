@@ -22,6 +22,8 @@ const NOW = new Date('2026-08-20T14:00:00Z');
 /** The completed week under test: Mon 2026-08-10 .. Sun 2026-08-16. */
 const LAST_WEEK = '2026-08-10';
 const THIS_WEEK = '2026-08-17';
+/** ET day of the default session below (2026-08-12T20:00Z = 4pm EDT Wed). */
+const SESSION_DAY = '2026-08-12';
 
 const ctx = { dryRun: false, timeRemainingMs: () => 50_000 };
 
@@ -45,7 +47,7 @@ const booking = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/** Captures every business_metrics_weekly upsert, keyed week|metric. */
+/** Captures every business_metrics_daily upsert, keyed date|metric. */
 function fakeDb(existingMetricRows: unknown[] = []) {
   const upserts: Record<string, number> = {};
   const db = {
@@ -56,7 +58,7 @@ function fakeDb(existingMetricRows: unknown[] = []) {
         then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
         upsert: (rows: Array<Record<string, unknown>>) => {
           for (const row of rows) {
-            upserts[`${row.week_start}|${row.metric}`] = row.value as number;
+            upserts[`${row.metric_date}|${row.metric}`] = row.value as number;
           }
           return Promise.resolve({ error: null });
         },
@@ -99,7 +101,7 @@ describe('runActivityMetricsSync', () => {
     vi.useRealTimers();
   });
 
-  it('counts check-ins as attendance and uncheck-ins as no-shows', async () => {
+  it('counts check-ins as attendance and uncheck-ins as no-shows, per ET day', async () => {
     const { db, upserts } = fakeDb();
     getDb.mockReturnValue(db);
     getRedis.mockReturnValue(fakeRedis());
@@ -115,8 +117,8 @@ describe('runActivityMetricsSync', () => {
     const summary = await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
     expect(summary.skipped).toBeUndefined();
-    expect(upserts[`${LAST_WEEK}|attendance`]).toBe(2);
-    expect(upserts[`${LAST_WEEK}|no_shows`]).toBe(1);
+    expect(upserts[`${SESSION_DAY}|attendance`]).toBe(2);
+    expect(upserts[`${SESSION_DAY}|no_shows`]).toBe(1);
   });
 
   it('ignores cancelled bookings and counts multi-ticket bookings per seat', async () => {
@@ -134,11 +136,11 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
-    expect(upserts[`${LAST_WEEK}|attendance`]).toBe(2);
-    expect(upserts[`${LAST_WEEK}|no_shows`]).toBe(3);
+    expect(upserts[`${SESSION_DAY}|attendance`]).toBe(2);
+    expect(upserts[`${SESSION_DAY}|no_shows`]).toBe(3);
   });
 
-  it('computes occupancy as booked over capacity across the week', async () => {
+  it('writes raw capacity and booked counts summed across a day', async () => {
     const { db, upserts } = fakeDb();
     getDb.mockReturnValue(db);
     getRedis.mockReturnValue(fakeRedis());
@@ -153,8 +155,10 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
-    // 8 booked / 40 capacity — not the mean of 20% and 20%.
-    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(20);
+    // The raw numerator/denominator, so read-time grouping computes true
+    // occupancy (8/40) instead of averaging percentages.
+    expect(upserts[`${SESSION_DAY}|session_capacity`]).toBe(40);
+    expect(upserts[`${SESSION_DAY}|session_booked`]).toBe(8);
   });
 
   it('drops sessions the padded fetch pulled in from an adjacent week', async () => {
@@ -179,7 +183,9 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
-    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(50);
+    expect(upserts[`${SESSION_DAY}|session_capacity`]).toBe(10);
+    expect(upserts[`${SESSION_DAY}|session_booked`]).toBe(5);
+    expect(upserts['2026-08-09|session_capacity']).toBeUndefined();
   });
 
   it('buckets a late-evening ET session by its ET day, not its UTC day', async () => {
@@ -202,7 +208,9 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
-    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(40);
+    expect(upserts['2026-08-16|session_capacity']).toBe(10);
+    expect(upserts['2026-08-16|session_booked']).toBe(4);
+    expect(upserts['2026-08-17|session_capacity']).toBeUndefined();
   });
 
   it('skips the bookings request for sessions nobody booked', async () => {
@@ -221,11 +229,11 @@ describe('runActivityMetricsSync', () => {
     expect(fetchSessionBookings).toHaveBeenCalledWith(2);
   });
 
-  it('leaves attendance unwritten for a week whose sessions have not ended', async () => {
+  it('leaves attendance unwritten for days whose sessions have not started', async () => {
     const { db, upserts } = fakeDb();
     getDb.mockReturnValue(db);
     getRedis.mockReturnValue(fakeRedis());
-    // The in-progress week: one session already run, one still ahead.
+    // The in-progress week: one session still ahead of NOW.
     fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
       startAfter.startsWith('2026-08-16')
         ? [
@@ -242,13 +250,13 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 0 });
 
-    // Future session: no occupancy, no attendance, no bookings request.
-    expect(upserts[`${THIS_WEEK}|attendance`]).toBeUndefined();
-    expect(upserts[`${THIS_WEEK}|occupancy_pct`]).toBeUndefined();
+    // Future session: no occupancy inputs, no attendance, no bookings request.
+    expect(upserts['2026-08-25|attendance']).toBeUndefined();
+    expect(upserts['2026-08-25|session_capacity']).toBeUndefined();
     expect(fetchSessionBookings).not.toHaveBeenCalled();
   });
 
-  it('buckets new members by ET week and stamps active members on this week', async () => {
+  it('buckets new members by ET day, zero-fills quiet days, and stamps active members on today', async () => {
     const { db, upserts } = fakeDb();
     getDb.mockReturnValue(db);
     getRedis.mockReturnValue(fakeRedis());
@@ -258,9 +266,9 @@ describe('runActivityMetricsSync', () => {
       }
       return {
         members: [
-          { id: 1, firstSeen: '2026-08-18T15:00:00.000Z' }, // this week
+          { id: 1, firstSeen: '2026-08-18T15:00:00.000Z' }, // Tuesday this week
           { id: 2, firstSeen: '2026-08-12T15:00:00.000Z' }, // last week
-          { id: 3, firstSeen: '2026-08-17T01:00:00.000Z' }, // 9pm ET Sun — last week
+          { id: 3, firstSeen: '2026-08-17T01:00:00.000Z' }, // 9pm ET Sun — 08-16
         ],
         totalCount: 3,
       };
@@ -268,9 +276,12 @@ describe('runActivityMetricsSync', () => {
 
     await runActivityMetricsSync(ctx, { weeksBack: 1 });
 
-    expect(upserts[`${THIS_WEEK}|new_members`]).toBe(1);
-    expect(upserts[`${LAST_WEEK}|new_members`]).toBe(2);
-    expect(upserts[`${THIS_WEEK}|active_members`]).toBe(264);
+    expect(upserts['2026-08-18|new_members']).toBe(1);
+    expect(upserts['2026-08-12|new_members']).toBe(1);
+    expect(upserts['2026-08-16|new_members']).toBe(1);
+    // A day with no arrivals is a real 0, not a gap.
+    expect(upserts['2026-08-11|new_members']).toBe(0);
+    expect(upserts['2026-08-20|active_members']).toBe(264);
   });
 
   it('parks unscanned weeks in a cursor when the budget runs out', async () => {
@@ -311,7 +322,8 @@ describe('runActivityMetricsSync', () => {
   });
 
   it('re-scans recent weeks daily but leaves settled weeks alone', async () => {
-    // Every week in the window already has an attendance row from yesterday.
+    // Every week in the window already has attendance day-rows from yesterday
+    // (one row on its Monday is enough to mark the week scanned).
     const weeks = [
       '2026-06-29',
       '2026-07-06',
@@ -322,7 +334,9 @@ describe('runActivityMetricsSync', () => {
       LAST_WEEK,
       THIS_WEEK,
     ];
-    const { db } = fakeDb(weeks.map((week_start) => ({ week_start, snapshot_date: '2026-08-19' })));
+    const { db } = fakeDb(
+      weeks.map((metric_date) => ({ metric_date, snapshot_date: '2026-08-19' }))
+    );
     getDb.mockReturnValue(db);
     const redis = fakeRedis();
     getRedis.mockReturnValue(redis);

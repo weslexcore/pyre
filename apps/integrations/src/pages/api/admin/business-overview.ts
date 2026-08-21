@@ -1,9 +1,16 @@
-// Read side of /admin/business — one admin-only GET returning the weekly
-// business series: Momence-sourced metrics (revenue, memberships,
-// attendance) from business_metrics_weekly, joined with labor cost computed
-// live from the shifts tables. Momence is never called on this path — the
-// daily business-report-sync and business-activity-sync cron jobs keep the
-// metrics tables fresh.
+// Read side of /admin/business — one admin-only GET returning the business
+// series over a caller-chosen date range, grouped by day, week, or month:
+// Momence-sourced metrics (revenue, memberships, attendance) from
+// business_metrics_daily, joined with labor cost computed live from the
+// shifts tables and re-bucketed to the requested grain. Momence is never
+// called on this path — the daily business-report-sync and
+// business-activity-sync cron jobs keep the metrics table fresh.
+//
+// Alongside the buckets, the payload carries range totals for the KPI tiles
+// plus the same totals for the equal-length period immediately before, so the
+// tiles can show a like-for-like delta whatever range is selected. Totals are
+// clamped at today: a range reaching into the future would otherwise count
+// scheduled labor against revenue that hasn't happened yet.
 //
 // Admin-only on purpose: revenue and labor cost together are the most
 // sensitive numbers in the building.
@@ -13,7 +20,7 @@ import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { type BusinessMetricRow, getDb } from '@/lib/db';
 import { DAILY_REPORTS } from '@/lib/reports/sync';
-import { computeWeeklyLabor } from '@/lib/schedule/labor';
+import { computeDailyLabor } from '@/lib/schedule/labor';
 
 export const prerender = false;
 
@@ -23,13 +30,28 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-const DEFAULT_WEEKS = 8;
-const MIN_WEEKS = 1;
-const MAX_WEEKS = 26;
+export type BucketGroup = 'day' | 'week' | 'month';
 
-export interface BusinessWeek {
-  weekStart: string;
-  /** null = no Momence snapshot covers this week (metric-by-metric). */
+const GROUPS: BucketGroup[] = ['day', 'week', 'month'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Span caps per grain — enough for a year of days or a couple of years of
+ * coarser buckets without letting one request pull the whole table apart. */
+const MAX_RANGE_DAYS: Record<BucketGroup, number> = { day: 400, week: 800, month: 1600 };
+
+/** How far past today a range may reach (a full year's forward planning). */
+const MAX_FUTURE_DAYS = 366;
+
+/** Default window when no range is given: 8 completed weeks + the current. */
+const DEFAULT_WEEKS = 8;
+
+/** One rendered bucket: a day, a Monday-start ET week, or an ET calendar
+ * month, clipped to the requested range at the edges. */
+export interface BusinessBucket {
+  /** First and last day actually covered (edge buckets may be partial). */
+  start: string;
+  end: string;
+  /** null = no Momence data covers this bucket (metric-by-metric). */
   revenue: number | null;
   laborCost: number;
   openHours: number;
@@ -40,15 +62,39 @@ export interface BusinessWeek {
   occupancyPct: number | null;
   noShows: number | null;
   newMembers: number | null;
-  /** End-of-week stock, from the latest snapshot covering the week. */
+  /** Latest stock value at or before the bucket's end. */
   activeMembers: number | null;
-  /** Current week — partial numbers. */
+  /** Reaches today or beyond — partial numbers, rendered dimmed. */
   future: boolean;
+}
+
+/** Aggregates over one exact span of days — the KPI-tile numbers. */
+export interface RangeTotals {
+  start: string;
+  end: string;
+  revenue: number | null;
+  laborCost: number;
+  openHours: number;
+  revenuePerOpenHour: number | null;
+  costPerOpenHour: number | null;
+  laborPctOfRevenue: number | null;
+  attendance: number | null;
+  occupancyPct: number | null;
+  noShows: number | null;
+  newMembers: number | null;
+  activeMembers: number | null;
 }
 
 export interface BusinessOverviewPayload {
   today: string;
-  weeks: BusinessWeek[];
+  group: BucketGroup;
+  start: string;
+  end: string;
+  buckets: BusinessBucket[];
+  /** range: totals over start..min(end, today). previous: the equal-length
+   * period immediately before, for deltas; null when the range is entirely
+   * in the future. */
+  summary: { range: RangeTotals; previous: RangeTotals | null };
   /** Newest snapshot write; stale (>26h) means the sync job is unwell. */
   lastSyncedAt: string | null;
   /** Daily report types with no snapshot in the last 3 days — either the
@@ -58,6 +104,28 @@ export interface BusinessOverviewPayload {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/** Whole days in [a, b], inclusive; both YYYY-MM-DD. */
+const daysBetween = (a: string, b: string): number =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1;
+
+const monthStartOf = (date: string): string => `${date.slice(0, 7)}-01`;
+
+/** Canonical start of the period containing `date` for a grain. */
+function periodStartOf(date: string, group: BucketGroup): string {
+  if (group === 'day') return date;
+  if (group === 'week') return weekStartOf(date);
+  return monthStartOf(date);
+}
+
+/** Start of the period after the one beginning at `periodStart`. */
+function nextPeriodStart(periodStart: string, group: BucketGroup): string {
+  if (group === 'day') return addDays(periodStart, 1);
+  if (group === 'week') return addDays(periodStart, 7);
+  const year = Number(periodStart.slice(0, 4));
+  const month = Number(periodStart.slice(5, 7));
+  return month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+}
+
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requireAdmin(cookies);
   if (gate instanceof Response) return gate;
@@ -65,69 +133,183 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const weeksParam = url.searchParams.get('weeks');
-  const weeks = weeksParam === null ? DEFAULT_WEEKS : Number(weeksParam);
-  if (!Number.isInteger(weeks) || weeks < MIN_WEEKS || weeks > MAX_WEEKS) {
-    return json({ error: `weeks must be an integer between ${MIN_WEEKS} and ${MAX_WEEKS}` }, 400);
-  }
-
   const today = utcToEastern(new Date().toISOString()).date;
   const thisWeek = weekStartOf(today);
-  // Last N completed weeks plus the in-progress one (rendered as partial).
-  const weekStarts = [...completedWeekStarts(today, weeks), thisWeek];
-  const rangeStart = weekStarts[0];
-  const rangeEnd = addDays(thisWeek, 6);
+
+  const groupParam = url.searchParams.get('group') ?? 'week';
+  if (!(GROUPS as string[]).includes(groupParam)) {
+    return json({ error: `group must be one of: ${GROUPS.join(', ')}` }, 400);
+  }
+  const group = groupParam as BucketGroup;
+
+  // Default range mirrors the dashboard's old fixed window: the last
+  // DEFAULT_WEEKS completed weeks plus the in-progress one.
+  let start = url.searchParams.get('start');
+  let end = url.searchParams.get('end');
+  if (start === null && end === null) {
+    start = completedWeekStarts(today, DEFAULT_WEEKS)[0] ?? thisWeek;
+    end = addDays(thisWeek, 6);
+  }
+  if (start === null || end === null || !DATE_RE.test(start) || !DATE_RE.test(end)) {
+    return json({ error: 'start and end must both be YYYY-MM-DD dates' }, 400);
+  }
+  if (end < start) return json({ error: 'end must not be before start' }, 400);
+  const spanDays = daysBetween(start, end);
+  if (spanDays > MAX_RANGE_DAYS[group]) {
+    return json(
+      { error: `range too long: at most ${MAX_RANGE_DAYS[group]} days for group=${group}` },
+      400
+    );
+  }
+  if (end > addDays(today, MAX_FUTURE_DAYS)) {
+    return json({ error: `end must be within ${MAX_FUTURE_DAYS} days of today` }, 400);
+  }
+
+  // Summary spans clamp at today; the previous period sits immediately
+  // before the range with the same number of days.
+  const summaryEnd = end < today ? end : today;
+  const hasElapsed = summaryEnd >= start;
+  const summaryDays = hasElapsed ? daysBetween(start, summaryEnd) : 0;
+  const prevStart = hasElapsed ? addDays(start, -summaryDays) : start;
+  const prevEnd = addDays(start, -1);
 
   const [metricsRes, snapshotRes, labor] = await Promise.all([
     db
-      .from('business_metrics_weekly')
+      .from('business_metrics_daily')
       .select('*')
-      .gte('week_start', rangeStart)
-      .lte('week_start', thisWeek),
+      .gte('metric_date', prevStart)
+      .lte('metric_date', end),
     db
       .from('momence_report_snapshots')
       .select('report_type, snapshot_date, created_at')
       .gte('snapshot_date', addDays(today, -3)),
-    computeWeeklyLabor(db, rangeStart, rangeEnd),
+    computeDailyLabor(db, prevStart, end),
   ]);
   const queryError = metricsRes.error ?? snapshotRes.error;
   if (queryError) return json({ error: queryError.message }, 500);
 
   const metricRows = (metricsRes.data ?? []) as BusinessMetricRow[];
-  const byWeek = new Map<string, Map<string, number>>();
+  const byDate = new Map<string, Map<string, number>>();
   for (const row of metricRows) {
-    let week = byWeek.get(row.week_start);
-    if (!week) {
-      week = new Map();
-      byWeek.set(row.week_start, week);
+    let day = byDate.get(row.metric_date);
+    if (!day) {
+      day = new Map();
+      byDate.set(row.metric_date, day);
     }
-    week.set(row.metric, Number(row.value));
+    day.set(row.metric, Number(row.value));
   }
-  const laborByWeek = new Map(labor.map((w) => [w.weekStart, w]));
+  const laborByDate = new Map(labor.map((d) => [d.date, d]));
+  // Stock lookups: active_members observations, oldest → newest.
+  const activeMemberObs = metricRows
+    .filter((row) => row.metric === 'active_members')
+    .map((row) => ({ date: row.metric_date, value: Number(row.value) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-  const weeksOut: BusinessWeek[] = weekStarts.map((weekStart) => {
-    const metrics = byWeek.get(weekStart);
-    const laborWeek = laborByWeek.get(weekStart);
-    const revenue = metrics?.get('revenue_total') ?? null;
-    const laborCost = laborWeek?.cost ?? 0;
-    const openHours = laborWeek?.openHours ?? 0;
+  const latestActiveMembers = (atOrBefore: string): number | null => {
+    let latest: number | null = null;
+    for (const obs of activeMemberObs) {
+      if (obs.date > atOrBefore) break;
+      latest = obs.value;
+    }
+    return latest;
+  };
+
+  /** Sum flows and labor over [from, to] inclusive; nulls where no Momence
+   * data covers the span at all. */
+  const totalsOver = (from: string, to: string): RangeTotals => {
+    let revenue: number | null = null;
+    let attendance: number | null = null;
+    let noShows: number | null = null;
+    let newMembers: number | null = null;
+    let capacity = 0;
+    let booked = 0;
+    let laborCost = 0;
+    let openHours = 0;
+
+    for (let day = from; day <= to; day = addDays(day, 1)) {
+      const metrics = byDate.get(day);
+      const rev = metrics?.get('revenue_total');
+      if (rev !== undefined) revenue = (revenue ?? 0) + rev;
+      const att = metrics?.get('attendance');
+      if (att !== undefined) attendance = (attendance ?? 0) + att;
+      const ns = metrics?.get('no_shows');
+      if (ns !== undefined) noShows = (noShows ?? 0) + ns;
+      const nm = metrics?.get('new_members');
+      if (nm !== undefined) newMembers = (newMembers ?? 0) + nm;
+      capacity += metrics?.get('session_capacity') ?? 0;
+      booked += metrics?.get('session_booked') ?? 0;
+      const laborDay = laborByDate.get(day);
+      laborCost += laborDay?.cost ?? 0;
+      openHours += laborDay?.openHours ?? 0;
+    }
+
+    laborCost = round2(laborCost);
+    openHours = Math.round(openHours * 10) / 10;
+    if (revenue !== null) revenue = round2(revenue);
     return {
-      weekStart,
+      start: from,
+      end: to,
       revenue,
       laborCost,
       openHours,
       revenuePerOpenHour: revenue !== null && openHours > 0 ? round2(revenue / openHours) : null,
-      costPerOpenHour: laborWeek?.costPerOpenHour ?? null,
+      costPerOpenHour: openHours > 0 ? round2(laborCost / openHours) : null,
       laborPctOfRevenue:
         revenue !== null && revenue > 0 ? round2((laborCost / revenue) * 100) : null,
-      attendance: metrics?.get('attendance') ?? null,
-      occupancyPct: metrics?.get('occupancy_pct') ?? null,
-      noShows: metrics?.get('no_shows') ?? null,
-      newMembers: metrics?.get('new_members') ?? null,
-      activeMembers: metrics?.get('active_members') ?? null,
-      future: weekStart >= thisWeek,
+      attendance,
+      occupancyPct: capacity > 0 ? round2((booked / capacity) * 100) : null,
+      noShows,
+      newMembers,
+      activeMembers: latestActiveMembers(to),
     };
-  });
+  };
+
+  // Buckets tile the requested range; the first and last may be clipped
+  // (e.g. a quarter grouped by week starts mid-week).
+  const buckets: BusinessBucket[] = [];
+  for (let cursor = start; cursor <= end; ) {
+    const periodStart = periodStartOf(cursor, group);
+    const next = nextPeriodStart(periodStart, group);
+    const bucketEnd = addDays(next, -1) < end ? addDays(next, -1) : end;
+    const t = totalsOver(cursor, bucketEnd);
+    buckets.push({
+      start: cursor,
+      end: bucketEnd,
+      revenue: t.revenue,
+      laborCost: t.laborCost,
+      openHours: t.openHours,
+      revenuePerOpenHour: t.revenuePerOpenHour,
+      costPerOpenHour: t.costPerOpenHour,
+      laborPctOfRevenue: t.laborPctOfRevenue,
+      attendance: t.attendance,
+      occupancyPct: t.occupancyPct,
+      noShows: t.noShows,
+      newMembers: t.newMembers,
+      activeMembers: t.activeMembers,
+      future: bucketEnd >= today,
+    });
+    cursor = next;
+  }
+
+  const emptyTotals: RangeTotals = {
+    ...totalsOver(start, start),
+    start,
+    end: start,
+    revenue: null,
+    laborCost: 0,
+    openHours: 0,
+    revenuePerOpenHour: null,
+    costPerOpenHour: null,
+    laborPctOfRevenue: null,
+    attendance: null,
+    occupancyPct: null,
+    noShows: null,
+    newMembers: null,
+  };
+  const summary = {
+    range: hasElapsed ? totalsOver(start, summaryEnd) : emptyTotals,
+    previous: hasElapsed ? totalsOver(prevStart, prevEnd) : null,
+  };
 
   const snapshots = (snapshotRes.data ?? []) as Array<{
     report_type: string;
@@ -140,7 +322,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const payload: BusinessOverviewPayload = {
     today,
-    weeks: weeksOut,
+    group,
+    start,
+    end,
+    buckets,
+    summary,
     lastSyncedAt,
     missingReportTypes: DAILY_REPORTS.filter((t) => !seenTypes.has(t)),
   };

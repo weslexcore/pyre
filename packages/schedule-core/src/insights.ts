@@ -119,3 +119,22 @@ export function openHoursByWeek(
   }
   return hours;
 }
+
+/**
+ * Daily-grain twin of openHoursByWeek, keyed by shift_date — for callers that
+ * re-bucket into arbitrary ranges (day/week/month) at read time. Same rules:
+ * only active Momence-synced shifts count, each trimmed of the staff-only
+ * lead/close padding and floored at zero.
+ */
+export function openHoursByDay(
+  shifts: Array<Pick<ShiftRow, 'shift_date' | 'starts_at' | 'ends_at' | 'status' | 'source'>>
+): Record<string, number> {
+  const padHours = (DEFAULT_WINDOW_OPTIONS.leadMin + DEFAULT_WINDOW_OPTIONS.closeMin) / 60;
+  const hours: Record<string, number> = {};
+  for (const shift of shifts) {
+    if (shift.status !== 'active' || shift.source !== 'momence') continue;
+    const open = Math.max(0, assignmentHours(shift.starts_at, shift.ends_at) - padHours);
+    hours[shift.shift_date] = (hours[shift.shift_date] ?? 0) + open;
+  }
+  return hours;
+}

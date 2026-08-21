@@ -1,4 +1,4 @@
-// Turns raw Momence report items into the weekly metric rows the business
+// Turns raw Momence report items into the daily metric rows the business
 // dashboard reads.
 //
 // Only one report type exists (TOTAL_SALES — see MomenceReportType), and its
@@ -9,20 +9,22 @@
 // that can't be parsed is counted (it drives the snapshot's normalize_status
 // triage field) but never throws.
 //
-// Weeks are Monday-start ET wall-clock, matching @pyre/schedule-core.
+// Days are ET wall-clock calendar days, matching @pyre/schedule-core.
 // paymentDate is a UTC *instant* (…T22:35:15.877Z), not a host-local date, so
 // it is converted to the ET calendar day before bucketing. Slicing the raw
-// string instead would push every sale after 8pm ET into the next day — and
-// across a Sunday/Monday boundary, into the wrong week.
+// string instead would push every sale after 8pm ET into the next day.
 
-import { utcToEastern, weekStartOf } from '@pyre/schedule-core';
+import { utcToEastern } from '@pyre/schedule-core';
 import type { MomenceReportType } from '@/lib/momence/reports';
 
 /**
- * Everything business_metrics_weekly can hold. revenue_total comes from the
+ * Everything business_metrics_daily can hold. revenue_total comes from the
  * total-sales report; the rest are swept out of the host endpoints by
- * lib/reports/activity.ts. (membership_cancellations was dropped — no
- * Momence endpoint exposes it.)
+ * lib/reports/activity.ts. session_capacity and session_booked are the
+ * occupancy numerator/denominator, kept raw so read-time grouping (day, week,
+ * month) computes the true booked/capacity ratio rather than averaging
+ * percentages. (membership_cancellations was dropped — no Momence endpoint
+ * exposes it.)
  */
 export type MetricKey =
   | 'revenue_total'
@@ -30,10 +32,12 @@ export type MetricKey =
   | 'active_members'
   | 'attendance'
   | 'no_shows'
-  | 'occupancy_pct';
+  | 'session_capacity'
+  | 'session_booked';
 
 export interface MetricUpsert {
-  weekStart: string;
+  /** ET calendar day, YYYY-MM-DD. */
+  date: string;
   metric: MetricKey;
   value: number;
 }
@@ -129,7 +133,7 @@ function netRevenue(item: TotalSalesItem, rec: Record<string, unknown>): number 
 }
 
 /**
- * Normalize one report's items into weekly metric upserts.
+ * Normalize one report's items into daily metric upserts.
  *
  * `snapshotDate` is unused for the flow-shaped TOTAL_SALES report but is kept
  * in the signature: it anchors any future point-in-time (stock) metric whose
@@ -149,7 +153,7 @@ export function normalizeReport(
 
   let parsed = 0;
   let unparseable = 0;
-  const weekly: Record<string, number> = {};
+  const daily: Record<string, number> = {};
 
   for (const item of items) {
     const rec = asRecord(item);
@@ -169,18 +173,17 @@ export function normalizeReport(
       continue;
     }
 
-    const week = weekStartOf(date);
-    weekly[week] = (weekly[week] ?? 0) + value;
+    daily[date] = (daily[date] ?? 0) + value;
     parsed += 1;
   }
 
-  const metrics: MetricUpsert[] = Object.entries(weekly)
-    .map(([weekStart, value]) => ({
-      weekStart,
+  const metrics: MetricUpsert[] = Object.entries(daily)
+    .map(([date, value]) => ({
+      date,
       metric: 'revenue_total' as const,
       value: round2(value),
     }))
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return {
     metrics,

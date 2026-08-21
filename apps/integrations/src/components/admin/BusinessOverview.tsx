@@ -1,21 +1,108 @@
 // Business overview island for /admin/business (admin-only): KPI tiles for
-// the last completed week, weekly revenue vs labor cost, per-open-hour
-// unit economics, membership flows, and attendance. All numbers arrive
-// pre-joined from /api/admin/business-overview (Momence report snapshots +
-// labor cost from the shifts tables); this island only renders.
+// the selected date range (with deltas against the equal-length period
+// before), revenue vs labor cost, per-open-hour unit economics, membership
+// flows, and attendance — over any preset or custom date range, grouped by
+// day, week, or month. All numbers arrive pre-joined from
+// /api/admin/business-overview (Momence metric syncs + labor cost from the
+// shifts tables); this island only renders.
+import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import type { BusinessOverviewPayload, BusinessWeek } from '@/pages/api/admin/business-overview';
+import type {
+  BucketGroup,
+  BusinessBucket,
+  BusinessOverviewPayload,
+} from '@/pages/api/admin/business-overview';
 
 const GOLD = '#b58d35';
 const GRID = 'rgba(255, 255, 255, 0.08)';
 const CREME = 'rgba(255, 255, 255, 0.65)';
 
-const WINDOW_OPTIONS = [4, 8, 13, 26] as const;
-const DEFAULT_WINDOW = 8;
-
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+
+const inputClass =
+  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// --- Date range presets (all ET wall-clock, same calendar as the API) ---
+
+type PresetKey =
+  | 'this-week'
+  | 'last-week'
+  | 'this-month'
+  | 'last-month'
+  | 'this-quarter'
+  | 'last-quarter'
+  | 'last-12-weeks'
+  | 'ytd'
+  | 'custom';
+
+const PRESETS: Array<{ key: PresetKey; label: string }> = [
+  { key: 'this-week', label: 'This week' },
+  { key: 'last-week', label: 'Last week' },
+  { key: 'this-month', label: 'This month' },
+  { key: 'last-month', label: 'Last month' },
+  { key: 'this-quarter', label: 'This qtr' },
+  { key: 'last-quarter', label: 'Last qtr' },
+  { key: 'last-12-weeks', label: '12 wks' },
+  { key: 'ytd', label: 'YTD' },
+  { key: 'custom', label: 'Custom' },
+];
+
+const monthStartOf = (date: string): string => `${date.slice(0, 7)}-01`;
+
+/** First of the month `n` months after the one containing `monthStart`. */
+function addMonths(monthStart: string, n: number): string {
+  const year = Number(monthStart.slice(0, 4));
+  const month = Number(monthStart.slice(5, 7)) - 1 + n;
+  const y = year + Math.floor(month / 12);
+  const m = ((month % 12) + 12) % 12;
+  return `${y}-${String(m + 1).padStart(2, '0')}-01`;
+}
+
+function quarterStartOf(date: string): string {
+  const month = Number(date.slice(5, 7));
+  const qMonth = month - ((month - 1) % 3);
+  return `${date.slice(0, 4)}-${String(qMonth).padStart(2, '0')}-01`;
+}
+
+/** A preset's range plus the grain it reads best at (overridable). */
+function presetRange(
+  key: Exclude<PresetKey, 'custom'>,
+  today: string
+): { start: string; end: string; group: BucketGroup } {
+  const thisWeek = weekStartOf(today);
+  switch (key) {
+    case 'this-week':
+      return { start: thisWeek, end: addDays(thisWeek, 6), group: 'day' };
+    case 'last-week':
+      return { start: addDays(thisWeek, -7), end: addDays(thisWeek, -1), group: 'day' };
+    case 'this-month': {
+      const start = monthStartOf(today);
+      return { start, end: addDays(addMonths(start, 1), -1), group: 'day' };
+    }
+    case 'last-month': {
+      const start = addMonths(monthStartOf(today), -1);
+      return { start, end: addDays(monthStartOf(today), -1), group: 'day' };
+    }
+    case 'this-quarter': {
+      const start = quarterStartOf(today);
+      return { start, end: addDays(addMonths(start, 3), -1), group: 'week' };
+    }
+    case 'last-quarter': {
+      const start = addMonths(quarterStartOf(today), -3);
+      return { start, end: addDays(quarterStartOf(today), -1), group: 'week' };
+    }
+    case 'last-12-weeks':
+      return { start: addDays(thisWeek, -7 * 12), end: addDays(thisWeek, 6), group: 'week' };
+    case 'ytd':
+      return { start: `${today.slice(0, 4)}-01-01`, end: today, group: 'month' };
+  }
+}
+
+// --- Formatting ---
 
 const fmtMoney = (n: number): string =>
   `$${Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(2)}`;
@@ -23,17 +110,33 @@ const fmtMoney = (n: number): string =>
 const fmtCount = (n: number): string =>
   Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(1);
 
-const fmtWeek = (d: string): string =>
+const fmtDay = (d: string): string =>
   new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-const fmtAxisDay = (d: string): string =>
-  new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+const fmtRange = (start: string, end: string): string =>
+  start === end ? fmtDay(start) : `${fmtDay(start)} – ${fmtDay(end)}`;
 
-/** "+12% WoW" / "−8% WoW"; null when either week is missing. */
-function wowDelta(current: number | null, previous: number | null): string | null {
+/** Axis tick for a bucket: 8/12 for days/weeks, Aug for months. */
+const fmtAxis = (d: string, group: BucketGroup): string =>
+  group === 'month'
+    ? new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'short' })
+    : new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+
+/** Tooltip name for a bucket: the day, "Week of …", or "August 2026". */
+function bucketLabel(bucket: BusinessBucket, group: BucketGroup): string {
+  if (group === 'day') return fmtDay(bucket.start);
+  if (group === 'week') return `Week of ${fmtDay(bucket.start)}`;
+  return new Date(`${bucket.start}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/** "+12% vs prior" / "−8% vs prior"; null when either period is missing. */
+function periodDelta(current: number | null, previous: number | null): string | null {
   if (current === null || previous === null || previous === 0) return null;
   const pct = Math.round(((current - previous) / previous) * 100);
-  return `${pct >= 0 ? '+' : '−'}${Math.abs(pct)}% WoW`;
+  return `${pct >= 0 ? '+' : '−'}${Math.abs(pct)}% vs prior`;
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -89,25 +192,27 @@ const frame = (count: number): ChartFrame => {
 
 /** Shared grid lines + x labels; children render the marks. */
 function ChartShell({
-  weeks,
+  buckets,
+  group,
   max,
   yLabel,
   ariaLabel,
   children,
 }: {
-  weeks: BusinessWeek[];
+  buckets: BusinessBucket[];
+  group: BucketGroup;
   max: number;
   yLabel: (v: number) => string;
   ariaLabel: string;
   children: (f: ChartFrame) => React.ReactNode;
 }) {
-  const f = frame(weeks.length);
+  const f = frame(buckets.length);
   const gridLines = [0.25, 0.5, 0.75, 1].map((fr) => ({
     y: f.TOP + f.plotH - fr * f.plotH,
     label: yLabel(max * fr),
   }));
-  const labelEvery = Math.ceil(weeks.length / 14);
-  const firstFuture = weeks.findIndex((w) => w.future);
+  const labelEvery = Math.ceil(buckets.length / 14);
+  const firstFuture = buckets.findIndex((b) => b.future);
 
   return (
     <svg
@@ -142,17 +247,17 @@ function ChartShell({
         />
       )}
       {children(f)}
-      {weeks.map((week, i) =>
-        i % labelEvery === 0 || i === weeks.length - 1 ? (
+      {buckets.map((bucket, i) =>
+        i % labelEvery === 0 || i === buckets.length - 1 ? (
           <text
-            key={week.weekStart}
+            key={bucket.start}
             x={f.LEFT + i * f.step + f.step / 2}
             y={f.H - 8}
             textAnchor="middle"
             className="fill-white/40 font-mono"
             fontSize={9}
           >
-            {fmtAxisDay(week.weekStart)}
+            {fmtAxis(bucket.start, group)}
           </text>
         ) : null
       )}
@@ -161,26 +266,34 @@ function ChartShell({
 }
 
 /** Revenue bars (gold) with a narrower labor-cost bar overlaid (creme). */
-function RevenueVsLaborChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const max = Math.max(...weeks.map((w) => Math.max(w.revenue ?? 0, w.laborCost)), 1);
+function RevenueVsLaborChart({
+  buckets,
+  group,
+}: {
+  buckets: BusinessBucket[];
+  group: BucketGroup;
+}) {
+  const max = Math.max(...buckets.map((b) => Math.max(b.revenue ?? 0, b.laborCost)), 1);
   return (
     <ChartShell
-      weeks={weeks}
+      buckets={buckets}
+      group={group}
       max={max}
       yLabel={(v) => `$${Math.round(v / 10) * 10}`}
-      ariaLabel="Weekly revenue vs labor cost"
+      ariaLabel="Revenue vs labor cost"
     >
       {(f) => (
         <>
-          {weeks.map((week, i) => {
+          {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 48);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
-            const revenueH = week.revenue !== null ? (week.revenue / max) * f.plotH : 0;
-            const laborH = (week.laborCost / max) * f.plotH;
-            const dim = week.future ? 0.35 : 0.85;
+            const revenueH = bucket.revenue !== null ? (bucket.revenue / max) * f.plotH : 0;
+            const laborH = (bucket.laborCost / max) * f.plotH;
+            const dim = bucket.future ? 0.35 : 0.85;
+            const label = bucketLabel(bucket, group);
             return (
-              <g key={week.weekStart}>
-                {week.revenue !== null && (
+              <g key={bucket.start}>
+                {bucket.revenue !== null && (
                   <rect
                     x={x}
                     y={f.TOP + f.plotH - revenueH}
@@ -190,7 +303,7 @@ function RevenueVsLaborChart({ weeks }: { weeks: BusinessWeek[] }) {
                     opacity={dim}
                   >
                     <title>
-                      {`Week of ${fmtWeek(week.weekStart)}${week.future ? ' (in progress)' : ''}: revenue ${fmtMoney(week.revenue)} · labor ${fmtMoney(week.laborCost)}${week.laborPctOfRevenue !== null ? ` (${week.laborPctOfRevenue}% of revenue)` : ''}`}
+                      {`${label}${bucket.future ? ' (in progress)' : ''}: revenue ${fmtMoney(bucket.revenue)} · labor ${fmtMoney(bucket.laborCost)}${bucket.laborPctOfRevenue !== null ? ` (${bucket.laborPctOfRevenue}% of revenue)` : ''}`}
                     </title>
                   </rect>
                 )}
@@ -200,9 +313,9 @@ function RevenueVsLaborChart({ weeks }: { weeks: BusinessWeek[] }) {
                   width={barW * 0.4}
                   height={laborH}
                   fill={CREME}
-                  opacity={week.future ? 0.3 : 0.6}
+                  opacity={bucket.future ? 0.3 : 0.6}
                 >
-                  <title>{`Week of ${fmtWeek(week.weekStart)}: labor ${fmtMoney(week.laborCost)}`}</title>
+                  <title>{`${label}: labor ${fmtMoney(bucket.laborCost)}`}</title>
                 </rect>
               </g>
             );
@@ -214,15 +327,15 @@ function RevenueVsLaborChart({ weeks }: { weeks: BusinessWeek[] }) {
 }
 
 /** Two per-open-hour lines: revenue (gold) and labor cost (creme, the
- * break-even line). Gaps where a week has no revenue snapshot. */
-function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const values = weeks.flatMap((w) => [w.revenuePerOpenHour ?? 0, w.costPerOpenHour ?? 0]);
+ * break-even line). Gaps where a bucket has no revenue data. */
+function UnitEconomicsChart({ buckets, group }: { buckets: BusinessBucket[]; group: BucketGroup }) {
+  const values = buckets.flatMap((b) => [b.revenuePerOpenHour ?? 0, b.costPerOpenHour ?? 0]);
   const max = Math.max(...values, 1);
-  const line = (pick: (w: BusinessWeek) => number | null, f: ChartFrame): string[] => {
-    // Split into segments at nulls so missing weeks read as gaps, not zeros.
+  const line = (pick: (b: BusinessBucket) => number | null, f: ChartFrame): string[] => {
+    // Split into segments at nulls so missing buckets read as gaps, not zeros.
     const segments: string[][] = [[]];
-    weeks.forEach((week, i) => {
-      const value = pick(week);
+    buckets.forEach((bucket, i) => {
+      const value = pick(bucket);
       if (value === null) {
         if (segments[segments.length - 1].length > 0) segments.push([]);
         return;
@@ -235,14 +348,15 @@ function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
   };
   return (
     <ChartShell
-      weeks={weeks}
+      buckets={buckets}
+      group={group}
       max={max}
       yLabel={(v) => `$${Math.round(v)}`}
       ariaLabel="Revenue and labor cost per open hour"
     >
       {(f) => (
         <>
-          {line((w) => w.costPerOpenHour, f).map((points) => (
+          {line((b) => b.costPerOpenHour, f).map((points) => (
             <polyline
               key={`c${points}`}
               points={points}
@@ -254,7 +368,7 @@ function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
               strokeLinecap="round"
             />
           ))}
-          {line((w) => w.revenuePerOpenHour, f).map((points) => (
+          {line((b) => b.revenuePerOpenHour, f).map((points) => (
             <polyline
               key={`r${points}`}
               points={points}
@@ -272,36 +386,37 @@ function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
 }
 
 /**
- * New members per week (gold). Cancellations used to sit beside these bars,
+ * New members per bucket (gold). Cancellations used to sit beside these bars,
  * but Momence exposes no host endpoint for them — see lib/reports/activity.ts
  * — so the chart shows arrivals only rather than an always-empty half.
  */
-function MembershipChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const max = Math.max(...weeks.map((w) => w.newMembers ?? 0), 1);
+function MembershipChart({ buckets, group }: { buckets: BusinessBucket[]; group: BucketGroup }) {
+  const max = Math.max(...buckets.map((b) => b.newMembers ?? 0), 1);
   return (
     <ChartShell
-      weeks={weeks}
+      buckets={buckets}
+      group={group}
       max={max}
       yLabel={(v) => String(Math.round(v))}
-      ariaLabel="New members per week"
+      ariaLabel="New members"
     >
       {(f) => (
         <>
-          {weeks.map((week, i) => {
+          {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 40);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
-            const newH = ((week.newMembers ?? 0) / max) * f.plotH;
+            const newH = ((bucket.newMembers ?? 0) / max) * f.plotH;
             return (
               <rect
-                key={week.weekStart}
+                key={bucket.start}
                 x={x}
                 y={f.TOP + f.plotH - newH}
                 width={barW - 1}
                 height={newH}
                 fill={GOLD}
-                opacity={week.future ? 0.35 : 0.85}
+                opacity={bucket.future ? 0.35 : 0.85}
               >
-                <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.newMembers ?? '—'} new${week.activeMembers !== null ? ` · ${week.activeMembers} active` : ''}`}</title>
+                <title>{`${bucketLabel(bucket, group)}: ${bucket.newMembers ?? '—'} new${bucket.activeMembers !== null ? ` · ${bucket.activeMembers} active` : ''}`}</title>
               </rect>
             );
           })}
@@ -312,26 +427,28 @@ function MembershipChart({ weeks }: { weeks: BusinessWeek[] }) {
 }
 
 /** Attendance bars with a thin no-show overlay; occupancy in the tooltip. */
-function AttendanceChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const max = Math.max(...weeks.map((w) => w.attendance ?? 0), 1);
+function AttendanceChart({ buckets, group }: { buckets: BusinessBucket[]; group: BucketGroup }) {
+  const max = Math.max(...buckets.map((b) => b.attendance ?? 0), 1);
   return (
     <ChartShell
-      weeks={weeks}
+      buckets={buckets}
+      group={group}
       max={max}
       yLabel={(v) => String(Math.round(v))}
-      ariaLabel="Weekly attendance"
+      ariaLabel="Attendance"
     >
       {(f) => (
         <>
-          {weeks.map((week, i) => {
+          {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 48);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
-            const attendH = ((week.attendance ?? 0) / max) * f.plotH;
-            const noShowH = ((week.noShows ?? 0) / max) * f.plotH;
-            const dim = week.future ? 0.35 : 0.85;
+            const attendH = ((bucket.attendance ?? 0) / max) * f.plotH;
+            const noShowH = ((bucket.noShows ?? 0) / max) * f.plotH;
+            const dim = bucket.future ? 0.35 : 0.85;
+            const label = bucketLabel(bucket, group);
             return (
-              <g key={week.weekStart}>
-                {week.attendance !== null && (
+              <g key={bucket.start}>
+                {bucket.attendance !== null && (
                   <rect
                     x={x}
                     y={f.TOP + f.plotH - attendH}
@@ -341,20 +458,20 @@ function AttendanceChart({ weeks }: { weeks: BusinessWeek[] }) {
                     opacity={dim}
                   >
                     <title>
-                      {`Week of ${fmtWeek(week.weekStart)}${week.future ? ' (in progress)' : ''}: ${fmtCount(week.attendance)} visits${week.occupancyPct !== null ? ` · ${week.occupancyPct}% occupancy` : ''}${week.noShows !== null ? ` · ${fmtCount(week.noShows)} no-shows` : ''}`}
+                      {`${label}${bucket.future ? ' (in progress)' : ''}: ${fmtCount(bucket.attendance)} visits${bucket.occupancyPct !== null ? ` · ${bucket.occupancyPct}% occupancy` : ''}${bucket.noShows !== null ? ` · ${fmtCount(bucket.noShows)} no-shows` : ''}`}
                     </title>
                   </rect>
                 )}
-                {week.noShows !== null && week.noShows > 0 && (
+                {bucket.noShows !== null && bucket.noShows > 0 && (
                   <rect
                     x={x + barW * 0.35}
                     y={f.TOP + f.plotH - noShowH}
                     width={barW * 0.3}
                     height={noShowH}
                     fill={CREME}
-                    opacity={week.future ? 0.3 : 0.6}
+                    opacity={bucket.future ? 0.3 : 0.6}
                   >
-                    <title>{`Week of ${fmtWeek(week.weekStart)}: ${fmtCount(week.noShows)} no-shows`}</title>
+                    <title>{`${label}: ${fmtCount(bucket.noShows)} no-shows`}</title>
                   </rect>
                 )}
               </g>
@@ -366,27 +483,128 @@ function AttendanceChart({ weeks }: { weeks: BusinessWeek[] }) {
   );
 }
 
-export function BusinessOverview() {
-  const [windowWeeks, setWindowWeeks] = useState<number>(DEFAULT_WINDOW);
+const GROUP_OPTIONS: Array<{ key: BucketGroup; label: string }> = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
 
-  // One cache entry per window, so switching back to a window you already
-  // viewed repaints from cache while it revalidates behind you.
-  const { data, error, loading, refreshing } = useCachedJson<BusinessOverviewPayload>(
-    `/api/admin/business-overview?weeks=${windowWeeks}`
+export function BusinessOverview() {
+  // ET calendar day, matching the API — a browser in another timezone must
+  // not shift preset boundaries.
+  const [today] = useState(() => utcToEastern(new Date().toISOString()).date);
+  const [preset, setPreset] = useState<PresetKey>('last-12-weeks');
+  const [group, setGroup] = useState<BucketGroup>('week');
+  const [customStart, setCustomStart] = useState(() => addDays(today, -56));
+  const [customEnd, setCustomEnd] = useState(today);
+
+  const range =
+    preset === 'custom' ? { start: customStart, end: customEnd } : presetRange(preset, today);
+  const customValid =
+    DATE_RE.test(range.start) && DATE_RE.test(range.end) && range.start <= range.end;
+
+  // One cache entry per (range, grain), so switching back to a view you
+  // already visited repaints from cache while it revalidates behind you.
+  const url = customValid
+    ? `/api/admin/business-overview?start=${range.start}&end=${range.end}&group=${group}`
+    : null;
+  const { data, error, loading, refreshing } = useCachedJson<BusinessOverviewPayload>(url);
+
+  const pickPreset = (key: PresetKey) => {
+    setPreset(key);
+    // Each preset opens at the grain it reads best at; the group buttons
+    // still override afterwards.
+    if (key !== 'custom') setGroup(presetRange(key, today).group);
+  };
+
+  const controls = (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-xs uppercase tracking-wide text-white/40">Range</span>
+        {PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className={`${buttonClass} ${preset === p.key ? 'border-white/40 text-white' : ''}`}
+            aria-pressed={preset === p.key}
+            disabled={loading || refreshing}
+            onClick={() => pickPreset(p.key)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-xs uppercase tracking-wide text-white/40">Group by</span>
+        {GROUP_OPTIONS.map((g) => (
+          <button
+            key={g.key}
+            type="button"
+            className={`${buttonClass} ${group === g.key ? 'border-white/40 text-white' : ''}`}
+            aria-pressed={group === g.key}
+            disabled={loading || refreshing}
+            onClick={() => setGroup(g.key)}
+          >
+            {g.label}
+          </button>
+        ))}
+        {preset === 'custom' && (
+          <>
+            <input
+              type="date"
+              className={inputClass}
+              value={customStart}
+              max={customEnd}
+              aria-label="Range start"
+              onChange={(e) => setCustomStart(e.target.value)}
+            />
+            <span className="font-mono text-xs text-white/40">to</span>
+            <input
+              type="date"
+              className={inputClass}
+              value={customEnd}
+              min={customStart}
+              aria-label="Range end"
+              onChange={(e) => setCustomEnd(e.target.value)}
+            />
+          </>
+        )}
+        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
+      </div>
+    </div>
   );
 
-  if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
+  if (!customValid) {
+    return (
+      <div className="space-y-8">
+        {controls}
+        <p className="font-mono text-sm text-white/40">
+          Pick a valid date range (start on or before end).
+        </p>
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        {controls}
+        <p className="font-mono text-sm text-white/40">Loading…</p>
+      </div>
+    );
+  }
   if (error || !data) {
     return (
-      <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-        {error ?? 'Failed to load'}
-      </p>
+      <div className="space-y-8">
+        {controls}
+        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
+          {error ?? 'Failed to load'}
+        </p>
+      </div>
     );
   }
 
-  const completed = data.weeks.filter((w) => !w.future);
-  const lastWeek = completed[completed.length - 1] ?? null;
-  const prevWeek = completed[completed.length - 2] ?? null;
+  const s = data.summary.range;
+  const prev = data.summary.previous;
 
   // Freshness: the sync runs daily, so anything past ~26h means it's unwell.
   const syncStale =
@@ -396,22 +614,7 @@ export function BusinessOverview() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs uppercase tracking-wide text-white/40">History</span>
-        {WINDOW_OPTIONS.map((w) => (
-          <button
-            key={w}
-            type="button"
-            className={`${buttonClass} ${windowWeeks === w ? 'border-white/40 text-white' : ''}`}
-            aria-pressed={windowWeeks === w}
-            disabled={loading || refreshing}
-            onClick={() => setWindowWeeks(w)}
-          >
-            {w} wks
-          </button>
-        ))}
-        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
-      </div>
+      {controls}
 
       {(neverSynced || syncStale || data.missingReportTypes.length > 0) && (
         <div className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)] space-y-1">
@@ -435,48 +638,49 @@ export function BusinessOverview() {
         </div>
       )}
 
-      {/* ---- KPI tiles (last completed week) ---- */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatTile
-          label="Revenue (last week)"
-          value={lastWeek?.revenue != null ? fmtMoney(lastWeek.revenue) : '—'}
-          sub={
-            wowDelta(lastWeek?.revenue ?? null, prevWeek?.revenue ?? null) ??
-            (lastWeek ? `week of ${fmtWeek(lastWeek.weekStart)}` : undefined)
-          }
-        />
-        <StatTile
-          label="Revenue / open hour"
-          value={lastWeek?.revenuePerOpenHour != null ? fmtMoney(lastWeek.revenuePerOpenHour) : '—'}
-          sub={
-            lastWeek?.costPerOpenHour != null
-              ? `vs ${fmtMoney(lastWeek.costPerOpenHour)} labor break-even`
-              : undefined
-          }
-        />
-        <StatTile
-          label="Labor % of revenue"
-          value={lastWeek?.laborPctOfRevenue != null ? `${lastWeek.laborPctOfRevenue}%` : '—'}
-          sub={lastWeek ? `${fmtMoney(lastWeek.laborCost)} labor cost` : undefined}
-        />
-        <StatTile
-          label="Active members"
-          value={lastWeek?.activeMembers != null ? fmtCount(lastWeek.activeMembers) : '—'}
-          sub={
-            wowDelta(lastWeek?.activeMembers ?? null, prevWeek?.activeMembers ?? null) ?? undefined
-          }
-        />
-        <StatTile
-          label="Visits (last week)"
-          value={lastWeek?.attendance != null ? fmtCount(lastWeek.attendance) : '—'}
-          sub={lastWeek?.occupancyPct != null ? `${lastWeek.occupancyPct}% occupancy` : undefined}
-        />
+      {/* ---- KPI tiles (totals over the selected range, through today) ---- */}
+      <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatTile
+            label="Revenue"
+            value={s.revenue != null ? fmtMoney(s.revenue) : '—'}
+            sub={periodDelta(s.revenue, prev?.revenue ?? null) ?? fmtRange(s.start, s.end)}
+          />
+          <StatTile
+            label="Revenue / open hour"
+            value={s.revenuePerOpenHour != null ? fmtMoney(s.revenuePerOpenHour) : '—'}
+            sub={
+              s.costPerOpenHour != null
+                ? `vs ${fmtMoney(s.costPerOpenHour)} labor break-even`
+                : undefined
+            }
+          />
+          <StatTile
+            label="Labor % of revenue"
+            value={s.laborPctOfRevenue != null ? `${s.laborPctOfRevenue}%` : '—'}
+            sub={`${fmtMoney(s.laborCost)} labor cost`}
+          />
+          <StatTile
+            label="Active members"
+            value={s.activeMembers != null ? fmtCount(s.activeMembers) : '—'}
+            sub={periodDelta(s.activeMembers, prev?.activeMembers ?? null) ?? undefined}
+          />
+          <StatTile
+            label="Visits"
+            value={s.attendance != null ? fmtCount(s.attendance) : '—'}
+            sub={s.occupancyPct != null ? `${s.occupancyPct}% occupancy` : undefined}
+          />
+        </div>
+        <p className="font-mono text-xs text-white/40">
+          Totals cover {fmtRange(s.start, s.end)}
+          {prev ? ` · prior period ${fmtRange(prev.start, prev.end)}` : ''}
+        </p>
       </div>
 
       {/* ---- Revenue vs labor ---- */}
       <section className="space-y-2">
         <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-          Weekly revenue vs labor cost
+          Revenue vs labor cost
         </h2>
         <Legend
           items={[
@@ -484,10 +688,10 @@ export function BusinessOverview() {
             { color: CREME, label: 'labor cost' },
           ]}
         />
-        <RevenueVsLaborChart weeks={data.weeks} />
+        <RevenueVsLaborChart buckets={data.buckets} group={data.group} />
         <p className="font-mono text-xs text-white/40">
-          Dimmed bars are the in-progress week — partial numbers. Missing revenue bars mean no
-          Momence snapshot covers that week yet.
+          Dimmed bars are still in progress — partial numbers. Missing revenue bars mean no Momence
+          data covers that period yet.
         </p>
       </section>
 
@@ -502,7 +706,7 @@ export function BusinessOverview() {
             { color: CREME, label: 'labor cost / open hour (break-even)' },
           ]}
         />
-        <UnitEconomicsChart weeks={data.weeks} />
+        <UnitEconomicsChart buckets={data.buckets} group={data.group} />
         <p className="font-mono text-xs text-white/40">
           Gold above the dashed line means the customer-facing hours pay for the labor staffing
           them.
@@ -515,7 +719,7 @@ export function BusinessOverview() {
           Memberships: new members
         </h2>
         <Legend items={[{ color: GOLD, label: 'new members' }]} />
-        <MembershipChart weeks={data.weeks} />
+        <MembershipChart buckets={data.buckets} group={data.group} />
       </section>
 
       {/* ---- Attendance ---- */}
@@ -529,7 +733,7 @@ export function BusinessOverview() {
             { color: CREME, label: 'no-shows' },
           ]}
         />
-        <AttendanceChart weeks={data.weeks} />
+        <AttendanceChart buckets={data.buckets} group={data.group} />
       </section>
     </div>
   );

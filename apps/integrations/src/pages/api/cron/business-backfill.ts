@@ -17,7 +17,7 @@ export const prerender = false;
 //
 // Re-curling after completion creates a fresh report run (one create against
 // the 100/day budget), so run it until both `pendingTypes` and
-// `activity.pendingWeeks` clear, then stop. Weekly upserts are idempotent.
+// `activity.pendingWeeks` clear, then stop. Metric upserts are idempotent.
 //
 // Note: point-in-time counts (active members) can't be reconstructed for the
 // past — backfill fills flow metrics; stocks accrue from daily syncs onward.
