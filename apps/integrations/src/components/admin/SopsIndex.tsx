@@ -12,7 +12,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SopRow } from '@/lib/db';
 import {
   ACCESS_LABELS,
-  canEditSop,
   SOP_ACCESS_LEVELS,
   type SopAccessLevel,
   type SopRole,
@@ -90,13 +89,14 @@ function Marked({ text, term }: { text: string; term: string }) {
   );
 }
 
-function AccessBadge({ level, kind }: { level: SopAccessLevel; kind: 'view' | 'edit' }) {
+/** Who may read this SOP. Edit access is a settings detail, not card furniture. */
+function AccessBadge({ level }: { level: SopAccessLevel }) {
   // "All staff" view access is the default and not worth a badge.
-  if (kind === 'view' && level === 'staff') return null;
+  if (level === 'staff') return null;
   const color = level === 'admin' ? 'text-[var(--pyre-red)]' : 'text-[var(--pyre-gold)]';
   return (
     <span className={`font-mono text-[10px] uppercase tracking-wide ${color}`}>
-      {kind === 'view' ? 'view' : 'edit'}: {ACCESS_LABELS[level].toLowerCase()}
+      view: {ACCESS_LABELS[level].toLowerCase()}
     </span>
   );
 }
@@ -381,9 +381,7 @@ export function SopsIndex() {
                 ☑ checklist · {sop.task_count} tasks
               </span>
             )}
-            <AccessBadge level={sop.view_access} kind="view" />
-            {/* Who may edit only matters to someone who may: hide it from the rest. */}
-            {canEditSop(role, sop) && <AccessBadge level={sop.edit_access} kind="edit" />}
+            <AccessBadge level={sop.view_access} />
           </div>
         </a>
         <span className="absolute top-3 right-3 flex gap-1">
