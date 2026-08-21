@@ -39,18 +39,23 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Object key for an upload: incidents/<incident id>/<random>.<ext>. The
- * original file name is kept in the attachment row, not the path — phone
- * camera names collide constantly and can carry anything.
+ * `<random>.<ext>` object name for an upload. The original file name is kept
+ * in the attachment row, not the path — phone camera names collide constantly
+ * and can carry anything. Shared with shift-note media.
  */
-export function buildStoragePath(incidentId: string, fileName: string, mime: string): string {
+export function objectName(fileName: string, mime: string): string {
   const extFromName = fileName.includes('.') ? (fileName.split('.').pop() ?? '') : '';
   const ext = /^[a-zA-Z0-9]{1,5}$/.test(extFromName)
     ? extFromName.toLowerCase()
     : (mime.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'bin';
   const id =
     globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `incidents/${incidentId}/${id}.${ext}`;
+  return `${id}.${ext}`;
+}
+
+/** Object key for an upload: incidents/<incident id>/<random>.<ext>. */
+export function buildStoragePath(incidentId: string, fileName: string, mime: string): string {
+  return `incidents/${incidentId}/${objectName(fileName, mime)}`;
 }
 
 /** Longest edge a re-encoded photo keeps — plenty to read a wet floor or a burn. */

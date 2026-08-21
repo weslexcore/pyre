@@ -5,7 +5,10 @@
 // and deleting a note is author-or-admin. Author identity always comes from
 // the session, never the request body.
 //
-//   GET                          → { notes, people, viewer }
+// Photos/video backing a note are handled by shift-note-media.ts; GET here
+// returns each note's attachment rows so the log renders in one request.
+//
+//   GET                          → { notes, attachments, people, viewer }
 //   POST   { noteDate, body }    → { note, people }
 //   PATCH  { id, noteDate?, body? } → { note, people }
 //   DELETE ?id=<uuid>            → { ok: true }
@@ -13,7 +16,7 @@
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { getDb, type ShiftNoteRow } from '@/lib/db';
+import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
 
@@ -57,8 +60,29 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (error) return json({ error: error.message }, 500);
 
   const notes = (data ?? []) as ShiftNoteRow[];
+
+  // Each note's media, keyed by note id, in upload order.
+  const attachments: Record<string, ShiftNoteAttachmentRow[]> = {};
+  if (notes.length > 0) {
+    const { data: rows, error: attachError } = await db
+      .from('shift_note_attachments')
+      .select('*')
+      .in(
+        'note_id',
+        notes.map((n) => n.id)
+      )
+      .order('created_at', { ascending: true });
+    if (attachError) return json({ error: attachError.message }, 500);
+    for (const row of (rows ?? []) as ShiftNoteAttachmentRow[]) {
+      const group = attachments[row.note_id];
+      if (group) group.push(row);
+      else attachments[row.note_id] = [row];
+    }
+  }
+
   return json({
     notes,
+    attachments,
     people: await peopleFor(notes),
     // So the island knows which notes to offer edit/delete on. The buttons
     // are UX only — every mutation re-checks author-or-admin here.
@@ -194,6 +218,22 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!existing) return json({ error: 'Note not found' }, 404);
   if (!canTouch(existing as ShiftNoteRow, gate)) {
     return json({ error: 'Only the author or an admin may delete a note' }, 403);
+  }
+
+  // Deleting the note cascades its attachment rows, but the objects in the
+  // bucket only go away if we remove them ourselves. Best-effort: a stranded
+  // object is unreachable (nothing signs URLs for it) and costs pennies,
+  // while failing the whole delete over storage would strand the note.
+  const { data: media } = await db
+    .from('shift_note_attachments')
+    .select('storage_path')
+    .eq('note_id', id);
+  const paths = ((media ?? []) as { storage_path: string }[]).map((m) => m.storage_path);
+  if (paths.length > 0) {
+    const { error: storageError } = await db.storage.from('shift-note-media').remove(paths);
+    if (storageError) {
+      console.error('[shift-notes] media cleanup failed:', storageError.message);
+    }
   }
 
   const { error } = await db.from('shift_notes').delete().eq('id', id);
