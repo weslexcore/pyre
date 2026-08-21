@@ -259,7 +259,8 @@ Landing page uses:
 - use nvm to select the proper node version
 
 ## Git & Attribution
-
+- Commit your work to your worktree branch when a task is done.
+- Unless asked explicitly - Never push to a remote. Never open PRs. Never merge. Never touch main.
 - Do NOT add AI/assistant attribution to git artifacts. Never include a
   `Co-Authored-By: Claude …` (or any Anthropic/AI) trailer in commit messages, and never
   add a "🤖 Generated with Claude Code" footer (or any "Claude"/"Anthropic" mention) to
