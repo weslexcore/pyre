@@ -332,6 +332,21 @@ export interface SopRunCheckRow {
   checked_at: string;
 }
 
+// One shift-lead note about how a shift went (see the shift_notes migration).
+// Keyed by the shift's wall-clock date rather than a shifts row, so notes
+// survive schedule resyncs and can cover days the board never held.
+export interface ShiftNoteRow {
+  id: string;
+  /** YYYY-MM-DD, local wall-clock America/New_York. */
+  note_date: string;
+  body: string;
+  author_email: string;
+  /** Session email of the last editor (author or admin); null until edited. */
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // A bathhouse incident report (see the incidents migration). The taxonomy —
 // categories, severities, areas, contributing factors — lives in
 // lib/incidents/types.ts, which the table's check constraints mirror.

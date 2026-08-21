@@ -5,6 +5,7 @@
 // while the table holds no admin row (or Supabase is unreachable), so a fresh
 // deployment can never lock every admin out.
 
+import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { getDb, type StaffRow } from '../db';
 
 export interface DashboardAccess {
@@ -89,9 +90,16 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   const rows = await listStaff();
   const row = rows?.find((r) => r.email === normalized);
   // A row without access is a roster-only person (scheduled, but no dashboard)
-  // — they fall through to the same env check as anyone unknown.
-  if (row && hasDashboardAccess(row)) {
-    return { isAdmin: row.is_admin, pages: row.pages, source: 'db' };
+  // — they fall through to the same env check as anyone unknown. Shift leads
+  // are the exception: leading shifts is itself the grant for the Shift Notes
+  // page, so is_shift_lead implies that page (and with it, dashboard access)
+  // without an admin ticking the checkbox on /admin/users.
+  if (row && (hasDashboardAccess(row) || row.is_shift_lead)) {
+    const pages =
+      row.is_shift_lead && !row.pages.includes(SHIFT_NOTES_HREF)
+        ? [...row.pages, SHIFT_NOTES_HREF]
+        : row.pages;
+    return { isAdmin: row.is_admin, pages, source: 'db' };
   }
 
   // Env fallback applies only while no admin row exists (bootstrap phase, or
