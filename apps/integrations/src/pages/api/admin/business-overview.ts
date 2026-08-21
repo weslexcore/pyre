@@ -2,7 +2,8 @@
 // business series: Momence-sourced metrics (revenue, memberships,
 // attendance) from business_metrics_weekly, joined with labor cost computed
 // live from the shifts tables. Momence is never called on this path — the
-// daily business-report-sync cron job keeps the metrics tables fresh.
+// daily business-report-sync and business-activity-sync cron jobs keep the
+// metrics tables fresh.
 //
 // Admin-only on purpose: revenue and labor cost together are the most
 // sensitive numbers in the building.
@@ -39,7 +40,6 @@ export interface BusinessWeek {
   occupancyPct: number | null;
   noShows: number | null;
   newMembers: number | null;
-  cancellations: number | null;
   /** End-of-week stock, from the latest snapshot covering the week. */
   activeMembers: number | null;
   /** Current week — partial numbers. */
@@ -124,7 +124,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       occupancyPct: metrics?.get('occupancy_pct') ?? null,
       noShows: metrics?.get('no_shows') ?? null,
       newMembers: metrics?.get('new_members') ?? null,
-      cancellations: metrics?.get('membership_cancellations') ?? null,
       activeMembers: metrics?.get('active_members') ?? null,
       future: weekStart >= thisWeek,
     };

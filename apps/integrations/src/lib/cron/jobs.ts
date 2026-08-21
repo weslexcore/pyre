@@ -66,12 +66,23 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
-    // Daily (first tick at/after 6am ET): pull Momence business reports
-    // (revenue, memberships, attendance) into Supabase for /admin/business.
-    // Runs after sync-shifts so the dashboard's labor join sees fresh shifts.
+    // Daily (first tick at/after 6am ET): pull the Momence total-sales report
+    // into Supabase for /admin/business. Runs after sync-shifts so the
+    // dashboard's labor join sees fresh shifts.
     name: 'business-report-sync',
     run: async (ctx) => {
       const summary = await (await import('@/lib/reports/sync')).runBusinessReportSync(ctx);
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
+  {
+    // Daily companion to business-report-sync: the /admin/business metrics
+    // with no report behind them (attendance, no-shows, occupancy, member
+    // counts), swept a week at a time out of the host endpoints. Resumes on
+    // later ticks when the shared budget runs out mid-sweep.
+    name: 'business-activity-sync',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/reports/activity')).runActivityMetricsSync(ctx);
       return summary as unknown as Record<string, unknown>;
     },
   },

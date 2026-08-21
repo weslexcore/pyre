@@ -44,9 +44,7 @@ describe('normalizeReport', () => {
       ],
       MON1
     );
-    expect(result.metrics).toEqual([
-      { weekStart: MON1, metric: 'revenue_total', value: 134.75 },
-    ]);
+    expect(result.metrics).toEqual([{ weekStart: MON1, metric: 'revenue_total', value: 134.75 }]);
     expect(result.status).toBe('ok');
   });
 
