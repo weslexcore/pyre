@@ -10,6 +10,7 @@ import type { SopRow, SopRunCheckRow, SopRunRow, SopVersionRow } from '@/lib/db'
 import { countTasks, parseChecklist } from '@/lib/sops/checklist';
 import { diffLines, diffSummary } from '@/lib/sops/diff';
 import { ACCESS_LABELS, SOP_ACCESS_LEVELS, type SopRole } from '@/lib/sops/levels';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { SopMarkdown } from './SopMarkdown';
 import { type RunEntry, RunsList } from './SopRunsList';
@@ -19,6 +20,8 @@ interface DocResponse {
   versions: SopVersionRow[];
   role: SopRole;
   canEdit: boolean;
+  /** Roster names for the emails stored on versions, runs and checks. */
+  people?: PeopleNames;
 }
 
 const inputClass =
@@ -51,8 +54,8 @@ function formatWhen(iso: string): string {
   });
 }
 
-function editorLabel(email: string): string {
-  return email === 'seed' ? 'initial import' : email;
+function editorLabel(email: string, people?: PeopleNames): string {
+  return email === 'seed' ? 'initial import' : personName(email, people);
 }
 
 /** Line diff of one version against its predecessor (empty for v1). */
@@ -83,10 +86,6 @@ function VersionDiff({ version, previous }: { version: SopVersionRow; previous?:
   );
 }
 
-function shortName(email: string): string {
-  return email.includes('@') ? email.slice(0, email.indexOf('@')) : email;
-}
-
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
@@ -101,6 +100,7 @@ const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
  */
 function RunView({
   runData,
+  people,
   currentVersion,
   busy,
   onToggle,
@@ -108,6 +108,7 @@ function RunView({
   onExit,
 }: {
   runData: { run: SopRunRow; checks: SopRunCheckRow[]; content: string };
+  people?: PeopleNames;
   currentVersion: number;
   busy: boolean;
   onToggle: (itemIndex: number, itemText: string, checked: boolean) => void;
@@ -131,7 +132,7 @@ function RunView({
             {done}/{total} done
           </span>
           <span className="font-mono text-[10px] text-white/40">
-            started by {shortName(run.started_by)} at {formatTime(run.started_at)}
+            started by {personName(run.started_by, people)} at {formatTime(run.started_at)}
           </span>
           <span className="ml-auto flex gap-2">
             <button
@@ -194,7 +195,7 @@ function RunView({
               </label>
               {check && (
                 <p className="mt-0.5 pl-8 font-mono text-[10px] text-[var(--pyre-sage)]">
-                  ✓ {shortName(check.checked_by)} · {formatTime(check.checked_at)}
+                  ✓ {personName(check.checked_by, people)} · {formatTime(check.checked_at)}
                 </p>
               )}
             </div>
@@ -245,8 +246,9 @@ export function SopDocument({ slug }: { slug: string }) {
     try {
       const res = await fetch(`/api/admin/sop-runs?view=list&sopId=${sopId}`);
       if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as { runs: RunEntry[] };
+      const body = (await res.json()) as { runs: RunEntry[]; people?: PeopleNames };
       setRunsPanel(body.runs);
+      setRunPeople((prev) => ({ ...prev, ...body.people }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load runs');
       setShowRuns(false);
@@ -287,6 +289,9 @@ export function SopDocument({ slug }: { slug: string }) {
     content: string;
   } | null>(null);
   const [runBusy, setRunBusy] = useState(false);
+  // Names for the people the run responses name (starters, checkers) — the
+  // document response only knows its editors, so the two merge for rendering.
+  const [runPeople, setRunPeople] = useState<PeopleNames>({});
 
   const taskCount = useMemo(() => (data ? countTasks(data.sop.content_md) : 0), [data]);
 
@@ -302,9 +307,11 @@ export function SopDocument({ slug }: { slug: string }) {
           run: SopRunRow | null;
           checks?: SopRunCheckRow[];
           content?: string;
+          people?: PeopleNames;
         };
         if (!cancelled && body.run) {
           setRunData({ run: body.run, checks: body.checks ?? [], content: body.content ?? '' });
+          setRunPeople((prev) => ({ ...prev, ...body.people }));
         }
       } catch {
         // Non-fatal: the doc renders fine without run state.
@@ -332,8 +339,10 @@ export function SopDocument({ slug }: { slug: string }) {
         checks: SopRunCheckRow[];
         content: string;
         resumed: boolean;
+        people?: PeopleNames;
       };
       setRunData({ run: body.run, checks: body.checks, content: body.content });
+      setRunPeople((prev) => ({ ...prev, ...body.people }));
       setMode('run');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start the checklist');
@@ -350,7 +359,14 @@ export function SopDocument({ slug }: { slug: string }) {
       body: JSON.stringify({ runId: runData.run.id, ...payload }),
     });
     if (!res.ok) throw new Error(await readError(res));
-    return (await res.json()) as { run: SopRunRow; checks: SopRunCheckRow[] };
+    const body = (await res.json()) as {
+      run: SopRunRow;
+      checks: SopRunCheckRow[];
+      people?: PeopleNames;
+    };
+    // A teammate checking an item is the first this page hears of them.
+    setRunPeople((prev) => ({ ...prev, ...body.people }));
+    return body;
   };
 
   const toggleCheck = async (itemIndex: number, itemText: string, checked: boolean) => {
@@ -527,6 +543,8 @@ export function SopDocument({ slug }: { slug: string }) {
   }
 
   const { sop, versions, role, canEdit } = data;
+  // Editors (from the document) plus run participants (from the run fetches).
+  const people = { ...data.people, ...runPeople };
   const isAdmin = role === 'admin';
 
   return (
@@ -574,7 +592,7 @@ export function SopDocument({ slug }: { slug: string }) {
         )}
         <span className="ml-auto font-mono text-[10px] text-white/40">
           v{sop.current_version} · {sop.category} · updated {formatWhen(sop.updated_at)}
-          {sop.updated_by ? ` by ${editorLabel(sop.updated_by)}` : ''}
+          {sop.updated_by ? ` by ${editorLabel(sop.updated_by, people)}` : ''}
         </span>
       </div>
 
@@ -694,6 +712,7 @@ export function SopDocument({ slug }: { slug: string }) {
           ) : (
             <RunsList
               runs={runsPanel}
+              people={people}
               showSopTitle={false}
               onDelete={isAdmin ? (run) => void deletePanelRun(run) : undefined}
             />
@@ -715,7 +734,9 @@ export function SopDocument({ slug }: { slug: string }) {
                 <li key={v.id} className="py-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-mono text-xs text-[var(--pyre-creme)]">v{v.version}</span>
-                    <span className="text-sm text-white/70">{editorLabel(v.edited_by)}</span>
+                    <span className="text-sm text-white/70">
+                      {editorLabel(v.edited_by, people)}
+                    </span>
                     <span className="font-mono text-[10px] text-white/40">
                       {formatWhen(v.created_at)}
                     </span>
@@ -764,6 +785,7 @@ export function SopDocument({ slug }: { slug: string }) {
       {mode === 'run' && runData ? (
         <RunView
           runData={runData}
+          people={people}
           currentVersion={sop.current_version}
           busy={runBusy}
           onToggle={toggleCheck}

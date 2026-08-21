@@ -17,6 +17,7 @@ import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
 import { canViewSop } from '@/lib/sops/levels';
+import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -32,6 +33,14 @@ const LIST_LIMIT = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
+
+/** A run row as the log query returns it, with its checks embedded. */
+type RunWithChecks = SopRunRow & { sop_run_checks: Pick<SopRunCheckRow, 'checked_by'>[] };
+
+/** Everyone one run names: who started it, ended it, and checked its items. */
+function runActors(run: SopRunRow, checks: Pick<SopRunCheckRow, 'checked_by'>[]): string[] {
+  return [run.started_by, run.ended_by ?? '', ...checks.map((c) => c.checked_by)];
+}
 
 async function loadRunChecks(db: Db, runId: string) {
   return db
@@ -106,7 +115,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
     const { data, error } = await query;
     if (error) return json({ error: error.message }, 500);
-    return json({ runs: data ?? [], scope: gate.access.isAdmin ? 'all' : 'mine' });
+    const runRows = (data ?? []) as RunWithChecks[];
+    return json({
+      runs: runRows,
+      scope: gate.access.isAdmin ? 'all' : 'mine',
+      // Names for everyone these runs name — started, ended, or checked an
+      // item — so the log reads as people rather than mailbox local parts.
+      people: await getPeopleNames(
+        runRows.flatMap((run) => runActors(run, run.sop_run_checks ?? []))
+      ),
+    });
   }
 
   // In-progress run for one document (the doc page's "Resume" lookup).
@@ -140,10 +158,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const { snapshot, error: snapshotError } = await loadRunContent(db, run);
     if (snapshotError) return json({ error: snapshotError.message }, 500);
 
+    const runChecks = (checks ?? []) as SopRunCheckRow[];
     return json({
       run,
-      checks: (checks ?? []) as SopRunCheckRow[],
+      checks: runChecks,
       content: snapshot?.content_md ?? sop.content_md,
+      people: await getPeopleNames(runActors(run, runChecks)),
     });
   }
 
@@ -166,11 +186,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const { snapshot, error: snapshotError } = await loadRunContent(db, run as SopRunRow);
   if (snapshotError) return json({ error: snapshotError.message }, 500);
 
+  const runChecks = (checks ?? []) as SopRunCheckRow[];
   return json({
     run,
-    checks: (checks ?? []) as SopRunCheckRow[],
+    checks: runChecks,
     content: snapshot?.content_md ?? sop.content_md,
     sop: { id: sop.id, slug: sop.slug, title: sop.title },
+    people: await getPeopleNames(runActors(run as SopRunRow, runChecks)),
   });
 };
 
@@ -229,11 +251,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
     if (checksError) return json({ error: checksError.message }, 500);
     const { snapshot } = await loadRunContent(db, run);
+    const runChecks = (checks ?? []) as SopRunCheckRow[];
     return json({
       run,
-      checks: (checks ?? []) as SopRunCheckRow[],
+      checks: runChecks,
       content: snapshot?.content_md ?? sop.content_md,
       resumed: true,
+      people: await getPeopleNames(runActors(run, runChecks)),
     });
   }
 
@@ -249,8 +273,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (createError) return json({ error: createError.message }, 500);
 
+  const newRun = created as SopRunRow;
   return json(
-    { run: created as SopRunRow, checks: [], content: sop.content_md, resumed: false },
+    {
+      run: newRun,
+      checks: [],
+      content: sop.content_md,
+      resumed: false,
+      people: await getPeopleNames(runActors(newRun, [])),
+    },
     201
   );
 };
@@ -359,7 +390,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (freshError) return json({ error: freshError.message }, 500);
 
-  return json({ run: freshRun as SopRunRow, checks: (checks ?? []) as SopRunCheckRow[] });
+  const freshChecks = (checks ?? []) as SopRunCheckRow[];
+  return json({
+    run: freshRun as SopRunRow,
+    checks: freshChecks,
+    people: await getPeopleNames(runActors(freshRun as SopRunRow, freshChecks)),
+  });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

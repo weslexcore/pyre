@@ -6,6 +6,7 @@
 // glance.
 import { useState } from 'react';
 import type { SopRunRow } from '@/lib/db';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 
 export interface RunCheck {
   item_index: number;
@@ -25,10 +26,6 @@ export const STATUS_META: Record<SopRunRow['status'], { label: string; className
   abandoned: { label: 'Abandoned', className: 'text-white/40' },
 };
 
-export function shortName(email: string): string {
-  return email.includes('@') ? email.slice(0, email.indexOf('@')) : email;
-}
-
 export function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: 'short',
@@ -44,13 +41,13 @@ function formatDuration(startIso: string, endIso: string): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-function CheckLine({ check }: { check: RunCheck }) {
+function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 text-xs">
       <span className="text-[var(--pyre-sage)]">✓</span>
       <span className="text-white/70">{check.item_text}</span>
       <span className="ml-auto font-mono text-[10px] text-white/40">
-        {shortName(check.checked_by)} · {formatWhen(check.checked_at)}
+        {personName(check.checked_by, people)} · {formatWhen(check.checked_at)}
       </span>
     </li>
   );
@@ -58,11 +55,14 @@ function CheckLine({ check }: { check: RunCheck }) {
 
 export function RunsList({
   runs,
+  people,
   itemQuery = '',
   showSopTitle = true,
   onDelete,
 }: {
   runs: RunEntry[];
+  /** Roster names, so runs and checks read as people rather than emails. */
+  people?: PeopleNames;
   /** When set, checks matching this text show inline under each run. */
   itemQuery?: string;
   /** Off for the per-SOP panel, where every run is the same document. */
@@ -116,11 +116,11 @@ export function RunsList({
                 {run.status === 'completed' && !complete && ' — items skipped'}
               </span>
               <span className="ml-auto text-right font-mono text-[10px] text-white/40">
-                started by {shortName(run.started_by)} · {formatWhen(run.started_at)}
+                started by {personName(run.started_by, people)} · {formatWhen(run.started_at)}
                 {run.ended_at && run.ended_by && (
                   <>
                     <br />
-                    ended by {shortName(run.ended_by)} · {formatWhen(run.ended_at)} (
+                    ended by {personName(run.ended_by, people)} · {formatWhen(run.ended_at)} (
                     {formatDuration(run.started_at, run.ended_at)})
                   </>
                 )}
@@ -129,7 +129,7 @@ export function RunsList({
             {!isOpen && matched.length > 0 && (
               <ul className="space-y-1 border-t border-white/10 px-4 py-2">
                 {matched.map((check) => (
-                  <CheckLine key={check.item_index} check={check} />
+                  <CheckLine key={check.item_index} check={check} people={people} />
                 ))}
               </ul>
             )}
@@ -148,7 +148,7 @@ export function RunsList({
                 ) : (
                   <ul className="mt-2 space-y-1">
                     {checks.map((check) => (
-                      <CheckLine key={check.item_index} check={check} />
+                      <CheckLine key={check.item_index} check={check} people={people} />
                     ))}
                   </ul>
                 )}
