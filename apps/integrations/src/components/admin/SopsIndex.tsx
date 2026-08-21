@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SopRow } from '@/lib/db';
 import {
   ACCESS_LABELS,
+  canEditSop,
   SOP_ACCESS_LEVELS,
   type SopAccessLevel,
   type SopRole,
@@ -381,7 +382,8 @@ export function SopsIndex() {
               </span>
             )}
             <AccessBadge level={sop.view_access} kind="view" />
-            <AccessBadge level={sop.edit_access} kind="edit" />
+            {/* Who may edit only matters to someone who may: hide it from the rest. */}
+            {canEditSop(role, sop) && <AccessBadge level={sop.edit_access} kind="edit" />}
           </div>
         </a>
         <span className="absolute top-3 right-3 flex gap-1">
