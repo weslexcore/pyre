@@ -446,6 +446,22 @@ export interface IncidentEventRow {
   created_at: string;
 }
 
+// OAuth tokens for a connected QuickBooks Online company (see the
+// quickbooks_tokens migration and lib/quickbooks). Refresh tokens rotate on
+// every refresh, so this row is rewritten each time; service-role only —
+// tokens never travel to a browser.
+export interface QuickBooksTokenRow {
+  realm_id: string;
+  access_token: string;
+  refresh_token: string;
+  access_token_expires_at: string;
+  refresh_token_expires_at: string;
+  environment: 'sandbox' | 'production';
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {
