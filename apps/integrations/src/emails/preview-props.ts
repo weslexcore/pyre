@@ -7,6 +7,7 @@ import { sampleConfirmationProps } from './components/ConfirmationEmail';
 import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
 import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
+import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
 import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
@@ -44,4 +45,5 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
   'weekly-shifts': WeeklyShifts.PreviewProps,
   'shift-request-decision': ShiftRequestDecision.PreviewProps,
+  'incident-reported': IncidentReported.PreviewProps,
 };

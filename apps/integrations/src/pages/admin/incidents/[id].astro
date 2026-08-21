@@ -1,0 +1,27 @@
+---
+// One incident report. The island loads it through /api/admin/incidents,
+// which decides what this caller may see — a reporter only ever gets their
+// own reports back, and gets the same 404 as for one that doesn't exist.
+//
+// ?uploads=failed comes from the filing form when the report saved but a
+// photo upload didn't, so the page can say so and offer to take them again.
+import { IncidentDetail } from '@/components/admin/IncidentDetail';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const { id } = Astro.params;
+const uploadsFailed = Astro.url.searchParams.get('uploads') === 'failed';
+
+if (!id) return Astro.redirect('/admin/incidents');
+---
+
+<AdminLayout title="Incident Report" subtitle="The record, its media, and everything since">
+  <p class="mb-4">
+    <a
+      href="/admin/incidents"
+      class="font-mono text-xs uppercase tracking-wide text-white/40 hover:text-white"
+    >
+      ← Back to the log
+    </a>
+  </p>
+  <IncidentDetail client:load incidentId={id} uploadsFailed={uploadsFailed} />
+</AdminLayout>

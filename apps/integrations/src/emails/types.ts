@@ -199,6 +199,26 @@ export interface ShiftRequestDecisionProps {
   scheduleUrl: string;
 }
 
+// Sent to management when a serious incident is filed (severe/critical, or
+// EMS/police involved). Everything here is already formatted for display —
+// the template does no lookups of its own.
+export interface IncidentReportedProps {
+  /** Case number, e.g. "INC-2026-0042". */
+  reference: string;
+  severityLabel: string;
+  categoryLabel: string;
+  areaLabel: string;
+  /** e.g. "Tuesday, August 21 at 7:42 PM" (bathhouse wall-clock time). */
+  occurredLabel: string;
+  /** Display name of whoever filed it, falling back to their email. */
+  reportedByLabel: string;
+  description: string;
+  immediateActions: string;
+  injuredCount: number;
+  emsCalled: boolean;
+  incidentUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -219,6 +239,7 @@ export interface EmailPropsByTemplate {
   'sub-claimed-notice': SubClaimedNoticeProps;
   'weekly-shifts': WeeklyShiftsProps;
   'shift-request-decision': ShiftRequestDecisionProps;
+  'incident-reported': IncidentReportedProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

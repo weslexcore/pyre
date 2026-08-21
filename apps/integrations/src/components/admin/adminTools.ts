@@ -47,6 +47,14 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/incidents',
+    title: 'Incident Reports',
+    navLabel: 'Incidents',
+    description:
+      'Report a slip, burn, or near miss from your phone, and the log of everything that has happened — with photos, follow-up, and a full audit trail.',
+    section: 'operations',
+  },
+  {
     href: '/admin/email-templates',
     title: 'Email Templates',
     navLabel: 'Templates',
@@ -159,11 +167,25 @@ export function hasReferralsManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(REFERRALS_MANAGE);
 }
 
+// Same split for incidents, and the most consequential of the four. A plain
+// '/admin/incidents' grant is reporter-level: file a report, and read back
+// the ones you were part of — because incident reports carry guest names,
+// contact details, and injury descriptions, and a bathhouse attendant needs
+// to file one, not to browse everyone else's. This key (or admin) unlocks the
+// whole log: reviewing, editing, resolving, and the trends every report rolls
+// up into.
+export const INCIDENTS_MANAGE = 'incidents:manage';
+
+export function hasIncidentsManage(access: PageAccess): boolean {
+  return access.isAdmin || access.pages.includes(INCIDENTS_MANAGE);
+}
+
 /** Manage capabilities that imply view access to the page they govern. */
 const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/schedule': SCHEDULE_MANAGE,
   '/admin/partners': PARTNERS_MANAGE,
   '/admin/referrals': REFERRALS_MANAGE,
+  '/admin/incidents': INCIDENTS_MANAGE,
 };
 
 /** Whether this user may view the tool page at `href` (manage implies view). */

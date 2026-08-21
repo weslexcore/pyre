@@ -6,7 +6,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow } from '@/lib/db';
-import { ADMIN_TOOLS, SCHEDULE_MANAGE } from './adminTools';
+import {
+  ADMIN_TOOLS,
+  INCIDENTS_MANAGE,
+  PARTNERS_MANAGE,
+  REFERRALS_MANAGE,
+  SCHEDULE_MANAGE,
+} from './adminTools';
 
 interface EnvUser {
   email: string;
@@ -32,8 +38,27 @@ const checkClass = 'flex items-center gap-1.5 font-mono text-xs text-white/60';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const MANAGE_HINT =
-  "Edit shifts and the roster, sync Momence, review AI drafts, and manage everyone's time off. Without it: view the schedule and manage own blackout dates only.";
+// Pages that split view from manage: granting the page is the read/participate
+// level, and the extra "manage" box is the privileged half. Each entry is only
+// offered once the page itself is granted, and is dropped with it.
+const MANAGE_CAPABILITIES: Record<string, { key: string; hint: string }> = {
+  '/admin/schedule': {
+    key: SCHEDULE_MANAGE,
+    hint: "Edit shifts and the roster, sync Momence, review AI drafts, and manage everyone's time off. Without it: view the schedule and manage own blackout dates only.",
+  },
+  '/admin/partners': {
+    key: PARTNERS_MANAGE,
+    hint: 'Edit partners and act on verification requests. Without it: browse the registry and the queue read-only.',
+  },
+  '/admin/referrals': {
+    key: REFERRALS_MANAGE,
+    hint: 'Create and edit referrers and tiers, and revoke redemptions and rewards. Without it: read-only.',
+  },
+  '/admin/incidents': {
+    key: INCIDENTS_MANAGE,
+    hint: 'Read the whole incident log, review and edit reports, and resolve them. Without it: file reports and read back the ones you were part of.',
+  },
+};
 
 async function readError(res: Response): Promise<string> {
   try {
@@ -54,40 +79,45 @@ function PagePicker({
 }) {
   const toggle = (key: string, granted: boolean) => {
     let next = granted ? [...pages, key] : pages.filter((p) => p !== key);
-    // Dropping the schedule page drops its manage capability with it.
-    if (key === '/admin/schedule' && !granted) next = next.filter((p) => p !== SCHEDULE_MANAGE);
+    // Dropping a page drops its manage capability with it, so a revoked page
+    // can't leave a dangling privilege behind.
+    const capability = MANAGE_CAPABILITIES[key];
+    if (capability && !granted) next = next.filter((p) => p !== capability.key);
     onChange([...new Set(next)]);
   };
 
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {ADMIN_TOOLS.map((tool) => (
-        <span key={tool.href} className="flex items-center gap-2">
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              checked={pages.includes(tool.href)}
-              disabled={disabled}
-              onChange={(e) => toggle(tool.href, e.target.checked)}
-            />
-            {tool.navLabel}
-          </label>
-          {tool.href === '/admin/schedule' && pages.includes('/admin/schedule') && (
-            <label
-              className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
-              title={MANAGE_HINT}
-            >
+      {ADMIN_TOOLS.map((tool) => {
+        const capability = MANAGE_CAPABILITIES[tool.href];
+        return (
+          <span key={tool.href} className="flex items-center gap-2">
+            <label className={checkClass}>
               <input
                 type="checkbox"
-                checked={pages.includes(SCHEDULE_MANAGE)}
+                checked={pages.includes(tool.href)}
                 disabled={disabled}
-                onChange={(e) => toggle(SCHEDULE_MANAGE, e.target.checked)}
+                onChange={(e) => toggle(tool.href, e.target.checked)}
               />
-              manage
+              {tool.navLabel}
             </label>
-          )}
-        </span>
-      ))}
+            {capability && pages.includes(tool.href) && (
+              <label
+                className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
+                title={capability.hint}
+              >
+                <input
+                  type="checkbox"
+                  checked={pages.includes(capability.key)}
+                  disabled={disabled}
+                  onChange={(e) => toggle(capability.key, e.target.checked)}
+                />
+                manage
+              </label>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }

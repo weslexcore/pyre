@@ -1,0 +1,16 @@
+---
+// The incident log. Anyone granted /admin/incidents lands here — reporters
+// see their own reports and the button to file another; holders of
+// incidents:manage see the whole log and the review queue. The
+// /api/admin/incidents route re-checks the session and the capability on
+// every request; this page's gate is UX.
+import { IncidentsIndex } from '@/components/admin/IncidentsIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Incident Reports"
+  subtitle="Everything that has happened in the building — filed, reviewed, and kept"
+>
+  <IncidentsIndex client:load />
+</AdminLayout>
