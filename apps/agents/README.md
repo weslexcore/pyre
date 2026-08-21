@@ -27,6 +27,10 @@ admin board ── proposal banner, dashed "AI draft" cards, approve ───�
   /api/admin/schedule-draft` → `POST {this app}/eve/v1/session`) and the
   weekly schedule in `agent/schedules/weekly_draft.md` (Mon 14:00 UTC →
   a Vercel Cron Job on deploy).
+- The button opens a composer first: the admin can add an optional note for
+  the run ("give Sarah a shift to lead"), which rides in as an `<admin-note>`
+  block on the session's opening message. It steers judgment only — the hard
+  rules in `agent/instructions.md` and the server-side validation still bind.
 - Re-drafting a week supersedes its open draft; accepted rows are never
   touched.
 

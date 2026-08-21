@@ -33,6 +33,7 @@ import type {
   SubRequestRow,
   TimeOffRow,
 } from '@/lib/db';
+import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { StaffMultiSelect } from './StaffMultiSelect';
 
@@ -271,6 +272,11 @@ export function ScheduleBoard() {
   // Agent drafting: set while waiting for a new proposal to appear.
   const [drafting, setDrafting] = useState(false);
   const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The Draft button opens a composer first so the admin can add a note for
+  // this run ("give Sarah a shift to lead"); the note is optional and the
+  // composer is where the run is actually started.
+  const [draftComposerOpen, setDraftComposerOpen] = useState(false);
+  const [draftNote, setDraftNote] = useState('');
   // "My shifts": filter the week/month lists to shifts the viewer is on.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
   // Manage-side people filter: whose shifts to show (empty = everyone).
@@ -511,11 +517,13 @@ export function ScheduleBoard() {
     const targetWeeks = draftTargetWeeks;
     if (targetWeeks.length === 0) return;
     setDrafting(true);
+    setDraftComposerOpen(false);
     setError(null);
     const res = await fetch('/api/admin/schedule-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekStarts: targetWeeks }),
+      // The note applies to every week in the run; empty means a plain draft.
+      body: JSON.stringify({ weekStarts: targetWeeks, prompt: draftNote.trim() }),
     });
     if (!res.ok) {
       try {
@@ -544,6 +552,7 @@ export function ScheduleBoard() {
           draftPollRef.current = null;
           setData(board);
           setDrafting(false);
+          setDraftNote('');
           return;
         }
       }
@@ -750,7 +759,7 @@ export function ScheduleBoard() {
               <button
                 type="button"
                 className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
-                onClick={() => void draftSchedule()}
+                onClick={() => setDraftComposerOpen((open) => !open)}
                 disabled={busy || drafting || draftTargetWeeks.length === 0}
                 title={
                   view === 'month'
@@ -793,11 +802,67 @@ export function ScheduleBoard() {
         </p>
       )}
 
+      {draftComposerOpen && !drafting && canManage && (view === 'week' || view === 'month') && (
+        <section className="space-y-2 rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/[0.06] p-3">
+          <label
+            className="block font-mono text-xs font-bold uppercase tracking-wide text-white/50"
+            htmlFor="draft-note"
+          >
+            Anything to keep in mind? (optional)
+          </label>
+          <textarea
+            id="draft-note"
+            // biome-ignore lint/a11y/noAutofocus: the composer only opens on an explicit click
+            autoFocus
+            rows={3}
+            maxLength={MAX_DRAFT_PROMPT_LENGTH}
+            className={inputClass}
+            placeholder="e.g. Asana and Cortney need training shifts with Wes, give Sarah and Omar each a shift to lead, and Liz needs 1 setup + 1 full shift."
+            value={draftNote}
+            onChange={(e) => setDraftNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setDraftComposerOpen(false);
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void draftSchedule();
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+              onClick={() => void draftSchedule()}
+              disabled={busy || draftTargetWeeks.length === 0}
+            >
+              ✦ Draft{draftTargetWeeks.length > 1 ? ` ${draftTargetWeeks.length} weeks` : ''}
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setDraftComposerOpen(false)}
+            >
+              Cancel
+            </button>
+            <span className="font-mono text-xs text-white/40">
+              Guides the agent's judgment for{' '}
+              {draftTargetWeeks.length > 1
+                ? `all ${draftTargetWeeks.length} weeks in this run`
+                : `the week of ${formatDay(draftTargetWeeks[0] ?? weekStart)}`}
+              . Availability and staffing limits still win. ⌘⏎ to draft.
+            </span>
+            {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
+              <span className="font-mono text-xs text-white/40">
+                {MAX_DRAFT_PROMPT_LENGTH - draftNote.length} left
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
       {drafting && (
         <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
           Syncing Momence and drafting{' '}
-          {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'} —
-          proposals will appear here (usually under a minute)…
+          {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'}
+          {draftNote.trim() ? ' with your note' : ''} — proposals will appear here (usually under a
+          minute)…
         </p>
       )}
 
