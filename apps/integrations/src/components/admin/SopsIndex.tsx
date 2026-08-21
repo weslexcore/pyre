@@ -13,13 +13,7 @@
 // guards — this island just mirrors them.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SopRow } from '@/lib/db';
-import {
-  ACCESS_LABELS,
-  SOP_ACCESS_LEVELS,
-  type SopAccessLevel,
-  type SopRole,
-  slugify,
-} from '@/lib/sops/levels';
+import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   categoriesInOrder,
@@ -28,14 +22,26 @@ import {
   repositionSop,
 } from '@/lib/sops/order';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import {
+  type GrantablePerson,
+  SopAccessPicker,
+  type SopGrant,
+  withAdmins,
+} from './SopAccessPicker';
 import { formatWhen } from './SopRunsList';
 
-type SopSummary = Omit<SopRow, 'content_md'> & { task_count: number };
+type SopSummary = Omit<SopRow, 'content_md'> & {
+  task_count: number;
+  /** Who can read it, in words — computed server-side (see /api/admin/sops). */
+  access_label: string;
+};
 
 interface ListResponse {
   sops: SopSummary[];
   /** Section names in display order, empty sections included (admins only). */
   categories?: string[];
+  /** Roster an admin can grant access to on the create form; admins only. */
+  staff?: GrantablePerson[];
   /** Roster names for the `updated_by` emails on the cards. */
   people?: PeopleNames;
   role: SopRole;
@@ -113,14 +119,20 @@ function Marked({ text, term }: { text: string; term: string }) {
   );
 }
 
-/** Who may read this SOP. Edit access is a settings detail, not card furniture. */
-function AccessBadge({ level }: { level: SopAccessLevel }) {
-  // "All staff" view access is the default and not worth a badge.
-  if (level === 'staff') return null;
-  const color = level === 'admin' ? 'text-[var(--pyre-red)]' : 'text-[var(--pyre-gold)]';
+/**
+ * Who may read this SOP, counting the editors who implicitly may. A document
+ * everyone can read is the default and not worth a badge; anything narrower is
+ * worth seeing without opening the document. The phrasing comes from the
+ * server, which is the only side that sees the individual grants.
+ */
+function AccessBadge({ label }: { label: string }) {
+  if (label === EVERYONE_LABEL) return null;
+  // Admins-only is the tightest state and reads as a warning; everything else
+  // is merely narrowed.
+  const color = label === ROLE_LABELS.admin ? 'text-[var(--pyre-red)]' : 'text-[var(--pyre-gold)]';
   return (
     <span className={`font-mono text-[10px] uppercase tracking-wide ${color}`}>
-      view: {ACCESS_LABELS[level].toLowerCase()}
+      view: {label.toLowerCase()}
     </span>
   );
 }
@@ -140,8 +152,14 @@ export function SopsIndex() {
   // `newCategoryName` is the section to create alongside the document.
   const [newCategory, setNewCategory] = useState<string>(NEW_SECTION);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newView, setNewView] = useState<SopAccessLevel>('staff');
-  const [newEdit, setNewEdit] = useState<SopAccessLevel>('admin');
+  // New documents start readable by everyone and editable by admins — the
+  // same defaults the columns carry.
+  const [newView, setNewView] = useState<SopGrant>({
+    roles: ['staff', 'shift_lead', 'admin'],
+    emails: [],
+  });
+  const [newEdit, setNewEdit] = useState<SopGrant>({ roles: ['admin'], emails: [] });
+  const [staff, setStaff] = useState<GrantablePerson[]>([]);
 
   // Standalone "add a section" form, and the header being renamed in place.
   const [showAddSection, setShowAddSection] = useState(false);
@@ -216,6 +234,7 @@ export function SopsIndex() {
       // deriving from the documents would drop them.
       setCategories(body.categories ?? categoriesInOrder(body.sops));
       setRole(body.role);
+      setStaff(body.staff ?? []);
       setPins(new Set(body.pins ?? []));
       setPeople((prev) => ({ ...prev, ...body.people }));
     } catch (e) {
@@ -294,8 +313,10 @@ export function SopsIndex() {
           // The API gives a brand-new section a position of its own, so a
           // section named here behaves exactly like one added on its own.
           category: chosenCategory || 'General',
-          viewAccess: newView,
-          editAccess: newEdit,
+          viewRoles: withAdmins(newView.roles),
+          viewEmails: newView.emails,
+          editRoles: withAdmins(newEdit.roles),
+          editEmails: newEdit.emails,
           content: `# ${newTitle.trim()}\n`,
         }),
       });
@@ -530,7 +551,7 @@ export function SopsIndex() {
                 ☑ checklist · {sop.task_count} tasks
               </span>
             )}
-            <AccessBadge level={sop.view_access} />
+            <AccessBadge label={sop.access_label} />
           </div>
         </a>
         <span className="absolute top-3 right-3 flex gap-1">
@@ -710,34 +731,23 @@ export function SopsIndex() {
                     onChange={(e) => setNewCategoryName(e.target.value)}
                   />
                 )}
-                <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-                  view
-                  <select
-                    className={selectClass}
-                    value={newView}
-                    onChange={(e) => setNewView(e.target.value as SopAccessLevel)}
-                  >
-                    {SOP_ACCESS_LEVELS.map((l) => (
-                      <option key={l} value={l}>
-                        {ACCESS_LABELS[l]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-                  edit
-                  <select
-                    className={selectClass}
-                    value={newEdit}
-                    onChange={(e) => setNewEdit(e.target.value as SopAccessLevel)}
-                  >
-                    {SOP_ACCESS_LEVELS.map((l) => (
-                      <option key={l} value={l}>
-                        {ACCESS_LABELS[l]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SopAccessPicker
+                  title="Who can view"
+                  grant={newView}
+                  staff={staff}
+                  disabled={busy}
+                  onChange={setNewView}
+                />
+                <SopAccessPicker
+                  title="Who can edit"
+                  hint="Anyone who can edit can also view."
+                  grant={newEdit}
+                  staff={staff}
+                  disabled={busy}
+                  onChange={setNewEdit}
+                />
               </div>
               {newTitle.trim() && (
                 <p className="font-mono text-[10px] text-white/40">

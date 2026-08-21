@@ -2,13 +2,14 @@
 // role may view — plus the section names to group them under, which for admins
 // includes sections holding nothing yet (see /api/admin/sop-categories) — or
 // one document + its history with ?slug= / ?id=. PUT saves
-// a new version (per-document edit_access, optimistic-locked on baseVersion),
+// a new version (per-document edit grants, optimistic-locked on baseVersion),
 // POST / PATCH / DELETE are admin-only: create, change settings (access
-// levels, category, archive), and permanently delete an archived document.
-// Gated on the /admin/sops page grant; per-document tiers (staff < shift_lead
-// < admin) come from the staff row via getSopRole. Mutations are CSRF-guarded
-// in-route via assertSameOrigin (global checkOrigin stays off; see
-// astro.config.mjs).
+// grants, category, archive), and permanently delete an archived document.
+// Gated on the /admin/sops page grant; per-document access is a set of roles
+// plus individually named staff emails (see lib/sops/levels.ts), resolved
+// against the caller's role from getSopRole and their session email.
+// Mutations are CSRF-guarded in-route via assertSameOrigin (global checkOrigin
+// stays off; see astro.config.mjs).
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
@@ -17,13 +18,18 @@ import { countTasks } from '@/lib/sops/checklist';
 import {
   canEditSop,
   canViewSop,
-  isSopAccessLevel,
+  describeGrants,
+  effectiveViewGrants,
+  isSopRole,
+  normalizeEmail,
   SLUG_RE,
+  SOP_ROLES,
   type SopRole,
+  type SopViewer,
   slugify,
 } from '@/lib/sops/levels';
 import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
-import { getPeopleNames } from '@/lib/sops/people';
+import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 
@@ -44,13 +50,78 @@ const MAX_VERSIONS = 100;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Matches the sops_*_emails_bounded check constraints.
+const MAX_GRANT_EMAILS = 100;
+
+/** A role list from a request body, deduped — or null if it isn't one. */
+function parseRoles(value: unknown): SopRole[] | null {
+  if (!Array.isArray(value)) return null;
+  const roles = [...new Set(value)];
+  if (!roles.every(isSopRole)) return null;
+  return roles;
+}
+
 /**
- * The list payload: everything but the (potentially large) markdown body,
- * plus the task count so the library can mark runnable checklists.
+ * An individual-grant email list from a request body, normalized and checked
+ * against the roster. Naming someone who isn't on it is always a mistake — a
+ * typo, or a departed teammate — and storing it would leave a grant that looks
+ * live in the settings panel and matches nobody.
  */
-function toSummary(row: SopRow): Omit<SopRow, 'content_md'> & { task_count: number } {
+async function parseGrantEmails(
+  value: unknown,
+  field: string
+): Promise<{ emails: string[]; error?: never } | { emails?: never; error: string }> {
+  if (!Array.isArray(value)) return { error: `${field} must be an array of staff emails` };
+  const emails = [
+    ...new Set(
+      value.map((entry) => (typeof entry === 'string' ? normalizeEmail(entry) : '')).filter(Boolean)
+    ),
+  ];
+  if (emails.length > MAX_GRANT_EMAILS) {
+    return { error: `${field} may name at most ${MAX_GRANT_EMAILS} people` };
+  }
+  if (emails.length === 0) return { emails };
+
+  const roster = new Set((await listGrantablePeople()).map((person) => person.email));
+  const unknown = emails.filter((email) => !roster.has(email));
+  if (unknown.length > 0) {
+    return { error: `Not on the staff roster: ${unknown.join(', ')}` };
+  }
+  return { emails };
+}
+
+/**
+ * Individually granted emails, for anyone who has no business reading the
+ * roster. A staffer may open a document without being entitled to a list of
+ * which teammates were named on it — the same reason getPeopleNames answers
+ * only for emails a response already mentions.
+ */
+function redactGrantEmails<T extends { view_emails: string[]; edit_emails: string[] }>(
+  row: T,
+  isAdmin: boolean
+): T {
+  if (isAdmin) return row;
+  return { ...row, view_emails: [], edit_emails: [] };
+}
+
+/**
+ * The list payload: everything but the (potentially large) markdown body, plus
+ * the task count so the library can mark runnable checklists, and the
+ * who-can-read summary. That summary is computed here rather than in the
+ * island because non-admins get the grant emails redacted and so can't derive
+ * it themselves.
+ */
+function toSummary(
+  row: SopRow,
+  isAdmin: boolean
+): Omit<SopRow, 'content_md'> & { task_count: number; access_label: string } {
   const { content_md, ...rest } = row;
-  return { ...rest, task_count: countTasks(content_md) };
+  const grants = effectiveViewGrants(row);
+  return {
+    ...redactGrantEmails(rest, isAdmin),
+    task_count: countTasks(content_md),
+    access_label: describeGrants(grants.roles, grants.emails),
+  };
 }
 
 /**
@@ -104,6 +175,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const role: SopRole = await getSopRole(gate.user.email ?? null, gate.access);
+  // Grants name people by email, so every access check needs both halves.
+  const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
 
   const id = url.searchParams.get('id');
   const slug = url.searchParams.get('slug');
@@ -114,7 +187,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const { sop, error } = await loadSop(db, { id, slug });
     if (error) return json({ error }, 500);
     // 404 for both "doesn't exist" and "not allowed to know it exists".
-    if (!sop || !canViewSop(role, sop)) return json({ error: 'SOP not found' }, 404);
+    if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
     const { data: versions, error: versionsError } = await db
       .from('sop_versions')
@@ -124,8 +197,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .limit(MAX_VERSIONS);
     if (versionsError) return json({ error: versionsError.message }, 500);
 
-    // The settings panel is admin-only and lets the document be refiled, so
-    // only admins need the list of sections to choose from.
+    // The settings panel is admin-only and lets the document be refiled and
+    // re-granted, so only admins need the sections and the roster to choose
+    // from — the roster especially, since it's the whole staff address book.
     let sections: string[] | undefined;
     if (role === 'admin') {
       const { data: ranks, error: ranksError } = await db
@@ -140,12 +214,18 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       );
     }
 
+    const grants = effectiveViewGrants(sop);
+
     return json({
-      sop,
+      sop: redactGrantEmails(sop, role === 'admin'),
+      // Same summary the library cards carry, for the same reason: a
+      // non-admin can't compute it from a redacted row.
+      accessLabel: describeGrants(grants.roles, grants.emails),
       versions: (versions ?? []) as SopVersionRow[],
       role,
-      canEdit: canEditSop(role, sop),
+      canEdit: canEditSop(viewer, sop),
       categories: sections,
+      staff: role === 'admin' ? await listGrantablePeople() : undefined,
       // Names for the editors this response names, so the header and history
       // read as people rather than mailbox local parts.
       people: await getPeopleNames([
@@ -165,7 +245,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .select('name, sort_order');
   if (categoriesError) return json({ error: categoriesError.message }, 500);
 
-  const visible = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(role, sop));
+  const visible = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(viewer, sop));
   const ranks = (categories ?? []) as CategoryRank[];
   const sorted = sortSops(visible, ranks);
 
@@ -222,8 +302,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   return json({
-    sops: sorted.map(toSummary),
+    sops: sorted.map((sop) => toSummary(sop, role === 'admin')),
     categories: sections,
+    // The create form grants access at creation time, so it needs the same
+    // roster the settings panel does. Admins only, for the same reason.
+    staff: role === 'admin' ? await listGrantablePeople() : undefined,
     role,
     pins,
     people: await getPeopleNames(sorted.map((s) => s.updated_by ?? '')),
@@ -266,11 +349,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       ? body.category.trim().slice(0, MAX_CATEGORY)
       : 'General';
 
-  const viewAccess = body.viewAccess ?? 'staff';
-  const editAccess = body.editAccess ?? 'admin';
-  if (!isSopAccessLevel(viewAccess) || !isSopAccessLevel(editAccess)) {
-    return json({ error: 'viewAccess and editAccess must be staff, shift_lead, or admin' }, 400);
+  // Defaults match the column defaults: readable by everyone with the page
+  // grant, editable by admins.
+  const viewRoles = body.viewRoles === undefined ? SOP_ROLES.slice() : parseRoles(body.viewRoles);
+  const editRoles =
+    body.editRoles === undefined ? (['admin'] as SopRole[]) : parseRoles(body.editRoles);
+  if (!viewRoles || !editRoles) {
+    return json({ error: 'viewRoles and editRoles must be staff, shift_lead, or admin' }, 400);
   }
+
+  const viewGrants = await parseGrantEmails(body.viewEmails ?? [], 'viewEmails');
+  if (viewGrants.error) return json({ error: viewGrants.error }, 400);
+  const editGrants = await parseGrantEmails(body.editEmails ?? [], 'editEmails');
+  if (editGrants.error) return json({ error: editGrants.error }, 400);
 
   const content = typeof body.content === 'string' ? body.content : '';
   if (content.length > MAX_CONTENT) {
@@ -290,8 +381,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       title,
       content_md: content,
       category,
-      view_access: viewAccess,
-      edit_access: editAccess,
+      view_roles: viewRoles,
+      edit_roles: editRoles,
+      view_emails: viewGrants.emails,
+      edit_emails: editGrants.emails,
       sort_order: sortOrder,
       created_by: email,
       updated_by: email,
@@ -346,8 +439,9 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
   if (loadError) return json({ error: loadError }, 500);
 
   const role = await getSopRole(gate.user.email ?? null, gate.access);
-  if (!sop || !canViewSop(role, sop)) return json({ error: 'SOP not found' }, 404);
-  if (!canEditSop(role, sop)) {
+  const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
+  if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
+  if (!canEditSop(viewer, sop)) {
     return json({ error: 'You do not have edit access to this SOP' }, 403);
   }
 
@@ -444,17 +538,25 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const patch: Partial<SopRow> & { updated_by: string } = { updated_by: gate.user.email ?? '' };
 
-  if (body.viewAccess !== undefined) {
-    if (!isSopAccessLevel(body.viewAccess)) {
-      return json({ error: 'viewAccess must be staff, shift_lead, or admin' }, 400);
-    }
-    patch.view_access = body.viewAccess;
+  if (body.viewRoles !== undefined) {
+    const roles = parseRoles(body.viewRoles);
+    if (!roles) return json({ error: 'viewRoles must be staff, shift_lead, or admin' }, 400);
+    patch.view_roles = roles;
   }
-  if (body.editAccess !== undefined) {
-    if (!isSopAccessLevel(body.editAccess)) {
-      return json({ error: 'editAccess must be staff, shift_lead, or admin' }, 400);
-    }
-    patch.edit_access = body.editAccess;
+  if (body.editRoles !== undefined) {
+    const roles = parseRoles(body.editRoles);
+    if (!roles) return json({ error: 'editRoles must be staff, shift_lead, or admin' }, 400);
+    patch.edit_roles = roles;
+  }
+  if (body.viewEmails !== undefined) {
+    const grants = await parseGrantEmails(body.viewEmails, 'viewEmails');
+    if (grants.error) return json({ error: grants.error }, 400);
+    patch.view_emails = grants.emails;
+  }
+  if (body.editEmails !== undefined) {
+    const grants = await parseGrantEmails(body.editEmails, 'editEmails');
+    if (grants.error) return json({ error: grants.error }, 400);
+    patch.edit_emails = grants.emails;
   }
   if (body.category !== undefined) {
     if (typeof body.category !== 'string' || !body.category.trim()) {
@@ -488,7 +590,16 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   if (patch.category) await ensureCategory(db, patch.category);
 
-  return json({ sop: data as SopRow });
+  const updated = data as SopRow;
+  const grants = effectiveViewGrants(updated);
+
+  // The caller here is always an admin, so the row goes back whole — but the
+  // summary comes with it so the document header restates who can read this
+  // without a reload.
+  return json({
+    sop: updated,
+    accessLabel: describeGrants(grants.roles, grants.emails),
+  });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

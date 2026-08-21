@@ -9,9 +9,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SopRow, SopRunCheckRow, SopRunRow, SopVersionRow } from '@/lib/db';
 import { countTasks, parseChecklist } from '@/lib/sops/checklist';
 import { diffLines, diffSummary } from '@/lib/sops/diff';
-import { ACCESS_LABELS, SOP_ACCESS_LEVELS, type SopRole } from '@/lib/sops/levels';
+import { EVERYONE_LABEL, type SopRole } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
+import { type GrantablePerson, SopAccessPicker, withAdmins } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
 import { type RunEntry, RunsList } from './SopRunsList';
 
@@ -22,6 +23,10 @@ interface DocResponse {
   canEdit: boolean;
   /** Every section name, in library order — admins only (they alone refile). */
   categories?: string[];
+  /** Roster an admin can grant this document to; admins only. */
+  staff?: GrantablePerson[];
+  /** Who can read this document, in words — computed server-side. */
+  accessLabel?: string;
   /** Roster names for the emails stored on versions, runs and checks. */
   people?: PeopleNames;
 }
@@ -525,8 +530,8 @@ export function SopDocument({ slug }: { slug: string }) {
         body: JSON.stringify({ id: data.sop.id, ...patch }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const { sop } = (await res.json()) as { sop: SopRow };
-      setData({ ...data, sop });
+      const body = (await res.json()) as { sop: SopRow; accessLabel?: string };
+      setData({ ...data, sop: body.sop, accessLabel: body.accessLabel ?? data.accessLabel });
       setNotice('Settings saved');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update settings');
@@ -622,6 +627,16 @@ export function SopDocument({ slug }: { slug: string }) {
         <span className="ml-auto font-mono text-[10px] text-white/40">
           v{sop.current_version} · {sop.category} · updated {formatWhen(sop.updated_at)}
           {sop.updated_by ? ` by ${editorLabel(sop.updated_by, people)}` : ''}
+          {/* Who else is reading this. Only worth saying when the document is
+              narrower than the whole team. */}
+          {data.accessLabel && data.accessLabel !== EVERYONE_LABEL && (
+            <>
+              {' · '}
+              <span className="text-[var(--pyre-gold)]">
+                view: {data.accessLabel.toLowerCase()}
+              </span>
+            </>
+          )}
         </span>
       </div>
 
@@ -645,37 +660,32 @@ export function SopDocument({ slug }: { slug: string }) {
       {showSettings && isAdmin && (
         <div className="space-y-3 rounded border border-white/10 bg-white/5 p-4">
           <h2 className="font-mono text-xs uppercase tracking-wide text-white/40">Settings</h2>
+
+          {/* Each toggle saves on its own, like the rest of this panel — busy
+              disables the controls in flight, so the changes can't race. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SopAccessPicker
+              title="Who can view"
+              grant={{ roles: sop.view_roles, emails: sop.view_emails }}
+              staff={data.staff ?? []}
+              disabled={busy}
+              onChange={(next) =>
+                void patchSettings({ viewRoles: withAdmins(next.roles), viewEmails: next.emails })
+              }
+            />
+            <SopAccessPicker
+              title="Who can edit"
+              hint="Anyone who can edit can also view."
+              grant={{ roles: sop.edit_roles, emails: sop.edit_emails }}
+              staff={data.staff ?? []}
+              disabled={busy}
+              onChange={(next) =>
+                void patchSettings({ editRoles: withAdmins(next.roles), editEmails: next.emails })
+              }
+            />
+          </div>
+
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-              who can view
-              <select
-                className={selectClass}
-                value={sop.view_access}
-                disabled={busy}
-                onChange={(e) => void patchSettings({ viewAccess: e.target.value })}
-              >
-                {SOP_ACCESS_LEVELS.map((l) => (
-                  <option key={l} value={l}>
-                    {ACCESS_LABELS[l]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-              who can edit
-              <select
-                className={selectClass}
-                value={sop.edit_access}
-                disabled={busy}
-                onChange={(e) => void patchSettings({ editAccess: e.target.value })}
-              >
-                {SOP_ACCESS_LEVELS.map((l) => (
-                  <option key={l} value={l}>
-                    {ACCESS_LABELS[l]}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="flex items-center gap-2 font-mono text-xs text-white/60">
               section
               {/* Picking from the library's sections rather than retyping the
