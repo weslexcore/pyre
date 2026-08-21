@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 
 // Email monitoring dashboard island. All data comes from the admin-gated
 // /api/admin/email-stats endpoint; this component only renders it.
@@ -139,31 +140,19 @@ function fmtDateTime(iso: string): string {
 
 export function EmailDashboard() {
   const [days, setDays] = useState(14);
-  const [data, setData] = useState<EmailStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (rangeDays: number, background = false) => {
-    if (!background) setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/email-stats?days=${rangeDays}`);
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      setData((await res.json()) as EmailStats);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load stats');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data, error, loading, reload } = useCachedJson<EmailStats>(
+    `/api/admin/email-stats?days=${days}`
+  );
 
+  // Poll in the background. reload() bypasses the cache, and because data is
+  // already on screen it surfaces as `refreshing`, never the spinner.
   useEffect(() => {
-    load(days);
-    const interval = setInterval(() => load(days, true), REFRESH_MS);
+    const interval = setInterval(() => void reload(), REFRESH_MS);
     return () => clearInterval(interval);
-  }, [days, load]);
+  }, [reload]);
 
-  if (loading && !data) {
+  if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--pyre-red)] border-t-transparent" />
@@ -177,7 +166,7 @@ export function EmailDashboard() {
         <p className="text-sm">{error}</p>
         <button
           type="button"
-          onClick={() => load(days)}
+          onClick={() => void reload()}
           className="mt-3 rounded-md border border-white/20 px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wide hover:bg-white/10"
         >
           Retry
@@ -220,7 +209,7 @@ export function EmailDashboard() {
           <span>updated {timeAgo(data.generatedAt)}</span>
           <button
             type="button"
-            onClick={() => load(days)}
+            onClick={() => void reload()}
             className="rounded-md border border-white/20 px-3 py-1.5 font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-colors hover:border-white/40 hover:bg-white/10"
           >
             Refresh

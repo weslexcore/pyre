@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 
 interface DailyStat {
   date: string;
@@ -59,27 +60,21 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
  * cards and failure list come from the live execution records.
  */
 export function WebhookHealthPanel({ refreshSignal }: { refreshSignal: number }) {
-  const [data, setData] = useState<StatsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<number>(30);
 
-  const fetchStats = useCallback(async (currentDays: number) => {
-    try {
-      const res = await fetch(`/api/admin/webhook-stats?days=${currentDays}`);
-      if (!res.ok) {
-        setError(`Failed to fetch stats (${res.status})`);
-        return;
-      }
-      setData(await res.json());
-      setError(null);
-    } catch {
-      setError('Network error');
-    }
-  }, []);
+  const { data, error, reload } = useCachedJson<StatsResponse>(
+    `/api/admin/webhook-stats?days=${days}`
+  );
 
+  // The parent bumps refreshSignal after it reloads the execution log, which
+  // has to force a refetch past the cache. Skip the initial value — the hook
+  // already fetches on mount.
+  const seenSignal = useRef(refreshSignal);
   useEffect(() => {
-    fetchStats(days);
-  }, [days, refreshSignal, fetchStats]);
+    if (refreshSignal === seenSignal.current) return;
+    seenSignal.current = refreshSignal;
+    void reload();
+  }, [refreshSignal, reload]);
 
   if (error) {
     return (

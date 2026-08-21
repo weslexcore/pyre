@@ -15,7 +15,8 @@ import {
   rollupHours,
   weekStartOf,
 } from '@pyre/schedule-core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 
 interface BoardData {
@@ -50,28 +51,16 @@ export function ScheduleHours() {
   // Default: four weeks back through two weeks ahead.
   const [start, setStart] = useState(() => addDays(weekStartOf(todayLocal()), -28));
   const [end, setEnd] = useState(() => addDays(weekStartOf(todayLocal()), 20));
-  const [data, setData] = useState<BoardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [byPeriod, setByPeriod] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/schedule-board?start=${start}&end=${end}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BoardData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [start, end]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Shares the schedule-board cache entry with ScheduleCalendar whenever the
+  // ranges line up, so moving between the schedule tabs often costs nothing.
+  const { data, error, loading, refreshing } = useCachedJson<BoardData>(
+    `/api/admin/schedule-board?start=${start}&end=${end}`
+  );
+  // `busy` keeps the old `loading` semantics at the call sites below: true
+  // for the first load and for every revalidation.
+  const busy = loading || refreshing;
 
   const canManage = data?.canManage ?? false;
   const isAdmin = data?.isAdmin ?? false;
@@ -231,7 +220,7 @@ export function ScheduleHours() {
         >
           Export CSV
         </button>
-        {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        {busy && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
       {error && (
@@ -240,14 +229,14 @@ export function ScheduleHours() {
         </p>
       )}
 
-      {!canManage && !selfId && !loading && (
+      {!canManage && !selfId && !busy && (
         <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
           Your login isn't linked to a roster entry yet, so there are no hours to show — ask an
           admin to set your Momence email on the roster.
         </p>
       )}
 
-      {(weeks.length === 0 || staffColumns.length === 0) && !loading ? (
+      {(weeks.length === 0 || staffColumns.length === 0) && !busy ? (
         <p className="font-mono text-sm text-white/40">No scheduled hours in this range.</p>
       ) : (
         <div className="overflow-x-auto">

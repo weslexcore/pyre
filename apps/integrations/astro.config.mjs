@@ -22,6 +22,11 @@ export default defineConfig({
   // maxDuration: the hourly cron tick sweeps Momence + sends email inside a
   // 50s budget (see api/cron/tick.ts), so give functions 60s headroom.
   adapter: vercel({ maxDuration: 60 }),
+  // Link prefetching for the admin nav, opt-in per link via
+  // data-astro-prefetch. `prefetchAll` is deliberately off: it would prefetch
+  // every same-origin <a>, and /api/auth/logout is a GET that clears the
+  // session cookies — hovering the logout link would sign the user out.
+  prefetch: { prefetchAll: false, defaultStrategy: 'hover' },
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],

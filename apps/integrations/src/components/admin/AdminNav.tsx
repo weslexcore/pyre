@@ -104,6 +104,13 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
               <li key={item.href} className="border-b border-white/5 last:border-b-0 md:border-b-0">
                 <a
                   href={item.href}
+                  // "tap" (not the default "hover"): Astro binds hover
+                  // listeners by walking the DOM on astro:page-load, which
+                  // misses these — the dropdown only renders once opened.
+                  // The tap strategy is delegated on document, so it catches
+                  // client-rendered links and still fires on mousedown,
+                  // before the click completes.
+                  data-astro-prefetch="tap"
                   aria-current={isActive(currentPath, item.href) ? 'page' : undefined}
                   className={`block rounded py-3 font-mono text-sm font-bold uppercase tracking-wide transition-colors md:px-2 md:py-2 md:text-xs md:hover:bg-white/10 ${
                     isActive(currentPath, item.href)
@@ -118,7 +125,15 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
           </ul>
           <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3 md:px-3">
             <span className="truncate font-mono text-xs text-white/40">{userEmail}</span>
-            <a href="/api/auth/logout" className={`${LINK_BASE} ${LINK_IDLE} shrink-0`}>
+            {/* Never prefetch: logout is a GET that clears the session
+                cookies, so fetching it in the background signs the user out.
+                Explicit "false" keeps that true even if someone later turns
+                on prefetchAll. */}
+            <a
+              href="/api/auth/logout"
+              data-astro-prefetch="false"
+              className={`${LINK_BASE} ${LINK_IDLE} shrink-0`}
+            >
               Log Out
             </a>
           </div>

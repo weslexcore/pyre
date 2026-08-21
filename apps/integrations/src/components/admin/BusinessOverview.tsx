@@ -3,7 +3,8 @@
 // unit economics, membership flows, and attendance. All numbers arrive
 // pre-joined from /api/admin/business-overview (Momence report snapshots +
 // labor cost from the shifts tables); this island only renders.
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BusinessOverviewPayload, BusinessWeek } from '@/pages/api/admin/business-overview';
 
 const GOLD = '#b58d35';
@@ -376,30 +377,15 @@ function AttendanceChart({ weeks }: { weeks: BusinessWeek[] }) {
 }
 
 export function BusinessOverview() {
-  const [data, setData] = useState<BusinessOverviewPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [windowWeeks, setWindowWeeks] = useState<number>(DEFAULT_WINDOW);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/business-overview?weeks=${windowWeeks}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BusinessOverviewPayload);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [windowWeeks]);
+  // One cache entry per window, so switching back to a window you already
+  // viewed repaints from cache while it revalidates behind you.
+  const { data, error, loading, refreshing } = useCachedJson<BusinessOverviewPayload>(
+    `/api/admin/business-overview?weeks=${windowWeeks}`
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading && !data) return <p className="font-mono text-sm text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
   if (error || !data) {
     return (
       <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
@@ -428,13 +414,13 @@ export function BusinessOverview() {
             type="button"
             className={`${buttonClass} ${windowWeeks === w ? 'border-white/40 text-white' : ''}`}
             aria-pressed={windowWeeks === w}
-            disabled={loading}
+            disabled={loading || refreshing}
             onClick={() => setWindowWeeks(w)}
           >
             {w} wks
           </button>
         ))}
-        {loading && data && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
       {(neverSynced || syncStale || data.missingReportTypes.length > 0) && (

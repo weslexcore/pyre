@@ -4,6 +4,7 @@
 // The API enforces the real guards (admin-only, last-admin/self protection,
 // access needs an email); this island just mirrors them in the UI.
 import { useCallback, useEffect, useState } from 'react';
+import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow } from '@/lib/db';
 import { ADMIN_TOOLS, SCHEDULE_MANAGE } from './adminTools';
 
@@ -174,6 +175,9 @@ export function UsersManager() {
         );
       }
     }
+    // Staff rows ride along in the schedule-board payload that the Calendar
+    // and Hours tabs cache, so every roster edit drops their entries too.
+    invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };
@@ -193,6 +197,7 @@ export function UsersManager() {
         `${person.display_name} has shifts or time off on record, so they were taken off the schedule and had their access removed instead of being deleted.`
       );
     }
+    invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };
@@ -226,6 +231,7 @@ export function UsersManager() {
       pages: envUser.pages,
     });
     if (person) setNotice(`Imported ${envUser.email} — they're now managed from this page.`);
+    invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };
@@ -254,6 +260,7 @@ export function UsersManager() {
       setNewPages(['/admin/schedule']);
       setNewPayRate('');
     }
+    invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };
