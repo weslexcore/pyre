@@ -17,6 +17,8 @@ const inputClass =
 const selectClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
 
+// 'Abandoned' only turns up runs from before ending early became a discard
+// (which deletes the run); kept so that history stays reachable.
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'in_progress', label: 'In progress' },

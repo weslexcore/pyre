@@ -1,17 +1,25 @@
 // Checklist-run API for the SOP library. A run is one execution of a
-// task-bearing SOP: POST starts (or resumes the in-progress run of) one, PATCH
-// checks/unchecks items and completes or abandons the run, GET fetches a
+// task-bearing SOP: POST starts (or joins the in-progress run of) one, PATCH
+// checks/unchecks items, completes the run, or discards it, GET fetches a
 // single run (?id=), the in-progress run for a document (?sopId=), every
-// unfinished run the caller may view (?view=active — the library's resume
+// unfinished run the caller may view (?view=active — the library's in-progress
 // strip), or the run log (?view=list — admins see all runs, others their
 // own), DELETE (admin only) removes a run and its check records outright.
 //
-// Permissions follow the document: anyone who may view an SOP may run it and
-// check items (running a checklist is the staff-level act the tool exists
-// for); identities are always taken from the session. Runs pin the document
-// version current at start, so item indexes stay meaningful if the document
-// is edited mid-run. Mutations are CSRF-guarded in-route like the rest
-// (global checkOrigin stays off; see astro.config.mjs).
+// A run stays in progress until someone completes it — there is no stepping
+// out of one to come back later. Discard is the escape hatch for a checklist
+// started by mistake: it deletes the run and its checks instead of logging
+// them, so the record only ever holds work that actually happened. (Runs from
+// before discard replaced it may still carry the 'abandoned' status; the log
+// still renders those.)
+//
+// Permissions follow the document: anyone who may view an SOP may run it,
+// check items, and discard the open run (runs are shared per document, so
+// whoever is standing there owns the mistake); identities are always taken
+// from the session. Runs pin the document version current at start, so item
+// indexes stay meaningful if the document is edited mid-run. Mutations are
+// CSRF-guarded in-route like the rest (global checkOrigin stays off; see
+// astro.config.mjs).
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
@@ -135,6 +143,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .limit(LIST_LIMIT);
     if (listSopId) query = query.eq('sop_id', listSopId);
     if (status) {
+      // 'abandoned' only matches runs from before discard replaced it.
       if (!['in_progress', 'completed', 'abandoned'].includes(status)) {
         return json({ error: 'status must be in_progress, completed, or abandoned' }, 400);
       }
@@ -355,8 +364,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (!UUID_RE.test(runId)) return json({ error: 'runId must be a UUID' }, 400);
 
   const action = body.action;
-  if (typeof action !== 'string' || !['check', 'uncheck', 'complete', 'abandon'].includes(action)) {
-    return json({ error: 'action must be check, uncheck, complete, or abandon' }, 400);
+  if (typeof action !== 'string' || !['check', 'uncheck', 'complete', 'discard'].includes(action)) {
+    return json({ error: 'action must be check, uncheck, complete, or discard' }, 400);
   }
 
   const { data: runData, error: runError } = await db
@@ -411,12 +420,23 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('run_id', runId)
       .eq('item_index', itemIndex);
     if (error) return json({ error: error.message }, 500);
+  } else if (action === 'discard') {
+    // Started by mistake: erase the run and its checks (they cascade) so
+    // nothing lands in the log. Only reachable while in progress — the status
+    // guard above already rejected finished runs.
+    const { error } = await db
+      .from('sop_runs')
+      .delete()
+      .eq('id', runId)
+      .eq('status', 'in_progress');
+    if (error) return json({ error: error.message }, 500);
+    return json({ run: null, checks: [], discarded: true });
   } else {
-    // complete / abandon
+    // complete
     const { error } = await db
       .from('sop_runs')
       .update({
-        status: action === 'complete' ? 'completed' : 'abandoned',
+        status: 'completed',
         ended_by: email,
         ended_at: new Date().toISOString(),
       })
