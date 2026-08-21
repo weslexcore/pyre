@@ -443,6 +443,24 @@ export function SopDocument({ slug }: { slug: string }) {
     }
   }, [data, mode, startEdit]);
 
+  // ?run=1 (the library's resume strip) opens the checklist as soon as the
+  // in-progress run has loaded. If the run was finished from another device in
+  // the meantime the lookup comes back empty and this stays in view mode — the
+  // toolbar then offers Start instead.
+  useEffect(() => {
+    if (!runData || mode !== 'view') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('run') !== '1') return;
+    setMode('run');
+    params.delete('run');
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      query ? `${window.location.pathname}?${query}` : window.location.pathname
+    );
+  }, [runData, mode]);
+
   const save = async (content: string, title: string, note: string | null) => {
     if (!data) return;
     setBusy(true);

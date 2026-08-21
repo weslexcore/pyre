@@ -24,6 +24,7 @@ import {
   repositionSop,
 } from '@/lib/sops/order';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import { formatWhen, shortName } from './SopRunsList';
 
 type SopSummary = Omit<SopRow, 'content_md'> & { task_count: number };
 
@@ -31,6 +32,18 @@ interface ListResponse {
   sops: SopSummary[];
   role: SopRole;
   pins: string[];
+}
+
+/** An unfinished checklist run, as served by /api/admin/sop-runs?view=active. */
+interface ActiveRun {
+  id: string;
+  sop_id: string;
+  task_count: number;
+  checked_count: number;
+  started_by: string;
+  started_at: string;
+  title: string;
+  slug: string;
 }
 
 type Drag = { kind: 'sop'; id: string } | { kind: 'category'; name: string };
@@ -119,6 +132,11 @@ export function SopsIndex() {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  // Unfinished runs on documents this role may view — runs are shared per
+  // document, so someone else's open checklist is the one you walk up to and
+  // continue.
+  const [activeRuns, setActiveRuns] = useState<ActiveRun[]>([]);
+
   // The caller's pinned document ids (personal; shown in the Pinned strip).
   const [pins, setPins] = useState<Set<string>>(new Set());
 
@@ -182,6 +200,25 @@ export function SopsIndex() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Resume strip. Separate from the library load so a runs outage still leaves
+  // a working SOP list.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/sop-runs?view=active');
+        if (!res.ok) return;
+        const body = (await res.json()) as { runs?: ActiveRun[] };
+        if (!cancelled) setActiveRuns(body.runs ?? []);
+      } catch {
+        // Non-fatal: the library renders fine without the strip.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Debounced library search; snippets come from the server so results only
   // ever cover documents this user may view.
@@ -446,6 +483,46 @@ export function SopsIndex() {
         onChange={(e) => setQuery(e.target.value)}
         aria-label="Search SOPs"
       />
+
+      {/* Resume strip: an open checklist is the most urgent thing on this page,
+          so it sits above everything but the search box. */}
+      {!searchActive && activeRuns.length > 0 && (
+        <section>
+          <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
+            ☑ In progress
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {activeRuns.map((run) => {
+              const pct =
+                run.task_count > 0 ? Math.round((run.checked_count / run.task_count) * 100) : 0;
+              return (
+                <a
+                  key={run.id}
+                  href={`/admin/sops/${run.slug}?run=1`}
+                  className="block rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/5 p-4 transition-colors hover:border-[var(--pyre-gold)]"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="font-semibold text-[var(--pyre-creme)]">{run.title}</h3>
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                      resume →
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1 rounded-full bg-white/10">
+                    <div
+                      className="h-1 rounded-full bg-[var(--pyre-gold)]"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 font-mono text-[10px] text-white/40">
+                    {run.checked_count}/{run.task_count} done · started by{' '}
+                    {shortName(run.started_by)} · {formatWhen(run.started_at)}
+                  </p>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {searchActive && (
         <div className="space-y-3">

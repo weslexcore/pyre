@@ -1,9 +1,10 @@
 // Checklist-run API for the SOP library. A run is one execution of a
 // task-bearing SOP: POST starts (or resumes the in-progress run of) one, PATCH
 // checks/unchecks items and completes or abandons the run, GET fetches a
-// single run (?id=), the in-progress run for a document (?sopId=), or the run
-// log (?view=list — admins see all runs, others their own), DELETE (admin
-// only) removes a run and its check records outright.
+// single run (?id=), the in-progress run for a document (?sopId=), every
+// unfinished run the caller may view (?view=active — the library's resume
+// strip), or the run log (?view=list — admins see all runs, others their
+// own), DELETE (admin only) removes a run and its check records outright.
 //
 // Permissions follow the document: anyone who may view an SOP may run it and
 // check items (running a checklist is the staff-level act the tool exists
@@ -33,6 +34,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
+/** A run joined to its document and its check rows (?view=active). */
+type ActiveRunRow = SopRunRow & {
+  sops: SopRow | null;
+  sop_run_checks: { item_index: number }[];
+};
+
 async function loadRunChecks(db: Db, runId: string) {
   return db
     .from('sop_run_checks')
@@ -60,6 +67,40 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const role = await getSopRole(gate.user.email ?? null, gate.access);
+
+  // Every unfinished run on a document this role may view, newest first. Runs
+  // are shared per document — whoever walks up next continues the open one —
+  // so this is deliberately not scoped to the caller's own runs the way the
+  // log below is. Feeds the "in progress" strip at the top of the library.
+  if (url.searchParams.get('view') === 'active') {
+    const { data, error } = await db
+      .from('sop_runs')
+      .select('*, sops(*), sop_run_checks(item_index)')
+      .eq('status', 'in_progress')
+      .order('started_at', { ascending: false })
+      .limit(LIST_LIMIT);
+    if (error) return json({ error: error.message }, 500);
+
+    const rows = (data ?? []) as ActiveRunRow[];
+    const runs = rows.flatMap((row) => {
+      const sop = row.sops;
+      if (!sop || !canViewSop(role, sop)) return [];
+      return [
+        {
+          id: row.id,
+          sop_id: row.sop_id,
+          task_count: row.task_count,
+          checked_count: row.sop_run_checks?.length ?? 0,
+          started_by: row.started_by,
+          started_at: row.started_at,
+          title: sop.title,
+          slug: sop.slug,
+        },
+      ];
+    });
+
+    return json({ runs });
+  }
 
   // Run log, newest first, with sop identity and the full per-item check
   // record embedded. Admins see every run; everyone else sees the runs they
