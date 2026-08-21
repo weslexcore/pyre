@@ -271,48 +271,38 @@ function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
   );
 }
 
-/** New members up (gold) vs cancellations down-styled (creme) side by side. */
+/**
+ * New members per week (gold). Cancellations used to sit beside these bars,
+ * but Momence exposes no host endpoint for them — see lib/reports/activity.ts
+ * — so the chart shows arrivals only rather than an always-empty half.
+ */
 function MembershipChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const max = Math.max(...weeks.flatMap((w) => [w.newMembers ?? 0, w.cancellations ?? 0]), 1);
+  const max = Math.max(...weeks.map((w) => w.newMembers ?? 0), 1);
   return (
     <ChartShell
       weeks={weeks}
       max={max}
       yLabel={(v) => String(Math.round(v))}
-      ariaLabel="New members vs cancellations"
+      ariaLabel="New members per week"
     >
       {(f) => (
         <>
           {weeks.map((week, i) => {
-            const pairW = Math.min(f.step * 0.6, 40);
-            const barW = pairW / 2;
-            const x = f.LEFT + i * f.step + (f.step - pairW) / 2;
+            const barW = Math.min(f.step * 0.6, 40);
+            const x = f.LEFT + i * f.step + (f.step - barW) / 2;
             const newH = ((week.newMembers ?? 0) / max) * f.plotH;
-            const cancelH = ((week.cancellations ?? 0) / max) * f.plotH;
-            const dim = week.future ? 0.35 : 0.85;
             return (
-              <g key={week.weekStart}>
-                <rect
-                  x={x}
-                  y={f.TOP + f.plotH - newH}
-                  width={barW - 1}
-                  height={newH}
-                  fill={GOLD}
-                  opacity={dim}
-                >
-                  <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.newMembers ?? '—'} new · ${week.cancellations ?? '—'} cancelled${week.activeMembers !== null ? ` · ${week.activeMembers} active` : ''}`}</title>
-                </rect>
-                <rect
-                  x={x + barW}
-                  y={f.TOP + f.plotH - cancelH}
-                  width={barW - 1}
-                  height={cancelH}
-                  fill={CREME}
-                  opacity={week.future ? 0.3 : 0.6}
-                >
-                  <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.cancellations ?? '—'} cancelled`}</title>
-                </rect>
-              </g>
+              <rect
+                key={week.weekStart}
+                x={x}
+                y={f.TOP + f.plotH - newH}
+                width={barW - 1}
+                height={newH}
+                fill={GOLD}
+                opacity={week.future ? 0.35 : 0.85}
+              >
+                <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.newMembers ?? '—'} new${week.activeMembers !== null ? ` · ${week.activeMembers} active` : ''}`}</title>
+              </rect>
             );
           })}
         </>
@@ -522,14 +512,9 @@ export function BusinessOverview() {
       {/* ---- Memberships ---- */}
       <section className="space-y-2">
         <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-          Memberships: new vs cancelled
+          Memberships: new members
         </h2>
-        <Legend
-          items={[
-            { color: GOLD, label: 'new members' },
-            { color: CREME, label: 'cancellations' },
-          ]}
-        />
+        <Legend items={[{ color: GOLD, label: 'new members' }]} />
         <MembershipChart weeks={data.weeks} />
       </section>
 

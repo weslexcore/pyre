@@ -1,0 +1,364 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const fetchHostSessions = vi.fn();
+const fetchSessionBookings = vi.fn();
+const fetchMembersFiltered = vi.fn();
+const getDb = vi.fn();
+const getRedis = vi.fn();
+
+vi.mock('@/lib/momence/host-api', () => ({
+  fetchHostSessions: (args: unknown) => fetchHostSessions(args),
+  fetchSessionBookings: (id: number) => fetchSessionBookings(id),
+  fetchMembersFiltered: (args: unknown) => fetchMembersFiltered(args),
+}));
+vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
+vi.mock('@pyre/webhook-core', () => ({ getRedis: () => getRedis() }));
+
+const { runActivityMetricsSync } = await import('./activity');
+
+/** Thursday 2026-08-20, 10am EDT — after the 6am sync hour. */
+const NOW = new Date('2026-08-20T14:00:00Z');
+
+/** The completed week under test: Mon 2026-08-10 .. Sun 2026-08-16. */
+const LAST_WEEK = '2026-08-10';
+const THIS_WEEK = '2026-08-17';
+
+const ctx = { dryRun: false, timeRemainingMs: () => 50_000 };
+
+const session = (over: Record<string, unknown> = {}) => ({
+  id: 1,
+  name: 'Open Hours',
+  startsAt: '2026-08-12T20:00:00.000Z',
+  endsAt: '2026-08-12T21:00:00.000Z',
+  isDraft: false,
+  isCancelled: false,
+  capacity: 30,
+  bookingCount: 2,
+  ...over,
+});
+
+const booking = (over: Record<string, unknown> = {}) => ({
+  id: 100,
+  checkedIn: true,
+  ticketsBought: 1,
+  cancelledAt: null,
+  ...over,
+});
+
+/** Captures every business_metrics_weekly upsert, keyed week|metric. */
+function fakeDb(existingMetricRows: unknown[] = []) {
+  const upserts: Record<string, number> = {};
+  const db = {
+    from(_table: string) {
+      const result = { data: existingMetricRows, error: null };
+      const builder: Record<string, unknown> = {
+        // biome-ignore lint/suspicious/noThenProperty: the Supabase builder is thenable, so the fake must be too
+        then: (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve),
+        upsert: (rows: Array<Record<string, unknown>>) => {
+          for (const row of rows) {
+            upserts[`${row.week_start}|${row.metric}`] = row.value as number;
+          }
+          return Promise.resolve({ error: null });
+        },
+      };
+      for (const method of ['select', 'gte', 'lte', 'eq', 'in']) {
+        builder[method] = () => builder;
+      }
+      return builder;
+    },
+  };
+  return { db, upserts };
+}
+
+function fakeRedis() {
+  const store = new Map<string, unknown>();
+  return {
+    store,
+    get: async (key: string) => store.get(key) ?? null,
+    set: async (key: string, value: unknown) => {
+      store.set(key, value);
+    },
+    del: async (key: string) => {
+      store.delete(key);
+    },
+  };
+}
+
+describe('runActivityMetricsSync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    fetchHostSessions.mockReset().mockResolvedValue([]);
+    fetchSessionBookings.mockReset().mockResolvedValue([]);
+    fetchMembersFiltered.mockReset().mockResolvedValue({ members: [], totalCount: 0 });
+    getDb.mockReset();
+    getRedis.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('counts check-ins as attendance and uncheck-ins as no-shows', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09') ? [session({ bookingCount: 3 })] : []
+    );
+    fetchSessionBookings.mockResolvedValue([
+      booking({ id: 1, checkedIn: true }),
+      booking({ id: 2, checkedIn: true }),
+      booking({ id: 3, checkedIn: false }),
+    ]);
+
+    const summary = await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(summary.skipped).toBeUndefined();
+    expect(upserts[`${LAST_WEEK}|attendance`]).toBe(2);
+    expect(upserts[`${LAST_WEEK}|no_shows`]).toBe(1);
+  });
+
+  it('ignores cancelled bookings and counts multi-ticket bookings per seat', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09') ? [session({ bookingCount: 2 })] : []
+    );
+    fetchSessionBookings.mockResolvedValue([
+      booking({ id: 1, checkedIn: true, ticketsBought: 2 }),
+      booking({ id: 2, checkedIn: true, cancelledAt: '2026-08-11T00:00:00.000Z' }),
+      booking({ id: 3, checkedIn: false, ticketsBought: 3 }),
+    ]);
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(upserts[`${LAST_WEEK}|attendance`]).toBe(2);
+    expect(upserts[`${LAST_WEEK}|no_shows`]).toBe(3);
+  });
+
+  it('computes occupancy as booked over capacity across the week', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09')
+        ? [
+            session({ id: 1, capacity: 30, bookingCount: 6 }),
+            session({ id: 2, capacity: 10, bookingCount: 2 }),
+          ]
+        : []
+    );
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    // 8 booked / 40 capacity — not the mean of 20% and 20%.
+    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(20);
+  });
+
+  it('drops sessions the padded fetch pulled in from an adjacent week', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09')
+        ? [
+            session({ id: 1, capacity: 10, bookingCount: 5 }),
+            // Sunday 2026-08-09 ET — the previous week, inside the pad.
+            session({
+              id: 2,
+              startsAt: '2026-08-09T20:00:00.000Z',
+              endsAt: '2026-08-09T21:00:00.000Z',
+              capacity: 90,
+              bookingCount: 0,
+            }),
+          ]
+        : []
+    );
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(50);
+  });
+
+  it('buckets a late-evening ET session by its ET day, not its UTC day', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    // 2026-08-17T01:00Z is 9pm ET on Sunday 2026-08-16 — still LAST_WEEK.
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09')
+        ? [
+            session({
+              startsAt: '2026-08-17T01:00:00.000Z',
+              endsAt: '2026-08-17T02:00:00.000Z',
+              capacity: 10,
+              bookingCount: 4,
+            }),
+          ]
+        : []
+    );
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(upserts[`${LAST_WEEK}|occupancy_pct`]).toBe(40);
+  });
+
+  it('skips the bookings request for sessions nobody booked', async () => {
+    const { db } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-09')
+        ? [session({ id: 1, bookingCount: 0 }), session({ id: 2, bookingCount: 1 })]
+        : []
+    );
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(fetchSessionBookings).toHaveBeenCalledTimes(1);
+    expect(fetchSessionBookings).toHaveBeenCalledWith(2);
+  });
+
+  it('leaves attendance unwritten for a week whose sessions have not ended', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    // The in-progress week: one session already run, one still ahead.
+    fetchHostSessions.mockImplementation(async ({ startAfter }: { startAfter: string }) =>
+      startAfter.startsWith('2026-08-16')
+        ? [
+            session({
+              id: 9,
+              startsAt: '2026-08-25T20:00:00.000Z',
+              endsAt: '2026-08-25T21:00:00.000Z',
+              capacity: 30,
+              bookingCount: 4,
+            }),
+          ]
+        : []
+    );
+
+    await runActivityMetricsSync(ctx, { weeksBack: 0 });
+
+    // Future session: no occupancy, no attendance, no bookings request.
+    expect(upserts[`${THIS_WEEK}|attendance`]).toBeUndefined();
+    expect(upserts[`${THIS_WEEK}|occupancy_pct`]).toBeUndefined();
+    expect(fetchSessionBookings).not.toHaveBeenCalled();
+  });
+
+  it('buckets new members by ET week and stamps active members on this week', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    fetchMembersFiltered.mockImplementation(async (args: { filterPreset?: string }) => {
+      if (args.filterPreset === 'with-active-membership') {
+        return { members: [], totalCount: 264 };
+      }
+      return {
+        members: [
+          { id: 1, firstSeen: '2026-08-18T15:00:00.000Z' }, // this week
+          { id: 2, firstSeen: '2026-08-12T15:00:00.000Z' }, // last week
+          { id: 3, firstSeen: '2026-08-17T01:00:00.000Z' }, // 9pm ET Sun — last week
+        ],
+        totalCount: 3,
+      };
+    });
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(upserts[`${THIS_WEEK}|new_members`]).toBe(1);
+    expect(upserts[`${LAST_WEEK}|new_members`]).toBe(2);
+    expect(upserts[`${THIS_WEEK}|active_members`]).toBe(264);
+  });
+
+  it('parks unscanned weeks in a cursor when the budget runs out', async () => {
+    const { db } = fakeDb();
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    getRedis.mockReturnValue(redis);
+    fetchHostSessions.mockResolvedValue([]);
+
+    const summary = await runActivityMetricsSync(
+      { dryRun: false, timeRemainingMs: () => 1_000 },
+      { weeksBack: 4 }
+    );
+
+    expect(summary.outOfTime).toBe(true);
+    expect(summary.weeksProcessed).toBe(0);
+    expect(summary.pendingWeeks).toBe(5);
+    expect(redis.store.get('activity-sync:cursor')).toMatchObject({ date: '2026-08-20' });
+  });
+
+  it('resumes a parked cursor without rebuilding the work list', async () => {
+    const { db } = fakeDb();
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    redis.store.set('activity-sync:cursor', { date: '2026-08-20', weeks: [LAST_WEEK] });
+    getRedis.mockReturnValue(redis);
+    fetchHostSessions.mockResolvedValue([]);
+
+    const summary = await runActivityMetricsSync(ctx);
+
+    expect(summary.resumed).toBe(true);
+    expect(summary.weeksProcessed).toBe(1);
+    expect(summary.pendingWeeks).toBe(0);
+    // Member metrics belong to the day's opening pass, not to a resume.
+    expect(fetchMembersFiltered).not.toHaveBeenCalled();
+    expect(redis.store.has('activity-sync:cursor')).toBe(false);
+    expect(redis.store.has('activity-sync:done:2026-08-20')).toBe(true);
+  });
+
+  it('re-scans recent weeks daily but leaves settled weeks alone', async () => {
+    // Every week in the window already has an attendance row from yesterday.
+    const weeks = [
+      '2026-06-29',
+      '2026-07-06',
+      '2026-07-13',
+      '2026-07-20',
+      '2026-07-27',
+      '2026-08-03',
+      LAST_WEEK,
+      THIS_WEEK,
+    ];
+    const { db } = fakeDb(weeks.map((week_start) => ({ week_start, snapshot_date: '2026-08-19' })));
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    getRedis.mockReturnValue(redis);
+    fetchHostSessions.mockResolvedValue([]);
+
+    const summary = await runActivityMetricsSync(ctx, { weeksBack: 7 });
+
+    // The in-progress week plus the two completed weeks behind it; the four
+    // older weeks already have rows and are left alone.
+    expect(summary.weeksProcessed).toBe(3);
+  });
+
+  it('holds off before the sync hour and after the day is done', async () => {
+    const { db } = fakeDb();
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    getRedis.mockReturnValue(redis);
+
+    vi.setSystemTime(new Date('2026-08-20T08:00:00Z')); // 4am ET
+    expect((await runActivityMetricsSync(ctx)).skipped).toBe('before-sync-hour');
+
+    vi.setSystemTime(NOW);
+    redis.store.set('activity-sync:done:2026-08-20', { finishedAt: 'x' });
+    expect((await runActivityMetricsSync(ctx)).skipped).toBe('already-done');
+  });
+
+  it('writes nothing on a dry run', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+
+    const summary = await runActivityMetricsSync({ ...ctx, dryRun: true }, { weeksBack: 2 });
+
+    expect(summary.wouldScan).toBe(3);
+    expect(upserts).toEqual({});
+    expect(fetchHostSessions).not.toHaveBeenCalled();
+    expect(fetchMembersFiltered).not.toHaveBeenCalled();
+  });
+});

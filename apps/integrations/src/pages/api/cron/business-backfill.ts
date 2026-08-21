@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { isCronAuthorized, unauthorizedResponse } from '@/lib/cron/auth';
+import { runActivityMetricsSync } from '@/lib/reports/activity';
 import { runBusinessReportSync } from '@/lib/reports/sync';
 
 export const prerender = false;
@@ -14,11 +15,11 @@ export const prerender = false;
 //   curl ... "/api/cron/business-backfill"               # poll again if runs
 //                                                        # were still pending
 //
-// Re-curling after completion creates a fresh batch of report runs (each
-// batch is one create per report type against the 100/day budget), so run it
-// until pending clears and then stop. Weekly upserts are idempotent.
+// Re-curling after completion creates a fresh report run (one create against
+// the 100/day budget), so run it until both `pendingTypes` and
+// `activity.pendingWeeks` clear, then stop. Weekly upserts are idempotent.
 //
-// Note: point-in-time reports (active members) can't be reconstructed for the
+// Note: point-in-time counts (active members) can't be reconstructed for the
 // past — backfill fills flow metrics; stocks accrue from daily syncs onward.
 
 const BUDGET_MS = 50_000;
@@ -37,15 +38,26 @@ const handler: APIRoute = async ({ request, url }) => {
     );
   }
 
-  const summary = await runBusinessReportSync(
-    {
-      dryRun: url.searchParams.get('dryRun') === '1',
-      timeRemainingMs: () => BUDGET_MS - (Date.now() - started),
-    },
-    { weeksBack: weeks, force: true, redisPrefix: 'report-sync:backfill' }
-  );
+  const ctx = {
+    dryRun: url.searchParams.get('dryRun') === '1',
+    timeRemainingMs: () => BUDGET_MS - (Date.now() - started),
+  };
 
-  return new Response(JSON.stringify({ weeks, ...summary }), {
+  const reports = await runBusinessReportSync(ctx, {
+    weeksBack: weeks,
+    force: true,
+    redisPrefix: 'report-sync:backfill',
+  });
+
+  // Session scanning is the slow half and shares this request's budget, so a
+  // wide backfill needs several curls before `activity.pendingWeeks` is 0.
+  const activity = await runActivityMetricsSync(ctx, {
+    weeksBack: weeks,
+    force: true,
+    redisPrefix: 'activity-sync:backfill',
+  });
+
+  return new Response(JSON.stringify({ weeks, ...reports, activity }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

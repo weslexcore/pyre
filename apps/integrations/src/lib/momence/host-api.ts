@@ -378,6 +378,21 @@ export interface HostSession {
   endsAt: string;
   isDraft: boolean;
   isCancelled?: boolean;
+  /** Spots offered. Feeds occupancy on /admin/business. */
+  capacity?: number;
+  /** Live bookings, already net of cancellations — verified against the
+   * bookings list, which returns the same count once cancelled rows are
+   * dropped. */
+  bookingCount?: number;
+}
+
+/** One seat in a session. `cancelledAt` is set on withdrawn bookings, which
+ * stay in the list; `checkedIn` is the attendance signal. */
+export interface SessionBooking {
+  id: number;
+  checkedIn: boolean;
+  ticketsBought: number;
+  cancelledAt: string | null;
 }
 
 export interface AppointmentReservation {
@@ -415,6 +430,16 @@ export async function fetchHostSessions(params: {
     sortOrder: 'ASC',
   });
   return sessions.filter((s) => !s.isDraft && !s.isCancelled);
+}
+
+/**
+ * Every booking on one session, cancelled rows included.
+ *
+ * One request per session, so callers sweeping a date range should skip
+ * sessions whose bookingCount is already 0 and respect a time budget.
+ */
+export async function fetchSessionBookings(sessionId: number): Promise<SessionBooking[]> {
+  return fetchAllPages<SessionBooking>(`/host/sessions/${sessionId}/bookings`, {});
 }
 
 /** Upcoming private appointment reservations in a UTC window. */

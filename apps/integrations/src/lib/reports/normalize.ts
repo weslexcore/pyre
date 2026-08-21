@@ -18,10 +18,15 @@
 import { utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import type { MomenceReportType } from '@/lib/momence/reports';
 
+/**
+ * Everything business_metrics_weekly can hold. revenue_total comes from the
+ * total-sales report; the rest are swept out of the host endpoints by
+ * lib/reports/activity.ts. (membership_cancellations was dropped — no
+ * Momence endpoint exposes it.)
+ */
 export type MetricKey =
   | 'revenue_total'
   | 'new_members'
-  | 'membership_cancellations'
   | 'active_members'
   | 'attendance'
   | 'no_shows'
