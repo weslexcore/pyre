@@ -1,7 +1,10 @@
-// SOP library for /admin/sops: documents grouped by category, filtered
-// server-side to what the caller's role may view and sorted by the
-// admin-managed category order. Admins get a create form (title, category,
-// access levels), see archived documents, and reorder by drag and drop: the
+// SOP library for /admin/sops: documents grouped by section (the free-text
+// `category` on each document), filtered server-side to what the caller's role
+// may view and sorted by the admin-managed section order. Admins get a create
+// form (title, section, access levels), can add/rename/remove the sections
+// themselves — including empty ones, which the server keeps in the list so a
+// new section is somewhere to file the next SOP rather than a no-op — see
+// archived documents, and reorder by drag and drop: the
 // ⠿ handle on a card moves a document within its section or into another
 // section, the handle on a section header reorders sections. The arrangement
 // updates live while dragging (native HTML5 drag events, no library) and
@@ -31,6 +34,8 @@ type SopSummary = Omit<SopRow, 'content_md'> & { task_count: number };
 
 interface ListResponse {
   sops: SopSummary[];
+  /** Section names in display order, empty sections included (admins only). */
+  categories?: string[];
   /** Roster names for the `updated_by` emails on the cards. */
   people?: PeopleNames;
   role: SopRole;
@@ -61,6 +66,9 @@ interface SearchResult {
   matchCount: number;
   snippets: string[];
 }
+
+/** `newCategory` value standing for "a section that doesn't exist yet". */
+const NEW_SECTION = '\u0000new';
 
 const inputClass =
   'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
@@ -128,9 +136,22 @@ export function SopsIndex() {
   const [showCreate, setShowCreate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState('General');
+  // Either an existing section name or NEW_SECTION, in which case the typed
+  // `newCategoryName` is the section to create alongside the document.
+  const [newCategory, setNewCategory] = useState<string>(NEW_SECTION);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [newView, setNewView] = useState<SopAccessLevel>('staff');
   const [newEdit, setNewEdit] = useState<SopAccessLevel>('admin');
+
+  // Standalone "add a section" form, and the header being renamed in place.
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [sectionDraft, setSectionDraft] = useState('');
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  // Escape has to reach the blur that follows it, and state wouldn't have
+  // re-rendered by then — the rename commits on blur alone, so this is how the
+  // cancel gets there.
+  const renameCancelledRef = useRef(false);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
@@ -191,7 +212,9 @@ export function SopsIndex() {
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as ListResponse;
       setSops(body.sops);
-      setCategories(categoriesInOrder(body.sops));
+      // Server-supplied so sections holding nothing yet still get a header;
+      // deriving from the documents would drop them.
+      setCategories(body.categories ?? categoriesInOrder(body.sops));
       setRole(body.role);
       setPins(new Set(body.pins ?? []));
       setPeople((prev) => ({ ...prev, ...body.people }));
@@ -255,6 +278,10 @@ export function SopsIndex() {
     return () => clearTimeout(timer);
   }, [query]);
 
+  // The section the create form will file the document under: the chosen one,
+  // or the name typed into the "new section" field.
+  const chosenCategory = (newCategory === NEW_SECTION ? newCategoryName : newCategory).trim();
+
   const create = async () => {
     setBusy(true);
     setError(null);
@@ -264,7 +291,9 @@ export function SopsIndex() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: newTitle.trim(),
-          category: newCategory.trim() || 'General',
+          // The API gives a brand-new section a position of its own, so a
+          // section named here behaves exactly like one added on its own.
+          category: chosenCategory || 'General',
           viewAccess: newView,
           editAccess: newEdit,
           content: `# ${newTitle.trim()}\n`,
@@ -276,6 +305,77 @@ export function SopsIndex() {
       window.location.href = `/admin/sops/${sop.slug}?edit=1`;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create SOP');
+      setBusy(false);
+    }
+  };
+
+  // ---- sections ------------------------------------------------------------
+
+  const addSection = async () => {
+    const name = sectionDraft.trim();
+    if (!name) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/sop-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      setSectionDraft('');
+      setShowAddSection(false);
+      // New sections land last and hold nothing — the reload is what puts the
+      // (empty) header on screen.
+      await load({ silent: true });
+      // Pre-select it, so "add a section" flows straight into filling it.
+      setNewCategory(name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add the section');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renameSection = async (name: string) => {
+    const newName = renameDraft.trim();
+    if (!newName || newName === name) {
+      setRenaming(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/sop-categories', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, newName }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      setRenaming(null);
+      // Every document in the section moved with it, so refetch rather than
+      // patching names in place.
+      await load({ silent: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to rename the section');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteSection = async (name: string) => {
+    if (!window.confirm(`Remove the "${name}" section? It has no SOPs in it.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/sop-categories?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      await load({ silent: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to remove the section');
+    } finally {
       setBusy(false);
     }
   };
@@ -587,12 +687,29 @@ export function SopsIndex() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                 />
-                <input
-                  className={`${inputClass} w-40`}
-                  placeholder="Category"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                />
+                <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+                  section
+                  <select
+                    className={selectClass}
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    <option value={NEW_SECTION}>+ New section…</option>
+                  </select>
+                </label>
+                {newCategory === NEW_SECTION && (
+                  <input
+                    className={`${inputClass} w-40`}
+                    placeholder="New section name"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                  />
+                )}
                 <label className="flex items-center gap-2 font-mono text-xs text-white/60">
                   view
                   <select
@@ -625,13 +742,14 @@ export function SopsIndex() {
               {newTitle.trim() && (
                 <p className="font-mono text-[10px] text-white/40">
                   /admin/sops/{slugify(newTitle)}
+                  {chosenCategory ? ` · ${chosenCategory}` : ''}
                 </p>
               )}
               <div className="flex gap-2">
                 <button
                   type="button"
                   className={buttonClass}
-                  disabled={busy || !newTitle.trim()}
+                  disabled={busy || !newTitle.trim() || !chosenCategory}
                   onClick={() => void create()}
                 >
                   Create
@@ -647,10 +765,65 @@ export function SopsIndex() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={buttonClass} onClick={() => setShowCreate(true)}>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => {
+                  // Default to filing into an existing section; picking
+                  // "+ New section…" is the deliberate choice.
+                  setNewCategory(categories[0] ?? NEW_SECTION);
+                  setShowCreate(true);
+                }}
+              >
                 + New SOP
               </button>
+              {showAddSection ? (
+                <>
+                  <input
+                    className={`${inputClass} w-48`}
+                    placeholder="Section name"
+                    value={sectionDraft}
+                    // biome-ignore lint/a11y/noAutofocus: focus the field the admin just opened
+                    autoFocus
+                    onChange={(e) => setSectionDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void addSection();
+                      if (e.key === 'Escape') {
+                        setShowAddSection(false);
+                        setSectionDraft('');
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || !sectionDraft.trim()}
+                    onClick={() => void addSection()}
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy}
+                    onClick={() => {
+                      setShowAddSection(false);
+                      setSectionDraft('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  onClick={() => setShowAddSection(true)}
+                >
+                  + New section
+                </button>
+              )}
               <a href="/admin/sops/runs" className={buttonClass}>
                 Runs
               </a>
@@ -693,36 +866,102 @@ export function SopsIndex() {
                 className={`mb-3 flex items-center gap-2 ${isDraggedCategory ? 'opacity-50' : ''}`}
                 onDragEnter={() => enterCategory(category)}
               >
-                <h2 className="font-mono text-xs uppercase tracking-wide text-white/40">
-                  {category}
-                </h2>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    className={handleClass}
-                    title="Drag to reorder sections"
-                    aria-label={`Drag to reorder the ${category} section`}
-                    draggable={!busy}
-                    onDragStart={(e) => beginDrag(e, { kind: 'category', name: category })}
-                    onDragEnd={endDrag}
-                  >
-                    ⠿
-                  </button>
+                {renaming === category ? (
+                  <input
+                    className={`${inputClass} w-48 py-1`}
+                    value={renameDraft}
+                    // biome-ignore lint/a11y/noAutofocus: focus the field the admin just opened
+                    autoFocus
+                    aria-label={`Rename the ${category} section`}
+                    disabled={busy}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    // Blur is the only path that commits; Enter and Escape
+                    // just blur, so a rename can't be sent twice.
+                    onBlur={() => {
+                      if (renameCancelledRef.current) {
+                        renameCancelledRef.current = false;
+                        setRenaming(null);
+                        return;
+                      }
+                      void renameSection(category);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                      if (e.key === 'Escape') {
+                        renameCancelledRef.current = true;
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                ) : (
+                  <h2 className="font-mono text-xs uppercase tracking-wide text-white/40">
+                    {category}
+                  </h2>
+                )}
+                {isAdmin && renaming !== category && (
+                  <>
+                    <button
+                      type="button"
+                      className={handleClass}
+                      title="Drag to reorder sections"
+                      aria-label={`Drag to reorder the ${category} section`}
+                      draggable={!busy}
+                      onDragStart={(e) => beginDrag(e, { kind: 'category', name: category })}
+                      onDragEnd={endDrag}
+                    >
+                      ⠿
+                    </button>
+                    <button
+                      type="button"
+                      className={handleClass}
+                      title="Rename this section"
+                      aria-label={`Rename the ${category} section`}
+                      disabled={busy}
+                      onClick={() => {
+                        setRenameDraft(category);
+                        setRenaming(category);
+                      }}
+                    >
+                      rename
+                    </button>
+                    {/* Removing a section never touches documents, so the
+                        control only appears once it holds none. */}
+                    {inCategory.length === 0 && (
+                      <button
+                        type="button"
+                        className={handleClass}
+                        title="Remove this empty section"
+                        aria-label={`Remove the ${category} section`}
+                        disabled={busy}
+                        onClick={() => void deleteSection(category)}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {inCategory.map((sop) => renderCard(sop, true))}
-                {inCategory.length === 0 && drag?.kind === 'sop' && (
-                  // A section emptied mid-drag stays visible as a drop zone so
-                  // the move can be undone by dragging back.
-                  // biome-ignore lint/a11y/noStaticElementInteractions: passive drop target for the drag handles
-                  <div
-                    onDragEnter={() => enterCategory(category)}
-                    className="rounded border border-dashed border-white/20 p-4 text-center font-mono text-xs text-white/40"
-                  >
-                    drop here
-                  </div>
-                )}
+                {inCategory.length === 0 &&
+                  (drag?.kind === 'sop' ? (
+                    // A section emptied mid-drag stays visible as a drop zone
+                    // so the move can be undone by dragging back.
+                    // biome-ignore lint/a11y/noStaticElementInteractions: passive drop target for the drag handles
+                    <div
+                      onDragEnter={() => enterCategory(category)}
+                      className="rounded border border-dashed border-white/20 p-4 text-center font-mono text-xs text-white/40"
+                    >
+                      drop here
+                    </div>
+                  ) : (
+                    // A section with nothing in it yet — an admin just added
+                    // it, or emptied it. Say so rather than rendering a bare
+                    // header over blank space.
+                    <p className="rounded border border-dashed border-white/10 p-4 text-center font-mono text-xs text-white/30">
+                      {isAdmin ? 'No SOPs here yet — create one, or drag one in.' : 'No SOPs here.'}
+                    </p>
+                  ))}
               </div>
             </section>
           );

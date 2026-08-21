@@ -1,5 +1,7 @@
 // SOP library API for the /admin/sops tool. GET lists the SOPs the caller's
-// role may view (or one document + its history with ?slug= / ?id=), PUT saves
+// role may view — plus the section names to group them under, which for admins
+// includes sections holding nothing yet (see /api/admin/sop-categories) — or
+// one document + its history with ?slug= / ?id=. PUT saves
 // a new version (per-document edit_access, optimistic-locked on baseVersion),
 // POST / PATCH / DELETE are admin-only: create, change settings (access
 // levels, category, archive), and permanently delete an archived document.
@@ -20,7 +22,7 @@ import {
   type SopRole,
   slugify,
 } from '@/lib/sops/levels';
-import { type CategoryRank, sortSops } from '@/lib/sops/order';
+import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
@@ -49,6 +51,35 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function toSummary(row: SopRow): Omit<SopRow, 'content_md'> & { task_count: number } {
   const { content_md, ...rest } = row;
   return { ...rest, task_count: countTasks(content_md) };
+}
+
+/**
+ * Give `name` a row in `sop_categories` if it doesn't have one, placed last.
+ * Filing a document under a section that was only ever implied by other
+ * documents is what makes that section real and reorderable; without this a
+ * category typed into the create form stays unranked and pinned to the bottom.
+ * Best-effort: a failure here doesn't invalidate the document itself.
+ */
+async function ensureCategory(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  name: string
+): Promise<void> {
+  const { data: existing } = await db
+    .from('sop_categories')
+    .select('name')
+    .eq('name', name)
+    .maybeSingle();
+  if (existing) return;
+
+  const { data: last } = await db
+    .from('sop_categories')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  await db
+    .from('sop_categories')
+    .insert({ name, sort_order: last ? (last.sort_order as number) + 1 : 0 });
 }
 
 async function loadSop(
@@ -93,11 +124,28 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .limit(MAX_VERSIONS);
     if (versionsError) return json({ error: versionsError.message }, 500);
 
+    // The settings panel is admin-only and lets the document be refiled, so
+    // only admins need the list of sections to choose from.
+    let sections: string[] | undefined;
+    if (role === 'admin') {
+      const { data: ranks, error: ranksError } = await db
+        .from('sop_categories')
+        .select('name, sort_order');
+      if (ranksError) return json({ error: ranksError.message }, 500);
+      const { data: used, error: usedError } = await db.from('sops').select('category');
+      if (usedError) return json({ error: usedError.message }, 500);
+      sections = sectionsInOrder(
+        (ranks ?? []) as CategoryRank[],
+        (used ?? []) as { category: string }[]
+      );
+    }
+
     return json({
       sop,
       versions: (versions ?? []) as SopVersionRow[],
       role,
       canEdit: canEditSop(role, sop),
+      categories: sections,
       // Names for the editors this response names, so the header and history
       // read as people rather than mailbox local parts.
       people: await getPeopleNames([
@@ -118,7 +166,18 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (categoriesError) return json({ error: categoriesError.message }, 500);
 
   const visible = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(role, sop));
-  const sorted = sortSops(visible, (categories ?? []) as CategoryRank[]);
+  const ranks = (categories ?? []) as CategoryRank[];
+  const sorted = sortSops(visible, ranks);
+
+  // Sections to render headers for. Admins get every section, including ones
+  // holding nothing yet — an empty section is a shelf waiting for its SOPs,
+  // and hiding it would make "add a section" look like it did nothing. Anyone
+  // else only sees sections with a document they may read, so an empty header
+  // never hints at documents above their tier.
+  const sections =
+    role === 'admin'
+      ? sectionsInOrder(ranks, (data ?? []) as { category: string }[])
+      : sectionsInOrder(ranks, sorted).filter((name) => sorted.some((s) => s.category === name));
 
   // ?q= searches title + body of the already view-filtered documents, so a
   // snippet can never leak text from a document the caller may not read.
@@ -164,6 +223,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   return json({
     sops: sorted.map(toSummary),
+    categories: sections,
     role,
     pins,
     people: await getPeopleNames(sorted.map((s) => s.updated_by ?? '')),
@@ -253,6 +313,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     change_note: 'Created',
   });
   if (versionError) return json({ error: versionError.message }, 500);
+
+  await ensureCategory(db, category);
 
   return json({ sop }, 201);
 };
@@ -423,6 +485,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!data) return json({ error: 'SOP not found' }, 404);
+
+  if (patch.category) await ensureCategory(db, patch.category);
 
   return json({ sop: data as SopRow });
 };

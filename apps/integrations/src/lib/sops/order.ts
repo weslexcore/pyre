@@ -31,6 +31,26 @@ export function categoriesInOrder(sops: Sortable[]): string[] {
   return [...new Set(sops.map((s) => s.category))];
 }
 
+/**
+ * Every section name in display order: the ranked `sop_categories` rows first
+ * (by sort_order), then any category a document uses without a row of its own,
+ * alphabetically — the same precedence `sortSops` gives the documents.
+ *
+ * Unlike `categoriesInOrder` this keeps sections with no documents: a section
+ * an admin created ahead of the SOPs that will go in it is a real, empty
+ * shelf, not an absence.
+ */
+export function sectionsInOrder(ranks: CategoryRank[], sops: { category: string }[]): string[] {
+  const ranked = [...ranks].sort(
+    (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+  );
+  const named = new Set(ranked.map((r) => r.name));
+  const unranked = [...new Set(sops.map((s) => s.category))]
+    .filter((name) => !named.has(name))
+    .sort((a, b) => a.localeCompare(b));
+  return [...ranked.map((r) => r.name), ...unranked];
+}
+
 // ---------------------------------------------------------------------------
 // Live-reorder helpers for the drag-and-drop UI. Each returns a new array (or
 // the input untouched when the move is a no-op) — the island renders these

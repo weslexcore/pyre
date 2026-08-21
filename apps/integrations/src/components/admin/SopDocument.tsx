@@ -20,6 +20,8 @@ interface DocResponse {
   versions: SopVersionRow[];
   role: SopRole;
   canEdit: boolean;
+  /** Every section name, in library order — admins only (they alone refile). */
+  categories?: string[];
   /** Roster names for the emails stored on versions, runs and checks. */
   people?: PeopleNames;
 }
@@ -675,16 +677,30 @@ export function SopDocument({ slug }: { slug: string }) {
               </select>
             </label>
             <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-              category
-              <input
-                className={`${inputClass} w-36 py-1.5`}
-                defaultValue={sop.category}
+              section
+              {/* Picking from the library's sections rather than retyping the
+                  name — a typo here used to fork a one-document section. New
+                  sections are added on the library page. */}
+              <select
+                className={selectClass}
+                value={sop.category}
                 disabled={busy}
-                onBlur={(e) => {
-                  const value = e.target.value.trim();
+                onChange={(e) => {
+                  const value = e.target.value;
                   if (value && value !== sop.category) void patchSettings({ category: value });
                 }}
-              />
+              >
+                {/* The document's own section is always an option, even if the
+                    list didn't load. */}
+                {(data.categories?.includes(sop.category)
+                  ? (data.categories ?? [])
+                  : [sop.category, ...(data.categories ?? [])]
+                ).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex items-center gap-2 font-mono text-xs text-white/60">
               sort

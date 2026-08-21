@@ -4,6 +4,7 @@ import {
   moveSopToCategoryEnd,
   repositionCategory,
   repositionSop,
+  sectionsInOrder,
   sortSops,
 } from './order';
 
@@ -45,6 +46,48 @@ describe('sortSops', () => {
     const input = [sop('B', 0, 'b'), sop('A', 0, 'a')];
     sortSops(input, []);
     expect(input.map((s) => s.category)).toEqual(['B', 'A']);
+  });
+});
+
+describe('sectionsInOrder', () => {
+  it('keeps sections that hold no documents', () => {
+    expect(
+      sectionsInOrder(
+        [
+          { name: 'Opening', sort_order: 0 },
+          { name: 'Maintenance', sort_order: 1 },
+          { name: 'Closing', sort_order: 2 },
+        ],
+        [sop('Opening', 0, 'a'), sop('Closing', 0, 'b')]
+      )
+    ).toEqual(['Opening', 'Maintenance', 'Closing']);
+  });
+
+  it('appends categories used by documents but never ranked, alphabetically', () => {
+    expect(
+      sectionsInOrder(
+        [{ name: 'Opening', sort_order: 0 }],
+        [sop('Zeta', 0, 'z'), sop('Opening', 0, 'a'), sop('Alpha', 0, 'b')]
+      )
+    ).toEqual(['Opening', 'Alpha', 'Zeta']);
+  });
+
+  it('breaks ties between equal ranks by name, matching sortSops', () => {
+    expect(
+      sectionsInOrder(
+        [
+          { name: 'Beta', sort_order: 0 },
+          { name: 'Alpha', sort_order: 0 },
+        ],
+        []
+      )
+    ).toEqual(['Alpha', 'Beta']);
+  });
+
+  it('never repeats a section named by both a rank and a document', () => {
+    expect(sectionsInOrder([{ name: 'Opening', sort_order: 0 }], [sop('Opening', 0, 'a')])).toEqual(
+      ['Opening']
+    );
   });
 });
 
