@@ -1,8 +1,8 @@
--- Incident reporting: the bathhouse's log of everything that went wrong —
--- slips and falls, burns, heat illness, chemical exposure, altercations,
--- near misses. Staff file a report from /admin/incidents/new the moment the
--- situation is stable; the record is what insurance, OSHA-style follow-up,
--- and our own corrective actions all read from later.
+-- Incident reporting: the log of everything that went wrong on site — slips
+-- and falls, burns, heat illness, chemical exposure, altercations, near
+-- misses. Staff file a report from /admin/incidents/new once the situation is
+-- stable and everyone is safe; the record is what insurance, OSHA-style
+-- follow-up, and our own corrective actions all read from later.
 --
 -- Three tables:
 --   incidents             the report itself, one row per event
@@ -49,9 +49,9 @@ create table public.incidents (
   category text not null check (category in (
     'slip_fall', 'burn_heat', 'cut_laceration', 'heat_illness', 'cold_exposure',
     'fainting', 'breathing_difficulty', 'allergic_reaction', 'chemical_exposure',
-    'water_quality', 'medical_event', 'equipment_failure', 'facility_damage',
+    'medical_event', 'equipment_failure', 'facility_damage',
     'fire_smoke', 'altercation', 'harassment', 'intoxication', 'policy_violation',
-    'theft_security', 'hygiene_contamination', 'near_miss', 'other'
+    'theft_security', 'hygiene_contamination', 'other'
   )),
   severity text not null check (severity in ('near_miss', 'minor', 'moderate', 'severe', 'critical')),
 
@@ -61,15 +61,18 @@ create table public.incidents (
   occurred_at timestamptz not null,
   discovered_at timestamptz,
 
-  -- Where, within the building. `area` is a code from lib/incidents/types.ts;
-  -- `area_detail` is the free-text specifics ("second bench, left sauna").
+  -- Where on the grounds. `area` is a code from lib/incidents/types.ts (the
+  -- site is outdoors, so these are areas, not rooms); `area_detail` is the
+  -- free-text specifics ("second bench, left sauna").
   area text not null,
   area_detail text,
 
-  -- People. Each entry of affected_people:
-  --   { role, name, phone, email, member_id, injured, injury_nature,
-  --     body_parts[], notes }
-  -- Each entry of witnesses: { name, phone, email, is_staff, statement }
+  -- People. affected_people and witnesses share the same identity fields,
+  -- because the form names them the same way — a guest matched in Momence, a
+  -- staff member picked off the roster, or someone typed in by hand:
+  --   { role, name, phone, email, memberId, ... }
+  -- affected_people adds { injured, injuryNature, bodyParts[], notes };
+  -- witnesses add { statement }.
   affected_people jsonb not null default '[]'::jsonb,
   witnesses jsonb not null default '[]'::jsonb,
   -- Emails/names of staff working at the time, for follow-up interviews.
@@ -238,7 +241,7 @@ values (
 on conflict (id) do nothing;
 
 comment on table public.incidents is
-  'Bathhouse incident reports: what happened, to whom, what staff did, and how it was resolved. Filed by staff from /admin/incidents; who filed it and when are taken from the session, never the request body.';
+  'Incident reports for the site: what happened, to whom, what staff did, and how it was resolved. Filed by staff from /admin/incidents; who filed it and when are taken from the session, never the request body.';
 comment on table public.incident_attachments is
   'Photos, video, and documents attached to an incident report. Objects live in the private incident-media bucket and are only ever served through short-lived signed URLs.';
 comment on table public.incident_events is

@@ -35,7 +35,7 @@ import {
   factorLabel,
   INCIDENT_AREAS,
   type IncidentStatus,
-  PERSON_ROLE_LABELS,
+  personRoleLabel,
   SEVERITY_OPTIONS,
   statusLabel,
   type Witness,
@@ -280,7 +280,7 @@ export function IncidentDetail({
                 {incident.transported_to_hospital ? 'Went' : 'Did not go'}
               </Row>
               <Row label="Treatment refused">{incident.treatment_refused ? 'Yes' : 'No'}</Row>
-              <Row label="Left the building">{yesNoUnknown(incident.guest_left_premises)}</Row>
+              <Row label="Left the site">{yesNoUnknown(incident.guest_left_premises)}</Row>
               <Row label="Knows a report was filed">
                 {yesNoUnknown(incident.guest_informed_of_report)}
               </Row>
@@ -299,7 +299,7 @@ export function IncidentDetail({
                 <p className="text-sm text-[var(--pyre-creme)]">
                   {person.name || 'Name not recorded'}{' '}
                   <span className="font-mono text-xs text-white/40">
-                    · {PERSON_ROLE_LABELS[person.role] ?? person.role}
+                    · {personRoleLabel(person.role)}
                   </span>
                 </p>
                 {(person.phone || person.email || person.memberId) && (
@@ -332,16 +332,20 @@ export function IncidentDetail({
               // biome-ignore lint/suspicious/noArrayIndexKey: stored as a positional list
               <li key={i} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
                 <p className="text-sm text-[var(--pyre-creme)]">
-                  {witness.name || 'Name not recorded'}
-                  {witness.isStaff && (
-                    <span className="ml-2 font-mono text-[10px] uppercase text-white/40">
-                      staff
-                    </span>
-                  )}
+                  {witness.name || 'Name not recorded'}{' '}
+                  <span className="font-mono text-xs text-white/40">
+                    · {personRoleLabel(witness.role)}
+                  </span>
                 </p>
-                {(witness.phone || witness.email) && (
+                {(witness.phone || witness.email || witness.memberId) && (
                   <p className="mt-0.5 font-mono text-xs text-white/50">
-                    {[witness.phone, witness.email].filter(Boolean).join(' · ')}
+                    {[
+                      witness.phone,
+                      witness.email,
+                      witness.memberId && `member ${witness.memberId}`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                 )}
                 {witness.statement && (

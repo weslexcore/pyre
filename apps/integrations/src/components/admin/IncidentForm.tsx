@@ -43,12 +43,16 @@ import {
   type IncidentArea,
   type IncidentCategory,
   type IncidentSeverity,
-  PERSON_ROLE_LABELS,
-  PERSON_ROLES,
   SEVERITY_OPTIONS,
   type Witness,
 } from '@/lib/incidents/types';
 import { FIELD_LIMITS } from '@/lib/incidents/validate';
+import {
+  PersonPicker,
+  RowHeader,
+  StaffOnShiftPicker,
+  useStaffRoster,
+} from './IncidentPersonPicker';
 import {
   buttonClass,
   Chip,
@@ -220,7 +224,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
           if (Date.parse(form.occurredAtLocal) > Date.now() + 5 * 60_000) {
             return 'The time is in the future — check the date.';
           }
-          if (!form.area) return 'Pick where in the building it happened.';
+          if (!form.area) return 'Pick where on site it happened.';
           return null;
         case 3:
           if (form.description.trim().length < 10) {
@@ -412,6 +416,8 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
 
   return (
     <div ref={topRef} className="space-y-5 pb-28">
+      <SafetyFirstNotice />
+
       {draftRestored && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2.5">
           <p className="text-xs text-[var(--pyre-gold)]">
@@ -508,7 +514,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
           </div>
 
           <div>
-            <SectionTitle>Where in the building?</SectionTitle>
+            <SectionTitle>Where on site?</SectionTitle>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {INCIDENT_AREAS.map((area) => (
                 <TileButton
@@ -614,7 +620,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
               onChange={(treatmentRefused) => patch({ treatmentRefused })}
             />
             <YesNo
-              label="They left the building"
+              label="They left the site"
               value={form.guestLeftPremises}
               onChange={(guestLeftPremises) => patch({ guestLeftPremises })}
             />
@@ -711,7 +717,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
           </div>
 
           <div>
-            <SectionTitle note="What made it possible. This is what a trends review reads to decide what to change about the building.">
+            <SectionTitle note="What made it possible. This is what a trends review reads to decide what to change about the site.">
               Anything that contributed?
             </SectionTitle>
             <div className="flex flex-wrap gap-2">
@@ -845,6 +851,32 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
   );
 }
 
+/**
+ * The first thing on the page, and deliberately the loudest. Someone opening
+ * this form may still be standing over the person it is about — filing is
+ * never the emergency, and a form that quietly implies otherwise is a form
+ * that can get somebody hurt. Nothing here is dismissible: the report can be
+ * finished an hour later, or tomorrow, and the record is no worse for it.
+ */
+function SafetyFirstNotice() {
+  return (
+    <section className="rounded border-2 border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 p-4">
+      <h2 className="text-base font-primary-semibold text-[var(--pyre-creme)]">
+        Take care of the incident first.
+      </h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-[var(--pyre-creme)]/90">
+        Make sure everyone is safe before you fill any of this in. Call 911 if it is needed, give
+        first aid, get people away from whatever caused it, and stay with anyone who is hurt.
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--pyre-creme)]/90">
+        This report can wait. Come back and file it once things have settled — later today, or at
+        the end of your shift. You will be asked when it happened, so a report filed after the fact
+        is just as good as one filed on the spot.
+      </p>
+    </section>
+  );
+}
+
 function StepBar({
   step,
   onJump,
@@ -896,23 +928,22 @@ function PeopleStep({
   onWitnesses: (next: Witness[]) => void;
   onStaff: (next: string[]) => void;
 }) {
-  const [staffDraft, setStaffDraft] = useState('');
+  // One roster fetch for the whole step — every picker on it reads the same
+  // cached list rather than each firing its own request.
+  const { staff, available: staffAvailable } = useStaffRoster();
 
   const updatePerson = (index: number, changes: Partial<AffectedPerson>) => {
     onPeople(people.map((p, i) => (i === index ? { ...p, ...changes } : p)));
   };
 
-  const addStaff = () => {
-    const name = staffDraft.trim();
-    if (!name) return;
-    if (!staffPresent.includes(name)) onStaff([...staffPresent, name]);
-    setStaffDraft('');
+  const updateWitness = (index: number, changes: Partial<Witness>) => {
+    onWitnesses(witnesses.map((w, i) => (i === index ? { ...w, ...changes } : w)));
   };
 
   return (
     <section className="space-y-6">
       <div>
-        <SectionTitle note="Skip this if nobody was involved — a burst pipe at 6am has no people. Contact details are what makes follow-up possible, so get them while they're still here.">
+        <SectionTitle note="Skip this if nobody was involved — a stove that failed overnight has no people. Look them up rather than typing from memory: those contact details are what makes follow-up possible.">
           Who did this happen to?
         </SectionTitle>
 
@@ -926,61 +957,17 @@ function PeopleStep({
           {people.map((person, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and reorderable only by add/remove
             <div key={index} className={cardClass}>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-mono text-xs uppercase tracking-wide text-white/40">
-                  Person {index + 1}
-                </span>
-                <button
-                  type="button"
-                  className="font-mono text-xs text-white/40 hover:text-[var(--pyre-red)]"
-                  onClick={() => onPeople(people.filter((_, i) => i !== index))}
-                >
-                  Remove
-                </button>
-              </div>
+              <RowHeader
+                label={`Person ${index + 1}`}
+                onRemove={() => onPeople(people.filter((_, i) => i !== index))}
+              />
 
-              <div className="mb-3 flex flex-wrap gap-2">
-                {PERSON_ROLES.map((role) => (
-                  <Chip
-                    key={role}
-                    label={PERSON_ROLE_LABELS[role]}
-                    selected={person.role === role}
-                    onClick={() => updatePerson(index, { role })}
-                  />
-                ))}
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input
-                  className={inputClass}
-                  placeholder="Full name"
-                  maxLength={FIELD_LIMITS.personName}
-                  value={person.name}
-                  onChange={(e) => updatePerson(index, { name: e.target.value })}
-                />
-                <input
-                  className={inputClass}
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="Phone"
-                  value={person.phone}
-                  onChange={(e) => updatePerson(index, { phone: e.target.value })}
-                />
-                <input
-                  className={inputClass}
-                  type="email"
-                  inputMode="email"
-                  placeholder="Email"
-                  value={person.email}
-                  onChange={(e) => updatePerson(index, { email: e.target.value })}
-                />
-                <input
-                  className={inputClass}
-                  placeholder="Momence member (if known)"
-                  value={person.memberId}
-                  onChange={(e) => updatePerson(index, { memberId: e.target.value })}
-                />
-              </div>
+              <PersonPicker
+                identity={person}
+                staff={staff}
+                staffAvailable={staffAvailable}
+                onChange={(changes) => updatePerson(index, changes)}
+              />
 
               <div className="mt-3">
                 <YesNo
@@ -1043,7 +1030,7 @@ function PeopleStep({
       </div>
 
       <div>
-        <SectionTitle note="Anyone who saw it. Write down what they said in their own words, now — memories change fast.">
+        <SectionTitle note="Anyone who saw it — a guest, someone working, or a passer-by. Write down what they said in their own words, now: memories change fast.">
           Witnesses
         </SectionTitle>
 
@@ -1051,80 +1038,24 @@ function PeopleStep({
           {witnesses.map((witness, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and reorderable only by add/remove
             <div key={index} className={cardClass}>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-mono text-xs uppercase tracking-wide text-white/40">
-                  Witness {index + 1}
-                </span>
-                <button
-                  type="button"
-                  className="font-mono text-xs text-white/40 hover:text-[var(--pyre-red)]"
-                  onClick={() => onWitnesses(witnesses.filter((_, i) => i !== index))}
-                >
-                  Remove
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <input
-                  className={inputClass}
-                  placeholder="Name"
-                  maxLength={FIELD_LIMITS.personName}
-                  value={witness.name}
-                  onChange={(e) =>
-                    onWitnesses(
-                      witnesses.map((w, i) => (i === index ? { ...w, name: e.target.value } : w))
-                    )
-                  }
-                />
-                <input
-                  className={inputClass}
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="Phone"
-                  value={witness.phone}
-                  onChange={(e) =>
-                    onWitnesses(
-                      witnesses.map((w, i) => (i === index ? { ...w, phone: e.target.value } : w))
-                    )
-                  }
-                />
-                <input
-                  className={inputClass}
-                  type="email"
-                  inputMode="email"
-                  placeholder="Email"
-                  value={witness.email}
-                  onChange={(e) =>
-                    onWitnesses(
-                      witnesses.map((w, i) => (i === index ? { ...w, email: e.target.value } : w))
-                    )
-                  }
-                />
-              </div>
-              <label className="mt-2 flex items-center gap-2 font-mono text-xs text-white/60">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[var(--pyre-red)]"
-                  checked={witness.isStaff}
-                  onChange={(e) =>
-                    onWitnesses(
-                      witnesses.map((w, i) =>
-                        i === index ? { ...w, isStaff: e.target.checked } : w
-                      )
-                    )
-                  }
-                />
-                Pyre staff
-              </label>
+              <RowHeader
+                label={`Witness ${index + 1}`}
+                onRemove={() => onWitnesses(witnesses.filter((_, i) => i !== index))}
+              />
+
+              <PersonPicker
+                identity={witness}
+                staff={staff}
+                staffAvailable={staffAvailable}
+                onChange={(changes) => updateWitness(index, changes)}
+              />
+
               <textarea
-                className={`${inputClass} mt-2 min-h-[80px]`}
+                className={`${inputClass} mt-3 min-h-[80px]`}
                 placeholder="What they saw, in their words"
                 maxLength={FIELD_LIMITS.statement}
                 value={witness.statement}
-                onChange={(e) =>
-                  onWitnesses(
-                    witnesses.map((w, i) => (i === index ? { ...w, statement: e.target.value } : w))
-                  )
-                }
+                onChange={(e) => updateWitness(index, { statement: e.target.value })}
               />
             </div>
           ))}
@@ -1143,35 +1074,12 @@ function PeopleStep({
         <SectionTitle note="Who else was working. They may be asked what they remember.">
           Staff on shift
         </SectionTitle>
-        <div className="flex gap-2">
-          <input
-            className={inputClass}
-            placeholder="Name"
-            value={staffDraft}
-            onChange={(e) => setStaffDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addStaff();
-              }
-            }}
-          />
-          <button type="button" className={buttonClass} onClick={addStaff}>
-            Add
-          </button>
-        </div>
-        {staffPresent.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {staffPresent.map((name) => (
-              <Chip
-                key={name}
-                label={`${name} ✕`}
-                selected
-                onClick={() => onStaff(staffPresent.filter((n) => n !== name))}
-              />
-            ))}
-          </div>
-        )}
+        <StaffOnShiftPicker
+          selected={staffPresent}
+          staff={staff}
+          staffAvailable={staffAvailable}
+          onChange={onStaff}
+        />
       </div>
     </section>
   );

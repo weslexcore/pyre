@@ -18,6 +18,8 @@ import {
   INCIDENT_CATEGORIES,
   INCIDENT_SEVERITIES,
   PERSON_ROLES,
+  type PersonIdentity,
+  type PersonRole,
   type Witness,
 } from './types';
 
@@ -240,15 +242,41 @@ function normalizeField(key: string, spec: FieldSpec, raw: unknown): NormalizeRe
   }
 }
 
+/** Reader for the string fields every named person shares. */
+function fieldReader(entry: Record<string, unknown>) {
+  return (key: string, max: number = FIELD_LIMITS.shortText): string =>
+    typeof entry[key] === 'string' ? trimTo(entry[key] as string, max) : '';
+}
+
+/**
+ * The identity half of an affected person or a witness. `role` decides where
+ * the form looked them up, but the stored record is the same either way: a
+ * name, however we got it, plus whatever contact details came with it.
+ */
+function normalizeIdentity(e: Record<string, unknown>): PersonIdentity {
+  const str = fieldReader(e);
+  const role = (PERSON_ROLES as readonly string[]).includes(e.role as string)
+    ? (e.role as PersonRole)
+    : 'guest';
+
+  return {
+    role,
+    name: str('name', FIELD_LIMITS.personName),
+    phone: str('phone'),
+    email: str('email').toLowerCase(),
+    // Momence ids are numeric; anything else is a typo, not an id.
+    memberId: /^\d+$/.test(str('memberId')) ? str('memberId') : '',
+  };
+}
+
+const hasIdentity = (identity: PersonIdentity): boolean =>
+  Boolean(identity.name || identity.phone || identity.email || identity.memberId);
+
 function normalizePerson(entry: unknown): AffectedPerson | null {
   if (!entry || typeof entry !== 'object') return null;
   const e = entry as Record<string, unknown>;
-  const str = (key: string, max: number = FIELD_LIMITS.shortText): string =>
-    typeof e[key] === 'string' ? trimTo(e[key] as string, max) : '';
+  const str = fieldReader(e);
 
-  const role = (PERSON_ROLES as readonly string[]).includes(e.role as string)
-    ? (e.role as AffectedPerson['role'])
-    : 'guest';
   const bodyParts = Array.isArray(e.bodyParts)
     ? [
         ...new Set(
@@ -261,11 +289,7 @@ function normalizePerson(entry: unknown): AffectedPerson | null {
     : [];
 
   const person: AffectedPerson = {
-    role,
-    name: str('name', FIELD_LIMITS.personName),
-    phone: str('phone'),
-    email: str('email').toLowerCase(),
-    memberId: str('memberId'),
+    ...normalizeIdentity(e),
     injured: e.injured === true,
     injuryNature: str('injuryNature', FIELD_LIMITS.personNotes),
     bodyParts,
@@ -275,30 +299,19 @@ function normalizePerson(entry: unknown): AffectedPerson | null {
   // "Nothing was filled in" — not even an unnamed injury. An entry that says
   // only "someone was hurt, no name" is still worth keeping.
   const hasContent =
-    person.name ||
-    person.phone ||
-    person.email ||
-    person.memberId ||
-    person.injuryNature ||
-    person.notes ||
-    person.bodyParts.length > 0;
+    hasIdentity(person) || person.injuryNature || person.notes || person.bodyParts.length > 0;
   return hasContent ? person : null;
 }
 
 function normalizeWitness(entry: unknown): Witness | null {
   if (!entry || typeof entry !== 'object') return null;
   const e = entry as Record<string, unknown>;
-  const str = (key: string, max: number = FIELD_LIMITS.shortText): string =>
-    typeof e[key] === 'string' ? trimTo(e[key] as string, max) : '';
 
   const witness: Witness = {
-    name: str('name', FIELD_LIMITS.personName),
-    phone: str('phone'),
-    email: str('email').toLowerCase(),
-    isStaff: e.isStaff === true,
-    statement: str('statement', FIELD_LIMITS.statement),
+    ...normalizeIdentity(e),
+    statement: fieldReader(e)('statement', FIELD_LIMITS.statement),
   };
-  return witness.name || witness.phone || witness.email || witness.statement ? witness : null;
+  return hasIdentity(witness) || witness.statement ? witness : null;
 }
 
 /**

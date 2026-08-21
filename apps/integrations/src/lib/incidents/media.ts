@@ -59,7 +59,7 @@ const MAX_IMAGE_EDGE = 2000;
 const DOWNSCALE_THRESHOLD_BYTES = 1_500_000;
 
 /**
- * Shrink a phone photo before upload so filing a report over the building's
+ * Shrink a phone photo before upload so filing a report over the site's
  * wifi doesn't stall on a 12 MP original. Returns the file untouched when it
  * is already small, isn't a re-encodable image, or the browser can't decode
  * it (HEIC outside Safari) — the upload still works, it's just bigger.

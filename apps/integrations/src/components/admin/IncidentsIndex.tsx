@@ -4,7 +4,7 @@
 //     the biggest thing on the screen, because at that moment nothing else on
 //     this page matters.
 //   * A reviewer working the queue — open reports first, then filters and the
-//     full history, with the counts that say whether the building is getting
+//     full history, with the counts that say whether the site is getting
 //     safer or not.
 //
 // Reporters without incidents:manage only ever see the reports they filed;
@@ -128,7 +128,7 @@ export function IncidentsIndex() {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 p-4">
         <div>
           <p className="text-sm font-primary-semibold text-[var(--pyre-creme)]">
-            Something happen in the building?
+            Something happen on site?
           </p>
           <p className="mt-0.5 text-xs text-white/60">
             File it while it's fresh — takes about two minutes on your phone.
