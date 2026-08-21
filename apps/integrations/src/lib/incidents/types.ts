@@ -2,6 +2,9 @@
 // API validates against. Keep this module client-bundle-safe (no db/env
 // imports) — the React islands import it directly, and the check constraints
 // in the incidents migration mirror these lists.
+//
+// The site is outdoors, so the areas are grounds, not rooms, and weather is a
+// first-class contributing factor.
 
 export const INCIDENT_CATEGORIES = [
   'slip_fall',
@@ -13,7 +16,6 @@ export const INCIDENT_CATEGORIES = [
   'breathing_difficulty',
   'allergic_reaction',
   'chemical_exposure',
-  'water_quality',
   'medical_event',
   'equipment_failure',
   'facility_damage',
@@ -24,7 +26,6 @@ export const INCIDENT_CATEGORIES = [
   'policy_violation',
   'theft_security',
   'hygiene_contamination',
-  'near_miss',
   'other',
 ] as const;
 
@@ -38,9 +39,9 @@ export interface CategoryOption {
 }
 
 // Order matters: the form renders these as big tap targets, most-common
-// first, so the usual bathhouse incidents are reachable without scrolling.
+// first, so the usual incidents are reachable without scrolling.
 export const CATEGORY_OPTIONS: CategoryOption[] = [
-  { value: 'slip_fall', label: 'Slip / trip / fall', hint: 'Wet floor, steps, benches, ice' },
+  { value: 'slip_fall', label: 'Slip / trip / fall', hint: 'Wet decking, steps, paths, ice' },
   { value: 'burn_heat', label: 'Burn', hint: 'Sauna rocks, stove, heater, hot surface, steam' },
   { value: 'heat_illness', label: 'Heat illness', hint: 'Overheating, dizziness, nausea, cramps' },
   { value: 'fainting', label: 'Fainting / lightheaded', hint: 'Passed out or nearly did' },
@@ -62,13 +63,12 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
     label: 'Chemical exposure',
     hint: 'Chlorine, shock, cleaning products',
   },
-  { value: 'water_quality', label: 'Water quality', hint: 'Bad readings, cloudy or unsafe water' },
   {
     value: 'equipment_failure',
     label: 'Equipment failure',
     hint: 'Stove, pump, heater, door, lock',
   },
-  { value: 'facility_damage', label: 'Facility damage', hint: 'Property damage, leak, breakage' },
+  { value: 'facility_damage', label: 'Property damage', hint: 'Damage, leak, breakage on site' },
   { value: 'fire_smoke', label: 'Fire / smoke', hint: 'Any fire, smoke, or alarm activation' },
   { value: 'altercation', label: 'Altercation', hint: 'Conflict between people on site' },
   { value: 'harassment', label: 'Harassment', hint: 'Toward a guest or a staff member' },
@@ -84,7 +84,6 @@ export const CATEGORY_OPTIONS: CategoryOption[] = [
     label: 'Hygiene / contamination',
     hint: 'Bodily fluids, contamination event',
   },
-  { value: 'near_miss', label: 'Near miss', hint: 'Nobody hurt, but it nearly happened' },
   { value: 'other', label: 'Something else', hint: 'Describe it below' },
 ];
 
@@ -115,7 +114,7 @@ export const SEVERITY_OPTIONS: SeverityOption[] = [
   { value: 'minor', label: 'Minor', hint: 'First aid on site, carried on' },
   { value: 'moderate', label: 'Moderate', hint: 'Stopped their session, may see a doctor' },
   { value: 'severe', label: 'Severe', hint: 'Needed medical care or left in an ambulance' },
-  { value: 'critical', label: 'Critical', hint: 'Life-threatening, or the building was evacuated' },
+  { value: 'critical', label: 'Critical', hint: 'Life-threatening, or the site was evacuated' },
 ];
 
 export const SEVERITY_LABELS: Record<IncidentSeverity, string> = Object.fromEntries(
@@ -148,20 +147,20 @@ export const STATUS_LABELS: Record<IncidentStatus, string> = {
 /** Statuses that still need someone to do something. */
 export const OPEN_STATUSES: IncidentStatus[] = ['submitted', 'under_review', 'action_required'];
 
-// Areas of the bathhouse. Free text stays available in area_detail; this list
+// Areas of the site. Free text stays available in area_detail; this list
 // exists so the log can be grouped by where things keep happening.
 export const INCIDENT_AREAS = [
   'sauna',
   'cold_plunge',
   'showers',
-  'changing_room',
+  'changing_area',
   'restroom',
-  'lobby',
+  'check_in',
   'lounge',
-  'deck_patio',
-  'walkway_stairs',
+  'deck',
+  'path_stairs',
   'parking_lot',
-  'mechanical_room',
+  'equipment_area',
   'staff_area',
   'other',
 ] as const;
@@ -172,24 +171,26 @@ export const AREA_LABELS: Record<IncidentArea, string> = {
   sauna: 'Sauna',
   cold_plunge: 'Cold plunge',
   showers: 'Showers',
-  changing_room: 'Changing room',
+  changing_area: 'Changing area',
   restroom: 'Restroom',
-  lobby: 'Lobby / front desk',
-  lounge: 'Lounge',
-  deck_patio: 'Deck / patio',
-  walkway_stairs: 'Walkway / stairs',
-  parking_lot: 'Parking lot',
-  mechanical_room: 'Mechanical room',
+  check_in: 'Check-in',
+  lounge: 'Lounge / fire',
+  deck: 'Deck',
+  path_stairs: 'Paths / stairs',
+  parking_lot: 'Parking',
+  equipment_area: 'Equipment area',
   staff_area: 'Staff area',
   other: 'Somewhere else',
 };
 
 // Conditions that contributed. Checkboxes rather than prose because these are
-// what a trends review actually queries — "how many falls involved standing
-// water?" is the question that changes how the building is run.
+// what a trends review actually queries — "how many falls happened on ice?"
+// is the question that changes how the site is run.
 export const CONTRIBUTING_FACTORS = [
   'wet_surface',
   'standing_water',
+  'ice_snow',
+  'weather',
   'uneven_surface',
   'poor_lighting',
   'missing_signage',
@@ -211,7 +212,9 @@ export type ContributingFactor = (typeof CONTRIBUTING_FACTORS)[number];
 export const FACTOR_LABELS: Record<ContributingFactor, string> = {
   wet_surface: 'Wet surface',
   standing_water: 'Standing water',
-  uneven_surface: 'Uneven / slippery surface',
+  ice_snow: 'Ice or snow',
+  weather: 'Weather — rain, wind, heat',
+  uneven_surface: 'Uneven / slippery ground',
   poor_lighting: 'Poor lighting',
   missing_signage: 'Missing or unclear signage',
   obstruction: 'Obstruction in the way',
@@ -227,16 +230,17 @@ export const FACTOR_LABELS: Record<ContributingFactor, string> = {
   unknown: 'Unknown',
 };
 
-export const PERSON_ROLES = ['guest', 'staff', 'contractor', 'visitor', 'unknown'] as const;
+// Who someone is, which also decides where the form looks them up: a guest
+// is searched in Momence, a staff member is picked off our roster, and
+// 'other' is typed in by hand (a passer-by, a delivery driver, a contractor).
+export const PERSON_ROLES = ['guest', 'staff', 'other'] as const;
 
 export type PersonRole = (typeof PERSON_ROLES)[number];
 
 export const PERSON_ROLE_LABELS: Record<PersonRole, string> = {
   guest: 'Guest',
   staff: 'Staff',
-  contractor: 'Contractor',
-  visitor: 'Visitor',
-  unknown: 'Unknown',
+  other: 'Other',
 };
 
 // Body parts, coarse enough that anyone picks the same one. Injury nature is
@@ -263,14 +267,22 @@ export const BODY_PARTS = [
 
 export type BodyPart = (typeof BODY_PARTS)[number];
 
-/** One person the incident happened to. */
-export interface AffectedPerson {
+/**
+ * Identity fields shared by everyone a report names, whether the incident
+ * happened to them or they only saw it. Filled by the Momence search (guest),
+ * the roster picker (staff), or by hand ('other').
+ */
+export interface PersonIdentity {
   role: PersonRole;
   name: string;
   phone: string;
   email: string;
-  /** Momence member id when the front desk can find them; free text otherwise. */
+  /** Momence member id when the guest was matched in the search. */
   memberId: string;
+}
+
+/** One person the incident happened to. */
+export interface AffectedPerson extends PersonIdentity {
   injured: boolean;
   /** Free text: "second-degree burn", "sprained ankle". */
   injuryNature: string;
@@ -279,21 +291,17 @@ export interface AffectedPerson {
 }
 
 /** Someone who saw it. Statements are captured verbatim while memory is fresh. */
-export interface Witness {
-  name: string;
-  phone: string;
-  email: string;
-  isStaff: boolean;
+export interface Witness extends PersonIdentity {
   statement: string;
+}
+
+export function emptyPersonIdentity(): PersonIdentity {
+  return { role: 'guest', name: '', phone: '', email: '', memberId: '' };
 }
 
 export function emptyAffectedPerson(): AffectedPerson {
   return {
-    role: 'guest',
-    name: '',
-    phone: '',
-    email: '',
-    memberId: '',
+    ...emptyPersonIdentity(),
     injured: true,
     injuryNature: '',
     bodyParts: [],
@@ -302,7 +310,7 @@ export function emptyAffectedPerson(): AffectedPerson {
 }
 
 export function emptyWitness(): Witness {
-  return { name: '', phone: '', email: '', isStaff: false, statement: '' };
+  return { ...emptyPersonIdentity(), statement: '' };
 }
 
 export function isIncidentCategory(v: unknown): v is IncidentCategory {
@@ -340,4 +348,9 @@ export function statusLabel(value: string): string {
 
 export function factorLabel(value: string): string {
   return (FACTOR_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/** Label for a stored role, tolerating rows written before a list change. */
+export function personRoleLabel(value: string): string {
+  return (PERSON_ROLE_LABELS as Record<string, string>)[value] ?? value;
 }
