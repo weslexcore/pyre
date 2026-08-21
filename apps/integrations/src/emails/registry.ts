@@ -3,6 +3,7 @@ import { ConfirmationEmail } from './components/ConfirmationEmail';
 import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
 import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
+import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
 import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
@@ -108,6 +109,11 @@ export const EMAIL_TEMPLATES: Registry = {
         ? `You're on: ${p.shiftLabel} on ${p.dateLabel}`
         : `Shift request update: ${p.shiftLabel} on ${p.dateLabel}`,
     Component: ShiftRequestDecision,
+  },
+  'incident-reported': {
+    subject: (p) =>
+      `${p.severityLabel} incident: ${p.categoryLabel} in the ${p.areaLabel} (${p.reference})`,
+    Component: IncidentReported,
   },
 };
 

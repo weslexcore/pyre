@@ -3,7 +3,8 @@
 // unit economics, membership flows, and attendance. All numbers arrive
 // pre-joined from /api/admin/business-overview (Momence report snapshots +
 // labor cost from the shifts tables); this island only renders.
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BusinessOverviewPayload, BusinessWeek } from '@/pages/api/admin/business-overview';
 
 const GOLD = '#b58d35';
@@ -270,48 +271,38 @@ function UnitEconomicsChart({ weeks }: { weeks: BusinessWeek[] }) {
   );
 }
 
-/** New members up (gold) vs cancellations down-styled (creme) side by side. */
+/**
+ * New members per week (gold). Cancellations used to sit beside these bars,
+ * but Momence exposes no host endpoint for them — see lib/reports/activity.ts
+ * — so the chart shows arrivals only rather than an always-empty half.
+ */
 function MembershipChart({ weeks }: { weeks: BusinessWeek[] }) {
-  const max = Math.max(...weeks.flatMap((w) => [w.newMembers ?? 0, w.cancellations ?? 0]), 1);
+  const max = Math.max(...weeks.map((w) => w.newMembers ?? 0), 1);
   return (
     <ChartShell
       weeks={weeks}
       max={max}
       yLabel={(v) => String(Math.round(v))}
-      ariaLabel="New members vs cancellations"
+      ariaLabel="New members per week"
     >
       {(f) => (
         <>
           {weeks.map((week, i) => {
-            const pairW = Math.min(f.step * 0.6, 40);
-            const barW = pairW / 2;
-            const x = f.LEFT + i * f.step + (f.step - pairW) / 2;
+            const barW = Math.min(f.step * 0.6, 40);
+            const x = f.LEFT + i * f.step + (f.step - barW) / 2;
             const newH = ((week.newMembers ?? 0) / max) * f.plotH;
-            const cancelH = ((week.cancellations ?? 0) / max) * f.plotH;
-            const dim = week.future ? 0.35 : 0.85;
             return (
-              <g key={week.weekStart}>
-                <rect
-                  x={x}
-                  y={f.TOP + f.plotH - newH}
-                  width={barW - 1}
-                  height={newH}
-                  fill={GOLD}
-                  opacity={dim}
-                >
-                  <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.newMembers ?? '—'} new · ${week.cancellations ?? '—'} cancelled${week.activeMembers !== null ? ` · ${week.activeMembers} active` : ''}`}</title>
-                </rect>
-                <rect
-                  x={x + barW}
-                  y={f.TOP + f.plotH - cancelH}
-                  width={barW - 1}
-                  height={cancelH}
-                  fill={CREME}
-                  opacity={week.future ? 0.3 : 0.6}
-                >
-                  <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.cancellations ?? '—'} cancelled`}</title>
-                </rect>
-              </g>
+              <rect
+                key={week.weekStart}
+                x={x}
+                y={f.TOP + f.plotH - newH}
+                width={barW - 1}
+                height={newH}
+                fill={GOLD}
+                opacity={week.future ? 0.35 : 0.85}
+              >
+                <title>{`Week of ${fmtWeek(week.weekStart)}: ${week.newMembers ?? '—'} new${week.activeMembers !== null ? ` · ${week.activeMembers} active` : ''}`}</title>
+              </rect>
             );
           })}
         </>
@@ -376,30 +367,15 @@ function AttendanceChart({ weeks }: { weeks: BusinessWeek[] }) {
 }
 
 export function BusinessOverview() {
-  const [data, setData] = useState<BusinessOverviewPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [windowWeeks, setWindowWeeks] = useState<number>(DEFAULT_WINDOW);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/business-overview?weeks=${windowWeeks}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BusinessOverviewPayload);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [windowWeeks]);
+  // One cache entry per window, so switching back to a window you already
+  // viewed repaints from cache while it revalidates behind you.
+  const { data, error, loading, refreshing } = useCachedJson<BusinessOverviewPayload>(
+    `/api/admin/business-overview?weeks=${windowWeeks}`
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading && !data) return <p className="font-mono text-sm text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
   if (error || !data) {
     return (
       <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
@@ -428,13 +404,13 @@ export function BusinessOverview() {
             type="button"
             className={`${buttonClass} ${windowWeeks === w ? 'border-white/40 text-white' : ''}`}
             aria-pressed={windowWeeks === w}
-            disabled={loading}
+            disabled={loading || refreshing}
             onClick={() => setWindowWeeks(w)}
           >
             {w} wks
           </button>
         ))}
-        {loading && data && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
       {(neverSynced || syncStale || data.missingReportTypes.length > 0) && (
@@ -536,14 +512,9 @@ export function BusinessOverview() {
       {/* ---- Memberships ---- */}
       <section className="space-y-2">
         <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-          Memberships: new vs cancelled
+          Memberships: new members
         </h2>
-        <Legend
-          items={[
-            { color: GOLD, label: 'new members' },
-            { color: CREME, label: 'cancellations' },
-          ]}
-        />
+        <Legend items={[{ color: GOLD, label: 'new members' }]} />
         <MembershipChart weeks={data.weeks} />
       </section>
 

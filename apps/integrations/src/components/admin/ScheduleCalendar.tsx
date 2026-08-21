@@ -15,7 +15,8 @@ import {
   timeToMinutes,
   weekStartOf,
 } from '@pyre/schedule-core';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { StaffMultiSelect } from './StaffMultiSelect';
@@ -128,9 +129,6 @@ const toneBlock: Record<CoverageTone, string> = {
 
 export function ScheduleCalendar() {
   const [monthStart, setMonthStart] = useState(() => monthStartOf(todayLocal()));
-  const [data, setData] = useState<BoardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // "My shifts": only show shift blocks the viewer is assigned to.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
   // Manage-side people filter: whose shifts and time off to show (empty =
@@ -142,23 +140,11 @@ export function ScheduleCalendar() {
   const gridStart = useMemo(() => weekStartOf(monthStart), [monthStart]);
   const gridEnd = useMemo(() => addDays(weekStartOf(monthEndOf(monthStart)), 6), [monthStart]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/schedule-board?start=${gridStart}&end=${gridEnd}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as BoardData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [gridStart, gridEnd]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Each month grid is its own cache entry, so paging back to a month you
+  // already opened repaints immediately and revalidates behind you.
+  const { data, error, loading, refreshing } = useCachedJson<BoardData>(
+    `/api/admin/schedule-board?start=${gridStart}&end=${gridEnd}`
+  );
 
   const weeks = useMemo(() => {
     const result: string[][] = [];
@@ -232,7 +218,7 @@ export function ScheduleCalendar() {
     return map;
   }, [data, weeks, personColor]);
 
-  if (loading && !data) {
+  if (loading) {
     return <p className="font-mono text-sm text-white/40">Loading calendar…</p>;
   }
 
@@ -295,7 +281,7 @@ export function ScheduleCalendar() {
             onChange={setStaffFilter}
           />
         )}
-        {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
       {error && (

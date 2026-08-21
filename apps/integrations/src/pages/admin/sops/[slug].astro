@@ -1,0 +1,27 @@
+---
+// One SOP document. The title is resolved server-side (with the same
+// role check the API applies) purely so the page header reads right; the
+// island fetches the document + history itself and /api/admin/sops stays the
+// security boundary.
+import { SopDocument } from '@/components/admin/SopDocument';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { getDb, type SopRow } from '@/lib/db';
+import { canViewSop } from '@/lib/sops/levels';
+import { getSopRole } from '@/lib/sops/role';
+
+const slug = Astro.params.slug ?? '';
+const access = Astro.locals.adminAccess ?? null;
+const email = Astro.locals.adminUser?.email ?? null;
+
+let title = 'SOP';
+const db = getDb();
+if (db && access) {
+  const { data } = await db.from('sops').select('*').eq('slug', slug).maybeSingle();
+  const sop = (data as SopRow) ?? null;
+  if (sop && canViewSop(await getSopRole(email, access), sop)) title = sop.title;
+}
+---
+
+<AdminLayout title={title} subtitle="Standard operating procedure">
+  <SopDocument client:load slug={slug} />
+</AdminLayout>

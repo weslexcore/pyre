@@ -7,6 +7,7 @@
 // is decided per user on /admin/users; the current pathname is checked here.
 // The /api/admin/* routes each page calls re-check the session on every
 // request (this gate is UX; the API gate is the security boundary).
+import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { canViewPath, toolsForAccess } from '@/components/admin/adminTools';
 import '@/styles/admin.css';
@@ -36,6 +37,10 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>{title} — Pyre Admin</title>
+    {/* Client-side nav between admin pages: the router swaps the document
+        instead of reloading it, which keeps the loaded JS realm alive so the
+        lib/client/cachedJson cache survives and pages repaint instantly. */}
+    <ClientRouter />
   </head>
   <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
     {
@@ -48,6 +53,8 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
           </p>
           <a
             href="/api/auth/logout"
+            data-astro-prefetch="false"
+            data-astro-reload
             class="mt-6 inline-block font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
           >
             Log out
@@ -61,6 +68,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
             >
               <a
                 href="/admin"
+                data-astro-prefetch
                 class="shrink-0 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] hover:text-white"
               >
                 Pyre Admin

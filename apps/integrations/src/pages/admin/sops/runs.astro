@@ -1,0 +1,20 @@
+---
+// Checklist-run log. Admins see every run with the filter bar; everyone else
+// sees only the runs they took part in (the API enforces the scoping — the
+// isAdmin prop just decides whether to render the filters).
+import { SopRunsBoard } from '@/components/admin/SopRunsBoard';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
+---
+
+<AdminLayout
+  title="Checklist Runs"
+  subtitle={
+    isAdmin
+      ? 'Who ran which SOP, what they checked, and when'
+      : 'Your checklist runs — what you started, checked, and finished'
+  }
+>
+  <SopRunsBoard client:load isAdmin={isAdmin} />
+</AdminLayout>

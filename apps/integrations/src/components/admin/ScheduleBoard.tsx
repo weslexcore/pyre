@@ -24,6 +24,7 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invalidateJson } from '@/lib/client/cachedJson';
 import type {
   ScheduleProposalRow,
   ShiftAssignmentRow,
@@ -241,7 +242,13 @@ async function api(
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.ok) return {};
+  if (res.ok) {
+    // Every board mutation lands in the same tables the Calendar and Hours
+    // tabs read through lib/client/cachedJson. Drop their entries so those
+    // tabs can't repaint a pre-edit snapshot from cache.
+    invalidateJson('/api/admin/schedule-board');
+    return {};
+  }
   try {
     return { error: ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}` };
   } catch {
@@ -509,6 +516,9 @@ export function ScheduleBoard() {
           return { error: `HTTP ${res.status}` };
         }
       }
+      // A Momence sync rewrites shifts wholesale — same staleness risk as any
+      // other board mutation.
+      invalidateJson('/api/admin/schedule-board');
       return {};
     });
   };

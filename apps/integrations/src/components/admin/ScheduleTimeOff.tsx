@@ -10,6 +10,7 @@ import {
   type TimeOffKind,
 } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invalidateJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { StaffMultiSelect } from './StaffMultiSelect';
 
@@ -205,6 +206,9 @@ export function ScheduleTimeOff() {
         setError(`HTTP ${res.status}`);
       }
     } else {
+      // Time off rides along in the schedule-board payload the Calendar and
+      // Hours tabs cache, so their entries have to go with it.
+      invalidateJson('/api/admin/schedule-board');
       resetForm();
       await load();
     }
@@ -215,6 +219,7 @@ export function ScheduleTimeOff() {
     setBusy(true);
     if (id === editingId) resetForm();
     await fetch(`/api/admin/schedule-time-off?id=${id}`, { method: 'DELETE' });
+    invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };

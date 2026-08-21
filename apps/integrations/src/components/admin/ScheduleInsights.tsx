@@ -4,7 +4,8 @@
 // and unmet demand (denied requests, subbed-away shifts). All numbers arrive
 // pre-computed from /api/admin/schedule-insights; this island only renders.
 import { addDays, weekStartOf } from '@pyre/schedule-core';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ScheduleInsightsPayload } from '@/pages/api/admin/schedule-insights';
 
 const GOLD = '#b58d35';
@@ -175,9 +176,6 @@ function CostChart({ weeks }: { weeks: ScheduleInsightsPayload['weeks'] }) {
 }
 
 export function ScheduleInsights() {
-  const [data, setData] = useState<ScheduleInsightsPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [windowWeeks, setWindowWeeks] = useState<number | 'custom'>(DEFAULT_WINDOW);
   // Custom range defaults to the standard window so switching modes starts
   // from familiar numbers instead of an empty chart.
@@ -187,26 +185,18 @@ export function ScheduleInsights() {
   const [customEnd, setCustomEnd] = useState(() => todayLocal());
   const customValid = customStart !== '' && customEnd !== '' && customStart <= customEnd;
 
-  const load = useCallback(async () => {
-    if (windowWeeks === 'custom' && !customValid) return;
-    const query =
-      windowWeeks === 'custom' ? `start=${customStart}&end=${customEnd}` : `weeks=${windowWeeks}`;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/schedule-insights?${query}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()) as ScheduleInsightsPayload);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, [windowWeeks, customStart, customEnd, customValid]);
+  // Null URL parks the fetch while a custom range is half-entered, matching
+  // the old early-return. Each window/range keeps its own cache entry, so
+  // flipping back to one you already looked at repaints without a round trip.
+  const url =
+    windowWeeks === 'custom'
+      ? customValid
+        ? `/api/admin/schedule-insights?start=${customStart}&end=${customEnd}`
+        : null
+      : `/api/admin/schedule-insights?weeks=${windowWeeks}`;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, error, loading, refreshing } = useCachedJson<ScheduleInsightsPayload>(url);
+  const busy = loading || refreshing;
 
   const windowPicker = (
     <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +207,7 @@ export function ScheduleInsights() {
           type="button"
           className={`${buttonClass} ${windowWeeks === w ? 'border-white/40 text-white' : ''}`}
           aria-pressed={windowWeeks === w}
-          disabled={loading}
+          disabled={busy}
           onClick={() => setWindowWeeks(w)}
         >
           {w} wks
@@ -227,7 +217,7 @@ export function ScheduleInsights() {
         type="button"
         className={`${buttonClass} ${windowWeeks === 'custom' ? 'border-white/40 text-white' : ''}`}
         aria-pressed={windowWeeks === 'custom'}
-        disabled={loading}
+        disabled={busy}
         onClick={() => setWindowWeeks('custom')}
       >
         Custom
@@ -256,11 +246,11 @@ export function ScheduleInsights() {
           )}
         </>
       )}
-      {loading && data && <span className="font-mono text-xs text-white/40">Loading…</span>}
+      {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
     </div>
   );
 
-  if (loading && !data) return <p className="font-mono text-sm text-white/40">Loading…</p>;
+  if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
   if (error || !data) {
     return (
       <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
