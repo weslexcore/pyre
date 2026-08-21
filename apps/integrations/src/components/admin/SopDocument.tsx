@@ -96,7 +96,9 @@ const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
 /**
  * The live checklist: the document's prose rendered as usual, its task items
  * as real checkboxes bound to the shared run — each checked item shows who
- * ticked it and when.
+ * ticked it and when. There are two ways out: finish it, or discard it if it
+ * was started by mistake (that leaves no record). A run left alone stays in
+ * progress and keeps showing up as active.
  */
 function RunView({
   runData,
@@ -105,15 +107,13 @@ function RunView({
   busy,
   onToggle,
   onFinish,
-  onExit,
 }: {
   runData: { run: SopRunRow; checks: SopRunCheckRow[]; content: string };
   people?: PeopleNames;
   currentVersion: number;
   busy: boolean;
   onToggle: (itemIndex: number, itemText: string, checked: boolean) => void;
-  onFinish: (action: 'complete' | 'abandon') => void;
-  onExit: () => void;
+  onFinish: (action: 'complete' | 'discard') => void;
 }) {
   const { run, checks, content } = runData;
   const parsed = useMemo(() => parseChecklist(content), [content]);
@@ -143,16 +143,15 @@ function RunView({
             >
               Finish
             </button>
-            <button type="button" className={buttonClass} disabled={busy} onClick={onExit}>
-              Exit (keep running)
-            </button>
             <button
               type="button"
-              className="rounded border border-white/10 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-[var(--pyre-red)] disabled:opacity-40"
+              // The only way out other than finishing, so it reads at the
+              // same size as Finish — muted, but not hidden.
+              className="rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-[var(--pyre-red)]/50 hover:text-[var(--pyre-red)] disabled:opacity-40"
               disabled={busy}
-              onClick={() => onFinish('abandon')}
+              onClick={() => onFinish('discard')}
             >
-              Abandon
+              Discard
             </button>
           </span>
         </div>
@@ -359,8 +358,9 @@ export function SopDocument({ slug }: { slug: string }) {
       body: JSON.stringify({ runId: runData.run.id, ...payload }),
     });
     if (!res.ok) throw new Error(await readError(res));
+    // `run` comes back null when the action was a discard — the row is gone.
     const body = (await res.json()) as {
-      run: SopRunRow;
+      run: SopRunRow | null;
       checks: SopRunCheckRow[];
       people?: PeopleNames;
     };
@@ -377,7 +377,7 @@ export function SopDocument({ slug }: { slug: string }) {
       const body = await patchRun(
         checked ? { action: 'check', itemIndex, itemText } : { action: 'uncheck', itemIndex }
       );
-      if (body) setRunData({ ...runData, run: body.run, checks: body.checks });
+      if (body?.run) setRunData({ ...runData, run: body.run, checks: body.checks });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the check');
     } finally {
@@ -385,15 +385,20 @@ export function SopDocument({ slug }: { slug: string }) {
     }
   };
 
-  const finishRun = async (action: 'complete' | 'abandon') => {
+  const finishRun = async (action: 'complete' | 'discard') => {
     if (!runData) return;
-    const unchecked = runData.run.task_count - runData.checks.length;
+    const done = runData.checks.length;
+    const unchecked = runData.run.task_count - done;
     const message =
       action === 'complete'
         ? unchecked > 0
           ? `${unchecked} item${unchecked === 1 ? '' : 's'} unchecked — finish anyway? The record will show what was skipped.`
           : null
-        : 'Abandon this run? It stays in the log as abandoned.';
+        : // Discard throws the run away, so it always confirms — and says what
+          // goes with it when someone has already checked things off.
+          done > 0
+          ? `Discard this checklist? Nothing is saved — the ${done} item${done === 1 ? '' : 's'} already checked off will be erased.`
+          : 'Discard this checklist? Nothing is saved and no run is logged.';
     if (message && !window.confirm(message)) return;
 
     setRunBusy(true);
@@ -402,7 +407,11 @@ export function SopDocument({ slug }: { slug: string }) {
       await patchRun({ action });
       setRunData(null);
       setMode('view');
-      setNotice(action === 'complete' ? 'Checklist completed — nice work.' : 'Run abandoned.');
+      setNotice(
+        action === 'complete'
+          ? 'Checklist completed — nice work.'
+          : 'Checklist discarded — nothing was saved.'
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to finish the run');
     } finally {
@@ -808,7 +817,6 @@ export function SopDocument({ slug }: { slug: string }) {
           busy={runBusy}
           onToggle={toggleCheck}
           onFinish={finishRun}
-          onExit={() => setMode('view')}
         />
       ) : mode === 'view' ? (
         <>

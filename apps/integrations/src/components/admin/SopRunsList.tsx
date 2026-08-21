@@ -20,6 +20,8 @@ export interface RunEntry extends SopRunRow {
   sop_run_checks: RunCheck[];
 }
 
+// 'abandoned' is historical: ending a run early now discards it outright, so
+// only runs from before that change carry the status.
 export const STATUS_META: Record<SopRunRow['status'], { label: string; className: string }> = {
   in_progress: { label: 'In progress', className: 'text-[var(--pyre-gold)]' },
   completed: { label: 'Completed', className: 'text-[var(--pyre-sage)]' },
