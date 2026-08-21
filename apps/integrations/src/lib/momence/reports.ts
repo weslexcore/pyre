@@ -13,19 +13,25 @@
 
 import { MomenceApiError, momenceRequest } from '@/lib/momence/host-api';
 
-/** The report types the daily sync pulls, named after Momence's internal
- * enum (the schema's x-enumNames). The wire values are kebab-case — see
- * WIRE_REPORT_TYPES. A type Momence rejects surfaces as
- * ReportUnavailableError and degrades per-metric, not per-page. */
-export type MomenceReportType =
-  | 'TOTAL_SALES'
-  | 'REVENUE_BREAKDOWN'
-  | 'ACTIVE_MEMBERS'
-  | 'NEW_MEMBERS'
-  | 'MEMBERSHIP_CANCELLATIONS'
-  | 'ATTENDANCE'
-  | 'SESSION_OCCUPANCY'
-  | 'NO_SHOWS';
+/**
+ * The report types the daily sync pulls.
+ *
+ * POST /host/reports accepts exactly two reportType values — the API says so
+ * itself when handed anything else:
+ *
+ *   400 "parameters must be a one of total-sales,
+ *        franchise-gift-card-reconciliation"
+ *
+ * An earlier version of this file guessed at a wider enum (revenue-breakdown,
+ * attendance, active-members, no-shows, …) from the schema's x-enumNames
+ * labels. Those names describe Momence's *dashboard* reports, not report-run
+ * types, and every one of them 400s. Do not add a type here without seeing it
+ * accepted by the live API first.
+ *
+ * franchise-gift-card-reconciliation is valid but franchise-only — it has no
+ * meaning for a single-host account, so the sync does not pull it.
+ */
+export type MomenceReportType = 'TOTAL_SALES';
 
 export interface ReportRunResult {
   id: number;
@@ -49,19 +55,10 @@ export class ReportUnavailableError extends Error {
   }
 }
 
-/** Momence's wire enum is kebab-case (the SCREAMING_SNAKE names above are
- * their schema's x-enumNames labels). Only `total-sales` appears in the
- * published enum — the rest are the kebab forms of internal names and may
- * still be gated server-side (403 → ReportUnavailableError). */
+/** Momence's wire enum is kebab-case; the SCREAMING_SNAKE names above are
+ * their schema's x-enumNames labels and are what the snapshot table stores. */
 const WIRE_REPORT_TYPES: Record<MomenceReportType, string> = {
   TOTAL_SALES: 'total-sales',
-  REVENUE_BREAKDOWN: 'revenue-breakdown',
-  ACTIVE_MEMBERS: 'active-members',
-  NEW_MEMBERS: 'new-members',
-  MEMBERSHIP_CANCELLATIONS: 'membership-cancellations',
-  ATTENDANCE: 'attendance',
-  SESSION_OCCUPANCY: 'session-occupancy',
-  NO_SHOWS: 'no-shows',
 };
 
 function hostId(): number {

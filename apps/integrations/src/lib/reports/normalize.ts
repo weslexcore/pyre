@@ -1,14 +1,21 @@
 // Turns raw Momence report items into the weekly metric rows the business
-// dashboard reads. Momence does not document per-type item shapes, so every
-// extractor here is candidate-key based and failure-tolerant: an item that
-// can't be parsed is counted (it drives the snapshot's normalize_status
-// triage field) but never throws — one weird row must not sink a report.
+// dashboard reads.
+//
+// Only one report type exists (TOTAL_SALES — see MomenceReportType), and its
+// item shape is undocumented but observed: one row per payment transaction,
+// with the fields named in TotalSalesItem below. Extraction stays candidate-
+// key based and failure-tolerant anyway — Momence can add or rename a field
+// without telling anyone, and one weird row must not sink a report. An item
+// that can't be parsed is counted (it drives the snapshot's normalize_status
+// triage field) but never throws.
 //
 // Weeks are Monday-start ET wall-clock, matching @pyre/schedule-core.
-// Momence reports are assumed to return host-local (ET) dates; verify against
-// the first real snapshot and adjust here if not.
+// paymentDate is a UTC *instant* (…T22:35:15.877Z), not a host-local date, so
+// it is converted to the ET calendar day before bucketing. Slicing the raw
+// string instead would push every sale after 8pm ET into the next day — and
+// across a Sunday/Monday boundary, into the wrong week.
 
-import { weekStartOf } from '@pyre/schedule-core';
+import { utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import type { MomenceReportType } from '@/lib/momence/reports';
 
 export type MetricKey =
@@ -33,19 +40,33 @@ export interface NormalizeResult {
   status: 'ok' | 'empty' | 'parse-partial';
 }
 
+/**
+ * One row of a `total-sales` report, as the API actually returns it. Every
+ * field is optional here because nothing about the shape is contractual.
+ *
+ *   paymentDate   UTC instant the money moved
+ *   paymentValue  gross charged, in host currency
+ *   refunded      amount refunded off this transaction (0 when none) —
+ *                 refunds are folded back into the original row rather than
+ *                 appearing as separate negative rows
+ *   paymentStatus 'succeeded' on every row observed; anything else is not
+ *                 collected revenue and is excluded from the total
+ */
+interface TotalSalesItem {
+  paymentDate?: unknown;
+  serviceDate?: unknown;
+  paymentValue?: unknown;
+  refunded?: unknown;
+  paymentStatus?: unknown;
+}
+
 // --- Defensive field extraction ---
 
-const DATE_KEYS = [
-  'date',
-  'saleDate',
-  'sessionDate',
-  'visitDate',
-  'startsAt',
-  'startDate',
-  'cancelledAt',
-  'createdAt',
-  'day',
-];
+/** paymentDate is the money-movement date; serviceDate is a fallback for
+ * hypothetical rows that omit it (none observed). */
+const DATE_KEYS = ['paymentDate', 'serviceDate'];
+const VALUE_KEYS = ['paymentValue'];
+const REFUND_KEYS = ['refunded'];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
 
@@ -55,11 +76,18 @@ function asRecord(item: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** First candidate key holding an ISO-ish date, as YYYY-MM-DD. */
-function pickDate(rec: Record<string, unknown>): string | null {
+/**
+ * First candidate key holding an ISO-ish date, as the ET calendar day.
+ * Timestamps carrying a zone/offset are converted; a bare YYYY-MM-DD is
+ * already a wall-clock date and is taken as-is.
+ */
+function pickEasternDate(rec: Record<string, unknown>): string | null {
   for (const key of DATE_KEYS) {
     const value = rec[key];
-    if (typeof value === 'string' && DATE_RE.test(value)) return value.slice(0, 10);
+    if (typeof value !== 'string' || !DATE_RE.test(value)) continue;
+    if (value.length <= 10) return value.slice(0, 10);
+    const parsed = utcToEastern(value);
+    if (parsed.date) return parsed.date;
   }
   return null;
 }
@@ -77,170 +105,78 @@ function pickNumber(rec: Record<string, unknown>, keys: string[]): number | null
   return null;
 }
 
-// --- Per-type extraction plans ---
-
-interface FlowPlan {
-  kind: 'flow';
-  metric: MetricKey;
-  valueKeys: string[];
-  /** Row-per-event reports (attendance, no-shows): a dated item with no
-   * numeric field still counts as 1 occurrence. */
-  countFallback: boolean;
-}
-
-interface StockPlan {
-  kind: 'stock';
-  metric: MetricKey;
-  valueKeys: string[];
-}
-
-interface RatioPlan {
-  kind: 'ratio';
-  metric: MetricKey;
-  numeratorKeys: string[];
-  denominatorKeys: string[];
-}
-
-type Plan = FlowPlan | StockPlan | RatioPlan;
-
-// REVENUE_BREAKDOWN is snapshot-only for now (raw jsonb, no weekly metric):
-// it slices the same dollars as TOTAL_SALES, so folding it into
-// revenue_total would double-write the row with a differently-shaped source.
-const PLANS: Partial<Record<MomenceReportType, Plan>> = {
-  TOTAL_SALES: {
-    kind: 'flow',
-    metric: 'revenue_total',
-    valueKeys: ['total', 'totalInCurrency', 'amount', 'amountInCurrency', 'revenue', 'totalPrice'],
-    countFallback: false,
-  },
-  NEW_MEMBERS: {
-    kind: 'flow',
-    metric: 'new_members',
-    valueKeys: ['newMembers', 'count', 'total'],
-    countFallback: true,
-  },
-  MEMBERSHIP_CANCELLATIONS: {
-    kind: 'flow',
-    metric: 'membership_cancellations',
-    valueKeys: ['cancellations', 'count', 'total'],
-    countFallback: true,
-  },
-  ATTENDANCE: {
-    kind: 'flow',
-    metric: 'attendance',
-    valueKeys: ['attendees', 'attendance', 'visits', 'checkedInCount', 'count'],
-    countFallback: true,
-  },
-  NO_SHOWS: {
-    kind: 'flow',
-    metric: 'no_shows',
-    valueKeys: ['noShows', 'count', 'total'],
-    countFallback: true,
-  },
-  ACTIVE_MEMBERS: {
-    kind: 'stock',
-    metric: 'active_members',
-    valueKeys: ['activeMembers', 'count', 'total', 'value'],
-  },
-  SESSION_OCCUPANCY: {
-    kind: 'ratio',
-    metric: 'occupancy_pct',
-    numeratorKeys: ['attendees', 'booked', 'bookedCount', 'checkedInCount', 'attendance'],
-    denominatorKeys: ['capacity', 'maxCapacity', 'spots', 'totalSpots'],
-  },
-};
-
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Net revenue for one sale row: gross minus whatever was refunded off it.
+ * Returns null for a row that isn't collected revenue at all (unparseable
+ * amount, or a payment that never succeeded).
+ */
+function netRevenue(item: TotalSalesItem, rec: Record<string, unknown>): number | null {
+  const status = item.paymentStatus;
+  if (typeof status === 'string' && status !== 'succeeded') return null;
+
+  const gross = pickNumber(rec, VALUE_KEYS);
+  if (gross === null) return null;
+
+  const refunded = pickNumber(rec, REFUND_KEYS) ?? 0;
+  return gross - refunded;
+}
 
 /**
  * Normalize one report's items into weekly metric upserts.
  *
- * `snapshotDate` anchors stock reports that come back date-less (a single
- * point-in-time count lands on the snapshot's own week).
+ * `snapshotDate` is unused for the flow-shaped TOTAL_SALES report but is kept
+ * in the signature: it anchors any future point-in-time (stock) metric whose
+ * items come back date-less.
  */
 export function normalizeReport(
   reportType: MomenceReportType,
   items: unknown[],
-  snapshotDate: string
+  _snapshotDate: string
 ): NormalizeResult {
-  const plan = PLANS[reportType];
   if (items.length === 0) return { metrics: [], parsed: 0, unparseable: 0, status: 'empty' };
-  if (!plan) return { metrics: [], parsed: items.length, unparseable: 0, status: 'ok' };
+  // Exhaustive today (TOTAL_SALES is the only type); a future type without an
+  // extractor is snapshot-only rather than an error.
+  if (reportType !== 'TOTAL_SALES') {
+    return { metrics: [], parsed: items.length, unparseable: 0, status: 'ok' };
+  }
 
   let parsed = 0;
   let unparseable = 0;
+  const weekly: Record<string, number> = {};
 
-  const metrics: MetricUpsert[] = [];
+  for (const item of items) {
+    const rec = asRecord(item);
+    const date = rec ? pickEasternDate(rec) : null;
+    if (!rec || !date) {
+      unparseable += 1;
+      continue;
+    }
 
-  if (plan.kind === 'flow') {
-    const weekly: Record<string, number> = {};
-    for (const item of items) {
-      const rec = asRecord(item);
-      const date = rec ? pickDate(rec) : null;
-      if (!rec || !date) {
-        unparseable += 1;
-        continue;
-      }
-      const value = pickNumber(rec, plan.valueKeys) ?? (plan.countFallback ? 1 : null);
-      if (value === null) {
-        unparseable += 1;
-        continue;
-      }
-      const week = weekStartOf(date);
-      weekly[week] = (weekly[week] ?? 0) + value;
-      parsed += 1;
+    const value = netRevenue(rec as TotalSalesItem, rec);
+    if (value === null) {
+      // A non-succeeded payment is understood, not malformed — it simply
+      // isn't revenue, so it must not flag the snapshot parse-partial.
+      const status = (rec as TotalSalesItem).paymentStatus;
+      if (typeof status === 'string' && status !== 'succeeded') parsed += 1;
+      else unparseable += 1;
+      continue;
     }
-    for (const [weekStart, value] of Object.entries(weekly)) {
-      metrics.push({ weekStart, metric: plan.metric, value: round2(value) });
-    }
-  } else if (plan.kind === 'stock') {
-    // Latest reading per week wins; a date-less count is a point-in-time
-    // value anchored to the snapshot day.
-    const latest: Record<string, { date: string; value: number }> = {};
-    for (const item of items) {
-      const rec = asRecord(item);
-      const value = rec ? pickNumber(rec, plan.valueKeys) : null;
-      if (!rec || value === null) {
-        unparseable += 1;
-        continue;
-      }
-      const date = pickDate(rec) ?? snapshotDate;
-      const week = weekStartOf(date);
-      const current = latest[week];
-      if (!current || date >= current.date) latest[week] = { date, value };
-      parsed += 1;
-    }
-    for (const [weekStart, entry] of Object.entries(latest)) {
-      metrics.push({ weekStart, metric: plan.metric, value: round2(entry.value) });
-    }
-  } else {
-    // Occupancy: attendees-sum / capacity-sum per week — averaging
-    // per-session percentages would let empty tiny sessions swamp full
-    // big ones.
-    const sums: Record<string, { num: number; den: number }> = {};
-    for (const item of items) {
-      const rec = asRecord(item);
-      const date = rec ? pickDate(rec) : null;
-      const num = rec ? pickNumber(rec, plan.numeratorKeys) : null;
-      const den = rec ? pickNumber(rec, plan.denominatorKeys) : null;
-      if (!rec || !date || num === null || den === null) {
-        unparseable += 1;
-        continue;
-      }
-      const week = weekStartOf(date);
-      sums[week] ??= { num: 0, den: 0 };
-      sums[week].num += num;
-      sums[week].den += den;
-      parsed += 1;
-    }
-    for (const [weekStart, { num, den }] of Object.entries(sums)) {
-      if (den > 0) {
-        metrics.push({ weekStart, metric: plan.metric, value: round2((num / den) * 100) });
-      }
-    }
+
+    const week = weekStartOf(date);
+    weekly[week] = (weekly[week] ?? 0) + value;
+    parsed += 1;
   }
 
-  metrics.sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+  const metrics: MetricUpsert[] = Object.entries(weekly)
+    .map(([weekStart, value]) => ({
+      weekStart,
+      metric: 'revenue_total' as const,
+      value: round2(value),
+    }))
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
   return {
     metrics,
     parsed,
