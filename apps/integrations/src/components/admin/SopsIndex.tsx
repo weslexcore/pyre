@@ -17,6 +17,7 @@ import {
   type SopRole,
   slugify,
 } from '@/lib/sops/levels';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   categoriesInOrder,
   moveSopToCategoryEnd,
@@ -24,12 +25,14 @@ import {
   repositionSop,
 } from '@/lib/sops/order';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
-import { formatWhen, shortName } from './SopRunsList';
+import { formatWhen } from './SopRunsList';
 
 type SopSummary = Omit<SopRow, 'content_md'> & { task_count: number };
 
 interface ListResponse {
   sops: SopSummary[];
+  /** Roster names for the `updated_by` emails on the cards. */
+  people?: PeopleNames;
   role: SopRole;
   pins: string[];
 }
@@ -116,6 +119,7 @@ function AccessBadge({ level }: { level: SopAccessLevel }) {
 
 export function SopsIndex() {
   const [sops, setSops] = useState<SopSummary[]>([]);
+  const [people, setPeople] = useState<PeopleNames>({});
   const [categories, setCategories] = useState<string[]>([]);
   const [role, setRole] = useState<SopRole>('staff');
   const [loading, setLoading] = useState(true);
@@ -190,6 +194,7 @@ export function SopsIndex() {
       setCategories(categoriesInOrder(body.sops));
       setRole(body.role);
       setPins(new Set(body.pins ?? []));
+      setPeople((prev) => ({ ...prev, ...body.people }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load SOPs');
     } finally {
@@ -209,8 +214,13 @@ export function SopsIndex() {
       try {
         const res = await fetch('/api/admin/sop-runs?view=active');
         if (!res.ok) return;
-        const body = (await res.json()) as { runs?: ActiveRun[] };
-        if (!cancelled) setActiveRuns(body.runs ?? []);
+        const body = (await res.json()) as { runs?: ActiveRun[]; people?: PeopleNames };
+        if (!cancelled) {
+          setActiveRuns(body.runs ?? []);
+          // Whoever started an open run may not be an editor of any document,
+          // so the strip brings its own names.
+          setPeople((prev) => ({ ...prev, ...body.people }));
+        }
       } catch {
         // Non-fatal: the library renders fine without the strip.
       }
@@ -410,7 +420,9 @@ export function SopsIndex() {
           </div>
           <p className="mt-2 font-mono text-[10px] text-white/40">
             v{sop.current_version} · updated {new Date(sop.updated_at).toLocaleDateString()}
-            {sop.updated_by && sop.updated_by !== 'seed' ? ` by ${sop.updated_by}` : ''}
+            {sop.updated_by && sop.updated_by !== 'seed'
+              ? ` by ${personName(sop.updated_by, people)}`
+              : ''}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-3">
             {sop.task_count > 0 && (
@@ -515,7 +527,7 @@ export function SopsIndex() {
                   </div>
                   <p className="mt-2 font-mono text-[10px] text-white/40">
                     {run.checked_count}/{run.task_count} done · started by{' '}
-                    {shortName(run.started_by)} · {formatWhen(run.started_at)}
+                    {personName(run.started_by, people)} · {formatWhen(run.started_at)}
                   </p>
                 </a>
               );

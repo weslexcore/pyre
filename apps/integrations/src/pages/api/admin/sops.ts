@@ -21,6 +21,7 @@ import {
   slugify,
 } from '@/lib/sops/levels';
 import { type CategoryRank, sortSops } from '@/lib/sops/order';
+import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 
@@ -97,6 +98,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       versions: (versions ?? []) as SopVersionRow[],
       role,
       canEdit: canEditSop(role, sop),
+      // Names for the editors this response names, so the header and history
+      // read as people rather than mailbox local parts.
+      people: await getPeopleNames([
+        sop.updated_by ?? '',
+        ...((versions ?? []) as SopVersionRow[]).map((v) => v.edited_by),
+      ]),
     });
   }
 
@@ -155,7 +162,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     pins = (pinRows ?? []).map((p) => p.sop_id as string).filter((id) => visibleIds.has(id));
   }
 
-  return json({ sops: sorted.map(toSummary), role, pins });
+  return json({
+    sops: sorted.map(toSummary),
+    role,
+    pins,
+    people: await getPeopleNames(sorted.map((s) => s.updated_by ?? '')),
+  });
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {

@@ -5,7 +5,8 @@
 // they took part in, with no filter bar. Scoping is enforced by the API; this
 // island just renders what it's given.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { type RunEntry, RunsList, shortName } from './SopRunsList';
+import { type PeopleNames, personName } from '@/lib/sops/names';
+import { type RunEntry, RunsList } from './SopRunsList';
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
@@ -46,6 +47,8 @@ function runTime(run: RunEntry): number {
 
 export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
   const [runs, setRuns] = useState<RunEntry[]>([]);
+  // Roster names for the emails the runs record, from the same response.
+  const [names, setNames] = useState<PeopleNames>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,8 +65,9 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
     try {
       const res = await fetch('/api/admin/sop-runs?view=list');
       if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as { runs: RunEntry[] };
+      const body = (await res.json()) as { runs: RunEntry[]; people?: PeopleNames };
       setRuns(body.runs);
+      setNames(body.people ?? {});
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load runs');
     } finally {
@@ -92,11 +96,13 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
     return [...bySlug.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [runs]);
 
-  const people = useMemo(() => {
+  // Filter options: participant emails (the filter value), ordered by the
+  // name they show under.
+  const personOptions = useMemo(() => {
     const set = new Set<string>();
     for (const run of runs) for (const p of participants(run)) set.add(p);
-    return [...set].sort();
-  }, [runs]);
+    return [...set].sort((a, b) => personName(a, names).localeCompare(personName(b, names)));
+  }, [runs, names]);
 
   const visible = useMemo(() => {
     const query = itemQuery.trim().toLowerCase();
@@ -167,9 +173,9 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
               onChange={(e) => setPersonFilter(e.target.value)}
             >
               <option value="all">Anyone</option>
-              {people.map((p) => (
+              {personOptions.map((p) => (
                 <option key={p} value={p}>
-                  {shortName(p)}
+                  {personName(p, names)}
                 </option>
               ))}
             </select>
@@ -244,6 +250,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
 
       <RunsList
         runs={visible}
+        people={names}
         itemQuery={itemQuery}
         onDelete={isAdmin ? (run) => void deleteRun(run) : undefined}
       />
