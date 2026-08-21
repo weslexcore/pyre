@@ -261,6 +261,72 @@ export interface BusinessMetricRow {
   updated_at: string;
 }
 
+// A standard operating procedure document on /admin/sops (see the sops
+// migration). Access-tier semantics live in lib/sops/levels.ts.
+export interface SopRow {
+  id: string;
+  slug: string;
+  title: string;
+  content_md: string;
+  category: string;
+  view_access: 'staff' | 'shift_lead' | 'admin';
+  edit_access: 'staff' | 'shift_lead' | 'admin';
+  sort_order: number;
+  archived: boolean;
+  current_version: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// One save of an SOP: full snapshot + who/when + optional change note.
+export interface SopVersionRow {
+  id: string;
+  sop_id: string;
+  version: number;
+  title: string;
+  content_md: string;
+  edited_by: string;
+  change_note: string | null;
+  created_at: string;
+}
+
+// Display order for SOP categories on /admin/sops (name matches the free-text
+// sops.category; unranked categories sort last).
+export interface SopCategoryRow {
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// One execution of a checklist SOP (see the sop_runs migration): who
+// started/ended it, when, against which document version.
+export interface SopRunRow {
+  id: string;
+  sop_id: string;
+  sop_version: number;
+  task_count: number;
+  status: 'in_progress' | 'completed' | 'abandoned';
+  started_by: string;
+  started_at: string;
+  ended_by: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// One checked task item within a run; unchecking deletes the row.
+export interface SopRunCheckRow {
+  id: string;
+  run_id: string;
+  item_index: number;
+  item_text: string;
+  checked_by: string;
+  checked_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {

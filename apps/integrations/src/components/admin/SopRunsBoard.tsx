@@ -1,0 +1,252 @@
+// Checklist-run log (/admin/sops/runs). Admins see every run and can slice by
+// status, SOP, person (anyone who started, ended, or checked something), date,
+// and checked-item text — the item filter surfaces matching checks inline so
+// "who completed task X" reads at a glance. Everyone else sees only the runs
+// they took part in, with no filter bar. Scoping is enforced by the API; this
+// island just renders what it's given.
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type RunEntry, RunsList, shortName } from './SopRunsList';
+
+const buttonClass =
+  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+
+const inputClass =
+  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+
+const selectClass =
+  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
+
+const STATUS_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'abandoned', label: 'Abandoned' },
+] as const;
+
+async function readError(res: Response): Promise<string> {
+  try {
+    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
+/** Everyone who touched this run: started, ended, or checked an item. */
+function participants(run: RunEntry): string[] {
+  const set = new Set<string>([run.started_by]);
+  if (run.ended_by) set.add(run.ended_by);
+  for (const check of run.sop_run_checks) set.add(check.checked_by);
+  return [...set];
+}
+
+/** The run's reference time for date filtering: when it ended, else started. */
+function runTime(run: RunEntry): number {
+  return Date.parse(run.ended_at ?? run.started_at);
+}
+
+export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
+  const [runs, setRuns] = useState<RunEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]['key']>('all');
+  const [sopFilter, setSopFilter] = useState('all');
+  const [personFilter, setPersonFilter] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [itemQuery, setItemQuery] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/sop-runs?view=list');
+      if (!res.ok) throw new Error(await readError(res));
+      const body = (await res.json()) as { runs: RunEntry[] };
+      setRuns(body.runs);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load runs');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const deleteRun = async (run: RunEntry) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/sop-runs?id=${run.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await readError(res));
+      setRuns((prev) => prev.filter((r) => r.id !== run.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete the run');
+    }
+  };
+
+  const sops = useMemo(() => {
+    const bySlug = new Map<string, string>();
+    for (const run of runs) if (run.sops) bySlug.set(run.sop_id, run.sops.title);
+    return [...bySlug.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [runs]);
+
+  const people = useMemo(() => {
+    const set = new Set<string>();
+    for (const run of runs) for (const p of participants(run)) set.add(p);
+    return [...set].sort();
+  }, [runs]);
+
+  const visible = useMemo(() => {
+    const query = itemQuery.trim().toLowerCase();
+    const from = fromDate ? Date.parse(fromDate) : null;
+    // Inclusive end date: anything before the *next* midnight.
+    const to = toDate ? Date.parse(toDate) + 24 * 60 * 60 * 1000 : null;
+    return runs.filter((run) => {
+      if (status !== 'all' && run.status !== status) return false;
+      if (sopFilter !== 'all' && run.sop_id !== sopFilter) return false;
+      if (personFilter !== 'all' && !participants(run).includes(personFilter)) return false;
+      if (from !== null && runTime(run) < from) return false;
+      if (to !== null && runTime(run) >= to) return false;
+      if (query && !run.sop_run_checks.some((c) => c.item_text.toLowerCase().includes(query))) {
+        return false;
+      }
+      return true;
+    });
+  }, [runs, status, sopFilter, personFilter, fromDate, toDate, itemQuery]);
+
+  if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <a href="/admin/sops" className={buttonClass}>
+          ← All SOPs
+        </a>
+        {isAdmin && (
+          <>
+            <span className="mx-2 h-4 w-px bg-white/10" />
+            {STATUS_FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`${buttonClass} ${status === key ? 'border-white/40 text-white' : ''}`}
+                onClick={() => setStatus(key)}
+              >
+                {label}
+                {key !== 'all' && ` (${runs.filter((r) => r.status === key).length})`}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-3 rounded border border-white/10 bg-white/5 p-3">
+          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+            SOP
+            <select
+              className={selectClass}
+              value={sopFilter}
+              onChange={(e) => setSopFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              {sops.map(([id, title]) => (
+                <option key={id} value={id}>
+                  {title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+            person
+            <select
+              className={selectClass}
+              value={personFilter}
+              onChange={(e) => setPersonFilter(e.target.value)}
+            >
+              <option value="all">Anyone</option>
+              {people.map((p) => (
+                <option key={p} value={p}>
+                  {shortName(p)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+            from
+            <input
+              type="date"
+              className={inputClass}
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+            to
+            <input
+              type="date"
+              className={inputClass}
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+            />
+          </label>
+          <input
+            type="search"
+            className={`${inputClass} min-w-48 flex-1`}
+            placeholder="Filter by checked item (e.g. “light fire”)…"
+            value={itemQuery}
+            onChange={(e) => setItemQuery(e.target.value)}
+            aria-label="Filter runs by checked item text"
+          />
+          {(status !== 'all' ||
+            sopFilter !== 'all' ||
+            personFilter !== 'all' ||
+            fromDate ||
+            toDate ||
+            itemQuery) && (
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => {
+                setStatus('all');
+                setSopFilter('all');
+                setPersonFilter('all');
+                setFromDate('');
+                setToDate('');
+                setItemQuery('');
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
+          {error}
+        </p>
+      )}
+
+      {!isAdmin && (
+        <p className="font-mono text-[10px] text-white/40">
+          Showing runs you started, finished, or checked items in.
+        </p>
+      )}
+
+      {isAdmin && visible.length !== runs.length && (
+        <p className="font-mono text-[10px] text-white/40">
+          {visible.length} of {runs.length} runs match.
+        </p>
+      )}
+
+      <RunsList
+        runs={visible}
+        itemQuery={itemQuery}
+        onDelete={isAdmin ? (run) => void deleteRun(run) : undefined}
+      />
+    </div>
+  );
+}

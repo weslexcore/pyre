@@ -39,6 +39,14 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/sops',
+    title: 'SOPs',
+    navLabel: 'SOPs',
+    description:
+      'Standard operating procedures — markdown checklists and guides with per-document access levels and full version history.',
+    section: 'operations',
+  },
+  {
     href: '/admin/email-templates',
     title: 'Email Templates',
     navLabel: 'Templates',
