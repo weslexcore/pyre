@@ -5,11 +5,18 @@
 // agent is instructed to and /api/agent/proposals enforces it. Returns
 // immediately with the session ids — the board polls for the resulting
 // proposals rather than holding this request open through the agent runs.
+// An optional `prompt` carries the admin's last-minute steer into every
+// session's opening message (see lib/schedule/draft-prompt).
 
 import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { actorFromGate } from '@/lib/schedule/change-log';
+import {
+  buildDraftMessage,
+  MAX_DRAFT_PROMPT_LENGTH,
+  sanitizeDraftPrompt,
+} from '@/lib/schedule/draft-prompt';
 import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
@@ -71,6 +78,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
   const weekStarts = (uniqueWeeks as string[]).sort();
 
+  // Optional last-minute steer from the admin ("give Sarah a shift to lead").
+  // The same note goes to every week in the run.
+  if (body.prompt !== undefined && body.prompt !== null && typeof body.prompt !== 'string') {
+    return json({ error: 'prompt must be a string' }, 400);
+  }
+  const rawPrompt = typeof body.prompt === 'string' ? body.prompt : '';
+  if (rawPrompt.length > MAX_DRAFT_PROMPT_LENGTH * 2) {
+    return json({ error: `prompt must be ${MAX_DRAFT_PROMPT_LENGTH} characters or fewer` }, 400);
+  }
+  const prompt = sanitizeDraftPrompt(rawPrompt);
+
   // Fresh windows before drafting — a stale board is the agent's worst input.
   let sync: SyncShiftsSummary | { error: string };
   try {
@@ -91,7 +109,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         ...(agentsBypass ? { 'x-vercel-protection-bypass': agentsBypass } : {}),
       },
       body: JSON.stringify({
-        message: `Draft the staffing schedule for the week starting ${week}. Use get_week_context with weekStart "${week}", then save exactly one proposal. Fill only shifts that are still below their staffNeeded count — leave fully staffed shifts untouched, and never add more people than a shift's remaining need. Any previous draft for that week is superseded automatically.`,
+        message: buildDraftMessage(week, prompt),
       }),
     });
 

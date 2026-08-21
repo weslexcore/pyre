@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AdminTool } from './adminTools';
+import { ADMIN_TOOL_SECTIONS, type AdminTool } from './adminTools';
 
 interface AdminNavProps {
   currentPath: string;
@@ -11,6 +11,12 @@ interface AdminNavProps {
 interface NavItem {
   href: string;
   label: string;
+}
+
+interface NavGroup {
+  /** Section heading, or null for the ungrouped links at the top. */
+  label: string | null;
+  items: NavItem[];
 }
 
 function isActive(currentPath: string, href: string): boolean {
@@ -30,17 +36,28 @@ const LINK_IDLE =
  * dropdown of the tools this user may view — full-width on mobile, anchored
  * to the right on md+. The panel anchors to the sticky header, which
  * AdminLayout marks `position: relative`.
+ *
+ * The tools are grouped under the same section headings, in the same order,
+ * as the cards on the /admin dashboard, so the menu reads as that same
+ * directory in a narrower shape.
  */
 export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
   const [open, setOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
 
-  const items: NavItem[] = [
-    { href: '/admin', label: 'Home' },
-    ...tools.map((tool) => ({ href: tool.href, label: tool.title })),
+  const groups: NavGroup[] = [
+    { label: null, items: [{ href: '/admin', label: 'Home' }] },
+    ...ADMIN_TOOL_SECTIONS.map((section) => ({
+      label: section.label,
+      items: tools
+        .filter((tool) => tool.section === section.key)
+        .map((tool) => ({ href: tool.href, label: tool.title })),
+    })).filter((group) => group.items.length > 0),
   ];
   // Label the button with where you are, since there is no active chip now.
-  const currentLabel = items.find((item) => isActive(currentPath, item.href))?.label ?? 'Menu';
+  const currentLabel =
+    groups.flatMap((group) => group.items).find((item) => isActive(currentPath, item.href))
+      ?.label ?? 'Menu';
 
   useEffect(() => {
     if (!open) return;
@@ -99,26 +116,60 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
           id="admin-menu"
           className="absolute inset-x-0 top-full z-50 border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-4 md:mt-2 md:w-64 md:rounded-md md:border md:border-white/10"
         >
-          <ul className="px-4 py-2 md:px-2">
-            {items.map((item) => (
-              <li key={item.href} className="border-b border-white/5 last:border-b-0 md:border-b-0">
-                <a
-                  href={item.href}
-                  aria-current={isActive(currentPath, item.href) ? 'page' : undefined}
-                  className={`block rounded py-3 font-mono text-sm font-bold uppercase tracking-wide transition-colors md:px-2 md:py-2 md:text-xs md:hover:bg-white/10 ${
-                    isActive(currentPath, item.href)
-                      ? 'text-[var(--pyre-red)]'
-                      : 'text-[var(--pyre-creme)] hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </a>
-              </li>
+          <div className="px-4 py-2 md:px-2">
+            {groups.map((group) => (
+              <div key={group.label ?? 'home'} className="mt-3 first:mt-0">
+                {group.label && (
+                  <div className="pb-1 font-mono text-[10px] font-bold uppercase tracking-wide text-white/40 md:px-2">
+                    {group.label}
+                  </div>
+                )}
+                <ul>
+                  {group.items.map((item) => (
+                    <li
+                      key={item.href}
+                      className="border-b border-white/5 last:border-b-0 md:border-b-0"
+                    >
+                      <a
+                        href={item.href}
+                        // "tap" (not the default "hover"): Astro binds hover
+                        // listeners by walking the DOM on astro:page-load, which
+                        // misses these — the dropdown only renders once opened.
+                        // The tap strategy is delegated on document, so it catches
+                        // client-rendered links and still fires on mousedown,
+                        // before the click completes.
+                        data-astro-prefetch="tap"
+                        aria-current={isActive(currentPath, item.href) ? 'page' : undefined}
+                        className={`block rounded py-3 font-mono text-sm font-bold uppercase tracking-wide transition-colors md:px-2 md:py-2 md:text-xs md:hover:bg-white/10 ${
+                          isActive(currentPath, item.href)
+                            ? 'text-[var(--pyre-red)]'
+                            : 'text-[var(--pyre-creme)] hover:text-white'
+                        }`}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
           <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3 md:px-3">
             <span className="truncate font-mono text-xs text-white/40">{userEmail}</span>
-            <a href="/api/auth/logout" className={`${LINK_BASE} ${LINK_IDLE} shrink-0`}>
+            {/* Never prefetch: logout is a GET that clears the session
+                cookies, so fetching it in the background signs the user out.
+                Explicit "false" keeps that true even if someone later turns
+                on prefetchAll.
+                data-astro-reload forces a full navigation rather than a
+                client-side swap, which tears down the JS realm — otherwise
+                the lib/client/cachedJson entries would outlive the session
+                in memory, on studio machines people share. */}
+            <a
+              href="/api/auth/logout"
+              data-astro-prefetch="false"
+              data-astro-reload
+              className={`${LINK_BASE} ${LINK_IDLE} shrink-0`}
+            >
               Log Out
             </a>
           </div>

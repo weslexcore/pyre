@@ -1,0 +1,14 @@
+---
+// SOP library: markdown procedures with per-document access levels and full
+// version history. The island lists what the caller's role may view; the
+// /api/admin/sops routes are the security boundary.
+import { SopsIndex } from '@/components/admin/SopsIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="SOPs"
+  subtitle="Standard operating procedures — versioned, markdown-edited, access-controlled"
+>
+  <SopsIndex client:load />
+</AdminLayout>

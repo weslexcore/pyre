@@ -30,6 +30,7 @@ const tabs = [
     tabs.map((tab) => (
       <a
         href={tab.href}
+        data-astro-prefetch
         class={`px-3 py-1.5 rounded border text-xs font-mono uppercase tracking-wide transition-colors ${
           current === tab.href
             ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'

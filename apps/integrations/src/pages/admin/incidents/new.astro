@@ -1,0 +1,22 @@
+---
+// File an incident report. Its own page rather than a modal on the log,
+// because this is filled out on a phone with one hand and needs the whole
+// screen — and because a bookmarkable /admin/incidents/new is what gets put
+// on the front-desk tablet.
+//
+// The reporter's identity comes from the session on the server side; the name
+// passed here is only for the "filed by" line on the review step.
+import { IncidentForm } from '@/components/admin/IncidentForm';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const user = Astro.locals.adminUser ?? null;
+const reporterName =
+  [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || (user?.email ?? 'you');
+---
+
+<AdminLayout
+  title="Report an Incident"
+  subtitle="Facts first. If anyone is still in danger, deal with that and file afterward."
+>
+  <IncidentForm client:load reporterName={reporterName} />
+</AdminLayout>

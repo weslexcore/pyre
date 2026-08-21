@@ -25,17 +25,18 @@ import {
 } from '@/lib/momence/reports';
 import { normalizeReport } from '@/lib/reports/normalize';
 
-/** The daily pull set. ~8 creates/day of the 100/day budget. */
-export const DAILY_REPORTS: MomenceReportType[] = [
-  'TOTAL_SALES',
-  'REVENUE_BREAKDOWN',
-  'ACTIVE_MEMBERS',
-  'NEW_MEMBERS',
-  'MEMBERSHIP_CANCELLATIONS',
-  'ATTENDANCE',
-  'SESSION_OCCUPANCY',
-  'NO_SHOWS',
-];
+/**
+ * The daily pull set: 1 create/day of the 100/day budget.
+ *
+ * Only TOTAL_SALES exists — POST /host/reports rejects every other report
+ * name with a 400 (see MomenceReportType). The membership-flow and
+ * attendance metrics the dashboard renders are therefore *not* report-run
+ * sourced; they need a different collector built on the host endpoints that
+ * do expose them (/host/sessions carries capacity + bookingCount,
+ * /host/sessions/{id}/bookings carries checkedIn, /host/members carries
+ * firstSeen). Until that exists those metrics stay null on /admin/business.
+ */
+export const DAILY_REPORTS: MomenceReportType[] = ['TOTAL_SALES'];
 
 /** ET hour from which the daily sync may start. */
 const SYNC_HOUR_ET = 6;
