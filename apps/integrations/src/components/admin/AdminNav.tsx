@@ -128,10 +128,15 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
             {/* Never prefetch: logout is a GET that clears the session
                 cookies, so fetching it in the background signs the user out.
                 Explicit "false" keeps that true even if someone later turns
-                on prefetchAll. */}
+                on prefetchAll.
+                data-astro-reload forces a full navigation rather than a
+                client-side swap, which tears down the JS realm — otherwise
+                the lib/client/cachedJson entries would outlive the session
+                in memory, on studio machines people share. */}
             <a
               href="/api/auth/logout"
               data-astro-prefetch="false"
+              data-astro-reload
               className={`${LINK_BASE} ${LINK_IDLE} shrink-0`}
             >
               Log Out
