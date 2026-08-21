@@ -376,7 +376,7 @@ export function ShiftNotes() {
             Add note
           </button>
           <label className={`${buttonClass} cursor-pointer`}>
-            📷 Take a photo
+            Take a photo
             <input
               type="file"
               accept="image/*"
@@ -390,7 +390,7 @@ export function ShiftNotes() {
             />
           </label>
           <label className={`${buttonClass} cursor-pointer`}>
-            🎬 Add photos / video
+            Add photos / video
             <input
               type="file"
               accept={ACCEPT_ATTRIBUTE}
@@ -569,17 +569,17 @@ export function ShiftNotes() {
                             href={src}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex h-24 w-full items-center justify-center rounded bg-white/5 text-2xl"
+                            className="flex h-24 w-full items-center justify-center rounded bg-white/5 font-mono text-xs uppercase tracking-wide text-white/40"
                           >
-                            📄
+                            PDF
                           </a>
                         )}
                         <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-white/30">
                           <span className="min-w-0 flex-1 truncate" title={attachment.file_name}>
                             {attachment.file_name}
                           </span>
-                          <a href={`${src}&download=1`} className="hover:text-white">
-                            ↓
+                          <a href={`${src}&download=1`} className="uppercase hover:text-white">
+                            download
                           </a>
                           {canTouch(note) && (
                             <button
@@ -602,7 +602,7 @@ export function ShiftNotes() {
                 (attachments[note.id]?.length ?? 0) < MAX_ATTACHMENTS_PER_NOTE && (
                   <div className="mt-2">
                     <label className="cursor-pointer font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white">
-                      ＋ add photos / video
+                      add photos / video
                       <input
                         type="file"
                         accept={ACCEPT_ATTRIBUTE}
