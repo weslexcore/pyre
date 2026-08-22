@@ -33,6 +33,7 @@ pre-computed from one admin-only endpoint:
 | Momence revenue ingestion | `src/lib/reports/sync.ts` → `src/lib/reports/normalize.ts` |
 | Momence activity ingestion | `src/lib/reports/activity.ts` |
 | Sync-schedule math (last/next sync) | `src/lib/reports/schedule.ts` |
+| What counts as a membership | `src/lib/momence/memberships.ts` |
 
 Two independent inputs are joined at read time:
 
@@ -103,7 +104,7 @@ idempotent upsert.
 | `session_capacity` | flow | `lib/reports/activity.ts` | Occupancy **denominator** |
 | `session_booked` | flow | `lib/reports/activity.ts` | Occupancy **numerator** |
 | `new_members` | flow | `lib/reports/activity.ts` | First-seen members that day |
-| `active_members` | **stock** | `lib/reports/activity.ts` | Count with an active membership, as of that day |
+| `active_members` | **stock** | `lib/reports/activity.ts` | Count on a **recurring monthly plan**, as of that day |
 
 Occupancy is deliberately stored as its two raw components rather than a
 percentage: grouping by week or month then computes the true
@@ -187,7 +188,7 @@ if their rows are missing.
 
 ### 4.3 `new_members` and `active_members`
 
-`src/lib/reports/activity.ts` → `collectMemberMetrics` (lines ~340–372).
+`src/lib/reports/activity.ts`.
 
 ```
 new_members[day] = count of members whose firstSeenAt converts to that ET day
@@ -197,14 +198,52 @@ Members are paged newest-first (`sortBy: firstSeenAt, DESC`, 100/page, cap 20
 pages) until one predates the window. Every day from the window start through
 today is **zero-filled**, so a quiet day reads as `0`, not as missing data.
 
+`new_members` counts **arrivals, not memberships**: anyone Momence saw for the
+first time that day, whether they bought a session, a pack, or nothing at all.
+
+#### `active_members` is not Momence's own count
+
+Momence's `filterPreset: 'with-active-membership'` is broader than the name
+suggests. It matches anyone holding any active bought-membership, and it files
+the **intro package and credit packs** under that same umbrella — so taking its
+`totalCount` inflated the number with people who bought a 5-pack once and may
+never come back.
+
+The sweep now uses that filter only to avoid walking the entire member list,
+then classifies each candidate from their actual purchases
+(`GET /host/members/{id}/bought-memberships/active`):
+
 ```
-active_members[today] = totalCount from POST /host/members/list
-                        with filterPreset = 'with-active-membership'
+candidates     = every member id under filterPreset 'with-active-membership'
+active_members = count of candidates holding ≥1 purchase where
+                   type ∈ {subscription, on-demand-subscription, patron}
+                   AND NOT isFrozen
+                   AND membership.id ∉ MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS
 ```
 
-This is a **stock**, not a flow: Momence exposes only the count *right now*, so
-one observation lands on today's date each sync and history accrues going
-forward. It cannot be backfilled.
+The rule lives in `src/lib/momence/memberships.ts`. Three exclusions, each
+chosen so the number means "people paying us every month" rather than "rows
+Momence calls active":
+
+| Excluded | Why |
+| --- | --- |
+| `package-events`, `package-money` | A fixed number of sessions or a prepaid balance — bought once, burned down, never re-billed. |
+| `isFrozen` | A freeze pauses billing, so nothing is charged this month even though the purchase stays active. |
+| Intro-offer catalog ids | An intro sold as a discounted first subscription period is still an intro. Reuses the ids already configured for the post-intro-offer journey, so it is a no-op when the intro is a package instead. |
+
+A member holding both a pack and a subscription counts **once**.
+
+**Cost and resumability.** This is one request per candidate, so it runs as its
+own cursor phase ahead of the week scan, with the pending ids and the running
+tally parked in Redis when the tick budget runs out. A half-finished count is
+never written — it would read as a membership collapse — so the row waits for a
+tick that can finish it. Packs are read with `fresh: true`, bypassing the shared
+20h cache so yesterday's cancellation cannot still be counted; the read writes
+through, so journeys keep their warm copy.
+
+This is a **stock**, not a flow: it is a count *right now*, so one observation
+lands on the sweep's date each day and history accrues going forward. It cannot
+be backfilled.
 
 > Membership **cancellations** are not collected — no host endpoint exposes
 > them. The membership chart shows arrivals only rather than an always-empty
@@ -322,7 +361,7 @@ range never counts scheduled labor against revenue that hasn't happened yet.
 | **Revenue** | `summary.range.revenue` — Σ `revenue_total` | `+N% vs prior`, else the date range |
 | **Revenue / open hour** | `revenue / openHours` | `vs $X labor break-even` = `laborCost / openHours` |
 | **Labor % of revenue** | `laborCost / revenue × 100` | `$X labor cost` = raw `laborCost` |
-| **Active members** | last `active_members` at or before the range end | `+N% vs prior` |
+| **Active members** | last `active_members` at or before the range end — recurring monthly plans only (§4.3) | `+N% vs prior` |
 | **Visits** | Σ `attendance` | `N% occupancy` = `Σbooked / Σcapacity × 100` |
 
 **The delta.** `periodDelta()` in `BusinessOverview.tsx`:
@@ -354,9 +393,10 @@ prior period is `0`. Only Revenue and Active members show one.
 
 ### 7.4 Memberships (bar chart)
 
-Gold bars = `bucket.newMembers` (Σ `new_members`). Tooltip appends
-`bucket.activeMembers`, which is the latest stock observation at or before the
-bucket's end — **not** a sum.
+Gold bars = `bucket.newMembers` (Σ `new_members`) — first-time arrivals, not
+new subscriptions. Tooltip appends `bucket.activeMembers`, the latest stock
+observation at or before the bucket's end — **not** a sum, and counting
+recurring plans only (§4.3).
 
 ### 7.5 Attendance (bar chart)
 
@@ -433,31 +473,39 @@ explicitly: without it, "synced 3h ago" reads as if the whole page were 3h old.
 
 1. **`active_members` has no history.** It is sampled at sync time and cannot be
    backfilled, so buckets before the first sync show `—`. Its "delta vs prior"
-   compares two point-in-time samples, not two sums.
-2. **Membership cancellations and churn are not available.** No Momence endpoint
+   compares two point-in-time samples, not two sums. Values recorded before the
+   recurring-plan narrowing (§4.3) are Momence's inflated count, so the series
+   has a **step down** at the point that shipped — it is a definition change,
+   not churn.
+2. **The recurring-plan rule is a business definition, not a Momence one.**
+   `RECURRING_MEMBERSHIP_TYPES`, the frozen exclusion, and the intro-offer id
+   list all encode a local judgement about what "member" means. If the Momence
+   catalog gains a new recurring product type, it must be added there or those
+   members go uncounted.
+3. **Membership cancellations and churn are not available.** No Momence endpoint
    exposes them.
-3. **Labor cost is computed from the schedule, not from payroll.** It prices
+4. **Labor cost is computed from the schedule, not from payroll.** It prices
    *assigned* shift windows at each person's `pay_rate` — no overtime multiplier,
    no taxes or burden, no clock-in/clock-out reconciliation. Founders are priced
    at their stored rate of 0.
-4. **Open hours exclude manual shifts entirely**, while their labor cost is
+5. **Open hours exclude manual shifts entirely**, while their labor cost is
    included. That is intentional (maintenance work is not sellable time) but it
    means a maintenance-heavy period will show a worse `costPerOpenHour`.
-5. **Attendance lags within the current day.** A day's row appears only once a
+6. **Attendance lags within the current day.** A day's row appears only once a
    session has finished, so today's bar climbs through the day.
-6. **Revenue is booked on the payment date, not the service date.** A gift card
+7. **Revenue is booked on the payment date, not the service date.** A gift card
    or package sold in March and redeemed in May is March revenue, while the May
    visit shows up in attendance — the two series are not expected to move
    together.
-7. **Revenue counts `paymentValue − refunded` on succeeded rows only.** It is net
+8. **Revenue counts `paymentValue − refunded` on succeeded rows only.** It is net
    collected cash, not accrual revenue, and it is not reconciled against
    QuickBooks anywhere in this codebase.
-8. **A stalled activity sweep is now visible** in the freshness line and banner
+9. **A stalled activity sweep is now visible** in the freshness line and banner
    (§9), but its symptom is still missing attendance/membership bars rather
    than an error — the revenue half of the page keeps working normally.
-9. **`null` and `0` mean different things** throughout the payload: `null` is "no
-   data covers this period", `0` is a real measured zero. The UI honors the
-   distinction (`—` and chart gaps vs. a zero-height bar).
-10. **The 12-week trailing sync window is the self-healing horizon.** A refund or
-   corrected check-in older than ~12 weeks will never be picked up by the daily
-   jobs; it needs a manual `business-backfill` run.
+10. **`null` and `0` mean different things** throughout the payload: `null` is "no
+    data covers this period", `0` is a real measured zero. The UI honors the
+    distinction (`—` and chart gaps vs. a zero-height bar).
+11. **The 12-week trailing sync window is the self-healing horizon.** A refund or
+    corrected check-in older than ~12 weeks will never be picked up by the daily
+    jobs; it needs a manual `business-backfill` run.

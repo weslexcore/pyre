@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchHostSessions = vi.fn();
 const fetchSessionBookings = vi.fn();
 const fetchMembersFiltered = vi.fn();
+const fetchMemberActivePacks = vi.fn();
+const getIntroOfferMembershipIds = vi.fn();
 const getDb = vi.fn();
 const getRedis = vi.fn();
 
@@ -10,6 +12,8 @@ vi.mock('@/lib/momence/host-api', () => ({
   fetchHostSessions: (args: unknown) => fetchHostSessions(args),
   fetchSessionBookings: (id: number) => fetchSessionBookings(id),
   fetchMembersFiltered: (args: unknown) => fetchMembersFiltered(args),
+  fetchMemberActivePacks: (id: number, opts: unknown) => fetchMemberActivePacks(id, opts),
+  getIntroOfferMembershipIds: () => getIntroOfferMembershipIds(),
 }));
 vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
 vi.mock('@pyre/webhook-core', () => ({ getRedis: () => getRedis() }));
@@ -93,6 +97,8 @@ describe('runActivityMetricsSync', () => {
     fetchHostSessions.mockReset().mockResolvedValue([]);
     fetchSessionBookings.mockReset().mockResolvedValue([]);
     fetchMembersFiltered.mockReset().mockResolvedValue({ members: [], totalCount: 0 });
+    fetchMemberActivePacks.mockReset().mockResolvedValue([]);
+    getIntroOfferMembershipIds.mockReset().mockReturnValue([]);
     getDb.mockReset();
     getRedis.mockReset();
   });
@@ -256,13 +262,13 @@ describe('runActivityMetricsSync', () => {
     expect(fetchSessionBookings).not.toHaveBeenCalled();
   });
 
-  it('buckets new members by ET day, zero-fills quiet days, and stamps active members on today', async () => {
+  it('buckets new members by ET day and zero-fills quiet days', async () => {
     const { db, upserts } = fakeDb();
     getDb.mockReturnValue(db);
     getRedis.mockReturnValue(fakeRedis());
     fetchMembersFiltered.mockImplementation(async (args: { filterPreset?: string }) => {
       if (args.filterPreset === 'with-active-membership') {
-        return { members: [], totalCount: 264 };
+        return { members: [], totalCount: 0 };
       }
       return {
         members: [
@@ -281,7 +287,122 @@ describe('runActivityMetricsSync', () => {
     expect(upserts['2026-08-16|new_members']).toBe(1);
     // A day with no arrivals is a real 0, not a gap.
     expect(upserts['2026-08-11|new_members']).toBe(0);
-    expect(upserts['2026-08-20|active_members']).toBe(264);
+  });
+
+  // --- active_members: Momence's own filter over-counts, so it is narrowed ---
+
+  /** Momence says these five hold an "active membership". */
+  const withActiveMembership = (ids: number[]) => {
+    fetchMembersFiltered.mockImplementation(async (args: { filterPreset?: string }) => {
+      if (args.filterPreset === 'with-active-membership') {
+        return { members: ids.map((id) => ({ id })), totalCount: ids.length };
+      }
+      return { members: [], totalCount: 0 };
+    });
+  };
+
+  const pack = (over: Record<string, unknown> = {}) => ({
+    id: 1,
+    type: 'subscription',
+    startDate: null,
+    endDate: null,
+    isFrozen: false,
+    eventCreditsLeft: null,
+    eventCreditsTotal: null,
+    moneyCreditsLeft: null,
+    moneyCreditsTotal: null,
+    membership: null,
+    ...over,
+  });
+
+  it('counts only recurring plans, not intro packages or credit packs', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    getIntroOfferMembershipIds.mockReturnValue([77]);
+    withActiveMembership([1, 2, 3, 4, 5]);
+    fetchMemberActivePacks.mockImplementation(async (id: number) => {
+      if (id === 1) return [pack()]; // a real monthly subscription
+      if (id === 2) return [pack({ type: 'package-events', eventCreditsLeft: 4 })]; // credit pack
+      if (id === 3) return [pack({ type: 'package-money', moneyCreditsLeft: 50 })]; // stored value
+      if (id === 4) return [pack({ membership: { id: 77, name: 'Intro Offer' } })]; // intro
+      return [pack({ isFrozen: true })]; // paused, so not paying this month
+    });
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    // Momence would have said 5.
+    expect(upserts['2026-08-20|active_members']).toBe(1);
+  });
+
+  it('counts a member once when they hold a pack alongside a subscription', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    withActiveMembership([1]);
+    fetchMemberActivePacks.mockResolvedValue([
+      pack({ id: 1, type: 'package-events' }),
+      pack({ id: 2, type: 'subscription' }),
+    ]);
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(upserts['2026-08-20|active_members']).toBe(1);
+  });
+
+  it('reads packs fresh so a cancellation cannot linger in the cache', async () => {
+    const { db } = fakeDb();
+    getDb.mockReturnValue(db);
+    getRedis.mockReturnValue(fakeRedis());
+    withActiveMembership([1]);
+
+    await runActivityMetricsSync(ctx, { weeksBack: 1 });
+
+    expect(fetchMemberActivePacks).toHaveBeenCalledWith(1, { fresh: true });
+  });
+
+  it('parks a half-finished count rather than writing a membership collapse', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    getRedis.mockReturnValue(redis);
+    withActiveMembership([1, 2, 3]);
+    // Enough budget for the first member, then nothing.
+    let calls = 0;
+    const tightCtx = {
+      dryRun: false,
+      timeRemainingMs: () => (calls++ < 1 ? 50_000 : 1_000),
+    };
+
+    const summary = await runActivityMetricsSync(tightCtx, { weeksBack: 1 });
+
+    expect(summary.outOfTime).toBe(true);
+    expect(summary.pendingMembers).toBeGreaterThan(0);
+    expect(upserts['2026-08-20|active_members']).toBeUndefined();
+    expect(redis.store.get('activity-sync:cursor')).toMatchObject({
+      members: { recurring: expect.any(Number) },
+    });
+  });
+
+  it('finishes a parked count on the next tick and writes it once', async () => {
+    const { db, upserts } = fakeDb();
+    getDb.mockReturnValue(db);
+    const redis = fakeRedis();
+    redis.store.set('activity-sync:cursor', {
+      date: '2026-08-20',
+      weeks: [],
+      members: { pending: [7, 8], recurring: 3 },
+    });
+    getRedis.mockReturnValue(redis);
+    fetchMemberActivePacks.mockResolvedValue([pack()]);
+
+    const summary = await runActivityMetricsSync(ctx);
+
+    expect(summary.resumed).toBe(true);
+    expect(summary.membersClassified).toBe(2);
+    // 3 carried over + the 2 finished here.
+    expect(upserts['2026-08-20|active_members']).toBe(5);
+    expect(redis.store.get('activity-sync:cursor')).toBeUndefined();
   });
 
   it('parks unscanned weeks in a cursor when the budget runs out', async () => {
