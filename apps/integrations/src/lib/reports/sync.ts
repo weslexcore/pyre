@@ -24,6 +24,7 @@ import {
   ReportUnavailableError,
 } from '@/lib/momence/reports';
 import { normalizeReport } from '@/lib/reports/normalize';
+import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 
 /**
  * The daily pull set: 1 create/day of the 100/day budget.
@@ -37,9 +38,6 @@ import { normalizeReport } from '@/lib/reports/normalize';
  * firstSeen). Until that exists those metrics stay null on /admin/business.
  */
 export const DAILY_REPORTS: MomenceReportType[] = ['TOTAL_SALES'];
-
-/** ET hour from which the daily sync may start. */
-const SYNC_HOUR_ET = 6;
 
 /** Trailing window: this many weeks back from the current Monday. */
 const DEFAULT_WEEKS_BACK = 12;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
 
 // Email monitoring dashboard island. All data comes from the admin-gated
 // /api/admin/email-stats endpoint; this component only renders it.
@@ -115,28 +116,6 @@ interface EmailStats {
 
 const RANGES = [7, 14, 30, 90];
 const REFRESH_MS = 60_000;
-
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const abs = Math.abs(diffMs);
-  const mins = Math.round(abs / 60_000);
-  let text: string;
-  if (mins < 1) text = 'now';
-  else if (mins < 60) text = `${mins}m`;
-  else if (mins < 48 * 60) text = `${Math.round(mins / 60)}h`;
-  else text = `${Math.round(mins / (24 * 60))}d`;
-  if (text === 'now') return text;
-  return diffMs >= 0 ? `${text} ago` : `in ${text}`;
-}
-
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 export function EmailDashboard() {
   const [days, setDays] = useState(14);
