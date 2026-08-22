@@ -13,7 +13,9 @@ routes driven by two kinds of input:
   member audiences, and advances email journeys.
 
 For step-by-step walkthroughs of how events move through the system, see
-**[docs/event-flows.md](docs/event-flows.md)**.
+**[docs/event-flows.md](docs/event-flows.md)**. For where every number on the
+`/admin/business` dashboard comes from, see
+**[docs/business-overview-metrics.md](docs/business-overview-metrics.md)**.
 
 ## System overview
 
