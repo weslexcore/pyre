@@ -164,7 +164,14 @@ function FieldLabel({
   const [open, setOpen] = useState(false);
   const labelClass = 'text-xs font-mono-bold uppercase tracking-wide text-white/40';
   return (
-    <div className="flex items-center gap-1.5 mb-1.5">
+    // The tooltip anchors to this row, not to the 16px "i" button: the button
+    // sits after a label of any length, so anchoring there pushed a 240px
+    // panel off the right edge of a phone — and it is only opacity-0 when
+    // closed, so it widened the page even while hidden. `relative` here plus
+    // `max-w-full` on the panel keeps it inside the content column at every
+    // width. `group` stays on the button's span so only hovering the button
+    // (not the label) reveals it.
+    <div className="relative flex items-center gap-1.5 mb-1.5">
       {htmlFor ? (
         <label htmlFor={htmlFor} className={labelClass}>
           {children}
@@ -172,7 +179,7 @@ function FieldLabel({
       ) : (
         <span className={labelClass}>{children}</span>
       )}
-      <span className="relative inline-flex group">
+      <span className="inline-flex group">
         <button
           type="button"
           aria-label={`What is ${typeof children === 'string' ? children : 'this field'}?`}
@@ -185,7 +192,7 @@ function FieldLabel({
         </button>
         <span
           role="tooltip"
-          className={`pointer-events-none absolute left-0 top-6 z-20 w-60 rounded border border-white/20 bg-[var(--pyre-black)] px-2.5 py-1.5 text-[11px] font-normal normal-case tracking-normal leading-snug text-white/70 shadow-lg transition-opacity group-hover:opacity-100 ${
+          className={`pointer-events-none absolute left-0 top-6 z-20 w-60 max-w-full rounded border border-white/20 bg-[var(--pyre-black)] px-2.5 py-1.5 text-[11px] font-normal normal-case tracking-normal leading-snug text-white/70 shadow-lg transition-opacity group-hover:opacity-100 ${
             open ? 'opacity-100' : 'opacity-0'
           }`}
         >

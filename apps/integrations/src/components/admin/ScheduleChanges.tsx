@@ -123,10 +123,21 @@ export function ScheduleChanges() {
                 <span className="shrink-0 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
                   {ENTITY_LABEL[entry.entity_type]}
                 </span>
-                <span className="min-w-0 flex-1 text-sm text-white/80">{entry.summary}</span>
+                {/* Full width of its own line on a phone: sharing the line with
+                    the 10rem timestamp leaves ~50px here, which `min-w-0` then
+                    lets shrink below a single word — the summary spilled past
+                    the right edge of the screen. break-words covers the emails
+                    and ids that turn up in a summary. */}
+                <span className="w-full min-w-0 break-words text-sm text-white/80 sm:w-auto sm:flex-1">
+                  {entry.summary}
+                </span>
               </div>
               {Object.keys(entry.details ?? {}).length > 0 && (
-                <details className="mt-1 pl-[10.75rem]">
+                <details
+                  // The indent lines Details up under the summary column,
+                  // which only shares the timestamp's line from sm up.
+                  className="mt-1 sm:pl-[10.75rem]"
+                >
                   <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-wide text-white/30 hover:text-white/60">
                     Details
                   </summary>
