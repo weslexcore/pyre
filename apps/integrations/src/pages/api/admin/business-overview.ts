@@ -19,6 +19,8 @@ import { addDays, completedWeekStarts, utcToEastern, weekStartOf } from '@pyre/s
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { type BusinessMetricRow, getDb } from '@/lib/db';
+import { HOST_API_SOURCE } from '@/lib/reports/activity';
+import { hoursSince, nextSyncAfter, SYNC_STALE_HOURS } from '@/lib/reports/schedule';
 import { DAILY_REPORTS } from '@/lib/reports/sync';
 import { computeDailyLabor } from '@/lib/schedule/labor';
 
@@ -85,6 +87,32 @@ export interface RangeTotals {
   activeMembers: number | null;
 }
 
+/**
+ * How current the Momence half of the page is. Two independent daily jobs
+ * feed it, so they are reported separately as well as rolled up — one of them
+ * stalling leaves the other's numbers perfectly fresh, and a single timestamp
+ * would hide that.
+ *
+ * Labor cost and open hours are deliberately absent: they are computed from
+ * the shifts tables on this very request, so they are never stale.
+ */
+export interface SyncStatus {
+  /** business-report-sync's newest snapshot — revenue. */
+  reportsSyncedAt: string | null;
+  /** business-activity-sync's newest write — attendance, occupancy, members. */
+  activitySyncedAt: string | null;
+  /** The page is only as current as its stalest feed, so: the OLDER of the
+   * two above (or whichever exists). null = neither has ever run. */
+  lastSyncedAt: string | null;
+  /** Soonest next run across both jobs, from the cron's daily 6am ET gate. */
+  nextSyncAt: string;
+  /** lastSyncedAt is missing or older than SYNC_STALE_HOURS. */
+  stale: boolean;
+  /** Daily report types with no snapshot in the last 3 days — either the
+   * type isn't available on the Momence plan or its runs keep failing. */
+  missingReportTypes: string[];
+}
+
 export interface BusinessOverviewPayload {
   today: string;
   group: BucketGroup;
@@ -95,11 +123,7 @@ export interface BusinessOverviewPayload {
    * period immediately before, for deltas; null when the range is entirely
    * in the future. */
   summary: { range: RangeTotals; previous: RangeTotals | null };
-  /** Newest snapshot write; stale (>26h) means the sync job is unwell. */
-  lastSyncedAt: string | null;
-  /** Daily report types with no snapshot in the last 3 days — either the
-   * type isn't available on the Momence plan or its runs keep failing. */
-  missingReportTypes: string[];
+  sync: SyncStatus;
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -173,7 +197,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const prevStart = hasElapsed ? addDays(start, -summaryDays) : start;
   const prevEnd = addDays(start, -1);
 
-  const [metricsRes, snapshotRes, labor] = await Promise.all([
+  const [metricsRes, snapshotRes, lastReportRes, lastActivityRes, labor] = await Promise.all([
     db
       .from('business_metrics_daily')
       .select('*')
@@ -181,11 +205,25 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .lte('metric_date', end),
     db
       .from('momence_report_snapshots')
-      .select('report_type, snapshot_date, created_at')
+      .select('report_type')
       .gte('snapshot_date', addDays(today, -3)),
+    // Freshness reads are unbounded by date on purpose: a sync that died a
+    // week ago must report as a week old, not as "never run".
+    db
+      .from('momence_report_snapshots')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1),
+    db
+      .from('business_metrics_daily')
+      .select('updated_at')
+      .eq('source_report_type', HOST_API_SOURCE)
+      .order('updated_at', { ascending: false })
+      .limit(1),
     computeDailyLabor(db, prevStart, end),
   ]);
-  const queryError = metricsRes.error ?? snapshotRes.error;
+  const queryError =
+    metricsRes.error ?? snapshotRes.error ?? lastReportRes.error ?? lastActivityRes.error;
   if (queryError) return json({ error: queryError.message }, 500);
 
   const metricRows = (metricsRes.data ?? []) as BusinessMetricRow[];
@@ -311,14 +349,46 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     previous: hasElapsed ? totalsOver(prevStart, prevEnd) : null,
   };
 
-  const snapshots = (snapshotRes.data ?? []) as Array<{
-    report_type: string;
-    snapshot_date: string;
-    created_at: string;
-  }>;
-  const seenTypes = new Set(snapshots.map((s) => s.report_type));
-  const lastSyncedAt =
-    snapshots.length > 0 ? snapshots.map((s) => s.created_at).sort()[snapshots.length - 1] : null;
+  const seenTypes = new Set(
+    ((snapshotRes.data ?? []) as Array<{ report_type: string }>).map((s) => s.report_type)
+  );
+  // PostgREST renders timestamptz as '…+00:00' with however many fractional
+  // digits Postgres kept, so canonicalize on the way in: one format for the
+  // comparisons below and for the <time datetime> the client emits.
+  const isoOrNull = (t: string | undefined): string | null =>
+    t === undefined ? null : new Date(t).toISOString();
+
+  const reportsSyncedAt = isoOrNull(
+    ((lastReportRes.data ?? []) as Array<{ created_at: string }>)[0]?.created_at
+  );
+  const activitySyncedAt = isoOrNull(
+    ((lastActivityRes.data ?? []) as Array<{ updated_at: string }>)[0]?.updated_at
+  );
+
+  // Roll up to the stalest feed that has ever run: if one job has never
+  // written at all its metrics are simply absent from the charts (and
+  // missingReportTypes calls that out), so it must not drag the timestamp of
+  // the data that IS on screen back to "never".
+  // Canonical ISO-8601 Z strings share a format and length, so lexical order
+  // is chronological order — min needs no re-parsing.
+  const earliest = (a: string, b: string): string => (a < b ? a : b);
+  const lastSyncedAt = [reportsSyncedAt, activitySyncedAt]
+    .filter((t): t is string => t !== null)
+    .reduce<string | null>((a, b) => (a === null ? b : earliest(a, b)), null);
+
+  const nowIso = new Date().toISOString();
+  const sync: SyncStatus = {
+    reportsSyncedAt,
+    activitySyncedAt,
+    lastSyncedAt,
+    // Soonest of the two: reports finishing for the day must not hide an
+    // activity sweep that is still due within the hour.
+    nextSyncAt: [reportsSyncedAt, activitySyncedAt]
+      .map((at) => nextSyncAfter(nowIso, at))
+      .reduce(earliest),
+    stale: hoursSince(nowIso, lastSyncedAt) > SYNC_STALE_HOURS,
+    missingReportTypes: DAILY_REPORTS.filter((t) => !seenTypes.has(t)),
+  };
 
   const payload: BusinessOverviewPayload = {
     today,
@@ -327,8 +397,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     end,
     buckets,
     summary,
-    lastSyncedAt,
-    missingReportTypes: DAILY_REPORTS.filter((t) => !seenTypes.has(t)),
+    sync,
   };
 
   return json(payload);

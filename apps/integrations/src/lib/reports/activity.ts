@@ -37,12 +37,11 @@ import {
   fetchSessionBookings,
 } from '@/lib/momence/host-api';
 import type { MetricKey, MetricUpsert } from '@/lib/reports/normalize';
+import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 
-/** Provenance stamp on rows this sweep writes (vs a report type). */
-const SOURCE = 'HOST_API';
-
-/** ET hour from which the daily sweep may start. */
-const SYNC_HOUR_ET = 6;
+/** Provenance stamp on rows this sweep writes (vs a report type). Exported so
+ * the dashboard can find this job's newest write without guessing the string. */
+export const HOST_API_SOURCE = 'HOST_API';
 
 /** Trailing window: this many weeks back from the current Monday. */
 const DEFAULT_WEEKS_BACK = 12;
@@ -383,7 +382,7 @@ async function upsertMetrics(
       metric_date: metric.date,
       metric: metric.metric satisfies MetricKey,
       value: metric.value,
-      source_report_type: SOURCE,
+      source_report_type: HOST_API_SOURCE,
       snapshot_date: snapshotDate,
     })),
     { onConflict: 'metric_date,metric' }
