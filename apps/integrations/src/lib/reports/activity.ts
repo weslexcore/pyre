@@ -10,7 +10,11 @@
 //   session_capacity  /host/sessions → capacity (occupancy denominator)
 //   session_booked    /host/sessions → bookingCount (occupancy numerator)
 //   new_members       /host/members sorted by firstSeenAt
-//   active_members    /host/members/list with filterPreset=with-active-membership
+//   active_members    /host/members/list with filterPreset=with-active-membership,
+//                     then each member's /bought-memberships/active narrowed to
+//                     recurring plans — Momence's filter counts intro packages
+//                     and credit packs as memberships, we don't (see
+//                     lib/momence/memberships.ts)
 //
 // membership_cancellations has no host endpoint behind it and is not
 // produced — the dashboard no longer renders it.
@@ -33,9 +37,12 @@ import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb } from '@/lib/db';
 import {
   fetchHostSessions,
+  fetchMemberActivePacks,
   fetchMembersFiltered,
   fetchSessionBookings,
+  getIntroOfferMembershipIds,
 } from '@/lib/momence/host-api';
+import { hasRecurringMembership } from '@/lib/momence/memberships';
 import type { MetricKey, MetricUpsert } from '@/lib/reports/normalize';
 import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 
@@ -58,22 +65,38 @@ const TIME_FLOOR_MS = 8_000;
 
 const DONE_TTL_SECONDS = 60 * 60 * 48;
 
-/** Page cap when walking members newest-first; 100 members/page. */
+/** Page cap for both member walks (new arrivals, active-membership
+ * candidates); 100 members/page, so 2000 members. */
 const MAX_MEMBER_PAGES = 20;
+
+/** The active_members count in progress: who is left to classify, and how
+ * many of those already checked are on a recurring plan. */
+interface MemberScanState {
+  pending: number[];
+  recurring: number;
+}
 
 interface ActivityCursor {
   /** ET day the sweep started — stamped on rows as their snapshot_date. */
   date: string;
   /** Weeks still to scan, newest first. */
   weeks: string[];
+  /** null once the day's active_members row has been written. Absent on a
+   * cursor written before this phase existed, which reads the same. */
+  members: MemberScanState | null;
 }
 
 export interface ActivitySyncSummary {
   weeksProcessed: number;
   sessionsScanned: number;
   bookingsScanned: number;
+  /** Members checked for a recurring plan this tick. */
+  membersClassified: number;
   metricsUpserted: number;
   pendingWeeks: number;
+  /** Members still awaiting classification — >0 means active_members was not
+   * written this tick. */
+  pendingMembers: number;
   resumed: boolean;
   skipped?: string;
   outOfTime?: boolean;
@@ -105,8 +128,10 @@ export async function runActivityMetricsSync(
     weeksProcessed: 0,
     sessionsScanned: 0,
     bookingsScanned: 0,
+    membersClassified: 0,
     metricsUpserted: 0,
     pendingWeeks: 0,
+    pendingMembers: 0,
     resumed: false,
   };
 
@@ -140,18 +165,64 @@ export async function runActivityMetricsSync(
       };
     }
 
-    // Member counts are cheap and cover the whole window at once, so they run
-    // up front rather than per week.
-    const memberMetrics = await collectMemberMetrics(windowWeeks, today);
+    // New-member counts are cheap and cover the whole window at once, so they
+    // run up front rather than per week.
+    const memberMetrics = await collectNewMemberMetrics(windowWeeks, today);
     summary.metricsUpserted += await upsertMetrics(db, memberMetrics, today);
 
-    cursor = { date: today, weeks: await weeksNeedingScan(db, windowWeeks, today) };
+    // Listing who Momence calls a member is cheap; deciding which of them
+    // actually pay monthly is a request each, so it goes in the cursor.
+    cursor = {
+      date: today,
+      weeks: await weeksNeedingScan(db, windowWeeks, today),
+      members: { pending: await fetchActiveMembershipMemberIds(), recurring: 0 },
+    };
     await redis.set(cursorKey, cursor);
   } else {
     summary.resumed = true;
     if (ctx.dryRun) {
       return { ...summary, skipped: 'dry-run (cursor pending)', pendingWeeks: cursor.weeks.length };
     }
+  }
+
+  // --- active_members: narrow Momence's list to the recurring plans ---
+  // Runs ahead of the week scan: it is the number this job exists to correct,
+  // and the week loop already resumes cleanly if it gets squeezed.
+  if (cursor.members) {
+    const scan = cursor.members;
+    const introOfferIds = getIntroOfferMembershipIds();
+
+    while (scan.pending.length > 0 && ctx.timeRemainingMs() > TIME_FLOOR_MS) {
+      const memberId = scan.pending[0];
+      if (memberId === undefined) break;
+      // fresh: the shared pack cache runs up to 20h behind, and yesterday's
+      // cancellation must not still count toward today's number. The read
+      // writes through, so journeys keep their warm cache.
+      const packs = await fetchMemberActivePacks(memberId, { fresh: true });
+      if (hasRecurringMembership(packs, introOfferIds)) scan.recurring += 1;
+      summary.membersClassified += 1;
+      scan.pending.shift();
+    }
+
+    if (scan.pending.length > 0) {
+      // Half a count reads as a membership collapse on the dashboard, so the
+      // row waits for a tick that can finish it.
+      await redis.set(cursorKey, cursor);
+      return {
+        ...summary,
+        outOfTime: true,
+        pendingMembers: scan.pending.length,
+        pendingWeeks: cursor.weeks.length,
+      };
+    }
+
+    summary.metricsUpserted += await upsertMetrics(
+      db,
+      [{ date: cursor.date, metric: 'active_members', value: scan.recurring }],
+      cursor.date
+    );
+    cursor.members = null;
+    await redis.set(cursorKey, cursor);
   }
 
   const remaining = [...cursor.weeks];
@@ -322,12 +393,15 @@ async function scanWeek(weekStart: string, ctx: CronJobContext): Promise<WeekSca
 }
 
 /**
- * New members per ET day (from firstSeen, zero-filled through today so quiet
- * days read as 0 rather than missing) and the current active-membership
- * count. Active members is a stock with no history behind it, so it lands on
- * today only and accrues from here.
+ * New members per ET day, from firstSeen — zero-filled through today so quiet
+ * days read as 0 rather than missing.
+ *
+ * This counts arrivals, not memberships: anyone Momence saw for the first time
+ * that day, whether they bought a session, a pack, or nothing at all.
+ * active_members is a different question and is counted separately, from each
+ * member's actual purchases.
  */
-async function collectMemberMetrics(weeks: string[], today: string): Promise<MetricUpsert[]> {
+async function collectNewMemberMetrics(weeks: string[], today: string): Promise<MetricUpsert[]> {
   const metrics: MetricUpsert[] = [];
   const windowStart = weeks[0];
   if (windowStart === undefined) return metrics;
@@ -360,14 +434,31 @@ async function collectMemberMetrics(weeks: string[], today: string): Promise<Met
     metrics.push({ date: day, metric: 'new_members', value: perDay.get(day) ?? 0 });
   }
 
-  const { totalCount } = await fetchMembersFiltered({
-    page: 0,
-    pageSize: 1,
-    filterPreset: 'with-active-membership',
-  });
-  metrics.push({ date: today, metric: 'active_members', value: totalCount });
-
   return metrics;
+}
+
+/**
+ * Everyone Momence counts as holding an active membership — the superset the
+ * recurring check narrows down.
+ *
+ * `with-active-membership` is Momence's own filter and it is generous: intro
+ * packages and credit packs land in here alongside real subscriptions, which
+ * is exactly why the count can't be taken from its totalCount. It is used only
+ * to avoid walking the entire member list.
+ */
+async function fetchActiveMembershipMemberIds(): Promise<number[]> {
+  const ids: number[] = [];
+  for (let page = 0; page < MAX_MEMBER_PAGES; page += 1) {
+    const { members } = await fetchMembersFiltered({
+      page,
+      pageSize: 100,
+      filterPreset: 'with-active-membership',
+    });
+    if (members.length === 0) break;
+    for (const member of members) ids.push(member.id);
+    if (members.length < 100) break;
+  }
+  return ids;
 }
 
 async function upsertMetrics(
