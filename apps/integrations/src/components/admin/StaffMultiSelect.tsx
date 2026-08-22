@@ -2,11 +2,14 @@
 // month calendar, time off): pick whose time to look at. An empty selection
 // means everyone — the filter only narrows, it never hides the whole board.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StaffRow } from '@/lib/db';
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+
+/** Breathing room kept between the panel and the edge of the viewport. */
+const EDGE_MARGIN = 8;
 
 export function StaffMultiSelect({
   staff,
@@ -28,6 +31,22 @@ export function StaffMultiSelect({
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // The button wraps onto whichever toolbar line it fits, so on a phone it can
+  // sit close enough to the right edge that a left-aligned panel would hang off
+  // the viewport and scroll the whole page sideways — nudge it back inside.
+  // A ref callback (rather than a layout effect, which React warns about in the
+  // server render Astro does for this island) runs on commit, before paint, so
+  // the panel is never seen in the wrong place.
+  const positionPanel = useCallback((panel: HTMLDivElement | null) => {
+    if (!panel || !rootRef.current) return;
+    panel.style.transform = '';
+    const viewport = document.documentElement.clientWidth;
+    const left = rootRef.current.getBoundingClientRect().left;
+    const rightmost = Math.max(EDGE_MARGIN, viewport - EDGE_MARGIN - panel.offsetWidth);
+    const offset = Math.min(Math.max(left, EDGE_MARGIN), rightmost) - left;
+    if (offset !== 0) panel.style.transform = `translateX(${offset}px)`;
+  }, []);
 
   const active = staff.filter((s) => s.active);
   const label =
@@ -55,7 +74,10 @@ export function StaffMultiSelect({
         👤 {label} ▾
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-[200px] space-y-1 rounded border border-white/15 bg-[var(--pyre-black)] p-2 shadow-lg">
+        <div
+          ref={positionPanel}
+          className="absolute left-0 top-full z-20 mt-1 max-h-[60vh] min-w-[200px] max-w-[calc(100vw-1rem)] space-y-1 overflow-y-auto overscroll-contain rounded border border-white/15 bg-[var(--pyre-black)] p-2 shadow-lg"
+        >
           {active.map((s) => (
             <label
               key={s.id}
