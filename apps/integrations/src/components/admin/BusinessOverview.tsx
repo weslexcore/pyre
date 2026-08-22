@@ -6,12 +6,14 @@
 // /api/admin/business-overview (Momence metric syncs + labor cost from the
 // shifts tables); this island only renders.
 import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
 import type {
   BucketGroup,
   BusinessBucket,
   BusinessOverviewPayload,
+  SyncStatus,
 } from '@/pages/api/admin/business-overview';
 
 const GOLD = '#b58d35';
@@ -483,6 +485,61 @@ function AttendanceChart({ buckets, group }: { buckets: BusinessBucket[]; group:
   );
 }
 
+/** How often the freshness line re-renders, so "in 4m" actually counts down
+ * on a dashboard left open. */
+const CLOCK_TICK_MS = 30_000;
+
+/**
+ * Freshness line: when the Momence numbers were last pulled and when they
+ * refresh next. Labor cost is called out as live because it is computed from
+ * the shifts tables on every request — without that note, "synced 6h ago"
+ * reads as if the whole page were 6h old.
+ */
+export function SyncLine({ sync }: { sync: SyncStatus }) {
+  // Re-render on a timer: the payload is fetched once on mount, so without
+  // this the relative times freeze at whatever they were on first paint.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), CLOCK_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // Both feeds in the tooltip — the headline shows only the stalest.
+  const detail = [
+    `Revenue: ${sync.reportsSyncedAt ? fmtDateTime(sync.reportsSyncedAt) : 'never synced'}`,
+    `Attendance & members: ${
+      sync.activitySyncedAt ? fmtDateTime(sync.activitySyncedAt) : 'never synced'
+    }`,
+  ].join('\n');
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-white/40">
+      <span title={detail}>
+        Momence data synced{' '}
+        {sync.lastSyncedAt ? (
+          <time
+            dateTime={sync.lastSyncedAt}
+            className={sync.stale ? 'text-[var(--pyre-gold)]' : 'text-white/70'}
+          >
+            {timeAgo(sync.lastSyncedAt, nowMs)}
+          </time>
+        ) : (
+          <span className="text-[var(--pyre-gold)]">never</span>
+        )}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span title={fmtDateTime(sync.nextSyncAt)}>
+        next sync{' '}
+        <time dateTime={sync.nextSyncAt} className="text-white/70">
+          {timeAgo(sync.nextSyncAt, nowMs)}
+        </time>
+      </span>
+      <span aria-hidden="true">·</span>
+      <span>labor cost is live from the schedule</span>
+    </div>
+  );
+}
+
 const GROUP_OPTIONS: Array<{ key: BucketGroup; label: string }> = [
   { key: 'day', label: 'Day' },
   { key: 'week', label: 'Week' },
@@ -606,32 +663,32 @@ export function BusinessOverview() {
   const s = data.summary.range;
   const prev = data.summary.previous;
 
-  // Freshness: the sync runs daily, so anything past ~26h means it's unwell.
-  const syncStale =
-    data.lastSyncedAt !== null &&
-    Date.now() - new Date(data.lastSyncedAt).getTime() > 26 * 60 * 60 * 1000;
-  const neverSynced = data.lastSyncedAt === null;
+  const { sync } = data;
+  const neverSynced = sync.lastSyncedAt === null;
 
   return (
     <div className="space-y-8">
       {controls}
 
-      {(neverSynced || syncStale || data.missingReportTypes.length > 0) && (
+      <SyncLine sync={sync} />
+
+      {(sync.stale || sync.missingReportTypes.length > 0) && (
         <div className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)] space-y-1">
           {neverSynced && (
             <p>
-              No Momence report snapshots yet — the daily sync hasn't run. Kick it off with the
+              No Momence data yet — the daily sync hasn't run. Kick it off with the
               business-report-sync cron job or the backfill endpoint.
             </p>
           )}
-          {syncStale && data.lastSyncedAt && (
+          {sync.stale && !neverSynced && (
             <p>
-              Last Momence sync was {new Date(data.lastSyncedAt).toLocaleString()} — over a day ago.
+              Momence data is over a day behind — the daily sync is failing or hasn't run. The
+              numbers below may be stale.
             </p>
           )}
-          {data.missingReportTypes.length > 0 && (
+          {sync.missingReportTypes.length > 0 && (
             <p>
-              No recent snapshot for: {data.missingReportTypes.join(', ')} — those metrics show as
+              No recent snapshot for: {sync.missingReportTypes.join(', ')} — those metrics show as
               missing. (Report type unavailable on the Momence plan, or its runs are failing.)
             </p>
           )}

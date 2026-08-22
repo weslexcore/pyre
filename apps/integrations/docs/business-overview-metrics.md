@@ -14,7 +14,7 @@ from and the arithmetic applied on the way. Written for the moment someone asks
 - [6. Read-time aggregation](#6-read-time-aggregation)
 - [7. Every rendered number, one by one](#7-every-rendered-number-one-by-one)
 - [8. Time, calendars, and period boundaries](#8-time-calendars-and-period-boundaries)
-- [9. Freshness banner](#9-freshness-banner)
+- [9. Freshness: last synced and next sync](#9-freshness-last-synced-and-next-sync)
 - [10. Known caveats](#10-known-caveats)
 
 ---
@@ -32,6 +32,7 @@ pre-computed from one admin-only endpoint:
 | Labor math | `src/lib/schedule/labor.ts` + `@pyre/schedule-core` |
 | Momence revenue ingestion | `src/lib/reports/sync.ts` → `src/lib/reports/normalize.ts` |
 | Momence activity ingestion | `src/lib/reports/activity.ts` |
+| Sync-schedule math (last/next sync) | `src/lib/reports/schedule.ts` |
 
 Two independent inputs are joined at read time:
 
@@ -376,20 +377,57 @@ counted in exactly one of them, and both exclude cancelled bookings.
   grain they read best at — quarters at week grain, YTD at month — and the
   Group-by buttons override afterwards.
 
-## 9. Freshness banner
+## 9. Freshness: last synced and next sync
 
-Driven by two payload fields:
+The line under the range controls answers "how current is this?" without anyone
+having to open the cron logs:
 
-- `lastSyncedAt` — newest `created_at` among `momence_report_snapshots` rows with
-  `snapshot_date >= today − 3`. `null` → "no snapshots yet"; older than **26h** →
-  "sync is unwell" (the job runs daily, so 26h is a day plus slack).
-- `missingReportTypes` — `DAILY_REPORTS` minus the report types seen in that same
-  3-day snapshot window. Today that list is just `TOTAL_SALES`, so a non-empty
-  value means revenue ingestion is failing.
+> Momence data synced **3h ago** · next sync **in 21h** · labor cost is live from
+> the schedule
 
-Note the asymmetry: the banner watches the **report** sync only. A stalled
-`business-activity-sync` shows up as missing attendance/membership bars, not as
-a warning.
+It renders from `payload.sync` (`SyncStatus`), and hovering the first item breaks
+the timestamp out per feed.
+
+| Field | Source | Meaning |
+| --- | --- | --- |
+| `reportsSyncedAt` | newest `momence_report_snapshots.created_at` | when revenue last landed |
+| `activitySyncedAt` | newest `business_metrics_daily.updated_at` where `source_report_type = 'HOST_API'` | when attendance / occupancy / members last landed |
+| `lastSyncedAt` | the **older** of the two above | the page's freshness floor — it is only as current as its stalest feed |
+| `nextSyncAt` | derived, see below | the soonest either job runs again |
+| `stale` | `lastSyncedAt` missing or older than `SYNC_STALE_HOURS` (26) | drives the warning banner |
+| `missingReportTypes` | `DAILY_REPORTS` minus types seen in the last 3 days | non-empty means revenue ingestion is failing |
+
+Both freshness reads are **unbounded by date**: a sync that died a week ago has
+to report as a week old, not as "never run".
+
+When one feed has never synced at all, `lastSyncedAt` falls back to the other
+rather than reading "never" — the missing feed's metrics are already visibly
+absent from the charts, and `missingReportTypes` names it.
+
+### Deriving `nextSyncAt`
+
+`src/lib/reports/schedule.ts` — no Redis read on the request path. Both jobs
+gate identically (first hourly tick at or after `SYNC_HOUR_ET` = 06:00 ET, one
+run per ET day), so the next run follows from the clock plus the job's last
+write:
+
+```
+wrote today already   → tomorrow 06:00 ET      (the done-key holds until then)
+now < 06:00 ET        → today 06:00 ET         (gate still shut)
+otherwise             → the next top-of-hour tick
+```
+
+`nextSyncAt` is the **earlier** of the two jobs' answers, so reports finishing
+for the day can't hide an activity sweep still due within the hour.
+
+One deliberate approximation, always in the safe direction: a job that wrote
+today and then ran out of tick budget resumes from its Redis cursor on the very
+next tick, which this reports as tomorrow morning. It errs late, never early —
+promising a refresh that isn't coming would be the worse failure.
+
+**Labor cost and open hours have no sync time** because they are computed from
+the shifts tables on the request itself. That is why the line says so
+explicitly: without it, "synced 3h ago" reads as if the whole page were 3h old.
 
 ## 10. Known caveats
 
@@ -414,9 +452,12 @@ a warning.
 7. **Revenue counts `paymentValue − refunded` on succeeded rows only.** It is net
    collected cash, not accrual revenue, and it is not reconciled against
    QuickBooks anywhere in this codebase.
-8. **`null` and `0` mean different things** throughout the payload: `null` is "no
+8. **A stalled activity sweep is now visible** in the freshness line and banner
+   (§9), but its symptom is still missing attendance/membership bars rather
+   than an error — the revenue half of the page keeps working normally.
+9. **`null` and `0` mean different things** throughout the payload: `null` is "no
    data covers this period", `0` is a real measured zero. The UI honors the
    distinction (`—` and chart gaps vs. a zero-height bar).
-9. **The 12-week trailing sync window is the self-healing horizon.** A refund or
+10. **The 12-week trailing sync window is the self-healing horizon.** A refund or
    corrected check-in older than ~12 weeks will never be picked up by the daily
    jobs; it needs a manual `business-backfill` run.
