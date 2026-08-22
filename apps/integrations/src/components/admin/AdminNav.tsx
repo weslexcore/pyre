@@ -114,9 +114,15 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
       {open && (
         <div
           id="admin-menu"
-          className="absolute inset-x-0 top-full z-50 border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-4 md:mt-2 md:w-64 md:rounded-md md:border md:border-white/10"
+          // The panel hangs off a sticky header, so anything past the bottom
+          // of the viewport can never be scrolled to — the header (and the
+          // panel with it) stays put as the page scrolls. Cap the panel at
+          // the space below the header and scroll the list inside it instead,
+          // keeping the account row pinned to the bottom. overscroll-contain
+          // stops that scroll from chaining to the page behind the menu.
+          className="absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-4 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-64 md:rounded-md md:border md:border-white/10"
         >
-          <div className="px-4 py-2 md:px-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 md:px-2">
             {groups.map((group) => (
               <div key={group.label ?? 'home'} className="mt-3 first:mt-0">
                 {group.label && (
@@ -154,7 +160,7 @@ export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
               </div>
             ))}
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3 md:px-3">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-3 md:px-3">
             <span className="truncate font-mono text-xs text-white/40">{userEmail}</span>
             {/* Never prefetch: logout is a GET that clears the session
                 cookies, so fetching it in the background signs the user out.

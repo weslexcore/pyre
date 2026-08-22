@@ -613,7 +613,10 @@ export function ScheduleBoard() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="flex gap-1.5">
+        {/* Every row in this toolbar wraps: on a phone the pills, the range
+            controls and the manage actions each stack onto as many lines as
+            they need rather than running off the right edge of the viewport. */}
+        <span className="flex flex-wrap gap-1.5">
           <button
             type="button"
             className={pillClass(view === 'week')}
@@ -746,7 +749,7 @@ export function ScheduleBoard() {
         )}
 
         {canManage && (
-          <span className="ml-auto flex gap-2">
+          <span className="flex flex-wrap gap-2 sm:ml-auto">
             {isAdmin && (
               <button
                 type="button"
