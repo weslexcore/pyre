@@ -10,6 +10,7 @@ import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import {
   DEFAULT_TEST_METHOD,
   type EntryType,
+  type Parameter,
   SHOCK_DOSES,
   TARGETS,
   TEST_METHOD_LABELS,
@@ -27,6 +28,7 @@ import {
   type Readings,
   type Recommendation,
 } from '@/lib/water/recommendations';
+import { MeasurementInfoButton } from './MeasurementInfo';
 import { WaterTrends } from './WaterTrends';
 
 const RANGES = [
@@ -133,6 +135,14 @@ const ENTRY_TYPE_LABELS: Array<[EntryType, string]> = [
   ['refill', 'Drain / Refill'],
 ];
 
+type TypeFilter = 'all' | EntryType;
+
+// Log filter options: same three types the form writes, plus "all".
+const ENTRY_TYPE_FILTERS: Array<[TypeFilter, string]> = [
+  ['all', 'All types'],
+  ...ENTRY_TYPE_LABELS,
+];
+
 // Staff read the log to answer "when was this tub last tested?", so entries
 // carry the clock time they were taken rather than an elapsed-time marker.
 // Rendered in the viewer's locale/timezone, which differs from the server's on
@@ -160,7 +170,15 @@ const statusTint: Record<ReturnType<typeof classifyReading>, string> = {
   critical: 'text-[var(--pyre-red)]',
 };
 
-function ReadingChips({ record }: { record: WaterTestRow }) {
+function ReadingChips({
+  record,
+  infoParam,
+  onInfoChange,
+}: {
+  record: WaterTestRow;
+  infoParam: Parameter | null;
+  onInfoChange: (parameter: Parameter | null) => void;
+}) {
   const shown = READING_FIELDS.filter((f) => record[f.column] != null);
   if (shown.length === 0) return null;
   return (
@@ -174,6 +192,12 @@ function ReadingChips({ record }: { record: WaterTestRow }) {
               {value}
               {f.unit ? ` ${f.unit}` : ''}
             </span>
+            <MeasurementInfoButton
+              parameter={f.key}
+              open={infoParam === f.key}
+              onOpenChange={(open) => onInfoChange(open ? f.key : null)}
+              className="ml-1"
+            />
           </span>
         );
       })}
@@ -283,6 +307,320 @@ function parseReading(raw: string): number | null | undefined {
   return Number.isFinite(value) ? value : undefined; // undefined = invalid input
 }
 
+/**
+ * In-place editor for an entry already in the log — the salt reading taken
+ * after the entry was saved, the dose logged at the wrong weight, the note
+ * that needed another sentence. Tub and entry type are not editable: changing
+ * those would make the row a different event, and the log is an audit record.
+ *
+ * It carries the same live recommendations as the entry form, so a reading
+ * added late is judged by the same rules — including TA gating pH — and any
+ * dose those corrected readings now call for can be logged onto the entry
+ * instead of being stranded.
+ */
+function EditEntryPanel({
+  record,
+  infoParam,
+  onInfoChange,
+  onCancel,
+  onSaved,
+  onSessionExpired,
+}: {
+  record: WaterTestRow;
+  infoParam: Parameter | null;
+  onInfoChange: (parameter: Parameter | null) => void;
+  onCancel: () => void;
+  onSaved: (record: WaterTestRow) => void;
+  onSessionExpired: () => void;
+}) {
+  // Drain/refill rows carry no measurements by design, so there is nothing to
+  // correct on one but its doses and notes.
+  const hasReadings = record.entry_type !== 'refill';
+
+  const [readingInputs, setReadingInputs] = useState<Record<ReadingKey, string>>(() => {
+    const initial = {} as Record<ReadingKey, string>;
+    for (const field of READING_FIELDS) {
+      const value = record[field.column];
+      initial[field.key] = value == null ? '' : String(value);
+    }
+    return initial;
+  });
+  const [testMethod, setTestMethod] = useState<TestMethod>(
+    record.test_method ?? DEFAULT_TEST_METHOD
+  );
+  const [doseDrafts, setDoseDrafts] = useState<DoseDraft[]>(() =>
+    record.doses.map((dose) => ({
+      chemical: dose.chemical,
+      gramsStr: String(dose.grams),
+      reason: dose.reason,
+      recommendedGrams: dose.recommended_grams,
+      accepted: true,
+    }))
+  );
+  const [notes, setNotes] = useState(record.notes ?? '');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const liveReadings = useMemo<Readings>(() => {
+    const readings: Record<string, number | null> = {};
+    for (const field of READING_FIELDS) {
+      const parsed = parseReading(readingInputs[field.key]);
+      readings[field.key] = parsed === undefined ? null : parsed;
+    }
+    return readings as Readings;
+  }, [readingInputs]);
+
+  const recommendations = useMemo(() => getRecommendations(liveReadings), [liveReadings]);
+
+  const liveRecByParam = useMemo(() => {
+    const map = new Map<ReadingKey, Recommendation>();
+    for (const rec of recommendations) map.set(rec.parameter, rec);
+    return map;
+  }, [recommendations]);
+
+  // Doses the corrected readings now call for that aren't on the entry yet.
+  const unlogged = recommendations.filter(
+    (rec) =>
+      rec.severity === 'action' &&
+      rec.chemical &&
+      rec.grams != null &&
+      !doseDrafts.some((draft) => draft.chemical === rec.chemical)
+  );
+
+  const save = async () => {
+    setError('');
+    const body: Record<string, unknown> = {};
+
+    if (hasReadings) {
+      const readings: Record<string, number | null> = {};
+      for (const field of READING_FIELDS) {
+        const parsed = parseReading(readingInputs[field.key]);
+        if (parsed === undefined) {
+          setError(`${field.label} must be a number (leave blank if not tested)`);
+          return;
+        }
+        readings[field.key] = parsed;
+      }
+      const measured = Object.values(readings).some((v) => v != null);
+      if (record.entry_type === 'test' && !measured) {
+        setError('A test entry needs at least one reading');
+        return;
+      }
+      body.readings = readings;
+      body.testMethod = measured ? testMethod : null;
+    }
+
+    const doses: DoseRecord[] = [];
+    for (const draft of doseDrafts) {
+      if (!draft.accepted) continue;
+      const grams = Number(draft.gramsStr);
+      if (!Number.isFinite(grams) || grams <= 0) {
+        setError(`${draft.chemical}: grams must be a positive number`);
+        return;
+      }
+      doses.push({
+        chemical: draft.chemical,
+        grams,
+        reason: draft.reason,
+        recommended_grams: draft.recommendedGrams,
+      });
+    }
+    body.doses = doses;
+    body.notes = notes.trim();
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/water-tests?id=${encodeURIComponent(record.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) {
+        onSessionExpired();
+        return;
+      }
+      const data = (await res.json()) as { record?: WaterTestRow; error?: string };
+      if (!res.ok || !data.record) throw new Error(data.error || `HTTP ${res.status}`);
+      onSaved(data.record);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 rounded border border-white/20 bg-white/5 p-3">
+      <div className="mb-3 font-mono-bold text-xs uppercase tracking-wide text-white/40">
+        Editing this entry
+      </div>
+
+      {hasReadings && (
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          {READING_FIELDS.map((field) => {
+            const parsed = parseReading(readingInputs[field.key]);
+            const invalid = parsed === undefined;
+            const status = typeof parsed === 'number' ? classifyReading(field.key, parsed) : null;
+            const rec = typeof parsed === 'number' ? liveRecByParam.get(field.key) : undefined;
+            return (
+              <label key={field.key} className="block">
+                <span className="mb-1.5 flex items-center gap-1 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                  <span>
+                    {field.label}
+                    {field.unit ? ` (${field.unit})` : ''}
+                  </span>
+                  <MeasurementInfoButton
+                    parameter={field.key}
+                    open={infoParam === field.key}
+                    onOpenChange={(open) => onInfoChange(open ? field.key : null)}
+                  />
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={readingInputs[field.key]}
+                  onChange={(e) =>
+                    setReadingInputs((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                  placeholder={targetHint(field.key)}
+                  className={readingInputClass(status, invalid, rec?.severity === 'blocked')}
+                />
+                <LiveFieldNote rec={rec} status={status} invalid={invalid} />
+              </label>
+            );
+          })}
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+              Test method
+            </span>
+            <select
+              value={testMethod}
+              onChange={(e) => setTestMethod(e.target.value as TestMethod)}
+              className={inputClass}
+            >
+              {TEST_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {TEST_METHOD_LABELS[method]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {doseDrafts.map((draft, index) => (
+        <div
+          key={draft.chemical}
+          className={`mb-2 rounded border p-3 ${
+            draft.accepted ? 'border-white/20 bg-white/5' : 'border-white/10 opacity-60'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-primary-semibold text-sm">{draft.chemical}</div>
+            <button
+              type="button"
+              onClick={() =>
+                setDoseDrafts((prev) =>
+                  prev.map((d, i) => (i === index ? { ...d, accepted: !d.accepted } : d))
+                )
+              }
+              className={pillClass(draft.accepted)}
+            >
+              {draft.accepted ? 'Logged' : 'Removed'}
+            </button>
+          </div>
+          {draft.accepted && (
+            <label className="mt-2 flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={draft.gramsStr}
+                onChange={(e) =>
+                  setDoseDrafts((prev) =>
+                    prev.map((d, i) => (i === index ? { ...d, gramsStr: e.target.value } : d))
+                  )
+                }
+                className={`${inputClass} max-w-28`}
+              />
+              <span className="font-mono text-sm text-white/40">
+                g{' '}
+                {draft.recommendedGrams != null &&
+                  Number(draft.gramsStr) !== draft.recommendedGrams &&
+                  `(chart: ${draft.recommendedGrams} g)`}
+              </span>
+            </label>
+          )}
+        </div>
+      ))}
+
+      {unlogged.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-1.5 text-xs text-white/40">
+            These readings call for a dose that isn't on the entry:
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unlogged.map((rec) => (
+              <button
+                key={rec.parameter}
+                type="button"
+                onClick={() =>
+                  setDoseDrafts((prev) => [
+                    ...prev,
+                    {
+                      chemical: rec.chemical as string,
+                      gramsStr: String(rec.grams),
+                      reason: rec.reason,
+                      recommendedGrams: rec.grams as number,
+                      accepted: true,
+                    },
+                  ])
+                }
+                className="rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-gold)] transition-colors hover:border-[var(--pyre-gold)]"
+              >
+                ＋ {rec.grams} g {rec.chemical}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <label className="mb-3 block">
+        <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
+          Notes
+        </span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Optional"
+          className={inputClass}
+        />
+      </label>
+
+      {error && <p className="mb-2 text-sm text-[var(--pyre-red)]">{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-md border border-white/20 px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="flex-1 rounded-md bg-[var(--pyre-red)] px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WaterLog({ userEmail }: { userEmail: string }) {
   const [sessionExpired, setSessionExpired] = useState(false);
 
@@ -309,22 +647,33 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const [records, setRecords] = useState<WaterTestRow[]>([]);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<'all' | Tub>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [logLoading, setLogLoading] = useState(false);
   const [logError, setLogError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  // One info modal at a time across the whole page — the log renders a ⓘ per
+  // reading per entry, and two open dialogs would be nonsense.
+  const [infoParam, setInfoParam] = useState<Parameter | null>(null);
 
   // --- trends chart ---
   const [range, setRange] = useState<RangeKey>('30d');
   const [chartRecords, setChartRecords] = useState<WaterTestRow[]>([]);
 
   const loadLog = useCallback(
-    async (offset: number, tubFilter: 'all' | Tub, rangeKey: RangeKey) => {
+    async (
+      offset: number,
+      tubFilter: 'all' | Tub,
+      rangeKey: RangeKey,
+      entryTypeFilter: TypeFilter
+    ) => {
       setLogLoading(true);
       setLogError('');
       try {
         const params = new URLSearchParams({ limit: '25', offset: String(offset) });
         if (tubFilter !== 'all') params.set('tub', tubFilter);
+        if (entryTypeFilter !== 'all') params.set('entryType', entryTypeFilter);
         const since = sinceIso(rangeKey);
         if (since) params.set('since', since);
         const res = await fetch(`/api/admin/water-tests?${params}`);
@@ -347,25 +696,29 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   // The chart wants the whole window in one fetch (up to the API's 100-row
   // cap), not the log's 25-row pages.
-  const loadChart = useCallback(async (tubFilter: 'all' | Tub, rangeKey: RangeKey) => {
-    try {
-      const params = new URLSearchParams({ limit: '100' });
-      if (tubFilter !== 'all') params.set('tub', tubFilter);
-      const since = sinceIso(rangeKey);
-      if (since) params.set('since', since);
-      const res = await fetch(`/api/admin/water-tests?${params}`);
-      if (!res.ok) return; // the log surfaces fetch problems; the chart stays quiet
-      const data = (await res.json()) as LogResponse;
-      setChartRecords(data.records);
-    } catch {
-      // ignore — chart is supplementary
-    }
-  }, []);
+  const loadChart = useCallback(
+    async (tubFilter: 'all' | Tub, rangeKey: RangeKey, entryTypeFilter: TypeFilter) => {
+      try {
+        const params = new URLSearchParams({ limit: '100' });
+        if (tubFilter !== 'all') params.set('tub', tubFilter);
+        if (entryTypeFilter !== 'all') params.set('entryType', entryTypeFilter);
+        const since = sinceIso(rangeKey);
+        if (since) params.set('since', since);
+        const res = await fetch(`/api/admin/water-tests?${params}`);
+        if (!res.ok) return; // the log surfaces fetch problems; the chart stays quiet
+        const data = (await res.json()) as LogResponse;
+        setChartRecords(data.records);
+      } catch {
+        // ignore — chart is supplementary
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    void loadLog(0, filter, range);
-    void loadChart(filter, range);
-  }, [loadLog, loadChart, filter, range]);
+    void loadLog(0, filter, range, typeFilter);
+    void loadChart(filter, range, typeFilter);
+  }, [loadLog, loadChart, filter, range, typeFilter]);
 
   // Live per-field feedback: the recommendation engine is pure and local, so
   // rerunning it on every keystroke is free. Invalid text is treated as
@@ -505,7 +858,10 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       const data = (await res.json()) as { record?: WaterTestRow; error?: string };
       if (!res.ok || !data.record) throw new Error(data.error || `HTTP ${res.status}`);
 
-      if (filter === 'all' || filter === tub) {
+      if (
+        (filter === 'all' || filter === tub) &&
+        (typeFilter === 'all' || typeFilter === entryType)
+      ) {
         setRecords((prev) => [data.record as WaterTestRow, ...prev]);
         setTotal((prev) => prev + 1);
         setChartRecords((prev) => [data.record as WaterTestRow, ...prev]);
@@ -537,6 +893,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     try {
       const params = new URLSearchParams({ format: 'csv' });
       if (filter !== 'all') params.set('tub', filter);
+      if (typeFilter !== 'all') params.set('entryType', typeFilter);
       const since = sinceIso(range);
       if (since) params.set('since', since);
       const res = await fetch(`/api/admin/water-tests?${params}`);
@@ -548,7 +905,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       const url = URL.createObjectURL(await res.blob());
       const link = document.createElement('a');
       link.href = url;
-      link.download = `water-log-${filter}-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `water-log-${filter}-${typeFilter}-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -674,9 +1031,16 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
               const rec = typeof parsed === 'number' ? liveRecByParam.get(field.key) : undefined;
               return (
                 <label key={field.key} className="block">
-                  <span className="mb-1.5 block text-xs font-mono-bold uppercase tracking-wide text-white/40">
-                    {field.label}
-                    {field.unit ? ` (${field.unit})` : ''}
+                  <span className="mb-1.5 flex items-center gap-1 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+                    <span>
+                      {field.label}
+                      {field.unit ? ` (${field.unit})` : ''}
+                    </span>
+                    <MeasurementInfoButton
+                      parameter={field.key}
+                      open={infoParam === field.key}
+                      onOpenChange={(open) => setInfoParam(open ? field.key : null)}
+                    />
                   </span>
                   <input
                     type="text"
@@ -918,8 +1282,8 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         </div>
       </div>
 
-      {/* ---- Filters (scope the trends chart and the log) ---- */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      {/* ---- Filters (scope the trends chart, the log and the CSV export) ---- */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <div className="flex gap-2">
           {RANGES.map((r) => (
             <button
@@ -944,6 +1308,19 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ENTRY_TYPE_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTypeFilter(value)}
+            className={pillClass(typeFilter === value)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* ---- Trends (collapsed by default; the log below carries every number) ---- */}
@@ -986,6 +1363,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         // outlined in red, so scanning the log answers "was anyone in the
         // water when they shouldn't have been?" without reading the numbers.
         const safety = getGuestSafety(recordReadings(record));
+        const editing = editingId === record.id;
         return (
           <div
             key={record.id}
@@ -1014,67 +1392,96 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
               </span>
             </div>
 
-            <ReadingChips record={record} />
+            {editing ? (
+              <EditEntryPanel
+                record={record}
+                infoParam={infoParam}
+                onInfoChange={setInfoParam}
+                onCancel={() => setEditingId(null)}
+                onSaved={(updated) => {
+                  setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+                  setChartRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+                  setEditingId(null);
+                }}
+                onSessionExpired={() => setSessionExpired(true)}
+              />
+            ) : (
+              <>
+                <ReadingChips record={record} infoParam={infoParam} onInfoChange={setInfoParam} />
 
-            {!safety.safe && (
-              <div className="mt-2 rounded border border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/10 px-2.5 py-2">
-                <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-red)]">
-                  Guests should not have been in the water
-                </div>
-                <div className="space-y-0.5">
-                  {safety.reasons.map((reason) => (
-                    <div key={reason} className="text-sm text-white/70">
-                      {reason}
+                {!safety.safe && (
+                  <div className="mt-2 rounded border border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/10 px-2.5 py-2">
+                    <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-red)]">
+                      Guests should not have been in the water
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Anything put into the water is the entry's most consequential
-             * fact, so it gets its own gold-tinted block — scannable down a
-             * column of cards without reading any of them. */}
-            {record.doses.length > 0 && (
-              <div className="mt-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-2.5 py-2">
-                <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-gold)]/70">
-                  Added to water
-                </div>
-                <div className="space-y-0.5">
-                  {record.doses.map((dose) => (
-                    <div
-                      key={`${record.id}-${dose.chemical}`}
-                      className="font-mono-bold text-sm text-[var(--pyre-gold)]"
-                    >
-                      ＋ {dose.chemical} {dose.grams} g
-                      {dose.recommended_grams != null && dose.recommended_grams !== dose.grams && (
-                        <span className="font-mono text-white/50">
-                          {' '}
-                          (chart: {dose.recommended_grams} g)
-                        </span>
-                      )}
+                    <div className="space-y-0.5">
+                      {safety.reasons.map((reason) => (
+                        <div key={reason} className="text-sm text-white/70">
+                          {reason}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {record.notes && <div className="mt-2 text-sm text-white/50">{record.notes}</div>}
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="font-mono text-xs text-white/30">
-                {record.recorded_by}
-                {record.test_method && ` · ${TEST_METHOD_LABELS[record.test_method]}`}
-              </span>
-              {record.recorded_by.toLowerCase() === userEmail.toLowerCase() && (
-                <button
-                  type="button"
-                  onClick={() => void deleteEntry(record)}
-                  disabled={deletingId === record.id}
-                  className="font-mono text-xs uppercase tracking-wide text-white/30 transition-colors hover:text-[var(--pyre-red)] disabled:opacity-50"
-                >
-                  {deletingId === record.id ? 'Deleting…' : 'Delete'}
-                </button>
-              )}
-            </div>
+                {/* Anything put into the water is the entry's most consequential
+                 * fact, so it gets its own gold-tinted block — scannable down a
+                 * column of cards without reading any of them. */}
+                {record.doses.length > 0 && (
+                  <div className="mt-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-2.5 py-2">
+                    <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-gold)]/70">
+                      Added to water
+                    </div>
+                    <div className="space-y-0.5">
+                      {record.doses.map((dose) => (
+                        <div
+                          key={`${record.id}-${dose.chemical}`}
+                          className="font-mono-bold text-sm text-[var(--pyre-gold)]"
+                        >
+                          ＋ {dose.chemical} {dose.grams} g
+                          {dose.recommended_grams != null &&
+                            dose.recommended_grams !== dose.grams && (
+                              <span className="font-mono text-white/50">
+                                {' '}
+                                (chart: {dose.recommended_grams} g)
+                              </span>
+                            )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {record.notes && <div className="mt-2 text-sm text-white/50">{record.notes}</div>}
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="font-mono text-xs text-white/30">
+                    {record.recorded_by}
+                    {record.test_method && ` · ${TEST_METHOD_LABELS[record.test_method]}`}
+                  </span>
+                  {/* Editing and deleting follow the same rule: your own entries
+                   * only, admins included — the API enforces it either way. */}
+                  {record.recorded_by.toLowerCase() === userEmail.toLowerCase() && (
+                    <span className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(record.id)}
+                        className="font-mono text-xs uppercase tracking-wide text-white/30 transition-colors hover:text-white"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteEntry(record)}
+                        disabled={deletingId === record.id}
+                        className="font-mono text-xs uppercase tracking-wide text-white/30 transition-colors hover:text-[var(--pyre-red)] disabled:opacity-50"
+                      >
+                        {deletingId === record.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         );
       })}
@@ -1082,7 +1489,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       {records.length < total && (
         <button
           type="button"
-          onClick={() => void loadLog(records.length, filter, range)}
+          onClick={() => void loadLog(records.length, filter, range, typeFilter)}
           disabled={logLoading}
           className="w-full rounded-md border border-white/20 px-6 py-3 font-mono-bold text-sm uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white disabled:opacity-50"
         >
