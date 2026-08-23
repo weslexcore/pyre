@@ -56,7 +56,7 @@ export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
           'Fill to halfway up the skimmer box (marked with arrow).',
           'Restore power (plug in, press GFCI Reset).',
           'Run each pump until jets are strong and steady (fully primed).',
-          'Balance the fresh water: TA first, then pH.',
+          'Balance the fresh water: TA first, and only once TA is in range, pH.',
           'Add ~920 g Dead Sea Salt into a bucket with water and stir. Pour right in front of the filter basket.',
           'Set temperature; allow ~16 hours to stabilize. Cover on and locked.',
         ],

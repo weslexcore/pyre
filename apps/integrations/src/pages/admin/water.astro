@@ -13,7 +13,7 @@ const userEmail = Astro.locals.adminUser?.email ?? '';
 
 <AdminLayout
   title="Cold Tub Water Log"
-  subtitle="Test in order: TA → pH → free chlorine (FC) → salt. Dose in that order too; run pumps ~15 min after dosing and retest."
+  subtitle="Test in order: TA → pH → free chlorine (FC) → salt. Dose in that order too — never adjust pH until total alkalinity is in range. Run pumps ~15 min after dosing and retest."
 >
   <WaterLog client:load userEmail={userEmail} />
 </AdminLayout>

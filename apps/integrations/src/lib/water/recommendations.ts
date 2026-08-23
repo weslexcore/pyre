@@ -28,7 +28,13 @@ export interface Readings {
   salt?: number | null;
 }
 
-export type Severity = 'info' | 'action' | 'critical';
+/**
+ * 'blocked' is advice that is deliberately *not* a dose: the reading is out of
+ * range, but correcting it now would be wrong (today: pH while TA is off).
+ * It never produces a dose draft — it tells the operator to stop and fix
+ * something else first.
+ */
+export type Severity = 'info' | 'action' | 'blocked' | 'critical';
 
 export interface Recommendation {
   parameter: Parameter;
@@ -51,6 +57,42 @@ export function classifyReading(parameter: Parameter, value: number): ReadingSta
   if (parameter === 'salt' && value > HARD_LIMITS.salt) return 'critical';
   const [min, max] = TARGETS[parameter];
   return value >= min && value <= max ? 'ok' : 'out-of-target';
+}
+
+/** Verdict on whether guests could safely be in the water for a set of readings. */
+export interface GuestSafety {
+  /** False when at least one reading means the tub should have been closed. */
+  safe: boolean;
+  /** Plain-language reasons, one per breached guest-safety rule. */
+  reasons: string[];
+}
+
+/**
+ * Guest safety is narrower than "in target": it is only about whether a person
+ * should have been in the water. Both failures are sanitizer failures —
+ * chlorine over the hard limit burns skin and eyes, chlorine under the target
+ * floor means the water was effectively unsanitized. Salt over its hard limit
+ * is an equipment problem, not a guest one, so it is deliberately not here.
+ * Readings that were not taken (null) can't prove anything and don't flag.
+ */
+export function getGuestSafety(readings: Readings): GuestSafety {
+  const { chlorine } = readings;
+  const reasons: string[] = [];
+
+  if (chlorine != null) {
+    const [chlorineMin] = TARGETS.chlorine;
+    if (chlorine > HARD_LIMITS.chlorine) {
+      reasons.push(
+        `Free chlorine ${chlorine} ppm was above the ${HARD_LIMITS.chlorine} ppm safety limit — no guests should have been in the water.`
+      );
+    } else if (chlorine < chlorineMin) {
+      reasons.push(
+        `Free chlorine ${chlorine} ppm was below the ${chlorineMin} ppm minimum — the water was not sanitized.`
+      );
+    }
+  }
+
+  return { safe: reasons.length === 0, reasons };
 }
 
 // Nearest chart row to the reading; when two rows are equally close, take the
@@ -77,6 +119,15 @@ const range = (parameter: Parameter): string => {
   const [min, max] = TARGETS[parameter];
   return `${min}–${max}`;
 };
+
+/**
+ * House rule, worded the same everywhere it appears so staff read it as one
+ * rule and not two pieces of advice: alkalinity first, pH only after it lands.
+ */
+export const TA_FIRST_INSTRUCTION = `FIX TOTAL ALKALINITY FIRST — do not adjust pH until TA is back in the ${range('ta')} ppm target.`;
+
+export const PH_BLOCKED_INSTRUCTION =
+  'DO NOT ADJUST pH — correct TA first, run the pumps ~15 minutes, then retest. pH usually follows TA back into range on its own; dose it only if it is still out after the retest.';
 
 /**
  * Recommendations for a set of readings, criticals first, then dosing/info
@@ -112,15 +163,22 @@ export function getRecommendations(readings: Readings): Recommendation[] {
     });
   }
 
-  if (ta != null && !inTarget('ta', ta)) {
+  // TA is the gate on pH: alkalinity is what holds pH still, so pH dosed
+  // against off-target TA bounces straight back and wastes product. Whenever
+  // TA is off, its recommendation carries that rule and the pH block below
+  // refuses to dose.
+  const offTa = ta != null && !inTarget('ta', ta) ? ta : null;
+
+  if (offTa != null) {
     const [taMin] = TARGETS.ta;
-    if (ta < taMin) {
+    if (offTa < taMin) {
       doses.push({
         parameter: 'ta',
         severity: 'action',
         chemical: PRODUCTS.taRaise,
-        grams: nearestDoseConservative(TA_RAISE, ta),
-        reason: `TA ${ta} ppm is below the ${range('ta')} ppm target`,
+        grams: nearestDoseConservative(TA_RAISE, offTa),
+        reason: `TA ${offTa} ppm is below the ${range('ta')} ppm target`,
+        instruction: TA_FIRST_INSTRUCTION,
       });
     } else {
       doses.push({
@@ -128,23 +186,31 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         severity: 'info',
         chemical: null,
         grams: null,
-        reason: `TA ${ta} ppm is above the ${range('ta')} ppm target — no lowering chart; it drifts down on its own. Persistent: consult the manual.`,
+        reason: `TA ${offTa} ppm is above the ${range('ta')} ppm target — no lowering chart; it drifts down on its own. Persistent: consult the manual.`,
+        instruction: TA_FIRST_INSTRUCTION,
       });
     }
   }
 
   if (ph != null && !inTarget('ph', ph)) {
     const [, phMax] = TARGETS.ph;
-    const afterTa = doses.some((d) => d.parameter === 'ta' && d.severity === 'action')
-      ? ' Add after the TA dose and ~15 minutes of circulation.'
-      : '';
-    if (ph > phMax) {
+    if (offTa != null) {
+      // No dose, on purpose: pH is out of range but TA has to come back first.
+      doses.push({
+        parameter: 'ph',
+        severity: 'blocked',
+        chemical: null,
+        grams: null,
+        reason: `pH ${ph} is ${ph > phMax ? 'above' : 'below'} the ${range('ph')} target, but TA ${offTa} ppm is off — TA is what holds pH steady, so a pH dose now would drift right back.`,
+        instruction: PH_BLOCKED_INSTRUCTION,
+      });
+    } else if (ph > phMax) {
       doses.push({
         parameter: 'ph',
         severity: 'action',
         chemical: PRODUCTS.phLower,
         grams: nearestDoseConservative(PH_LOWER, ph),
-        reason: `pH ${ph} is above the ${range('ph')} target.${afterTa}`,
+        reason: `pH ${ph} is above the ${range('ph')} target.`,
       });
     } else {
       const offChart = ph < PH_RAISE[PH_RAISE.length - 1].reading;
@@ -155,7 +221,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         grams: nearestDoseConservative(PH_RAISE, ph),
         reason: `pH ${ph} is below the ${range('ph')} target.${
           offChart ? ' Reading is below the chart — dosing the lowest row; retest and repeat.' : ''
-        }${afterTa}`,
+        }`,
       });
     }
   }
