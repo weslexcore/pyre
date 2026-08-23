@@ -1,7 +1,8 @@
 // Cold-tub water testing log API for the /admin/water staff tool: GET lists
-// entries newest-first (optionally per tub, or as a CSV download with
-// ?format=csv), POST records a new entry with readings and the chemicals
-// actually added, DELETE removes an entry the caller recorded themselves.
+// entries newest-first (optionally per tub or entry type, or as a CSV download
+// with ?format=csv), POST records a new entry with readings and the chemicals
+// actually added, PATCH corrects an entry the caller recorded themselves (a
+// reading taken after the entry was saved), DELETE removes one.
 // Gated on the /admin/water page grant (requirePage), and — as the app's
 // first cookie-authed mutating routes — CSRF-guarded in-route via
 // assertSameOrigin plus (on POST) the JSON content-type requirement (global
@@ -53,6 +54,72 @@ const READING_KEYS: Record<ReadingColumn, string> = {
   salt_ppm: 'salt',
 };
 
+type ReadingColumns = Partial<Record<ReadingColumn, number | null>>;
+
+// The body validators below are shared by POST and PATCH so a corrected entry
+// can never hold a value a new entry would have rejected. Each returns either
+// the parsed value or the 400 to send back.
+
+function parseReadings(raw: unknown): ReadingColumns | Response {
+  const rawReadings = (raw ?? {}) as Record<string, unknown>;
+  const readings: ReadingColumns = {};
+  for (const column of Object.keys(READING_BOUNDS) as ReadingColumn[]) {
+    const value = rawReadings[READING_KEYS[column]];
+    if (value == null) {
+      readings[column] = null;
+      continue;
+    }
+    const [min, max] = READING_BOUNDS[column];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+      return json(
+        { error: `${READING_KEYS[column]} must be a number between ${min} and ${max}` },
+        400
+      );
+    }
+    readings[column] = value;
+  }
+  return readings;
+}
+
+function parseTestMethod(raw: unknown): TestMethod | null | Response {
+  if (raw == null) return null;
+  if (typeof raw !== 'string' || !TEST_METHODS.includes(raw as TestMethod)) {
+    return json({ error: `testMethod must be one of: ${TEST_METHODS.join(', ')}` }, 400);
+  }
+  return raw as TestMethod;
+}
+
+function parseDoses(raw: unknown): DoseRecord[] | Response {
+  const rawDoses = raw ?? [];
+  if (!Array.isArray(rawDoses) || rawDoses.length > 8) {
+    return json({ error: 'doses must be an array of at most 8 items' }, 400);
+  }
+  const doses: DoseRecord[] = [];
+  for (const item of rawDoses) {
+    const d = item as Record<string, unknown>;
+    const chemical = typeof d.chemical === 'string' ? d.chemical.trim() : '';
+    const grams = d.grams;
+    if (!chemical || chemical.length > 64) {
+      return json({ error: 'each dose needs a chemical name (max 64 chars)' }, 400);
+    }
+    // Sanity bound only — a fresh salt fill is ~920 g, and dosing badly
+    // depleted salt water can top 1 kg.
+    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 2000) {
+      return json({ error: 'each dose needs grams between 0 and 2000' }, 400);
+    }
+    const dose: DoseRecord = { chemical, grams };
+    if (typeof d.reason === 'string' && d.reason) dose.reason = d.reason.slice(0, 200);
+    if (typeof d.recommended_grams === 'number' && Number.isFinite(d.recommended_grams)) {
+      dose.recommended_grams = d.recommended_grams;
+    }
+    doses.push(dose);
+  }
+  return doses;
+}
+
+const parseNotes = (raw: unknown): string =>
+  typeof raw === 'string' ? raw.trim().slice(0, 1000) : '';
+
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, '/admin/water');
   if (gate instanceof Response) return gate;
@@ -65,14 +132,19 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
   }
 
+  const entryType = url.searchParams.get('entryType');
+  if (entryType && !ENTRY_TYPES.includes(entryType as EntryType)) {
+    return json({ error: `entryType must be one of: ${ENTRY_TYPES.join(', ')}` }, 400);
+  }
+
   const since = url.searchParams.get('since');
   if (since && Number.isNaN(Date.parse(since))) {
     return json({ error: 'since must be an ISO date' }, 400);
   }
 
-  // CSV export: same tub/since filters as the log, but the whole matching
-  // history in one file (oldest first — a log people read top-to-bottom or
-  // chart in a spreadsheet).
+  // CSV export: same tub/entryType/since filters as the log, but the whole
+  // matching history in one file (oldest first — a log people read
+  // top-to-bottom or chart in a spreadsheet).
   if (url.searchParams.get('format') === 'csv') {
     let csvQuery = db
       .from('water_tests')
@@ -80,12 +152,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .order('created_at', { ascending: true })
       .limit(CSV_MAX_ROWS);
     if (tub) csvQuery = csvQuery.eq('tub', tub);
+    if (entryType) csvQuery = csvQuery.eq('entry_type', entryType);
     if (since) csvQuery = csvQuery.gte('created_at', since);
 
     const { data: csvRows, error: csvError } = await csvQuery;
     if (csvError) return json({ error: csvError.message }, 500);
 
-    const filename = `water-log-${tub ?? 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const filename = `water-log-${tub ?? 'all'}-${entryType ?? 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
     return new Response(waterTestsToCsv((csvRows ?? []) as WaterTestRow[]), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
@@ -107,6 +180,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
   if (tub) query = query.eq('tub', tub);
+  if (entryType) query = query.eq('entry_type', entryType);
   if (since) query = query.gte('created_at', since);
 
   const { data, error, count } = await query;
@@ -146,23 +220,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: `entryType must be one of: ${ENTRY_TYPES.join(', ')}` }, 400);
   }
 
-  const rawReadings = (body.readings ?? {}) as Record<string, unknown>;
-  const readings: Partial<Record<ReadingColumn, number | null>> = {};
-  for (const column of Object.keys(READING_BOUNDS) as ReadingColumn[]) {
-    const value = rawReadings[READING_KEYS[column]];
-    if (value == null) {
-      readings[column] = null;
-      continue;
-    }
-    const [min, max] = READING_BOUNDS[column];
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
-      return json(
-        { error: `${READING_KEYS[column]} must be a number between ${min} and ${max}` },
-        400
-      );
-    }
-    readings[column] = value;
-  }
+  const readings = parseReadings(body.readings);
+  if (readings instanceof Response) return readings;
 
   if (entryType === 'test' && Object.values(readings).every((v) => v == null)) {
     return json({ error: 'A test entry needs at least one reading' }, 400);
@@ -174,40 +233,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     for (const column of Object.keys(readings) as ReadingColumn[]) readings[column] = null;
   }
 
-  let testMethod = body.testMethod ?? null;
-  if (entryType === 'refill') testMethod = null;
-  if (testMethod != null) {
-    if (typeof testMethod !== 'string' || !TEST_METHODS.includes(testMethod as TestMethod)) {
-      return json({ error: `testMethod must be one of: ${TEST_METHODS.join(', ')}` }, 400);
-    }
-  }
+  const parsedMethod = parseTestMethod(body.testMethod);
+  if (parsedMethod instanceof Response) return parsedMethod;
+  const testMethod = entryType === 'refill' ? null : parsedMethod;
 
-  const rawDoses = body.doses ?? [];
-  if (!Array.isArray(rawDoses) || rawDoses.length > 8) {
-    return json({ error: 'doses must be an array of at most 8 items' }, 400);
-  }
-  const doses: DoseRecord[] = [];
-  for (const raw of rawDoses) {
-    const d = raw as Record<string, unknown>;
-    const chemical = typeof d.chemical === 'string' ? d.chemical.trim() : '';
-    const grams = d.grams;
-    if (!chemical || chemical.length > 64) {
-      return json({ error: 'each dose needs a chemical name (max 64 chars)' }, 400);
-    }
-    // Sanity bound only — a fresh salt fill is ~920 g, and dosing badly
-    // depleted salt water can top 1 kg.
-    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 2000) {
-      return json({ error: 'each dose needs grams between 0 and 2000' }, 400);
-    }
-    const dose: DoseRecord = { chemical, grams };
-    if (typeof d.reason === 'string' && d.reason) dose.reason = d.reason.slice(0, 200);
-    if (typeof d.recommended_grams === 'number' && Number.isFinite(d.recommended_grams)) {
-      dose.recommended_grams = d.recommended_grams;
-    }
-    doses.push(dose);
-  }
+  const doses = parseDoses(body.doses);
+  if (doses instanceof Response) return doses;
 
-  const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 1000) : '';
+  const notes = parseNotes(body.notes);
 
   const { data, error } = await db
     .from('water_tests')
@@ -226,6 +259,101 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   return json({ record: data as WaterTestRow }, 201);
+};
+
+/**
+ * Correct an entry already in the log — the reading taken after the entry was
+ * saved, the dose logged at the wrong weight, the note that needed a sentence
+ * more. Readings, test method, doses and notes are editable; tub and entry
+ * type are not, because changing those makes the row a different event and the
+ * log is an audit record (log a new entry instead). Fields left out of the
+ * body are kept as they are.
+ */
+export const PATCH: APIRoute = async ({ cookies, request, url }) => {
+  const gate = await requirePage(cookies, '/admin/water');
+  if (gate instanceof Response) return gate;
+
+  const crossOrigin = assertSameOrigin(request);
+  if (crossOrigin) return crossOrigin;
+
+  if (!request.headers.get('content-type')?.includes('application/json')) {
+    return json({ error: 'Content-Type must be application/json' }, 415);
+  }
+
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const id = url.searchParams.get('id');
+  if (!id) return json({ error: 'id is required' }, 400);
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { data: existing, error: fetchError } = await db
+    .from('water_tests')
+    .select('id, recorded_by, entry_type')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!existing) return json({ error: 'Entry not found' }, 404);
+
+  // Same rule as DELETE: the log is an audit record, so only the person who
+  // wrote an entry can change it — admins included.
+  const email = (gate.user.email ?? '').toLowerCase();
+  if ((existing.recorded_by ?? '').toLowerCase() !== email) {
+    return json({ error: 'You can only edit entries you recorded' }, 403);
+  }
+
+  const entryType = existing.entry_type as EntryType;
+  const patch: Record<string, unknown> = {};
+
+  if ('readings' in body) {
+    // A refill row carries no measurements, so there is nothing to correct on
+    // one — reject rather than silently dropping what the caller sent.
+    if (entryType === 'refill') {
+      return json({ error: 'A drain/refill entry has no readings to edit' }, 400);
+    }
+    const readings = parseReadings(body.readings);
+    if (readings instanceof Response) return readings;
+    if (entryType === 'test' && Object.values(readings).every((v) => v == null)) {
+      return json({ error: 'A test entry needs at least one reading' }, 400);
+    }
+    Object.assign(patch, readings);
+  }
+
+  if ('testMethod' in body) {
+    const testMethod = parseTestMethod(body.testMethod);
+    if (testMethod instanceof Response) return testMethod;
+    patch.test_method = entryType === 'refill' ? null : testMethod;
+  }
+
+  if ('doses' in body) {
+    const doses = parseDoses(body.doses);
+    if (doses instanceof Response) return doses;
+    patch.doses = doses;
+  }
+
+  if ('notes' in body) patch.notes = parseNotes(body.notes) || null;
+
+  if (Object.keys(patch).length === 0) {
+    return json({ error: 'Nothing to update' }, 400);
+  }
+
+  // recorded_by and created_at stay put: an edit corrects what was measured,
+  // it doesn't change who logged it or when. updated_at moves via trigger.
+  const { data, error } = await db
+    .from('water_tests')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) return json({ error: error.message }, 500);
+
+  return json({ record: data as WaterTestRow });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
