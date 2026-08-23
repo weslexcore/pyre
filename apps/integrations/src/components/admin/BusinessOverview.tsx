@@ -7,7 +7,7 @@
 // shifts tables); this island only renders.
 import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
-import { useCachedJson } from '@/lib/client/cachedJson';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
 import type {
   BucketGroup,
@@ -15,6 +15,7 @@ import type {
   BusinessOverviewPayload,
   SyncStatus,
 } from '@/pages/api/admin/business-overview';
+import type { BusinessSyncResponse } from '@/pages/api/admin/business-sync';
 
 const GOLD = '#b58d35';
 const GRID = 'rgba(255, 255, 255, 0.08)';
@@ -495,7 +496,77 @@ const CLOCK_TICK_MS = 30_000;
  * the shifts tables on every request — without that note, "synced 6h ago"
  * reads as if the whole page were 6h old.
  */
-export function SyncLine({ sync }: { sync: SyncStatus }) {
+/**
+ * Runs today's Momence pull on demand rather than waiting for the 6am ET cron.
+ * The request holds open for up to ~45s of real syncing, so the button owns a
+ * busy state instead of firing and forgetting.
+ */
+function SyncNowButton({ onSynced }: { onSynced: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ text: string; failed: boolean } | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/admin/business-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const body = (await res.json()) as BusinessSyncResponse & { error?: string };
+      if (!res.ok) {
+        setResult({ text: body.error ?? `Sync failed (${res.status})`, failed: true });
+        return;
+      }
+      setResult({ text: body.message, failed: false });
+      // The sync rewrote metric rows, so every cached range is stale, not just
+      // the one on screen.
+      invalidateJson('/api/admin/business-overview');
+      await onSynced();
+    } catch (err) {
+      setResult({ text: err instanceof Error ? err.message : 'Sync failed', failed: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className={buttonClass}
+        disabled={busy}
+        aria-busy={busy}
+        onClick={() => void run()}
+        title="Pull today's Momence data now instead of waiting for the daily sync"
+      >
+        {busy ? 'Syncing…' : 'Sync now'}
+      </button>
+      {busy && (
+        <span className="font-mono text-xs text-white/40">
+          Pulling from Momence — up to a minute.
+        </span>
+      )}
+      {!busy && result && (
+        <span
+          className={`font-mono text-xs ${result.failed ? 'text-[var(--pyre-red)]' : 'text-white/50'}`}
+          role="status"
+        >
+          {result.text}
+        </span>
+      )}
+    </>
+  );
+}
+
+export function SyncLine({
+  sync,
+  onSynced,
+}: {
+  sync: SyncStatus;
+  onSynced: () => Promise<void> | void;
+}) {
   // Re-render on a timer: the payload is fetched once on mount, so without
   // this the relative times freeze at whatever they were on first paint.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -536,6 +607,7 @@ export function SyncLine({ sync }: { sync: SyncStatus }) {
       </span>
       <span aria-hidden="true">·</span>
       <span>labor cost is live from the schedule</span>
+      <SyncNowButton onSynced={onSynced} />
     </div>
   );
 }
@@ -565,7 +637,7 @@ export function BusinessOverview() {
   const url = customValid
     ? `/api/admin/business-overview?start=${range.start}&end=${range.end}&group=${group}`
     : null;
-  const { data, error, loading, refreshing } = useCachedJson<BusinessOverviewPayload>(url);
+  const { data, error, loading, refreshing, reload } = useCachedJson<BusinessOverviewPayload>(url);
 
   const pickPreset = (key: PresetKey) => {
     setPreset(key);
@@ -670,7 +742,7 @@ export function BusinessOverview() {
     <div className="space-y-8">
       {controls}
 
-      <SyncLine sync={sync} />
+      <SyncLine sync={sync} onSynced={reload} />
 
       {(sync.stale || sync.missingReportTypes.length > 0) && (
         <div className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)] space-y-1">

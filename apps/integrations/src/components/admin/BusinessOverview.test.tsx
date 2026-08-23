@@ -27,9 +27,16 @@ const text = (node: React.ReactElement): string =>
     .trim();
 
 describe('SyncLine', () => {
+  it('offers a manual sync alongside the timestamps', () => {
+    vi.setSystemTime(NOW);
+    const out = text(<SyncLine sync={status()} onSynced={() => {}} />);
+    expect(out).toContain('Sync now');
+    vi.useRealTimers();
+  });
+
   it('states how old the data is and when it refreshes', () => {
     vi.setSystemTime(NOW);
-    const out = text(<SyncLine sync={status()} />);
+    const out = text(<SyncLine sync={status()} onSynced={() => {}} />);
     expect(out).toContain('Momence data synced 3h ago');
     expect(out).toContain('next sync in 21h');
     // Labor is computed per-request, so it is never as old as the sync.
@@ -39,7 +46,9 @@ describe('SyncLine', () => {
 
   it('says so plainly when nothing has ever synced', () => {
     vi.setSystemTime(NOW);
-    const out = text(<SyncLine sync={status({ lastSyncedAt: null, stale: true })} />);
+    const out = text(
+      <SyncLine sync={status({ lastSyncedAt: null, stale: true })} onSynced={() => {}} />
+    );
     expect(out).toContain('Momence data synced never');
     vi.useRealTimers();
   });
@@ -48,7 +57,7 @@ describe('SyncLine', () => {
     vi.setSystemTime(NOW);
     // React 19 emits the prop name verbatim; HTML parses attribute names
     // case-insensitively, so lowercase before asserting on the attribute.
-    const html = renderToStaticMarkup(<SyncLine sync={status()} />);
+    const html = renderToStaticMarkup(<SyncLine sync={status()} onSynced={() => {}} />);
     expect(html.replace(/dateTime=/g, 'datetime=')).toContain(
       'datetime="2026-08-22T10:04:00.000Z"'
     );
@@ -63,8 +72,10 @@ describe('SyncLine', () => {
 
   it('marks a stale timestamp in gold', () => {
     vi.setSystemTime(NOW);
-    const fresh = renderToStaticMarkup(<SyncLine sync={status()} />);
-    const stale = renderToStaticMarkup(<SyncLine sync={status({ stale: true })} />);
+    const fresh = renderToStaticMarkup(<SyncLine sync={status()} onSynced={() => {}} />);
+    const stale = renderToStaticMarkup(
+      <SyncLine sync={status({ stale: true })} onSynced={() => {}} />
+    );
     expect(fresh).not.toContain('--pyre-gold');
     expect(stale).toContain('--pyre-gold');
     vi.useRealTimers();
