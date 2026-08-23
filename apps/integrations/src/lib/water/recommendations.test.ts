@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PRODUCTS } from './charts';
-import { classifyReading, getRecommendations } from './recommendations';
+import { classifyReading, getGuestSafety, getRecommendations } from './recommendations';
 
 const only = (readings: Parameters<typeof getRecommendations>[0]) => {
   const recs = getRecommendations(readings);
@@ -171,10 +171,56 @@ describe('getRecommendations', () => {
     });
   });
 
+  // House rule: alkalinity buffers pH, so pH dosed against off-target TA
+  // drifts straight back. The engine refuses to dose pH until TA lands.
+  describe('TA gates pH', () => {
+    it('blocks a pH-lowering dose while TA is below target', () => {
+      const recs = getRecommendations({ ta: 70, ph: 7.9 });
+      const ph = recs.find((r) => r.parameter === 'ph');
+      expect(ph).toMatchObject({ severity: 'blocked', chemical: null, grams: null });
+      expect(ph?.instruction).toContain('DO NOT ADJUST pH');
+      expect(ph?.reason).toContain('TA 70 ppm is off');
+    });
+
+    it('blocks a pH-raising dose while TA is below target', () => {
+      const ph = getRecommendations({ ta: 40, ph: 7.0 }).find((r) => r.parameter === 'ph');
+      expect(ph).toMatchObject({ severity: 'blocked', grams: null });
+    });
+
+    it('blocks pH while TA is above target too (no lowering chart to run first)', () => {
+      const ph = getRecommendations({ ta: 150, ph: 8.0 }).find((r) => r.parameter === 'ph');
+      expect(ph).toMatchObject({ severity: 'blocked', grams: null });
+    });
+
+    it('carries the TA-first rule on the TA recommendation itself', () => {
+      expect(only({ ta: 70 }).instruction).toContain('FIX TOTAL ALKALINITY FIRST');
+      expect(only({ ta: 150 }).instruction).toContain('FIX TOTAL ALKALINITY FIRST');
+    });
+
+    it('doses pH normally once TA is in range', () => {
+      const recs = getRecommendations({ ta: 100, ph: 7.9 });
+      expect(recs).toHaveLength(1);
+      expect(recs[0]).toMatchObject({ parameter: 'ph', severity: 'action', grams: 10 });
+    });
+
+    it('doses pH normally when TA was not tested', () => {
+      expect(only({ ph: 7.9 })).toMatchObject({ severity: 'action', grams: 10 });
+    });
+
+    it('never blocks a pH that is already in range', () => {
+      expect(getRecommendations({ ta: 70, ph: 7.4 }).map((r) => r.parameter)).toEqual(['ta']);
+    });
+  });
+
   describe('ordering', () => {
     it('emits doses in correction order: TA, then pH, then FC, then CC, then salt', () => {
       const recs = getRecommendations({ ta: 70, ph: 7.9, chlorine: 0.5, cc: 1, salt: 2100 });
       expect(recs.map((r) => r.parameter)).toEqual(['ta', 'ph', 'chlorine', 'cc', 'salt']);
+    });
+
+    it('holds pH in place even though it carries no dose', () => {
+      const recs = getRecommendations({ ta: 70, ph: 7.9, chlorine: 2 });
+      expect(recs.map((r) => r.severity)).toEqual(['action', 'blocked']);
     });
 
     it('puts criticals before doses', () => {
@@ -183,13 +229,9 @@ describe('getRecommendations', () => {
       expect(recs[0].severity).toBe('critical');
     });
 
-    it('tells the operator to dose pH after TA when both fire', () => {
-      const recs = getRecommendations({ ta: 70, ph: 7.9 });
-      expect(recs[1].reason).toContain('after the TA dose');
-    });
-
-    it('does not add the TA note when only pH fires', () => {
-      expect(only({ ph: 7.9 }).reason).not.toContain('after the TA dose');
+    it('emits doses in correction order when TA is in range', () => {
+      const recs = getRecommendations({ ta: 100, ph: 7.9, chlorine: 0.5, cc: 1, salt: 2100 });
+      expect(recs.map((r) => r.parameter)).toEqual(['ph', 'chlorine', 'cc', 'salt']);
     });
   });
 });
@@ -209,5 +251,50 @@ describe('classifyReading', () => {
     expect(classifyReading('salt', 2300)).toBe('ok');
     expect(classifyReading('salt', 2000)).toBe('out-of-target');
     expect(classifyReading('salt', 3200)).toBe('critical');
+  });
+});
+
+// The log outlines an entry in red when this says the water wasn't guest-safe,
+// so its boundaries are pinned as tightly as the dosing charts.
+describe('getGuestSafety', () => {
+  it('is safe when readings are in range', () => {
+    expect(getGuestSafety({ ta: 100, ph: 7.4, chlorine: 2, cc: 0.2, salt: 2300 })).toEqual({
+      safe: true,
+      reasons: [],
+    });
+  });
+
+  it('is safe when nothing was tested (no reading, no verdict)', () => {
+    expect(getGuestSafety({}).safe).toBe(true);
+    expect(getGuestSafety({ ta: null, ph: null, chlorine: null, salt: null }).safe).toBe(true);
+  });
+
+  it('is unsafe above the chlorine hard limit', () => {
+    const safety = getGuestSafety({ chlorine: 6 });
+    expect(safety.safe).toBe(false);
+    expect(safety.reasons[0]).toContain('above the 5 ppm safety limit');
+  });
+
+  it('is unsafe below the chlorine target floor — unsanitized water', () => {
+    const safety = getGuestSafety({ chlorine: 0 });
+    expect(safety.safe).toBe(false);
+    expect(safety.reasons[0]).toContain('below the 1 ppm minimum');
+  });
+
+  it('treats the chlorine target boundaries themselves as safe', () => {
+    expect(getGuestSafety({ chlorine: 1 }).safe).toBe(true);
+    expect(getGuestSafety({ chlorine: 5 }).safe).toBe(true);
+  });
+
+  it('is safe between the chlorine target max and the hard limit', () => {
+    expect(getGuestSafety({ chlorine: 4 }).safe).toBe(true);
+  });
+
+  it('does not flag out-of-target TA, pH, CC or salt — those are not guest-safety limits', () => {
+    expect(getGuestSafety({ ta: 40, ph: 8.4, cc: 2, salt: 3200, chlorine: 2 }).safe).toBe(true);
+  });
+
+  it('reports one reason per breached rule', () => {
+    expect(getGuestSafety({ chlorine: 6 }).reasons).toHaveLength(1);
   });
 });
