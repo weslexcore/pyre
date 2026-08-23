@@ -33,6 +33,7 @@ pre-computed from one admin-only endpoint:
 | Momence revenue ingestion | `src/lib/reports/sync.ts` → `src/lib/reports/normalize.ts` |
 | Momence activity ingestion | `src/lib/reports/activity.ts` |
 | Sync-schedule math (last/next sync) | `src/lib/reports/schedule.ts` |
+| Manual "Sync now" | `src/pages/api/admin/business-sync.ts` |
 | What counts as a membership | `src/lib/momence/memberships.ts` |
 
 Two independent inputs are joined at read time:
@@ -468,6 +469,34 @@ promising a refresh that isn't coming would be the worse failure.
 **Labor cost and open hours have no sync time** because they are computed from
 the shifts tables on the request itself. That is why the line says so
 explicitly: without it, "synced 3h ago" reads as if the whole page were 3h old.
+
+### Sync now
+
+The button at the end of the freshness line runs today's pull on demand rather
+than waiting for the 6am ET gate — `POST /api/admin/business-sync`, admin-only.
+
+It runs the same two jobs the cron tick runs, with `force: true` (past the day
+gate and the done-key) and **the daily cursor namespace**, so a press *resumes*
+whatever the cron parked instead of starting a rival sweep beside it. It does
+not set the done-key, so the day's scheduled run still happens.
+
+Guards, in order:
+
+| Guard | Why |
+| --- | --- |
+| `requireAdmin` | Same boundary as the page. |
+| `assertSameOrigin` + JSON content-type | It is a cookie-authed mutation, and global CSRF checking is off (see `astro.config.mjs`). |
+| Redis `nx` lock, 90s TTL | Report-run creation spends a 100/day Momence budget, so a double-click, two admins, or an impatient tab must not burn it or run two sweeps over each other. A second press inside the window gets a 429. The lock is deleted on failure so a genuine error is retryable at once. |
+
+The response carries both raw job summaries plus a `message` composed
+server-side (the UI shouldn't have to know job internals) and a `pending` flag
+when either job parked work — the button then says what is left and invites
+another press. On success the client drops **every** cached range for
+`/api/admin/business-overview`, not just the one on screen, since the sync
+rewrote rows underneath all of them.
+
+Budget: 45s, under the 60s `maxDuration`. Anything unfinished parks in the
+cursor exactly as it would on a cron tick.
 
 ## 10. Known caveats
 
