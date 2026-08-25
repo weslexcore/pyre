@@ -7,6 +7,7 @@
 // shifts tables); this island only renders.
 import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
+import { BusinessCosts } from '@/components/admin/BusinessCosts';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
 import type {
@@ -142,11 +143,26 @@ function periodDelta(current: number | null, previous: number | null): string | 
   return `${pct >= 0 ? '+' : '−'}${Math.abs(pct)}% vs prior`;
 }
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatTile({
+  label,
+  value,
+  sub,
+  bad,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  /** Renders the value in the warning red — a loss, not a number. */
+  bad?: boolean;
+}) {
   return (
     <div className="rounded border border-white/10 bg-white/[0.03] px-4 py-3">
       <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-[var(--pyre-creme)]">{value}</p>
+      <p
+        className={`mt-1 text-2xl font-bold ${bad ? 'text-[var(--pyre-red)]' : 'text-[var(--pyre-creme)]'}`}
+      >
+        {value}
+      </p>
       {sub && <p className="mt-0.5 font-mono text-xs text-white/40">{sub}</p>}
     </div>
   );
@@ -319,6 +335,64 @@ function RevenueVsLaborChart({
                   opacity={bucket.future ? 0.3 : 0.6}
                 >
                   <title>{`${label}: labor ${fmtMoney(bucket.laborCost)}`}</title>
+                </rect>
+              </g>
+            );
+          })}
+        </>
+      )}
+    </ChartShell>
+  );
+}
+
+/** Revenue bars (gold) with the full cost stack overlaid (creme): labor plus
+ * amortized operating costs. The visible gap between the bars IS the profit;
+ * the tooltip spells it out. */
+function RevenueVsCostChart({ buckets, group }: { buckets: BusinessBucket[]; group: BucketGroup }) {
+  const max = Math.max(...buckets.map((b) => Math.max(b.revenue ?? 0, b.totalCosts)), 1);
+  return (
+    <ChartShell
+      buckets={buckets}
+      group={group}
+      max={max}
+      yLabel={(v) => `$${Math.round(v / 10) * 10}`}
+      ariaLabel="Revenue vs total cost"
+    >
+      {(f) => (
+        <>
+          {buckets.map((bucket, i) => {
+            const barW = Math.min(f.step * 0.6, 48);
+            const x = f.LEFT + i * f.step + (f.step - barW) / 2;
+            const revenueH = bucket.revenue !== null ? (bucket.revenue / max) * f.plotH : 0;
+            const costH = (bucket.totalCosts / max) * f.plotH;
+            const dim = bucket.future ? 0.35 : 0.85;
+            const label = bucketLabel(bucket, group);
+            const costDetail = `labor ${fmtMoney(bucket.laborCost)} · fixed ${fmtMoney(bucket.fixedCosts)} · rent ${fmtMoney(bucket.rentCost)} · fees ${fmtMoney(bucket.feesCost)}`;
+            return (
+              <g key={bucket.start}>
+                {bucket.revenue !== null && (
+                  <rect
+                    x={x}
+                    y={f.TOP + f.plotH - revenueH}
+                    width={barW}
+                    height={revenueH}
+                    fill={GOLD}
+                    opacity={dim}
+                  >
+                    <title>
+                      {`${label}${bucket.future ? ' (in progress)' : ''}: revenue ${fmtMoney(bucket.revenue)} · costs ${fmtMoney(bucket.totalCosts)}${bucket.profit !== null ? ` · profit ${fmtMoney(bucket.profit)}${bucket.profitMarginPct !== null ? ` (${bucket.profitMarginPct}%)` : ''}` : ''}`}
+                    </title>
+                  </rect>
+                )}
+                <rect
+                  x={x + barW * 0.3}
+                  y={f.TOP + f.plotH - costH}
+                  width={barW * 0.4}
+                  height={costH}
+                  fill={CREME}
+                  opacity={bucket.future ? 0.3 : 0.6}
+                >
+                  <title>{`${label}: total cost ${fmtMoney(bucket.totalCosts)} (${costDetail})`}</title>
                 </rect>
               </g>
             );
@@ -800,11 +874,61 @@ export function BusinessOverview() {
             sub={s.occupancyPct != null ? `${s.occupancyPct}% occupancy` : undefined}
           />
         </div>
+        {/* Profit row: revenue minus labor plus the operating costs managed
+            at the bottom of this page. */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatTile
+            label="Profit"
+            value={s.profit != null ? fmtMoney(s.profit) : '—'}
+            sub={
+              periodDelta(s.profit, prev?.profit ?? null) ??
+              (s.profitMarginPct != null ? `${s.profitMarginPct}% margin` : undefined)
+            }
+            bad={s.profit != null && s.profit < 0}
+          />
+          <StatTile
+            label="Profit margin"
+            value={s.profitMarginPct != null ? `${s.profitMarginPct}%` : '—'}
+            sub={s.revenue != null ? `on ${fmtMoney(s.revenue)} revenue` : undefined}
+            bad={s.profitMarginPct != null && s.profitMarginPct < 0}
+          />
+          <StatTile
+            label="Total costs"
+            value={fmtMoney(s.totalCosts)}
+            sub={
+              periodDelta(s.totalCosts, prev?.totalCosts ?? null) ??
+              `incl. ${fmtMoney(s.laborCost)} labor`
+            }
+          />
+          <StatTile
+            label="Overhead"
+            value={fmtMoney(s.fixedCosts + s.rentCost + s.feesCost)}
+            sub={`rent ${fmtMoney(s.rentCost)} · fixed ${fmtMoney(s.fixedCosts)} · fees ${fmtMoney(s.feesCost)}`}
+          />
+        </div>
         <p className="font-mono text-xs text-white/40">
           Totals cover {fmtRange(s.start, s.end)}
           {prev ? ` · prior period ${fmtRange(prev.start, prev.end)}` : ''}
         </p>
       </div>
+
+      {/* ---- Revenue vs total cost (profit) ---- */}
+      <section className="space-y-2">
+        <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+          Revenue vs total cost
+        </h2>
+        <Legend
+          items={[
+            { color: GOLD, label: 'revenue' },
+            { color: CREME, label: 'total cost (labor + operating)' },
+          ]}
+        />
+        <RevenueVsCostChart buckets={data.buckets} group={data.group} />
+        <p className="font-mono text-xs text-white/40">
+          The gap between gold and creme is the profit. Operating costs come from the list at the
+          bottom of this page; labor comes from the schedule.
+        </p>
+      </section>
 
       {/* ---- Revenue vs labor ---- */}
       <section className="space-y-2">
@@ -864,6 +988,9 @@ export function BusinessOverview() {
         />
         <AttendanceChart buckets={data.buckets} group={data.group} />
       </section>
+
+      {/* ---- Operating costs manager ---- */}
+      <BusinessCosts today={today} onChanged={() => void reload()} />
     </div>
   );
 }
