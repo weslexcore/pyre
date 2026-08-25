@@ -45,11 +45,15 @@ function MeasurementDialog({ parameter, onClose }: { parameter: Parameter; onClo
         onClick={onClose}
         className="absolute inset-0 h-full w-full cursor-default bg-black/70"
       />
+      {/* whitespace-normal: the dialog mounts inline under the ⓘ, which sits
+       * inside the log's whitespace-nowrap reading chips — white-space inherits
+       * straight through fixed positioning, so without the reset every
+       * paragraph in here renders as one unwrapped line off the page. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={`measurement-info-${parameter}`}
-        className="relative w-full max-w-lg rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
+        className="relative w-full max-w-lg whitespace-normal rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
