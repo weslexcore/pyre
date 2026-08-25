@@ -28,6 +28,7 @@ import {
 } from '@/lib/schedule/change-log';
 import { getScheduleSettings } from '@/lib/schedule/settings';
 import { formatDateLabel, formatWindowLabel } from '@/lib/schedule/sub';
+import { TIME_RE } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
@@ -102,6 +103,27 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
 
+  // The hours they want to work — optional pair (legacy clients omit it;
+  // approval then derives the window from the role, as before).
+  const startsAt = body.startsAt;
+  const endsAt = body.endsAt;
+  if ((startsAt === undefined) !== (endsAt === undefined)) {
+    return json({ error: 'startsAt and endsAt must be sent together' }, 400);
+  }
+  if (startsAt !== undefined) {
+    if (
+      typeof startsAt !== 'string' ||
+      !TIME_RE.test(startsAt) ||
+      typeof endsAt !== 'string' ||
+      !TIME_RE.test(endsAt)
+    ) {
+      return json({ error: 'startsAt and endsAt must be HH:MM' }, 400);
+    }
+    if (endsAt.slice(0, 5) <= startsAt.slice(0, 5)) {
+      return json({ error: 'endsAt must be after startsAt' }, 400);
+    }
+  }
+
   const staffId = await selfStaffId(db, auth.gate);
   if (!staffId) {
     return json({ error: "Your login isn't linked to the schedule roster" }, 403);
@@ -130,7 +152,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data, error } = await db
     .from('shift_requests')
-    .insert({ shift_id: shiftId, staff_id: staffId, role, note: note || null })
+    .insert({
+      shift_id: shiftId,
+      staff_id: staffId,
+      role,
+      requested_starts_at: (startsAt as string | undefined) ?? null,
+      requested_ends_at: (endsAt as string | undefined) ?? null,
+      note: note || null,
+    })
     .select('*')
     .single();
   if (error) {
@@ -145,7 +174,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     entityType: 'request',
     entityId: request_.id,
     action: 'create',
-    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)} (${ASSIGNMENT_ROLE_LABELS[role]})`,
+    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)} (${ASSIGNMENT_ROLE_LABELS[role]}${
+      request_.requested_starts_at && request_.requested_ends_at
+        ? `, ${request_.requested_starts_at.slice(0, 5)}–${request_.requested_ends_at.slice(0, 5)}`
+        : ''
+    })`,
     details: { after: request_ },
   });
 
@@ -171,6 +204,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (action !== 'approve' && action !== 'deny') {
     return json({ error: "action must be 'approve' or 'deny'" }, 400);
   }
+  // Optional reason from the manager — stored on the request and included in
+  // the decision email to the requester.
+  const decisionNote = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
 
   const { data: existing, error: fetchError } = await db
     .from('shift_requests')
@@ -204,21 +240,24 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     status: string;
   } | null;
 
-  // The window the request asked for: the whole shift, or its setup span
-  // (first 2h of the window — same snapping as the board's role buttons).
+  // The window the request asked for: the hours entered with the request, or
+  // — on legacy rows without them — the whole shift / its setup span (first
+  // 2h of the window, same snapping as the board's role buttons).
   const requestedWindow = shift
-    ? {
-        starts_at: shift.starts_at,
-        ends_at:
-          pending.role === 'setup'
-            ? minutesToTime(
-                Math.min(
-                  timeToMinutes(shift.starts_at) + SETUP_DURATION_MIN,
-                  timeToMinutes(shift.ends_at)
+    ? pending.requested_starts_at && pending.requested_ends_at
+      ? { starts_at: pending.requested_starts_at, ends_at: pending.requested_ends_at }
+      : {
+          starts_at: shift.starts_at,
+          ends_at:
+            pending.role === 'setup'
+              ? minutesToTime(
+                  Math.min(
+                    timeToMinutes(shift.starts_at) + SETUP_DURATION_MIN,
+                    timeToMinutes(shift.ends_at)
+                  )
                 )
-              )
-            : shift.ends_at,
-      }
+              : shift.ends_at,
+        }
     : null;
 
   let assignment: ShiftAssignmentRow | null = null;
@@ -262,6 +301,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       status: action === 'approve' ? 'approved' : 'denied',
       decided_by: decidedEmail,
       decided_at: new Date().toISOString(),
+      decision_note: decisionNote || null,
     })
     .eq('id', id)
     .select('*')
@@ -274,7 +314,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     entityType: 'request',
     entityId: decided.id,
     action: action === 'approve' ? 'approve' : 'deny',
-    summary: `${action === 'approve' ? 'Approved' : 'Denied'} ${requesterName}'s shift request`,
+    summary: `${action === 'approve' ? 'Approved' : 'Denied'} ${requesterName}'s shift request${decisionNote ? ` — ${decisionNote}` : ''}`,
     details: { before: pending, after: decided },
   });
 
@@ -300,6 +340,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
             dateLabel: formatDateLabel(shift.shift_date),
             timeLabel: formatWindowLabel(requestedWindow),
             roleLabel: ASSIGNMENT_ROLE_LABELS[pending.role],
+            reasonNote: decisionNote || null,
             scheduleUrl: `${new URL(request.url).origin}/admin/schedule`,
           },
           kind: 'transactional',

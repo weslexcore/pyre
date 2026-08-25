@@ -13,6 +13,7 @@ export function ShiftRequestDecision({
   dateLabel,
   timeLabel,
   roleLabel,
+  reasonNote,
   scheduleUrl,
 }: ShiftRequestDecisionProps) {
   const approved = decision === 'approved';
@@ -24,14 +25,17 @@ export function ShiftRequestDecision({
           : `Your ${shiftLabel} request on ${dateLabel} was closed`
       }
     >
-      <Text style={heading}>
-        {approved ? "You're on the schedule" : 'Shift request closed'}
-      </Text>
+      <Text style={heading}>{approved ? "You're on the schedule" : 'Shift request closed'}</Text>
       <Text style={text}>
         {approved
           ? `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} was approved. You're on for ${timeLabel} (${roleLabel}).`
           : `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} (${timeLabel}, ${roleLabel}) wasn't approved this time; the shift was likely covered another way. Keep an eye on the board for other open shifts.`}
       </Text>
+      {reasonNote && (
+        <Text style={text}>
+          {approved ? 'Note from the manager' : 'Reason'}: {reasonNote}
+        </Text>
+      )}
       <Button style={button} href={scheduleUrl}>
         Open the schedule
       </Button>

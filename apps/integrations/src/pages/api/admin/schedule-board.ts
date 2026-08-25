@@ -69,8 +69,9 @@ export interface ScheduleBoardPayload {
    */
   subRequests: SubRequestRow[];
   /**
-   * Manage side: pending requests on today-or-future shifts across the whole
-   * horizon (not just the fetched range) — the Requests badge. 0 otherwise.
+   * Manage side: outstanding asks on today-or-future shifts across the whole
+   * horizon (not just the fetched range) — pending shift requests plus open
+   * sub requests, the Requests badge. 0 otherwise.
    */
   pendingRequestCount: number;
   /** The admin toggles for the employee-facing actions. */
@@ -171,16 +172,26 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // The Requests badge: outstanding asks on any upcoming shift, however far
   // out — a week-sized fetch must not hide requests sitting in later weeks.
+  // Sub requests count too: an open sub is as much waiting on attention as a
+  // pending shift request.
   let pendingRequestCount = 0;
   if (canManage) {
     const today = utcToEastern(new Date().toISOString()).date;
-    const { count, error } = await db
-      .from('shift_requests')
-      .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
-      .eq('status', 'pending')
-      .gte('shifts.shift_date', today);
-    if (error) return json({ error: error.message }, 500);
-    pendingRequestCount = count ?? 0;
+    const [requestsCount, subsCount] = await Promise.all([
+      db
+        .from('shift_requests')
+        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .gte('shifts.shift_date', today),
+      db
+        .from('sub_requests')
+        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+        .eq('status', 'open')
+        .gte('shifts.shift_date', today),
+    ]);
+    const countError = requestsCount.error ?? subsCount.error;
+    if (countError) return json({ error: countError.message }, 500);
+    pendingRequestCount = (requestsCount.count ?? 0) + (subsCount.count ?? 0);
   }
 
   let subRequests: SubRequestRow[] = [];

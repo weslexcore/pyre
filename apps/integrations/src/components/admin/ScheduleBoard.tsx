@@ -63,7 +63,7 @@ interface BoardData {
   shiftRequests?: ShiftRequestRow[];
   /** Open sub requests — visible to everyone so any teammate can take one. */
   subRequests?: SubRequestRow[];
-  /** Manage side: outstanding requests on upcoming shifts, whole horizon. */
+  /** Manage side: outstanding shift + sub requests on upcoming shifts, whole horizon. */
   pendingRequestCount?: number;
   settings?: BoardSettings;
 }
@@ -370,13 +370,17 @@ export function ScheduleBoard() {
     return (data?.shifts ?? []).filter((s) => s.shift_date >= today && isUncovered(s));
   }, [view, data]);
 
-  // Shifts with an outstanding request, today forward — the Requests view.
-  // The payload's shiftRequests only ever hold pending rows, so shift-id
-  // membership is enough.
+  // Shifts with an outstanding ask, today forward — the Requests view. Both
+  // kinds land here: pending shift requests and open sub requests (the
+  // payload only ever holds pending/open rows, so shift-id membership is
+  // enough).
   const requestShifts = useMemo(() => {
     if (view !== 'requests') return [];
     const today = todayLocal();
-    const withRequests = new Set((data?.shiftRequests ?? []).map((r) => r.shift_id));
+    const withRequests = new Set([
+      ...(data?.shiftRequests ?? []).map((r) => r.shift_id),
+      ...(data?.subRequests ?? []).map((s) => s.shift_id),
+    ]);
     return (data?.shifts ?? []).filter((s) => s.shift_date >= today && withRequests.has(s.id));
   }, [view, data]);
 
@@ -644,7 +648,7 @@ export function ScheduleBoard() {
             <button
               type="button"
               className={pillClass(view === 'requests')}
-              title="Shifts with an outstanding request waiting on a decision"
+              title="Shifts with an outstanding shift request or open sub request"
               onClick={() => setView('requests')}
             >
               Requests
@@ -932,7 +936,7 @@ export function ScheduleBoard() {
 
       {view === 'requests' && days.length === 0 && !loading && (
         <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
-          No outstanding shift requests — all caught up.
+          No outstanding shift or sub requests — all caught up.
         </p>
       )}
 
@@ -942,7 +946,11 @@ export function ScheduleBoard() {
           let shifts = allShifts;
           if (view === 'uncovered') shifts = allShifts.filter(isUncovered);
           if (view === 'requests') {
-            shifts = allShifts.filter((s) => (requestsByShift.get(s.id) ?? []).length > 0);
+            shifts = allShifts.filter(
+              (s) =>
+                (requestsByShift.get(s.id) ?? []).length > 0 ||
+                (subsByShift.get(s.id) ?? []).length > 0
+            );
           }
           if (mineOnly && calendarView && selfId) {
             shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
@@ -1258,8 +1266,18 @@ function ShiftForm({
         aria-label="Notes"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={buttonClass} onClick={onSubmit} disabled={busy}>
-          {shift ? 'Save' : 'Add shift'}
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={onSubmit}
+          disabled={busy}
+          title={
+            shift?.is_draft
+              ? 'Saving accepts this AI draft shift onto the live schedule with your changes'
+              : undefined
+          }
+        >
+          {shift ? (shift.is_draft ? 'Save & accept' : 'Save') : 'Add shift'}
         </button>
         <button type="button" className={buttonClass} onClick={onCancel} disabled={busy}>
           Close
@@ -1346,6 +1364,34 @@ function ShiftDetail({
   const endMin = timeToMinutes(shift.ends_at);
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
   const candidates = data.staff.filter((s) => s.active && !assignedIds.has(s.id));
+
+  // Employee request composer: the Full/Setup buttons open it with the role's
+  // window prefilled, and the times are the hours they're offering to work.
+  const [requestDraft, setRequestDraft] = useState<{
+    role: 'full' | 'setup';
+    startsAt: string;
+    endsAt: string;
+  } | null>(null);
+  // Manager decision composer: the request being approved/denied, with an
+  // optional reason that's stored and emailed to the requester.
+  const [deciding, setDeciding] = useState<{ id: string; action: 'approve' | 'deny' } | null>(null);
+  const [decisionNote, setDecisionNote] = useState('');
+
+  // The window a role implies: the whole shift, or its setup span (first 2h).
+  const roleWindow = (role: 'full' | 'setup') => ({
+    startsAt: hhmm(shift.starts_at),
+    endsAt:
+      role === 'setup'
+        ? minutesToTime(Math.min(startMin + SETUP_DURATION_MIN, endMin))
+        : hhmm(shift.ends_at),
+  });
+
+  // The hours a request asked for — entered with it, or (legacy rows) the
+  // role's window. Mirrors the approval fallback on the server.
+  const requestedWindow = (r: ShiftRequestRow): { startsAt: string; endsAt: string } =>
+    r.requested_starts_at && r.requested_ends_at
+      ? { startsAt: r.requested_starts_at, endsAt: r.requested_ends_at }
+      : roleWindow(r.role);
 
   // Employee self-service: these actions only make sense on live, upcoming
   // shifts, and requesting sits behind its admin toggle.
@@ -1557,70 +1603,161 @@ function ShiftDetail({
           </p>
           <ul className="space-y-1.5">
             {requests.map((r) => {
+              // Availability against the hours they actually asked for, not
+              // the whole shift — a partial offer may dodge their time off.
+              const window = requestedWindow(r);
               const availability = availabilityFor(
                 data.timeOff,
                 r.staff_id,
                 shift.shift_date,
-                startMin,
-                endMin
+                timeToMinutes(window.startsAt),
+                timeToMinutes(window.endsAt)
               );
               const badge = availabilityBadge(availability);
+              const decidingThis = deciding?.id === r.id ? deciding : null;
               return (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-[var(--pyre-blue)]/10 px-2 py-1.5"
-                >
-                  <span className="font-medium">
-                    {staffById.get(r.staff_id)?.display_name ?? '?'}
-                  </span>
-                  <span
-                    className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/70"
-                    title={
-                      r.role === 'setup'
-                        ? 'Asked to work just the setup (first 2h of the window)'
-                        : 'Asked to work the whole shift'
-                    }
-                  >
-                    {ASSIGNMENT_ROLE_LABELS[r.role]}
-                  </span>
-                  <span className="font-mono text-xs text-white/50">
-                    asked {new Date(r.created_at).toLocaleDateString()}
-                  </span>
-                  <span className={`font-mono text-xs ${badge.className}`}>{badge.label}</span>
-                  {r.note && <span className="font-mono text-xs text-white/40">{r.note}</span>}
-                  <span className="ml-auto flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
-                      title="Approve — puts them on the shift"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() =>
-                          api('PATCH', '/api/admin/shift-requests', {
-                            id: r.id,
-                            action: 'approve',
-                          })
-                        )
+                <li key={r.id} className="rounded bg-[var(--pyre-blue)]/10 px-2 py-1.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-medium">
+                      {staffById.get(r.staff_id)?.display_name ?? '?'}
+                    </span>
+                    <span
+                      className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/70"
+                      title={
+                        r.role === 'setup'
+                          ? 'Asked to work just the setup'
+                          : 'Asked to work the shift'
                       }
                     >
-                      approve
-                    </button>
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() =>
-                          api('PATCH', '/api/admin/shift-requests', { id: r.id, action: 'deny' })
-                        )
-                      }
+                      {ASSIGNMENT_ROLE_LABELS[r.role]}
+                    </span>
+                    <span
+                      className="font-mono text-xs text-[var(--pyre-creme)]"
+                      title="The hours they asked to work — approving assigns exactly these"
                     >
-                      deny
-                    </button>
-                  </span>
+                      {formatTime(window.startsAt)}–{formatTime(window.endsAt)} ·{' '}
+                      {assignmentHours(window.startsAt, window.endsAt)}h
+                    </span>
+                    <span className="font-mono text-xs text-white/50">
+                      asked {new Date(r.created_at).toLocaleDateString()}
+                    </span>
+                    <span className={`font-mono text-xs ${badge.className}`}>{badge.label}</span>
+                    {r.note && <span className="font-mono text-xs text-white/40">{r.note}</span>}
+                    <span className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
+                        title="Approve — puts them on the shift for the hours they asked"
+                        disabled={busy}
+                        onClick={() => {
+                          setDecisionNote('');
+                          setDeciding(
+                            decidingThis?.action === 'approve'
+                              ? null
+                              : { id: r.id, action: 'approve' }
+                          );
+                        }}
+                      >
+                        approve
+                      </button>
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
+                        disabled={busy}
+                        onClick={() => {
+                          setDecisionNote('');
+                          setDeciding(
+                            decidingThis?.action === 'deny' ? null : { id: r.id, action: 'deny' }
+                          );
+                        }}
+                      >
+                        deny
+                      </button>
+                    </span>
+                  </div>
+                  {decidingThis && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <input
+                        className={`${inputClass} flex-1 min-w-48`}
+                        maxLength={500}
+                        placeholder="Reason (optional) — included in the email to them"
+                        value={decisionNote}
+                        onChange={(e) => setDecisionNote(e.target.value)}
+                        aria-label="Decision reason"
+                      />
+                      <button
+                        type="button"
+                        className={`${buttonClass} ${
+                          decidingThis.action === 'approve'
+                            ? 'border-[var(--pyre-sage)]/60 text-[var(--pyre-sage)]'
+                            : 'text-[var(--pyre-red)]'
+                        }`}
+                        disabled={busy}
+                        onClick={() => {
+                          const note = decisionNote.trim();
+                          setDeciding(null);
+                          setDecisionNote('');
+                          void run(() =>
+                            api('PATCH', '/api/admin/shift-requests', {
+                              id: r.id,
+                              action: decidingThis.action,
+                              ...(note ? { note } : {}),
+                            })
+                          );
+                        }}
+                      >
+                        {decidingThis.action === 'approve' ? 'Confirm approve' : 'Confirm deny'}
+                      </button>
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        onClick={() => setDeciding(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}
+          </ul>
+        </div>
+      )}
+
+      {canManage && subs.length > 0 && (
+        <div>
+          <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
+            Sub requests
+          </p>
+          <ul className="space-y-1.5">
+            {subs.map((sub) => (
+              <li
+                key={sub.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-[var(--pyre-gold)]/10 px-2 py-1.5"
+              >
+                <span className="font-medium">
+                  {staffById.get(sub.requester_staff_id)?.display_name ?? '?'}
+                </span>
+                <span className="font-mono text-xs text-[var(--pyre-gold)]">
+                  needs a sub for {formatTime(sub.starts_at)}–{formatTime(sub.ends_at)}
+                </span>
+                <span className="font-mono text-xs text-white/50">
+                  asked {new Date(sub.created_at).toLocaleDateString()}
+                  {sub.notified_count > 0 && ` · ${sub.notified_count} people emailed`}
+                </span>
+                <span className="ml-auto">
+                  <button
+                    type="button"
+                    className="font-mono text-xs text-white/50 underline hover:text-white disabled:opacity-40"
+                    title="Cancel the sub request and remove the time off it logged"
+                    disabled={busy}
+                    onClick={() => cancelSub(sub)}
+                  >
+                    cancel sub
+                  </button>
+                </span>
+              </li>
+            ))}
           </ul>
         </div>
       )}
@@ -1646,54 +1783,105 @@ function ShiftDetail({
       {canAddToCalendar && <AddToCalendar shiftId={shift.id} />}
 
       {canRequest && (
-        <div className="flex flex-wrap items-center gap-2">
-          {selfRequest ? (
-            <>
-              <span className="font-mono text-xs text-[var(--pyre-creme)]">
-                Requested ({ASSIGNMENT_ROLE_LABELS[selfRequest.role]}) — waiting for a manager to
-                approve.
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {selfRequest ? (
+              <>
+                <span className="font-mono text-xs text-[var(--pyre-creme)]">
+                  Requested {ASSIGNMENT_ROLE_LABELS[selfRequest.role]},{' '}
+                  {formatTime(requestedWindow(selfRequest).startsAt)}–
+                  {formatTime(requestedWindow(selfRequest).endsAt)} — waiting for a manager to
+                  approve.
+                </span>
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() => api('DELETE', `/api/admin/shift-requests?id=${selfRequest.id}`))
+                  }
+                >
+                  Withdraw request
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="font-mono text-xs text-white/50">Request this shift:</span>
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                  title="Ask to work the whole shift"
+                  disabled={busy}
+                  onClick={() =>
+                    setRequestDraft(
+                      requestDraft?.role === 'full' ? null : { role: 'full', ...roleWindow('full') }
+                    )
+                  }
+                >
+                  Full shift
+                </button>
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                  title="Ask to work just the setup — the first 2 hours of the window"
+                  disabled={busy}
+                  onClick={() =>
+                    setRequestDraft(
+                      requestDraft?.role === 'setup'
+                        ? null
+                        : { role: 'setup', ...roleWindow('setup') }
+                    )
+                  }
+                >
+                  Setup only
+                </button>
+              </>
+            )}
+          </div>
+          {!selfRequest && requestDraft && (
+            <div className="flex flex-wrap items-center gap-2 rounded bg-white/5 px-2 py-1.5">
+              <span className="font-mono text-xs text-white/50">
+                Hours you want to work ({ASSIGNMENT_ROLE_LABELS[requestDraft.role]}):
               </span>
-              <button
-                type="button"
-                className={buttonClass}
-                disabled={busy}
-                onClick={() =>
-                  void run(() => api('DELETE', `/api/admin/shift-requests?id=${selfRequest.id}`))
-                }
-              >
-                Withdraw request
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="font-mono text-xs text-white/50">Request this shift:</span>
-              <button
-                type="button"
-                className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-                title="Ask to work the whole shift"
-                disabled={busy}
-                onClick={() =>
-                  void run(() =>
-                    api('POST', '/api/admin/shift-requests', { shiftId: shift.id, role: 'full' })
-                  )
-                }
-              >
-                Full shift
-              </button>
+              <input
+                type="time"
+                step={1800}
+                className={`${inputClass} w-auto`}
+                value={requestDraft.startsAt}
+                onChange={(e) => setRequestDraft({ ...requestDraft, startsAt: e.target.value })}
+                aria-label="Requested start"
+              />
+              <input
+                type="time"
+                step={1800}
+                className={`${inputClass} w-auto`}
+                value={requestDraft.endsAt}
+                onChange={(e) => setRequestDraft({ ...requestDraft, endsAt: e.target.value })}
+                aria-label="Requested end"
+              />
               <button
                 type="button"
                 className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-                title="Ask to work just the setup — the first 2 hours of the window"
-                disabled={busy}
-                onClick={() =>
+                disabled={busy || requestDraft.endsAt <= requestDraft.startsAt}
+                onClick={() => {
+                  const draft = requestDraft;
+                  setRequestDraft(null);
                   void run(() =>
-                    api('POST', '/api/admin/shift-requests', { shiftId: shift.id, role: 'setup' })
-                  )
-                }
+                    api('POST', '/api/admin/shift-requests', {
+                      shiftId: shift.id,
+                      role: draft.role,
+                      startsAt: draft.startsAt,
+                      endsAt: draft.endsAt,
+                    })
+                  );
+                }}
               >
-                Setup only
+                Send request
               </button>
-            </>
+              <button type="button" className={buttonClass} onClick={() => setRequestDraft(null)}>
+                Cancel
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1908,9 +2096,14 @@ function AssignmentEditor({
         type="button"
         className={buttonClass}
         disabled={busy}
+        title={
+          assignment.is_draft
+            ? 'Saving accepts this AI draft onto the live schedule with your changes'
+            : undefined
+        }
         onClick={() => void onSave({ startsAt, endsAt, role })}
       >
-        Save
+        {assignment.is_draft ? 'Save & accept' : 'Save'}
       </button>
     </div>
   );
@@ -2001,8 +2194,9 @@ function ProposalBanner({
         </pre>
       )}
       <p className="mt-2 font-mono text-[10px] text-white/40">
-        Dashed cards and "AI draft" chips are proposals — edit them like normal entries, ✓/✗
-        individually, or approve the whole week. Nothing is live until accepted.
+        Dashed cards and "AI draft" chips are proposals — ✓/✗ individually, approve the whole week,
+        or just edit an entry: saving an edit accepts it onto the live schedule with your changes.
+        Nothing else is live until accepted.
       </p>
     </section>
   );
