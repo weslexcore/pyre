@@ -1,7 +1,8 @@
 -- Stipend hours: recurring weekly hours paid for off-schedule work (e.g.
 -- "inventory & towel ordering, 1h/week"), tracked per person on the hours
 -- report alongside scheduled shift hours and priced at the same pay_rate.
--- Managed from /admin/schedule/hours (admin only).
+-- Managed from /admin/users (recurring stipends, next to pay rates) and
+-- /admin/schedule/hours (per-week adjustments); admin only.
 --
 -- Two tables on purpose:
 --   staff_stipends    the recurring agreement, effective-dated by week so

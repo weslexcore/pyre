@@ -398,9 +398,9 @@ async function readError(res: Response): Promise<string> {
 }
 
 /**
- * Admin-only management of recurring stipend hours (extra weekly pay for
- * off-schedule work like inventory or ordering) and their one-week overrides.
- * Lives on the hours report so edits show up in the table immediately.
+ * Admin-only one-week stipend adjustments, kept on the hours report because
+ * the weeks are visible here. The recurring stipends themselves (add / edit /
+ * end) are managed next to pay rates on /admin/users.
  */
 function StipendsPanel({
   staff,
@@ -415,17 +415,6 @@ function StipendsPanel({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Existing-stipend edits are typed before they're saved, so they live here
-  // until the row's Save button goes (same pattern as UsersManager).
-  const [drafts, setDrafts] = useState<
-    Record<string, { label: string; hours: string; from: string; until: string }>
-  >({});
-
-  const [newStaffId, setNewStaffId] = useState('');
-  const [newLabel, setNewLabel] = useState('');
-  const [newHours, setNewHours] = useState('');
-  const [newFrom, setNewFrom] = useState(() => weekStartOf(todayLocal()));
 
   const [ovStipendId, setOvStipendId] = useState('');
   const [ovWeek, setOvWeek] = useState(() => weekStartOf(todayLocal()));
@@ -445,25 +434,9 @@ function StipendsPanel({
         : {}),
     });
     if (!res.ok) setError(await readError(res));
-    // Rebuild row drafts from the fresh rows (the server may have snapped
-    // dates to Mondays or trimmed the label).
-    else setDrafts({});
     await onChanged();
     setBusy(false);
     return res.ok;
-  };
-
-  const addStipend = async () => {
-    const ok = await call('POST', {
-      staffId: newStaffId,
-      label: newLabel.trim(),
-      hoursPerWeek: Number(newHours),
-      effectiveFrom: newFrom,
-    });
-    if (ok) {
-      setNewLabel('');
-      setNewHours('');
-    }
   };
 
   const saveOverride = async (hours: number | null) => {
@@ -487,10 +460,12 @@ function StipendsPanel({
         Stipend hours
       </h2>
       <p className="font-mono text-xs text-white/40">
-        Recurring weekly hours for off-schedule work (inventory, ordering...), paid at the person's
-        hourly rate and included in the table above. Weeks snap to their Monday. To stop a stipend,
-        set its last week — past weeks keep paying out; deleting removes it from every week, past
-        ones included.
+        Recurring weekly hours for off-schedule work, paid at the person's hourly rate and included
+        in the table above. Add, edit, or end stipends next to pay rates on the{' '}
+        <a href="/admin/users" className="underline hover:text-white">
+          People page
+        </a>
+        ; adjust a single week here.
       </p>
 
       {error && (
@@ -499,183 +474,10 @@ function StipendsPanel({
         </p>
       )}
 
-      <ul className="space-y-2">
-        {stipends.map((stipend) => {
-          const draft = drafts[stipend.id] ?? {
-            label: stipend.label,
-            hours: String(stipend.hours_per_week),
-            from: stipend.effective_from,
-            until: stipend.effective_until ?? '',
-          };
-          const dirty =
-            draft.label.trim() !== stipend.label ||
-            draft.hours.trim() !== String(stipend.hours_per_week) ||
-            draft.from !== stipend.effective_from ||
-            draft.until !== (stipend.effective_until ?? '');
-          const setDraft = (fields: Partial<typeof draft>) =>
-            setDrafts({ ...drafts, [stipend.id]: { ...draft, ...fields } });
-
-          return (
-            <li
-              key={stipend.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded border border-white/10 bg-white/[0.02] px-3 py-2"
-            >
-              <span className="w-20 font-medium">{nameById.get(stipend.staff_id) ?? '?'}</span>
-              <input
-                className={`${inputClass} w-48`}
-                value={draft.label}
-                disabled={busy}
-                onChange={(e) => setDraft({ label: e.target.value })}
-                aria-label="Stipend label"
-              />
-              <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-                <input
-                  className={`${inputClass} w-20`}
-                  type="number"
-                  min={0.1}
-                  max={40}
-                  step={0.1}
-                  value={draft.hours}
-                  disabled={busy}
-                  onChange={(e) => setDraft({ hours: e.target.value })}
-                  aria-label="Stipend hours per week"
-                />
-                h/wk
-              </label>
-              <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-                from
-                <input
-                  className={inputClass}
-                  type="date"
-                  value={draft.from}
-                  disabled={busy}
-                  onChange={(e) => e.target.value && setDraft({ from: e.target.value })}
-                  aria-label="First week"
-                />
-              </label>
-              <label
-                className="flex items-center gap-1.5 font-mono text-xs text-white/60"
-                title="Last week this stipend pays. Leave blank to keep it running."
-              >
-                until
-                <input
-                  className={inputClass}
-                  type="date"
-                  value={draft.until}
-                  disabled={busy}
-                  onChange={(e) => setDraft({ until: e.target.value })}
-                  aria-label="Last week (blank = ongoing)"
-                />
-              </label>
-              {dirty && (
-                <button
-                  type="button"
-                  className={buttonClass}
-                  disabled={busy}
-                  onClick={() =>
-                    void call('PATCH', {
-                      id: stipend.id,
-                      label: draft.label.trim(),
-                      hoursPerWeek: Number(draft.hours),
-                      effectiveFrom: draft.from,
-                      effectiveUntil: draft.until || null,
-                    })
-                  }
-                >
-                  Save
-                </button>
-              )}
-              <button
-                type="button"
-                className={`${buttonClass} ml-auto`}
-                disabled={busy}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Delete ${nameById.get(stipend.staff_id) ?? ''}'s "${stipend.label}" stipend? It disappears from every week, including ones already paid. To stop it going forward, set its last week instead.`
-                    )
-                  )
-                    void call('DELETE', undefined, `?id=${encodeURIComponent(stipend.id)}`);
-                }}
-              >
-                Delete
-              </button>
-            </li>
-          );
-        })}
-        {stipends.length === 0 && (
-          <li className="rounded border border-white/10 bg-white/[0.02] px-3 py-3 font-mono text-xs text-white/40">
-            No stipends yet.
-          </li>
-        )}
-      </ul>
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
-        <select
-          className={inputClass}
-          value={newStaffId}
-          disabled={busy}
-          onChange={(e) => setNewStaffId(e.target.value)}
-          aria-label="Person"
-        >
-          <option value="">person...</option>
-          {staff
-            .filter((s) => s.active)
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.display_name}
-              </option>
-            ))}
-        </select>
-        <input
-          className={`${inputClass} w-48`}
-          placeholder="what it's for"
-          value={newLabel}
-          disabled={busy}
-          onChange={(e) => setNewLabel(e.target.value)}
-          aria-label="New stipend label"
-        />
-        <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-          <input
-            className={`${inputClass} w-20`}
-            type="number"
-            min={0.1}
-            max={40}
-            step={0.1}
-            placeholder="1"
-            value={newHours}
-            disabled={busy}
-            onChange={(e) => setNewHours(e.target.value)}
-            aria-label="New stipend hours per week"
-          />
-          h/wk
-        </label>
-        <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-          from
-          <input
-            className={inputClass}
-            type="date"
-            value={newFrom}
-            disabled={busy}
-            onChange={(e) => e.target.value && setNewFrom(e.target.value)}
-            aria-label="New stipend first week"
-          />
-        </label>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={busy || !newStaffId || !newLabel.trim() || !(Number(newHours) > 0)}
-          onClick={() => void addStipend()}
-        >
-          Add stipend
-        </button>
-      </div>
-
-      {stipends.length > 0 && (
-        <div className="space-y-2 border-t border-white/10 pt-3">
-          <h3 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-            Adjust one week
-          </h3>
+      {stipends.length === 0 ? (
+        <p className="font-mono text-xs text-white/40">No stipends yet.</p>
+      ) : (
+        <div className="space-y-2">
           <p className="font-mono text-xs text-white/40">
             Replaces the stipend's hours for that week only — set 0 for a skipped week. Clearing
             puts the week back on the recurring amount.
