@@ -187,6 +187,10 @@ export default defineTool({
         shiftId: r.shift_id,
         staffId: r.staff_id,
         role: r.role,
+        // The hours they asked to work; null on legacy requests (then the
+        // role implies the window: full shift, or its setup span).
+        requestedStartsAt: r.requested_starts_at?.slice(0, 5) ?? null,
+        requestedEndsAt: r.requested_ends_at?.slice(0, 5) ?? null,
         note: r.note,
       })),
       existingAssignments: weekAssignments.map((a) => ({

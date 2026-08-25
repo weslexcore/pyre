@@ -16,6 +16,7 @@ import {
   logScheduleChange,
   staffNameOf,
 } from '@/lib/schedule/change-log';
+import { acceptDraftRow, resolveProposalIfDone } from '@/lib/schedule/draft-accept';
 
 export const prerender = false;
 
@@ -142,17 +143,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (!row || !row.is_draft) return json({ error: 'Draft item not found' }, 404);
 
     if (action === 'accept-item') {
-      const { error } = await db.from(table).update({ is_draft: false }).eq('id', id);
-      if (error) return json({ error: error.message }, 500);
-      // A live assignment must never reference a draft shift.
-      if (kind === 'assignment') {
-        const { error: shiftError } = await db
-          .from('shifts')
-          .update({ is_draft: false })
-          .eq('id', (row as { shift_id: string }).shift_id)
-          .eq('is_draft', true);
-        if (shiftError) return json({ error: shiftError.message }, 500);
-      }
+      const acceptError = await acceptDraftRow(db, {
+        kind,
+        id,
+        shiftId: row.shift_id,
+        proposalId: row.proposal_id,
+      });
+      if (acceptError) return json({ error: acceptError }, 500);
     } else {
       const { error } = await db.from(table).delete().eq('id', id);
       if (error) return json({ error: error.message }, 500);
@@ -172,34 +169,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       details: { proposalId: row.proposal_id },
     });
 
-    // Auto-resolve the proposal when nothing is left to review.
-    const proposalId = row.proposal_id as string | null;
-    if (proposalId) {
-      const [shiftsLeft, assignmentsLeft] = await Promise.all([
-        db
-          .from('shifts')
-          .select('id', { count: 'exact', head: true })
-          .eq('proposal_id', proposalId)
-          .eq('is_draft', true),
-        db
-          .from('shift_assignments')
-          .select('id', { count: 'exact', head: true })
-          .eq('proposal_id', proposalId)
-          .eq('is_draft', true),
-      ]);
-      if (
-        !shiftsLeft.error &&
-        !assignmentsLeft.error &&
-        !shiftsLeft.count &&
-        !assignmentsLeft.count
-      ) {
-        await db
-          .from('schedule_proposals')
-          .update({ status: 'approved', decided_at: now })
-          .eq('id', proposalId)
-          .eq('status', 'draft');
-      }
-    }
+    // Auto-resolve the proposal when nothing is left to review (the accept
+    // path already did this inside acceptDraftRow).
+    if (!accepted && row.proposal_id) await resolveProposalIfDone(db, row.proposal_id);
     return json({ ok: true });
   }
 

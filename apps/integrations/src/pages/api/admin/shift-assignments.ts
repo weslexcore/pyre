@@ -17,6 +17,7 @@ import {
   summarizeDiff,
   timeWindow,
 } from '@/lib/schedule/change-log';
+import { acceptDraftRow } from '@/lib/schedule/draft-accept';
 import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -167,16 +168,39 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return json({ error: error.message }, 500);
 
-  const assignment = data as ShiftAssignmentRow;
+  let assignment = data as ShiftAssignmentRow;
+  const actor = actorFromGate(gate);
   const diff = changedFields(existing as Record<string, unknown>, fields);
   if (diff) {
     await logScheduleChange(db, {
-      actor: actorFromGate(gate),
+      actor,
       entityType: 'assignment',
       entityId: assignment.id,
       action: 'update',
       summary: `Updated ${await staffNameOf(db, assignment.staff_id)}'s assignment on ${await shiftDescription(db, assignment.shift_id)}: ${summarizeDiff(diff)}`,
       details: diff,
+    });
+  }
+
+  // Editing an AI draft accepts it — the admin adjusted the recommendation,
+  // so their version goes live (parent shift included) rather than staying a
+  // proposal they'd still have to ✓ separately.
+  if (existing.is_draft) {
+    const acceptError = await acceptDraftRow(db, {
+      kind: 'assignment',
+      id: assignment.id,
+      shiftId: assignment.shift_id,
+      proposalId: assignment.proposal_id,
+    });
+    if (acceptError) return json({ error: acceptError }, 500);
+    assignment = { ...assignment, is_draft: false };
+    await logScheduleChange(db, {
+      actor,
+      entityType: 'assignment',
+      entityId: assignment.id,
+      action: 'accept_item',
+      summary: `Accepted draft assignment for ${await staffNameOf(db, assignment.staff_id)} on ${await shiftDescription(db, assignment.shift_id)} (edited)`,
+      details: { proposalId: assignment.proposal_id },
     });
   }
 

@@ -104,11 +104,19 @@ export interface ShiftRequestRow {
 	status: "pending" | "approved" | "denied";
 	/** What they offered to work: the whole shift, or just its setup span. */
 	role: "full" | "setup";
+	/**
+	 * The hours they asked to work, entered with the request. Null (both) on
+	 * legacy rows — approval then falls back to the role-derived window.
+	 */
+	requested_starts_at: string | null;
+	requested_ends_at: string | null;
 	/** Optional message from the requester. */
 	note: string | null;
 	/** Dashboard email of the manager who decided; null while pending. */
 	decided_by: string | null;
 	decided_at: string | null;
+	/** Optional reason from the manager, emailed to the requester. */
+	decision_note: string | null;
 	created_at: string;
 	updated_at: string;
 }

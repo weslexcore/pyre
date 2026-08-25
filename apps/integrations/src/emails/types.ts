@@ -196,6 +196,8 @@ export interface ShiftRequestDecisionProps {
   timeLabel: string;
   /** "Full" | "Setup" */
   roleLabel: string;
+  /** Optional reason the manager attached to the decision. */
+  reasonNote?: string | null;
   scheduleUrl: string;
 }
 
