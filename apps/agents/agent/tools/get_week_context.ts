@@ -1,15 +1,19 @@
-// The scheduler's entire world view, pre-computed: roster, the target week's
-// shifts (coverage windows already synced from Momence by the integrations
-// cron), accepted assignments, per-person availability for every shift,
-// recent weekly hours, and history patterns. All judgment-free math lives
-// here (via @pyre/schedule-core) so the model only decides who works when.
+// The scheduler's entire world view, pre-computed: roster (with lead flags
+// and weekly hour targets), the target week's shifts (coverage windows
+// already synced from Momence by the integrations cron), accepted
+// assignments, pending shift requests, per-person availability for every
+// shift, recent weekly hours, and history patterns. All judgment-free math
+// lives here (via @pyre/schedule-core) so the model only decides who works
+// when.
 
 import {
   availabilityFor,
   addDays,
+  canLeadShift,
   rollupHours,
   type StaffRow,
   type ShiftAssignmentRow,
+  type ShiftRequestRow,
   type ShiftRow,
   type TimeOffRow,
   timeToMinutes,
@@ -24,7 +28,7 @@ const HISTORY_WEEKS = 8;
 
 export default defineTool({
   description:
-    'Load everything needed to draft one week of the staffing schedule: roster, shifts (coverage windows), accepted assignments, availability per person per shift, recent weekly hours, and history patterns. Call this first, before save_proposal.',
+    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags and weekly hour targets), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours, and history patterns. Call this first, before save_proposal.',
   inputSchema: z.object({
     weekStart: z
       .string()
@@ -85,6 +89,22 @@ export default defineTool({
       const shift = shiftById.get(a.shift_id);
       return shift !== undefined && shift.shift_date >= weekStart;
     });
+
+    // Pending shift requests on the week's shifts: people who asked to work
+    // a shift and are still waiting on a decision.
+    let pendingRequests: ShiftRequestRow[] = [];
+    if (weekShifts.length > 0) {
+      const { data, error } = await db
+        .from('shift_requests')
+        .select('*')
+        .in(
+          'shift_id',
+          weekShifts.map((s) => s.id)
+        )
+        .eq('status', 'pending');
+      if (error) throw new Error(error.message);
+      pendingRequests = (data ?? []) as ShiftRequestRow[];
+    }
 
     // Availability matrix: person × week shift.
     const shiftsOut = weekShifts.map((shift) => ({
@@ -159,8 +179,16 @@ export default defineTool({
         staffId: s.id,
         name: s.display_name,
         isFounder: s.is_founder,
+        canLead: canLeadShift(s),
+        targetHoursPerWeek: s.target_hours_per_week,
       })),
       shifts: shiftsOut,
+      pendingShiftRequests: pendingRequests.map((r) => ({
+        shiftId: r.shift_id,
+        staffId: r.staff_id,
+        role: r.role,
+        note: r.note,
+      })),
       existingAssignments: weekAssignments.map((a) => ({
         shiftId: a.shift_id,
         staffId: a.staff_id,

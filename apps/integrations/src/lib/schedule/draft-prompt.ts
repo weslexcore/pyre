@@ -34,6 +34,8 @@ export function buildDraftMessage(weekStart: string, prompt = ''): string {
     `Use get_week_context with weekStart "${weekStart}", then save exactly one proposal. ` +
     'Fill only shifts that are still below their staffNeeded count — leave fully staffed ' +
     "shifts untouched, and never add more people than a shift's remaining need. " +
+    'Apply every scheduling rule in your instructions — shift-lead coverage, weekly hour ' +
+    'targets, and pending shift requests included. ' +
     'Any previous draft for that week is superseded automatically.';
 
   if (!prompt) return base;
