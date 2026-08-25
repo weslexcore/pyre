@@ -38,6 +38,11 @@ export interface WeekHours {
   total: number;
   /** Share of the week's hours worked by founders (0..1); null when no hours. */
   founderShare: number | null;
+  /**
+   * Stipend portion of byStaff, set by applyStipends() (see stipends.ts) —
+   * already included in byStaff/total, kept separately for display.
+   */
+  stipendByStaff?: Record<string, number>;
 }
 
 /**
@@ -150,6 +155,8 @@ export interface PayPeriod {
   founderShare: number | null;
   /** Weeks actually present in the input — 1 means the range clipped the period. */
   weekCount: number;
+  /** Stipend portion of byStaff, present when any input week carried one. */
+  stipendByStaff?: Record<string, number>;
 }
 
 /** Monday starting the bi-weekly pay period containing `date`. */
@@ -188,6 +195,15 @@ export function groupIntoPayPeriods(weeks: WeekHours[], anchor = PAY_PERIOD_ANCH
       // share needs no founderIds parameter.
       const founderHours = periodWeeks.reduce((a, w) => a + (w.founderShare ?? 0) * w.total, 0);
 
+      let stipendByStaff: Record<string, number> | undefined;
+      for (const week of periodWeeks) {
+        if (!week.stipendByStaff) continue;
+        stipendByStaff ??= {};
+        for (const [staffId, hours] of Object.entries(week.stipendByStaff)) {
+          stipendByStaff[staffId] = (stipendByStaff[staffId] ?? 0) + hours;
+        }
+      }
+
       return {
         periodStart,
         periodEnd: addDays(periodStart, 13),
@@ -196,6 +212,7 @@ export function groupIntoPayPeriods(weeks: WeekHours[], anchor = PAY_PERIOD_ANCH
         total,
         founderShare: total > 0 ? founderHours / total : null,
         weekCount: periodWeeks.length,
+        ...(stipendByStaff !== undefined ? { stipendByStaff } : {}),
       };
     });
 }

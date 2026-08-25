@@ -516,7 +516,10 @@ cursor exactly as it would on a cron tick.
 4. **Labor cost is computed from the schedule, not from payroll.** It prices
    *assigned* shift windows at each person's `pay_rate` — no overtime multiplier,
    no taxes or burden, no clock-in/clock-out reconciliation. Founders are priced
-   at their stored rate of 0.
+   at their stored rate of 0. Weekly stipend hours (`staff_stipends`) are NOT
+   included here — they are week-granular, not day-granular, so they appear in
+   the hours report and the schedule insights cost tiles but not in this
+   dashboard's daily labor series.
 5. **Open hours exclude manual shifts entirely**, while their labor cost is
    included. That is intentional (maintenance work is not sellable time) but it
    means a maintenance-heavy period will show a worse `costPerOpenHour`.

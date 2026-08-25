@@ -185,6 +185,8 @@ export type {
   ShiftRequestRow,
   ShiftRow,
   StaffRow,
+  StaffStipendRow,
+  StipendOverrideRow,
   SubRequestRow,
   TimeOffRow,
 } from '@pyre/schedule-core';

@@ -17,6 +17,8 @@ import {
   type ShiftRequestRow,
   type ShiftRow,
   type StaffRow,
+  type StaffStipendRow,
+  type StipendOverrideRow,
   type SubRequestRow,
   type TimeOffRow,
 } from '@/lib/db';
@@ -37,6 +39,14 @@ export interface ScheduleBoardPayload {
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   /** All entries on the manage side; only the caller's own otherwise. */
   timeOff: TimeOffRow[];
+  /**
+   * Recurring weekly stipend hours, for the hours report. Like timeOff: all
+   * of them on the manage side, only the caller's own otherwise (effective
+   * dates apply to any range, so no date filtering, just ownership).
+   */
+  stipends: StaffStipendRow[];
+  /** Per-week overrides for the shipped stipends. */
+  stipendOverrides: StipendOverrideRow[];
   /** Open draft proposals covering the range; only with includeDrafts=1, manage-side only. */
   proposals?: ScheduleProposalRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
@@ -95,12 +105,19 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .order('starts_at');
   if (!includeDrafts) shiftsQuery = shiftsQuery.eq('is_draft', false);
 
-  const [staffRes, shiftsRes, timeOffRes] = await Promise.all([
+  const [staffRes, shiftsRes, timeOffRes, stipendsRes, overridesRes] = await Promise.all([
     db.from('staff').select('*').order('display_name'),
     shiftsQuery,
     db.from('time_off').select('*').order('created_at'),
+    db.from('staff_stipends').select('*').order('created_at'),
+    db.from('stipend_overrides').select('*').order('week_start'),
   ]);
-  const firstError = staffRes.error ?? shiftsRes.error ?? timeOffRes.error;
+  const firstError =
+    staffRes.error ??
+    shiftsRes.error ??
+    timeOffRes.error ??
+    stipendsRes.error ??
+    overridesRes.error;
   if (firstError) return json({ error: firstError.message }, 500);
 
   const shifts = (shiftsRes.data ?? []) as Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
@@ -185,6 +202,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // own. Redacted here, server-side, in BOTH branches below — pay is stricter
   // than canManage (a non-admin schedule manager gets hours but no rates),
   // and unlike hours it never reaches the client for other people.
+  // Stipend hours are hours data, not pay data — same visibility as timeOff:
+  // the manage side sees everyone's, employees only their own.
+  const stipends = ((stipendsRes.data ?? []) as StaffStipendRow[]).filter(
+    (s) => canManage || (selfStaffId !== null && s.staff_id === selfStaffId)
+  );
+  const stipendIds = new Set(stipends.map((s) => s.id));
+
   const redactPay = (s: StaffRow): StaffRow =>
     gate.access.isAdmin || s.id === selfStaffId
       ? s
@@ -208,6 +232,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     // only their own entries (availability badges on others read as free).
     timeOff: ((timeOffRes.data ?? []) as TimeOffRow[]).filter(
       (t) => canManage || (selfStaffId !== null && t.staff_id === selfStaffId)
+    ),
+    stipends,
+    // Only overrides for stipends this viewer received.
+    stipendOverrides: ((overridesRes.data ?? []) as StipendOverrideRow[]).filter((o) =>
+      stipendIds.has(o.stipend_id)
     ),
     canManage,
     isAdmin: gate.access.isAdmin,

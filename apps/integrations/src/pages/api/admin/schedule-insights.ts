@@ -12,6 +12,7 @@
 import {
   addDays,
   amountsDue,
+  applyStipends,
   type ConsistencyRow,
   completedWeekStarts,
   consistencyStats,
@@ -32,6 +33,8 @@ import {
   type ShiftRequestRow,
   type ShiftRow,
   type StaffRow,
+  type StaffStipendRow,
+  type StipendOverrideRow,
   type SubRequestRow,
 } from '@/lib/db';
 
@@ -184,7 +187,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const forecastEnd = addDays(currentPeriodStart, 27);
   const rangeEnd = displayEnd > forecastEnd ? displayEnd : forecastEnd;
 
-  const [staffRes, shiftsRes] = await Promise.all([
+  const [staffRes, shiftsRes, stipendsRes, stipendOverridesRes] = await Promise.all([
     db.from('staff').select('*').order('display_name'),
     db
       .from('shifts')
@@ -193,11 +196,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .lte('shift_date', rangeEnd)
       .eq('is_draft', false)
       .order('shift_date'),
+    db.from('staff_stipends').select('*'),
+    db.from('stipend_overrides').select('*'),
   ]);
-  const queryError = staffRes.error ?? shiftsRes.error;
+  const queryError =
+    staffRes.error ?? shiftsRes.error ?? stipendsRes.error ?? stipendOverridesRes.error;
   if (queryError) return json({ error: queryError.message }, 500);
 
   const staff = (staffRes.data ?? []) as StaffRow[];
+  const stipends = (stipendsRes.data ?? []) as StaffStipendRow[];
+  const stipendOverrides = (stipendOverridesRes.data ?? []) as StipendOverrideRow[];
   const shifts = (shiftsRes.data ?? []) as ShiftRow[];
   const shiftIds = shifts.map((s) => s.id);
   const shiftById = new Map(shifts.map((s) => [s.id, s]));
@@ -231,13 +239,24 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .filter((r) => r.shiftDate !== ''),
     founderIdsOf(staff)
   );
+  // Stipend hours ride into the cost math (weeks + period tiles) so labor
+  // cost matches the hours report. Consistency stats below stay on `rolled`:
+  // target_hours_per_week is a scheduled-shifts target.
+  const withStipends = applyStipends(
+    rolled,
+    stipends,
+    stipendOverrides,
+    founderIdsOf(staff),
+    rangeStart,
+    rangeEnd
+  );
   const rates = payRatesOf(staff);
   const openHours = openHoursByWeek(shifts);
 
   // Chart weeks stay inside the selected window; the wider fetch exists only
   // for the always-on forecast tiles (periods below).
   const displaySet = new Set(displayWeekStarts);
-  const weeks: InsightsWeek[] = rolled
+  const weeks: InsightsWeek[] = withStipends
     .filter((week) => displaySet.has(week.weekStart))
     .map((week) => {
       const cost = amountsDue(week.byStaff, rates).total;
@@ -256,7 +275,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       };
     });
 
-  const periods: InsightsPeriod[] = groupIntoPayPeriods(rolled).map((p) => ({
+  const periods: InsightsPeriod[] = groupIntoPayPeriods(withStipends).map((p) => ({
     periodStart: p.periodStart,
     periodEnd: p.periodEnd,
     payday: p.payday,

@@ -154,6 +154,42 @@ export interface TimeOffRow {
 	updated_at: string;
 }
 
+/**
+ * A recurring weekly stipend: extra paid hours for off-schedule work
+ * ("inventory & towel ordering, 1h/week"), priced at the person's pay_rate on
+ * the hours report. Effective-dated by Monday week so editing or ending one
+ * never rewrites weeks that were already paid out.
+ */
+export interface StaffStipendRow {
+	id: string;
+	staff_id: string;
+	/** What the stipend is for, shown on the hours report. */
+	label: string;
+	hours_per_week: number;
+	/** First Monday-start week this stipend pays (YYYY-MM-DD). */
+	effective_from: string;
+	/** Last Monday-start week this stipend pays; null = open-ended. */
+	effective_until: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+/**
+ * A one-off per-week replacement for a stipend's default hours — 0 means the
+ * stipend was skipped that week. One row per (stipend, Monday week).
+ */
+export interface StipendOverrideRow {
+	id: string;
+	stipend_id: string;
+	/** Monday of the overridden week (YYYY-MM-DD). */
+	week_start: string;
+	/** Replaces hours_per_week for this week. */
+	hours: number;
+	note: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface ScheduleProposalRow {
 	id: string;
 	/** Monday of the drafted week. */

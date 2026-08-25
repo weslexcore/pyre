@@ -9,6 +9,7 @@
 import {
   addDays,
   amountsDue,
+  applyStipends,
   founderIdsOf,
   groupIntoPayPeriods,
   payRatesOf,
@@ -16,13 +17,23 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
-import { useCachedJson } from '@/lib/client/cachedJson';
-import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import type {
+  ShiftAssignmentRow,
+  ShiftRow,
+  StaffRow,
+  StaffStipendRow,
+  StipendOverrideRow,
+  TimeOffRow,
+} from '@/lib/db';
 
 interface BoardData {
   staff: StaffRow[];
   shifts: Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   timeOff: TimeOffRow[];
+  /** All stipends on the manage side; only the viewer's own otherwise. */
+  stipends?: StaffStipendRow[];
+  stipendOverrides?: StipendOverrideRow[];
   /** Manage side (schedule:manage / admin) — false = own hours only. */
   canManage?: boolean;
   /** Admins additionally see the labor-cost column. */
@@ -55,7 +66,7 @@ export function ScheduleHours() {
 
   // Shares the schedule-board cache entry with ScheduleCalendar whenever the
   // ranges line up, so moving between the schedule tabs often costs nothing.
-  const { data, error, loading, refreshing } = useCachedJson<BoardData>(
+  const { data, error, loading, refreshing, reload } = useCachedJson<BoardData>(
     `/api/admin/schedule-board?start=${start}&end=${end}`
   );
   // `busy` keeps the old `loading` semantics at the call sites below: true
@@ -73,7 +84,16 @@ export function ScheduleHours() {
       .flatMap((shift) =>
         shift.assignments.map((assignment) => ({ assignment, shiftDate: shift.shift_date }))
       );
-    const rolled = rollupHours(assignments, founderIdsOf(data.staff));
+    // Stipend hours (recurring weekly, with per-week overrides) fold into the
+    // same rollup, so amounts due and pay periods price them automatically.
+    const rolled = applyStipends(
+      rollupHours(assignments, founderIdsOf(data.staff)),
+      data.stipends ?? [],
+      data.stipendOverrides ?? [],
+      founderIdsOf(data.staff),
+      start,
+      end
+    );
     // Managers see everyone with hours in range (roster order); employees see
     // only themselves.
     const visible = canManage ? data.staff : data.staff.filter((s) => s.id === selfId);
@@ -82,7 +102,7 @@ export function ScheduleHours() {
       staffColumns: visible.filter((s) => withHours.has(s.id)),
       weeks: rolled,
     };
-  }, [data, canManage, selfId]);
+  }, [data, canManage, selfId, start, end]);
 
   const totals = useMemo(() => {
     const byStaff: Record<string, number> = {};
@@ -114,6 +134,7 @@ export function ScheduleHours() {
         byStaff: week.byStaff,
         total: week.total,
         founderShare: week.founderShare,
+        stipendByStaff: week.stipendByStaff,
       }));
     }
     return groupIntoPayPeriods(weeks).map((p) => ({
@@ -124,6 +145,7 @@ export function ScheduleHours() {
       byStaff: p.byStaff,
       total: p.total,
       founderShare: p.founderShare,
+      stipendByStaff: p.stipendByStaff,
     }));
   }, [weeks, byPeriod, start, end]);
 
@@ -279,12 +301,21 @@ export function ScheduleHours() {
                   {staffColumns.map((s) => {
                     const hours = row.byStaff[s.id] ?? 0;
                     const amount = rowAmounts[row.key]?.byStaff[s.id];
+                    const stipend = row.stipendByStaff?.[s.id] ?? 0;
                     return (
                       <td
                         key={s.id}
                         className={`py-2 pr-3 text-right font-mono ${hours === 0 ? 'text-white/25' : ''}`}
                       >
                         {fmt(hours)}
+                        {stipend > 0 && (
+                          <div
+                            className="text-xs text-[var(--pyre-gold)]/70"
+                            title="Stipend hours included in this cell (recurring weekly, adjustable per week below)"
+                          >
+                            incl. {fmt(stipend)} stipend
+                          </div>
+                        )}
                         {amount !== undefined && hours > 0 && (
                           <div className="text-xs text-white/40">{fmtCost(amount)}</div>
                         )}
@@ -339,6 +370,411 @@ export function ScheduleHours() {
             <p className="mt-2 font-mono text-xs text-white/40">
               * the picked range doesn't cover this whole pay period — widen it before paying out.
             </p>
+          )}
+        </div>
+      )}
+
+      {isAdmin && data && (
+        <StipendsPanel
+          staff={data.staff}
+          stipends={data.stipends ?? []}
+          overrides={data.stipendOverrides ?? []}
+          onChanged={async () => {
+            invalidateJson('/api/admin/schedule-board');
+            await reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+async function readError(res: Response): Promise<string> {
+  try {
+    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
+}
+
+/**
+ * Admin-only management of recurring stipend hours (extra weekly pay for
+ * off-schedule work like inventory or ordering) and their one-week overrides.
+ * Lives on the hours report so edits show up in the table immediately.
+ */
+function StipendsPanel({
+  staff,
+  stipends,
+  overrides,
+  onChanged,
+}: {
+  staff: StaffRow[];
+  stipends: StaffStipendRow[];
+  overrides: StipendOverrideRow[];
+  onChanged: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Existing-stipend edits are typed before they're saved, so they live here
+  // until the row's Save button goes (same pattern as UsersManager).
+  const [drafts, setDrafts] = useState<
+    Record<string, { label: string; hours: string; from: string; until: string }>
+  >({});
+
+  const [newStaffId, setNewStaffId] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [newHours, setNewHours] = useState('');
+  const [newFrom, setNewFrom] = useState(() => weekStartOf(todayLocal()));
+
+  const [ovStipendId, setOvStipendId] = useState('');
+  const [ovWeek, setOvWeek] = useState(() => weekStartOf(todayLocal()));
+  const [ovHours, setOvHours] = useState('');
+  const [ovNote, setOvNote] = useState('');
+
+  const nameById = useMemo(() => new Map(staff.map((s) => [s.id, s.display_name])), [staff]);
+  const stipendById = useMemo(() => new Map(stipends.map((s) => [s.id, s])), [stipends]);
+
+  const call = async (method: string, body?: unknown, query = ''): Promise<boolean> => {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/admin/stipends${query}`, {
+      method,
+      ...(body !== undefined
+        ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        : {}),
+    });
+    if (!res.ok) setError(await readError(res));
+    // Rebuild row drafts from the fresh rows (the server may have snapped
+    // dates to Mondays or trimmed the label).
+    else setDrafts({});
+    await onChanged();
+    setBusy(false);
+    return res.ok;
+  };
+
+  const addStipend = async () => {
+    const ok = await call('POST', {
+      staffId: newStaffId,
+      label: newLabel.trim(),
+      hoursPerWeek: Number(newHours),
+      effectiveFrom: newFrom,
+    });
+    if (ok) {
+      setNewLabel('');
+      setNewHours('');
+    }
+  };
+
+  const saveOverride = async (hours: number | null) => {
+    const ok = await call('PUT', {
+      stipendId: ovStipendId,
+      weekStart: ovWeek,
+      hours,
+      note: ovNote.trim() || null,
+    });
+    if (ok) {
+      setOvHours('');
+      setOvNote('');
+    }
+  };
+
+  const sortedOverrides = [...overrides].sort((a, b) => b.week_start.localeCompare(a.week_start));
+
+  return (
+    <div className="space-y-3 rounded border border-white/10 bg-white/[0.03] px-3 py-3">
+      <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+        Stipend hours
+      </h2>
+      <p className="font-mono text-xs text-white/40">
+        Recurring weekly hours for off-schedule work (inventory, ordering...), paid at the person's
+        hourly rate and included in the table above. Weeks snap to their Monday. To stop a stipend,
+        set its last week — past weeks keep paying out; deleting removes it from every week, past
+        ones included.
+      </p>
+
+      {error && (
+        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
+          {error}
+        </p>
+      )}
+
+      <ul className="space-y-2">
+        {stipends.map((stipend) => {
+          const draft = drafts[stipend.id] ?? {
+            label: stipend.label,
+            hours: String(stipend.hours_per_week),
+            from: stipend.effective_from,
+            until: stipend.effective_until ?? '',
+          };
+          const dirty =
+            draft.label.trim() !== stipend.label ||
+            draft.hours.trim() !== String(stipend.hours_per_week) ||
+            draft.from !== stipend.effective_from ||
+            draft.until !== (stipend.effective_until ?? '');
+          const setDraft = (fields: Partial<typeof draft>) =>
+            setDrafts({ ...drafts, [stipend.id]: { ...draft, ...fields } });
+
+          return (
+            <li
+              key={stipend.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded border border-white/10 bg-white/[0.02] px-3 py-2"
+            >
+              <span className="w-20 font-medium">{nameById.get(stipend.staff_id) ?? '?'}</span>
+              <input
+                className={`${inputClass} w-48`}
+                value={draft.label}
+                disabled={busy}
+                onChange={(e) => setDraft({ label: e.target.value })}
+                aria-label="Stipend label"
+              />
+              <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+                <input
+                  className={`${inputClass} w-20`}
+                  type="number"
+                  min={0.1}
+                  max={40}
+                  step={0.1}
+                  value={draft.hours}
+                  disabled={busy}
+                  onChange={(e) => setDraft({ hours: e.target.value })}
+                  aria-label="Stipend hours per week"
+                />
+                h/wk
+              </label>
+              <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+                from
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={draft.from}
+                  disabled={busy}
+                  onChange={(e) => e.target.value && setDraft({ from: e.target.value })}
+                  aria-label="First week"
+                />
+              </label>
+              <label
+                className="flex items-center gap-1.5 font-mono text-xs text-white/60"
+                title="Last week this stipend pays. Leave blank to keep it running."
+              >
+                until
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={draft.until}
+                  disabled={busy}
+                  onChange={(e) => setDraft({ until: e.target.value })}
+                  aria-label="Last week (blank = ongoing)"
+                />
+              </label>
+              {dirty && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy}
+                  onClick={() =>
+                    void call('PATCH', {
+                      id: stipend.id,
+                      label: draft.label.trim(),
+                      hoursPerWeek: Number(draft.hours),
+                      effectiveFrom: draft.from,
+                      effectiveUntil: draft.until || null,
+                    })
+                  }
+                >
+                  Save
+                </button>
+              )}
+              <button
+                type="button"
+                className={`${buttonClass} ml-auto`}
+                disabled={busy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Delete ${nameById.get(stipend.staff_id) ?? ''}'s "${stipend.label}" stipend? It disappears from every week, including ones already paid. To stop it going forward, set its last week instead.`
+                    )
+                  )
+                    void call('DELETE', undefined, `?id=${encodeURIComponent(stipend.id)}`);
+                }}
+              >
+                Delete
+              </button>
+            </li>
+          );
+        })}
+        {stipends.length === 0 && (
+          <li className="rounded border border-white/10 bg-white/[0.02] px-3 py-3 font-mono text-xs text-white/40">
+            No stipends yet.
+          </li>
+        )}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+        <select
+          className={inputClass}
+          value={newStaffId}
+          disabled={busy}
+          onChange={(e) => setNewStaffId(e.target.value)}
+          aria-label="Person"
+        >
+          <option value="">person...</option>
+          {staff
+            .filter((s) => s.active)
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.display_name}
+              </option>
+            ))}
+        </select>
+        <input
+          className={`${inputClass} w-48`}
+          placeholder="what it's for"
+          value={newLabel}
+          disabled={busy}
+          onChange={(e) => setNewLabel(e.target.value)}
+          aria-label="New stipend label"
+        />
+        <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+          <input
+            className={`${inputClass} w-20`}
+            type="number"
+            min={0.1}
+            max={40}
+            step={0.1}
+            placeholder="1"
+            value={newHours}
+            disabled={busy}
+            onChange={(e) => setNewHours(e.target.value)}
+            aria-label="New stipend hours per week"
+          />
+          h/wk
+        </label>
+        <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+          from
+          <input
+            className={inputClass}
+            type="date"
+            value={newFrom}
+            disabled={busy}
+            onChange={(e) => e.target.value && setNewFrom(e.target.value)}
+            aria-label="New stipend first week"
+          />
+        </label>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy || !newStaffId || !newLabel.trim() || !(Number(newHours) > 0)}
+          onClick={() => void addStipend()}
+        >
+          Add stipend
+        </button>
+      </div>
+
+      {stipends.length > 0 && (
+        <div className="space-y-2 border-t border-white/10 pt-3">
+          <h3 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+            Adjust one week
+          </h3>
+          <p className="font-mono text-xs text-white/40">
+            Replaces the stipend's hours for that week only — set 0 for a skipped week. Clearing
+            puts the week back on the recurring amount.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className={inputClass}
+              value={ovStipendId}
+              disabled={busy}
+              onChange={(e) => setOvStipendId(e.target.value)}
+              aria-label="Stipend to adjust"
+            >
+              <option value="">stipend...</option>
+              {stipends.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {nameById.get(s.staff_id) ?? '?'} — {s.label}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+              week of
+              <input
+                className={inputClass}
+                type="date"
+                value={ovWeek}
+                disabled={busy}
+                onChange={(e) => e.target.value && setOvWeek(weekStartOf(e.target.value))}
+                aria-label="Week to adjust"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+              <input
+                className={`${inputClass} w-20`}
+                type="number"
+                min={0}
+                max={40}
+                step={0.1}
+                placeholder="0"
+                value={ovHours}
+                disabled={busy}
+                onChange={(e) => setOvHours(e.target.value)}
+                aria-label="Hours for that week"
+              />
+              h
+            </label>
+            <input
+              className={`${inputClass} w-56`}
+              placeholder="note (optional)"
+              value={ovNote}
+              disabled={busy}
+              onChange={(e) => setOvNote(e.target.value)}
+              aria-label="Override note"
+            />
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy || !ovStipendId || ovHours.trim() === '' || Number(ovHours) < 0}
+              onClick={() => void saveOverride(Number(ovHours))}
+            >
+              Set week
+            </button>
+          </div>
+
+          {sortedOverrides.length > 0 && (
+            <ul className="space-y-1">
+              {sortedOverrides.map((o) => {
+                const stipend = stipendById.get(o.stipend_id);
+                return (
+                  <li
+                    key={o.id}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-white/60"
+                  >
+                    <span className="text-white/70">{o.week_start}</span>
+                    <span>
+                      {stipend ? (nameById.get(stipend.staff_id) ?? '?') : '?'} —{' '}
+                      {stipend?.label ?? 'deleted stipend'}
+                    </span>
+                    <span className="text-white/70">
+                      {fmt(o.hours)}h{stipend ? ` (usually ${fmt(stipend.hours_per_week)})` : ''}
+                    </span>
+                    {o.note && <span className="text-white/40">{o.note}</span>}
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy}
+                      onClick={() =>
+                        void call('PUT', {
+                          stipendId: o.stipend_id,
+                          weekStart: o.week_start,
+                          hours: null,
+                        })
+                      }
+                    >
+                      Clear
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
