@@ -12,7 +12,7 @@ import type { APIRoute } from 'astro';
 import { ADMIN_TOOLS, PARTNERS_MANAGE, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
-import { getDb, redactCalendarToken, type StaffRow } from '@/lib/db';
+import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 
 export const prerender = false;
@@ -124,6 +124,11 @@ export const GET: APIRoute = async ({ cookies }) => {
   const staff = await listStaff(true);
   if (staff === null) return json({ error: 'Storage unavailable' }, 503);
 
+  // Recurring stipends ride along so pay rates and stipends are managed from
+  // one place (mutations go through /api/admin/stipends).
+  const stipendsRes = await db.from('staff_stipends').select('*').order('created_at');
+  if (stipendsRes.error) return json({ error: stipendsRes.error.message }, 500);
+
   // Env-allowlisted emails without a staff row, so the legacy ADMIN_EMAILS /
   // STAFF_EMAILS entries stay visible and importable. Whether they actually
   // grant access depends on the bootstrap rule (only while the table has no
@@ -134,6 +139,7 @@ export const GET: APIRoute = async ({ cookies }) => {
     // Someone's calendar feed token is a credential, not roster data — an
     // admin managing people has no reason to hold it.
     staff: staff.map(redactCalendarToken),
+    stipends: (stipendsRes.data ?? []) as StaffStipendRow[],
     envUsers,
     envActive: !staff.some((s) => s.is_admin),
     self: (gate.user.email ?? '').toLowerCase(),
