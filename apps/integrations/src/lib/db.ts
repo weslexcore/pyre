@@ -462,6 +462,27 @@ export interface QuickBooksTokenRow {
   updated_at: string;
 }
 
+// An admin-entered operating cost on /admin/business (see the business_costs
+// migration). `amount` means dollars-per-cadence, total dollars, dollars per
+// open hour, or a percent of revenue depending on `kind`; the amortization
+// math lives in lib/business/costs.ts.
+export interface BusinessCostRow {
+  id: string;
+  name: string;
+  category: 'rent' | 'software' | 'supplies' | 'services' | 'fees' | 'other';
+  kind: 'recurring' | 'one_off' | 'per_open_hour' | 'percent_of_revenue';
+  amount: number;
+  cadence: 'weekly' | 'biweekly' | 'monthly' | 'yearly' | null;
+  monthly_cap: number | null;
+  incurred_on: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {

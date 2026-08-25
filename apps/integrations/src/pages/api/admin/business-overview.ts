@@ -18,7 +18,8 @@
 import { addDays, completedWeekStarts, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
-import { type BusinessMetricRow, getDb } from '@/lib/db';
+import { computeDailyCosts } from '@/lib/business/costs';
+import { type BusinessCostRow, type BusinessMetricRow, getDb } from '@/lib/db';
 import { HOST_API_SOURCE } from '@/lib/reports/activity';
 import { hoursSince, nextSyncAfter, SYNC_STALE_HOURS } from '@/lib/reports/schedule';
 import { DAILY_REPORTS } from '@/lib/reports/sync';
@@ -60,6 +61,17 @@ export interface BusinessBucket {
   revenuePerOpenHour: number | null;
   costPerOpenHour: number | null;
   laborPctOfRevenue: number | null;
+  /** Admin-entered operating costs (lib/business/costs.ts): subscriptions
+   * and one-off purchases; per-open-hour rent (monthly cap applied); and
+   * percent-of-revenue fees on days with known revenue. */
+  fixedCosts: number;
+  rentCost: number;
+  feesCost: number;
+  /** laborCost + fixedCosts + rentCost + feesCost. */
+  totalCosts: number;
+  /** revenue − totalCosts; null while revenue is unknown. */
+  profit: number | null;
+  profitMarginPct: number | null;
   attendance: number | null;
   occupancyPct: number | null;
   noShows: number | null;
@@ -80,6 +92,12 @@ export interface RangeTotals {
   revenuePerOpenHour: number | null;
   costPerOpenHour: number | null;
   laborPctOfRevenue: number | null;
+  fixedCosts: number;
+  rentCost: number;
+  feesCost: number;
+  totalCosts: number;
+  profit: number | null;
+  profitMarginPct: number | null;
   attendance: number | null;
   occupancyPct: number | null;
   noShows: number | null;
@@ -197,33 +215,42 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const prevStart = hasElapsed ? addDays(start, -summaryDays) : start;
   const prevEnd = addDays(start, -1);
 
-  const [metricsRes, snapshotRes, lastReportRes, lastActivityRes, labor] = await Promise.all([
-    db
-      .from('business_metrics_daily')
-      .select('*')
-      .gte('metric_date', prevStart)
-      .lte('metric_date', end),
-    db
-      .from('momence_report_snapshots')
-      .select('report_type')
-      .gte('snapshot_date', addDays(today, -3)),
-    // Freshness reads are unbounded by date on purpose: a sync that died a
-    // week ago must report as a week old, not as "never run".
-    db
-      .from('momence_report_snapshots')
-      .select('created_at')
-      .order('created_at', { ascending: false })
-      .limit(1),
-    db
-      .from('business_metrics_daily')
-      .select('updated_at')
-      .eq('source_report_type', HOST_API_SOURCE)
-      .order('updated_at', { ascending: false })
-      .limit(1),
-    computeDailyLabor(db, prevStart, end),
-  ]);
+  const [metricsRes, snapshotRes, lastReportRes, lastActivityRes, costsRes, labor] =
+    await Promise.all([
+      db
+        .from('business_metrics_daily')
+        .select('*')
+        .gte('metric_date', prevStart)
+        .lte('metric_date', end),
+      db
+        .from('momence_report_snapshots')
+        .select('report_type')
+        .gte('snapshot_date', addDays(today, -3)),
+      // Freshness reads are unbounded by date on purpose: a sync that died a
+      // week ago must report as a week old, not as "never run".
+      db
+        .from('momence_report_snapshots')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1),
+      db
+        .from('business_metrics_daily')
+        .select('updated_at')
+        .eq('source_report_type', HOST_API_SOURCE)
+        .order('updated_at', { ascending: false })
+        .limit(1),
+      db.from('business_costs').select('*'),
+      // Labor stretches back to the top of prevStart's month — not for the
+      // labor numbers themselves, but so per-open-hour rent caps accrue from
+      // the first of the month (see lib/business/costs.ts).
+      computeDailyLabor(db, monthStartOf(prevStart), end),
+    ]);
   const queryError =
-    metricsRes.error ?? snapshotRes.error ?? lastReportRes.error ?? lastActivityRes.error;
+    metricsRes.error ??
+    snapshotRes.error ??
+    lastReportRes.error ??
+    lastActivityRes.error ??
+    costsRes.error;
   if (queryError) return json({ error: queryError.message }, 500);
 
   const metricRows = (metricsRes.data ?? []) as BusinessMetricRow[];
@@ -237,6 +264,20 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     day.set(row.metric, Number(row.value));
   }
   const laborByDate = new Map(labor.map((d) => [d.date, d]));
+
+  // Operating costs amortized per day over the same span as the metrics.
+  const dailyCosts = computeDailyCosts({
+    costs: (costsRes.data ?? []) as BusinessCostRow[],
+    start: prevStart,
+    end,
+    openHoursByDate: new Map(labor.map((d) => [d.date, d.openHours])),
+    revenueByDate: new Map(
+      metricRows
+        .filter((row) => row.metric === 'revenue_total')
+        .map((row) => [row.metric_date, Number(row.value)])
+    ),
+  });
+  const costsByDate = new Map(dailyCosts.map((d) => [d.date, d]));
   // Stock lookups: active_members observations, oldest → newest.
   const activeMemberObs = metricRows
     .filter((row) => row.metric === 'active_members')
@@ -263,6 +304,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     let booked = 0;
     let laborCost = 0;
     let openHours = 0;
+    let fixedCosts = 0;
+    let rentCost = 0;
+    let feesCost = 0;
 
     for (let day = from; day <= to; day = addDays(day, 1)) {
       const metrics = byDate.get(day);
@@ -279,11 +323,20 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       const laborDay = laborByDate.get(day);
       laborCost += laborDay?.cost ?? 0;
       openHours += laborDay?.openHours ?? 0;
+      const costDay = costsByDate.get(day);
+      fixedCosts += costDay?.fixed ?? 0;
+      rentCost += costDay?.rent ?? 0;
+      feesCost += costDay?.fees ?? 0;
     }
 
     laborCost = round2(laborCost);
     openHours = Math.round(openHours * 10) / 10;
     if (revenue !== null) revenue = round2(revenue);
+    fixedCosts = round2(fixedCosts);
+    rentCost = round2(rentCost);
+    feesCost = round2(feesCost);
+    const totalCosts = round2(laborCost + fixedCosts + rentCost + feesCost);
+    const profit = revenue !== null ? round2(revenue - totalCosts) : null;
     return {
       start: from,
       end: to,
@@ -294,6 +347,15 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       costPerOpenHour: openHours > 0 ? round2(laborCost / openHours) : null,
       laborPctOfRevenue:
         revenue !== null && revenue > 0 ? round2((laborCost / revenue) * 100) : null,
+      fixedCosts,
+      rentCost,
+      feesCost,
+      totalCosts,
+      profit,
+      profitMarginPct:
+        revenue !== null && revenue > 0 && profit !== null
+          ? round2((profit / revenue) * 100)
+          : null,
       attendance,
       occupancyPct: capacity > 0 ? round2((booked / capacity) * 100) : null,
       noShows,
@@ -319,6 +381,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       revenuePerOpenHour: t.revenuePerOpenHour,
       costPerOpenHour: t.costPerOpenHour,
       laborPctOfRevenue: t.laborPctOfRevenue,
+      fixedCosts: t.fixedCosts,
+      rentCost: t.rentCost,
+      feesCost: t.feesCost,
+      totalCosts: t.totalCosts,
+      profit: t.profit,
+      profitMarginPct: t.profitMarginPct,
       attendance: t.attendance,
       occupancyPct: t.occupancyPct,
       noShows: t.noShows,
@@ -339,6 +407,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     revenuePerOpenHour: null,
     costPerOpenHour: null,
     laborPctOfRevenue: null,
+    fixedCosts: 0,
+    rentCost: 0,
+    feesCost: 0,
+    totalCosts: 0,
+    profit: null,
+    profitMarginPct: null,
     attendance: null,
     occupancyPct: null,
     noShows: null,
