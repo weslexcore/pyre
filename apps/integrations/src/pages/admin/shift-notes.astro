@@ -1,15 +1,17 @@
 ---
-// Shift-note log. Who may see it — admins, shift leads (implicit grant in
-// lib/auth/access), and anyone granted the page — is decided by the
-// middleware + AdminLayout gate; the island fetches everything it shows from
-// /api/admin/shift-notes, which re-checks on every request.
+// Shift-note log. Who may open it — admins, everyone active on the roster
+// (implicit grant in lib/auth/access), and anyone granted the page — is
+// decided by the middleware + AdminLayout gate. What they see inside is a
+// second question the API answers: admins get every note, everyone else only
+// the ones they wrote. The island fetches everything it shows from
+// /api/admin/shift-notes, which re-checks both on every request.
 import { ShiftNotes } from '@/components/admin/ShiftNotes';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
 <AdminLayout
   title="Shift Notes"
-  subtitle="How each shift went, from the person leading it — details, handoffs, feedback, and photos or video backing what they saw"
+  subtitle="How your shift went — details, handoffs, feedback, and photos or video backing what you saw"
 >
   <ShiftNotes client:load />
 </AdminLayout>
