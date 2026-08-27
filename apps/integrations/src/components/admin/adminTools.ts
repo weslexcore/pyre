@@ -23,10 +23,12 @@ export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
   { key: 'admin', label: 'Admin' },
 ];
 
-// Shift Notes is a normal grantable page with one twist: everyone flagged
-// is_shift_lead on the roster gets it without an explicit grant (the implicit
-// grant lives in lib/auth/access — leading shifts is what the page is for).
-// The checkbox on /admin/users still works for giving it to anyone else.
+// Shift Notes is a normal grantable page with one twist: everyone active on
+// the roster gets it without an explicit grant (the implicit grant lives in
+// lib/auth/access — writing up your own shift is everyone's job). The
+// checkbox on /admin/users still works for giving it to anyone else, e.g.
+// someone off the schedule. Access to the page is not access to the log:
+// only admins read everyone's notes, everyone else reads their own.
 export const SHIFT_NOTES_HREF = '/admin/shift-notes';
 
 export const ADMIN_TOOLS: AdminTool[] = [
@@ -67,7 +69,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     title: 'Shift Notes',
     navLabel: 'Shift Notes',
     description:
-      'How each shift went, from the person leading it — details worth handing off, feedback, and photos or video backing what they saw.',
+      'How your shift went — details worth handing off, feedback, and photos or video backing what you saw. Admins read every note; everyone else reads their own.',
     section: 'operations',
   },
   {

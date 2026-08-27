@@ -466,7 +466,7 @@ export function UsersManager() {
                 </label>
                 <label
                   className={checkClass}
-                  title="Can anchor a shift. Anyone without this (or founder) must be scheduled with a founder or shift lead — the boards flag shifts that break the rule. Also unlocks the Shift Notes page, no page grant needed."
+                  title="Can anchor a shift. Anyone without this (or founder) must be scheduled with a founder or shift lead — the boards flag shifts that break the rule."
                 >
                   <input
                     type="checkbox"
@@ -478,7 +478,7 @@ export function UsersManager() {
                 </label>
                 <label
                   className={checkClass}
-                  title="Assignable on the shift board. Turn off when someone leaves — their past shifts and hours stay."
+                  title="Assignable on the shift board, and unlocks the Shift Notes page (their own notes only) with no page grant needed. Turn off when someone leaves — their past shifts and hours stay, and their access goes."
                 >
                   <input
                     type="checkbox"

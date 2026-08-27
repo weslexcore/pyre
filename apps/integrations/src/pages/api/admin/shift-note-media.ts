@@ -7,17 +7,19 @@
 // always get a fresh link. DELETE removes the object and its row.
 //
 // Nothing in the bucket is publicly readable: every read passes the same
-// gate as the log itself. Permissions mirror the notes: everyone who can see
-// /admin/shift-notes may view media; attaching and removing follow the note's
-// own author-or-admin rule, the same check as editing its text. Uploads go
-// through the function rather than a direct-to-storage signed URL so size,
-// MIME type, and per-note count are all enforced server-side, and the
-// attachment row and the object are created together.
+// gate as the log itself. Permissions mirror the notes exactly — media
+// belongs to the note it backs, so an admin reaches all of it and everyone
+// else only what hangs off their own notes, for viewing as much as for
+// attaching and removing (lib/shift-notes/access). Uploads go through the
+// function rather than a direct-to-storage signed URL so size, MIME type,
+// and per-note count are all enforced server-side, and the attachment row
+// and the object are created together.
 
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
+import { canSeeNote, normalizeEmail } from '@/lib/shift-notes/access';
 import {
   buildNoteStoragePath,
   formatBytes,
@@ -41,11 +43,23 @@ const SIGNED_URL_TTL_SECONDS = 600;
 /** Original names come from phone cameras and can be anything; keep them sane. */
 const FILE_NAME_MAX = 200;
 
-/** Same rule as editing the note itself (shift-notes.ts). */
-function canTouch(note: ShiftNoteRow, gate: AdminGate): boolean {
-  if (gate.access.isAdmin) return true;
-  const email = (gate.user.email ?? '').trim().toLowerCase();
-  return !!email && note.author_email === email;
+/**
+ * The note `noteId` backs, if this caller may reach it at all. Same rule as
+ * reading and editing the note itself (shift-notes.ts), and the same silence
+ * about other people's notes: not theirs reads as not there.
+ */
+async function loadOwnNote(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  noteId: string,
+  gate: AdminGate
+): Promise<ShiftNoteRow | Response> {
+  const { data, error } = await db.from('shift_notes').select('*').eq('id', noteId).maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+
+  const note = (data as ShiftNoteRow) ?? null;
+  const viewer = { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
+  if (!note || !canSeeNote(note, viewer)) return json({ error: 'Note not found' }, 404);
+  return note;
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -74,17 +88,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'No file was uploaded' }, 400);
 
-  const { data: noteData, error: noteError } = await db
-    .from('shift_notes')
-    .select('*')
-    .eq('id', noteId)
-    .maybeSingle();
-  if (noteError) return json({ error: noteError.message }, 500);
-  const note = (noteData as ShiftNoteRow) ?? null;
-  if (!note) return json({ error: 'Note not found' }, 404);
-  if (!canTouch(note, gate)) {
-    return json({ error: 'Only the author or an admin may attach to a note' }, 403);
-  }
+  const note = await loadOwnNote(db, noteId, gate);
+  if (note instanceof Response) return note;
 
   const kind = kindForMime(file.type);
   if (!kind) return json({ error: `Unsupported file type: ${file.type || 'unknown'}` }, 415);
@@ -118,7 +123,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: `Upload failed: ${uploadError.message}` }, 502);
   }
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   const { data, error } = await db
     .from('shift_note_attachments')
     .insert({
@@ -152,7 +157,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const id = url.searchParams.get('id');
   if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  // Everyone who can read the log can view its media — no per-note check.
   const { data, error } = await db
     .from('shift_note_attachments')
     .select('*')
@@ -162,6 +166,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const row = (data as ShiftNoteAttachmentRow) ?? null;
   if (!row) return json({ error: 'Attachment not found' }, 404);
+
+  // Media is only as visible as the note it backs: signing a URL here is a
+  // read of that note's contents, so it takes the same check.
+  const note = await loadOwnNote(db, row.note_id, gate);
+  if (note instanceof Response) return note;
 
   const { data: signed, error: signError } = await db.storage
     .from(BUCKET)
@@ -207,16 +216,8 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const attachment = (data as ShiftNoteAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Attachment not found' }, 404);
 
-  const { data: noteData, error: noteError } = await db
-    .from('shift_notes')
-    .select('*')
-    .eq('id', attachment.note_id)
-    .maybeSingle();
-  if (noteError) return json({ error: noteError.message }, 500);
-  const note = (noteData as ShiftNoteRow) ?? null;
-  if (!note || !canTouch(note, gate)) {
-    return json({ error: 'Only the author or an admin may remove an attachment' }, 403);
-  }
+  const note = await loadOwnNote(db, attachment.note_id, gate);
+  if (note instanceof Response) return note;
 
   const { error: storageError } = await db.storage.from(BUCKET).remove([attachment.storage_path]);
   if (storageError) {

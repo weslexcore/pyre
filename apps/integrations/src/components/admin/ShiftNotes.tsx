@@ -1,11 +1,13 @@
 // Shift notes (/admin/shift-notes). A composer on top — pick the shift date,
 // write what the next crew or the admins should know, attach photos or video
 // backing what you saw — and the log below, grouped by shift date, newest
-// first. Everyone who can see the page reads the whole log; edit/delete shows
-// on your own notes (or all of them for admins) and the API re-checks either
-// way. Media is staged in the composer and uploaded right after the note is
-// created (notes get their id from the server), and can also be added to or
-// removed from an existing note by whoever could edit it.
+// first. Everyone on the roster writes notes; what the log holds depends on
+// who is reading it — an admin gets everyone's, everyone else only their own
+// — so a non-admin's view is entirely theirs to edit and needs no person
+// filter. The server decides all of that (the island only renders what came
+// back, and every mutation is re-checked). Media is staged in the composer
+// and uploaded right after the note is created (notes get their id from the
+// server), and can also be added to or removed from an existing note.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
 import {
@@ -36,6 +38,9 @@ interface Viewer {
   email: string;
   isAdmin: boolean;
 }
+
+/** Whose notes came back: the whole log, or only this person's. */
+type Scope = 'all' | 'mine';
 
 async function readError(res: Response): Promise<string> {
   try {
@@ -73,6 +78,7 @@ export function ShiftNotes() {
   const [attachments, setAttachments] = useState<Record<string, ShiftNoteAttachmentRow[]>>({});
   const [names, setNames] = useState<PeopleNames>({});
   const [viewer, setViewer] = useState<Viewer>({ email: '', isAdmin: false });
+  const [scope, setScope] = useState<Scope>('mine');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -103,11 +109,13 @@ export function ShiftNotes() {
         attachments?: Record<string, ShiftNoteAttachmentRow[]>;
         people?: PeopleNames;
         viewer?: Viewer;
+        scope?: Scope;
       };
       setNotes(data.notes);
       setAttachments(data.attachments ?? {});
       setNames(data.people ?? {});
       if (data.viewer) setViewer(data.viewer);
+      if (data.scope) setScope(data.scope);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load shift notes');
     } finally {
@@ -299,11 +307,13 @@ export function ShiftNotes() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return notes.filter((note) => {
-      if (personFilter !== 'all' && note.author_email !== personFilter) return false;
+      if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
+        return false;
+      }
       if (q && !note.body.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [notes, personFilter, query]);
+  }, [notes, personFilter, query, scope]);
 
   // note_date → that day's notes, in the server's order (dates desc,
   // written-order within a day).
@@ -422,21 +432,23 @@ export function ShiftNotes() {
 
       {notes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            person
-            <select
-              className={selectClass}
-              value={personFilter}
-              onChange={(e) => setPersonFilter(e.target.value)}
-            >
-              <option value="all">Anyone</option>
-              {authorOptions.map((email) => (
-                <option key={email} value={email}>
-                  {personName(email, names)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {scope === 'all' && (
+            <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+              person
+              <select
+                className={selectClass}
+                value={personFilter}
+                onChange={(e) => setPersonFilter(e.target.value)}
+              >
+                <option value="all">Anyone</option>
+                {authorOptions.map((email) => (
+                  <option key={email} value={email}>
+                    {personName(email, names)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <input
             type="search"
             className={`${inputClass} min-w-48 flex-1`}
@@ -453,11 +465,19 @@ export function ShiftNotes() {
         </div>
       )}
 
-      {byDay.length === 0 && (
-        <p className="font-mono text-xs text-white/40">
-          {notes.length === 0 ? 'No shift notes yet — yours can be the first.' : 'No notes match.'}
-        </p>
-      )}
+      {/* Whose log this is, so a non-admin isn't left wondering where the
+          rest of the team's notes went. */}
+      <p className="font-mono text-xs text-white/40">
+        {byDay.length === 0 && notes.length > 0
+          ? 'No notes match.'
+          : scope === 'all'
+            ? notes.length === 0
+              ? 'No shift notes yet — every note anyone writes lands here.'
+              : 'Every note anyone has written.'
+            : notes.length === 0
+              ? 'You have not written a shift note yet — add your first above. Only admins read the whole log.'
+              : 'The notes you have written. Only admins read the whole log.'}
+      </p>
 
       {byDay.map(([date, dayNotes]) => (
         <section key={date} className="space-y-2">

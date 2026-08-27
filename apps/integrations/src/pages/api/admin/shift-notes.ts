@@ -1,14 +1,16 @@
-// Shift notes: the running log behind /admin/shift-notes where the person
-// leading a shift writes down how it went. Everyone who can see the page —
-// admins, shift leads (implicit grant in lib/auth/access), and anyone granted
-// the page from /admin/users — reads the whole log and may add notes; editing
-// and deleting a note is author-or-admin. Author identity always comes from
-// the session, never the request body.
+// Shift notes: the running log behind /admin/shift-notes where whoever worked
+// a shift writes down how it went. Everyone who can see the page — admins,
+// everyone active on the roster (implicit grant in lib/auth/access), and
+// anyone granted the page from /admin/users — may add notes. What they read
+// back splits by role: an admin sees every note, everyone else sees only the
+// ones they wrote, and editing and deleting follow the same line
+// (lib/shift-notes/access). Author identity always comes from the session,
+// never the request body.
 //
 // Photos/video backing a note are handled by shift-note-media.ts; GET here
 // returns each note's attachment rows so the log renders in one request.
 //
-//   GET                          → { notes, attachments, people, viewer }
+//   GET                          → { notes, attachments, people, viewer, scope }
 //   POST   { noteDate, body }    → { note, people }
 //   PATCH  { id, noteDate?, body? } → { note, people }
 //   DELETE ?id=<uuid>            → { ok: true }
@@ -17,6 +19,7 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
+import { canSeeNote, normalizeEmail } from '@/lib/shift-notes/access';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
 
@@ -37,11 +40,27 @@ function peopleFor(notes: ShiftNoteRow[]) {
   return getPeopleNames(notes.flatMap((n) => [n.author_email, n.updated_by ?? '']));
 }
 
-/** Whether the caller may edit or delete this note. */
-function canTouch(note: ShiftNoteRow, gate: AdminGate): boolean {
-  if (gate.access.isAdmin) return true;
-  const email = (gate.user.email ?? '').trim().toLowerCase();
-  return !!email && note.author_email === email;
+/** The viewer this gate represents, in the shape the access rule reads. */
+function viewerOf(gate: AdminGate) {
+  return { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
+}
+
+/**
+ * Load the note `id` for a caller who is about to change it. Non-admins can't
+ * see other people's notes at all, so one that isn't theirs comes back the
+ * same way a nonexistent one does — a 403 here would confirm it exists.
+ */
+async function loadOwnNote(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  id: string,
+  gate: AdminGate
+): Promise<ShiftNoteRow | Response> {
+  const { data, error } = await db.from('shift_notes').select('*').eq('id', id).maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+
+  const note = (data as ShiftNoteRow) ?? null;
+  if (!note || !canSeeNote(note, viewerOf(gate))) return json({ error: 'Note not found' }, 404);
+  return note;
 }
 
 export const GET: APIRoute = async ({ cookies }) => {
@@ -51,12 +70,20 @@ export const GET: APIRoute = async ({ cookies }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const { data, error } = await db
+  const viewer = viewerOf(gate);
+
+  let query = db
     .from('shift_notes')
     .select('*')
     .order('note_date', { ascending: false })
     .order('created_at', { ascending: true })
     .limit(LIST_LIMIT);
+
+  // Admins read the whole log; everyone else reads what they wrote. A session
+  // without an email can't have written anything, so it reads nothing.
+  if (!viewer.isAdmin) query = query.eq('author_email', viewer.email);
+
+  const { data, error } = await query;
   if (error) return json({ error: error.message }, 500);
 
   const notes = (data ?? []) as ShiftNoteRow[];
@@ -84,12 +111,11 @@ export const GET: APIRoute = async ({ cookies }) => {
     notes,
     attachments,
     people: await peopleFor(notes),
-    // So the island knows which notes to offer edit/delete on. The buttons
-    // are UX only — every mutation re-checks author-or-admin here.
-    viewer: {
-      email: (gate.user.email ?? '').trim().toLowerCase(),
-      isAdmin: gate.access.isAdmin,
-    },
+    // So the island knows whether it is showing the whole log or just this
+    // person's, and which notes to offer edit/delete on. Both are UX only —
+    // every read and every mutation re-checks the same rule here.
+    viewer,
+    scope: viewer.isAdmin ? 'all' : 'mine',
   });
 };
 
@@ -105,7 +131,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   let body: Record<string, unknown>;
@@ -144,7 +170,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   let body: Record<string, unknown>;
@@ -174,16 +200,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
   patch.updated_by = email;
 
-  const { data: existing, error: fetchError } = await db
-    .from('shift_notes')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
-  if (!existing) return json({ error: 'Note not found' }, 404);
-  if (!canTouch(existing as ShiftNoteRow, gate)) {
-    return json({ error: 'Only the author or an admin may edit a note' }, 403);
-  }
+  const existing = await loadOwnNote(db, id, gate);
+  if (existing instanceof Response) return existing;
 
   const { data, error } = await db
     .from('shift_notes')
@@ -209,16 +227,8 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id') ?? '';
   if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  const { data: existing, error: fetchError } = await db
-    .from('shift_notes')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
-  if (!existing) return json({ error: 'Note not found' }, 404);
-  if (!canTouch(existing as ShiftNoteRow, gate)) {
-    return json({ error: 'Only the author or an admin may delete a note' }, 403);
-  }
+  const existing = await loadOwnNote(db, id, gate);
+  if (existing instanceof Response) return existing;
 
   // Deleting the note cascades its attachment rows, but the objects in the
   // bucket only go away if we remove them ourselves. Best-effort: a stranded
