@@ -180,6 +180,7 @@ export interface WaterTestRow {
 // Staff scheduling row types live in @pyre/schedule-core (shared with the
 // agents app); re-exported here so app code keeps one import for row shapes.
 export type {
+  ScheduleDraftMessageRow,
   ScheduleProposalRow,
   ShiftAssignmentRow,
   ShiftRequestRow,

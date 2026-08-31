@@ -2,21 +2,97 @@
 // Admin home: directory of the tools this user may view, grouped by section,
 // with a per-user Pinned section at the top (pinning and drag-reordering live
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
-// island renders the same filtered tool list the nav uses.
+// island renders the same filtered tool list the nav uses. Above the cards, a
+// next-shift chip: staff see their own next upcoming shift, admins see the
+// next one on the schedule overall.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
-import { toolsForAccess } from '@/components/admin/adminTools';
+import { canViewPage, toolsForAccess } from '@/components/admin/adminTools';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
+import { listStaff } from '@/lib/auth/access';
+import { getDb } from '@/lib/db';
+import {
+  formatChipDate,
+  formatChipTime,
+  getNextUpcomingShift,
+  type NextShift,
+} from '@/lib/schedule/next-shift';
 
 const access = Astro.locals.adminAccess ?? null;
 const tools = access ? toolsForAccess(access) : [];
-const email = Astro.locals.adminUser?.email ?? '';
+const email = (Astro.locals.adminUser?.email ?? '').toLowerCase();
 const pins = email ? await getToolPins(email) : [];
 // Memo for AdminLayout (its frontmatter runs after the page's), so the nav
 // doesn't refetch the same list on this request.
 Astro.locals.toolPins = pins;
+
+const db = getDb();
+let nextShift: NextShift | null = null;
+// Whether the chip is the viewer's own shift ("Your next shift") vs the
+// admin's schedule-wide one ("Next shift", with who's on it).
+let chipIsOwn = false;
+let assignedNames: string[] = [];
+if (db && access) {
+  const staff = (await listStaff()) ?? [];
+  const selfStaffId = email
+    ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
+    : null;
+  if (access.isAdmin) {
+    nextShift = await getNextUpcomingShift(db);
+    if (nextShift) {
+      const nameById = new Map(staff.map((s) => [s.id, s.display_name]));
+      assignedNames = nextShift.assignments.map((a) => nameById.get(a.staff_id) ?? '?');
+    }
+  } else if (selfStaffId) {
+    nextShift = await getNextUpcomingShift(db, selfStaffId);
+    chipIsOwn = true;
+  }
+}
+
+// Deep-link into the schedule board's month view, same as the calendar's
+// shift blocks — but only when this viewer may open the schedule page.
+const chipHref =
+  nextShift && access && canViewPage(access, '/admin/schedule')
+    ? `/admin/schedule?view=month&date=${nextShift.shift.shift_date}&shift=${nextShift.shift.id}`
+    : null;
+
+const ChipTag = chipHref ? 'a' : 'span';
+const chipWhen = nextShift
+  ? nextShift.isToday
+    ? 'Today'
+    : formatChipDate(nextShift.shift.shift_date)
+  : '';
+const chipWindow = nextShift
+  ? `${formatChipTime(nextShift.shift.starts_at)}–${formatChipTime(nextShift.shift.ends_at)} ${nextShift.shift.label}`
+  : '';
 ---
 
 <AdminLayout title="Admin" subtitle="Internal tools for the Pyre team.">
-  <AdminToolsIndex client:load tools={tools} initialPins={pins} />
+  <div class="space-y-8">
+    {
+      nextShift && (
+        <div>
+          <ChipTag
+            href={chipHref ?? undefined}
+            class={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/10 px-4 py-2 font-mono text-xs ${
+              chipHref
+                ? 'transition-colors hover:border-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/20'
+                : ''
+            }`}
+          >
+            <span class="font-bold uppercase tracking-wide text-[var(--pyre-gold)]">
+              {chipIsOwn ? 'Your next shift' : 'Next shift'}
+            </span>
+            <span class="text-[var(--pyre-creme)]">
+              {chipWhen} · {chipWindow}
+            </span>
+            {assignedNames.length > 0 && (
+              <span class="text-white/60">· {assignedNames.join(', ')}</span>
+            )}
+          </ChipTag>
+        </div>
+      )
+    }
+    <AdminToolsIndex client:load tools={tools} initialPins={pins} />
+  </div>
 </AdminLayout>

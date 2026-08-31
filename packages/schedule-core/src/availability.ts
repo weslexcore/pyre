@@ -80,6 +80,37 @@ export function busyIntervalsFor(
 
 export type AvailabilityStatus = 'free' | 'partial' | 'busy';
 
+export interface WindowInterval {
+  startMin: number;
+  endMin: number;
+}
+
+/**
+ * Classify a window against arbitrary busy intervals (time off, shift
+ * assignments, …): 'busy' when the intervals cover the whole window,
+ * 'partial' when they overlap part of it, 'free' otherwise. Interval ends
+ * are exclusive, so an interval ending 14:30 doesn't conflict with a window
+ * starting 14:30.
+ */
+export function coverageStatus(
+  intervals: readonly WindowInterval[],
+  startMin: number,
+  endMin: number
+): AvailabilityStatus {
+  const overlapping = intervals.filter((b) => b.startMin < endMin && b.endMin > startMin);
+  if (overlapping.length === 0) return 'free';
+
+  // Walk merged coverage to see whether the window is fully covered.
+  const sorted = [...overlapping].sort((a, b) => a.startMin - b.startMin);
+  let covered = startMin;
+  for (const b of sorted) {
+    if (b.startMin > covered) break;
+    covered = Math.max(covered, b.endMin);
+  }
+
+  return covered >= endMin ? 'busy' : 'partial';
+}
+
 export interface Availability {
   status: AvailabilityStatus;
   /** The busy intervals that overlap the window (empty when free). */
@@ -87,10 +118,8 @@ export interface Availability {
 }
 
 /**
- * Classify a staff member's availability for a window on a date:
- * 'busy' when busy intervals cover the whole window, 'partial' when they
- * overlap part of it, 'free' otherwise. Interval ends are exclusive, so
- * time off ending 14:30 doesn't conflict with a shift starting 14:30.
+ * Classify a staff member's availability for a window on a date, from their
+ * time off alone.
  */
 export function availabilityFor(
   entries: TimeOffRow[],
@@ -102,17 +131,7 @@ export function availabilityFor(
   const overlapping = busyIntervalsFor(entries, staffId, date).filter(
     (b) => b.startMin < endMin && b.endMin > startMin
   );
-  if (overlapping.length === 0) return { status: 'free', conflicts: [] };
-
-  // Walk merged coverage to see whether the window is fully covered.
-  const sorted = [...overlapping].sort((a, b) => a.startMin - b.startMin);
-  let covered = startMin;
-  for (const b of sorted) {
-    if (b.startMin > covered) break;
-    covered = Math.max(covered, b.endMin);
-  }
-
-  return { status: covered >= endMin ? 'busy' : 'partial', conflicts: overlapping };
+  return { status: coverageStatus(overlapping, startMin, endMin), conflicts: overlapping };
 }
 
 export interface AssignmentConflict {

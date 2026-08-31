@@ -12,6 +12,7 @@ import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
   redactCalendarToken,
+  type ScheduleDraftMessageRow,
   type ScheduleProposalRow,
   type ShiftAssignmentRow,
   type ShiftRequestRow,
@@ -49,6 +50,8 @@ export interface ScheduleBoardPayload {
   stipendOverrides: StipendOverrideRow[];
   /** Open draft proposals covering the range; only with includeDrafts=1, manage-side only. */
   proposals?: ScheduleProposalRow[];
+  /** Conversation threads for the returned proposals, keyed by their agent sessions. */
+  draftMessages?: ScheduleDraftMessageRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
   /**
@@ -268,6 +271,21 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .order('created_at', { ascending: false });
     if (error) return json({ error: error.message }, 500);
     payload.proposals = (proposals ?? []) as ScheduleProposalRow[];
+
+    // The drafting conversations behind those proposals (admin notes +
+    // agent rationales), for the review banner's thread.
+    const sessionIds = [
+      ...new Set(payload.proposals.map((p) => p.agent_session_id).filter(Boolean)),
+    ] as string[];
+    if (sessionIds.length > 0) {
+      const { data: messages, error: messagesError } = await db
+        .from('schedule_draft_messages')
+        .select('*')
+        .in('agent_session_id', sessionIds)
+        .order('created_at', { ascending: true });
+      if (messagesError) return json({ error: messagesError.message }, 500);
+      payload.draftMessages = (messages ?? []) as ScheduleDraftMessageRow[];
+    }
   }
 
   return json(payload);

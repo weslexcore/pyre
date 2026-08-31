@@ -28,7 +28,8 @@ export type ChangeAction =
   | 'accept_item'
   | 'reject_item'
   | 'sync'
-  | 'deny';
+  | 'deny'
+  | 'refine';
 
 export interface ScheduleChangeRow {
   id: string;

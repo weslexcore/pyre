@@ -49,3 +49,68 @@ export function buildDraftMessage(weekStart: string, prompt = ''): string {
     `<admin-note>\n${prompt}\n</admin-note>`
   );
 }
+
+/** Shared instruction for a refinement turn, live session or fresh. */
+function refineInstruction(weekStart: string): string {
+  return (
+    `The admin reviewed your current draft for the week starting ${weekStart} and wants ` +
+    `changes. Call get_week_context again with weekStart "${weekStart}" before doing anything ` +
+    'else — items may have been accepted, rejected, or edited since your last draft, and ' +
+    'accepted items are now live assignments you must schedule around, never re-propose. ' +
+    'Apply the requested changes, keep everything else from your previous draft stable, and ' +
+    'call save_proposal once with the FULL updated assignment set — it supersedes the prior ' +
+    'draft automatically, so a partial set would silently drop the rest. The hard rules in ' +
+    'your instructions still win over the note. Open the rationale with a short ' +
+    '"What changed:" line.'
+  );
+}
+
+/**
+ * The follow-up message for a still-resumable Eve session: the agent already
+ * has the drafting conversation in its history. `prompt` is the sanitised
+ * refinement note.
+ */
+export function buildRefineMessage(weekStart: string, prompt: string): string {
+  return `${refineInstruction(weekStart)}\n<admin-note>\n${prompt}\n</admin-note>`;
+}
+
+/** Thread messages replayed into a fresh session (see buildRefineFallbackMessage). */
+export interface DraftThreadMessage {
+  role: 'admin' | 'agent';
+  content: string;
+}
+
+/** Replay at most this many prior messages into a fresh session. */
+const MAX_REPLAYED_MESSAGES = 6;
+/** Cap each replayed message so old rationales can't crowd out the request. */
+const MAX_REPLAYED_MESSAGE_LENGTH = 2000;
+
+/**
+ * The opening message for a FRESH session refining an existing draft — used
+ * when the original drafting session is gone (expired, or a cron draft whose
+ * schedule-triggered session already completed). Replays a capped transcript
+ * of the prior thread so the new session has the conversation context.
+ */
+export function buildRefineFallbackMessage(
+  weekStart: string,
+  prompt: string,
+  priorThread: DraftThreadMessage[]
+): string {
+  const replayed = priorThread.slice(-MAX_REPLAYED_MESSAGES).map((m) => {
+    const label = m.role === 'admin' ? 'Admin' : 'You (previous draft rationale)';
+    const content =
+      m.content.length > MAX_REPLAYED_MESSAGE_LENGTH
+        ? `${m.content.slice(0, MAX_REPLAYED_MESSAGE_LENGTH)}…`
+        : m.content;
+    return `${label}:\n${content}`;
+  });
+  const transcript =
+    replayed.length > 0
+      ? 'Your original drafting session is no longer available, so here is the conversation ' +
+        'so far (the current draft on the board came from your last rationale below):\n\n' +
+        `${replayed.join('\n\n---\n\n')}\n\n`
+      : 'Your original drafting session is no longer available. The current draft for this ' +
+        'week is already on the board.\n\n';
+
+  return `${transcript}${refineInstruction(weekStart)}\n<admin-note>\n${prompt}\n</admin-note>`;
+}
