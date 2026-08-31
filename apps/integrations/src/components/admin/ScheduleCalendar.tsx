@@ -131,6 +131,10 @@ export function ScheduleCalendar() {
   const [monthStart, setMonthStart] = useState(() => monthStartOf(todayLocal()));
   // "My shifts": only show shift blocks the viewer is assigned to.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
+  // Days already behind us are noise on a forward-looking calendar, so their
+  // shift blocks hide until asked for. Deliberately not persisted — every
+  // visit starts upcoming-only.
+  const [showPast, setShowPast] = useState(false);
   // Manage-side people filter: whose shifts and time off to show (empty =
   // everyone).
   const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
@@ -223,6 +227,9 @@ export function ScheduleCalendar() {
   }
 
   const today = todayLocal();
+  // A month wholly behind us has nothing upcoming — hiding its shifts would
+  // blank the grid, so history months always show everything (no toggle).
+  const monthIsPast = monthStart < monthStartOf(today);
   // The commitment boundary (schedule-core): every Monday locks the week
   // that just started plus the next, so this is always the Monday after
   // next. Shift blocks on later dates render dashed, and the banner
@@ -272,6 +279,20 @@ export function ScheduleCalendar() {
             }
           >
             My shifts
+          </button>
+        )}
+        {!monthIsPast && (
+          <button
+            type="button"
+            className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+              showPast
+                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
+                : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+            }`}
+            title="Show shifts earlier in the month"
+            onClick={() => setShowPast((v) => !v)}
+          >
+            Past shifts
           </button>
         )}
         {data?.canManage && (
@@ -324,6 +345,7 @@ export function ScheduleCalendar() {
               {week.map((date) => {
                 const inMonth = date.slice(0, 7) === monthStart.slice(0, 7);
                 let shifts = shiftsByDate.get(date) ?? [];
+                if (!showPast && !monthIsPast && date < today) shifts = [];
                 if (mineOnly && selfId) {
                   shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
                 }

@@ -286,6 +286,12 @@ export function ScheduleBoard() {
   const [draftNote, setDraftNote] = useState('');
   // "My shifts": filter the week/month lists to shifts the viewer is on.
   const [mineOnly, setMineOnly] = useState(readMyShiftsPref);
+  // Month view opens upcoming-only; this reveals the days already behind us.
+  // Not persisted — every visit starts forward-looking. A deep link to a
+  // past date flips it on so the linked shift is actually on the page.
+  const [showPast, setShowPast] = useState(
+    () => !!initialLink.date && initialLink.date < todayLocal()
+  );
   // Manage-side people filter: whose shifts to show (empty = everyone).
   const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
   // Admin-only panel with the employee-action toggles.
@@ -384,9 +390,16 @@ export function ScheduleBoard() {
     return (data?.shifts ?? []).filter((s) => s.shift_date >= today && withRequests.has(s.id));
   }, [view, data]);
 
+  // A month wholly behind us has nothing upcoming, so history months always
+  // show every day (and the Past shifts toggle hides — nothing to reveal).
+  const monthIsPast = monthStart < monthStartOf(todayLocal());
+
   const days = useMemo(() => {
     if (view === 'month') {
-      return Array.from({ length: daysInMonth(monthStart) }, (_, i) => addDays(monthStart, i));
+      const all = Array.from({ length: daysInMonth(monthStart) }, (_, i) => addDays(monthStart, i));
+      if (showPast || monthIsPast) return all;
+      const today = todayLocal();
+      return all.filter((d) => d >= today);
     }
     if (view === 'uncovered') {
       return [...new Set(uncoveredShifts.map((s) => s.shift_date))].sort();
@@ -395,7 +408,7 @@ export function ScheduleBoard() {
       return [...new Set(requestShifts.map((s) => s.shift_date))].sort();
     }
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [view, weekStart, monthStart, uncoveredShifts, requestShifts]);
+  }, [view, weekStart, monthStart, uncoveredShifts, requestShifts, showPast, monthIsPast]);
 
   const shiftsByDate = useMemo(() => {
     const map = new Map<string, BoardShift[]>();
@@ -671,6 +684,20 @@ export function ScheduleBoard() {
               onClick={toggleMineOnly}
             >
               My shifts
+            </button>
+          )}
+          {view === 'month' && !monthIsPast && (
+            <button
+              type="button"
+              className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+                showPast
+                  ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
+                  : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+              }`}
+              title="Show days earlier in the month"
+              onClick={() => setShowPast((v) => !v)}
+            >
+              Past shifts
             </button>
           )}
           {canManage && calendarView && (
