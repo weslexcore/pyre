@@ -1,40 +1,22 @@
 ---
-// Admin home: directory of the tools this user may view, grouped by section.
-// Auth + header live in AdminLayout; the card grids render the same filtered
-// tool list the nav uses.
-import { ADMIN_TOOL_SECTIONS, toolsForAccess } from '@/components/admin/adminTools';
+// Admin home: directory of the tools this user may view, grouped by section,
+// with a per-user Pinned section at the top (pinning and drag-reordering live
+// in the AdminToolsIndex island). Auth + header live in AdminLayout; the
+// island renders the same filtered tool list the nav uses.
+import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
+import { toolsForAccess } from '@/components/admin/adminTools';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { getToolPins } from '@/lib/admin/toolPins';
 
 const access = Astro.locals.adminAccess ?? null;
 const tools = access ? toolsForAccess(access) : [];
-const sections = ADMIN_TOOL_SECTIONS.filter((s) => tools.some((t) => t.section === s.key));
+const email = Astro.locals.adminUser?.email ?? '';
+const pins = email ? await getToolPins(email) : [];
+// Memo for AdminLayout (its frontmatter runs after the page's), so the nav
+// doesn't refetch the same list on this request.
+Astro.locals.toolPins = pins;
 ---
 
 <AdminLayout title="Admin" subtitle="Internal tools for the Pyre team.">
-  <div class="space-y-8">
-    {
-      sections.map((section) => (
-        <section>
-          <h2 class="border-b border-white/10 pb-2 font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-            {section.label}
-          </h2>
-          <ul class="mt-3 grid gap-3 sm:grid-cols-2">
-            {tools.filter((tool) => tool.section === section.key).map((tool) => (
-              <li>
-                <a
-                  href={tool.href}
-                  class="block rounded-lg border border-white/10 bg-white/5 px-4 py-4 transition-colors hover:border-white/30 hover:bg-white/10"
-                >
-                  <div class="font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)]">
-                    {tool.title}
-                  </div>
-                  <p class="mt-1 text-xs text-white/50">{tool.description}</p>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))
-    }
-  </div>
+  <AdminToolsIndex client:load tools={tools} initialPins={pins} />
 </AdminLayout>

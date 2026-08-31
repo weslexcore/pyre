@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
 import { ADMIN_TOOL_SECTIONS, type AdminTool } from './adminTools';
 
 interface AdminNavProps {
@@ -6,6 +7,8 @@ interface AdminNavProps {
   userEmail: string;
   /** Pre-filtered by AdminLayout to the tools this user may view. */
   tools: AdminTool[];
+  /** The user's ordered pinned tool hrefs (the menu's Pinned group). */
+  pinnedHrefs: string[];
 }
 
 interface NavItem {
@@ -41,12 +44,36 @@ const LINK_IDLE =
  * as the cards on the /admin dashboard, so the menu reads as that same
  * directory in a narrower shape.
  */
-export function AdminNav({ currentPath, userEmail, tools }: AdminNavProps) {
+export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNavProps) {
   const [open, setOpen] = useState(false);
+  // Server-rendered pins, kept live by the dashboard island's CustomEvent so
+  // pinning a card updates the open page's menu without a navigation.
+  const [pins, setPins] = useState(pinnedHrefs);
   const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const handlePins = (event: Event) => {
+      const detail = (event as CustomEvent<string[]>).detail;
+      if (Array.isArray(detail)) setPins(detail);
+    };
+    document.addEventListener(TOOL_PINS_EVENT, handlePins);
+    return () => document.removeEventListener(TOOL_PINS_EVENT, handlePins);
+  }, []);
+
+  const toolByHref = new Map(tools.map((tool) => [tool.href, tool]));
+  const pinnedItems = normalizePins(
+    pins,
+    tools.map((tool) => tool.href)
+  ).map((href) => {
+    const tool = toolByHref.get(href) as AdminTool;
+    return { href: tool.href, label: tool.title };
+  });
 
   const groups: NavGroup[] = [
     { label: null, items: [{ href: '/admin', label: 'Home' }] },
+    // Pinned tools first, in the user's order; they stay in their sections
+    // below too, mirroring the dashboard.
+    ...(pinnedItems.length > 0 ? [{ label: 'Pinned', items: pinnedItems }] : []),
     ...ADMIN_TOOL_SECTIONS.map((section) => ({
       label: section.label,
       items: tools
