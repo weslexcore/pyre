@@ -357,6 +357,22 @@ export const POST: APIRoute = async ({ request }) => {
     if (error) return json({ error: error.message }, 500);
   }
 
+  // The rationale doubles as the agent's reply in the draft conversation
+  // thread (keyed by Eve session id; see schedule_draft_messages). Dry runs
+  // and rejected submissions return earlier, so only landed drafts speak.
+  if (agentSessionId) {
+    const { error: threadError } = await db.from('schedule_draft_messages').insert({
+      agent_session_id: agentSessionId,
+      week_start: weekStart,
+      role: 'agent',
+      content: rationale ?? '(no rationale provided)',
+      proposal_id: proposalId,
+    });
+    if (threadError) {
+      console.warn('[agent-proposals] thread insert failed:', threadError.message);
+    }
+  }
+
   await logScheduleChange(db, {
     actor: AGENT_ACTOR,
     entityType: 'proposal',

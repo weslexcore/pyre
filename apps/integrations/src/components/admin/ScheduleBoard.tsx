@@ -26,6 +26,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type {
+  ScheduleDraftMessageRow,
   ScheduleProposalRow,
   ShiftAssignmentRow,
   ShiftRequestRow,
@@ -54,6 +55,8 @@ interface BoardData {
   shifts: BoardShift[];
   timeOff: TimeOffRow[];
   proposals?: ScheduleProposalRow[];
+  /** Drafting conversations behind the proposals, keyed by agent session id. */
+  draftMessages?: ScheduleDraftMessageRow[];
   /** Manage side (schedule:manage / admin) — false renders a read-only board. */
   canManage?: boolean;
   /** Admins additionally see the employee-action toggles. */
@@ -278,6 +281,9 @@ export function ScheduleBoard() {
   const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
   // Agent drafting: set while waiting for a new proposal to appear.
   const [drafting, setDrafting] = useState(false);
+  // Week whose draft is being revised via the banner's refine composer (the
+  // poll is shared with draft runs, so one agent run at a time either way).
+  const [refiningWeek, setRefiningWeek] = useState<string | null>(null);
   const draftPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // The Draft button opens a composer first so the admin can add a note for
   // this run ("give Sarah a shift to lead"); the note is optional and the
@@ -540,6 +546,41 @@ export function ScheduleBoard() {
     });
   };
 
+  // Poll until every target week has a draft proposal that wasn't there when
+  // the run started (the agent sessions run async; a refinement's superseding
+  // proposal is a new id just like a fresh draft's); ~3min budget. Shared by
+  // draft runs and refinements — one agent run at a time.
+  const pollForNewProposals = (targetWeeks: string[], onSettle: (ok: boolean) => void) => {
+    const beforeIds = new Set((data?.proposals ?? []).map((p) => p.id));
+    const startedAt = Date.now();
+    const pollUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}&includeDrafts=1`;
+    if (draftPollRef.current) clearInterval(draftPollRef.current);
+    draftPollRef.current = setInterval(async () => {
+      const boardRes = await fetch(pollUrl);
+      if (boardRes.ok) {
+        const board = (await boardRes.json()) as BoardData;
+        const freshWeeks = new Set(
+          (board.proposals ?? []).filter((p) => !beforeIds.has(p.id)).map((p) => p.week_start)
+        );
+        if (targetWeeks.every((w) => freshWeeks.has(w))) {
+          if (draftPollRef.current) clearInterval(draftPollRef.current);
+          draftPollRef.current = null;
+          setData(board);
+          onSettle(true);
+          return;
+        }
+      }
+      if (Date.now() - startedAt > 180_000) {
+        if (draftPollRef.current) clearInterval(draftPollRef.current);
+        draftPollRef.current = null;
+        setError(
+          'The agent is taking longer than expected — refresh in a minute or check the agent logs.'
+        );
+        onSettle(false);
+      }
+    }, 5000);
+  };
+
   const draftSchedule = async () => {
     const targetWeeks = draftTargetWeeks;
     if (targetWeeks.length === 0) return;
@@ -561,37 +602,34 @@ export function ScheduleBoard() {
       setDrafting(false);
       return;
     }
-    // Poll until every requested week has a new draft proposal (the agent
-    // sessions run async and in parallel); ~3min budget.
-    const beforeIds = new Set((data?.proposals ?? []).map((p) => p.id));
-    const startedAt = Date.now();
-    const pollUrl = `/api/admin/schedule-board?start=${range.start}&end=${range.end}&includeDrafts=1`;
-    if (draftPollRef.current) clearInterval(draftPollRef.current);
-    draftPollRef.current = setInterval(async () => {
-      const boardRes = await fetch(pollUrl);
-      if (boardRes.ok) {
-        const board = (await boardRes.json()) as BoardData;
-        const freshWeeks = new Set(
-          (board.proposals ?? []).filter((p) => !beforeIds.has(p.id)).map((p) => p.week_start)
-        );
-        if (targetWeeks.every((w) => freshWeeks.has(w))) {
-          if (draftPollRef.current) clearInterval(draftPollRef.current);
-          draftPollRef.current = null;
-          setData(board);
-          setDrafting(false);
-          setDraftNote('');
-          return;
-        }
+    pollForNewProposals(targetWeeks, (ok) => {
+      setDrafting(false);
+      if (ok) setDraftNote('');
+    });
+  };
+
+  // Send a follow-up note into the drafting conversation behind a week's open
+  // proposal; the revised draft supersedes it and arrives via the same poll.
+  // Returns whether the request was accepted (so the composer keeps the note
+  // on failure).
+  const refineDraft = async (week: string, prompt: string): Promise<boolean> => {
+    setError(null);
+    const res = await fetch('/api/admin/schedule-draft-refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekStart: week, prompt }),
+    });
+    if (!res.ok) {
+      try {
+        setError(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
+      } catch {
+        setError(`HTTP ${res.status}`);
       }
-      if (Date.now() - startedAt > 180_000) {
-        if (draftPollRef.current) clearInterval(draftPollRef.current);
-        draftPollRef.current = null;
-        setDrafting(false);
-        setError(
-          'The agent is taking longer than expected — refresh in a minute or check the agent logs.'
-        );
-      }
-    }, 5000);
+      return false;
+    }
+    setRefiningWeek(week);
+    pollForNewProposals([week], () => setRefiningWeek(null));
+    return true;
   };
 
   useEffect(
@@ -952,7 +990,17 @@ export function ScheduleBoard() {
       )}
 
       {visibleProposals.map((p) => (
-        <ProposalBanner key={p.id} proposal={p} busy={busy} onAction={proposalAction} />
+        <ProposalBanner
+          key={p.id}
+          proposal={p}
+          messages={(data?.draftMessages ?? []).filter(
+            (m) => m.agent_session_id === p.agent_session_id
+          )}
+          busy={busy || drafting || refiningWeek !== null}
+          refining={refiningWeek === p.week_start}
+          onAction={proposalAction}
+          onRefine={(prompt) => refineDraft(p.week_start, prompt)}
+        />
       ))}
 
       {view === 'uncovered' && days.length === 0 && !loading && (
@@ -2138,18 +2186,33 @@ function AssignmentEditor({
 
 function ProposalBanner({
   proposal,
+  messages,
   busy,
+  refining,
   onAction,
+  onRefine,
 }: {
   proposal: ScheduleProposalRow;
+  /** The drafting conversation (admin notes + agent rationales), oldest first. */
+  messages: ScheduleDraftMessageRow[];
   busy: boolean;
+  /** A refinement of this week is in flight; its proposal will replace this one. */
+  refining: boolean;
   onAction: (body: Record<string, unknown>) => Promise<void>;
+  onRefine: (prompt: string) => Promise<boolean>;
 }) {
   const [showRationale, setShowRationale] = useState(true);
+  const [refineNote, setRefineNote] = useState('');
   const summary = proposal.summary as {
     uncoveredShifts?: number;
     partialAvailabilityPlacements?: number;
     warnings?: string[];
+  };
+
+  const submitRefine = async () => {
+    const prompt = refineNote.trim();
+    if (!prompt) return;
+    if (await onRefine(prompt)) setRefineNote('');
   };
 
   return (
@@ -2215,10 +2278,74 @@ function ProposalBanner({
           ))}
         </ul>
       )}
-      {showRationale && proposal.rationale && (
-        <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-black/20 p-2 font-mono text-xs leading-relaxed text-white/80">
-          {proposal.rationale}
-        </pre>
+      {showRationale &&
+        (messages.length > 0 ? (
+          // The conversation so far: the admin's notes and the agent's
+          // rationales (the latest agent entry is this proposal's rationale).
+          <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+            {messages.map((m) =>
+              m.role === 'admin' ? (
+                <p
+                  key={m.id}
+                  className="whitespace-pre-wrap rounded bg-white/10 p-2 font-mono text-xs leading-relaxed text-white/80"
+                >
+                  <span className="font-bold text-[var(--pyre-gold)]">You: </span>
+                  {m.content}
+                </p>
+              ) : (
+                <pre
+                  key={m.id}
+                  className="whitespace-pre-wrap rounded bg-black/20 p-2 font-mono text-xs leading-relaxed text-white/80"
+                >
+                  {m.content}
+                </pre>
+              )
+            )}
+          </div>
+        ) : (
+          proposal.rationale && (
+            <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-black/20 p-2 font-mono text-xs leading-relaxed text-white/80">
+              {proposal.rationale}
+            </pre>
+          )
+        ))}
+      {refining ? (
+        <p className="mt-2 rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+          Revising the draft with your note — the updated proposal will replace this one shortly…
+        </p>
+      ) : (
+        <div className="mt-2 space-y-1">
+          <textarea
+            rows={2}
+            maxLength={MAX_DRAFT_PROMPT_LENGTH}
+            className={inputClass}
+            placeholder='Refine this draft… e.g. "swap Liz and Omar on Thursday"'
+            value={refineNote}
+            onChange={(e) => setRefineNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submitRefine();
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+              disabled={busy || !refineNote.trim()}
+              onClick={() => void submitRefine()}
+            >
+              ✦ Revise draft
+            </button>
+            <span className="font-mono text-[10px] text-white/40">
+              Sends your note back to the agent; its revised draft replaces this one. Availability
+              and staffing limits still win. ⌘⏎ to send.
+            </span>
+            {refineNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
+              <span className="font-mono text-[10px] text-white/40">
+                {MAX_DRAFT_PROMPT_LENGTH - refineNote.length} left
+              </span>
+            )}
+          </div>
+        </div>
       )}
       <p className="mt-2 font-mono text-[10px] text-white/40">
         Dashed cards and "AI draft" chips are proposals — ✓/✗ individually, approve the whole week,

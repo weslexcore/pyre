@@ -12,7 +12,7 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 
 export default defineTool({
   description:
-    'Save the drafted schedule for one week as a proposal for admin review. Call exactly once per draft, after get_week_context. Assignments reference existing shifts by shiftId, or new shifts (in this payload) by shiftKey. On validation/conflict errors, fix the draft and call again.',
+    'Save the drafted schedule for one week as a proposal for admin review. Call exactly once per drafting or refinement turn, after get_week_context; a save supersedes your previous draft for the week. Assignments reference existing shifts by shiftId, or new shifts (in this payload) by shiftKey. On validation/conflict errors, fix the draft and call again.',
   inputSchema: z.object({
     weekStart: dateString.describe('Monday of the drafted week'),
     rationale: z
