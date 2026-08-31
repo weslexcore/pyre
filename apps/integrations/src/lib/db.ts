@@ -355,7 +355,8 @@ export interface ShiftNoteRow {
 // served via signed URLs minted by /api/admin/shift-note-media.
 export interface ShiftNoteAttachmentRow {
   id: string;
-  note_id: string;
+  /** Owning note; null while staged (uploaded from the composer before the note exists). */
+  note_id: string | null;
   storage_path: string;
   file_name: string;
   mime_type: string;
