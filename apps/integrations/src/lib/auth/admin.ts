@@ -66,6 +66,16 @@ export async function requirePage(
 }
 
 /**
+ * Weakest gate: passes anyone getAccess resolves — i.e. any user with
+ * dashboard access at all, including roster-only staff who hold nothing but
+ * the implicit shift-notes grant. For routes serving the /admin directory
+ * itself (e.g. tool pins), which every dashboard user may use.
+ */
+export async function requireStaff(cookies: AstroCookies): Promise<AdminGate | Response> {
+  return requireAccess(cookies, () => true);
+}
+
+/**
  * Gate for the schedule's manage side (shift/assignment mutations, roster,
  * Momence sync, AI drafts, other people's time off): passes admins and users
  * holding the schedule:manage capability.

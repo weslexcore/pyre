@@ -11,12 +11,14 @@
 import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { getDb } from '@/lib/db';
 import { actorFromGate } from '@/lib/schedule/change-log';
 import {
   buildDraftMessage,
   MAX_DRAFT_PROMPT_LENGTH,
   sanitizeDraftPrompt,
 } from '@/lib/schedule/draft-prompt';
+import { startEveSession } from '@/lib/schedule/eve-session';
 import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
@@ -99,32 +101,38 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     sync = { error: error instanceof Error ? error.message : 'Sync failed' };
   }
 
+  const eveConfig = { baseUrl: agentsBaseUrl, channelSecret, bypassSecret: agentsBypass };
+  const db = getDb();
+
   const sessions: Array<{ weekStart: string; sessionId: string | null }> = [];
   for (const week of weekStarts) {
-    const response = await fetch(`${agentsBaseUrl.replace(/\/$/, '')}/eve/v1/session`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${channelSecret}`,
-        'Content-Type': 'application/json',
-        ...(agentsBypass ? { 'x-vercel-protection-bypass': agentsBypass } : {}),
-      },
-      body: JSON.stringify({
-        message: buildDraftMessage(week, prompt),
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = (await response.text()).slice(0, 300);
+    let sessionId: string | null;
+    try {
+      sessionId = await startEveSession(eveConfig, buildDraftMessage(week, prompt));
+    } catch (error) {
       return json(
         {
-          error: `Agent session for week ${week} failed (HTTP ${response.status}): ${detail}`,
+          error: `Agent session for week ${week} failed: ${error instanceof Error ? error.message : String(error)}`,
           sessions,
           sync,
         },
         502
       );
     }
-    sessions.push({ weekStart: week, sessionId: response.headers.get('x-eve-session-id') });
+    sessions.push({ weekStart: week, sessionId });
+
+    // The note opens the drafting conversation — persist it as the thread's
+    // first message so the review banner can show what was asked. Best-effort:
+    // a failed insert must never fail the draft run.
+    if (prompt && sessionId && db) {
+      const { error } = await db.from('schedule_draft_messages').insert({
+        agent_session_id: sessionId,
+        week_start: week,
+        role: 'admin',
+        content: prompt,
+      });
+      if (error) console.warn('[schedule-draft] thread insert failed:', error.message);
+    }
   }
 
   // weekStart/sessionId mirror the first entry for the original single-week

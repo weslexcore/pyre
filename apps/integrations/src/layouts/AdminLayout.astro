@@ -10,6 +10,7 @@
 import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { canViewPath, toolsForAccess } from '@/components/admin/adminTools';
+import { getToolPins } from '@/lib/admin/toolPins';
 import '@/styles/admin.css';
 
 interface Props {
@@ -27,6 +28,10 @@ const user = Astro.locals.adminUser ?? null;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!user && !!access && canViewPath(access, Astro.url.pathname);
 const tools = access ? toolsForAccess(access) : [];
+// The user's pin order for the nav's Pinned group — reuse the page's fetch
+// when it already made one (the /admin index memoizes into locals).
+const pinnedHrefs =
+  Astro.locals.toolPins ?? (allowed && user?.email ? await getToolPins(user.email) : []);
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
 ---
 
@@ -78,6 +83,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
                 currentPath={Astro.url.pathname}
                 userEmail={user.email ?? ''}
                 tools={tools}
+                pinnedHrefs={pinnedHrefs}
               />
             </div>
           </header>

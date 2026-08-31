@@ -105,5 +105,9 @@ declare namespace App {
     adminUser?: import('./lib/auth/types').MomenceUserProfile;
     // Their dashboard access (null = no dashboard access at all).
     adminAccess?: import('./lib/auth/access').DashboardAccess | null;
+    // Per-request memo: the user's ordered pinned tool hrefs, set by pages
+    // that already fetched them (the /admin index) so AdminLayout doesn't
+    // query admin_tool_pins twice in one render.
+    toolPins?: string[];
   }
 }

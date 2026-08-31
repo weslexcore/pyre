@@ -1,0 +1,16 @@
+---
+// Availability finder: intersect selected people's availability (time off +
+// existing assignments) across a date range, then turn a chosen day into a
+// shift with everyone assigned.
+import { ScheduleAvailability } from '@/components/admin/ScheduleAvailability';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Availability"
+  subtitle="Pick people and a time window — find the dates everyone can work, then turn one into a shift."
+>
+  <ScheduleTabs current="/admin/schedule/availability" />
+  <ScheduleAvailability client:load />
+</AdminLayout>

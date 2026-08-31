@@ -212,3 +212,17 @@ export interface ScheduleProposalRow {
 	created_at: string;
 	updated_at: string;
 }
+
+export interface ScheduleDraftMessageRow {
+	id: string;
+	/** Eve session id of the drafting conversation; the thread key. */
+	agent_session_id: string;
+	/** Monday of the drafted week. */
+	week_start: string;
+	/** admin = a note sent to the agent; agent = the resulting rationale. */
+	role: "admin" | "agent";
+	content: string;
+	/** For agent rows: the proposal that turn produced. */
+	proposal_id: string | null;
+	created_at: string;
+}
