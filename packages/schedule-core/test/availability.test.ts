@@ -7,6 +7,7 @@ import type { TimeOffRow } from '../src/types';
 import {
   availabilityFor,
   busyIntervalOn,
+  coverageStatus,
   dayOfWeek,
   findAssignmentConflicts,
   minutesToTime,
@@ -166,6 +167,40 @@ describe('availabilityFor', () => {
       ends_at: '23:30',
     });
     expect(availabilityFor([early, late], STAFF, '2026-08-13', ...evening).status).toBe('partial');
+  });
+});
+
+describe('coverageStatus', () => {
+  // The availability finder classifies over mixed interval lists (time off +
+  // shift assignments), so the classifier is pinned independently here.
+  const window = [timeToMinutes('14:30'), timeToMinutes('20:30')] as const;
+  const iv = (starts: string, ends: string) => ({
+    startMin: timeToMinutes(starts),
+    endMin: timeToMinutes(ends),
+  });
+
+  it('is free with no intervals', () => {
+    expect(coverageStatus([], ...window)).toBe('free');
+  });
+
+  it('ignores intervals outside the window (ends exclusive)', () => {
+    expect(coverageStatus([iv('10:00', '14:30'), iv('20:30', '23:00')], ...window)).toBe('free');
+  });
+
+  it('is partial on a partial overlap', () => {
+    expect(coverageStatus([iv('17:30', '21:00')], ...window)).toBe('partial');
+  });
+
+  it('is busy when one interval covers the window exactly', () => {
+    expect(coverageStatus([iv('14:30', '20:30')], ...window)).toBe('busy');
+  });
+
+  it('is busy when two adjacent intervals jointly cover the window', () => {
+    expect(coverageStatus([iv('12:00', '17:00'), iv('17:00', '21:00')], ...window)).toBe('busy');
+  });
+
+  it('is partial when intervals leave a gap inside the window', () => {
+    expect(coverageStatus([iv('12:00', '16:00'), iv('18:00', '23:00')], ...window)).toBe('partial');
   });
 });
 
