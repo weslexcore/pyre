@@ -1,14 +1,15 @@
 // Pooled booking model for the events schedule.
 //
 // Sessions carrying a pooled tag (see POOLED_TAG_CONFIGS) are sold as hourly
-// entry slots plus an optional full-length session at the same start + location
-// (Open Hours: 1hr/2hr; Social evenings: 1hr entries with a 3hr full evening).
-// The schedule shows only the entry slots; a full-length session sharing an
-// entry slot's start is kept in Momence but hidden from the schedule and
-// surfaces as the longer duration option in that slot's details modal, so the
-// whole visit stays a single Momence checkout. Standalone full-length sessions
-// (no entry-slot counterpart) still render as their own row. Every option is
-// gated by the shared occupancy pool AND its own Momence capacity.
+// entry slots plus any number of full-length sessions at the same start +
+// location (Open Hours: 1hr/2hr/3hr/4hr; Social evenings: 1hr entries with a
+// 3hr full evening). The schedule shows only the entry slots; every
+// full-length session sharing an entry slot's start is kept in Momence but
+// hidden from the schedule and surfaces as a longer duration option in that
+// slot's details modal (sorted shortest to longest), so the whole visit stays a
+// single Momence checkout. Standalone full-length sessions (no entry-slot
+// counterpart) still render as their own row. Every option is gated by the
+// shared occupancy pool AND its own Momence capacity.
 //
 // Pure functions only — no React — so the model can be exercised directly
 // (see scripts/verify-booking-model.ts).
@@ -43,7 +44,7 @@ function isEntrySlot(event: EventItem): boolean {
   const minutes = event.durationMinutes ?? 0;
   return minutes > 0 && minutes < LONG_SESSION_MIN_MINUTES;
 }
-// Pairing key: an entry slot and a full-length session pair only when they
+// Pairing key: an entry slot and its full-length sessions pair only when they
 // share tag, location, and exact start time.
 function pooledStartKey(config: PooledTagConfig, event: EventItem): string {
   return `${config.tag}__${event.location}__${event.isoDate ?? event.id}`;
@@ -114,15 +115,23 @@ export function buildPooledBookingModel(events: EventItem[]): PooledBookingModel
       }))
   );
 
-  const longByStart = new Map<string, EventItem>();
+  // Every full-length session at a given start (2hr, 3hr, 4hr, …) — each one
+  // becomes its own duration option on the entry slot sharing that start.
+  const longByStart = new Map<string, EventItem[]>();
   const entryStarts = new Set<string>();
   for (const { event: e, config } of pooled) {
-    if (isLongSession(e)) longByStart.set(pooledStartKey(config, e), e);
-    else if (isEntrySlot(e)) entryStarts.add(pooledStartKey(config, e));
+    if (isLongSession(e)) {
+      const key = pooledStartKey(config, e);
+      const list = longByStart.get(key);
+      if (list) list.push(e);
+      else longByStart.set(key, [e]);
+    } else if (isEntrySlot(e)) {
+      entryStarts.add(pooledStartKey(config, e));
+    }
   }
 
-  // Hide a full-length session when an entry slot shares its start — it becomes
-  // that slot's longer duration option instead of its own row.
+  // Hide full-length sessions when an entry slot shares their start — they
+  // become that slot's longer duration options instead of their own rows.
   const hiddenIds = new Set<string>();
   for (const { event: e, config } of pooled) {
     if (isLongSession(e) && entryStarts.has(pooledStartKey(config, e))) hiddenIds.add(e.id);
@@ -133,9 +142,13 @@ export function buildPooledBookingModel(events: EventItem[]): PooledBookingModel
     if (hiddenIds.has(e.id)) continue;
     if (isEntrySlot(e)) {
       const options = [toBookingOption(e, occupancy)];
-      const partner = longByStart.get(pooledStartKey(config, e));
-      if (partner) {
-        options.push(toBookingOption(partner, occupancy));
+      const partners = longByStart.get(pooledStartKey(config, e)) ?? [];
+      if (partners.length > 0) {
+        // Offer every longer duration at this start, shortest first.
+        const sorted = [...partners].sort(
+          (a, b) => (a.durationMinutes ?? 0) - (b.durationMinutes ?? 0)
+        );
+        for (const partner of sorted) options.push(toBookingOption(partner, occupancy));
       } else if (config.missingPartnerFallback) {
         const { minutes, credits } = config.missingPartnerFallback;
         options.push({
