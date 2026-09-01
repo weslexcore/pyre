@@ -2,9 +2,10 @@
 // Run with: yarn tsx scripts/verify-booking-model.ts
 //
 // Covers: Social 1hr/3hr grouping (full evening hidden, entry slots pool-gated
-// by the 3hr session's bookings), the Open Hours 1hr/2hr pair, the sold-out
-// 2-hour fallback on a partner-less Open Hours slot, and a legacy high-capacity
-// social that bypasses the pool.
+// by the 3hr session's bookings), the Open Hours 1hr/2hr pair, an Open Hours
+// slot selling 1/2/3/4 hours (every full-length session surfaces as an option,
+// sorted by duration), the sold-out 2-hour fallback on a partner-less Open
+// Hours slot, and a legacy high-capacity social that bypasses the pool.
 
 import { buildPooledBookingModel } from '../src/lib/booking-model';
 import type { EventItem } from '../src/lib/types';
@@ -80,6 +81,44 @@ const events: EventItem[] = [
     spotsRemaining: 8,
     priceUsd: 50,
   }),
+  // Open Hours at 2pm selling 1/2/3/4 hours. Listed out of order to prove the
+  // options are sorted by duration rather than by Momence order.
+  makeEvent({
+    id: 'oh-4hr-2pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-01T18:00:00.000Z',
+    durationMinutes: 240,
+    totalSpots: 10,
+    spotsRemaining: 6,
+    priceUsd: 100,
+  }),
+  makeEvent({
+    id: 'oh-1hr-2pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-01T18:00:00.000Z',
+    durationMinutes: 60,
+    totalSpots: 20,
+    spotsRemaining: 20,
+    priceUsd: 25,
+  }),
+  makeEvent({
+    id: 'oh-3hr-2pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-01T18:00:00.000Z',
+    durationMinutes: 180,
+    totalSpots: 10,
+    spotsRemaining: 10,
+    priceUsd: 75,
+  }),
+  makeEvent({
+    id: 'oh-2hr-2pm',
+    tags: ['Open Hours'],
+    isoDate: '2026-08-01T18:00:00.000Z',
+    durationMinutes: 120,
+    totalSpots: 10,
+    spotsRemaining: 9,
+    priceUsd: 50,
+  }),
   // Partner-less Open Hours 1hr at noon — should get the sold-out 2hr fallback.
   makeEvent({
     id: 'oh-1hr-noon',
@@ -146,6 +185,32 @@ check('2hr partner is hidden', model.hiddenIds.has('oh-2hr-10am'), true);
 check('10am slot offers two durations', opts('oh-1hr-10am')?.map((o) => o.minutes), [60, 120]);
 check('10am 1hr capped by own Momence spots', opts('oh-1hr-10am')?.[0].spotsLeft, 15);
 check('10am 2hr capped by own Momence spots', opts('oh-1hr-10am')?.[1].spotsLeft, 8);
+
+console.log('Open Hours 1/2/3/4 hour slot surfaces every duration');
+const twoPm = opts('oh-1hr-2pm');
+check(
+  'all full-length sessions are hidden',
+  ['oh-2hr-2pm', 'oh-3hr-2pm', 'oh-4hr-2pm'].map((id) => model.hiddenIds.has(id)),
+  [true, true, true]
+);
+check('2pm slot offers four durations, sorted', twoPm?.map((o) => o.minutes), [60, 120, 180, 240]);
+check(
+  'labels for each duration',
+  twoPm?.map((o) => o.label),
+  ['Book 1 hour', 'Book 2 hours', 'Book 3 hours', 'Book 4 hours']
+);
+check('credits from Momence prices', twoPm?.map((o) => o.credits), [1, 2, 3, 4]);
+check(
+  'hrefs point at each session',
+  twoPm?.map((o) => o.href.split('/').pop()),
+  ['oh-1hr-2pm', 'oh-2hr-2pm', 'oh-3hr-2pm', 'oh-4hr-2pm']
+);
+// 2hr has 1 booked (2–4pm), 4hr has 4 booked (2–6pm): 2pm/3pm hours carry 5.
+check('1hr capped by own Momence spots (pool would allow 25)', twoPm?.[0].spotsLeft, 20);
+check('2hr capped by own Momence spots', twoPm?.[1].spotsLeft, 9);
+check('3hr capped by own Momence spots', twoPm?.[2].spotsLeft, 10);
+check('4hr capped by own Momence spots', twoPm?.[3].spotsLeft, 6);
+check('no sold-out fallback when partners exist', twoPm?.some((o) => o.href === '#'), false);
 
 console.log('Partner-less Open Hours slot keeps the sold-out 2hr fallback');
 const noonFallback = opts('oh-1hr-noon')?.[1];

@@ -13,8 +13,8 @@ interface EventDetailModalProps {
   event: EventItem | null;
   isOpen: boolean;
   // When present, the footer shows these gated duration choices (e.g. Book 1
-  // hour / Book 2 hours, or Book 3 hours for a social evening) instead of the
-  // single Book Now CTA.
+  // hour / 2 hours / 3 hours / 4 hours, or Book 3 hours for a social evening)
+  // instead of the single Book Now CTA — one row per option.
   bookingOptions?: PooledBookingOption[];
   // Opens the practitioner bio modal (owned by the parent so it can layer on
   // top of this one).
@@ -520,7 +520,8 @@ export default function EventDetailModal({
             {/* Booking CTAs — one shared row layout for every bookable choice:
               [Duration] [Credits] [slots left] [Book Now]. */}
             {hasBookingOptions ? (
-              // Pooled sessions: gated duration choices (1hr/2hr, 1hr/3hr, ...).
+              // Pooled sessions: one row per gated duration choice
+              // (1hr/2hr/3hr/4hr, 1hr/3hr, ...).
               <div className="flex flex-col">
                 {bookingOptions?.map((option) => (
                   <BookingRow
