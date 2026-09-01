@@ -20,6 +20,20 @@ import type { EventItem, Practitioner } from './types';
 // never render a practitioner credit.
 const HOUSE_TEACHER_NAMES = ['pyre sauna', 'pyre', 'sauna rental'];
 
+// Momence requires a last name, so single-name guests get a placeholder there:
+// a lone ".", or an invisible filler like HANGUL FILLER (U+3164) that `trim()`
+// doesn't strip. Remove those so the credit and monogram show just the name.
+const INVISIBLE_CHARS = /[\u1160\u115F\u3164\uFFA0\u200B-\u200D\u2060\uFEFF\u00A0]/g;
+const PUNCTUATION_ONLY_WORD = /^[^\p{L}\p{N}]+$/u;
+
+export function cleanTeacherName(name: string | null | undefined): string {
+  return (name ?? '')
+    .replace(INVISIBLE_CHARS, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 0 && !PUNCTUATION_ONLY_WORD.test(word))
+    .join(' ');
+}
+
 // Normalize a name for matching: lowercase, strip punctuation, collapse spaces.
 function normalizeName(name: string): string {
   return name
@@ -73,7 +87,7 @@ export function toPractitioner(
   name: string | null | undefined,
   profile?: MomenceTeacher
 ): Practitioner | undefined {
-  const trimmed = (name ?? '').trim();
+  const trimmed = cleanTeacherName(name);
   if (!trimmed || isHouseTeacher(trimmed)) return undefined;
 
   const fromMomence: Practitioner = {

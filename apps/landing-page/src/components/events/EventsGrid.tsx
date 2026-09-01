@@ -390,14 +390,20 @@ function PooledSlotRow({
   event,
   options,
   onViewDetails,
+  onOpenPractitioner,
 }: {
   event: EventItem;
   options: PooledBookingOption[];
   onViewDetails: (event: EventItem) => void;
+  onOpenPractitioner?: (practitioner: Practitioner) => void;
 }) {
   const rowSpots = options.length ? Math.max(...options.map((o) => o.spotsLeft)) : 0;
   const allSoldOut = options.length > 0 && options.every((o) => o.soldOut);
   const spotsText = allSoldOut ? 'Waitlist' : `${rowSpots} left`;
+  // Pooled special events (e.g. a guest-hosted Social evening) still credit
+  // their practitioner beneath the title, exactly like SlotRow.
+  const practitioners = specialEventPractitioners(event);
+  const timeAlignment = practitioners.length > 0 ? 'sm:self-start' : '';
 
   return (
     <div
@@ -412,25 +418,34 @@ function PooledSlotRow({
       }}
       className="group flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 px-4 rounded-md border border-transparent cursor-pointer transition-colors hover:border-current/10 hover:bg-current/[0.03]"
     >
-      {/* Title */}
-      <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start sm:w-72 shrink-0">
-        <span className="truncate">{event.title}</span>
-        {/* Mobile book pill — opens the modal to choose duration */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewDetails(event);
-          }}
-          className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
-        >
-          Book
-          <ArrowIcon />
-        </button>
-      </span>
+      {/* Title, with the guest practitioner credit on its own line beneath it */}
+      <div className="flex flex-col gap-1 min-w-0 sm:w-72 shrink-0">
+        <span className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-creme)] flex items-center justify-between sm:justify-start">
+          <span className="truncate">{event.title}</span>
+          {/* Mobile book pill — opens the modal to choose duration */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(event);
+            }}
+            className="sm:hidden inline-flex items-center text-xs font-mono-bold uppercase tracking-wide bg-[var(--pyre-red)] rounded-full px-3 py-1 text-[var(--pyre-creme)] hover:opacity-90 transition-opacity whitespace-nowrap ml-2"
+          >
+            Book
+            <ArrowIcon />
+          </button>
+        </span>
 
-      {/* Time */}
-      <span className="flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1">
+        {practitioners.length > 0 && (
+          <PractitionerByline practitioners={practitioners} onOpenBio={onOpenPractitioner} />
+        )}
+      </div>
+
+      {/* Time — rides up to the title's line when a practitioner adds a second
+          line below it, while the spots count and Book pill stay centered */}
+      <span
+        className={`flex items-center text-sm text-[var(--pyre-creme)]/70 sm:flex-1 ${timeAlignment}`}
+      >
         <span className="inline-flex items-center gap-1.5">
           <ClockIcon className="w-3.5 h-3.5" />
           {event.time}
@@ -507,6 +522,7 @@ function DateGroup({
               event={event}
               options={options}
               onViewDetails={onViewDetails}
+              onOpenPractitioner={onOpenPractitioner}
             />
           ) : (
             <SlotRow
