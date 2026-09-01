@@ -1,26 +1,33 @@
 ---
-import promoConfig from '../lib/promoPopup';
+import promoPopups from '../lib/promoPopup';
 import signupForm from '../lib/signupForm';
 import Button from './Button.astro';
 
-if (!promoConfig.enabled || Astro.url.pathname.startsWith('/admin')) return;
-
-const hasForm = !!promoConfig.form;
+// Every enabled popup is rendered; the client script picks the first one whose
+// date window is live on the visitor's clock and discards the rest.
+const popups = promoPopups.filter((p) => p.enabled);
+if (popups.length === 0 || Astro.url.pathname.startsWith('/admin')) return;
 ---
 
-<div
-  data-component="promo-popup"
-  data-popup-id={promoConfig.id}
-  data-delay={String(promoConfig.delayMs ?? 1500)}
-  data-starts={promoConfig.starts ?? ''}
-  data-expires={promoConfig.expires ?? ''}
->
+<div data-component="promo-popup">
+  {popups.map((promoConfig) => {
+    const hasForm = !!promoConfig.form;
+    const headingId = `promo-popup-heading-${promoConfig.id}`;
+    const emailId = `promo-popup-email-${promoConfig.id}`;
+    return (
+  <div
+    data-promo-popup
+    data-popup-id={promoConfig.id}
+    data-delay={String(promoConfig.delayMs ?? 1500)}
+    data-starts={promoConfig.starts ?? ''}
+    data-expires={promoConfig.expires ?? ''}
+  >
   <!-- Full-screen dialog overlay -->
   <div
     data-popup-dialog
     role="dialog"
     aria-modal="true"
-    aria-labelledby="promo-popup-heading"
+    aria-labelledby={headingId}
     class="fixed inset-0 z-[100] hidden"
   >
     <!-- Backdrop -->
@@ -51,7 +58,7 @@ const hasForm = !!promoConfig.form;
 
         <!-- Content -->
         <h2
-          id="promo-popup-heading"
+          id={headingId}
           class="font-mono-bold text-2xl text-[var(--pyre-creme)] sm:text-3xl"
         >
           {promoConfig.headline}
@@ -60,6 +67,37 @@ const hasForm = !!promoConfig.form;
         <p class="mt-3 text-base leading-relaxed text-[var(--pyre-creme)]/80">
           {promoConfig.body}
         </p>
+
+        <!-- Discount code block with copy button -->
+        {promoConfig.code && (
+          <div class="mt-5 rounded-md border border-dashed border-[var(--pyre-gold)]/60 bg-[var(--pyre-creme)]/5 px-4 py-3">
+            <p class="text-xs uppercase tracking-wide text-[var(--pyre-creme)]/60">
+              {promoConfig.code.label ?? 'Use code'}
+            </p>
+            <div class="mt-1 flex items-center justify-between gap-3">
+              <span
+                data-popup-code
+                class="font-mono-bold text-2xl tracking-widest text-[var(--pyre-gold)] select-all"
+              >
+                {promoConfig.code.value}
+              </span>
+              <button
+                data-popup-copy
+                type="button"
+                aria-label={`Copy code ${promoConfig.code.value}`}
+                class="shrink-0 rounded-md border border-[var(--pyre-creme)]/30 px-3 py-1.5 text-xs font-mono-bold uppercase tracking-wide text-[var(--pyre-creme)] hover:border-[var(--pyre-gold)] hover:text-[var(--pyre-gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pyre-gold)]/50"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+
+        {promoConfig.finePrint && (
+          <p class="mt-3 text-sm text-[var(--pyre-creme)]/60">
+            {promoConfig.finePrint}
+          </p>
+        )}
 
         <!-- Email signup form when configured, otherwise CTA button -->
         {hasForm ? (
@@ -78,9 +116,9 @@ const hasForm = !!promoConfig.form;
             data-success-message={promoConfig.form!.successMessage}
           >
             <div class="flex-1 min-w-0">
-              <label for="promo-popup-email" class="sr-only">Email</label>
+              <label for={emailId} class="sr-only">Email</label>
               <input
-                id="promo-popup-email"
+                id={emailId}
                 name="EMAIL"
                 type="email"
                 required
@@ -165,11 +203,63 @@ const hasForm = !!promoConfig.form;
       )}
     </button>
   )}
+  </div>
+    );
+  })}
 </div>
 
 <script>
   (function () {
     let cleanup: (() => void) | null = null;
+
+    function capture(event: string, props: Record<string, unknown>) {
+      try {
+        const ph = (window as any).posthog;
+        if (!ph) return;
+        const attribution = (window as any).pyreAttribution ? (window as any).pyreAttribution() : {};
+        ph.capture(event, { ...props, ...attribution });
+      } catch {}
+    }
+
+    /**
+     * Pick the first popup (in config order) whose date window is live and
+     * whose offer hasn't already been taken. Everything else is removed.
+     */
+    function selectPopup(container: HTMLElement): HTMLElement | null {
+      const candidates = Array.from(container.querySelectorAll<HTMLElement>('[data-promo-popup]'));
+      const now = new Date();
+      let chosen: HTMLElement | null = null;
+
+      for (const candidate of candidates) {
+        if (chosen) {
+          candidate.remove();
+          continue;
+        }
+
+        const popupId = candidate.dataset.popupId;
+        const starts = candidate.dataset.starts || '';
+        const expires = candidate.dataset.expires || '';
+        let live = !!popupId;
+        if (live && starts && now < new Date(starts)) live = false;
+        if (live && expires && now > new Date(expires)) live = false;
+
+        // Offer already taken (form submitted successfully)
+        if (live) {
+          try {
+            if (localStorage.getItem('pyre-popup-taken-' + popupId) === '1') live = false;
+          } catch {}
+        }
+
+        if (live) {
+          chosen = candidate;
+        } else {
+          candidate.remove();
+        }
+      }
+
+      if (!chosen) container.remove();
+      return chosen;
+    }
 
     function initPopup() {
       if (cleanup) {
@@ -177,40 +267,18 @@ const hasForm = !!promoConfig.form;
         cleanup = null;
       }
 
-      const root = document.querySelector('[data-component="promo-popup"]') as HTMLElement | null;
+      const container = document.querySelector('[data-component="promo-popup"]') as HTMLElement | null;
+      if (!container) return;
+
+      const root = selectPopup(container);
       if (!root) return;
 
-      const popupId = root.dataset.popupId;
-      if (!popupId) return;
-
+      const popupId = root.dataset.popupId as string;
       const delayMs = Number(root.dataset.delay) || 1500;
-      const starts = root.dataset.starts || '';
-      const expires = root.dataset.expires || '';
-
-      // Date window check
-      const now = new Date();
-      if (starts && now < new Date(starts)) {
-        root.remove();
-        return;
-      }
-      if (expires && now > new Date(expires)) {
-        root.remove();
-        return;
-      }
 
       // localStorage keys
       const storageKey = 'pyre-popup-dismissed-' + popupId;
       const takenKey = 'pyre-popup-taken-' + popupId;
-
-      // Check if offer was already taken (form submitted successfully)
-      let offerTaken = false;
-      try {
-        offerTaken = localStorage.getItem(takenKey) === '1';
-      } catch {}
-      if (offerTaken) {
-        root.remove();
-        return;
-      }
 
       // Check if previously dismissed
       let isDismissed = false;
@@ -225,6 +293,8 @@ const hasForm = !!promoConfig.form;
       const closeBtn = root.querySelector('[data-popup-close]') as HTMLElement;
       const dismissBtn = root.querySelector('[data-popup-dismiss]') as HTMLElement | null;
       const ctaBtn = root.querySelector('[data-popup-cta]') as HTMLElement | null;
+      const copyBtn = root.querySelector('[data-popup-copy]') as HTMLButtonElement | null;
+      const codeEl = root.querySelector('[data-popup-code]') as HTMLElement | null;
       const popupForm = root.querySelector('[data-popup-form]') as HTMLFormElement | null;
 
       if (!dialog || !backdrop || !panel || !closeBtn) return;
@@ -319,7 +389,7 @@ const hasForm = !!promoConfig.form;
           localStorage.setItem(takenKey, '1');
         } catch {}
         document.body.style.overflow = '';
-        root.remove();
+        container.remove();
       };
 
       // Event listeners — must be before the early return so they work
@@ -338,16 +408,57 @@ const hasForm = !!promoConfig.form;
         });
       }
 
+      // Copy discount code to the clipboard
+      let copyResetTimeout: ReturnType<typeof setTimeout> | undefined;
+      if (copyBtn && codeEl) {
+        const code = (codeEl.textContent || '').trim();
+        const defaultLabel = copyBtn.textContent;
+        copyBtn.addEventListener('click', async () => {
+          let copied = false;
+          try {
+            await navigator.clipboard.writeText(code);
+            copied = true;
+          } catch {
+            // Clipboard API unavailable — select the code so the user can copy manually
+            try {
+              const range = document.createRange();
+              range.selectNodeContents(codeEl);
+              const selection = window.getSelection();
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+            } catch {}
+          }
+          copyBtn.textContent = copied ? 'Copied' : 'Select';
+          clearTimeout(copyResetTimeout);
+          copyResetTimeout = setTimeout(() => {
+            copyBtn.textContent = defaultLabel;
+          }, 2000);
+          if (copied) capture('promo_code_copied', { popup_id: popupId, code });
+        });
+      }
+
       // CTA click: dismiss then follow the link
       if (ctaBtn) {
         ctaBtn.addEventListener('click', (e) => {
           const href = ctaBtn.getAttribute('href');
+          capture('promo_popup_cta_clicked', { popup_id: popupId, href });
 
-          if (href && href.startsWith('#')) {
+          // Same-page anchor (either "#id" or "/#id" while on "/"): scroll after the close animation
+          let sameHash: string | null = null;
+          if (href) {
+            try {
+              const target = new URL(href, window.location.href);
+              if (target.hash && target.origin === window.location.origin && target.pathname === window.location.pathname) {
+                sameHash = target.hash;
+              }
+            } catch {}
+          }
+
+          if (sameHash) {
             e.preventDefault();
             dismiss();
             setTimeout(() => {
-              window.location.hash = href;
+              window.location.hash = sameHash as string;
             }, 350);
           } else {
             dismiss();
@@ -536,14 +647,24 @@ const hasForm = !!promoConfig.form;
 
       document.addEventListener('keydown', handleKeyDown);
 
+      // Schedule showing the popup after page load + delay
+      let showTimeout: ReturnType<typeof setTimeout> | undefined;
+
+      cleanup = () => {
+        clearTimeout(showTimeout);
+        clearTimeout(copyResetTimeout);
+        closeBtn.removeEventListener('click', dismiss);
+        if (dismissBtn) dismissBtn.removeEventListener('click', dismiss);
+        backdrop.removeEventListener('click', dismiss);
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+
       // If previously dismissed, show tab immediately instead of popup
       if (isDismissed && tab) {
         showTab();
         return;
       }
-
-      // Schedule showing the popup after page load + delay
-      let showTimeout: ReturnType<typeof setTimeout>;
 
       function scheduleShow() {
         showTimeout = setTimeout(show, delayMs);
@@ -554,15 +675,6 @@ const hasForm = !!promoConfig.form;
       } else {
         window.addEventListener('load', scheduleShow, { once: true });
       }
-
-      cleanup = () => {
-        clearTimeout(showTimeout);
-        closeBtn.removeEventListener('click', dismiss);
-        if (dismissBtn) dismissBtn.removeEventListener('click', dismiss);
-        backdrop.removeEventListener('click', dismiss);
-        document.removeEventListener('keydown', handleKeyDown);
-        document.body.style.overflow = '';
-      };
     }
 
     // Defer initialization until the browser is idle so the popup's setup
