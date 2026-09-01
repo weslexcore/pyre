@@ -207,6 +207,8 @@ export function ScheduleHours() {
     URL.revokeObjectURL(url);
   };
 
+  const labelColClass = canManage ? 'sticky left-0 z-10 bg-[var(--pyre-black)]' : '';
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -258,6 +260,7 @@ export function ScheduleHours() {
         </p>
       )}
 
+      {/* Managers get a table wide enough to scroll; pin the label column so rows stay readable. */}
       {(weeks.length === 0 || staffColumns.length === 0) && !busy ? (
         <p className="font-mono text-sm text-white/40">No scheduled hours in this range.</p>
       ) : (
@@ -266,7 +269,7 @@ export function ScheduleHours() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left font-mono text-xs uppercase tracking-wide text-white/40">
-                  <th className="whitespace-nowrap py-2 pr-3">
+                  <th className={`whitespace-nowrap py-2 pr-3 ${labelColClass}`}>
                     {byPeriod ? 'Pay period' : 'Week of'}
                   </th>
                   {staffColumns.map((s) => (
@@ -294,7 +297,9 @@ export function ScheduleHours() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.key} className="border-b border-white/5">
-                    <td className="whitespace-nowrap py-2 pr-3 font-mono text-white/70">
+                    <td
+                      className={`whitespace-nowrap py-2 pr-3 font-mono text-white/70 ${labelColClass}`}
+                    >
                       {row.label}
                       {row.partial && (
                         <span title="The picked range doesn't cover this whole pay period"> *</span>
@@ -345,7 +350,9 @@ export function ScheduleHours() {
                   </tr>
                 ))}
                 <tr>
-                  <td className="whitespace-nowrap py-2 pr-3 font-mono font-bold text-white/70">
+                  <td
+                    className={`whitespace-nowrap py-2 pr-3 font-mono font-bold text-white/70 ${labelColClass}`}
+                  >
                     Total
                   </td>
                   {staffColumns.map((s) => {
