@@ -23,6 +23,14 @@ export interface MomenceAddressPayload {
   country: string;
 }
 
+/** Fired when an async report run (POST /host/reports) finishes. */
+export interface MomenceReportRunPayload {
+  /** The report run id — matches what createReportRun returned. */
+  id: number;
+  reportUrlWeb: string;
+  reportUrlApi: string;
+}
+
 export type MomenceEventType =
   | 'member-assigned'
   | 'member-updated'
@@ -30,7 +38,8 @@ export type MomenceEventType =
   | 'member-address-updated'
   | 'member-address-deleted'
   | 'session-booked'
-  | 'session-booking-cancelled';
+  | 'session-booking-cancelled'
+  | 'host-report-run-completed';
 
 export interface MomenceWebhookResult<T = unknown> {
   event: string;

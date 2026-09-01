@@ -65,7 +65,16 @@ interface SyncCursor {
   rangeTo: string;
   pending: PendingRun[];
   failed: Array<{ reportType: string; error: string }>;
+  /** True when the cursor was created by a forced run (manual sync /
+   * backfill) — those must not set the day's done-key when they finish, so
+   * the scheduled daily pull still happens. Absent on cursors written before
+   * this field existed, which only daily (non-force) runs ever were. */
+  force?: boolean;
 }
+
+/** Cursor namespaces a host-report-run-completed webhook may find its run
+ * in: the daily job's and the backfill's (see business-backfill.ts). */
+const WEBHOOK_CURSOR_PREFIXES = ['report-sync', 'report-sync:backfill'];
 
 export interface ReportSyncSummary {
   created: number;
@@ -161,7 +170,7 @@ export async function runBusinessReportSync(
       }
     }
 
-    cursor = { date: today, rangeFrom, rangeTo, pending, failed };
+    cursor = { date: today, rangeFrom, rangeTo, pending, failed, force };
     await redis.set(cursorKey, cursor);
   } else {
     summary.resumed = true;
@@ -228,6 +237,82 @@ export async function runBusinessReportSync(
     );
   }
   return summary;
+}
+
+export interface WebhookReportResult {
+  /** False when the run id isn't in any cursor — not ours to persist. */
+  matched: boolean;
+  prefix?: string;
+  reportType?: string;
+  metricsUpserted?: number;
+  pendingLeft?: number;
+}
+
+/**
+ * Process a Momence `host-report-run-completed` webhook: if the run id is one
+ * a sync parked in a cursor, fetch the result now and persist it — the report
+ * lands seconds after Momence finishes it instead of waiting for a later
+ * tick's GET-only resume. The poll loop in runBusinessReportSync stays as the
+ * fallback for missed webhooks.
+ *
+ * Unknown run ids come back matched: false and are ignored — report runs are
+ * also created by hand in the Momence dashboard, and those aren't ours.
+ *
+ * Concurrency: a tick polling the same cursor can interleave with this
+ * read-modify-write and resurrect the run into pending; the re-poll then
+ * re-persists through the same idempotent upserts, so the race is harmless.
+ */
+export async function processCompletedReportRun(runId: number): Promise<WebhookReportResult> {
+  const redis = getRedis();
+  if (!redis) return { matched: false };
+
+  for (const prefix of WEBHOOK_CURSOR_PREFIXES) {
+    const cursorKey = `${prefix}:cursor`;
+    const cursor = await redis.get<SyncCursor>(cursorKey);
+    const run = cursor?.pending.find((p) => p.runId === runId);
+    if (!cursor || !run) continue;
+
+    const result = await getReportRun(runId);
+    if (result.status !== 'completed' || result.data === null) {
+      // The webhook said completed but the GET disagrees — leave the cursor
+      // for the poll fallback rather than argue.
+      return {
+        matched: true,
+        prefix,
+        reportType: run.reportType,
+        pendingLeft: cursor.pending.length,
+      };
+    }
+
+    const metricsUpserted = await persistReport(run, result.data.items, cursor);
+    cursor.pending = cursor.pending.filter((p) => p.runId !== runId);
+
+    if (cursor.pending.length > 0) {
+      await redis.set(cursorKey, cursor);
+    } else {
+      await redis.del(cursorKey);
+      // Mirror the tail of runBusinessReportSync: only a non-forced (daily)
+      // cursor marks its day done; manual/backfill cursors must leave the
+      // scheduled pull free to run.
+      if (!cursor.force) {
+        await redis.set(
+          `${prefix}:done:${cursor.date}`,
+          { finishedAt: new Date().toISOString() },
+          { ex: DONE_TTL_SECONDS }
+        );
+      }
+    }
+
+    return {
+      matched: true,
+      prefix,
+      reportType: run.reportType,
+      metricsUpserted,
+      pendingLeft: cursor.pending.length,
+    };
+  }
+
+  return { matched: false };
 }
 
 /** Upsert one completed report: raw snapshot row + normalized daily rows.

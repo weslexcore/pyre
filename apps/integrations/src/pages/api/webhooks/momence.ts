@@ -18,6 +18,7 @@ import {
   type MomenceAddressPayload,
   type MomenceEventType,
   type MomenceMemberPayload,
+  type MomenceReportRunPayload,
   verifyMomenceWebhook,
   WebhookVerificationError,
 } from '@/lib/webhooks/momence';
@@ -217,6 +218,31 @@ async function handleAddressEvent(
   }
 }
 
+/**
+ * A report run finished — if it's one the business-report sync is waiting on,
+ * persist it right now instead of leaving it parked until a later tick polls.
+ * A failure here throws, the route 500s, and Momence's retry gives the
+ * (idempotent) persist another chance.
+ */
+async function handleReportRunCompleted(
+  payload: MomenceReportRunPayload,
+  tracer: WebhookTracer
+): Promise<void> {
+  const { processCompletedReportRun } = await import('@/lib/reports/sync');
+  const result = await tracer.span(
+    'Persist completed report run',
+    () => processCompletedReportRun(payload.id),
+    { runId: payload.id }
+  );
+
+  if (!result.matched) {
+    // Runs also get created by hand in the Momence dashboard; nothing to do.
+    log.info(`Report run ${payload.id} is not one we're waiting on — ignoring`);
+    return;
+  }
+  log.info(`Report run ${payload.id} processed`, { ...result });
+}
+
 const handler: TracedAPIRoute = async ({ request }, tracer) => {
   try {
     const { event, payload, requestId, timestamp } = await tracer.span(
@@ -233,6 +259,8 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
       await handleBookingEvent(event as MomenceEventType, payload as MomenceBookingPayload, tracer);
+    } else if (event === 'host-report-run-completed') {
+      await handleReportRunCompleted(payload as MomenceReportRunPayload, tracer);
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }
