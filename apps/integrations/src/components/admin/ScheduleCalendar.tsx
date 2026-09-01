@@ -20,6 +20,7 @@ import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { StaffMultiSelect } from './StaffMultiSelect';
+import { filterChipClass, toolbarCaptionClass } from './scheduleUi';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -239,70 +240,76 @@ export function ScheduleCalendar() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setMonthStart(addMonths(monthStart, -1))}
-        >
-          ‹ Prev
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setMonthStart(monthStartOf(todayLocal()))}
-        >
-          This month
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => setMonthStart(addMonths(monthStart, 1))}
-        >
-          Next ›
-        </button>
-        <span className="font-mono text-xl font-bold text-white/80">{formatMonth(monthStart)}</span>
-        {selfId && (
+      <div className="space-y-2">
+        {/* Two toolbar rows: month navigation changes what you're looking at
+            (square pills); the row below narrows it (round gold filter chips). */}
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
-              mineOnly
-                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
-                : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
-            }`}
-            title="Only show shifts you're assigned to"
-            onClick={() =>
-              setMineOnly((v) => {
-                writeMyShiftsPref(!v);
-                return !v;
-              })
-            }
+            className={buttonClass}
+            onClick={() => setMonthStart(addMonths(monthStart, -1))}
           >
-            My shifts
+            ‹ Prev
           </button>
-        )}
-        {!monthIsPast && (
           <button
             type="button"
-            className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
-              showPast
-                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
-                : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
-            }`}
-            title="Show shifts earlier in the month"
-            onClick={() => setShowPast((v) => !v)}
+            className={buttonClass}
+            onClick={() => setMonthStart(monthStartOf(todayLocal()))}
           >
-            Past shifts
+            This month
           </button>
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() => setMonthStart(addMonths(monthStart, 1))}
+          >
+            Next ›
+          </button>
+          <span className="font-mono text-xl font-bold text-white/80">
+            {formatMonth(monthStart)}
+          </span>
+          {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        </div>
+
+        {(selfId || !monthIsPast || data?.canManage) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={toolbarCaptionClass}>Filter</span>
+            {selfId && (
+              <button
+                type="button"
+                className={filterChipClass(mineOnly)}
+                aria-pressed={mineOnly}
+                title="Only show shifts you're assigned to"
+                onClick={() =>
+                  setMineOnly((v) => {
+                    writeMyShiftsPref(!v);
+                    return !v;
+                  })
+                }
+              >
+                My shifts
+              </button>
+            )}
+            {!monthIsPast && (
+              <button
+                type="button"
+                className={filterChipClass(showPast)}
+                aria-pressed={showPast}
+                title="Show shifts earlier in the month"
+                onClick={() => setShowPast((v) => !v)}
+              >
+                Past shifts
+              </button>
+            )}
+            {data?.canManage && (
+              <StaffMultiSelect
+                staff={data?.staff ?? []}
+                selected={staffFilter}
+                onChange={setStaffFilter}
+              />
+            )}
+          </div>
         )}
-        {data?.canManage && (
-          <StaffMultiSelect
-            staff={data?.staff ?? []}
-            selected={staffFilter}
-            onChange={setStaffFilter}
-          />
-        )}
-        {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
       {error && (

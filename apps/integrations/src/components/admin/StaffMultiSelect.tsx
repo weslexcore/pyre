@@ -4,9 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StaffRow } from '@/lib/db';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+import { filterChipClass } from './scheduleUi';
 
 /** Breathing room kept between the panel and the edge of the viewport. */
 const EDGE_MARGIN = 8;
@@ -67,7 +65,9 @@ export function StaffMultiSelect({
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className={`${buttonClass} ${selected.size > 0 ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
+        className={filterChipClass(selected.size > 0)}
+        aria-haspopup="true"
+        aria-expanded={open}
         title="Filter to specific people's shifts and time off"
         onClick={() => setOpen(!open)}
       >

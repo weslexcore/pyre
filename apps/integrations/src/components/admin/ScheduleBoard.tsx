@@ -38,6 +38,7 @@ import type {
 import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { StaffMultiSelect } from './StaffMultiSelect';
+import { filterChipClass, toolbarCaptionClass } from './scheduleUi';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -400,6 +401,11 @@ export function ScheduleBoard() {
   // show every day (and the Past shifts toggle hides — nothing to reveal).
   const monthIsPast = monthStart < monthStartOf(todayLocal());
 
+  // The filter row under the toolbar only renders when a filter applies.
+  const showMineFilter = Boolean(selfId) && calendarView;
+  const showPastFilter = view === 'month' && !monthIsPast;
+  const showStaffFilter = canManage && calendarView;
+
   const days = useMemo(() => {
     if (view === 'month') {
       const all = Array.from({ length: daysInMonth(monthStart) }, (_, i) => addDays(monthStart, i));
@@ -667,200 +673,208 @@ export function ScheduleBoard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Every row in this toolbar wraps: on a phone the pills, the range
-            controls and the manage actions each stack onto as many lines as
-            they need rather than running off the right edge of the viewport. */}
-        <span className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            className={pillClass(view === 'week')}
-            onClick={() => setView('week')}
-          >
-            Week
-          </button>
-          <button
-            type="button"
-            className={pillClass(view === 'month')}
-            onClick={() => setView('month')}
-          >
-            Month
-          </button>
-          {canManage && (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Both toolbar rows wrap: on a phone the pills, the range controls
+            and the manage actions each stack onto as many lines as they need
+            rather than running off the right edge of the viewport. This row
+            changes what you're looking at (square pills); the row below
+            narrows it (round gold filter chips). */}
+          <span className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              className={pillClass(view === 'uncovered')}
-              onClick={() => setView('uncovered')}
+              className={pillClass(view === 'week')}
+              aria-pressed={view === 'week'}
+              onClick={() => setView('week')}
             >
-              Uncovered
-            </button>
-          )}
-          {canManage && (
-            <button
-              type="button"
-              className={pillClass(view === 'requests')}
-              title="Shifts with an outstanding shift request or open sub request"
-              onClick={() => setView('requests')}
-            >
-              Requests
-              {pendingRequestCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-[var(--pyre-red)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pyre-creme)]">
-                  {pendingRequestCount}
-                </span>
-              )}
-            </button>
-          )}
-          {selfId && calendarView && (
-            <button
-              type="button"
-              className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
-                mineOnly
-                  ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
-                  : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
-              }`}
-              title="Only show shifts you're assigned to"
-              onClick={toggleMineOnly}
-            >
-              My shifts
-            </button>
-          )}
-          {view === 'month' && !monthIsPast && (
-            <button
-              type="button"
-              className={`px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
-                showPast
-                  ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/15 text-[var(--pyre-gold)]'
-                  : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
-              }`}
-              title="Show days earlier in the month"
-              onClick={() => setShowPast((v) => !v)}
-            >
-              Past shifts
-            </button>
-          )}
-          {canManage && calendarView && (
-            <StaffMultiSelect
-              staff={data?.staff ?? []}
-              selected={staffFilter}
-              onChange={setStaffFilter}
-            />
-          )}
-        </span>
-
-        {view === 'week' && (
-          <>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setWeekStart(addDays(weekStart, -7))}
-            >
-              ‹ Prev
+              Week
             </button>
             <button
               type="button"
-              className={buttonClass}
-              onClick={() => setWeekStart(weekStartOf(todayLocal()))}
+              className={pillClass(view === 'month')}
+              aria-pressed={view === 'month'}
+              onClick={() => setView('month')}
             >
-              This week
+              Month
             </button>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setWeekStart(addDays(weekStart, 7))}
-            >
-              Next ›
-            </button>
-            <span className="font-mono text-xl font-bold text-white/80">
-              {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
-            </span>
-          </>
-        )}
-
-        {view === 'month' && (
-          <>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setMonthStart(addMonths(monthStart, -1))}
-            >
-              ‹ Prev
-            </button>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setMonthStart(monthStartOf(todayLocal()))}
-            >
-              This month
-            </button>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setMonthStart(addMonths(monthStart, 1))}
-            >
-              Next ›
-            </button>
-            <span className="font-mono text-xl font-bold text-white/80">
-              {monthLabel(monthStart)}
-            </span>
-          </>
-        )}
-
-        {view === 'uncovered' && (
-          <span className="font-mono text-xl font-bold text-white/80">
-            {uncoveredShifts.length} uncovered through {range.end}
+            {canManage && (
+              <button
+                type="button"
+                className={pillClass(view === 'uncovered')}
+                aria-pressed={view === 'uncovered'}
+                onClick={() => setView('uncovered')}
+              >
+                Uncovered
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                className={pillClass(view === 'requests')}
+                aria-pressed={view === 'requests'}
+                title="Shifts with an outstanding shift request or open sub request"
+                onClick={() => setView('requests')}
+              >
+                Requests
+                {pendingRequestCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-[var(--pyre-red)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pyre-creme)]">
+                    {pendingRequestCount}
+                  </span>
+                )}
+              </button>
+            )}
           </span>
-        )}
 
-        {view === 'requests' && (
-          <span className="font-mono text-xl font-bold text-white/80">
-            {pendingRequestCount} outstanding request{pendingRequestCount === 1 ? '' : 's'}
-          </span>
-        )}
-
-        {canManage && (
-          <span className="flex flex-wrap gap-2 sm:ml-auto">
-            {isAdmin && (
+          {view === 'week' && (
+            <>
               <button
                 type="button"
                 className={buttonClass}
-                title="Employee action settings"
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={() => setWeekStart(addDays(weekStart, -7))}
               >
-                ⚙ Settings
+                ‹ Prev
               </button>
-            )}
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => void syncMomence()}
-              disabled={busy || drafting}
-            >
-              Sync Momence
-            </button>
-            {(view === 'week' || view === 'month') && (
               <button
                 type="button"
-                className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
-                onClick={() => setDraftComposerOpen((open) => !open)}
-                disabled={busy || drafting || draftTargetWeeks.length === 0}
-                title={
-                  view === 'month'
-                    ? 'Drafts every week this month that still has uncovered shifts'
-                    : undefined
-                }
+                className={buttonClass}
+                onClick={() => setWeekStart(weekStartOf(todayLocal()))}
               >
-                {drafting
-                  ? 'Drafting…'
-                  : view === 'month'
-                    ? `✦ Draft uncovered (${draftTargetWeeks.length} wk)`
-                    : '✦ Draft schedule'}
+                This week
+              </button>
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setWeekStart(addDays(weekStart, 7))}
+              >
+                Next ›
+              </button>
+              <span className="font-mono text-xl font-bold text-white/80">
+                {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
+              </span>
+            </>
+          )}
+
+          {view === 'month' && (
+            <>
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setMonthStart(addMonths(monthStart, -1))}
+              >
+                ‹ Prev
+              </button>
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setMonthStart(monthStartOf(todayLocal()))}
+              >
+                This month
+              </button>
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setMonthStart(addMonths(monthStart, 1))}
+              >
+                Next ›
+              </button>
+              <span className="font-mono text-xl font-bold text-white/80">
+                {monthLabel(monthStart)}
+              </span>
+            </>
+          )}
+
+          {view === 'uncovered' && (
+            <span className="font-mono text-xl font-bold text-white/80">
+              {uncoveredShifts.length} uncovered through {range.end}
+            </span>
+          )}
+
+          {view === 'requests' && (
+            <span className="font-mono text-xl font-bold text-white/80">
+              {pendingRequestCount} outstanding request{pendingRequestCount === 1 ? '' : 's'}
+            </span>
+          )}
+
+          {canManage && (
+            <span className="flex flex-wrap gap-2 sm:ml-auto">
+              {isAdmin && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  title="Employee action settings"
+                  onClick={() => setShowSettings(!showSettings)}
+                >
+                  ⚙ Settings
+                </button>
+              )}
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => void syncMomence()}
+                disabled={busy || drafting}
+              >
+                Sync Momence
+              </button>
+              {(view === 'week' || view === 'month') && (
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+                  onClick={() => setDraftComposerOpen((open) => !open)}
+                  disabled={busy || drafting || draftTargetWeeks.length === 0}
+                  title={
+                    view === 'month'
+                      ? 'Drafts every week this month that still has uncovered shifts'
+                      : undefined
+                  }
+                >
+                  {drafting
+                    ? 'Drafting…'
+                    : view === 'month'
+                      ? `✦ Draft uncovered (${draftTargetWeeks.length} wk)`
+                      : '✦ Draft schedule'}
+                </button>
+              )}
+            </span>
+          )}
+          {busy && <span className="font-mono text-xs text-white/40">Saving…</span>}
+          {!busy && loading && data && (
+            <span className="font-mono text-xs text-white/40">Loading…</span>
+          )}
+        </div>
+
+        {(showMineFilter || showPastFilter || showStaffFilter) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={toolbarCaptionClass}>Filter</span>
+            {showMineFilter && (
+              <button
+                type="button"
+                className={filterChipClass(mineOnly)}
+                aria-pressed={mineOnly}
+                title="Only show shifts you're assigned to"
+                onClick={toggleMineOnly}
+              >
+                My shifts
               </button>
             )}
-          </span>
-        )}
-        {busy && <span className="font-mono text-xs text-white/40">Saving…</span>}
-        {!busy && loading && data && (
-          <span className="font-mono text-xs text-white/40">Loading…</span>
+            {showPastFilter && (
+              <button
+                type="button"
+                className={filterChipClass(showPast)}
+                aria-pressed={showPast}
+                title="Show days earlier in the month"
+                onClick={() => setShowPast((v) => !v)}
+              >
+                Past shifts
+              </button>
+            )}
+            {showStaffFilter && (
+              <StaffMultiSelect
+                staff={data?.staff ?? []}
+                selected={staffFilter}
+                onChange={setStaffFilter}
+              />
+            )}
+          </div>
         )}
       </div>
 
