@@ -53,7 +53,7 @@ const promoPopups: PromoPopupConfig[] = [
     // Labor Day 2026 — Fri Sept 4 at noon through end of Mon Sept 7 (Eastern).
     id: 'labor-day-2026',
     enabled: true,
-    headline: 'Labor Day Sale: 25% Off',
+    headline: 'Labor Day Sale!',
     body: 'Take 25% off credits, credit packs, and your first month of membership. Enter the code at checkout.',
     finePrint: 'Offer ends Monday, September 7.',
     code: {
@@ -63,7 +63,7 @@ const promoPopups: PromoPopupConfig[] = [
     promoText: '25% Off',
     cta: {
       label: 'Shop the Sale',
-      href: withBase('/#sessions'),
+      href: withBase('/#membership'),
       ariaLabel: 'Shop credits, credit packs, and memberships',
     },
     dismiss: {
