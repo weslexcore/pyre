@@ -22,6 +22,8 @@ interface PerformanceResponse {
   generatedAt: string;
   days: number;
   cached: boolean;
+  /** PostHog failed; numbers are from the last successful report (generatedAt). */
+  stale: boolean;
   campaigns: CampaignRow[];
   unattributed: Array<{ slug: string; pageviews: number; visitors: number }>;
   posthog: { configured: boolean; missingEvents: string[]; error: string | null };
@@ -85,7 +87,9 @@ export function CampaignPerformance() {
     ? !data.posthog.configured
       ? 'PostHog querying is not configured (set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID) — showing link clicks only.'
       : data.posthog.error
-        ? `PostHog query failed: ${data.posthog.error}`
+        ? data.stale
+          ? `PostHog query failed — showing the last successful report from ${new Date(data.generatedAt).toLocaleString()}. Refresh to retry. (${data.posthog.error})`
+          : `PostHog query failed: ${data.posthog.error}`
         : data.posthog.missingEvents.length > 0
           ? `No ${data.posthog.missingEvents.join(', ')} events found in PostHog — those columns will read 0 until the events flow (check POSTHOG_API_KEY on the integrations deployment).`
           : null
@@ -244,7 +248,7 @@ export function CampaignPerformance() {
       {data && (
         <div className="mt-4 text-xs text-white/40">
           Last {data.days} days · generated {new Date(data.generatedAt).toLocaleString()}
-          {data.cached ? ' (cached, refresh for live data)' : ''}
+          {data.stale ? ' (stale)' : data.cached ? ' (cached, refresh for live data)' : ''}
         </div>
       )}
     </div>
