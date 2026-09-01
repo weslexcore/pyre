@@ -261,111 +261,124 @@ export function ScheduleHours() {
       {(weeks.length === 0 || staffColumns.length === 0) && !busy ? (
         <p className="font-mono text-sm text-white/40">No scheduled hours in this range.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-left font-mono text-xs uppercase tracking-wide text-white/40">
-                <th className="py-2 pr-3">{byPeriod ? 'Pay period' : 'Week of'}</th>
-                {staffColumns.map((s) => (
-                  <th key={s.id} className="py-2 pr-3 text-right">
-                    {s.display_name}
-                    {s.is_founder && <span title="Founder"> ✦</span>}
+        <div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left font-mono text-xs uppercase tracking-wide text-white/40">
+                  <th className="whitespace-nowrap py-2 pr-3">
+                    {byPeriod ? 'Pay period' : 'Week of'}
                   </th>
+                  {staffColumns.map((s) => (
+                    <th key={s.id} className="whitespace-nowrap py-2 pr-3 text-right">
+                      {s.display_name}
+                      {s.is_founder && <span title="Founder"> ✦</span>}
+                    </th>
+                  ))}
+                  {canManage && (
+                    <>
+                      <th className="whitespace-nowrap py-2 pr-3 text-right">Total</th>
+                      {isAdmin && (
+                        <th
+                          className="whitespace-nowrap py-2 pr-3 text-right"
+                          title="Sum of each person's hours × their hourly rate"
+                        >
+                          Cost
+                        </th>
+                      )}
+                      <th className="whitespace-nowrap py-2 text-right">% Founders</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.key} className="border-b border-white/5">
+                    <td className="whitespace-nowrap py-2 pr-3 font-mono text-white/70">
+                      {row.label}
+                      {row.partial && (
+                        <span title="The picked range doesn't cover this whole pay period"> *</span>
+                      )}
+                      {row.sub && <div className="text-xs text-white/40">{row.sub}</div>}
+                    </td>
+                    {staffColumns.map((s) => {
+                      const hours = row.byStaff[s.id] ?? 0;
+                      const amount = rowAmounts[row.key]?.byStaff[s.id];
+                      const stipend = row.stipendByStaff?.[s.id] ?? 0;
+                      return (
+                        <td
+                          key={s.id}
+                          className={`whitespace-nowrap py-2 pr-3 text-right font-mono ${hours === 0 ? 'text-white/25' : ''}`}
+                        >
+                          {fmt(hours)}
+                          {stipend > 0 && (
+                            <div
+                              className="text-xs text-[var(--pyre-gold)]/70"
+                              title="Stipend hours included in this cell (recurring weekly, adjustable per week below)"
+                            >
+                              incl. {fmt(stipend)} stipend
+                            </div>
+                          )}
+                          {amount !== undefined && hours > 0 && (
+                            <div className="text-xs text-white/40">{fmtCost(amount)}</div>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {canManage && (
+                      <>
+                        <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
+                          {fmt(row.total)}
+                        </td>
+                        {isAdmin && (
+                          <td className="whitespace-nowrap py-2 pr-3 text-right font-mono text-white/60">
+                            {fmtCost(rowAmounts[row.key]?.total ?? 0)}
+                          </td>
+                        )}
+                        <td className="whitespace-nowrap py-2 text-right font-mono text-white/60">
+                          {row.founderShare == null
+                            ? '—'
+                            : `${(row.founderShare * 100).toFixed(0)}%`}
+                        </td>
+                      </>
+                    )}
+                  </tr>
                 ))}
-                {canManage && (
-                  <>
-                    <th className="py-2 pr-3 text-right">Total</th>
-                    {isAdmin && (
-                      <th
-                        className="py-2 pr-3 text-right"
-                        title="Sum of each person's hours × their hourly rate"
-                      >
-                        Cost
-                      </th>
-                    )}
-                    <th className="py-2 text-right">% Founders</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="border-b border-white/5">
-                  <td className="py-2 pr-3 font-mono text-white/70">
-                    {row.label}
-                    {row.partial && (
-                      <span title="The picked range doesn't cover this whole pay period"> *</span>
-                    )}
-                    {row.sub && <div className="text-xs text-white/40">{row.sub}</div>}
+                <tr>
+                  <td className="whitespace-nowrap py-2 pr-3 font-mono font-bold text-white/70">
+                    Total
                   </td>
                   {staffColumns.map((s) => {
-                    const hours = row.byStaff[s.id] ?? 0;
-                    const amount = rowAmounts[row.key]?.byStaff[s.id];
-                    const stipend = row.stipendByStaff?.[s.id] ?? 0;
+                    const amount = totalAmounts.byStaff[s.id];
                     return (
                       <td
                         key={s.id}
-                        className={`py-2 pr-3 text-right font-mono ${hours === 0 ? 'text-white/25' : ''}`}
+                        className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold"
                       >
-                        {fmt(hours)}
-                        {stipend > 0 && (
-                          <div
-                            className="text-xs text-[var(--pyre-gold)]/70"
-                            title="Stipend hours included in this cell (recurring weekly, adjustable per week below)"
-                          >
-                            incl. {fmt(stipend)} stipend
-                          </div>
-                        )}
-                        {amount !== undefined && hours > 0 && (
-                          <div className="text-xs text-white/40">{fmtCost(amount)}</div>
+                        {fmt(totals.byStaff[s.id] ?? 0)}
+                        {amount !== undefined && (
+                          <div className="text-xs font-normal text-white/40">{fmtCost(amount)}</div>
                         )}
                       </td>
                     );
                   })}
                   {canManage && (
                     <>
-                      <td className="py-2 pr-3 text-right font-mono font-bold">{fmt(row.total)}</td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
+                        {fmt(totals.total)}
+                      </td>
                       {isAdmin && (
-                        <td className="py-2 pr-3 text-right font-mono text-white/60">
-                          {fmtCost(rowAmounts[row.key]?.total ?? 0)}
+                        <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
+                          {fmtCost(totalAmounts.total)}
                         </td>
                       )}
-                      <td className="py-2 text-right font-mono text-white/60">
-                        {row.founderShare == null ? '—' : `${(row.founderShare * 100).toFixed(0)}%`}
-                      </td>
+                      <td />
                     </>
                   )}
                 </tr>
-              ))}
-              <tr>
-                <td className="py-2 pr-3 font-mono font-bold text-white/70">Total</td>
-                {staffColumns.map((s) => {
-                  const amount = totalAmounts.byStaff[s.id];
-                  return (
-                    <td key={s.id} className="py-2 pr-3 text-right font-mono font-bold">
-                      {fmt(totals.byStaff[s.id] ?? 0)}
-                      {amount !== undefined && (
-                        <div className="text-xs font-normal text-white/40">{fmtCost(amount)}</div>
-                      )}
-                    </td>
-                  );
-                })}
-                {canManage && (
-                  <>
-                    <td className="py-2 pr-3 text-right font-mono font-bold">
-                      {fmt(totals.total)}
-                    </td>
-                    {isAdmin && (
-                      <td className="py-2 pr-3 text-right font-mono font-bold">
-                        {fmtCost(totalAmounts.total)}
-                      </td>
-                    )}
-                    <td />
-                  </>
-                )}
-              </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
           {hasPartial && (
             <p className="mt-2 font-mono text-xs text-white/40">
               * the picked range doesn't cover this whole pay period — widen it before paying out.
