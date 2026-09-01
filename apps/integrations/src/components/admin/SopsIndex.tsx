@@ -631,7 +631,7 @@ export function SopsIndex() {
               return (
                 <a
                   key={run.id}
-                  href={`/admin/sops/${run.slug}?run=1`}
+                  href={`/admin/sops/${run.slug}`}
                   className="block rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/5 p-4 transition-colors hover:border-[var(--pyre-gold)]"
                 >
                   <div className="flex items-baseline justify-between gap-2">

@@ -74,3 +74,19 @@ export function parseChecklist(content: string): ParsedChecklist {
 export function countTasks(content: string): number {
   return parseChecklist(content).tasks.length;
 }
+
+/**
+ * The task at `index` plus every task nested under it, in document order.
+ * Checking a parent checks its whole subtree, so the UI needs the group; a
+ * task with nothing nested returns just itself.
+ */
+export function subtreeTasks(tasks: ChecklistTask[], index: number): ChecklistTask[] {
+  const start = tasks.findIndex((task) => task.index === index);
+  if (start === -1) return [];
+  const root = tasks[start];
+  const group = [root];
+  for (let i = start + 1; i < tasks.length && tasks[i].depth > root.depth; i++) {
+    group.push(tasks[i]);
+  }
+  return group;
+}

@@ -1,10 +1,16 @@
 // Checklist-run API for the SOP library. A run is one execution of a
-// task-bearing SOP: POST starts (or joins the in-progress run of) one, PATCH
-// checks/unchecks items, completes the run, or discards it, GET fetches a
-// single run (?id=), the in-progress run for a document (?sopId=), every
-// unfinished run the caller may view (?view=active — the library's in-progress
-// strip), or the run log (?view=list — admins see all runs, others their
-// own), DELETE (admin only) removes a run and its check records outright.
+// task-bearing SOP: POST starts (or joins the in-progress run of) one —
+// optionally recording a first check in the same request, since the UI starts
+// a run implicitly when the first box is tapped — PATCH checks/unchecks items,
+// completes the run, or discards it, GET fetches a single run (?id=), the
+// in-progress run for a document (?sopId=), every unfinished run the caller
+// may view (?view=active — the library's in-progress strip), or the run log
+// (?view=list — admins see all runs, others their own), DELETE (admin only)
+// removes a run and its check records outright.
+//
+// Runs end implicitly too: an uncheck that leaves zero items checked deletes
+// the run outright (same effect as discard), so a stray first tap that gets
+// untapped never litters the log.
 //
 // A run stays in progress until someone completes it — there is no stepping
 // out of one to come back later. Discard is the escape hatch for a checklist
@@ -42,6 +48,38 @@ const LIST_LIMIT = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
+
+interface CheckItem {
+  itemIndex: number;
+  itemText: string;
+}
+
+/**
+ * A list of checks from a request body, deduped by index — or an error string.
+ * Checking a parent task checks its whole subtree, so both the start request
+ * and the check action carry lists rather than single items.
+ */
+function parseCheckItems(
+  value: unknown
+): { items: CheckItem[]; error?: never } | { error: string } {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { error: 'items must be a non-empty array of { itemIndex, itemText }' };
+  }
+  const byIndex = new Map<number, CheckItem>();
+  for (const entry of value) {
+    const raw = entry as Record<string, unknown> | null;
+    const itemIndex = raw && typeof raw === 'object' ? raw.itemIndex : undefined;
+    if (typeof itemIndex !== 'number' || !Number.isInteger(itemIndex) || itemIndex < 0) {
+      return { error: 'itemIndex must be a non-negative integer' };
+    }
+    const itemText =
+      typeof raw?.itemText === 'string' && raw.itemText.trim()
+        ? raw.itemText.trim().slice(0, MAX_ITEM_TEXT)
+        : `Item ${itemIndex + 1}`;
+    byIndex.set(itemIndex, { itemIndex, itemText });
+  }
+  return { items: [...byIndex.values()] };
+}
 
 /** A run joined to its document and its check rows (?view=active). */
 type ActiveRunRow = SopRunRow & {
@@ -274,6 +312,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const sopId = typeof body.sopId === 'string' ? body.sopId : '';
   if (!UUID_RE.test(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
 
+  // Optional first checks, recorded in the same request as the start so the
+  // UI's tap-to-start needs no second round trip (and no window where a run
+  // exists with nothing checked). A list because tapping a parent task checks
+  // its whole subtree in one go.
+  let initialChecks: CheckItem[] | null = null;
+  if (body.initialChecks !== undefined) {
+    const parsed = parseCheckItems(body.initialChecks);
+    if (parsed.error) return json({ error: `initialChecks: ${parsed.error}` }, 400);
+    initialChecks = parsed.items;
+  }
+
   const { data: sopData, error: sopError } = await db
     .from('sops')
     .select('*')
@@ -289,6 +338,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const taskCount = countTasks(sop.content_md);
   if (taskCount === 0) return json({ error: 'This SOP has no checklist items' }, 400);
+  if (initialChecks?.some((item) => item.itemIndex >= taskCount)) {
+    return json({ error: `initialChecks indexes must be in [0, ${taskCount})` }, 400);
+  }
 
   // One in-progress run per document: starting while one is open resumes it
   // (two people splitting a checklist share the run — that's the point).
@@ -304,6 +356,22 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   if (existing) {
     const run = existing as SopRunRow;
+    // The tap that meant "start" joins the run someone else already opened.
+    // Indexes are validated against that run's (possibly older) snapshot — a
+    // tap past its task list is dropped rather than misfiled.
+    const joinable = (initialChecks ?? []).filter((item) => item.itemIndex < run.task_count);
+    if (joinable.length > 0) {
+      const { error: checkError } = await db.from('sop_run_checks').upsert(
+        joinable.map((item) => ({
+          run_id: run.id,
+          item_index: item.itemIndex,
+          item_text: item.itemText,
+          checked_by: gate.user.email ?? '',
+        })),
+        { onConflict: 'run_id,item_index', ignoreDuplicates: true }
+      );
+      if (checkError) return json({ error: checkError.message }, 500);
+    }
     const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
     if (checksError) return json({ error: checksError.message }, 500);
     const { snapshot } = await loadRunContent(db, run);
@@ -330,13 +398,36 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (createError) return json({ error: createError.message }, 500);
 
   const newRun = created as SopRunRow;
+  let newChecks: SopRunCheckRow[] = [];
+  if (initialChecks) {
+    // No transaction over PostgREST: if this insert fails, best-effort delete
+    // the just-created run so the failed tap doesn't leave an empty run
+    // behind. (A crash between the two statements can — the uncheck
+    // auto-discard and explicit Discard both clean that up.)
+    const { data: checkRows, error: checkError } = await db
+      .from('sop_run_checks')
+      .insert(
+        initialChecks.map((item) => ({
+          run_id: newRun.id,
+          item_index: item.itemIndex,
+          item_text: item.itemText,
+          checked_by: gate.user.email ?? '',
+        }))
+      )
+      .select('*');
+    if (checkError) {
+      await db.from('sop_runs').delete().eq('id', newRun.id);
+      return json({ error: checkError.message }, 500);
+    }
+    newChecks = (checkRows ?? []) as SopRunCheckRow[];
+  }
   return json(
     {
       run: newRun,
-      checks: [],
+      checks: newChecks,
       content: sop.content_md,
       resumed: false,
-      people: await getPeopleNames(runActors(newRun, [])),
+      people: await getPeopleNames(runActors(newRun, newChecks)),
     },
     201
   );
@@ -389,28 +480,29 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const email = gate.user.email ?? '';
 
   if (action === 'check') {
-    const itemIndex = body.itemIndex;
-    if (
-      typeof itemIndex !== 'number' ||
-      !Number.isInteger(itemIndex) ||
-      itemIndex < 0 ||
-      itemIndex >= run.task_count
-    ) {
+    // One or many items — tapping a parent task checks its whole subtree.
+    // A bare { itemIndex, itemText } is accepted as shorthand for one item.
+    const parsed = parseCheckItems(
+      body.items !== undefined
+        ? body.items
+        : [{ itemIndex: body.itemIndex, itemText: body.itemText }]
+    );
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    if (parsed.items.some((item) => item.itemIndex >= run.task_count)) {
       return json({ error: `itemIndex must be an integer in [0, ${run.task_count})` }, 400);
     }
-    const itemText =
-      typeof body.itemText === 'string' && body.itemText.trim()
-        ? body.itemText.trim().slice(0, MAX_ITEM_TEXT)
-        : `Item ${itemIndex + 1}`;
 
     // The (run_id, item_index) unique constraint makes a double-check from two
     // devices a no-op instead of an error.
-    const { error } = await db
-      .from('sop_run_checks')
-      .upsert(
-        { run_id: runId, item_index: itemIndex, item_text: itemText, checked_by: email },
-        { onConflict: 'run_id,item_index', ignoreDuplicates: true }
-      );
+    const { error } = await db.from('sop_run_checks').upsert(
+      parsed.items.map((item) => ({
+        run_id: runId,
+        item_index: item.itemIndex,
+        item_text: item.itemText,
+        checked_by: email,
+      })),
+      { onConflict: 'run_id,item_index', ignoreDuplicates: true }
+    );
     if (error) return json({ error: error.message }, 500);
   } else if (action === 'uncheck') {
     const itemIndex = body.itemIndex;
@@ -423,6 +515,27 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('run_id', runId)
       .eq('item_index', itemIndex);
     if (error) return json({ error: error.message }, 500);
+
+    // Runs start implicitly with the first check, so they end implicitly when
+    // the last one goes: nothing checked means nothing happened, and the run
+    // vanishes like a discard. Race note: if a teammate's check lands between
+    // the delete above and this count, the count is non-zero and the run
+    // survives (correct); if their check is in flight when the run row goes,
+    // that insert fails on the FK and their client retries as a fresh start.
+    const { count, error: countError } = await db
+      .from('sop_run_checks')
+      .select('id', { count: 'exact', head: true })
+      .eq('run_id', runId);
+    if (countError) return json({ error: countError.message }, 500);
+    if ((count ?? 0) === 0) {
+      const { error: discardError } = await db
+        .from('sop_runs')
+        .delete()
+        .eq('id', runId)
+        .eq('status', 'in_progress');
+      if (discardError) return json({ error: discardError.message }, 500);
+      return json({ run: null, checks: [], discarded: true });
+    }
   } else if (action === 'discard') {
     // Started by mistake: erase the run and its checks (they cascade) so
     // nothing lands in the log. Only reachable while in progress — the status

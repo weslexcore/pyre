@@ -17,10 +17,11 @@ describe('SopMarkdown', () => {
     const html = renderToStaticMarkup(<SopMarkdown content={SAMPLE} />);
     expect(html).toContain('Large Sauna');
     expect(html).toContain('Uncover wood + stage wood under anteroom bench');
-    // Task items render as (enabled) checkboxes staff can tick off.
+    // Task checkboxes here are reference-only — the live ones are
+    // ChecklistView's — so they render disabled.
     expect(html.match(/type="checkbox"/g)?.length).toBe(2);
     expect(html).toContain('checked');
-    expect(html).not.toContain('disabled');
+    expect(html).toContain('disabled');
     expect(html).toContain('<blockquote');
     expect(html).toContain('Ongoing:');
   });
@@ -50,7 +51,10 @@ describe('SopMarkdown', () => {
 
   it('wraps search matches in <mark> across element types', () => {
     const html = renderToStaticMarkup(
-      <SopMarkdown content={'## Sauna\n\n- [ ] Wipe **sauna** glass\n\nPlain sauna text.'} highlight="sauna" />
+      <SopMarkdown
+        content={'## Sauna\n\n- [ ] Wipe **sauna** glass\n\nPlain sauna text.'}
+        highlight="sauna"
+      />
     );
     // Heading text, bold text inside a task item, and paragraph text all mark.
     expect(html.match(/<mark/g)?.length).toBe(3);
@@ -66,5 +70,26 @@ describe('SopMarkdown', () => {
     const html = renderToStaticMarkup(<SopMarkdown content={'Just **bold** text.'} />);
     expect(html).toContain('<strong');
     expect(html).not.toContain('**');
+  });
+
+  it('turns library links into peek buttons when onSopLink is provided', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown
+        content={'[Towels](/admin/sops/momence-dirty-towels) and [Momence](https://momence.com)'}
+        onSopLink={() => {}}
+      />
+    );
+    // The library link becomes a button; the external link stays an anchor.
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>Towels<\/button>/);
+    expect(html).toContain('<a href="https://momence.com"');
+    expect(html).not.toContain('href="/admin/sops/momence-dirty-towels"');
+  });
+
+  it('leaves library links as plain anchors without onSopLink', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown content={'[Towels](/admin/sops/momence-dirty-towels)'} />
+    );
+    expect(html).toContain('<a href="/admin/sops/momence-dirty-towels"');
+    expect(html).not.toContain('<button');
   });
 });

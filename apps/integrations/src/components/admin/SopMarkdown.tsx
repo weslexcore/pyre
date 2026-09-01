@@ -1,8 +1,14 @@
 // Markdown renderer for SOP documents (view mode and edit preview). GFM so
 // the seeded checklists' task lists work; no typography plugin in this app,
 // so each element is styled inline for the dark admin theme. Task-list
-// checkboxes are left enabled — staff tick items off as they run a checklist
-// (client-side only, resets on reload; the document itself is never mutated).
+// checkboxes render disabled here — the live, persisted checkboxes belong to
+// ChecklistView; everywhere this component shows a task line (edit preview,
+// the peek modal, prose edge cases) it is reference material, and a tickable
+// box that saves nothing would be a lie.
+//
+// `onSopLink` turns links to other library documents (/admin/sops/<slug>)
+// into buttons that open the peek modal instead of navigating; without it
+// they stay plain links.
 //
 // `highlight` wraps every occurrence of the term in <mark> for the in-document
 // search: every text node is a direct string child of one of the overridden
@@ -11,6 +17,7 @@
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { sopSlugFromHref } from '@/lib/sops/links';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
@@ -28,7 +35,15 @@ function markString(text: string, term: string, keyBase: string): ReactNode[] {
   );
 }
 
-export function SopMarkdown({ content, highlight }: { content: string; highlight?: string }) {
+export function SopMarkdown({
+  content,
+  highlight,
+  onSopLink,
+}: {
+  content: string;
+  highlight?: string;
+  onSopLink?: (slug: string) => void;
+}) {
   const term = highlight?.trim() ?? '';
   const active = term.length >= MIN_QUERY_LENGTH;
 
@@ -79,8 +94,10 @@ export function SopMarkdown({ content, highlight }: { content: string; highlight
           input: ({ checked }) => (
             <input
               type="checkbox"
-              defaultChecked={checked === true}
-              className="mr-2 h-4 w-4 align-[-3px] accent-[var(--pyre-gold)]"
+              checked={checked === true}
+              disabled
+              readOnly
+              className="mr-2 h-4 w-4 align-[-3px] opacity-60 accent-[var(--pyre-gold)]"
             />
           ),
           blockquote: ({ children }) => (
@@ -98,15 +115,30 @@ export function SopMarkdown({ content, highlight }: { content: string; highlight
               {children}
             </pre>
           ),
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              className="text-[var(--pyre-gold)] underline hover:text-white"
-              rel="noopener noreferrer"
-            >
-              {hl(children)}
-            </a>
-          ),
+          a: ({ children, href }) => {
+            const slug = sopSlugFromHref(href);
+            if (slug && onSopLink) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => onSopLink(slug)}
+                  aria-haspopup="dialog"
+                  className="cursor-pointer text-[var(--pyre-gold)] underline hover:text-white"
+                >
+                  {hl(children)}
+                </button>
+              );
+            }
+            return (
+              <a
+                href={href}
+                className="text-[var(--pyre-gold)] underline hover:text-white"
+                rel="noopener noreferrer"
+              >
+                {hl(children)}
+              </a>
+            );
+          },
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto">
               <table className="w-full border-collapse text-sm">{children}</table>

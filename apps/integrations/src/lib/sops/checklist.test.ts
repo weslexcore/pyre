@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countTasks, parseChecklist } from './checklist';
+import { countTasks, parseChecklist, subtreeTasks } from './checklist';
 
 const DOC = `## Large Sauna
 
@@ -62,5 +62,27 @@ describe('countTasks', () => {
   it('counts tasks and returns 0 for prose documents', () => {
     expect(countTasks(DOC)).toBe(5);
     expect(countTasks('no tasks here')).toBe(0);
+  });
+});
+
+describe('subtreeTasks', () => {
+  const { tasks } = parseChecklist(DOC);
+
+  it('returns a parent with everything nested under it', () => {
+    expect(subtreeTasks(tasks, 1).map((t) => t.text)).toEqual([
+      '**Ensure fire is out!**',
+      'Remove chimney',
+      'Cover chimney hole',
+    ]);
+  });
+
+  it('returns a leaf alone', () => {
+    expect(subtreeTasks(tasks, 0).map((t) => t.index)).toEqual([0]);
+    expect(subtreeTasks(tasks, 2).map((t) => t.index)).toEqual([2]);
+    expect(subtreeTasks(tasks, 4).map((t) => t.index)).toEqual([4]);
+  });
+
+  it('returns nothing for an unknown index', () => {
+    expect(subtreeTasks(tasks, 99)).toEqual([]);
   });
 });

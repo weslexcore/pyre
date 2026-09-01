@@ -5,15 +5,24 @@
 // save is optimistic-locked on the version the editor opened, so simultaneous
 // edits surface as a reload prompt instead of a silent overwrite. The API
 // enforces the real guards — this island just mirrors them.
+//
+// Task-bearing documents render as a live checklist (ChecklistView): there is
+// no separate run mode — checking the first item starts the shared run,
+// unchecking the last one silently discards it, and links to other library
+// documents open in a peek modal (SopPeekModal) so a tutorial never navigates
+// away from a half-finished checklist.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SopRow, SopRunCheckRow, SopRunRow, SopVersionRow } from '@/lib/db';
-import { countTasks, parseChecklist } from '@/lib/sops/checklist';
+import { countTasks } from '@/lib/sops/checklist';
 import { diffLines, diffSummary } from '@/lib/sops/diff';
 import { EVERYONE_LABEL, type SopRole } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
+import { ChecklistView } from './ChecklistView';
+import { ConfirmDialog } from './ConfirmDialog';
 import { type GrantablePerson, SopAccessPicker, withAdmins } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
+import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
 
 interface DocResponse {
@@ -30,6 +39,8 @@ interface DocResponse {
   /** Roster names for the emails stored on versions, runs and checks. */
   people?: PeopleNames;
 }
+
+type CheckItems = { itemIndex: number; itemText: string }[];
 
 const inputClass =
   'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
@@ -93,125 +104,6 @@ function VersionDiff({ version, previous }: { version: SopVersionRow; previous?:
   );
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-// Indent per nesting depth (matches the parser's 2-spaces-per-level).
-const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
-
-/**
- * The live checklist: the document's prose rendered as usual, its task items
- * as real checkboxes bound to the shared run — each checked item shows who
- * ticked it and when. There are two ways out: finish it, or discard it if it
- * was started by mistake (that leaves no record). A run left alone stays in
- * progress and keeps showing up as active.
- */
-function RunView({
-  runData,
-  people,
-  currentVersion,
-  busy,
-  onToggle,
-  onFinish,
-}: {
-  runData: { run: SopRunRow; checks: SopRunCheckRow[]; content: string };
-  people?: PeopleNames;
-  currentVersion: number;
-  busy: boolean;
-  onToggle: (itemIndex: number, itemText: string, checked: boolean) => void;
-  onFinish: (action: 'complete' | 'discard') => void;
-}) {
-  const { run, checks, content } = runData;
-  const parsed = useMemo(() => parseChecklist(content), [content]);
-  const checkByIndex = useMemo(() => new Map(checks.map((c) => [c.item_index, c])), [checks]);
-  const done = checks.length;
-  const total = run.task_count;
-
-  return (
-    <div className="space-y-4">
-      <div className="sticky top-14 z-30 space-y-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-black)] p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
-            Checklist in progress
-          </span>
-          <span className="font-mono text-xs text-white/60">
-            {done}/{total} done
-          </span>
-          <span className="font-mono text-[10px] text-white/40">
-            started by {personName(run.started_by, people)} at {formatTime(run.started_at)}
-          </span>
-          <span className="ml-auto flex gap-2">
-            <button
-              type="button"
-              className={primaryButtonClass}
-              disabled={busy}
-              onClick={() => onFinish('complete')}
-            >
-              Finish
-            </button>
-            <button
-              type="button"
-              // The only way out other than finishing, so it reads at the
-              // same size as Finish — muted, but not hidden.
-              className="rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-[var(--pyre-red)]/50 hover:text-[var(--pyre-red)] disabled:opacity-40"
-              disabled={busy}
-              onClick={() => onFinish('discard')}
-            >
-              Discard
-            </button>
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded bg-white/10">
-          <div
-            className="h-full bg-[var(--pyre-gold)] transition-all"
-            style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
-          />
-        </div>
-        {run.sop_version !== currentVersion && (
-          <p className="font-mono text-[10px] text-white/40">
-            Showing v{run.sop_version}, the version this run started with (the document has since
-            changed).
-          </p>
-        )}
-      </div>
-
-      <div className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
-        {parsed.segments.map((segment) => {
-          if (segment.kind === 'markdown') {
-            return <SopMarkdown key={`md-${segment.line}`} content={segment.content} />;
-          }
-          const { task } = segment;
-          const check = checkByIndex.get(task.index);
-          return (
-            <div key={`task-${segment.line}`} className={`py-1 ${DEPTH_PAD[task.depth] ?? ''}`}>
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--pyre-gold)]"
-                  checked={!!check}
-                  disabled={busy}
-                  onChange={(e) => onToggle(task.index, task.text, e.target.checked)}
-                />
-                <div
-                  className={`text-sm [&_p]:my-0 ${check ? 'text-white/40 line-through' : 'text-white/80'}`}
-                >
-                  <SopMarkdown content={task.text} />
-                </div>
-              </label>
-              {check && (
-                <p className="mt-0.5 pl-8 font-mono text-[10px] text-[var(--pyre-sage)]">
-                  ✓ {personName(check.checked_by, people)} · {formatTime(check.checked_at)}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function SopDocument({ slug }: { slug: string }) {
   const [data, setData] = useState<DocResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -219,7 +111,7 @@ export function SopDocument({ slug }: { slug: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [mode, setMode] = useState<'view' | 'edit' | 'run'>('view');
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -299,6 +191,12 @@ export function SopDocument({ slug }: { slug: string }) {
   // document response only knows its editors, so the two merge for rendering.
   const [runPeople, setRunPeople] = useState<PeopleNames>({});
 
+  // Which finish action is awaiting confirmation in the dialog, if any.
+  const [confirmAction, setConfirmAction] = useState<'complete' | 'discard' | null>(null);
+
+  // Library document opened in the peek modal from an in-content link.
+  const [peekSlug, setPeekSlug] = useState<string | null>(null);
+
   const taskCount = useMemo(() => (data ? countTasks(data.sop.content_md) : 0), [data]);
 
   // Look up an already-in-progress run so the toolbar can offer Resume.
@@ -328,33 +226,25 @@ export function SopDocument({ slug }: { slug: string }) {
     };
   }, [data, taskCount]);
 
-  const startRun = async () => {
+  // Start a run (or join the one a teammate opened) and record the tap that
+  // started it in the same request — the checklist has no Start button.
+  const startWithChecks = async (items: CheckItems) => {
     if (!data) return;
-    setRunBusy(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch('/api/admin/sop-runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sopId: data.sop.id }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as {
-        run: SopRunRow;
-        checks: SopRunCheckRow[];
-        content: string;
-        resumed: boolean;
-        people?: PeopleNames;
-      };
-      setRunData({ run: body.run, checks: body.checks, content: body.content });
-      setRunPeople((prev) => ({ ...prev, ...body.people }));
-      setMode('run');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start the checklist');
-    } finally {
-      setRunBusy(false);
-    }
+    const res = await fetch('/api/admin/sop-runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sopId: data.sop.id, initialChecks: items }),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    const body = (await res.json()) as {
+      run: SopRunRow;
+      checks: SopRunCheckRow[];
+      content: string;
+      resumed: boolean;
+      people?: PeopleNames;
+    };
+    setRunPeople((prev) => ({ ...prev, ...body.people }));
+    setRunData({ run: body.run, checks: body.checks, content: body.content });
   };
 
   const patchRun = async (payload: Record<string, unknown>) => {
@@ -376,15 +266,40 @@ export function SopDocument({ slug }: { slug: string }) {
     return body;
   };
 
-  const toggleCheck = async (itemIndex: number, itemText: string, checked: boolean) => {
-    if (!runData || runBusy) return;
+  // `items` carries one entry per affected task — a tap on a parent brings
+  // its whole subtree along (ChecklistView computes the group).
+  const toggleCheck = async (items: CheckItems, checked: boolean) => {
+    if (!data || runBusy || items.length === 0) return;
     setRunBusy(true);
     setError(null);
     try {
-      const body = await patchRun(
-        checked ? { action: 'check', itemIndex, itemText } : { action: 'uncheck', itemIndex }
-      );
-      if (body?.run) setRunData({ ...runData, run: body.run, checks: body.checks });
+      if (!runData) {
+        // No run yet: the first check starts one. (Unchecking an unchecked
+        // box can't happen, but guard anyway.)
+        if (checked) await startWithChecks(items);
+        return;
+      }
+      if (checked) {
+        try {
+          const body = await patchRun({ action: 'check', items });
+          if (body?.run) setRunData({ ...runData, run: body.run, checks: body.checks });
+        } catch (e) {
+          // The run may have vanished under us — a teammate unchecked the last
+          // item and it auto-discarded. If so, this tap becomes a fresh start.
+          const probe = await fetch(`/api/admin/sop-runs?sopId=${data.sop.id}`);
+          const alive = probe.ok && ((await probe.json()) as { run: SopRunRow | null }).run;
+          if (alive) throw e;
+          setRunData(null);
+          await startWithChecks(items);
+        }
+      } else {
+        const body = await patchRun({ action: 'uncheck', itemIndex: items[0].itemIndex });
+        if (!body) return;
+        // run comes back null when nothing is checked any more: the server
+        // discarded the run, and the page quietly returns to its clean state.
+        if (body.run) setRunData({ ...runData, run: body.run, checks: body.checks });
+        else setRunData(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the check');
     } finally {
@@ -392,28 +307,30 @@ export function SopDocument({ slug }: { slug: string }) {
     }
   };
 
-  const finishRun = async (action: 'complete' | 'discard') => {
+  // A finish that loses nothing (everything checked, or discarding an empty
+  // run) goes straight through; anything else confirms in the dialog first.
+  const requestFinish = (action: 'complete' | 'discard') => {
     if (!runData) return;
     const done = runData.checks.length;
-    const unchecked = runData.run.task_count - done;
-    const message =
-      action === 'complete'
-        ? unchecked > 0
-          ? `${unchecked} item${unchecked === 1 ? '' : 's'} unchecked — finish anyway? The record will show what was skipped.`
-          : null
-        : // Discard throws the run away, so it always confirms — and says what
-          // goes with it when someone has already checked things off.
-          done > 0
-          ? `Discard this checklist? Nothing is saved — the ${done} item${done === 1 ? '' : 's'} already checked off will be erased.`
-          : 'Discard this checklist? Nothing is saved and no run is logged.';
-    if (message && !window.confirm(message)) return;
+    if (action === 'complete' && done >= runData.run.task_count) {
+      void finishRun(action);
+      return;
+    }
+    if (action === 'discard' && done === 0) {
+      void finishRun(action);
+      return;
+    }
+    setConfirmAction(action);
+  };
 
+  const finishRun = async (action: 'complete' | 'discard') => {
+    if (!runData) return;
+    setConfirmAction(null);
     setRunBusy(true);
     setError(null);
     try {
       await patchRun({ action });
       setRunData(null);
-      setMode('view');
       setNotice(
         action === 'complete'
           ? 'Checklist completed — nice work.'
@@ -475,15 +392,11 @@ export function SopDocument({ slug }: { slug: string }) {
     }
   }, [data, mode, startEdit]);
 
-  // ?run=1 (the library's resume strip) opens the checklist as soon as the
-  // in-progress run has loaded. If the run was finished from another device in
-  // the meantime the lookup comes back empty and this stays in view mode — the
-  // toolbar then offers Start instead.
+  // The checklist is always live now, so ?run=1 (old resume links and
+  // bookmarks) has nothing to switch — just strip it from the URL.
   useEffect(() => {
-    if (!runData || mode !== 'view') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('run') !== '1') return;
-    setMode('run');
     params.delete('run');
     const query = params.toString();
     window.history.replaceState(
@@ -491,7 +404,7 @@ export function SopDocument({ slug }: { slug: string }) {
       '',
       query ? `${window.location.pathname}?${query}` : window.location.pathname
     );
-  }, [runData, mode]);
+  }, []);
 
   const save = async (content: string, title: string, note: string | null) => {
     if (!data) return;
@@ -587,21 +500,6 @@ export function SopDocument({ slug }: { slug: string }) {
         <a href="/admin/sops" className={buttonClass}>
           ← All SOPs
         </a>
-        {mode === 'view' && taskCount > 0 && !sop.archived && (
-          <button
-            type="button"
-            className={primaryButtonClass}
-            disabled={runBusy}
-            onClick={() => {
-              if (runData) setMode('run');
-              else void startRun();
-            }}
-          >
-            {runData
-              ? `Resume checklist (${runData.checks.length}/${runData.run.task_count})`
-              : 'Start checklist'}
-          </button>
-        )}
         {mode === 'view' && canEdit && !sop.archived && (
           <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
             Edit
@@ -835,16 +733,7 @@ export function SopDocument({ slug }: { slug: string }) {
         </div>
       )}
 
-      {mode === 'run' && runData ? (
-        <RunView
-          runData={runData}
-          people={people}
-          currentVersion={sop.current_version}
-          busy={runBusy}
-          onToggle={toggleCheck}
-          onFinish={finishRun}
-        />
-      ) : mode === 'view' ? (
+      {mode === 'view' ? (
         <>
           <div className="flex items-center gap-3">
             <input
@@ -861,9 +750,29 @@ export function SopDocument({ slug }: { slug: string }) {
               </span>
             )}
           </div>
-          <div ref={contentRef} className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
-            <SopMarkdown content={sop.content_md} highlight={docTerm} />
-          </div>
+          {taskCount > 0 && !sop.archived ? (
+            // The live checklist. With a run open it renders the run's pinned
+            // snapshot; otherwise the current document, ready for a first tap.
+            <div ref={contentRef}>
+              <ChecklistView
+                content={runData?.content ?? sop.content_md}
+                run={runData?.run ?? null}
+                checks={runData?.checks ?? []}
+                people={people}
+                currentVersion={sop.current_version}
+                busy={runBusy}
+                highlight={docTerm}
+                onSopLink={setPeekSlug}
+                onToggle={toggleCheck}
+                onFinish={() => requestFinish('complete')}
+                onDiscard={() => requestFinish('discard')}
+              />
+            </div>
+          ) : (
+            <div ref={contentRef} className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
+              <SopMarkdown content={sop.content_md} highlight={docTerm} onSopLink={setPeekSlug} />
+            </div>
+          )}
         </>
       ) : (
         <div className="space-y-3">
@@ -890,12 +799,13 @@ export function SopDocument({ slug }: { slug: string }) {
               Preview
             </button>
             <span className="ml-auto font-mono text-[10px] text-white/40">
-              Markdown — use “- [ ]” for checklist items
+              Markdown — “- [ ]” for checklist items · link another SOP with
+              [name](/admin/sops/slug)
             </span>
           </div>
           {preview ? (
             <div className="min-h-[50vh] rounded border border-white/10 bg-white/5 p-5">
-              <SopMarkdown content={draftContent} />
+              <SopMarkdown content={draftContent} onSopLink={setPeekSlug} />
             </div>
           ) : (
             <textarea
@@ -934,6 +844,28 @@ export function SopDocument({ slug }: { slug: string }) {
           </div>
         </div>
       )}
+
+      {confirmAction && runData && (
+        <ConfirmDialog
+          title={confirmAction === 'complete' ? 'Finish checklist?' : 'Discard checklist?'}
+          body={
+            confirmAction === 'complete'
+              ? `${runData.run.task_count - runData.checks.length} item${
+                  runData.run.task_count - runData.checks.length === 1 ? '' : 's'
+                } unchecked — the record will show what was skipped.`
+              : `Nothing is saved — the ${runData.checks.length} item${
+                  runData.checks.length === 1 ? '' : 's'
+                } already checked off will be erased.`
+          }
+          confirmLabel={confirmAction === 'complete' ? 'Finish' : 'Discard'}
+          danger={confirmAction === 'discard'}
+          busy={runBusy}
+          onConfirm={() => void finishRun(confirmAction)}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
+      {peekSlug && <SopPeekModal slug={peekSlug} onClose={() => setPeekSlug(null)} />}
     </div>
   );
 }
