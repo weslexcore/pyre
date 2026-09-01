@@ -1885,7 +1885,7 @@ function ShiftDetail({
                 <button
                   type="button"
                   className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-                  title="Ask to work the whole shift"
+                  title="Ask to a shift"
                   disabled={busy}
                   onClick={() =>
                     setRequestDraft(
@@ -1893,9 +1893,9 @@ function ShiftDetail({
                     )
                   }
                 >
-                  Full shift
+                  Request
                 </button>
-                <button
+                {/* <button
                   type="button"
                   className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
                   title="Ask to work just the setup — the first 2 hours of the window"
@@ -1909,7 +1909,7 @@ function ShiftDetail({
                   }
                 >
                   Setup only
-                </button>
+                </button> */}
               </>
             )}
           </div>
