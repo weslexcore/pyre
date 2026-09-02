@@ -28,8 +28,11 @@ export const STATUS_META: Record<SopRunRow['status'], { label: string; className
   abandoned: { label: 'Abandoned', className: 'text-white/40' },
 };
 
+// Pinned locale + venue time zone so server and client renders agree (the
+// SOP page hydrates from server-rendered markup).
 export function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

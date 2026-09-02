@@ -1,12 +1,15 @@
 ---
-// One SOP document. The title is resolved server-side (with the same
-// role check the API applies) purely so the page header reads right; the
-// island fetches the document + history itself and /api/admin/sops stays the
-// security boundary.
+// One SOP document. The document — and the in-progress run when there is
+// one — is loaded here and rendered into the page, so the island paints with
+// the checklist already in place instead of fetching it after hydration.
+// The same loader backs /api/admin/sops, which stays the security boundary
+// for every mutation; the middleware has already validated the session and
+// resolved dashboard access for this request (Astro.locals).
 import { SopDocument } from '@/components/admin/SopDocument';
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import { getDb, type SopRow } from '@/lib/db';
-import { canViewSop, normalizeEmail } from '@/lib/sops/levels';
+import { getDb } from '@/lib/db';
+import { loadSopDocument, type SopDocumentPayload } from '@/lib/sops/document';
+import { normalizeEmail } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 const slug = Astro.params.slug ?? '';
@@ -14,15 +17,26 @@ const access = Astro.locals.adminAccess ?? null;
 const email = Astro.locals.adminUser?.email ?? null;
 
 let title = 'SOP';
+let initial: SopDocumentPayload | null = null;
+let initialError: string | null = null;
+
 const db = getDb();
 if (db && access) {
-  const { data } = await db.from('sops').select('*').eq('slug', slug).maybeSingle();
-  const sop = (data as SopRow) ?? null;
   const viewer = { role: await getSopRole(email, access), email: normalizeEmail(email) };
-  if (sop && canViewSop(viewer, sop)) title = sop.title;
+  const result = await loadSopDocument(db, viewer, { slug });
+  if (result.ok) {
+    initial = result.doc;
+    title = result.doc.sop.title;
+  } else {
+    initialError = result.error;
+    Astro.response.status = result.status;
+  }
+} else if (!db) {
+  initialError = 'Storage unavailable';
+  Astro.response.status = 503;
 }
 ---
 
 <AdminLayout title={title} subtitle="Standard operating procedure">
-  <SopDocument client:load slug={slug} />
+  <SopDocument client:load slug={slug} initial={initial} initialError={initialError} />
 </AdminLayout>

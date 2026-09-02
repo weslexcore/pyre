@@ -1,7 +1,8 @@
 // SOP library API for the /admin/sops tool. GET lists the SOPs the caller's
 // role may view — plus the section names to group them under, which for admins
 // includes sections holding nothing yet (see /api/admin/sop-categories) — or
-// one document + its history with ?slug= / ?id=. PUT saves
+// one document (with its in-progress run) with ?slug= / ?id=, or that
+// document's version history with &view=versions. PUT saves
 // a new version (per-document edit grants, optimistic-locked on baseVersion),
 // POST / PATCH / DELETE are admin-only: create, change settings (access
 // grants, category, archive), and permanently delete an archived document.
@@ -15,6 +16,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
+import { loadSop, loadSopDocument, redactGrantEmails } from '@/lib/sops/document';
 import {
   canEditSop,
   canViewSop,
@@ -91,20 +93,6 @@ async function parseGrantEmails(
 }
 
 /**
- * Individually granted emails, for anyone who has no business reading the
- * roster. A staffer may open a document without being entitled to a list of
- * which teammates were named on it — the same reason getPeopleNames answers
- * only for emails a response already mentions.
- */
-function redactGrantEmails<T extends { view_emails: string[]; edit_emails: string[] }>(
-  row: T,
-  isAdmin: boolean
-): T {
-  if (isAdmin) return row;
-  return { ...row, view_emails: [], edit_emails: [] };
-}
-
-/**
  * The list payload: everything but the (potentially large) markdown body, plus
  * the task count so the library can mark runnable checklists, and the
  * who-can-read summary. That summary is computed here rather than in the
@@ -153,20 +141,6 @@ async function ensureCategory(
     .insert({ name, sort_order: last ? (last.sort_order as number) + 1 : 0 });
 }
 
-async function loadSop(
-  db: NonNullable<ReturnType<typeof getDb>>,
-  ref: { id?: string | null; slug?: string | null }
-): Promise<{ sop: SopRow | null; error: string | null }> {
-  let query = db.from('sops').select('*');
-  if (ref.id) query = query.eq('id', ref.id);
-  else if (ref.slug) query = query.eq('slug', ref.slug);
-  else return { sop: null, error: null };
-
-  const { data, error } = await query.maybeSingle();
-  if (error) return { sop: null, error: error.message };
-  return { sop: (data as SopRow) ?? null, error: null };
-}
-
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, PAGE);
   if (gate instanceof Response) return gate;
@@ -181,12 +155,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const id = url.searchParams.get('id');
   const slug = url.searchParams.get('slug');
 
-  // Single document + its version history.
-  if (id || slug) {
+  // Version history for one document, fetched only when the History panel
+  // opens — the bodies of up to MAX_VERSIONS saves have no business on the
+  // document's critical path.
+  if ((id || slug) && url.searchParams.get('view') === 'versions') {
     if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
     const { sop, error } = await loadSop(db, { id, slug });
     if (error) return json({ error }, 500);
-    // 404 for both "doesn't exist" and "not allowed to know it exists".
     if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
     const { data: versions, error: versionsError } = await db
@@ -197,42 +172,22 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .limit(MAX_VERSIONS);
     if (versionsError) return json({ error: versionsError.message }, 500);
 
-    // The settings panel is admin-only and lets the document be refiled and
-    // re-granted, so only admins need the sections and the roster to choose
-    // from — the roster especially, since it's the whole staff address book.
-    let sections: string[] | undefined;
-    if (role === 'admin') {
-      const { data: ranks, error: ranksError } = await db
-        .from('sop_categories')
-        .select('name, sort_order');
-      if (ranksError) return json({ error: ranksError.message }, 500);
-      const { data: used, error: usedError } = await db.from('sops').select('category');
-      if (usedError) return json({ error: usedError.message }, 500);
-      sections = sectionsInOrder(
-        (ranks ?? []) as CategoryRank[],
-        (used ?? []) as { category: string }[]
-      );
-    }
-
-    const grants = effectiveViewGrants(sop);
-
+    const rows = (versions ?? []) as SopVersionRow[];
     return json({
-      sop: redactGrantEmails(sop, role === 'admin'),
-      // Same summary the library cards carry, for the same reason: a
-      // non-admin can't compute it from a redacted row.
-      accessLabel: describeGrants(grants.roles, grants.emails),
-      versions: (versions ?? []) as SopVersionRow[],
-      role,
-      canEdit: canEditSop(viewer, sop),
-      categories: sections,
-      staff: role === 'admin' ? await listGrantablePeople() : undefined,
-      // Names for the editors this response names, so the header and history
-      // read as people rather than mailbox local parts.
-      people: await getPeopleNames([
-        sop.updated_by ?? '',
-        ...((versions ?? []) as SopVersionRow[]).map((v) => v.edited_by),
-      ]),
+      versions: rows,
+      // Names for the editors, so history reads as people rather than
+      // mailbox local parts.
+      people: await getPeopleNames(rows.map((v) => v.edited_by)),
     });
+  }
+
+  // Single document, with its in-progress run embedded (the same payload the
+  // page renders server-side; see lib/sops/document.ts).
+  if (id || slug) {
+    if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    const result = await loadSopDocument(db, viewer, { id, slug });
+    if (!result.ok) return json({ error: result.error }, result.status);
+    return json(result.doc);
   }
 
   // Library listing, filtered to what this role may view and sorted by the

@@ -34,6 +34,7 @@ import { countTasks } from '@/lib/sops/checklist';
 import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
+import { loadRunChecks, loadRunState, resolveRunContent, runActors } from '@/lib/sops/runs';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -47,8 +48,6 @@ const LIST_LIMIT = 100;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Db = NonNullable<ReturnType<typeof getDb>>;
-
 interface CheckItem {
   itemIndex: number;
   itemText: string;
@@ -59,9 +58,7 @@ interface CheckItem {
  * Checking a parent task checks its whole subtree, so both the start request
  * and the check action carry lists rather than single items.
  */
-function parseCheckItems(
-  value: unknown
-): { items: CheckItem[]; error?: never } | { error: string } {
+function parseCheckItems(value: unknown): { items: CheckItem[] } | { error: string } {
   if (!Array.isArray(value) || value.length === 0) {
     return { error: 'items must be a non-empty array of { itemIndex, itemText }' };
   }
@@ -89,30 +86,6 @@ type ActiveRunRow = SopRunRow & {
 
 /** A run row as the log query returns it, with its checks embedded. */
 type RunWithChecks = SopRunRow & { sop_run_checks: Pick<SopRunCheckRow, 'checked_by'>[] };
-
-/** Everyone one run names: who started it, ended it, and checked its items. */
-function runActors(run: SopRunRow, checks: Pick<SopRunCheckRow, 'checked_by'>[]): string[] {
-  return [run.started_by, run.ended_by ?? '', ...checks.map((c) => c.checked_by)];
-}
-
-async function loadRunChecks(db: Db, runId: string) {
-  return db
-    .from('sop_run_checks')
-    .select('*')
-    .eq('run_id', runId)
-    .order('item_index', { ascending: true });
-}
-
-/** The run's document snapshot (title + content of the pinned version). */
-async function loadRunContent(db: Db, run: SopRunRow) {
-  const { data, error } = await db
-    .from('sop_versions')
-    .select('title, content_md')
-    .eq('sop_id', run.sop_id)
-    .eq('version', run.sop_version)
-    .maybeSingle();
-  return { snapshot: (data as { title: string; content_md: string } | null) ?? null, error };
-}
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, PAGE);
@@ -234,29 +207,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const sop = (sopData as SopRow) ?? null;
     if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
-    const { data: runData, error: runError } = await db
-      .from('sop_runs')
-      .select('*')
-      .eq('sop_id', sopId)
-      .eq('status', 'in_progress')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (runError) return json({ error: runError.message }, 500);
-    const run = (runData as SopRunRow) ?? null;
-    if (!run) return json({ run: null });
-
-    const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
-    if (checksError) return json({ error: checksError.message }, 500);
-    const { snapshot, error: snapshotError } = await loadRunContent(db, run);
-    if (snapshotError) return json({ error: snapshotError.message }, 500);
-
-    const runChecks = (checks ?? []) as SopRunCheckRow[];
+    const { state, error: stateError } = await loadRunState(db, sop);
+    if (stateError) return json({ error: stateError }, 500);
+    if (!state) return json({ run: null });
     return json({
-      run,
-      checks: runChecks,
-      content: snapshot?.content_md ?? sop.content_md,
-      people: await getPeopleNames(runActors(run, runChecks)),
+      ...state,
+      people: await getPeopleNames(runActors(state.run, state.checks)),
     });
   }
 
@@ -274,16 +230,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const { sops: sop, ...run } = runData as SopRunRow & { sops: SopRow };
   if (!sop || !canViewSop(viewer, sop)) return json({ error: 'Run not found' }, 404);
 
-  const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
+  const [{ data: checks, error: checksError }, { content, error: contentError }] =
+    await Promise.all([loadRunChecks(db, run.id), resolveRunContent(db, sop, run as SopRunRow)]);
   if (checksError) return json({ error: checksError.message }, 500);
-  const { snapshot, error: snapshotError } = await loadRunContent(db, run as SopRunRow);
-  if (snapshotError) return json({ error: snapshotError.message }, 500);
+  if (contentError) return json({ error: contentError }, 500);
 
   const runChecks = (checks ?? []) as SopRunCheckRow[];
   return json({
     run,
     checks: runChecks,
-    content: snapshot?.content_md ?? sop.content_md,
+    content,
     sop: { id: sop.id, slug: sop.slug, title: sop.title },
     people: await getPeopleNames(runActors(run as SopRunRow, runChecks)),
   });
@@ -319,19 +275,29 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   let initialChecks: CheckItem[] | null = null;
   if (body.initialChecks !== undefined) {
     const parsed = parseCheckItems(body.initialChecks);
-    if (parsed.error) return json({ error: `initialChecks: ${parsed.error}` }, 400);
+    if ('error' in parsed) return json({ error: `initialChecks: ${parsed.error}` }, 400);
     initialChecks = parsed.items;
   }
 
-  const { data: sopData, error: sopError } = await db
-    .from('sops')
-    .select('*')
-    .eq('id', sopId)
-    .maybeSingle();
-  if (sopError) return json({ error: sopError.message }, 500);
-  const sop = (sopData as SopRow) ?? null;
+  // The document and any open run on it are independent reads — both keyed
+  // on sopId — so they go out together. (One in-progress run per document:
+  // starting while one is open resumes it; two people splitting a checklist
+  // share the run — that's the point.)
+  const [sopResult, existingResult, role] = await Promise.all([
+    db.from('sops').select('*').eq('id', sopId).maybeSingle(),
+    db
+      .from('sop_runs')
+      .select('*')
+      .eq('sop_id', sopId)
+      .eq('status', 'in_progress')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    getSopRole(gate.user.email ?? null, gate.access),
+  ]);
+  if (sopResult.error) return json({ error: sopResult.error.message }, 500);
+  const sop = (sopResult.data as SopRow) ?? null;
 
-  const role = await getSopRole(gate.user.email ?? null, gate.access);
   const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
   if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
   if (sop.archived) return json({ error: 'This SOP is archived' }, 400);
@@ -342,17 +308,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: `initialChecks indexes must be in [0, ${taskCount})` }, 400);
   }
 
-  // One in-progress run per document: starting while one is open resumes it
-  // (two people splitting a checklist share the run — that's the point).
-  const { data: existing, error: existingError } = await db
-    .from('sop_runs')
-    .select('*')
-    .eq('sop_id', sopId)
-    .eq('status', 'in_progress')
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (existingError) return json({ error: existingError.message }, 500);
+  if (existingResult.error) return json({ error: existingResult.error.message }, 500);
+  const existing = existingResult.data;
 
   if (existing) {
     const run = existing as SopRunRow;
@@ -372,14 +329,16 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       );
       if (checkError) return json({ error: checkError.message }, 500);
     }
-    const { data: checks, error: checksError } = await loadRunChecks(db, run.id);
+    const [{ data: checks, error: checksError }, { content }] = await Promise.all([
+      loadRunChecks(db, run.id),
+      resolveRunContent(db, sop, run),
+    ]);
     if (checksError) return json({ error: checksError.message }, 500);
-    const { snapshot } = await loadRunContent(db, run);
     const runChecks = (checks ?? []) as SopRunCheckRow[];
     return json({
       run,
       checks: runChecks,
-      content: snapshot?.content_md ?? sop.content_md,
+      content,
       resumed: true,
       people: await getPeopleNames(runActors(run, runChecks)),
     });
@@ -487,7 +446,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         ? body.items
         : [{ itemIndex: body.itemIndex, itemText: body.itemText }]
     );
-    if (parsed.error) return json({ error: parsed.error }, 400);
+    if ('error' in parsed) return json({ error: parsed.error }, 400);
     if (parsed.items.some((item) => item.itemIndex >= run.task_count)) {
       return json({ error: `itemIndex must be an integer in [0, ${run.task_count})` }, 400);
     }
@@ -518,16 +477,16 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
     // Runs start implicitly with the first check, so they end implicitly when
     // the last one goes: nothing checked means nothing happened, and the run
-    // vanishes like a discard. Race note: if a teammate's check lands between
-    // the delete above and this count, the count is non-zero and the run
-    // survives (correct); if their check is in flight when the run row goes,
-    // that insert fails on the FK and their client retries as a fresh start.
-    const { count, error: countError } = await db
-      .from('sop_run_checks')
-      .select('id', { count: 'exact', head: true })
-      .eq('run_id', runId);
-    if (countError) return json({ error: countError.message }, 500);
-    if ((count ?? 0) === 0) {
+    // vanishes like a discard. The remaining checks are the response anyway,
+    // so their count doubles as the test. Race note: if a teammate's check
+    // lands between the delete above and this read, the list is non-empty and
+    // the run survives (correct); if their check is in flight when the run
+    // row goes, that insert fails on the FK and their client retries as a
+    // fresh start.
+    const { data: remaining, error: remainingError } = await loadRunChecks(db, runId);
+    if (remainingError) return json({ error: remainingError.message }, 500);
+    const remainingChecks = (remaining ?? []) as SopRunCheckRow[];
+    if (remainingChecks.length === 0) {
       const { error: discardError } = await db
         .from('sop_runs')
         .delete()
@@ -536,6 +495,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       if (discardError) return json({ error: discardError.message }, 500);
       return json({ run: null, checks: [], discarded: true });
     }
+    return json({
+      run,
+      checks: remainingChecks,
+      people: await getPeopleNames(runActors(run, remainingChecks)),
+    });
   } else if (action === 'discard') {
     // Started by mistake: erase the run and its checks (they cascade) so
     // nothing lands in the log. Only reachable while in progress — the status
@@ -548,34 +512,44 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (error) return json({ error: error.message }, 500);
     return json({ run: null, checks: [], discarded: true });
   } else {
-    // complete
-    const { error } = await db
-      .from('sop_runs')
-      .update({
-        status: 'completed',
-        ended_by: email,
-        ended_at: new Date().toISOString(),
-      })
-      .eq('id', runId)
-      .eq('status', 'in_progress');
+    // complete — the update returns the finished row, so no re-read; a
+    // null means a teammate finished it first.
+    const [{ data: finished, error }, { data: checks, error: checksError }] = await Promise.all([
+      db
+        .from('sop_runs')
+        .update({
+          status: 'completed',
+          ended_by: email,
+          ended_at: new Date().toISOString(),
+        })
+        .eq('id', runId)
+        .eq('status', 'in_progress')
+        .select('*')
+        .maybeSingle(),
+      loadRunChecks(db, runId),
+    ]);
     if (error) return json({ error: error.message }, 500);
+    if (checksError) return json({ error: checksError.message }, 500);
+    if (!finished) return json({ error: 'This run is already finished' }, 409);
+    const finishedRun = finished as SopRunRow;
+    const finishedChecks = (checks ?? []) as SopRunCheckRow[];
+    return json({
+      run: finishedRun,
+      checks: finishedChecks,
+      people: await getPeopleNames(runActors(finishedRun, finishedChecks)),
+    });
   }
 
+  // check: the run row itself didn't change, so the one read left is the
+  // checks — the whole list, since a parent tap may have added several and a
+  // teammate may have added more since the client last looked.
   const { data: checks, error: checksError } = await loadRunChecks(db, runId);
   if (checksError) return json({ error: checksError.message }, 500);
-
-  const { data: freshRun, error: freshError } = await db
-    .from('sop_runs')
-    .select('*')
-    .eq('id', runId)
-    .single();
-  if (freshError) return json({ error: freshError.message }, 500);
-
-  const freshChecks = (checks ?? []) as SopRunCheckRow[];
+  const runChecks = (checks ?? []) as SopRunCheckRow[];
   return json({
-    run: freshRun as SopRunRow,
-    checks: freshChecks,
-    people: await getPeopleNames(runActors(freshRun as SopRunRow, freshChecks)),
+    run,
+    checks: runChecks,
+    people: await getPeopleNames(runActors(run, runChecks)),
   });
 };
 

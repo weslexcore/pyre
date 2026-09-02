@@ -11,36 +11,57 @@
 // unchecking the last one silently discards it, and links to other library
 // documents open in a peek modal (SopPeekModal) so a tutorial never navigates
 // away from a half-finished checklist.
+//
+// The page arrives with the document and its open run already rendered
+// (`initial`, assembled server-side by lib/sops/document.ts), so nothing is
+// fetched on mount. Taps apply locally first and reach the server through a
+// serialized queue — the box flips instantly, the record catches up behind
+// it, and a refused tap is rolled back with an error.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { SopRow, SopRunCheckRow, SopRunRow, SopVersionRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
 import { diffLines, diffSummary } from '@/lib/sops/diff';
-import { EVERYONE_LABEL, type SopRole } from '@/lib/sops/levels';
+import type { SopDocumentPayload } from '@/lib/sops/document';
+import { EVERYONE_LABEL } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import {
+  applyCheck,
+  applyUncheck,
+  type CheckItems,
+  isPersisted,
+  pendingRun,
+  type RunState,
+  revertCheck,
+  revertUncheck,
+} from '@/lib/sops/optimistic';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { ChecklistView } from './ChecklistView';
 import { ConfirmDialog } from './ConfirmDialog';
-import { type GrantablePerson, SopAccessPicker, withAdmins } from './SopAccessPicker';
+import { SopAccessPicker, withAdmins } from './SopAccessPicker';
+import { SopLinkTextarea } from './SopLinkTextarea';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
 
-interface DocResponse {
-  sop: SopRow;
+type DocResponse = SopDocumentPayload;
+
+interface VersionsResponse {
   versions: SopVersionRow[];
-  role: SopRole;
-  canEdit: boolean;
-  /** Every section name, in library order — admins only (they alone refile). */
-  categories?: string[];
-  /** Roster an admin can grant this document to; admins only. */
-  staff?: GrantablePerson[];
-  /** Who can read this document, in words — computed server-side. */
-  accessLabel?: string;
-  /** Roster names for the emails stored on versions, runs and checks. */
   people?: PeopleNames;
 }
 
-type CheckItems = { itemIndex: number; itemText: string }[];
+/** What the runs API answers with after a start, check, or lookup. */
+interface RunResponse {
+  run: SopRunRow | null;
+  checks?: SopRunCheckRow[];
+  content?: string;
+  people?: PeopleNames;
+}
+
+// Server-rendered HTML older than this (a prefetched page, a bfcache restore)
+// re-checks the shared run in the background once the island is up.
+const FRESH_MS = 15_000;
 
 const inputClass =
   'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
@@ -62,8 +83,11 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+// Pinned locale + venue time zone: this renders on the server and again on
+// the phone, and the two have to agree or React throws the server tree away.
 function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -104,10 +128,19 @@ function VersionDiff({ version, previous }: { version: SopVersionRow; previous?:
   );
 }
 
-export function SopDocument({ slug }: { slug: string }) {
-  const [data, setData] = useState<DocResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function SopDocument({
+  slug,
+  initial,
+  initialError = null,
+}: {
+  slug: string;
+  /** The document as the page loaded it; null when it couldn't. */
+  initial: DocResponse | null;
+  initialError?: string | null;
+}) {
+  const [data, setData] = useState<DocResponse | null>(initial);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -127,8 +160,11 @@ export function SopDocument({ slug }: { slug: string }) {
       const res = await fetch(`/api/admin/sop-runs?id=${run.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await readError(res));
       setRunsPanel((prev) => prev?.filter((r) => r.id !== run.id) ?? null);
-      // Deleting the in-progress run also clears the Resume state.
-      if (runData?.run.id === run.id) setRunData(null);
+      // Deleting the in-progress run also clears the checklist.
+      if (runRef.current?.run.id === run.id) {
+        commit(null);
+        lastRunRef.current = null;
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete the run');
     }
@@ -180,12 +216,21 @@ export function SopDocument({ slug }: { slug: string }) {
 
   // Checklist run state: the in-progress run for this document (shared — two
   // people splitting a checklist see the same run), its checks, and the
-  // document snapshot it pinned at start.
-  const [runData, setRunData] = useState<{
-    run: SopRunRow;
-    checks: SopRunCheckRow[];
-    content: string;
-  } | null>(null);
+  // document snapshot it pinned at start. Seeded from the server-rendered
+  // payload, then owned here: taps apply locally first and the server hears
+  // about them through a serialized queue (helpers in lib/sops/optimistic).
+  const [runData, setRunData] = useState<RunState | null>(initial?.run ?? null);
+  // Mirror for the queue: an op must see the state the taps before it left,
+  // not the render it was created in.
+  const runRef = useRef<RunState | null>(initial?.run ?? null);
+  // The last state that held a run — after an optimistic "nothing checked,
+  // run gone" the queued uncheck still needs the run's id.
+  const lastRunRef = useRef<RunState | null>(initial?.run ?? null);
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  // Requests still in flight or waiting their turn.
+  const [pending, setPending] = useState(0);
+  const pendingRef = useRef(0);
+  // Finish/Discard in flight — those still wait for the server.
   const [runBusy, setRunBusy] = useState(false);
   // Names for the people the run responses name (starters, checkers) — the
   // document response only knows its editors, so the two merge for rendering.
@@ -197,120 +242,185 @@ export function SopDocument({ slug }: { slug: string }) {
   // Library document opened in the peek modal from an in-content link.
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
 
+  const viewerEmail = data?.viewerEmail ?? '';
   const taskCount = useMemo(() => (data ? countTasks(data.sop.content_md) : 0), [data]);
 
-  // Look up an already-in-progress run so the toolbar can offer Resume.
-  useEffect(() => {
-    if (!data || taskCount === 0) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/admin/sop-runs?sopId=${data.sop.id}`);
-        if (!res.ok) return;
-        const body = (await res.json()) as {
-          run: SopRunRow | null;
-          checks?: SopRunCheckRow[];
-          content?: string;
-          people?: PeopleNames;
-        };
-        if (!cancelled && body.run) {
-          setRunData({ run: body.run, checks: body.checks ?? [], content: body.content ?? '' });
-          setRunPeople((prev) => ({ ...prev, ...body.people }));
-        }
-      } catch {
-        // Non-fatal: the doc renders fine without run state.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [data, taskCount]);
+  const commit = useCallback((next: RunState | null) => {
+    runRef.current = next;
+    if (next) lastRunRef.current = next;
+    setRunData(next);
+  }, []);
 
-  // Start a run (or join the one a teammate opened) and record the tap that
-  // started it in the same request — the checklist has no Start button.
-  const startWithChecks = async (items: CheckItems) => {
-    if (!data) return;
+  const mergePeople = useCallback((people?: PeopleNames) => {
+    if (people) setRunPeople((prev) => ({ ...prev, ...people }));
+  }, []);
+
+  const enqueue = useCallback((op: () => Promise<void>) => {
+    pendingRef.current += 1;
+    setPending(pendingRef.current);
+    queueRef.current = queueRef.current
+      .then(op)
+      .catch(() => {
+        // Ops report their own failures (revert + error banner).
+      })
+      .finally(() => {
+        pendingRef.current -= 1;
+        setPending(pendingRef.current);
+      });
+  }, []);
+
+  // Adopt a server response. The run row is always taken (after the first
+  // start it's how the real id arrives); the checks only when nothing else is
+  // queued behind this op — an earlier response would otherwise erase taps
+  // the server hasn't seen yet.
+  const reconcile = useCallback(
+    (body: RunResponse) => {
+      mergePeople(body.people);
+      const last = pendingRef.current === 1;
+      const current = runRef.current;
+
+      if (!body.run) {
+        // The server has no run (it auto-discarded after an uncheck).
+        if (!current) {
+          lastRunRef.current = null;
+        } else if (current.checks.length === 0) {
+          commit(null);
+          lastRunRef.current = null;
+        } else if (isPersisted(current.run)) {
+          // Taps since then re-checked items: the next op starts afresh.
+          commit({ ...current, run: { ...current.run, id: '' } });
+        }
+        return;
+      }
+
+      if (!current) {
+        // Locally nothing is checked (an uncheck is queued, or just landed).
+        // Show the server's run only when it's the final word and holds a
+        // teammate's checks; otherwise just remember its id for the queue.
+        const adopted: RunState = {
+          run: body.run,
+          checks: last ? (body.checks ?? []) : [],
+          content: body.content ?? lastRunRef.current?.content ?? data?.sop.content_md ?? '',
+        };
+        if (last && adopted.checks.length > 0) commit(adopted);
+        else lastRunRef.current = adopted;
+        return;
+      }
+
+      commit({
+        run: body.run,
+        checks: last && body.checks ? body.checks : current.checks,
+        content: body.content ?? current.content,
+      });
+    },
+    [commit, mergePeople, data]
+  );
+
+  const postStart = async (items: CheckItems): Promise<RunResponse> => {
+    if (!data) throw new Error('SOP not loaded');
     const res = await fetch('/api/admin/sop-runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sopId: data.sop.id, initialChecks: items }),
     });
     if (!res.ok) throw new Error(await readError(res));
-    const body = (await res.json()) as {
-      run: SopRunRow;
-      checks: SopRunCheckRow[];
-      content: string;
-      resumed: boolean;
-      people?: PeopleNames;
-    };
-    setRunPeople((prev) => ({ ...prev, ...body.people }));
-    setRunData({ run: body.run, checks: body.checks, content: body.content });
+    return (await res.json()) as RunResponse;
   };
 
-  const patchRun = async (payload: Record<string, unknown>) => {
-    if (!runData) return null;
+  const patchRun = async (runId: string, payload: Record<string, unknown>) => {
     const res = await fetch('/api/admin/sop-runs', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId: runData.run.id, ...payload }),
+      body: JSON.stringify({ runId, ...payload }),
     });
     if (!res.ok) throw new Error(await readError(res));
-    // `run` comes back null when the action was a discard — the row is gone.
-    const body = (await res.json()) as {
-      run: SopRunRow | null;
-      checks: SopRunCheckRow[];
-      people?: PeopleNames;
-    };
-    // A teammate checking an item is the first this page hears of them.
-    setRunPeople((prev) => ({ ...prev, ...body.people }));
-    return body;
+    return (await res.json()) as RunResponse;
+  };
+
+  // The queued half of a check: start the run if this screen has none yet,
+  // otherwise record the items on the run it knows.
+  const sendCheck = async (items: CheckItems, added: number[]) => {
+    const current = runRef.current;
+    if (!current || !data) return;
+    try {
+      if (!isPersisted(current.run)) {
+        reconcile(await postStart(items));
+        return;
+      }
+      try {
+        reconcile(await patchRun(current.run.id, { action: 'check', items }));
+      } catch (e) {
+        // The run may have vanished under us — a teammate unchecked the last
+        // item and it auto-discarded. If so, this tap becomes a fresh start.
+        const probe = await fetch(`/api/admin/sop-runs?sopId=${data.sop.id}`);
+        const alive = probe.ok && ((await probe.json()) as { run: SopRunRow | null }).run;
+        if (alive) throw e;
+        reconcile(await postStart(items));
+      }
+    } catch (e) {
+      const now = runRef.current;
+      if (now) {
+        const reverted = revertCheck(now, added);
+        commit(reverted.checks.length === 0 && !isPersisted(reverted.run) ? null : reverted);
+      }
+      setError(e instanceof Error ? e.message : 'Failed to save the check');
+    }
+  };
+
+  const sendUncheck = async (itemIndex: number, removed: SopRunCheckRow) => {
+    // The screen may already show no run (that was the last item); the id
+    // lives on in lastRunRef. A run that never reached the server has
+    // nothing to undo there.
+    const known = runRef.current ?? lastRunRef.current;
+    if (!known || !isPersisted(known.run)) return;
+    try {
+      reconcile(await patchRun(known.run.id, { action: 'uncheck', itemIndex }));
+    } catch (e) {
+      const base = runRef.current ?? lastRunRef.current;
+      if (base) commit(revertUncheck(base, removed));
+      setError(e instanceof Error ? e.message : 'Failed to save the check');
+    }
   };
 
   // `items` carries one entry per affected task — a tap on a parent brings
-  // its whole subtree along (ChecklistView computes the group).
-  const toggleCheck = async (items: CheckItems, checked: boolean) => {
-    if (!data || runBusy || items.length === 0) return;
-    setRunBusy(true);
+  // its whole subtree along (ChecklistView computes the group). The box flips
+  // now; the request queues behind whatever is already in flight.
+  const toggleCheck = (items: CheckItems, checked: boolean) => {
+    if (!data || items.length === 0) return;
     setError(null);
-    try {
-      if (!runData) {
-        // No run yet: the first check starts one. (Unchecking an unchecked
-        // box can't happen, but guard anyway.)
-        if (checked) await startWithChecks(items);
-        return;
-      }
-      if (checked) {
-        try {
-          const body = await patchRun({ action: 'check', items });
-          if (body?.run) setRunData({ ...runData, run: body.run, checks: body.checks });
-        } catch (e) {
-          // The run may have vanished under us — a teammate unchecked the last
-          // item and it auto-discarded. If so, this tap becomes a fresh start.
-          const probe = await fetch(`/api/admin/sop-runs?sopId=${data.sop.id}`);
-          const alive = probe.ok && ((await probe.json()) as { run: SopRunRow | null }).run;
-          if (alive) throw e;
-          setRunData(null);
-          await startWithChecks(items);
-        }
-      } else {
-        const body = await patchRun({ action: 'uncheck', itemIndex: items[0].itemIndex });
-        if (!body) return;
-        // run comes back null when nothing is checked any more: the server
-        // discarded the run, and the page quietly returns to its clean state.
-        if (body.run) setRunData({ ...runData, run: body.run, checks: body.checks });
-        else setRunData(null);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save the check');
-    } finally {
-      setRunBusy(false);
+    const nowIso = new Date().toISOString();
+    if (checked) {
+      // With nothing on screen, prefer the run the server still knows (an
+      // uncheck of the last item may be mid-flight) over a brand-new one.
+      const remembered = lastRunRef.current;
+      const base: RunState =
+        runRef.current ??
+        (remembered && isPersisted(remembered.run)
+          ? { ...remembered, checks: [] }
+          : {
+              run: pendingRun(data.sop, taskCount, viewerEmail, nowIso),
+              checks: [],
+              content: data.sop.content_md,
+            });
+      const { next, added } = applyCheck(base, items, viewerEmail, nowIso);
+      if (added.length === 0) return;
+      commit(next);
+      enqueue(() => sendCheck(items, added));
+      return;
     }
+    const current = runRef.current;
+    if (!current) return;
+    const { next, removed } = applyUncheck(current, items[0].itemIndex);
+    if (!removed) return;
+    // Unchecking the last item ends the run, as it does on the server.
+    commit(next.checks.length === 0 ? null : next);
+    enqueue(() => sendUncheck(items[0].itemIndex, removed));
   };
 
   // A finish that loses nothing (everything checked, or discarding an empty
   // run) goes straight through; anything else confirms in the dialog first.
   const requestFinish = (action: 'complete' | 'discard') => {
-    if (!runData) return;
+    if (!runData || pendingRef.current > 0) return;
     const done = runData.checks.length;
     if (action === 'complete' && done >= runData.run.task_count) {
       void finishRun(action);
@@ -324,13 +434,16 @@ export function SopDocument({ slug }: { slug: string }) {
   };
 
   const finishRun = async (action: 'complete' | 'discard') => {
-    if (!runData) return;
+    const current = runRef.current;
+    if (!current || !isPersisted(current.run)) return;
     setConfirmAction(null);
     setRunBusy(true);
     setError(null);
     try {
-      await patchRun({ action });
-      setRunData(null);
+      const body = await patchRun(current.run.id, { action });
+      mergePeople(body.people);
+      commit(null);
+      lastRunRef.current = null;
       setNotice(
         action === 'complete'
           ? 'Checklist completed — nice work.'
@@ -342,6 +455,50 @@ export function SopDocument({ slug }: { slug: string }) {
       setRunBusy(false);
     }
   };
+
+  // The HTML this island hydrated from may be older than it looks (a
+  // prefetched page, a bfcache restore): re-check the shared run once, and
+  // only if no tap of ours is in flight to be clobbered.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once for the payload the page shipped with
+  useEffect(() => {
+    if (!initial || initial.taskCount === 0) return;
+    if (Date.now() - initial.loadedAt < FRESH_MS) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/sop-runs?sopId=${initial.sop.id}`);
+        if (!res.ok) return;
+        const body = (await res.json()) as RunResponse;
+        if (cancelled || pendingRef.current > 0) return;
+        mergePeople(body.people);
+        if (body.run) {
+          commit({ run: body.run, checks: body.checks ?? [], content: body.content ?? '' });
+        } else {
+          commit(null);
+          lastRunRef.current = null;
+        }
+      } catch {
+        // Non-fatal: the rendered state stands.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Version history loads when the panel opens — the bodies of every past
+  // save have no place on the document's critical path.
+  const versionsQuery = useCachedJson<VersionsResponse>(
+    showHistory && data ? `/api/admin/sops?slug=${encodeURIComponent(slug)}&view=versions` : null,
+    { maxAgeMs: 60_000 }
+  );
+
+  // Editors (from the document), run participants (from run responses), and
+  // past editors (from history), merged for rendering.
+  const people = useMemo(
+    () => ({ ...data?.people, ...runPeople, ...versionsQuery.data?.people }),
+    [data?.people, runPeople, versionsQuery.data?.people]
+  );
 
   useEffect(() => {
     if (!docMatches) return;
@@ -355,23 +512,23 @@ export function SopDocument({ slug }: { slug: string }) {
     return () => clearTimeout(timer);
   }, [docMatches]);
 
+  // Retry after a failed page load — the normal path never fetches here.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/admin/sops?slug=${encodeURIComponent(slug)}`);
       if (!res.ok) throw new Error(await readError(res));
-      setData((await res.json()) as DocResponse);
+      const doc = (await res.json()) as DocResponse;
+      setData(doc);
+      commit(doc.run);
+      if (!doc.run) lastRunRef.current = null;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load SOP');
     } finally {
       setLoading(false);
     }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  }, [slug, commit]);
 
   const startEdit = useCallback((doc: DocResponse) => {
     setDraftTitle(doc.sop.title);
@@ -423,6 +580,7 @@ export function SopDocument({ slug }: { slug: string }) {
         }),
       });
       if (!res.ok) throw new Error(await readError(res));
+      invalidateJson(`/api/admin/sops?slug=${encodeURIComponent(slug)}`);
       // Full reload keeps the SSR page header in sync after a rename.
       window.location.href = window.location.pathname;
     } catch (e) {
@@ -482,16 +640,20 @@ export function SopDocument({ slug }: { slug: string }) {
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
           {error ?? 'SOP not found'}
         </p>
-        <a href="/admin/sops" className={buttonClass}>
-          ← All SOPs
-        </a>
+        <div className="flex gap-2">
+          <a href="/admin/sops" className={buttonClass}>
+            ← All SOPs
+          </a>
+          <button type="button" className={buttonClass} onClick={() => void load()}>
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
-  const { sop, versions, role, canEdit } = data;
-  // Editors (from the document) plus run participants (from the run fetches).
-  const people = { ...data.people, ...runPeople };
+  const { sop, role, canEdit } = data;
+  const versions = versionsQuery.data?.versions ?? [];
   const isAdmin = role === 'admin';
 
   return (
@@ -506,7 +668,7 @@ export function SopDocument({ slug }: { slug: string }) {
           </button>
         )}
         <button type="button" className={buttonClass} onClick={() => setShowHistory((v) => !v)}>
-          History ({versions.length})
+          History ({sop.current_version})
         </button>
         {taskCount > 0 && (
           <button
@@ -676,6 +838,10 @@ export function SopDocument({ slug }: { slug: string }) {
           <h2 className="font-mono text-xs uppercase tracking-wide text-white/40">
             Version history
           </h2>
+          {versionsQuery.loading && <p className="font-mono text-xs text-white/40">Loading…</p>}
+          {versionsQuery.error && (
+            <p className="text-sm text-[var(--pyre-red)]">{versionsQuery.error}</p>
+          )}
           <ul className="divide-y divide-white/5">
             {versions.map((v, i) => {
               const previous = versions[i + 1];
@@ -760,7 +926,7 @@ export function SopDocument({ slug }: { slug: string }) {
                 checks={runData?.checks ?? []}
                 people={people}
                 currentVersion={sop.current_version}
-                busy={runBusy}
+                busy={runBusy || pending > 0}
                 highlight={docTerm}
                 onSopLink={setPeekSlug}
                 onToggle={toggleCheck}
@@ -799,8 +965,7 @@ export function SopDocument({ slug }: { slug: string }) {
               Preview
             </button>
             <span className="ml-auto font-mono text-[10px] text-white/40">
-              Markdown — “- [ ]” for checklist items · link another SOP with
-              [name](/admin/sops/slug)
+              Markdown — “- [ ]” for checklist items · type [name](/ to pick a page or SOP to link
             </span>
           </div>
           {preview ? (
@@ -808,12 +973,12 @@ export function SopDocument({ slug }: { slug: string }) {
               <SopMarkdown content={draftContent} onSopLink={setPeekSlug} />
             </div>
           ) : (
-            <textarea
+            <SopLinkTextarea
               className={`${inputClass} min-h-[50vh] w-full resize-y font-mono text-xs leading-relaxed`}
               value={draftContent}
               disabled={busy}
-              onChange={(e) => setDraftContent(e.target.value)}
-              spellCheck={false}
+              onChange={setDraftContent}
+              currentSlug={sop.slug}
             />
           )}
           <div className="flex flex-wrap items-center gap-2">
