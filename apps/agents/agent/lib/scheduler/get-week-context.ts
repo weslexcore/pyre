@@ -5,6 +5,8 @@
 // shift, recent weekly hours, and history patterns. All judgment-free math
 // lives here (via @pyre/schedule-core) so the model only decides who works
 // when.
+//
+// Exposed to the model only in scheduler sessions — see agent/tools/role_tools.ts.
 
 import {
   availabilityFor,
@@ -22,11 +24,11 @@ import {
 } from '@pyre/schedule-core';
 import { defineTool } from 'eve/tools';
 import { z } from 'zod';
-import { getDb } from '../lib/db';
+import { getDb } from '../db';
 
 const HISTORY_WEEKS = 8;
 
-export default defineTool({
+export const getWeekContextTool = defineTool({
   description:
     'Load everything needed to draft one week of the staffing schedule: roster (with lead flags and weekly hour targets), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours, and history patterns. Call this first, before save_proposal.',
   inputSchema: z.object({

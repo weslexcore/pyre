@@ -16,6 +16,12 @@ export interface EveConfig {
   channelSecret: string;
   /** Vercel Deployment Protection bypass secret, if configured. */
   bypassSecret?: string | null;
+  /**
+   * Extra request headers, e.g. the role headers that make pyre-agents run a
+   * session as the knowledge assistant (lib/knowledge/scope.ts). Sent on
+   * every call for the session, though only session creation reads them.
+   */
+  headers?: Record<string, string>;
 }
 
 export type EveSessionTail =
@@ -31,7 +37,31 @@ function headers(config: EveConfig, json = true): Record<string, string> {
     Authorization: `Bearer ${config.channelSecret}`,
     ...(json ? { 'Content-Type': 'application/json' } : {}),
     ...(config.bypassSecret ? { 'x-vercel-protection-bypass': config.bypassSecret } : {}),
+    ...(config.headers ?? {}),
   };
+}
+
+/**
+ * Open a session's NDJSON event stream from an absolute event index. Returns
+ * the raw upstream Response (the caller owns reading and aborting it), or
+ * null when the session is unknown or the stream cannot be opened.
+ */
+export async function openEveSessionStream(
+  config: EveConfig,
+  sessionId: string,
+  startIndex: number,
+  signal?: AbortSignal
+): Promise<Response | null> {
+  try {
+    const response = await fetch(
+      sessionUrl(config, `/${sessionId}/stream?startIndex=${Math.max(0, Math.floor(startIndex))}`),
+      { headers: headers(config, false), signal }
+    );
+    if (!response.ok || !response.body) return null;
+    return response;
+  } catch {
+    return null;
+  }
 }
 
 function sessionUrl(config: EveConfig, path = ''): string {

@@ -23,6 +23,7 @@ describe('sopSlugFromHref', () => {
     // Deeper paths and the runs board aren't documents.
     expect(sopSlugFromHref('/admin/sops/a/b')).toBeNull();
     expect(sopSlugFromHref('/admin/sops/runs')).toBeNull();
+    expect(sopSlugFromHref('/admin/sops/ask')).toBeNull();
     // Empty or malformed slugs.
     expect(sopSlugFromHref('/admin/sops/')).toBeNull();
     expect(sopSlugFromHref('/admin/sops/Not-A-Slug')).toBeNull();

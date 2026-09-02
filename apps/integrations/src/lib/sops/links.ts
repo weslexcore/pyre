@@ -13,7 +13,7 @@ const PREFIX = '/admin/sops/';
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 // Real pages under /admin/sops/ that aren't documents.
-const RESERVED = new Set(['runs']);
+const RESERVED = new Set(['runs', 'ask']);
 
 /** The library slug an href points at, or null when it isn't an SOP link. */
 export function sopSlugFromHref(href: string | undefined): string | null {

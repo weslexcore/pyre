@@ -1,10 +1,71 @@
 # pyre-agents
 
-Vercel [Eve](https://eve.dev) app hosting Pyre's AI agents — first up: the
-**staff-scheduling drafter**, which reviews upcoming coverage shifts (synced
-from Momence by the integrations app), everyone's time off, hours, and history
-patterns, then drafts a week of assignments the admin reviews on
-`/admin/schedule` (approve week, ✓/✗ per item, or discard).
+Vercel [Eve](https://eve.dev) app hosting Pyre's AI agents. One deployment,
+two roles, chosen per session:
+
+- the **staff-scheduling drafter** (the default), which reviews upcoming
+  coverage shifts (synced from Momence by the integrations app), everyone's
+  time off, hours, and history patterns, then drafts a week of assignments the
+  admin reviews on `/admin/schedule` (approve week, ✓/✗ per item, or discard);
+- the **knowledge assistant**, which answers staff questions ("What are the
+  benefits of cold plunging?", "When was the left tub last shocked?") from
+  the SOP library, shift notes, the cold tub water log, and incident reports,
+  citing the dashboard pages it drew on. Staff reach it from
+  `/admin/sops/ask`.
+
+## Two roles in one Eve app
+
+Eve builds one root agent per app, so the second agent is a *role* the same
+deployment switches into: `agent/instructions/role.ts` and
+`agent/tools/role_tools.ts` are dynamic resolvers that pick the system prompt
+(`agent/lib/prompts/*`) and the tool set from the session's auth attributes
+(`agent/lib/role.ts`). A request to `POST /eve/v1/session` carrying
+`x-pyre-agent: knowledge` runs as the assistant; the channel
+(`agent/channels/eve.ts`) stamps that, plus the asking staff member's access
+as JSON from `x-pyre-knowledge-scope`, onto the session. Everything else —
+cron schedules, the board's draft button, evals by default — is the
+scheduler. The initiator decides for the life of a session, so a follow-up
+can never flip a conversation to the other role, and a knowledge session
+never sees `save_proposal`.
+
+Both roles run with the sandbox, web, delegation, and question tools
+disabled (`agent/tools/{bash,read_file,...}.ts`): the scheduler works from
+`get_week_context`, the assistant from the knowledge base, and document text
+never gets a shell.
+
+### Knowledge assistant
+
+```
+/admin/sops/ask ──▶ POST /api/admin/knowledge-ask (integrations)
+                        resolves the asker's scope: SOP role + email,
+                        shift-notes / incidents (all | mine | none), water
+                        │  x-pyre-agent: knowledge, x-pyre-knowledge-scope
+                        ▼
+                    POST {this app}/eve/v1/session
+                        search_knowledge_base ─▶ knowledge_search() in Postgres
+                        list_sops / read_sop ─▶ sops (grant-filtered)
+                        get_water_log / get_shift_notes / read_incident
+                        ▼
+                    GET /api/admin/knowledge-ask?sessionId… streams the answer
+```
+
+- Retrieval is Postgres full-text search: `public.knowledge_search(...)`
+  (migration `20260903100000_knowledge_search`) ranks SOP titles/bodies,
+  shift-note bodies, incident narratives, and water-log notes with
+  `ts_rank_cd`, returns `ts_headline` snippets, and applies the dashboard's
+  visibility rules from the scope it is passed. The tool then finds the
+  matching section of each SOP hit so links carry a `#section` anchor (the
+  anchor scheme mirrors the dashboard's `headingId`).
+- The tools re-derive the scope from the session's auth on every call, and
+  incident reads never return the people fields (names, contact details).
+- Links use `KNOWLEDGE_SITE_URL` (default `https://integrations.pyresauna.com`)
+  as the dashboard origin; the Ask island makes them relative again so
+  in-library links open in the peek modal.
+- The read-only "not covered" answer is by design: the prompt
+  (`agent/lib/prompts/knowledge.ts`) forbids filling gaps from general
+  knowledge.
+
+### Staff-scheduling drafter
 
 ## How it fits together
 

@@ -608,14 +608,24 @@ export function SopsIndex() {
         </p>
       )}
 
-      <input
-        type="search"
-        className={`${inputClass} w-full sm:max-w-md`}
-        placeholder="Search SOPs…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        aria-label="Search SOPs"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          className={`${inputClass} w-full sm:max-w-md`}
+          placeholder="Search SOPs…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search SOPs"
+        />
+        {/* Natural-language questions go to the knowledge assistant, which
+            searches every source the reader may see and cites its answers. */}
+        <a
+          href="/admin/sops/ask"
+          className="font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
+        >
+          Ask a question →
+        </a>
+      </div>
 
       {/* Resume strip: an open checklist is the most urgent thing on this page,
           so it sits above everything but the search box. */}

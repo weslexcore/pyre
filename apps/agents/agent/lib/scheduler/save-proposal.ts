@@ -2,15 +2,17 @@
 // single validated write path). Server-side errors — including the hard
 // time-off conflict report — come back verbatim so the model can fix and
 // resubmit. AGENT_FORCE_DRY_RUN=1 (evals) validates without writing.
+//
+// Exposed to the model only in scheduler sessions — see agent/tools/role_tools.ts.
 
 import { defineTool } from 'eve/tools';
 import { z } from 'zod';
-import { postProposal } from '../lib/api';
+import { postProposal } from '../api';
 
 const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM');
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 
-export default defineTool({
+export const saveProposalTool = defineTool({
   description:
     'Save the drafted schedule for one week as a proposal for admin review. Call exactly once per drafting or refinement turn, after get_week_context; a save supersedes your previous draft for the week. Assignments reference existing shifts by shiftId, or new shifts (in this payload) by shiftKey. On validation/conflict errors, fix the draft and call again.',
   inputSchema: z.object({
