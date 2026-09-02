@@ -18,9 +18,16 @@ interface Props {
   subtitle?: string;
   /** Widens the content column (email templates preview needs the room). */
   wide?: boolean;
+  /**
+   * Pins the page to the viewport height and hands the slot the remaining
+   * room (a flex column, min-height 0) instead of letting the document grow —
+   * for chat-style pages that scroll inside themselves and keep a composer
+   * at the bottom.
+   */
+  fill?: boolean;
 }
 
-const { title, subtitle, wide = false } = Astro.props;
+const { title, subtitle, wide = false, fill = false } = Astro.props;
 
 Astro.response.headers.set('Cache-Control', 'private, no-store');
 
@@ -47,7 +54,11 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
         lib/client/cachedJson cache survives and pages repaint instantly. */}
     <ClientRouter />
   </head>
-  <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
+  <body
+    class={`bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased ${
+      fill ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'
+    }`}
+  >
     {
       !allowed || !user ? (
         <main class="mx-auto max-w-md px-4 py-16 text-center">
@@ -67,7 +78,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
         </main>
       ) : (
         <>
-          <header class="sticky top-0 z-40 border-b border-white/10 bg-[var(--pyre-black)]">
+          <header class="sticky top-0 z-40 shrink-0 border-b border-white/10 bg-[var(--pyre-black)]">
             <div
               class={`relative mx-auto flex ${widthClass} items-center justify-between gap-4 px-4 py-3`}
             >
@@ -87,12 +98,24 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               />
             </div>
           </header>
-          <main class={`mx-auto ${widthClass} px-4 py-6`}>
-            <div class="mb-8">
+          <main
+            class={`mx-auto w-full ${widthClass} px-4 ${
+              fill ? 'flex min-h-0 flex-1 flex-col pt-4 pb-3' : 'py-6'
+            }`}
+          >
+            <div class={fill ? 'mb-3 shrink-0' : 'mb-8'}>
               <h1 class="text-2xl font-semibold">{title}</h1>
               {subtitle && <p class="mt-1 font-mono text-xs text-white/40">{subtitle}</p>}
             </div>
-            <slot />
+            {
+              fill ? (
+                <div class="flex min-h-0 flex-1 flex-col">
+                  <slot />
+                </div>
+              ) : (
+                <slot />
+              )
+            }
           </main>
         </>
       )

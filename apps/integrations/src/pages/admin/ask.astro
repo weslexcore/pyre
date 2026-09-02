@@ -1,10 +1,11 @@
 ---
-// Ask a question: a natural-language question answered by the pyre-agents
-// knowledge assistant from the SOP library, shift notes, water log, and
-// incident reports — scoped to what this user may read, with links back to
-// the documents. Who may open it is the Ask page grant on /admin/users
-// (the middleware + AdminLayout gate); the island talks to
-// /api/admin/knowledge-ask, which re-checks the grant on every request.
+// Ask a question: a chat with the pyre-agents knowledge assistant, which
+// answers from the SOP library, shift notes, water log, and incident
+// reports — scoped to what this user may read, with links back to the
+// documents. Earlier conversations sit beside the chat (their own only).
+// Who may open it is the Ask page grant on /admin/users (the middleware +
+// AdminLayout gate); the island talks to /api/admin/knowledge-ask and
+// /api/admin/knowledge-history, which re-check the grant on every request.
 // Admins also get a link to the audit log of every question asked.
 import { SopAsk } from '@/components/admin/SopAsk';
 import AdminLayout from '@/layouts/AdminLayout.astro';
@@ -15,19 +16,7 @@ const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
 <AdminLayout
   title="Ask a Question"
   subtitle="Answers from the SOPs, shift notes, water log, and incident reports you can see — with links to where they come from"
+  fill
 >
-  {
-    isAdmin && (
-      <p class="mb-4 text-right">
-        <a
-          href="/admin/ask/log"
-          class="font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)] hover:underline"
-          data-astro-prefetch
-        >
-          Review the question log →
-        </a>
-      </p>
-    )
-  }
-  <SopAsk client:load />
+  <SopAsk client:load isAdmin={isAdmin} />
 </AdminLayout>
