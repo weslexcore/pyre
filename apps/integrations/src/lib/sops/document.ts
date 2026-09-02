@@ -16,10 +16,11 @@ import {
   type SopRole,
   type SopViewer,
 } from './levels';
+import type { LinkedProgressMap } from './links';
 import type { PeopleNames } from './names';
 import { type CategoryRank, sectionsInOrder } from './order';
 import { type GrantablePerson, getPeopleNames, listGrantablePeople } from './people';
-import { loadRunState, runActors, type SopRunState } from './runs';
+import { loadLinkedProgress, loadRunState, runActors, type SopRunState } from './runs';
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -35,6 +36,8 @@ export interface SopDocumentPayload {
   taskCount: number;
   /** The shared in-progress run, when someone has one open. */
   run: SopRunState | null;
+  /** Progress of the checklists this document links to, by slug (empty for prose). */
+  linked: LinkedProgressMap;
   /** Every section name, in library order — admins only (they alone refile). */
   categories?: string[];
   /** Roster an admin can grant this document to; admins only. */
@@ -80,7 +83,12 @@ export function redactGrantEmails<T extends { view_emails: string[]; edit_emails
 export async function loadSopDocument(
   db: Db,
   viewer: SopViewer,
-  ref: { id?: string | null; slug?: string | null }
+  ref: { id?: string | null; slug?: string | null },
+  opts: {
+    /** ISO time: with no run open, show the newest one completed since then
+     * (the peek modal passes the parent run's start). */
+    since?: string | null;
+  } = {}
 ): Promise<LoadDocumentResult> {
   const { sop, error } = await loadSop(db, ref);
   if (error) return { ok: false, status: 500, error };
@@ -94,7 +102,9 @@ export async function loadSopDocument(
   // re-granted, so only admins need the sections and the roster to choose
   // from — the roster especially, since it's the whole staff address book.
   const [runResult, ranks, used, staff] = await Promise.all([
-    taskCount > 0 ? loadRunState(db, sop) : Promise.resolve({ state: null, error: null }),
+    taskCount > 0
+      ? loadRunState(db, sop, { since: opts.since })
+      : Promise.resolve({ state: null, error: null }),
     isAdmin ? db.from('sop_categories').select('name, sort_order') : Promise.resolve(null),
     isAdmin ? db.from('sops').select('category') : Promise.resolve(null),
     isAdmin ? listGrantablePeople() : Promise.resolve(undefined),
@@ -112,6 +122,15 @@ export async function loadSopDocument(
       : undefined;
 
   const run = runResult.state;
+  // The bars under items that link to other checklists. Needs the parent
+  // run's start time ("completed since this run began"), so it follows the
+  // run read rather than joining the fan-out above.
+  const parentRun = run && run.run.status === 'in_progress' ? run.run : null;
+  const linkedResult =
+    taskCount > 0
+      ? await loadLinkedProgress(db, viewer, sop, parentRun)
+      : { linked: {}, error: null };
+  if (linkedResult.error) return { ok: false, status: 500, error: linkedResult.error };
   const grants = effectiveViewGrants(sop);
   const people = await getPeopleNames([
     sop.updated_by ?? '',
@@ -129,6 +148,7 @@ export async function loadSopDocument(
       viewerEmail: viewer.email,
       taskCount,
       run,
+      linked: linkedResult.linked,
       categories,
       staff,
       people,

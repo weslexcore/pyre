@@ -105,3 +105,68 @@ export function revertUncheck(state: RunState, removed: SopRunCheckRow): RunStat
   if (state.checks.some((c) => c.item_index === removed.item_index)) return state;
   return { ...state, checks: [...state.checks, removed].sort(byIndex) };
 }
+
+/** What the runs API answers with after a start, check, or lookup. */
+export interface RunResponseBody {
+  run: SopRunRow | null;
+  checks?: SopRunCheckRow[];
+  content?: string;
+}
+
+/**
+ * The two pieces of run state the queue carries between ops: what's on
+ * screen, and the last state that held a run (after an optimistic "nothing
+ * checked, run gone" a queued uncheck still needs the run's id).
+ */
+export interface RunRefs {
+  run: RunState | null;
+  last: RunState | null;
+}
+
+/**
+ * Adopt a server response. The run row is always taken (after the first start
+ * it's how the real id arrives); the checks only when this is the last queued
+ * op — an earlier response would otherwise erase taps the server hasn't seen
+ * yet. Returns the next screen state and the next remembered run; `last`
+ * follows every non-null `run`.
+ */
+export function reconcileRun(
+  refs: RunRefs,
+  body: RunResponseBody,
+  isLastQueued: boolean,
+  fallbackContent: string
+): RunRefs {
+  const current = refs.run;
+
+  if (!body.run) {
+    // The server has no run (it auto-discarded after an uncheck).
+    if (!current) return { run: null, last: null };
+    if (current.checks.length === 0) return { run: null, last: null };
+    if (isPersisted(current.run)) {
+      // Taps since then re-checked items: the next op starts afresh.
+      const next = { ...current, run: { ...current.run, id: '' } };
+      return { run: next, last: next };
+    }
+    return refs;
+  }
+
+  if (!current) {
+    // Locally nothing is checked (an uncheck is queued, or just landed). Show
+    // the server's run only when it's the final word and holds a teammate's
+    // checks; otherwise just remember its id for the queue.
+    const adopted: RunState = {
+      run: body.run,
+      checks: isLastQueued ? (body.checks ?? []) : [],
+      content: body.content ?? refs.last?.content ?? fallbackContent,
+    };
+    if (isLastQueued && adopted.checks.length > 0) return { run: adopted, last: adopted };
+    return { run: null, last: adopted };
+  }
+
+  const next: RunState = {
+    run: body.run,
+    checks: isLastQueued && body.checks ? body.checks : current.checks,
+    content: body.content ?? current.content,
+  };
+  return { run: next, last: next };
+}

@@ -7,6 +7,7 @@ import {
   LOCAL_ID_PREFIX,
   pendingRun,
   type RunState,
+  reconcileRun,
   revertCheck,
   revertUncheck,
 } from './optimistic';
@@ -102,5 +103,73 @@ describe('revertCheck', () => {
       NOW
     );
     expect(revertCheck(next, added)).toEqual(before);
+  });
+});
+
+describe('reconcileRun', () => {
+  const persisted = state([check(1)]);
+  const serverRun = { ...persisted.run, id: 'run-1' };
+
+  it('clears everything when the server has no run and nothing is checked locally', () => {
+    expect(reconcileRun({ run: null, last: persisted }, { run: null }, true, 'x')).toEqual({
+      run: null,
+      last: null,
+    });
+    const empty = { ...persisted, checks: [] };
+    expect(reconcileRun({ run: empty, last: empty }, { run: null }, true, 'x')).toEqual({
+      run: null,
+      last: null,
+    });
+  });
+
+  it('forgets the id of a vanished run when local taps re-checked items', () => {
+    const out = reconcileRun({ run: persisted, last: persisted }, { run: null }, false, 'x');
+    expect(out.run?.run.id).toBe('');
+    expect(out.run?.checks).toEqual(persisted.checks);
+    expect(out.last).toBe(out.run);
+  });
+
+  it('leaves an unpersisted local run alone when the server has none', () => {
+    const local = { ...persisted, run: { ...persisted.run, id: '' } };
+    const refs = { run: local, last: local };
+    expect(reconcileRun(refs, { run: null }, true, 'x')).toBe(refs);
+  });
+
+  it('adopts a teammate-held run on screen only as the last queued op', () => {
+    const body = { run: serverRun, checks: [check(3, 'mate@pyresauna.com')], content: 'srv' };
+    const shown = reconcileRun({ run: null, last: null }, body, true, 'x');
+    expect(shown.run?.checks.map((c) => c.item_index)).toEqual([3]);
+    expect(shown.run?.content).toBe('srv');
+    expect(shown.last).toBe(shown.run);
+
+    const remembered = reconcileRun({ run: null, last: null }, body, false, 'x');
+    expect(remembered.run).toBeNull();
+    expect(remembered.last?.run.id).toBe('run-1');
+    expect(remembered.last?.checks).toEqual([]);
+  });
+
+  it('falls back to the remembered content, then the document, for a bare run', () => {
+    const viaLast = reconcileRun(
+      { run: null, last: { ...persisted, content: 'pinned' } },
+      { run: serverRun },
+      true,
+      'doc'
+    );
+    expect(viaLast.last?.content).toBe('pinned');
+    const viaDoc = reconcileRun({ run: null, last: null }, { run: serverRun }, true, 'doc');
+    expect(viaDoc.last?.content).toBe('doc');
+  });
+
+  it('takes the run row always and the checks only when last in the queue', () => {
+    const local = { ...persisted, run: { ...persisted.run, id: '' } };
+    const body = { run: serverRun, checks: [check(1), check(2)] };
+    const last = reconcileRun({ run: local, last: local }, body, true, 'x');
+    expect(last.run?.run.id).toBe('run-1');
+    expect(last.run?.checks.map((c) => c.item_index)).toEqual([1, 2]);
+    expect(last.last).toBe(last.run);
+
+    const midQueue = reconcileRun({ run: local, last: local }, body, false, 'x');
+    expect(midQueue.run?.run.id).toBe('run-1');
+    expect(midQueue.run?.checks).toBe(local.checks);
   });
 });

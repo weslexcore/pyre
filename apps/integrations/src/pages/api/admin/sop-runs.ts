@@ -1,16 +1,20 @@
 // Checklist-run API for the SOP library. A run is one execution of a
 // task-bearing SOP: POST starts (or joins the in-progress run of) one —
 // optionally recording a first check in the same request, since the UI starts
-// a run implicitly when the first box is tapped — PATCH checks/unchecks items,
+// a run implicitly when the first box is tapped, or checking every item at
+// once (checkAll — a parent checklist ticking off the item that links here) —
+// PATCH checks/unchecks items,
 // completes the run, or discards it, GET fetches a single run (?id=), the
 // in-progress run for a document (?sopId=), every unfinished run the caller
 // may view (?view=active — the library's in-progress strip), or the run log
 // (?view=list — admins see all runs, others their own), DELETE (admin only)
 // removes a run and its check records outright.
 //
-// Runs end implicitly too: an uncheck that leaves zero items checked deletes
-// the run outright (same effect as discard), so a stray first tap that gets
-// untapped never litters the log.
+// Runs end implicitly too: the check that ticks the last item completes the
+// run (nobody taps Finish after finishing — Finish is for leaving items
+// undone), and an uncheck that leaves zero items checked deletes the run
+// outright (same effect as discard), so a stray first tap that gets untapped
+// never litters the log.
 //
 // A run stays in progress until someone completes it — there is no stepping
 // out of one to come back later. Discard is the escape hatch for a checklist
@@ -30,11 +34,17 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
-import { countTasks } from '@/lib/sops/checklist';
+import { countTasks, parseChecklist } from '@/lib/sops/checklist';
 import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
-import { loadRunChecks, loadRunState, resolveRunContent, runActors } from '@/lib/sops/runs';
+import {
+  completeIfFull,
+  loadRunChecks,
+  loadRunState,
+  resolveRunContent,
+  runActors,
+} from '@/lib/sops/runs';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -51,6 +61,14 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface CheckItem {
   itemIndex: number;
   itemText: string;
+}
+
+/** Every task in `content` as a check item, for checkAll. */
+function allItems(content: string): CheckItem[] {
+  return parseChecklist(content).tasks.map((task) => ({
+    itemIndex: task.index,
+    itemText: task.text.slice(0, MAX_ITEM_TEXT),
+  }));
 }
 
 /**
@@ -278,6 +296,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if ('error' in parsed) return json({ error: `initialChecks: ${parsed.error}` }, 400);
     initialChecks = parsed.items;
   }
+  // Check every item of the document's run (starting one if needed): a parent
+  // checklist ticked off the item that links to this one, so the whole
+  // sub-checklist counts as done. The items come from the run's own snapshot,
+  // so the texts on record are the real ones.
+  const checkAll = body.checkAll === true;
+  if (checkAll && initialChecks) {
+    return json({ error: 'checkAll and initialChecks are exclusive' }, 400);
+  }
 
   // The document and any open run on it are independent reads — both keyed
   // on sopId — so they go out together. (One in-progress run per document:
@@ -313,6 +339,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   if (existing) {
     const run = existing as SopRunRow;
+    let runContent: string | null = null;
+    if (checkAll) {
+      const resolved = await resolveRunContent(db, sop, run);
+      if (resolved.error) return json({ error: resolved.error }, 500);
+      runContent = resolved.content;
+      initialChecks = allItems(runContent);
+    }
     // The tap that meant "start" joins the run someone else already opened.
     // Indexes are validated against that run's (possibly older) snapshot — a
     // tap past its task list is dropped rather than misfiled.
@@ -331,16 +364,20 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
     const [{ data: checks, error: checksError }, { content }] = await Promise.all([
       loadRunChecks(db, run.id),
-      resolveRunContent(db, sop, run),
+      runContent !== null
+        ? Promise.resolve({ content: runContent })
+        : resolveRunContent(db, sop, run),
     ]);
     if (checksError) return json({ error: checksError.message }, 500);
     const runChecks = (checks ?? []) as SopRunCheckRow[];
+    const full = await completeIfFull(db, run, runChecks, gate.user.email ?? '');
+    if (full.error) return json({ error: full.error }, 500);
     return json({
-      run,
+      run: full.run,
       checks: runChecks,
       content,
       resumed: true,
-      people: await getPeopleNames(runActors(run, runChecks)),
+      people: await getPeopleNames(runActors(full.run, runChecks)),
     });
   }
 
@@ -358,6 +395,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const newRun = created as SopRunRow;
   let newChecks: SopRunCheckRow[] = [];
+  if (checkAll) initialChecks = allItems(sop.content_md);
   if (initialChecks) {
     // No transaction over PostgREST: if this insert fails, best-effort delete
     // the just-created run so the failed tap doesn't leave an empty run
@@ -380,13 +418,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
     newChecks = (checkRows ?? []) as SopRunCheckRow[];
   }
+  const full = await completeIfFull(db, newRun, newChecks, gate.user.email ?? '');
+  if (full.error) return json({ error: full.error }, 500);
   return json(
     {
-      run: newRun,
+      run: full.run,
       checks: newChecks,
       content: sop.content_md,
       resumed: false,
-      people: await getPeopleNames(runActors(newRun, newChecks)),
+      people: await getPeopleNames(runActors(full.run, newChecks)),
     },
     201
   );
@@ -540,16 +580,18 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     });
   }
 
-  // check: the run row itself didn't change, so the one read left is the
-  // checks — the whole list, since a parent tap may have added several and a
-  // teammate may have added more since the client last looked.
+  // check: re-read the checks — the whole list, since a parent tap may have
+  // added several and a teammate may have added more since the client last
+  // looked — and finish the run if that was the last of them.
   const { data: checks, error: checksError } = await loadRunChecks(db, runId);
   if (checksError) return json({ error: checksError.message }, 500);
   const runChecks = (checks ?? []) as SopRunCheckRow[];
+  const full = await completeIfFull(db, run, runChecks, email);
+  if (full.error) return json({ error: full.error }, 500);
   return json({
-    run,
+    run: full.run,
     checks: runChecks,
-    people: await getPeopleNames(runActors(run, runChecks)),
+    people: await getPeopleNames(runActors(full.run, runChecks)),
   });
 };
 

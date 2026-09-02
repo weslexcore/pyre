@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sopSlugFromHref } from './links';
+import { linkedSopSlugs, sopSlugFromHref } from './links';
 
 describe('sopSlugFromHref', () => {
   it('extracts the slug from a library path', () => {
@@ -26,5 +26,21 @@ describe('sopSlugFromHref', () => {
     // Empty or malformed slugs.
     expect(sopSlugFromHref('/admin/sops/')).toBeNull();
     expect(sopSlugFromHref('/admin/sops/Not-A-Slug')).toBeNull();
+  });
+});
+
+describe('linkedSopSlugs', () => {
+  it('extracts library links in order, deduped', () => {
+    const md = [
+      '- [ ] [Clear towel hampers](/admin/sops/momence-dirty-towels) before close',
+      '- [ ] See [the guide](https://example.com/guide) and [break down](/admin/sops/break-down)',
+      '- [ ] Again [hampers](/admin/sops/momence-dirty-towels?q=x)',
+    ].join('\n');
+    expect(linkedSopSlugs(md)).toEqual(['momence-dirty-towels', 'break-down']);
+  });
+
+  it('ignores non-library links and plain text', () => {
+    expect(linkedSopSlugs('- [ ] Wipe the glass')).toEqual([]);
+    expect(linkedSopSlugs('[runs](/admin/sops/runs) [water](/admin/water)')).toEqual([]);
   });
 });

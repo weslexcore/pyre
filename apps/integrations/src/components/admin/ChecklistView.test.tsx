@@ -4,7 +4,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
-import { ChecklistView } from './ChecklistView';
+import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 
 const CONTENT = `## Large Sauna
 
@@ -99,6 +99,31 @@ describe('ChecklistView', () => {
     expect(html).toContain('width:100%');
   });
 
+  it('shows a finished run ticked and locked, with Start again', () => {
+    const checks = [
+      CHECK,
+      { ...CHECK, id: 'check-2', item_index: 1, item_text: 'Ensure fire is out' },
+      { ...CHECK, id: 'check-3', item_index: 2, item_text: 'Remove chimney' },
+    ];
+    const html = render({
+      run: {
+        ...RUN,
+        status: 'completed',
+        ended_by: 'marina@pyresauna.com',
+        ended_at: '2026-09-01T14:20:00Z',
+      },
+      checks,
+      people: { 'marina@pyresauna.com': 'Marina' },
+    });
+    expect(html).toContain('>Completed<');
+    expect(html).toContain('finished by Marina');
+    expect(html).toContain('>Start again<');
+    expect(html).not.toContain('>Finish<');
+    expect(html).not.toContain('>Discard<');
+    expect(html.match(/disabled=""/g)?.length).toBe(3);
+    expect(html.match(/checked=""/g)?.length).toBe(3);
+  });
+
   it('notes the pinned version when the document has moved on', () => {
     const html = render({ run: RUN, checks: [CHECK], currentVersion: 5 });
     expect(html).toContain('Showing v3');
@@ -115,5 +140,90 @@ describe('ChecklistView', () => {
     });
     // Both heading segments get the padding class; the first one cancels it.
     expect(html.match(/pt-8 first:pt-0/g)?.length).toBe(2);
+  });
+
+  it('pins the progress header under the nav by default, at the top in a modal', () => {
+    expect(render({ run: RUN, checks: [CHECK] })).toContain('sticky top-14');
+    const modal = render({ run: RUN, checks: [CHECK], headerOffset: 'none' });
+    expect(modal).toContain('sticky top-0');
+    expect(modal).not.toContain('top-14');
+  });
+
+  it('shows a progress bar under items that link to a sub-checklist', () => {
+    const content = [
+      '- [ ] [Clear towel hampers](/admin/sops/momence-dirty-towels)',
+      '- [ ] [Break down](/admin/sops/break-down)',
+      '- [ ] [Reset plunges](/admin/sops/reset-plunges)',
+      '- [ ] Wipe the glass',
+    ].join('\n');
+    const html = render({
+      content,
+      linked: {
+        'momence-dirty-towels': {
+          slug: 'momence-dirty-towels',
+          sopId: 'sop-2',
+          taskCount: 5,
+          checked: 2,
+          status: 'in_progress',
+        },
+        'break-down': {
+          slug: 'break-down',
+          sopId: 'sop-3',
+          taskCount: 4,
+          checked: 4,
+          status: 'completed',
+        },
+        'reset-plunges': {
+          slug: 'reset-plunges',
+          sopId: 'sop-4',
+          taskCount: 3,
+          checked: 0,
+          status: 'none',
+        },
+      },
+    });
+    expect(html).toContain('2 of 5');
+    expect(html).toContain('width:40%');
+    expect(html).toContain('Completed');
+    expect(html).toContain('Not started');
+    // Three bars for three linked items; the plain item gets none.
+    expect(html.match(/h-1\.5 w-32/g)?.length).toBe(3);
+  });
+
+  it('renders no bar when the linked document is unknown', () => {
+    const html = render({
+      content: '- [ ] [Clear towel hampers](/admin/sops/momence-dirty-towels)',
+      linked: {},
+    });
+    expect(html).not.toContain('w-32');
+    expect(html).not.toContain('Not started');
+  });
+});
+
+describe('ChecklistConfirmDialog', () => {
+  it('counts what a finish would skip and what a discard would erase', () => {
+    const runData = { run: RUN, checks: [CHECK], content: CONTENT };
+    const finish = renderToStaticMarkup(
+      <ChecklistConfirmDialog
+        action="complete"
+        runData={runData}
+        busy={false}
+        onConfirm={noop}
+        onCancel={noop}
+      />
+    );
+    expect(finish).toContain('Finish checklist?');
+    expect(finish).toContain('2 items unchecked');
+    const discard = renderToStaticMarkup(
+      <ChecklistConfirmDialog
+        action="discard"
+        runData={runData}
+        busy={false}
+        onConfirm={noop}
+        onCancel={noop}
+      />
+    );
+    expect(discard).toContain('Discard checklist?');
+    expect(discard).toContain('1 item already checked off');
   });
 });

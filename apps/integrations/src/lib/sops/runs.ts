@@ -3,6 +3,9 @@
 // in-progress run in its first response instead of fetching it afterwards.
 
 import type { getDb, SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
+import { countTasks } from './checklist';
+import { canViewSop, type SopViewer } from './levels';
+import { type LinkedProgressMap, linkedSopSlugs } from './links';
 
 export type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -59,11 +62,14 @@ type RunWithEmbeddedChecks = SopRunRow & { sop_run_checks: SopRunCheckRow[] | nu
 /**
  * The newest in-progress run on `sop` with its checks, in one query (the
  * checks come embedded, sorted here by item index). Null when nobody has a
- * run open.
+ * run open — unless `since` is given, in which case the newest run completed
+ * at or after that moment stands in, so a sub-checklist opened from a parent
+ * run still shows the ticks that finished it during this run of the parent.
  */
 export async function loadRunState(
   db: Db,
-  sop: SopRow
+  sop: SopRow,
+  opts: { since?: string | null } = {}
 ): Promise<{ state: SopRunState | null; error: string | null }> {
   const { data, error } = await db
     .from('sop_runs')
@@ -74,11 +80,140 @@ export async function loadRunState(
     .limit(1)
     .maybeSingle();
   if (error) return { state: null, error: error.message };
-  if (!data) return { state: null, error: null };
+  let row = data as RunWithEmbeddedChecks | null;
+  if (!row && opts.since) {
+    const finished = await db
+      .from('sop_runs')
+      .select('*, sop_run_checks(*)')
+      .eq('sop_id', sop.id)
+      .eq('status', 'completed')
+      .gte('ended_at', opts.since)
+      .order('ended_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (finished.error) return { state: null, error: finished.error.message };
+    row = finished.data as RunWithEmbeddedChecks | null;
+  }
+  if (!row) return { state: null, error: null };
 
-  const { sop_run_checks, ...run } = data as RunWithEmbeddedChecks;
+  const { sop_run_checks, ...run } = row;
   const checks = [...(sop_run_checks ?? [])].sort((a, b) => a.item_index - b.item_index);
   const { content, error: contentError } = await resolveRunContent(db, sop, run);
   if (contentError) return { state: null, error: contentError };
   return { state: { run, checks, content }, error: null };
+}
+
+/**
+ * Finish a run the moment its last item is checked: nobody should have to
+ * tap Finish after ticking everything (Finish is for leaving items undone).
+ * Returns the run as it now stands — finished, or unchanged when items
+ * remain or a teammate finished it first.
+ */
+export async function completeIfFull(
+  db: Db,
+  run: SopRunRow,
+  checks: Pick<SopRunCheckRow, 'item_index'>[],
+  email: string
+): Promise<{ run: SopRunRow; error: string | null }> {
+  if (run.status !== 'in_progress' || checks.length < run.task_count) {
+    return { run, error: null };
+  }
+  const { data, error } = await db
+    .from('sop_runs')
+    .update({ status: 'completed', ended_by: email, ended_at: new Date().toISOString() })
+    .eq('id', run.id)
+    .eq('status', 'in_progress')
+    .select('*')
+    .maybeSingle();
+  if (error) return { run, error: error.message };
+  return { run: (data as SopRunRow | null) ?? run, error: null };
+}
+
+type LinkedRunRow = Pick<SopRunRow, 'sop_id' | 'task_count'> & {
+  sop_run_checks: { item_index: number }[] | null;
+};
+
+/**
+ * Progress of every task-bearing document `sop` links to, for the bars under
+ * the parent's items. An open run shows its count; a run completed since the
+ * parent's own run started counts as done (so "Completed" means this shift,
+ * not ever); anything else is not started. Documents the viewer can't read,
+ * archived ones, and prose-only pages get no entry — and no bar.
+ */
+export async function loadLinkedProgress(
+  db: Db,
+  viewer: SopViewer,
+  sop: SopRow,
+  parentRun: SopRunRow | null
+): Promise<{ linked: LinkedProgressMap; error: string | null }> {
+  const slugs = linkedSopSlugs(sop.content_md);
+  if (slugs.length === 0) return { linked: {}, error: null };
+
+  const { data: rows, error } = await db.from('sops').select('*').in('slug', slugs);
+  if (error) return { linked: {}, error: error.message };
+  const targets = ((rows ?? []) as SopRow[]).filter(
+    (row) => canViewSop(viewer, row) && !row.archived && countTasks(row.content_md) > 0
+  );
+  if (targets.length === 0) return { linked: {}, error: null };
+  const ids = targets.map((row) => row.id);
+
+  const [open, completed] = await Promise.all([
+    db
+      .from('sop_runs')
+      .select('sop_id, task_count, sop_run_checks(item_index)')
+      .in('sop_id', ids)
+      .eq('status', 'in_progress')
+      .order('started_at', { ascending: false }),
+    parentRun
+      ? db
+          .from('sop_runs')
+          .select('sop_id')
+          .in('sop_id', ids)
+          .eq('status', 'completed')
+          .gte('ended_at', parentRun.started_at)
+      : Promise.resolve({ data: [] as { sop_id: string }[], error: null }),
+  ]);
+  if (open.error) return { linked: {}, error: open.error.message };
+  if (completed.error) return { linked: {}, error: completed.error.message };
+
+  // Newest open run per document (the query is newest-first).
+  const openBySop = new Map<string, LinkedRunRow>();
+  for (const row of (open.data ?? []) as LinkedRunRow[]) {
+    if (!openBySop.has(row.sop_id)) openBySop.set(row.sop_id, row);
+  }
+  const completedSops = new Set(
+    ((completed.data ?? []) as { sop_id: string }[]).map((r) => r.sop_id)
+  );
+
+  const linked: LinkedProgressMap = {};
+  for (const target of targets) {
+    const taskCount = countTasks(target.content_md);
+    const run = openBySop.get(target.id);
+    if (run) {
+      linked[target.slug] = {
+        slug: target.slug,
+        sopId: target.id,
+        taskCount: run.task_count,
+        checked: run.sop_run_checks?.length ?? 0,
+        status: 'in_progress',
+      };
+    } else if (completedSops.has(target.id)) {
+      linked[target.slug] = {
+        slug: target.slug,
+        sopId: target.id,
+        taskCount,
+        checked: taskCount,
+        status: 'completed',
+      };
+    } else {
+      linked[target.slug] = {
+        slug: target.slug,
+        sopId: target.id,
+        taskCount,
+        checked: 0,
+        status: 'none',
+      };
+    }
+  }
+  return { linked, error: null };
 }

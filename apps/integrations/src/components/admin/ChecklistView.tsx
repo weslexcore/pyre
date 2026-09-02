@@ -1,12 +1,16 @@
 // The live checklist for a task-bearing SOP. The document's prose renders as
 // usual; its task items render as large tappable rows bound to the shared run.
 // There is no separate "run mode" any more: with no run open the rows sit
-// unchecked and the first tap starts one (SopDocument owns that logic — this
+// unchecked and the first tap starts one (useSopRun owns that logic — this
 // component just reports toggles); once a run exists a sticky progress header
 // appears with Finish and Discard, and unchecking the last remaining item
-// silently discards the run again. Checking a parent task checks everything
+// silently discards the run again. Ticking the last item finishes the run by
+// itself; the finished run then shows ticked and locked, with Start again in
+// the header, until someone clears it. Checking a parent task checks everything
 // nested under it in one tap; unchecking stays one item at a time. Checked
-// items say who ticked them and when.
+// items say who ticked them and when. An item that links to another checklist
+// carries a thin progress bar for that sub-checklist under its text, so the
+// parent shows where each subtask stands without opening it.
 //
 // Taps are never blocked: SopDocument applies them locally and queues the
 // server work, so `busy` only holds Finish and Discard while requests are
@@ -15,11 +19,21 @@
 import { memo, useCallback, useMemo, useRef } from 'react';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/checklist';
+import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import type { RunState } from '@/lib/sops/optimistic';
+import { ConfirmDialog } from './ConfirmDialog';
 import { SopMarkdown } from './SopMarkdown';
 
 // Indent per nesting depth (matches the parser's 2-spaces-per-level).
 const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
+
+// Where the progress header pins: under the page nav, or at the top of the
+// peek modal's own scroll container. Literal class names, for Tailwind.
+const STICKY_TOP = { nav: 'top-14', none: 'top-0' } as const;
+
+// No rows share this array, so unchanged rows keep the same reference.
+const NO_LINKED: LinkedProgress[] = [];
 
 const headerButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
@@ -41,18 +55,51 @@ function formatTime(iso: string): string {
   });
 }
 
+/** The bar under an item that links to a sub-checklist. */
+function SubProgress({ progress }: { progress: LinkedProgress }) {
+  const full = progress.taskCount > 0 && progress.checked >= progress.taskCount;
+  const done = progress.status === 'completed' || (progress.status === 'in_progress' && full);
+  const pct =
+    progress.taskCount > 0 ? Math.round((progress.checked / progress.taskCount) * 100) : 0;
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <div className="h-1.5 w-32 overflow-hidden rounded bg-white/10">
+        <div
+          className={`h-full transition-all ${done ? 'bg-[var(--pyre-sage)]' : 'bg-[var(--pyre-gold)]'}`}
+          style={{ width: `${done ? 100 : pct}%` }}
+        />
+      </div>
+      <span
+        className={`font-mono text-[10px] ${done ? 'text-[var(--pyre-sage)]' : 'text-white/40'}`}
+      >
+        {progress.status === 'completed'
+          ? 'Completed'
+          : progress.status === 'in_progress'
+            ? `${progress.checked} of ${progress.taskCount}`
+            : 'Not started'}
+      </span>
+    </div>
+  );
+}
+
 const TaskRow = memo(function TaskRow({
   task,
   checked,
   checkedLabel,
+  linked,
+  locked,
   highlight,
   onSopLink,
   onToggle,
 }: {
   task: ChecklistTask;
   checked: boolean;
+  /** The run is finished: the box shows its state but takes no taps. */
+  locked: boolean;
   /** "who · when" for a checked item, precomputed so the row's props stay flat. */
   checkedLabel: string | null;
+  /** Progress of the sub-checklists this item links to (usually none or one). */
+  linked: LinkedProgress[];
   highlight?: string;
   onSopLink: (slug: string) => void;
   onToggle: (task: ChecklistTask, nextChecked: boolean) => void;
@@ -63,11 +110,16 @@ const TaskRow = memo(function TaskRow({
     >
       {/* The whole row is the tap target — staff are on phones with
           wet hands, so the label spans text and padding alike. */}
-      <label className="group -mx-2 flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-white/5 active:bg-white/10">
+      <label
+        className={`group -mx-2 flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors ${
+          locked ? '' : 'cursor-pointer hover:bg-white/5 active:bg-white/10'
+        }`}
+      >
         <input
           type="checkbox"
           className="peer sr-only"
           checked={checked}
+          disabled={locked}
           onChange={(e) => onToggle(task, e.target.checked)}
         />
         <span
@@ -101,6 +153,9 @@ const TaskRow = memo(function TaskRow({
           >
             <SopMarkdown content={task.text} highlight={highlight} onSopLink={onSopLink} />
           </div>
+          {linked.map((progress) => (
+            <SubProgress key={progress.slug} progress={progress} />
+          ))}
           {checkedLabel && (
             <div className="mt-0.5 font-mono text-[10px] text-white/35">{checkedLabel}</div>
           )}
@@ -115,34 +170,56 @@ export function ChecklistView({
   run,
   checks,
   people,
+  linked,
   currentVersion,
   busy,
   highlight,
+  headerOffset = 'nav',
   onSopLink,
   onToggle,
   onFinish,
   onDiscard,
+  onStartAgain,
 }: {
   /** Run snapshot when a run is open, otherwise the current document. */
   content: string;
+  /** The open run, or a finished one still on screen (status !== in_progress). */
   run: SopRunRow | null;
   checks: SopRunCheckRow[];
   people?: PeopleNames;
+  /** Progress of the checklists this document links to, by slug. */
+  linked?: LinkedProgressMap;
   currentVersion: number;
   /** Requests in flight — holds Finish and Discard, never the boxes. */
   busy: boolean;
   highlight?: string;
+  /** What the sticky progress header pins under: the page nav, or nothing (modal). */
+  headerOffset?: keyof typeof STICKY_TOP;
   onSopLink: (slug: string) => void;
   /** One entry per item the toggle covers — a parent tap carries its subtree. */
   onToggle: (items: { itemIndex: number; itemText: string }[], checked: boolean) => void;
   onFinish: () => void;
   onDiscard: () => void;
+  /** Clears a finished run off the screen so the next tap starts a new one. */
+  onStartAgain?: () => void;
 }) {
   const parsed = useMemo(() => parseChecklist(content), [content]);
   const checkByIndex = useMemo(() => new Map(checks.map((c) => [c.item_index, c])), [checks]);
   const done = checks.length;
   const total = run?.task_count ?? parsed.tasks.length;
-  const allDone = run !== null && total > 0 && done >= total;
+  const finished = run !== null && run.status !== 'in_progress';
+  const allDone = finished || (run !== null && total > 0 && done >= total);
+
+  // Sub-checklist progress per task index, for the items that link to one.
+  const linkedByTask = useMemo(() => {
+    const map = new Map<number, LinkedProgress[]>();
+    if (!linked) return map;
+    for (const task of parsed.tasks) {
+      const entries = linkedSopSlugs(task.text).flatMap((slug) => linked[slug] ?? []);
+      if (entries.length > 0) map.set(task.index, entries);
+    }
+    return map;
+  }, [parsed, linked]);
 
   // One stable toggle handler for every row (so the memoized rows don't all
   // re-render on each tap); it reads the latest tasks and checks from a ref.
@@ -164,7 +241,7 @@ export function ChecklistView({
     <div className="space-y-4">
       {run && (
         <div
-          className={`sticky top-14 z-30 space-y-2 rounded-lg border bg-[var(--pyre-black)] p-4 ${
+          className={`sticky ${STICKY_TOP[headerOffset]} z-30 space-y-2 rounded-lg border bg-[var(--pyre-black)] p-4 ${
             allDone ? 'border-[var(--pyre-sage)]/60' : 'border-[var(--pyre-gold)]/40'
           }`}
         >
@@ -174,31 +251,46 @@ export function ChecklistView({
                 allDone ? 'text-[var(--pyre-sage)]' : 'text-[var(--pyre-gold)]'
               }`}
             >
-              {allDone ? 'All items done' : 'Checklist in progress'}
+              {finished ? 'Completed' : allDone ? 'All items done' : 'Checklist in progress'}
             </span>
             <span className="font-mono text-xs text-white/60">
               {done} of {total}
             </span>
             <span className="font-mono text-[10px] text-white/40">
-              started by {personName(run.started_by, people)} at {formatTime(run.started_at)}
+              {finished && run.ended_by && run.ended_at
+                ? `finished by ${personName(run.ended_by, people)} at ${formatTime(run.ended_at)}`
+                : `started by ${personName(run.started_by, people)} at ${formatTime(run.started_at)}`}
             </span>
             <span className="ml-auto flex gap-2">
-              <button
-                type="button"
-                className={allDone ? finishDoneClass : headerButtonClass}
-                disabled={busy}
-                onClick={onFinish}
-              >
-                Finish
-              </button>
-              <button
-                type="button"
-                className={discardButtonClass}
-                disabled={busy}
-                onClick={onDiscard}
-              >
-                Discard
-              </button>
+              {finished ? (
+                <button
+                  type="button"
+                  className={headerButtonClass}
+                  disabled={busy}
+                  onClick={onStartAgain}
+                >
+                  Start again
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={allDone ? finishDoneClass : headerButtonClass}
+                    disabled={busy}
+                    onClick={onFinish}
+                  >
+                    Finish
+                  </button>
+                  <button
+                    type="button"
+                    className={discardButtonClass}
+                    disabled={busy}
+                    onClick={onDiscard}
+                  >
+                    Discard
+                  </button>
+                </>
+              )}
             </span>
           </div>
           <div className="h-1.5 overflow-hidden rounded bg-white/10">
@@ -245,6 +337,8 @@ export function ChecklistView({
               key={`task-${segment.line}`}
               task={task}
               checked={!!check}
+              locked={finished}
+              linked={linkedByTask.get(task.index) ?? NO_LINKED}
               checkedLabel={
                 check
                   ? `${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
@@ -258,5 +352,41 @@ export function ChecklistView({
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * The confirm step before a Finish that skips items or a Discard that erases
+ * checks — the same words on the page and in the peek modal.
+ */
+export function ChecklistConfirmDialog({
+  action,
+  runData,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  action: 'complete' | 'discard';
+  runData: RunState;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const left = runData.run.task_count - runData.checks.length;
+  const done = runData.checks.length;
+  return (
+    <ConfirmDialog
+      title={action === 'complete' ? 'Finish checklist?' : 'Discard checklist?'}
+      body={
+        action === 'complete'
+          ? `${left} item${left === 1 ? '' : 's'} unchecked — the record will show what was skipped.`
+          : `Nothing is saved — the ${done} item${done === 1 ? '' : 's'} already checked off will be erased.`
+      }
+      confirmLabel={action === 'complete' ? 'Finish' : 'Discard'}
+      danger={action === 'discard'}
+      busy={busy}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }

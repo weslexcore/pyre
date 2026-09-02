@@ -182,10 +182,17 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   // Single document, with its in-progress run embedded (the same payload the
-  // page renders server-side; see lib/sops/document.ts).
+  // page renders server-side; see lib/sops/document.ts). ?since= (ISO time)
+  // lets a run finished since then stand in when none is open — the peek
+  // modal passes the parent run's start, so a sub-checklist ticked off
+  // during it opens showing those ticks.
   if (id || slug) {
     if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
-    const result = await loadSopDocument(db, viewer, { id, slug });
+    const since = url.searchParams.get('since');
+    if (since && Number.isNaN(Date.parse(since))) {
+      return json({ error: 'since must be an ISO date-time' }, 400);
+    }
+    const result = await loadSopDocument(db, viewer, { id, slug }, { since });
     if (!result.ok) return json({ error: result.error }, result.status);
     return json(result.doc);
   }
