@@ -5,7 +5,11 @@
 //
 //   POST { question, session? }  → opens a knowledge session (or sends a
 //                                  follow-up into the caller's own session)
-//                                  and returns { sessionId, token, fresh }
+//                                  and returns { sessionId, token, fresh,
+//                                  nextIndex? } — nextIndex only for a
+//                                  conversation reopened from the history
+//                                  sidebar (session.resume), which the island
+//                                  otherwise has no stream position for
 //   GET  ?sessionId&token&startIndex → proxies the session's event stream
 //                                  as a reduced NDJSON feed the island renders
 //
@@ -28,6 +32,7 @@ import {
 import { type AskStreamEvent, reduceStreamEvent, type UpstreamEvent } from '@/lib/knowledge/stream';
 import type { EveConfig } from '@/lib/schedule/eve-session';
 import {
+  countEveSessionEvents,
   openEveSessionStream,
   readEveSessionTail,
   sendEveFollowUp,
@@ -91,7 +96,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const sessionConfig: EveConfig = { ...config, headers: knowledgeHeaders(scope) };
 
   // A follow-up into the caller's own conversation, when it is still there.
-  const session = body.session as { id?: unknown; token?: unknown } | undefined;
+  // `resume` marks a conversation reopened from the history sidebar: the
+  // island holds no stream position for it, so the reply carries the index
+  // to stream from (the session's event count before this follow-up).
+  const session = body.session as { id?: unknown; token?: unknown; resume?: unknown } | undefined;
   if (
     session &&
     typeof session.id === 'string' &&
@@ -101,17 +109,34 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const tail = await readEveSessionTail(sessionConfig, session.id);
     if (tail.state === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
     if (tail.state === 'waiting') {
-      const sent = await sendEveFollowUp(
-        sessionConfig,
-        session.id,
-        tail.continuationToken,
-        buildAskMessage(question, true)
-      );
-      if (sent.ok) {
-        return json({ ok: true, sessionId: session.id, token: session.token, fresh: false }, 202);
+      const nextIndex =
+        session.resume === true
+          ? await countEveSessionEvents(sessionConfig, session.id, tail.continuationToken)
+          : undefined;
+      // A resume whose log could not be measured is treated as gone: a
+      // fresh session beats streaming the new answer from a guessed index.
+      if (nextIndex !== null) {
+        const sent = await sendEveFollowUp(
+          sessionConfig,
+          session.id,
+          tail.continuationToken,
+          buildAskMessage(question, true)
+        );
+        if (sent.ok) {
+          return json(
+            {
+              ok: true,
+              sessionId: session.id,
+              token: session.token,
+              fresh: false,
+              ...(nextIndex !== undefined ? { nextIndex } : {}),
+            },
+            202
+          );
+        }
+        if (sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
+        return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
       }
-      if (sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
-      return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
     }
     // 'gone' — fall through to a fresh session; the island tells the reader.
   }

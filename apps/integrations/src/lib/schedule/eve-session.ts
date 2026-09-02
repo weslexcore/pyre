@@ -151,6 +151,74 @@ export async function readEveSessionTail(
   }
 }
 
+/** Give the whole-log scan this long; a parked session's log is short and arrives at once. */
+const SCAN_TIMEOUT_MS = 15_000;
+
+/**
+ * Whether `line` is the `session.waiting` event carrying `continuationToken`.
+ * Exported for tests.
+ */
+export function isWaitingEventFor(line: string, continuationToken: string): boolean {
+  try {
+    const event = JSON.parse(line) as { type?: string; data?: { continuationToken?: string } };
+    return event?.type === 'session.waiting' && event.data?.continuationToken === continuationToken;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * How many events a parked session has written so far — the index a caller
+ * streams from to see only what its next follow-up produces. Events carry
+ * no index of their own and every turn ends in a look-alike
+ * `session.waiting`, so the scan reads the log from the start and stops at
+ * the waiting event carrying the session's current continuation token (from
+ * readEveSessionTail — the token rotates each turn, so it names the latest
+ * one). Null when the scan times out or the token never appears; the
+ * caller's fallback is a fresh session.
+ */
+export async function countEveSessionEvents(
+  config: EveConfig,
+  sessionId: string,
+  continuationToken: string
+): Promise<number | null> {
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), SCAN_TIMEOUT_MS);
+  try {
+    const response = await fetch(sessionUrl(config, `/${sessionId}/stream?startIndex=0`), {
+      headers: headers(config, false),
+      signal: abort.signal,
+    });
+    if (!response.ok || !response.body) return null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let count = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = done ? '' : (lines.pop() ?? '');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          count += 1;
+          if (isWaitingEventFor(trimmed, continuationToken)) return count;
+        }
+        if (done) return null;
+      }
+    } finally {
+      abort.abort(); // release the held-open stream
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export type FollowUpResult =
   | { ok: true }
   /** The continuation was taken by another turn between probe and send. */
