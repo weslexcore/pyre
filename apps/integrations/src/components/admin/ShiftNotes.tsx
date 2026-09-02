@@ -10,6 +10,8 @@
 // yet, per-chip progress), and creating the note claims the finished uploads
 // by id — so submitting never waits on file transfer that could have already
 // happened. Media can also be added to or removed from an existing note.
+// Clicking a photo or video opens it in the ShiftNoteViewer lightbox, which
+// steps through that note's media without leaving the page.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
 import {
@@ -22,6 +24,7 @@ import {
 import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { highlightSegments } from '@/lib/sops/search';
+import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
@@ -155,6 +158,8 @@ export function ShiftNotes() {
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
   const [attachments, setAttachments] = useState<Record<string, ShiftNoteAttachmentRow[]>>({});
   const [names, setNames] = useState<PeopleNames>({});
+  // Which note's media is open in the lightbox, and which item within it.
+  const [lightbox, setLightbox] = useState<{ noteId: string; index: number } | null>(null);
   const [viewer, setViewer] = useState<Viewer>({ email: '', isAdmin: false });
   const [scope, setScope] = useState<Scope>('mine');
   const [loading, setLoading] = useState(true);
@@ -530,6 +535,19 @@ export function ShiftNotes() {
     });
   }, [notes, personFilter, term, scope]);
 
+  // The lightbox browses one note's photos and videos (PDFs open in a tab).
+  const viewable = useCallback(
+    (noteId: string) =>
+      (attachments[noteId] ?? []).filter((a) => a.kind === 'photo' || a.kind === 'video'),
+    [attachments]
+  );
+  const lightboxItems = lightbox ? viewable(lightbox.noteId) : [];
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const navigateLightbox = useCallback(
+    (index: number) => setLightbox((prev) => (prev ? { ...prev, index } : prev)),
+    []
+  );
+
   // note_date → that day's notes, in the server's order (dates desc,
   // written-order within a day).
   const byDay = useMemo(() => {
@@ -798,29 +816,55 @@ export function ShiftNotes() {
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {(attachments[note.id] ?? []).map((attachment) => {
-                    const src = `/api/admin/shift-note-media?id=${encodeURIComponent(attachment.id)}`;
+                    const src = attachmentSrc(attachment);
+                    const openViewer = () =>
+                      setLightbox({
+                        noteId: note.id,
+                        index: Math.max(
+                          0,
+                          viewable(note.id).findIndex((a) => a.id === attachment.id)
+                        ),
+                      });
                     return (
                       <li
                         key={attachment.id}
                         className="rounded border border-white/10 bg-white/5 p-1.5"
                       >
                         {attachment.kind === 'photo' ? (
-                          <a href={src} target="_blank" rel="noreferrer">
+                          <button
+                            type="button"
+                            onClick={openViewer}
+                            aria-label={`View ${attachment.file_name}`}
+                            className="block w-full cursor-zoom-in"
+                          >
                             <img
                               src={src}
                               alt={attachment.file_name}
                               loading="lazy"
                               className="h-24 w-full rounded object-cover"
                             />
-                          </a>
+                          </button>
                         ) : attachment.kind === 'video' ? (
-                          // biome-ignore lint/a11y/useMediaCaption: shift footage has no caption track
-                          <video
-                            src={src}
-                            controls
-                            preload="metadata"
-                            className="h-24 w-full rounded bg-black object-contain"
-                          />
+                          <button
+                            type="button"
+                            onClick={openViewer}
+                            aria-label={`Play ${attachment.file_name}`}
+                            className="relative block w-full cursor-zoom-in"
+                          >
+                            <video
+                              src={src}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              tabIndex={-1}
+                              className="pointer-events-none h-24 w-full rounded bg-black object-contain"
+                            />
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                              <span className="rounded border border-white/40 bg-black/60 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white">
+                                Play
+                              </span>
+                            </span>
+                          </button>
                         ) : (
                           <a
                             href={src}
@@ -883,6 +927,15 @@ export function ShiftNotes() {
           ))}
         </section>
       ))}
+
+      {lightbox && lightboxItems.length > 0 && (
+        <ShiftNoteViewer
+          items={lightboxItems}
+          index={Math.min(lightbox.index, lightboxItems.length - 1)}
+          onNavigate={navigateLightbox}
+          onClose={closeLightbox}
+        />
+      )}
     </div>
   );
 }
