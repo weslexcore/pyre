@@ -96,6 +96,17 @@ describe('SopMarkdown', () => {
     expect(html).not.toMatch(/<a href="\/admin\/sops\/runs"[^>]*target=/);
   });
 
+  it('gives headings ids so in-document links can jump to them', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown
+        content={'## Safety: what the research says\n\n[Jump](#safety-what-the-research-says)'}
+      />
+    );
+    expect(html).toContain('<h3 id="safety-what-the-research-says"');
+    expect(html).toMatch(/<a href="#safety-what-the-research-says"[^>]*>Jump<\/a>/);
+    expect(html).not.toMatch(/<a href="#[^>]*target=/);
+  });
+
   it('leaves library links as plain anchors without onSopLink', () => {
     const html = renderToStaticMarkup(
       <SopMarkdown content={'[Towels](/admin/sops/momence-dirty-towels)'} />

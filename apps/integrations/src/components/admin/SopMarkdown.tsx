@@ -14,13 +14,31 @@
 // search: every text node is a direct string child of one of the overridden
 // elements below, so marking string children in each override covers the
 // whole document.
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { sopSlugFromHref } from '@/lib/sops/links';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
+
+/**
+ * A stable id for a heading, so a document can link to its own sections
+ * ([Safety](#safety)) — quick-reference summaries up top jump to the detail
+ * below. Derived from the heading's plain text the same way GitHub does:
+ * lowercase, punctuation dropped, spaces to hyphens. Element children (a
+ * link inside a heading) contribute nothing, which is fine for a slug.
+ */
+export function headingId(children: ReactNode): string | undefined {
+  const nodes = Array.isArray(children) ? children : [children];
+  const text = nodes.filter((c): c is string => typeof c === 'string').join('');
+  const slug = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .trim()
+    .replace(/\s+/g, '-');
+  return slug.length > 0 ? slug : undefined;
+}
 
 function markString(text: string, term: string, keyBase: string): ReactNode[] {
   return highlightSegments(text, term).map((segment, i) =>
@@ -35,7 +53,9 @@ function markString(text: string, term: string, keyBase: string): ReactNode[] {
   );
 }
 
-export function SopMarkdown({
+// Memoized: a checklist renders one of these per task row, and a tap must
+// not re-parse every other row's markdown.
+export const SopMarkdown = memo(function SopMarkdown({
   content,
   highlight,
   onSopLink,
@@ -66,17 +86,26 @@ export function SopMarkdown({
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h2 className="mt-8 mb-3 text-xl font-semibold text-[var(--pyre-creme)] first:mt-0">
+            <h2
+              id={headingId(children)}
+              className="mt-8 mb-3 text-xl font-semibold text-[var(--pyre-creme)] first:mt-0"
+            >
               {hl(children)}
             </h2>
           ),
           h2: ({ children }) => (
-            <h3 className="mt-8 mb-3 border-b border-white/10 pb-1.5 text-lg font-semibold text-[var(--pyre-creme)] first:mt-0">
+            <h3
+              id={headingId(children)}
+              className="mt-8 mb-3 border-b border-white/10 pb-1.5 text-lg font-semibold text-[var(--pyre-creme)] first:mt-0"
+            >
               {hl(children)}
             </h3>
           ),
           h3: ({ children }) => (
-            <h4 className="mt-6 mb-2 text-base font-semibold text-[var(--pyre-creme)]">
+            <h4
+              id={headingId(children)}
+              className="mt-6 mb-2 text-base font-semibold text-[var(--pyre-creme)]"
+            >
               {hl(children)}
             </h4>
           ),
@@ -167,4 +196,4 @@ export function SopMarkdown({
       </ReactMarkdown>
     </div>
   );
-}
+});
