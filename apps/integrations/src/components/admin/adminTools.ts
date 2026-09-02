@@ -57,6 +57,14 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/ask',
+    title: 'Ask a Question',
+    navLabel: 'Ask',
+    description:
+      'Ask the knowledge assistant anything about how we run the sauna. It answers from the SOPs, shift notes, water log, and incident reports you can see, with links to its sources.',
+    section: 'operations',
+  },
+  {
     href: '/admin/incidents',
     title: 'Incident Reports',
     navLabel: 'Incidents',

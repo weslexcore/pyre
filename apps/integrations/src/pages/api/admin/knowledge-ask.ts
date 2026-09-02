@@ -1,4 +1,4 @@
-// The staff "Ask" box (/admin/sops/ask): a natural-language question goes to
+// The staff "Ask" box (/admin/ask): a natural-language question goes to
 // the knowledge assistant in pyre-agents, which searches the SOP library,
 // shift notes, water log, and incident reports on the asker's behalf and
 // answers with links back here.
@@ -12,8 +12,8 @@
 // The session runs as the asker: their SOP role, email, and page grants ride
 // in as the knowledge scope (lib/knowledge/scope.ts) and the agent's tools
 // filter by them. A signed token binds each session to the session email so
-// only its opener can continue or read it. Gated on the SOPs page like the
-// rest of the library.
+// only its opener can continue or read it. Gated on the Ask page grant — the
+// checkbox on /admin/users — so the assistant is opt-in per person.
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
@@ -37,7 +37,7 @@ import { normalizeEmail } from '@/lib/sops/levels';
 
 export const prerender = false;
 
-const PAGE = '/admin/sops';
+const PAGE = '/admin/ask';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 

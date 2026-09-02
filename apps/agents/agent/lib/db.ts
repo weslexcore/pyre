@@ -1,4 +1,6 @@
-// Supabase client for agent tools — READ ONLY by convention. This app holds
+// Supabase client for agent tools — READ ONLY by convention, with one
+// exception: the knowledge assistant appends to its own audit log
+// (knowledge_queries, see lib/knowledge/audit.ts). This app holds
 // its own revocable secret key (SUPABASE_AGENTS_SECRET_KEY); all schedule
 // writes go through the integrations app's /api/agent/proposals endpoint so
 // validation and state transitions stay single-sourced.

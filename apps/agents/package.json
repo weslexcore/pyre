@@ -12,7 +12,7 @@
     "build": "echo 'pyre-agents builds via eve on Vercel (yarn build:eve locally)'",
     "build:eve": "eve build",
     "eval": "eve eval",
-    "test": "echo 'evals run via yarn eval against a dev server'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@pyre/schedule-core": "workspace:^",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

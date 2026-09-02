@@ -64,6 +64,24 @@ never gets a shell.
 - The read-only "not covered" answer is by design: the prompt
   (`agent/lib/prompts/knowledge.ts`) forbids filling gaps from general
   knowledge.
+- **Access parity.** The assistant can only surface what the dashboard would
+  show the same person: SOPs by the document's grants (admins everything,
+  others by role or named email, archived hidden), shift notes all-or-own,
+  incident reports all-or-own-filed with people fields withheld, the water
+  log by page grant. The scope comes from the integrations app's own access
+  code, tools re-derive it from the session on every call, and the SQL
+  function applies it row by row. `tests/access.test.ts` covers the
+  agent-side rules.
+- **Who may ask** is the "Ask" checkbox on `/admin/users` (the
+  `/admin/ask` page grant); the dashboard's ask route checks it on every
+  request.
+- **Audit log.** Every question lands in `public.knowledge_queries`
+  (migration `20260903130000_knowledge_queries`) with the asker, their
+  scope, each tool call and its input, the answer, and the outcome. The
+  channel handlers in `agent/channels/eve.ts` and the hook in
+  `agent/hooks/knowledge_audit.ts` write it from the event stream, so a
+  closed browser tab never loses a record. Admins review it at
+  `/admin/ask/log`.
 
 ### Staff-scheduling drafter
 

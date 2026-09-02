@@ -1,0 +1,19 @@
+---
+// Audit log of the knowledge assistant: every question, who asked it, the
+// access the assistant had on their behalf, what it searched and read, and
+// the answer. Admin-only — the Ask page grant lets someone reach this path
+// through AdminLayout's prefix rule, so the page checks for itself and the
+// API (/api/admin/knowledge-log) requires admin on every request.
+import { KnowledgeLog } from '@/components/admin/KnowledgeLog';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (!Astro.locals.adminAccess?.isAdmin) return Astro.redirect('/admin/ask');
+---
+
+<AdminLayout
+  title="Question Log"
+  subtitle="What staff asked the knowledge assistant, what it looked at, and how it answered"
+  wide
+>
+  <KnowledgeLog client:load />
+</AdminLayout>

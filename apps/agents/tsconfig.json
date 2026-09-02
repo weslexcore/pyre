@@ -1,5 +1,5 @@
 {
-  "include": ["agent/**/*", "evals/**/*"],
+  "include": ["agent/**/*", "evals/**/*", "tests/**/*"],
   "compilerOptions": {
     "target": "es2022",
     "module": "esnext",
