@@ -4,7 +4,7 @@
 
 import type { getDb, SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { countTasks } from './checklist';
-import { canViewSop, type SopViewer } from './levels';
+import { canViewSop, type SopAccessFields, type SopViewer } from './levels';
 import { type LinkedProgressMap, linkedSopSlugs } from './links';
 
 export type Db = NonNullable<ReturnType<typeof getDb>>;
@@ -20,6 +20,43 @@ export interface SopRunState {
 /** Everyone one run names: who started it, ended it, and checked its items. */
 export function runActors(run: SopRunRow, checks: Pick<SopRunCheckRow, 'checked_by'>[]): string[] {
   return [run.started_by, run.ended_by ?? '', ...checks.map((c) => c.checked_by)];
+}
+
+/**
+ * Ids of the documents this viewer may read. The run log is scoped by this
+ * rather than by who took part: a run's checks quote the document's items, so
+ * run visibility follows document visibility and nothing else. Admins are not
+ * narrowed at all — canViewSop already passes everything for them, archived
+ * documents included — so callers may skip this for an admin.
+ */
+export function visibleSopIds(
+  viewer: SopViewer,
+  sops: (SopAccessFields & { id: string })[]
+): string[] {
+  return sops.filter((sop) => canViewSop(viewer, sop)).map((sop) => sop.id);
+}
+
+/**
+ * The ids the run log narrows on for a non-admin, read from the library. Pass
+ * `onlySopId` when the caller already names one document (the SOP page's Runs
+ * panel) so this checks that row alone. Only the grant columns are selected —
+ * the named-email grants stay server-side, as they do everywhere else.
+ */
+export async function loadViewableSopIds(
+  db: Db,
+  viewer: SopViewer,
+  onlySopId?: string | null
+): Promise<{ ids: string[]; error: string | null }> {
+  let query = db
+    .from('sops')
+    .select('id, view_roles, edit_roles, view_emails, edit_emails, archived');
+  if (onlySopId) query = query.eq('id', onlySopId);
+  const { data, error } = await query;
+  if (error) return { ids: [], error: error.message };
+  return {
+    ids: visibleSopIds(viewer, (data ?? []) as (SopAccessFields & { id: string })[]),
+    error: null,
+  };
 }
 
 export async function loadRunChecks(db: Db, runId: string) {

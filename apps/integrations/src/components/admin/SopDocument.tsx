@@ -154,9 +154,9 @@ export function SopDocument({
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Past runs of this document: all of them for admins, the caller's own for
-  // everyone else (the API scopes; see /api/admin/sop-runs). Fetched fresh
-  // each time the panel opens.
+  // Past runs of this document: all of them, for anyone who can open the
+  // document — the run log is a shared record (the API scopes by view access;
+  // see /api/admin/sop-runs). Fetched fresh each time the panel opens.
   const [showRuns, setShowRuns] = useState(false);
   const [runsPanel, setRunsPanel] = useState<RunEntry[] | null>(null);
 
@@ -549,7 +549,7 @@ export function SopDocument({
       {showRuns && (
         <div className="space-y-2 rounded border border-white/10 bg-white/5 p-4">
           <h2 className="font-mono text-xs uppercase tracking-wide text-white/40">
-            Runs of this SOP{isAdmin ? '' : ' (yours)'}
+            Runs of this SOP
           </h2>
           {runsPanel === null ? (
             <p className="font-mono text-xs text-white/40">Loading…</p>
