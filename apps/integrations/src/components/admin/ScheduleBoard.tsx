@@ -675,10 +675,11 @@ export function ScheduleBoard() {
     <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Both toolbar rows wrap: on a phone the pills, the range controls
+          {/* Toolbar rows wrap: on a phone the pills, the range controls
             and the manage actions each stack onto as many lines as they need
             rather than running off the right edge of the viewport. This row
-            changes what you're looking at (square pills); the row below
+            changes what you're looking at (square pills); the range in view
+            sits on its own line beneath it; the filter row below that
             narrows it (round gold filter chips). */}
           <span className="flex flex-wrap gap-1.5">
             <button
@@ -748,9 +749,6 @@ export function ScheduleBoard() {
               >
                 Next ›
               </button>
-              <span className="font-mono text-xl font-bold text-white/80">
-                {formatDay(weekStart)} – {formatDay(addDays(weekStart, 6))}
-              </span>
             </>
           )}
 
@@ -777,9 +775,6 @@ export function ScheduleBoard() {
               >
                 Next ›
               </button>
-              <span className="font-mono text-xl font-bold text-white/80">
-                {monthLabel(monthStart)}
-              </span>
             </>
           )}
 
@@ -841,6 +836,17 @@ export function ScheduleBoard() {
             <span className="font-mono text-xs text-white/40">Loading…</span>
           )}
         </div>
+
+        {/* The range in view gets its own line between the view controls and
+            the filters so it reads as a heading rather than trailing the nav
+            buttons — on a phone it no longer wraps mid-row. */}
+        {calendarView && (
+          <p className="font-mono text-xl font-bold text-white/80">
+            {view === 'week'
+              ? `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`
+              : monthLabel(monthStart)}
+          </p>
+        )}
 
         {(showMineFilter || showPastFilter || showStaffFilter) && (
           <div className="flex flex-wrap items-center gap-2">
