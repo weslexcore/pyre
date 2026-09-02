@@ -841,7 +841,7 @@ export function ScheduleBoard() {
             the filters so it reads as a heading rather than trailing the nav
             buttons — on a phone it no longer wraps mid-row. */}
         {calendarView && (
-          <p className="font-mono text-xl font-bold text-white/80">
+          <p className="pt-3 font-mono text-2xl font-bold text-white/80">
             {view === 'week'
               ? `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`
               : monthLabel(monthStart)}

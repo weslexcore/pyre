@@ -21,6 +21,7 @@ import {
 } from '@/lib/shift-notes/media';
 import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { highlightSegments } from '@/lib/sops/search';
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
@@ -100,6 +101,34 @@ function uploadWithProgress(
 }
 
 /** "Thursday, Aug 21" (+ year when it isn't this year). */
+/**
+ * Note body with every occurrence of `term` wrapped in <mark>, so a search hit
+ * is visible at a glance instead of having to be re-read for. Same styling as
+ * the SOP search so the two feel like one feature.
+ */
+function MarkedBody({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>;
+  let offset = 0;
+  return (
+    <>
+      {highlightSegments(text, term).map((segment) => {
+        const key = offset;
+        offset += segment.text.length;
+        return segment.match ? (
+          <mark
+            key={key}
+            className="rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]"
+          >
+            {segment.text}
+          </mark>
+        ) : (
+          segment.text
+        );
+      })}
+    </>
+  );
+}
+
 function formatDay(date: string): string {
   const [year, month, day] = date.split('-').map(Number);
   const utc = new Date(Date.UTC(year, month - 1, day));
@@ -486,8 +515,12 @@ export function ShiftNotes() {
     return [...set].sort((a, b) => personName(a, names).localeCompare(personName(b, names)));
   }, [notes, names]);
 
+  // The trimmed term drives both the filter and the highlight, so what marks
+  // is exactly what matched.
+  const term = query.trim();
+
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = term.toLowerCase();
     return notes.filter((note) => {
       if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
         return false;
@@ -495,7 +528,7 @@ export function ShiftNotes() {
       if (q && !note.body.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [notes, personFilter, query, scope]);
+  }, [notes, personFilter, term, scope]);
 
   // note_date → that day's notes, in the server's order (dates desc,
   // written-order within a day).
@@ -758,7 +791,9 @@ export function ShiftNotes() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">{note.body}</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
+                  <MarkedBody text={note.body} term={term} />
+                </p>
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
