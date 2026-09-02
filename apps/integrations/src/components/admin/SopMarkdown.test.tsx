@@ -85,6 +85,17 @@ describe('SopMarkdown', () => {
     expect(html).not.toContain('href="/admin/sops/momence-dirty-towels"');
   });
 
+  it('opens external links in a new tab and keeps in-app links in place', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown
+        content={'[PubMed](https://pubmed.ncbi.nlm.nih.gov/25705824/) and [Runs](/admin/sops/runs)'}
+      />
+    );
+    expect(html).toMatch(/<a href="https:\/\/pubmed[^>]*target="_blank"/);
+    expect(html).toMatch(/<a href="\/admin\/sops\/runs"[^>]*>/);
+    expect(html).not.toMatch(/<a href="\/admin\/sops\/runs"[^>]*target=/);
+  });
+
   it('leaves library links as plain anchors without onSopLink', () => {
     const html = renderToStaticMarkup(
       <SopMarkdown content={'[Towels](/admin/sops/momence-dirty-towels)'} />

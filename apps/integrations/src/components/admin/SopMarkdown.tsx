@@ -129,11 +129,15 @@ export function SopMarkdown({
                 </button>
               );
             }
+            // Off-site links (research citations, vendor pages) open in a new
+            // tab so the reader keeps their place in the library.
+            const external = /^https?:\/\//i.test(href ?? '');
             return (
               <a
                 href={href}
                 className="text-[var(--pyre-gold)] underline hover:text-white"
                 rel="noopener noreferrer"
+                target={external ? '_blank' : undefined}
               >
                 {hl(children)}
               </a>
