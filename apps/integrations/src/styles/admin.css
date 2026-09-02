@@ -23,3 +23,23 @@
     font-weight: 600;
   }
 }
+
+/* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every
+ * same-origin navigation runs through the View Transition API in browsers
+ * that have it. The root snapshot crossfades with the browser's default
+ * 250ms animation; this only shortens it. It stays opacity-only, which the
+ * compositor animates without touching layout — never animate size or
+ * position of the root groups here. The sticky header is excluded from the
+ * root snapshot (see transition:name in AdminLayout) so it does not fade.
+ * Reduced motion is handled by Astro: its transition stylesheet turns every
+ * view-transition animation off under prefers-reduced-motion. Browsers
+ * without the API navigate instantly, with no fallback animation. */
+::view-transition-old(root) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-in;
+}
+
+::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: ease-out;
+}

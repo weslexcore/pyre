@@ -67,7 +67,16 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
         </main>
       ) : (
         <>
-          <header class="sticky top-0 z-40 border-b border-white/10 bg-[var(--pyre-black)]">
+          {/* The header gets its own view-transition snapshot and no animation,
+              so it holds still while the page body crossfades underneath it
+              (the crossfade itself is tuned in styles/admin.css). Without a
+              name it would be part of the root snapshot and fade with the
+              rest of the page on every navigation. */}
+          <header
+            transition:name="admin-header"
+            transition:animate="none"
+            class="sticky top-0 z-40 border-b border-white/10 bg-[var(--pyre-black)]"
+          >
             <div
               class={`relative mx-auto flex ${widthClass} items-center justify-between gap-4 px-4 py-3`}
             >
