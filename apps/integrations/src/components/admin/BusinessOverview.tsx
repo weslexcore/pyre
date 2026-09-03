@@ -6,7 +6,7 @@
 // /api/admin/business-overview (Momence metric syncs + labor cost from the
 // shifts tables); this island only renders.
 import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BusinessCosts } from '@/components/admin/BusinessCosts';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
@@ -114,6 +114,10 @@ const fmtMoney = (n: number): string =>
 const fmtCount = (n: number): string =>
   Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(1);
 
+/** Popup values for series that can be missing (no sync yet, future bucket). */
+const fmtMaybeMoney = (n: number | null): string => (n === null ? '—' : fmtMoney(n));
+const fmtMaybeCount = (n: number | null): string => (n === null ? '—' : fmtCount(n));
+
 const fmtDay = (d: string): string =>
   new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -197,6 +201,29 @@ interface ChartFrame {
   step: number;
 }
 
+/** One line of the hover popup: a series name, its exact value, and the
+ * swatch colour that ties it back to the mark on the chart. */
+interface TooltipRow {
+  label: string;
+  value: string;
+  color?: string;
+  /** Indent under the row above — a component of a total, not a series. */
+  sub?: boolean;
+}
+
+const HOVER_COLUMN = 'rgba(255, 255, 255, 0.06)';
+
+/**
+ * Which bucket column a viewBox x-coordinate falls in, or null when the
+ * pointer is over the y-axis gutter or past the last column. Pure so the
+ * snapping can be tested without a DOM.
+ */
+export function bucketIndexAt(vx: number, f: ChartFrame, count: number): number | null {
+  if (count === 0 || vx < f.LEFT || vx >= f.LEFT + f.plotW) return null;
+  const i = Math.floor((vx - f.LEFT) / f.step);
+  return i >= 0 && i < count ? i : null;
+}
+
 const frame = (count: number): ChartFrame => {
   const W = 640;
   const H = 180;
@@ -209,13 +236,18 @@ const frame = (count: number): ChartFrame => {
   return { W, H, LEFT, TOP, plotW, plotH, step: count > 0 ? plotW / count : plotW };
 };
 
-/** Shared grid lines + x labels; children render the marks. */
+/**
+ * Shared grid lines + x labels; children render the marks. Hovering (or
+ * tapping) a column snaps to that bucket, tints the column, and shows a popup
+ * with the exact value of every series — `tooltip` says what those are.
+ */
 function ChartShell({
   buckets,
   group,
   max,
   yLabel,
   ariaLabel,
+  tooltip,
   children,
 }: {
   buckets: BusinessBucket[];
@@ -223,9 +255,16 @@ function ChartShell({
   max: number;
   yLabel: (v: number) => string;
   ariaLabel: string;
-  children: (f: ChartFrame) => React.ReactNode;
+  tooltip: (bucket: BusinessBucket) => TooltipRow[];
+  /** `hovered` is the index of the bucket under the pointer, so marks can
+   * brighten or grow a dot on the active column. */
+  children: (f: ChartFrame, hovered: number | null) => React.ReactNode;
 }) {
   const f = frame(buckets.length);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // A range change can shrink the bucket list under a stale index.
+  const hovered = hoverIndex !== null && hoverIndex < buckets.length ? hoverIndex : null;
   const gridLines = [0.25, 0.5, 0.75, 1].map((fr) => ({
     y: f.TOP + f.plotH - fr * f.plotH,
     label: yLabel(max * fr),
@@ -233,54 +272,115 @@ function ChartShell({
   const labelEvery = Math.ceil(buckets.length / 14);
   const firstFuture = buckets.findIndex((b) => b.future);
 
+  const snap = (clientX: number) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const vx = ((clientX - rect.left) / rect.width) * f.W;
+    setHoverIndex(bucketIndexAt(vx, f, buckets.length));
+  };
+
+  const hoveredBucket = hovered !== null ? buckets[hovered] : null;
+  const centerX = hovered !== null ? f.LEFT + hovered * f.step + f.step / 2 : null;
+
   return (
-    <svg
-      viewBox={`0 0 ${f.W} ${f.H}`}
-      className="w-full max-w-[720px]"
-      role="img"
-      aria-label={ariaLabel}
-    >
-      {gridLines.map((g) => (
-        <g key={g.y}>
-          <line x1={f.LEFT} x2={f.W - 12} y1={g.y} y2={g.y} stroke={GRID} strokeWidth={1} />
-          <text
-            x={f.LEFT - 6}
-            y={g.y + 3}
-            textAnchor="end"
-            className="fill-white/40 font-mono"
-            fontSize={9}
-          >
-            {g.label}
-          </text>
-        </g>
-      ))}
-      {firstFuture > 0 && (
-        <line
-          x1={f.LEFT + firstFuture * f.step}
-          x2={f.LEFT + firstFuture * f.step}
-          y1={f.TOP}
-          y2={f.TOP + f.plotH}
-          stroke="rgba(255,255,255,0.25)"
-          strokeDasharray="4 4"
-          strokeWidth={1}
-        />
+    <div className="relative w-full max-w-[720px]">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${f.W} ${f.H}`}
+        className="w-full touch-none select-none"
+        role="img"
+        aria-label={ariaLabel}
+        onPointerMove={(e) => snap(e.clientX)}
+        onPointerDown={(e) => snap(e.clientX)}
+        onPointerLeave={() => setHoverIndex(null)}
+      >
+        {hovered !== null && (
+          <rect
+            x={f.LEFT + hovered * f.step}
+            y={f.TOP}
+            width={f.step}
+            height={f.plotH}
+            fill={HOVER_COLUMN}
+          />
+        )}
+        {gridLines.map((g) => (
+          <g key={g.y}>
+            <line x1={f.LEFT} x2={f.W - 12} y1={g.y} y2={g.y} stroke={GRID} strokeWidth={1} />
+            <text
+              x={f.LEFT - 6}
+              y={g.y + 3}
+              textAnchor="end"
+              className="fill-white/40 font-mono"
+              fontSize={9}
+            >
+              {g.label}
+            </text>
+          </g>
+        ))}
+        {firstFuture > 0 && (
+          <line
+            x1={f.LEFT + firstFuture * f.step}
+            x2={f.LEFT + firstFuture * f.step}
+            y1={f.TOP}
+            y2={f.TOP + f.plotH}
+            stroke="rgba(255,255,255,0.25)"
+            strokeDasharray="4 4"
+            strokeWidth={1}
+          />
+        )}
+        {children(f, hovered)}
+        {buckets.map((bucket, i) =>
+          i % labelEvery === 0 || i === buckets.length - 1 ? (
+            <text
+              key={bucket.start}
+              x={f.LEFT + i * f.step + f.step / 2}
+              y={f.H - 8}
+              textAnchor="middle"
+              className="fill-white/40 font-mono"
+              fontSize={9}
+            >
+              {fmtAxis(bucket.start, group)}
+            </text>
+          ) : null
+        )}
+      </svg>
+      {hoveredBucket && centerX !== null && (
+        <div
+          className="pointer-events-none absolute top-1 z-10 min-w-[150px] rounded border border-white/15 bg-[var(--pyre-black)] px-3 py-2 shadow-lg"
+          style={
+            centerX > f.W / 2
+              ? { right: `${100 - (centerX / f.W) * 100}%`, marginRight: 8 }
+              : { left: `${(centerX / f.W) * 100}%`, marginLeft: 8 }
+          }
+        >
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/50">
+            {bucketLabel(hoveredBucket, group)}
+            {hoveredBucket.future && ' · in progress'}
+          </p>
+          {tooltip(hoveredBucket).map((row) => (
+            <div
+              key={row.label}
+              className="flex items-baseline justify-between gap-4 font-mono text-xs"
+            >
+              <span
+                className={`flex items-center gap-1.5 text-white/50 ${row.sub ? 'pl-3.5' : ''}`}
+              >
+                {row.color && (
+                  <span
+                    className="inline-block h-2 w-2 rounded-sm"
+                    style={{ backgroundColor: row.color }}
+                  />
+                )}
+                {row.label}
+              </span>
+              <span className="text-[var(--pyre-creme)]">{row.value}</span>
+            </div>
+          ))}
+        </div>
       )}
-      {children(f)}
-      {buckets.map((bucket, i) =>
-        i % labelEvery === 0 || i === buckets.length - 1 ? (
-          <text
-            key={bucket.start}
-            x={f.LEFT + i * f.step + f.step / 2}
-            y={f.H - 8}
-            textAnchor="middle"
-            className="fill-white/40 font-mono"
-            fontSize={9}
-          >
-            {fmtAxis(bucket.start, group)}
-          </text>
-        ) : null
-      )}
-    </svg>
+    </div>
   );
 }
 
@@ -300,16 +400,23 @@ function RevenueVsLaborChart({
       max={max}
       yLabel={(v) => `$${Math.round(v / 10) * 10}`}
       ariaLabel="Revenue vs labor cost"
+      tooltip={(bucket) => [
+        { label: 'Revenue', value: fmtMaybeMoney(bucket.revenue), color: GOLD },
+        { label: 'Labor', value: fmtMoney(bucket.laborCost), color: CREME },
+        ...(bucket.laborPctOfRevenue !== null
+          ? [{ label: 'Labor % of revenue', value: `${bucket.laborPctOfRevenue}%` }]
+          : []),
+      ]}
     >
-      {(f) => (
+      {(f, hovered) => (
         <>
           {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 48);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
             const revenueH = bucket.revenue !== null ? (bucket.revenue / max) * f.plotH : 0;
             const laborH = (bucket.laborCost / max) * f.plotH;
-            const dim = bucket.future ? 0.35 : 0.85;
-            const label = bucketLabel(bucket, group);
+            const active = hovered === i;
+            const dim = active ? 1 : bucket.future ? 0.35 : 0.85;
             return (
               <g key={bucket.start}>
                 {bucket.revenue !== null && (
@@ -320,11 +427,7 @@ function RevenueVsLaborChart({
                     height={revenueH}
                     fill={GOLD}
                     opacity={dim}
-                  >
-                    <title>
-                      {`${label}${bucket.future ? ' (in progress)' : ''}: revenue ${fmtMoney(bucket.revenue)} · labor ${fmtMoney(bucket.laborCost)}${bucket.laborPctOfRevenue !== null ? ` (${bucket.laborPctOfRevenue}% of revenue)` : ''}`}
-                    </title>
-                  </rect>
+                  />
                 )}
                 <rect
                   x={x + barW * 0.3}
@@ -332,10 +435,8 @@ function RevenueVsLaborChart({
                   width={barW * 0.4}
                   height={laborH}
                   fill={CREME}
-                  opacity={bucket.future ? 0.3 : 0.6}
-                >
-                  <title>{`${label}: labor ${fmtMoney(bucket.laborCost)}`}</title>
-                </rect>
+                  opacity={active ? 0.8 : bucket.future ? 0.3 : 0.6}
+                />
               </g>
             );
           })}
@@ -357,17 +458,32 @@ function RevenueVsCostChart({ buckets, group }: { buckets: BusinessBucket[]; gro
       max={max}
       yLabel={(v) => `$${Math.round(v / 10) * 10}`}
       ariaLabel="Revenue vs total cost"
+      tooltip={(bucket) => [
+        { label: 'Revenue', value: fmtMaybeMoney(bucket.revenue), color: GOLD },
+        { label: 'Total cost', value: fmtMoney(bucket.totalCosts), color: CREME },
+        { label: 'Labor', sub: true, value: fmtMoney(bucket.laborCost) },
+        { label: 'Fixed', sub: true, value: fmtMoney(bucket.fixedCosts) },
+        { label: 'Rent', sub: true, value: fmtMoney(bucket.rentCost) },
+        { label: 'Fees', sub: true, value: fmtMoney(bucket.feesCost) },
+        ...(bucket.profit !== null
+          ? [
+              {
+                label: 'Profit',
+                value: `${fmtMoney(bucket.profit)}${bucket.profitMarginPct !== null ? ` (${bucket.profitMarginPct}%)` : ''}`,
+              },
+            ]
+          : []),
+      ]}
     >
-      {(f) => (
+      {(f, hovered) => (
         <>
           {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 48);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
             const revenueH = bucket.revenue !== null ? (bucket.revenue / max) * f.plotH : 0;
             const costH = (bucket.totalCosts / max) * f.plotH;
-            const dim = bucket.future ? 0.35 : 0.85;
-            const label = bucketLabel(bucket, group);
-            const costDetail = `labor ${fmtMoney(bucket.laborCost)} · fixed ${fmtMoney(bucket.fixedCosts)} · rent ${fmtMoney(bucket.rentCost)} · fees ${fmtMoney(bucket.feesCost)}`;
+            const active = hovered === i;
+            const dim = active ? 1 : bucket.future ? 0.35 : 0.85;
             return (
               <g key={bucket.start}>
                 {bucket.revenue !== null && (
@@ -378,11 +494,7 @@ function RevenueVsCostChart({ buckets, group }: { buckets: BusinessBucket[]; gro
                     height={revenueH}
                     fill={GOLD}
                     opacity={dim}
-                  >
-                    <title>
-                      {`${label}${bucket.future ? ' (in progress)' : ''}: revenue ${fmtMoney(bucket.revenue)} · costs ${fmtMoney(bucket.totalCosts)}${bucket.profit !== null ? ` · profit ${fmtMoney(bucket.profit)}${bucket.profitMarginPct !== null ? ` (${bucket.profitMarginPct}%)` : ''}` : ''}`}
-                    </title>
-                  </rect>
+                  />
                 )}
                 <rect
                   x={x + barW * 0.3}
@@ -390,10 +502,8 @@ function RevenueVsCostChart({ buckets, group }: { buckets: BusinessBucket[]; gro
                   width={barW * 0.4}
                   height={costH}
                   fill={CREME}
-                  opacity={bucket.future ? 0.3 : 0.6}
-                >
-                  <title>{`${label}: total cost ${fmtMoney(bucket.totalCosts)} (${costDetail})`}</title>
-                </rect>
+                  opacity={active ? 0.8 : bucket.future ? 0.3 : 0.6}
+                />
               </g>
             );
           })}
@@ -430,8 +540,16 @@ function UnitEconomicsChart({ buckets, group }: { buckets: BusinessBucket[]; gro
       max={max}
       yLabel={(v) => `$${Math.round(v)}`}
       ariaLabel="Revenue and labor cost per open hour"
+      tooltip={(bucket) => [
+        {
+          label: 'Revenue / open hr',
+          value: fmtMaybeMoney(bucket.revenuePerOpenHour),
+          color: GOLD,
+        },
+        { label: 'Labor / open hr', value: fmtMaybeMoney(bucket.costPerOpenHour), color: CREME },
+      ]}
     >
-      {(f) => (
+      {(f, hovered) => (
         <>
           {line((b) => b.costPerOpenHour, f).map((points) => (
             <polyline
@@ -456,6 +574,24 @@ function UnitEconomicsChart({ buckets, group }: { buckets: BusinessBucket[]; gro
               strokeLinecap="round"
             />
           ))}
+          {/* Dots on the hovered column so the popup's numbers map to a point. */}
+          {hovered !== null &&
+            (
+              [
+                [buckets[hovered].costPerOpenHour, CREME],
+                [buckets[hovered].revenuePerOpenHour, GOLD],
+              ] as const
+            ).map(([value, color]) =>
+              value !== null ? (
+                <circle
+                  key={color}
+                  cx={f.LEFT + hovered * f.step + f.step / 2}
+                  cy={f.TOP + f.plotH - (value / max) * f.plotH}
+                  r={3.5}
+                  fill={color}
+                />
+              ) : null
+            )}
         </>
       )}
     </ChartShell>
@@ -476,8 +612,14 @@ function MembershipChart({ buckets, group }: { buckets: BusinessBucket[]; group:
       max={max}
       yLabel={(v) => String(Math.round(v))}
       ariaLabel="New members"
+      tooltip={(bucket) => [
+        { label: 'New members', value: fmtMaybeCount(bucket.newMembers), color: GOLD },
+        ...(bucket.activeMembers !== null
+          ? [{ label: 'Active members', value: fmtCount(bucket.activeMembers) }]
+          : []),
+      ]}
     >
-      {(f) => (
+      {(f, hovered) => (
         <>
           {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 40);
@@ -491,10 +633,8 @@ function MembershipChart({ buckets, group }: { buckets: BusinessBucket[]; group:
                 width={barW - 1}
                 height={newH}
                 fill={GOLD}
-                opacity={bucket.future ? 0.35 : 0.85}
-              >
-                <title>{`${bucketLabel(bucket, group)}: ${bucket.newMembers ?? '—'} new${bucket.activeMembers !== null ? ` · ${bucket.activeMembers} active` : ''}`}</title>
-              </rect>
+                opacity={hovered === i ? 1 : bucket.future ? 0.35 : 0.85}
+              />
             );
           })}
         </>
@@ -513,16 +653,23 @@ function AttendanceChart({ buckets, group }: { buckets: BusinessBucket[]; group:
       max={max}
       yLabel={(v) => String(Math.round(v))}
       ariaLabel="Attendance"
+      tooltip={(bucket) => [
+        { label: 'Visits', value: fmtMaybeCount(bucket.attendance), color: GOLD },
+        { label: 'No-shows', value: fmtMaybeCount(bucket.noShows), color: CREME },
+        ...(bucket.occupancyPct !== null
+          ? [{ label: 'Occupancy', value: `${bucket.occupancyPct}%` }]
+          : []),
+      ]}
     >
-      {(f) => (
+      {(f, hovered) => (
         <>
           {buckets.map((bucket, i) => {
             const barW = Math.min(f.step * 0.6, 48);
             const x = f.LEFT + i * f.step + (f.step - barW) / 2;
             const attendH = ((bucket.attendance ?? 0) / max) * f.plotH;
             const noShowH = ((bucket.noShows ?? 0) / max) * f.plotH;
-            const dim = bucket.future ? 0.35 : 0.85;
-            const label = bucketLabel(bucket, group);
+            const active = hovered === i;
+            const dim = active ? 1 : bucket.future ? 0.35 : 0.85;
             return (
               <g key={bucket.start}>
                 {bucket.attendance !== null && (
@@ -533,11 +680,7 @@ function AttendanceChart({ buckets, group }: { buckets: BusinessBucket[]; group:
                     height={attendH}
                     fill={GOLD}
                     opacity={dim}
-                  >
-                    <title>
-                      {`${label}${bucket.future ? ' (in progress)' : ''}: ${fmtCount(bucket.attendance)} visits${bucket.occupancyPct !== null ? ` · ${bucket.occupancyPct}% occupancy` : ''}${bucket.noShows !== null ? ` · ${fmtCount(bucket.noShows)} no-shows` : ''}`}
-                    </title>
-                  </rect>
+                  />
                 )}
                 {bucket.noShows !== null && bucket.noShows > 0 && (
                   <rect
@@ -546,10 +689,8 @@ function AttendanceChart({ buckets, group }: { buckets: BusinessBucket[]; group:
                     width={barW * 0.3}
                     height={noShowH}
                     fill={CREME}
-                    opacity={bucket.future ? 0.3 : 0.6}
-                  >
-                    <title>{`${label}: ${fmtCount(bucket.noShows)} no-shows`}</title>
-                  </rect>
+                    opacity={active ? 0.8 : bucket.future ? 0.3 : 0.6}
+                  />
                 )}
               </g>
             );
