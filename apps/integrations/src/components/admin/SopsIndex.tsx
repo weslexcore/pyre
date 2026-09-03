@@ -845,7 +845,7 @@ export function SopsIndex() {
       {!searchActive && !isAdmin && (
         <div>
           <a href="/admin/sops/runs" className={buttonClass}>
-            My runs
+            Runs
           </a>
         </div>
       )}

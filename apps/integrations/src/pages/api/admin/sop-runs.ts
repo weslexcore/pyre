@@ -7,7 +7,7 @@
 // completes the run, or discards it, GET fetches a single run (?id=), the
 // in-progress run for a document (?sopId=), every unfinished run the caller
 // may view (?view=active — the library's in-progress strip), or the run log
-// (?view=list — admins see all runs, others their own), DELETE (admin only)
+// (?view=list — every run of the SOPs the caller may view), DELETE (admin only)
 // removes a run and its check records outright.
 //
 // Runs end implicitly too: the check that ticks the last item completes the
@@ -42,6 +42,7 @@ import {
   completeIfFull,
   loadRunChecks,
   loadRunState,
+  loadViewableSopIds,
   resolveRunContent,
   runActors,
 } from '@/lib/sops/runs';
@@ -154,8 +155,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   // Run log, newest first, with sop identity and the full per-item check
-  // record embedded. Admins see every run; everyone else sees the runs they
-  // took part in — started, ended, or checked at least one item. ?sopId=
+  // record embedded. Everyone sees the log — it is the shared record of who
+  // has completed what — scoped for non-admins to the documents they may view
+  // (see below); admins see every run, archived documents included. ?sopId=
   // narrows to one document (the SOP page's Runs panel).
   if (url.searchParams.get('view') === 'list') {
     const listSopId = url.searchParams.get('sopId');
@@ -180,21 +182,19 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       query = query.eq('status', status);
     }
 
+    // Non-admins read the whole log too — seeing who has completed what is the
+    // point of it. The line that remains is the document's: a run's checks
+    // quote the SOP's items, so a run is readable by exactly the people who
+    // may read the SOP it ran. Narrowing on sop_id up front (rather than
+    // filtering the fetched rows) keeps LIST_LIMIT honest — post-filtering
+    // would take the newest 100 runs and then throw most of them away, leaving
+    // a restricted viewer a near-empty page.
     if (!gate.access.isAdmin) {
-      const email = (gate.user.email ?? '').toLowerCase();
-      if (!email) return json({ runs: [], scope: 'mine' });
-      // Participation = started/ended the run, or checked an item in it (runs
-      // are shared, so a helper's checks make it their run too).
-      const { data: checkRows, error: checkError } = await db
-        .from('sop_run_checks')
-        .select('run_id')
-        .eq('checked_by', email)
-        .limit(500);
-      if (checkError) return json({ error: checkError.message }, 500);
-      const participatedIds = [...new Set((checkRows ?? []).map((r) => r.run_id as string))];
-      const orParts = [`started_by.eq."${email}"`, `ended_by.eq."${email}"`];
-      if (participatedIds.length > 0) orParts.push(`id.in.(${participatedIds.join(',')})`);
-      query = query.or(orParts.join(','));
+      const { ids, error: idsError } = await loadViewableSopIds(db, viewer, listSopId);
+      if (idsError) return json({ error: idsError }, 500);
+      // Nothing readable: answer directly rather than send an empty in.().
+      if (ids.length === 0) return json({ runs: [], scope: 'visible', people: {} });
+      query = query.in('sop_id', ids);
     }
 
     const { data, error } = await query;
@@ -202,7 +202,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const runRows = (data ?? []) as RunWithChecks[];
     return json({
       runs: runRows,
-      scope: gate.access.isAdmin ? 'all' : 'mine',
+      scope: gate.access.isAdmin ? 'all' : 'visible',
       // Names for everyone these runs name — started, ended, or checked an
       // item — so the log reads as people rather than mailbox local parts.
       people: await getPeopleNames(

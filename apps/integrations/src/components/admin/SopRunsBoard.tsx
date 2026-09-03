@@ -1,9 +1,10 @@
-// Checklist-run log (/admin/sops/runs). Admins see every run and can slice by
-// status, SOP, person (anyone who started, ended, or checked something), date,
-// and checked-item text — the item filter surfaces matching checks inline so
-// "who completed task X" reads at a glance. Everyone else sees only the runs
-// they took part in, with no filter bar. Scoping is enforced by the API; this
-// island just renders what it's given.
+// Checklist-run log (/admin/sops/runs). The shared record of who has completed
+// what: everyone gets the same filter bar — status, SOP, person (anyone who
+// started, ended, or checked something), date, and checked-item text, which
+// surfaces matching checks inline so "who completed task X" reads at a glance.
+// A non-admin's log is narrowed to runs of the SOPs they may view; that
+// scoping is enforced by the API, and this island just renders what it's
+// given. isAdmin decides one thing here: whether a run can be deleted.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { type RunEntry, RunsList } from './SopRunsList';
@@ -132,105 +133,99 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
         <a href="/admin/sops" className={buttonClass}>
           ← All SOPs
         </a>
-        {isAdmin && (
-          <>
-            <span className="mx-2 h-4 w-px bg-white/10" />
-            {STATUS_FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                className={`${buttonClass} ${status === key ? 'border-white/40 text-white' : ''}`}
-                onClick={() => setStatus(key)}
-              >
-                {label}
-                {key !== 'all' && ` (${runs.filter((r) => r.status === key).length})`}
-              </button>
-            ))}
-          </>
-        )}
+        <span className="mx-2 h-4 w-px bg-white/10" />
+        {STATUS_FILTERS.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            className={`${buttonClass} ${status === key ? 'border-white/40 text-white' : ''}`}
+            onClick={() => setStatus(key)}
+          >
+            {label}
+            {key !== 'all' && ` (${runs.filter((r) => r.status === key).length})`}
+          </button>
+        ))}
       </div>
 
-      {isAdmin && (
-        <div className="flex flex-wrap items-center gap-3 rounded border border-white/10 bg-white/5 p-3">
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            SOP
-            <select
-              className={selectClass}
-              value={sopFilter}
-              onChange={(e) => setSopFilter(e.target.value)}
-            >
-              <option value="all">All</option>
-              {sops.map(([id, title]) => (
-                <option key={id} value={id}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            person
-            <select
-              className={selectClass}
-              value={personFilter}
-              onChange={(e) => setPersonFilter(e.target.value)}
-            >
-              <option value="all">Anyone</option>
-              {personOptions.map((p) => (
-                <option key={p} value={p}>
-                  {personName(p, names)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            from
-            <input
-              type="date"
-              className={inputClass}
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-            />
-          </label>
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            to
-            <input
-              type="date"
-              className={inputClass}
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-            />
-          </label>
+      <div className="flex flex-wrap items-center gap-3 rounded border border-white/10 bg-white/5 p-3">
+        <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+          SOP
+          <select
+            className={selectClass}
+            value={sopFilter}
+            onChange={(e) => setSopFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            {sops.map(([id, title]) => (
+              <option key={id} value={id}>
+                {title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+          person
+          <select
+            className={selectClass}
+            value={personFilter}
+            onChange={(e) => setPersonFilter(e.target.value)}
+          >
+            <option value="all">Anyone</option>
+            {personOptions.map((p) => (
+              <option key={p} value={p}>
+                {personName(p, names)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+          from
           <input
-            type="search"
-            className={`${inputClass} min-w-48 flex-1`}
-            placeholder="Filter by checked item (e.g. “light fire”)…"
-            value={itemQuery}
-            onChange={(e) => setItemQuery(e.target.value)}
-            aria-label="Filter runs by checked item text"
+            type="date"
+            className={inputClass}
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
           />
-          {(status !== 'all' ||
-            sopFilter !== 'all' ||
-            personFilter !== 'all' ||
-            fromDate ||
-            toDate ||
-            itemQuery) && (
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => {
-                setStatus('all');
-                setSopFilter('all');
-                setPersonFilter('all');
-                setFromDate('');
-                setToDate('');
-                setItemQuery('');
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
+        </label>
+        <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+          to
+          <input
+            type="date"
+            className={inputClass}
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </label>
+        <input
+          type="search"
+          className={`${inputClass} min-w-48 flex-1`}
+          placeholder="Filter by checked item (e.g. “light fire”)…"
+          value={itemQuery}
+          onChange={(e) => setItemQuery(e.target.value)}
+          aria-label="Filter runs by checked item text"
+        />
+        {(status !== 'all' ||
+          sopFilter !== 'all' ||
+          personFilter !== 'all' ||
+          fromDate ||
+          toDate ||
+          itemQuery) && (
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() => {
+              setStatus('all');
+              setSopFilter('all');
+              setPersonFilter('all');
+              setFromDate('');
+              setToDate('');
+              setItemQuery('');
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       {error && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
@@ -240,11 +235,11 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
 
       {!isAdmin && (
         <p className="font-mono text-[10px] text-white/40">
-          Showing runs you started, finished, or checked items in.
+          Showing every run of the SOPs you can view.
         </p>
       )}
 
-      {isAdmin && visible.length !== runs.length && (
+      {visible.length !== runs.length && (
         <p className="font-mono text-[10px] text-white/40">
           {visible.length} of {runs.length} runs match.
         </p>
