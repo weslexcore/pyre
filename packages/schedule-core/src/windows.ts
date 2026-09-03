@@ -5,6 +5,8 @@
 // Momence fetch and the DB writes live in apps/integrations.
 
 import { minutesToTime, timeToMinutes } from './availability';
+import { addDays } from './hours';
+import { easternToUtc, utcToEastern } from './tz';
 
 export interface CoverageEvent {
   kind: 'session' | 'appointment';
@@ -141,6 +143,45 @@ export function formatShiftNotes(shift: {
     if (title) seen.add(title);
   }
   return seen.size > 0 ? [...seen].join(', ') : shift.notes;
+}
+
+// --- Sync range: which instants to fetch, which shift dates to reconcile ---
+
+export interface SyncRange {
+  /** UTC ISO bounds for the Momence fetch. */
+  startAfter: string;
+  startBefore: string;
+  /** Inclusive ET dates of the shifts to reconcile against those events. */
+  rangeStart: string;
+  rangeEnd: string;
+}
+
+/**
+ * The sync's fetch and reconcile bounds for one run. Both start at ET
+ * midnight of the first reconciled day, never at `now`: the planner diffs
+ * whole shift rows, so it has to see every session on a day it touches.
+ * Fetching from `now` made today's already-started sessions invisible — each
+ * hourly run walked a staffed shift's start later and then, once the last
+ * session had begun, flagged it as cancelled.
+ *
+ * `lookbackDays` pulls earlier days back into range so a manual run can repair
+ * rows a past run got wrong; the cron uses 0.
+ */
+export function syncRange(
+  nowIso: string,
+  options: { horizonDays: number; lookbackDays?: number }
+): SyncRange {
+  const lookbackDays = options.lookbackDays ?? 0;
+  const today = utcToEastern(nowIso).date;
+  const rangeStart = addDays(today, -lookbackDays);
+  const horizonEnd = new Date(Date.parse(nowIso) + options.horizonDays * 86_400_000);
+  const startBefore = horizonEnd.toISOString();
+  return {
+    startAfter: easternToUtc(rangeStart, '00:00'),
+    startBefore,
+    rangeStart,
+    rangeEnd: utcToEastern(startBefore).date,
+  };
 }
 
 // --- Sync planning: diff derived windows against existing shifts ---

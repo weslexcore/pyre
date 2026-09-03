@@ -16,6 +16,7 @@ import {
   minutesToTime,
   planShiftSync,
   type SyncShiftInput,
+  syncRange,
   utcToEastern,
 } from '@pyre/schedule-core';
 import { getDb } from '@/lib/db';
@@ -30,6 +31,7 @@ const APPOINTMENT_FALLBACK_MIN = 60;
 export interface SyncShiftsSummary {
   dryRun: boolean;
   horizonDays: number;
+  lookbackDays: number;
   events: number;
   windows: number;
   created: number;
@@ -67,18 +69,28 @@ function toEvent(
 export async function syncShifts(
   // `actor` attributes the run in the schedule change log; the default is the
   // hourly cron's system actor, admin triggers pass the clicking user.
-  options: { dryRun?: boolean; horizonDays?: number; actor?: ChangeActor } = {}
+  // `lookbackDays` also reconciles that many past days, so an admin run can
+  // repair rows an earlier run got wrong; the cron leaves it at 0.
+  options: {
+    dryRun?: boolean;
+    horizonDays?: number;
+    lookbackDays?: number;
+    actor?: ChangeActor;
+  } = {}
 ): Promise<SyncShiftsSummary> {
   const dryRun = options.dryRun ?? false;
   const horizonDays = options.horizonDays ?? DEFAULT_HORIZON_DAYS;
+  const lookbackDays = options.lookbackDays ?? 0;
 
   const db = getDb();
   if (!db) throw new Error('Supabase not configured');
 
-  const now = new Date();
-  const horizonEnd = new Date(now.getTime() + horizonDays * 86_400_000);
-  const startAfter = now.toISOString();
-  const startBefore = horizonEnd.toISOString();
+  // Fetch and reconcile bounds both start at ET midnight of the first day —
+  // see syncRange for why fetching from `now` corrupted today's shifts.
+  const { startAfter, startBefore, rangeStart, rangeEnd } = syncRange(new Date().toISOString(), {
+    horizonDays,
+    lookbackDays,
+  });
 
   const [sessions, appointments] = await Promise.all([
     fetchHostSessions({ startAfter, startBefore }),
@@ -107,8 +119,6 @@ export async function syncShifts(
   // for matching (all statuses, so a re-appearing session doesn't duplicate a
   // cancelled row's window) and manual shifts so the planner can suppress
   // momence duplicates of windows an admin-entered shift already covers.
-  const rangeStart = utcToEastern(startAfter).date;
-  const rangeEnd = utcToEastern(startBefore).date;
   const { data: shiftRows, error: shiftsError } = await db
     .from('shifts')
     .select(
@@ -144,6 +154,7 @@ export async function syncShifts(
   const summary: SyncShiftsSummary = {
     dryRun,
     horizonDays,
+    lookbackDays,
     events: events.length,
     windows: windows.length,
     created: plan.create.length,

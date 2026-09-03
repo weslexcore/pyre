@@ -11,6 +11,7 @@ import {
   labelForWindow,
   planShiftSync,
   type SyncShiftInput,
+  syncRange,
 } from '../src/windows';
 import { timeToMinutes } from '../src/availability';
 import { utcToEastern } from '../src/tz';
@@ -254,5 +255,37 @@ describe('planShiftSync', () => {
       ]
     );
     expect(plan).toEqual({ create: [], update: [], cancel: [], flag: [], clearFlag: [] });
+  });
+});
+
+describe('syncRange', () => {
+  it('fetches from ET midnight of today, not from now, so started sessions stay visible', () => {
+    // 6:30pm EDT on Sep 2 — the 4pm and 5pm sessions have begun.
+    const range = syncRange('2026-09-02T22:30:00.000Z', { horizonDays: 21 });
+    expect(range.startAfter).toBe('2026-09-02T04:00:00.000Z');
+    expect(range.rangeStart).toBe('2026-09-02');
+    expect(range.startBefore).toBe('2026-09-23T22:30:00.000Z');
+    expect(range.rangeEnd).toBe('2026-09-23');
+  });
+
+  it('keys today off ET, not UTC, late in the evening', () => {
+    // 11:30pm EDT on Sep 2 is already Sep 3 in UTC.
+    const range = syncRange('2026-09-03T03:30:00.000Z', { horizonDays: 21 });
+    expect(range.rangeStart).toBe('2026-09-02');
+    expect(range.startAfter).toBe('2026-09-02T04:00:00.000Z');
+  });
+
+  it('uses the EST offset in winter', () => {
+    const range = syncRange('2026-01-15T15:00:00.000Z', { horizonDays: 7 });
+    expect(range.startAfter).toBe('2026-01-15T05:00:00.000Z');
+    expect(range.rangeStart).toBe('2026-01-15');
+    expect(range.rangeEnd).toBe('2026-01-22');
+  });
+
+  it('pulls earlier days into range with lookbackDays', () => {
+    const range = syncRange('2026-09-03T14:00:00.000Z', { horizonDays: 21, lookbackDays: 1 });
+    expect(range.rangeStart).toBe('2026-09-02');
+    expect(range.startAfter).toBe('2026-09-02T04:00:00.000Z');
+    expect(range.rangeEnd).toBe('2026-09-24');
   });
 });

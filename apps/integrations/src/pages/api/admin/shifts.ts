@@ -116,7 +116,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (ends.slice(0, 5) <= starts.slice(0, 5))
     return json({ error: 'endsAt must be after startsAt' }, 400);
 
-  if (existing.source === 'momence') fields.sync_locked = true;
+  // Editing a Momence shift takes ownership of it: lock it against the sync
+  // and treat any divergence flag as resolved by the admin's adjustment.
+  if (existing.source === 'momence') {
+    fields.sync_locked = true;
+    fields.sync_flag = null;
+  }
 
   const { data, error } = await db.from('shifts').update(fields).eq('id', id).select('*').single();
   if (error) return json({ error: error.message }, 500);

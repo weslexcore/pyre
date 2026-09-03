@@ -544,7 +544,14 @@ export function ScheduleBoard() {
 
   const syncMomence = async () => {
     await run(async () => {
-      const res = await fetch('/api/admin/sync-shifts', { method: 'POST' });
+      // Manual syncs reach back a day so yesterday's rows get reconciled
+      // against the full day's sessions, repairing anything a run mid-day got
+      // wrong (the cron only looks forward from today).
+      const res = await fetch('/api/admin/sync-shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookbackDays: 1 }),
+      });
       if (!res.ok) {
         try {
           return {
