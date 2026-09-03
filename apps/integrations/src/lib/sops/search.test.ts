@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countMatches, highlightSegments, searchContent } from './search';
+import { countMatches, highlightSegments, searchContent, searchEntries } from './search';
 
 describe('countMatches', () => {
   it('counts case-insensitively', () => {
@@ -75,5 +75,28 @@ describe('searchContent', () => {
 
   it('rejects queries under the minimum length', () => {
     expect(searchContent(doc, 'w')).toEqual({ count: 0, snippets: [] });
+  });
+});
+
+describe('searchEntries', () => {
+  it('tags each entry with the ordinal of its first match in the document', () => {
+    const content = '# Wood\n\nStack the wood by the wood shed.\n\n- [ ] Split wood\n';
+    const result = searchEntries(content, 'wood');
+    expect(result.count).toBe(4);
+    expect(result.entries.map((entry) => entry.ordinal)).toEqual([0, 1, 3]);
+    expect(result.entries[2].text).toBe('Split wood');
+  });
+
+  it('keeps counting past the entry cap so later ordinals stay right', () => {
+    const result = searchEntries('ash\nash\nash\nash', 'ash', 2);
+    expect(result.count).toBe(4);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  it('is what searchContent renders', () => {
+    const content = 'a sauna\nno match\nanother sauna';
+    expect(searchContent(content, 'sauna').snippets).toEqual(
+      searchEntries(content, 'sauna').entries.map((entry) => entry.text)
+    );
   });
 });

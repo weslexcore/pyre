@@ -200,6 +200,16 @@ export function ShiftNotes() {
   const [personFilter, setPersonFilter] = useState('all');
   const [query, setQuery] = useState('');
 
+  // Arriving from the global search: ?q= seeds the filter and #note-<id>
+  // names the note to scroll to once the log has rendered.
+  const landOnRef = useRef<string | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) setQuery(q);
+    const hash = window.location.hash;
+    if (hash.startsWith('#note-')) landOnRef.current = hash.slice(1);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -228,6 +238,15 @@ export function ShiftNotes() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Once the log has painted, scroll to the note a search result pointed at.
+  // The hash alone can't do it: the notes arrive after the page does.
+  useEffect(() => {
+    if (loading || !landOnRef.current) return;
+    const target = document.getElementById(landOnRef.current);
+    landOnRef.current = null;
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [loading]);
 
   /** Insert `note` into local state at its date-sorted place. */
   const mergeNote = (note: ShiftNoteRow, people: PeopleNames) => {
@@ -738,7 +757,11 @@ export function ShiftNotes() {
             {formatDay(date)}
           </h2>
           {dayNotes.map((note) => (
-            <article key={note.id} className="rounded border border-white/10 bg-white/5 p-3">
+            <article
+              key={note.id}
+              id={`note-${note.id}`}
+              className="scroll-mt-20 rounded border border-white/10 bg-white/5 p-3 target:border-[var(--pyre-gold)]/60"
+            >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="text-sm font-semibold">
                   {personName(note.author_email, names)}

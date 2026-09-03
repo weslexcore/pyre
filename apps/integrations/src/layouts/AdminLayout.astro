@@ -9,7 +9,8 @@
 // request (this gate is UX; the API gate is the security boundary).
 import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
-import { canViewPath, toolsForAccess } from '@/components/admin/adminTools';
+import { canViewPath, searchablePages, toolsForAccess } from '@/components/admin/adminTools';
+import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { getToolPins } from '@/lib/admin/toolPins';
 import '@/styles/admin.css';
 
@@ -28,6 +29,9 @@ const user = Astro.locals.adminUser ?? null;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!user && !!access && canViewPath(access, Astro.url.pathname);
 const tools = access ? toolsForAccess(access) : [];
+// Pages the global search (cmd+K, or the magnifier in the header) can open:
+// the same tools plus their sub-pages, filtered the same way.
+const searchPages = access ? searchablePages(tools, access.isAdmin) : [];
 // The user's pin order for the nav's Pinned group — reuse the page's fetch
 // when it already made one (the /admin index memoizes into locals).
 const pinnedHrefs =
@@ -78,13 +82,16 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               >
                 Pyre Admin
               </a>
-              <AdminNav
-                client:load
-                currentPath={Astro.url.pathname}
-                userEmail={user.email ?? ''}
-                tools={tools}
-                pinnedHrefs={pinnedHrefs}
-              />
+              <div class="flex items-center gap-2">
+                <GlobalSearch client:load pages={searchPages} />
+                <AdminNav
+                  client:load
+                  currentPath={Astro.url.pathname}
+                  userEmail={user.email ?? ''}
+                  tools={tools}
+                  pinnedHrefs={pinnedHrefs}
+                />
+              </div>
             </div>
           </header>
           <main class={`mx-auto ${widthClass} px-4 py-6`}>

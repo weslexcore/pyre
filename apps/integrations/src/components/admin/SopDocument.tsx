@@ -202,12 +202,18 @@ export function SopDocument({
 
   // In-document search: highlights every match in the rendered markdown and
   // scrolls the first one into view. Seeded from ?q= when arriving from a
-  // library search result.
+  // library search result; &m= (from the global search) names which
+  // occurrence to land on instead of the first — best effort, since the
+  // count comes from the markdown source and only rendered text gets marked.
   const [docQuery, setDocQuery] = useState('');
+  const landOnRef = useRef(0);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('q');
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    const m = Number.parseInt(params.get('m') ?? '', 10);
+    landOnRef.current = Number.isInteger(m) && m > 0 ? m : 0;
     if (q) setDocQuery(q);
   }, []);
 
@@ -235,10 +241,12 @@ export function SopDocument({
     if (!docMatches) return;
     // Small delay so highlights render (and typing settles) before scrolling.
     const timer = setTimeout(() => {
-      contentRef.current?.querySelector('mark')?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      });
+      const marks = contentRef.current?.querySelectorAll('mark') ?? [];
+      // The requested occurrence applies to the arrival query only; typing a
+      // new term goes back to its first match.
+      const target = marks[Math.min(landOnRef.current, marks.length - 1)] ?? marks[0];
+      landOnRef.current = 0;
+      target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }, 300);
     return () => clearTimeout(timer);
   }, [docMatches]);

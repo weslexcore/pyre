@@ -64,22 +64,40 @@ export interface ContentSearch {
   snippets: string[];
 }
 
+export interface ContentEntry {
+  /** The cleaned, windowed line holding the match. */
+  text: string;
+  /**
+   * Which occurrence in the document this line's first match is (0-based),
+   * counting every match in every line above it. A page that marks each
+   * occurrence in order can scroll straight to this one.
+   */
+  ordinal: number;
+}
+
+export interface EntrySearch {
+  count: number;
+  entries: ContentEntry[];
+}
+
 /**
  * Find `term` in a markdown document: total occurrence count plus up to
- * `maxSnippets` context lines containing a match.
+ * `maxEntries` context lines containing a match, each tagged with the
+ * ordinal of its first occurrence so a link can land on that very match.
  */
-export function searchContent(content: string, term: string, maxSnippets = 3): ContentSearch {
+export function searchEntries(content: string, term: string, maxEntries = 3): EntrySearch {
   const needle = term.toLowerCase();
-  if (needle.length < MIN_QUERY_LENGTH) return { count: 0, snippets: [] };
+  if (needle.length < MIN_QUERY_LENGTH) return { count: 0, entries: [] };
 
   let count = 0;
-  const snippets: string[] = [];
+  const entries: ContentEntry[] = [];
 
   for (const rawLine of content.split('\n')) {
     const lineMatches = countMatches(rawLine, term);
     if (lineMatches === 0) continue;
+    const ordinal = count;
     count += lineMatches;
-    if (snippets.length >= maxSnippets) continue;
+    if (entries.length >= maxEntries) continue;
 
     const line = cleanLine(rawLine);
     const index = line.toLowerCase().indexOf(needle);
@@ -91,10 +109,19 @@ export function searchContent(content: string, term: string, maxSnippets = 3): C
 
     const start = Math.max(0, at - SNIPPET_BEFORE);
     const end = Math.min(source.length, at + needle.length + SNIPPET_AFTER);
-    const snippet =
+    const text =
       (start > 0 ? '…' : '') + source.slice(start, end) + (end < source.length ? '…' : '');
-    snippets.push(snippet);
+    entries.push({ text, ordinal });
   }
 
-  return { count, snippets };
+  return { count, entries };
+}
+
+/**
+ * Find `term` in a markdown document: total occurrence count plus up to
+ * `maxSnippets` context lines containing a match.
+ */
+export function searchContent(content: string, term: string, maxSnippets = 3): ContentSearch {
+  const { count, entries } = searchEntries(content, term, maxSnippets);
+  return { count, snippets: entries.map((entry) => entry.text) };
 }
