@@ -9,9 +9,10 @@
 //
 // Opening an SOP entry lands on that very match (?q= highlights, &m= picks
 // the occurrence); a shift note opens the log filtered to the term, scrolled
-// to that note. Anyone who holds the Ask page also gets an "Ask a question"
-// row last, which opens the Ask page and puts the typed text to the
-// knowledge assistant — the semantic search, where the rows above are exact. Modal mechanics follow SopPeekModal (backdrop button, Escape,
+// to that note. Anyone who holds the Ask page also gets a gold "Ask a
+// question" row first, which opens the Ask page and puts the typed text to
+// the knowledge assistant — the semantic search, where the rows below are
+// exact. Modal mechanics follow SopPeekModal (backdrop button, Escape,
 // full-screen sheet on mobile).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,7 +27,8 @@ import {
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
 
-const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes', 'ask'];
+// The Ask row is rendered on its own above these, without a heading.
+const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes'];
 
 // One brand color per group heading (text, underline, and dot), so where one
 // group ends and the next begins reads at a glance even in a long list; the
@@ -50,11 +52,47 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
     heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
     badge: 'bg-[var(--pyre-sage)]',
   },
-  ask: {
-    heading: 'text-[var(--pyre-creme)] border-white/30',
-    badge: 'bg-[var(--pyre-creme)]',
-  },
+  // Never a heading: the Ask row is drawn on its own, in gold, at the top.
+  ask: { heading: '', badge: '' },
 };
+
+/** The "Ask a question" row: gold, headingless, first in the list. */
+function AskRow({
+  item,
+  index,
+  active,
+  onSelect,
+  onOpen,
+}: {
+  item: SearchItem;
+  index: number;
+  active: boolean;
+  onSelect: (index: number) => void;
+  onOpen: () => void;
+}) {
+  return (
+    <a
+      id={optionId(index)}
+      href={item.href}
+      data-index={index}
+      data-astro-prefetch="tap"
+      role="option"
+      aria-selected={active}
+      onMouseEnter={() => onSelect(index)}
+      onClick={onOpen}
+      className={`mb-2 flex items-baseline gap-2 rounded border px-3 py-2.5 transition-colors ${
+        active
+          ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/20'
+          : 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 hover:border-[var(--pyre-gold)]'
+      }`}
+    >
+      <span className="text-sm font-semibold text-[var(--pyre-gold)]">{item.title}</span>
+      <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/70">
+        {item.hint} →
+      </span>
+    </a>
+  );
+}
 const LIST_ID = 'global-search-list';
 
 function optionId(index: number): string {
@@ -92,8 +130,18 @@ export function SearchResults({
   onSelect: (index: number) => void;
   onOpen: () => void;
 }) {
+  const askIndex = items.findIndex((item) => item.group === 'ask');
   return (
     <>
+      {askIndex !== -1 && (
+        <AskRow
+          item={items[askIndex]}
+          index={askIndex}
+          active={askIndex === selected}
+          onSelect={onSelect}
+          onOpen={onOpen}
+        />
+      )}
       {GROUP_ORDER.map((group) => {
         const rows = items
           .map((item, index) => ({ item, index }))
@@ -270,7 +318,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   };
 
   // What to say under the input when there are no rows to show (the Ask row
-  // doesn't count — it is the offer to make when nothing matched).
+  // doesn't count — it is the offer that stands when nothing matched).
   const matched = items.filter((item) => item.group !== 'ask').length;
   const status = !contentSearch
     ? term

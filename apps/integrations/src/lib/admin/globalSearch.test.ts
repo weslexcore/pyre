@@ -145,16 +145,17 @@ describe('buildItems', () => {
     expect(items.map((item) => item.href)).toEqual(['/admin', '/admin/water', '/admin/sops']);
   });
 
-  it('ends with an Ask row for anyone who holds the Ask page, even with no matches', () => {
+  it('starts with an Ask row for anyone who holds the Ask page, even with no matches', () => {
     const withAsk = [
       ...pages,
       { href: '/admin/ask', title: 'Ask a Question', hint: '', keywords: [] },
     ];
     const items = buildItems(withAsk, server, 'cold plunge');
-    const last = items[items.length - 1];
-    expect(last.group).toBe('ask');
-    expect(last.href).toBe('/admin/ask?q=cold+plunge');
-    expect(last.title).toBe('Ask a question: “cold plunge”');
+    const [first, second] = items;
+    expect(first.group).toBe('ask');
+    expect(first.href).toBe('/admin/ask?q=cold+plunge');
+    expect(first.title).toBe('Ask a question: “cold plunge”');
+    expect(second.group).toBe('pages');
 
     const none = buildItems(withAsk, { q: 'zzz', sops: [], notes: [] }, 'why is the tub cloudy');
     expect(none.map((item) => item.group)).toEqual(['ask']);

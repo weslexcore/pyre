@@ -113,10 +113,10 @@ export function askHref(term: string): string {
 }
 
 /**
- * The palette's last row, for anyone who holds the Ask page: hand the typed
+ * The palette's first row, for anyone who holds the Ask page: hand the typed
  * text to the knowledge assistant as a question. Exact matching is what the
- * rows above do; this is the semantic search — and the way to a real answer
- * when nothing above matched.
+ * rows below do; this is the semantic search — and the way to a real answer
+ * when nothing below matched.
  */
 export function askItem(pages: SearchPage[], term: string): SearchItem | null {
   if (!term || !pages.some((page) => page.href === ASK_HREF)) return null;
@@ -130,12 +130,12 @@ export function askItem(pages: SearchPage[], term: string): SearchItem | null {
 }
 
 /**
- * The palette's rows in display order: pages first (matched locally), then
- * SOP documents whose title matched, then the matched entries inside every
- * SOP the server returned, then shift notes, and last the "Ask a question"
- * row for anyone who holds the Ask page. A document that matched only in its
- * body doesn't get a document row of its own — its entries are the more
- * useful thing to land on, and they name the document.
+ * The palette's rows in display order: the "Ask a question" row for anyone
+ * who holds the Ask page, then pages (matched locally), then SOP documents
+ * whose title matched, then the matched entries inside every SOP the server
+ * returned, then shift notes. A document that matched only in its body
+ * doesn't get a document row of its own — its entries are the more useful
+ * thing to land on, and they name the document.
  */
 export function buildItems(
   pages: SearchPage[],
@@ -145,15 +145,18 @@ export function buildItems(
   const term = query.trim();
   // Nothing typed yet: the palette doubles as a jump list of every page.
   const matched = term ? matchPages(pages, term) : pages;
-  const items: SearchItem[] = matched.map((page) => ({
-    key: `page:${page.href}`,
-    group: 'pages',
-    href: page.href,
-    title: page.title,
-    hint: page.hint,
-  }));
   const ask = askItem(pages, term);
-  if (!server || !term) return ask ? [...items, ask] : items;
+  const items: SearchItem[] = ask ? [ask] : [];
+  for (const page of matched) {
+    items.push({
+      key: `page:${page.href}`,
+      group: 'pages',
+      href: page.href,
+      title: page.title,
+      hint: page.hint,
+    });
+  }
+  if (!server || !term) return items;
 
   for (const sop of server.sops) {
     if (!sop.titleMatch) continue;
@@ -189,6 +192,5 @@ export function buildItems(
       snippet: note.snippet,
     });
   }
-  if (ask) items.push(ask);
   return items;
 }

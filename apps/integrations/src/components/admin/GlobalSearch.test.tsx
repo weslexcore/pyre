@@ -63,6 +63,37 @@ describe('SearchResults', () => {
   });
 });
 
+describe('SearchResults with an Ask row', () => {
+  const html = renderToStaticMarkup(
+    <SearchResults
+      items={[
+        {
+          key: 'ask',
+          group: 'ask',
+          href: '/admin/ask?q=cold',
+          title: 'Ask a question: “cold”',
+          hint: 'Knowledge assistant',
+        },
+        ...ITEMS,
+      ]}
+      term="cold"
+      selected={0}
+      onSelect={() => {}}
+      onOpen={() => {}}
+    />
+  );
+
+  it('draws the Ask row first, in gold, with no heading', () => {
+    expect(html).not.toContain('>Ask<');
+    const ask = html.indexOf('data-index="0"');
+    const pages = html.indexOf('Pages');
+    expect(ask).toBeGreaterThan(-1);
+    expect(ask).toBeLessThan(pages);
+    expect(html).toMatch(/data-index="0"[^>]*aria-selected="true"[^>]*pyre-gold/);
+    expect(html).toContain('href="/admin/ask?q=cold"');
+  });
+});
+
 describe('GlobalSearch', () => {
   it('renders only the trigger button while closed', () => {
     const html = renderToStaticMarkup(<GlobalSearch pages={[]} />);
