@@ -24,6 +24,34 @@ import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
 
 const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes'];
+
+// One brand color per group, on the heading and as a rail down every row in
+// it, so where one group ends and the next begins reads at a glance even in a
+// long list. Pages take the red the nav uses for "where you are"; the two
+// SOP groups share gold (the library's own accent), the entries a step
+// dimmer; shift notes take sage.
+const GROUP_STYLE: Record<SearchGroup, { heading: string; rail: string; badge: string }> = {
+  pages: {
+    heading: 'text-[var(--pyre-red)] border-[var(--pyre-red)]/40',
+    rail: 'border-l-[var(--pyre-red)]',
+    badge: 'bg-[var(--pyre-red)]',
+  },
+  sops: {
+    heading: 'text-[var(--pyre-gold)] border-[var(--pyre-gold)]/40',
+    rail: 'border-l-[var(--pyre-gold)]',
+    badge: 'bg-[var(--pyre-gold)]',
+  },
+  entries: {
+    heading: 'text-[var(--pyre-gold)]/80 border-[var(--pyre-gold)]/30',
+    rail: 'border-l-[var(--pyre-gold)]/50',
+    badge: 'bg-[var(--pyre-gold)]/60',
+  },
+  notes: {
+    heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
+    rail: 'border-l-[var(--pyre-sage)]',
+    badge: 'bg-[var(--pyre-sage)]',
+  },
+};
 const LIST_ID = 'global-search-list';
 
 function optionId(index: number): string {
@@ -68,12 +96,20 @@ export function SearchResults({
           .map((item, index) => ({ item, index }))
           .filter(({ item }) => item.group === group);
         if (rows.length === 0) return null;
+        const style = GROUP_STYLE[group];
         return (
-          <section key={group} className="mt-3 first:mt-0" aria-label={GROUP_LABELS[group]}>
-            <h3 className="px-2 pb-1 font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">
+          <section key={group} className="mt-4 first:mt-0" aria-label={GROUP_LABELS[group]}>
+            <h3
+              className={`mb-1 flex items-center gap-2 border-b px-2 pb-1 font-mono text-[10px] font-bold uppercase tracking-wide ${style.heading}`}
+            >
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${style.badge}`}
+                aria-hidden="true"
+              />
               {GROUP_LABELS[group]}
+              <span className="font-normal opacity-60">{rows.length}</span>
             </h3>
-            <ul>
+            <ul className="space-y-0.5">
               {rows.map(({ item, index }) => {
                 const active = index === selected;
                 return (
@@ -87,7 +123,7 @@ export function SearchResults({
                       aria-selected={active}
                       onMouseEnter={() => onSelect(index)}
                       onClick={onOpen}
-                      className={`block rounded px-2 py-2 transition-colors ${
+                      className={`block rounded-r border-l-2 px-2 py-2 transition-colors ${style.rail} ${
                         active ? 'bg-white/10' : 'hover:bg-white/5'
                       }`}
                     >
