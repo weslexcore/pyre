@@ -7,6 +7,7 @@ import {
   USERS_TOOL,
 } from '@/components/admin/adminTools';
 import {
+  askHref,
   buildItems,
   matchPages,
   noteHref,
@@ -142,6 +143,33 @@ describe('buildItems', () => {
   it('lists every page as a jump list when nothing is typed', () => {
     const items = buildItems(pages, server, '');
     expect(items.map((item) => item.href)).toEqual(['/admin', '/admin/water', '/admin/sops']);
+  });
+
+  it('ends with an Ask row for anyone who holds the Ask page, even with no matches', () => {
+    const withAsk = [
+      ...pages,
+      { href: '/admin/ask', title: 'Ask a Question', hint: '', keywords: [] },
+    ];
+    const items = buildItems(withAsk, server, 'cold plunge');
+    const last = items[items.length - 1];
+    expect(last.group).toBe('ask');
+    expect(last.href).toBe('/admin/ask?q=cold+plunge');
+    expect(last.title).toBe('Ask a question: “cold plunge”');
+
+    const none = buildItems(withAsk, { q: 'zzz', sops: [], notes: [] }, 'why is the tub cloudy');
+    expect(none.map((item) => item.group)).toEqual(['ask']);
+    expect(none[0].href).toBe(askHref('why is the tub cloudy'));
+  });
+
+  it('offers no Ask row without the Ask page, or with nothing typed', () => {
+    expect(buildItems(pages, server, 'cold plunge').some((item) => item.group === 'ask')).toBe(
+      false
+    );
+    const withAsk = [
+      ...pages,
+      { href: '/admin/ask', title: 'Ask a Question', hint: '', keywords: [] },
+    ];
+    expect(buildItems(withAsk, null, '').some((item) => item.group === 'ask')).toBe(false);
   });
 
   it('shows the page matches alone while the server has not answered', () => {

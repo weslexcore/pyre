@@ -40,14 +40,18 @@ export interface SearchResponse {
   notes: NoteHit[];
 }
 
-export type SearchGroup = 'pages' | 'sops' | 'entries' | 'notes';
+export type SearchGroup = 'pages' | 'sops' | 'entries' | 'notes' | 'ask';
 
 export const GROUP_LABELS: Record<SearchGroup, string> = {
   pages: 'Pages',
   sops: 'SOPs',
   entries: 'In SOPs',
   notes: 'Shift notes',
+  ask: 'Ask',
 };
+
+/** The Ask page's href; holding it is what puts the "Ask a question" row in the palette. */
+export const ASK_HREF = '/admin/ask';
 
 /** One row of the palette, whatever it came from. */
 export interface SearchItem {
@@ -103,11 +107,34 @@ export function noteHref(id: string, term: string): string {
   return `/admin/shift-notes?${new URLSearchParams({ q: term })}#note-${id}`;
 }
 
+/** Link to the Ask page that asks `term` on arrival (SopAsk reads ?q=). */
+export function askHref(term: string): string {
+  return `${ASK_HREF}?${new URLSearchParams({ q: term })}`;
+}
+
+/**
+ * The palette's last row, for anyone who holds the Ask page: hand the typed
+ * text to the knowledge assistant as a question. Exact matching is what the
+ * rows above do; this is the semantic search — and the way to a real answer
+ * when nothing above matched.
+ */
+export function askItem(pages: SearchPage[], term: string): SearchItem | null {
+  if (!term || !pages.some((page) => page.href === ASK_HREF)) return null;
+  return {
+    key: 'ask',
+    group: 'ask',
+    href: askHref(term),
+    title: `Ask a question: “${term}”`,
+    hint: 'Knowledge assistant',
+  };
+}
+
 /**
  * The palette's rows in display order: pages first (matched locally), then
  * SOP documents whose title matched, then the matched entries inside every
- * SOP the server returned, then shift notes. A document that matched only in
- * its body doesn't get a document row of its own — its entries are the more
+ * SOP the server returned, then shift notes, and last the "Ask a question"
+ * row for anyone who holds the Ask page. A document that matched only in its
+ * body doesn't get a document row of its own — its entries are the more
  * useful thing to land on, and they name the document.
  */
 export function buildItems(
@@ -125,7 +152,8 @@ export function buildItems(
     title: page.title,
     hint: page.hint,
   }));
-  if (!server || !term) return items;
+  const ask = askItem(pages, term);
+  if (!server || !term) return ask ? [...items, ask] : items;
 
   for (const sop of server.sops) {
     if (!sop.titleMatch) continue;
@@ -161,5 +189,6 @@ export function buildItems(
       snippet: note.snippet,
     });
   }
+  if (ask) items.push(ask);
   return items;
 }

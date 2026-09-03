@@ -248,6 +248,26 @@ export function SopAsk() {
     [busy, patchTurn, streamAnswer]
   );
 
+  // Arriving from the global search's "Ask a question" row: ?q= is the
+  // question, asked once on mount. The param is dropped from the URL first so
+  // a reload (or the back button) doesn't ask it again.
+  const askedFromUrl = useRef(false);
+  useEffect(() => {
+    if (askedFromUrl.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q')?.trim();
+    if (!q) return;
+    askedFromUrl.current = true;
+    params.delete('q');
+    const rest = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+    );
+    void ask(q);
+  }, [ask]);
+
   const startOver = () => {
     session.current = null;
     setTurns([]);

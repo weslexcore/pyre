@@ -9,7 +9,9 @@
 //
 // Opening an SOP entry lands on that very match (?q= highlights, &m= picks
 // the occurrence); a shift note opens the log filtered to the term, scrolled
-// to that note. Modal mechanics follow SopPeekModal (backdrop button, Escape,
+// to that note. Anyone who holds the Ask page also gets an "Ask a question"
+// row last, which opens the Ask page and puts the typed text to the
+// knowledge assistant — the semantic search, where the rows above are exact. Modal mechanics follow SopPeekModal (backdrop button, Escape,
 // full-screen sheet on mobile).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -24,7 +26,7 @@ import {
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
 
-const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes'];
+const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes', 'ask'];
 
 // One brand color per group heading (text, underline, and dot), so where one
 // group ends and the next begins reads at a glance even in a long list; the
@@ -47,6 +49,10 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   notes: {
     heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
     badge: 'bg-[var(--pyre-sage)]',
+  },
+  ask: {
+    heading: 'text-[var(--pyre-creme)] border-white/30',
+    badge: 'bg-[var(--pyre-creme)]',
   },
 };
 const LIST_ID = 'global-search-list';
@@ -130,7 +136,7 @@ export function SearchResults({
                             active ? 'text-white' : 'text-[var(--pyre-creme)]'
                           }`}
                         >
-                          {group === 'entries' || group === 'notes' ? (
+                          {group === 'entries' || group === 'notes' || group === 'ask' ? (
                             item.title
                           ) : (
                             <Marked text={item.title} term={term} />
@@ -263,7 +269,9 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
     }
   };
 
-  // What to say under the input when there are no rows to show.
+  // What to say under the input when there are no rows to show (the Ask row
+  // doesn't count — it is the offer to make when nothing matched).
+  const matched = items.filter((item) => item.group !== 'ask').length;
   const status = !contentSearch
     ? term
       ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches SOPs and shift notes too.`
@@ -272,7 +280,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       ? error
       : searching && server === null
         ? 'Searching…'
-        : items.length === 0
+        : matched === 0
           ? `No matches for “${term}”.`
           : null;
 
