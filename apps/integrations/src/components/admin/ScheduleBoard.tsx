@@ -24,7 +24,7 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { invalidateJson } from '@/lib/client/cachedJson';
+import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
   ScheduleDraftMessageRow,
   ScheduleProposalRow,
@@ -36,6 +36,7 @@ import type {
   TimeOffRow,
 } from '@/lib/db';
 import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
+import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, toolbarCaptionClass } from './scheduleUi';
@@ -340,6 +341,14 @@ export function ScheduleBoard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Guest signups per shift, from Momence. Fetched beside the board rather
+  // than inside it: a slow host API must not delay the schedule paint, and a
+  // failure just hides the chip.
+  const { data: signupsData } = useCachedJson<{ signups: ShiftSignups }>(
+    `/api/admin/shift-signups?start=${range.start}&end=${range.end}`
+  );
+  const signups = signupsData?.signups ?? null;
 
   // Deep link from the calendar: once the linked shift's card is on the
   // board, scroll it into view (once — reloads after edits shouldn't jump).
@@ -1202,6 +1211,14 @@ export function ScheduleBoard() {
                             <span className="font-mono text-xs text-white/40">{notes}</span>
                           )}
                         </button>
+                        {shift.status !== 'cancelled' && signups?.[shift.id] !== undefined && (
+                          <span
+                            className="font-mono text-xs text-white/60"
+                            title="Guests booked in Momence for the sessions during this shift"
+                          >
+                            {formatSignups(signups[shift.id])}
+                          </span>
+                        )}
                         {shift.is_draft && (
                           <span className="flex gap-1">
                             <button
