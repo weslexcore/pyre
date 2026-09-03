@@ -14,13 +14,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SopRow } from '@/lib/db';
 import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
-import { actorLabel, type PeopleNames, personName, sameActor } from '@/lib/sops/names';
+import {
+  actorLabel,
+  ownRunsFirst,
+  type PeopleNames,
+  personName,
+  sameActor,
+} from '@/lib/sops/names';
 import {
   categoriesInOrder,
   moveSopToCategoryEnd,
   repositionCategory,
   repositionSop,
 } from '@/lib/sops/order';
+import type { ActiveRun } from '@/lib/sops/runs';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 import {
   type GrantablePerson,
@@ -46,18 +53,6 @@ interface ListResponse {
   people?: PeopleNames;
   role: SopRole;
   pins: string[];
-}
-
-/** An unfinished checklist run, as served by /api/admin/sop-runs?view=active. */
-interface ActiveRun {
-  id: string;
-  sop_id: string;
-  task_count: number;
-  checked_count: number;
-  started_by: string;
-  started_at: string;
-  title: string;
-  slug: string;
 }
 
 type Drag = { kind: 'sop'; id: string } | { kind: 'category'; name: string };
@@ -185,11 +180,18 @@ export function SopsIndex() {
 
   // Own open checklists first — they are the ones this person has to finish —
   // then everyone else's, each group newest first as the API returns them.
-  const orderedActiveRuns = useMemo(() => {
-    const mine = activeRuns.filter((run) => sameActor(run.started_by, viewerEmail));
-    const others = activeRuns.filter((run) => !sameActor(run.started_by, viewerEmail));
-    return [...mine, ...others];
-  }, [activeRuns, viewerEmail]);
+  const orderedActiveRuns = useMemo(
+    () => ownRunsFirst(activeRuns, viewerEmail),
+    [activeRuns, viewerEmail]
+  );
+  // The open run per document, so each card can say it is in progress (and
+  // whose it is) without a trip to the strip.
+  const activeBySop = useMemo(() => {
+    const map = new Map<string, ActiveRun>();
+    // Newest first, so the first run seen per document is the open one.
+    for (const run of activeRuns) if (!map.has(run.sop_id)) map.set(run.sop_id, run);
+    return map;
+  }, [activeRuns]);
 
   // The caller's pinned document ids (personal; shown in the Pinned strip).
   const [pins, setPins] = useState<Set<string>>(new Set());
@@ -530,6 +532,8 @@ export function SopsIndex() {
   const renderCard = (sop: SopSummary, draggable: boolean) => {
     const isDragged = draggable && drag?.kind === 'sop' && drag.id === sop.id;
     const isPinned = pins.has(sop.id);
+    const activeRun = activeBySop.get(sop.id) ?? null;
+    const activeIsMine = activeRun !== null && sameActor(activeRun.started_by, viewerEmail);
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: passive drop target for the drag handles
       <div
@@ -539,7 +543,11 @@ export function SopsIndex() {
         className={`relative rounded border bg-white/5 transition-colors ${
           isDragged
             ? 'border-dashed border-white/40 opacity-40'
-            : 'border-white/10 hover:border-white/30'
+            : activeIsMine
+              ? 'border-[var(--pyre-gold)] hover:border-[var(--pyre-gold)]'
+              : activeRun
+                ? 'border-[var(--pyre-gold)]/40 hover:border-[var(--pyre-gold)]'
+                : 'border-white/10 hover:border-white/30'
         } ${sop.archived ? 'opacity-50' : ''}`}
       >
         <a href={`/admin/sops/${sop.slug}`} className="block p-4" draggable={false}>
@@ -562,9 +570,21 @@ export function SopsIndex() {
               : ''}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-3">
-            {sop.task_count > 0 && (
+            {activeRun ? (
               <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
-                ☑ checklist · {sop.task_count} tasks
+                ☑ in progress · {activeRun.checked_count}/{activeRun.task_count} · started by{' '}
+                {actorLabel(activeRun.started_by, viewerEmail, people)}
+              </span>
+            ) : (
+              sop.task_count > 0 && (
+                <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                  ☑ checklist · {sop.task_count} tasks
+                </span>
+              )
+            )}
+            {activeIsMine && (
+              <span className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-sage)]">
+                yours
               </span>
             )}
             <AccessBadge label={sop.access_label} />
@@ -657,7 +677,7 @@ export function SopsIndex() {
                     <h3 className="flex flex-wrap items-baseline gap-x-2 font-semibold text-[var(--pyre-creme)]">
                       {run.title}
                       {mine && (
-                        <span className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                        <span className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-sage)]">
                           yours
                         </span>
                       )}

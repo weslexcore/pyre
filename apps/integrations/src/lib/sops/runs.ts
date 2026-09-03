@@ -94,6 +94,61 @@ export async function resolveRunContent(
   return { content: snapshot?.content_md ?? sop.content_md, error: null };
 }
 
+/** One unfinished run as the library strip and the admin home show it. */
+export interface ActiveRun {
+  id: string;
+  sop_id: string;
+  task_count: number;
+  checked_count: number;
+  started_by: string;
+  started_at: string;
+  title: string;
+  slug: string;
+}
+
+type ActiveRunRow = SopRunRow & {
+  sops: SopRow | null;
+  sop_run_checks: { item_index: number }[] | null;
+};
+
+/**
+ * Every unfinished run on a document this viewer may read, newest first.
+ * Runs are shared per document — whoever walks up next continues the open
+ * one — so this is deliberately not scoped to the caller's own runs; callers
+ * mark those with sameActor() instead. Feeds the "in progress" strip on the
+ * library page and the same block on the admin home.
+ */
+export async function loadActiveRuns(
+  db: Db,
+  viewer: SopViewer,
+  limit = 100
+): Promise<{ runs: ActiveRun[]; error: string | null }> {
+  const { data, error } = await db
+    .from('sop_runs')
+    .select('*, sops(*), sop_run_checks(item_index)')
+    .eq('status', 'in_progress')
+    .order('started_at', { ascending: false })
+    .limit(limit);
+  if (error) return { runs: [], error: error.message };
+  const runs = ((data ?? []) as ActiveRunRow[]).flatMap((row) => {
+    const sop = row.sops;
+    if (!sop || !canViewSop(viewer, sop)) return [];
+    return [
+      {
+        id: row.id,
+        sop_id: row.sop_id,
+        task_count: row.task_count,
+        checked_count: row.sop_run_checks?.length ?? 0,
+        started_by: row.started_by,
+        started_at: row.started_at,
+        title: sop.title,
+        slug: sop.slug,
+      },
+    ];
+  });
+  return { runs, error: null };
+}
+
 type RunWithEmbeddedChecks = SopRunRow & { sop_run_checks: SopRunCheckRow[] | null };
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actorLabel, personName, sameActor } from './names';
+import { actorLabel, ownRunsFirst, personName, sameActor } from './names';
 
 describe('personName', () => {
   const people = { 'wes@pyresauna.com': 'Wes McLaughlin' };
@@ -33,6 +33,18 @@ describe('sameActor', () => {
   it('never matches an empty or missing viewer', () => {
     expect(sameActor('', '')).toBe(false);
     expect(sameActor('wes@pyresauna.com', null)).toBe(false);
+  });
+});
+
+describe('ownRunsFirst', () => {
+  it('leads with the viewer’s runs and keeps each group’s order', () => {
+    const runs = [
+      { id: 'a', started_by: 'ada@pyresauna.com' },
+      { id: 'b', started_by: 'Wes@pyresauna.com' },
+      { id: 'c', started_by: 'bob@pyresauna.com' },
+      { id: 'd', started_by: 'wes@pyresauna.com' },
+    ];
+    expect(ownRunsFirst(runs, 'wes@pyresauna.com').map((r) => r.id)).toEqual(['b', 'd', 'a', 'c']);
   });
 });
 

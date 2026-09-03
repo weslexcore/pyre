@@ -30,6 +30,20 @@ export function sameActor(a: string | null | undefined, b: string | null | undef
 }
 
 /**
+ * The viewer's own runs ahead of everyone else's, each group keeping its
+ * incoming order (newest first, as the API serves them). The library strip
+ * and the admin home both lead with what this person has to finish.
+ */
+export function ownRunsFirst<T extends { started_by: string }>(
+  runs: T[],
+  viewerEmail: string
+): T[] {
+  const mine = runs.filter((run) => sameActor(run.started_by, viewerEmail));
+  const others = runs.filter((run) => !sameActor(run.started_by, viewerEmail));
+  return [...mine, ...others];
+}
+
+/**
  * How an actor reads to the viewer: "you" for the viewer themselves, the
  * roster name for anyone else. Used wherever a run says who started or
  * ended it, so a person's own runs stand out from the shared list.

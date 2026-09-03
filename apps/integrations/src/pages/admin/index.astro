@@ -4,9 +4,12 @@
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
 // island renders the same filtered tool list the nav uses. Above the cards, a
 // next-shift chip: staff see their own next upcoming shift, admins see the
-// next one on the schedule overall.
+// next one on the schedule overall — and under it, every checklist run still
+// open on an SOP this person may view, their own first, so what they are on
+// the hook to finish is the first thing they see.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
 import { canViewPage, toolsForAccess } from '@/components/admin/adminTools';
+import { formatWhen } from '@/components/admin/SopRunsList';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
@@ -17,6 +20,11 @@ import {
   getNextUpcomingShift,
   type NextShift,
 } from '@/lib/schedule/next-shift';
+import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
+import { getPeopleNames } from '@/lib/sops/people';
+import { getSopRole } from '@/lib/sops/role';
+import { type ActiveRun, loadActiveRuns } from '@/lib/sops/runs';
 
 const access = Astro.locals.adminAccess ?? null;
 const tools = access ? toolsForAccess(access) : [];
@@ -47,6 +55,21 @@ if (db && access) {
     nextShift = await getNextUpcomingShift(db, selfStaffId);
     chipIsOwn = true;
   }
+}
+
+// Open checklist runs, for anyone who can reach the SOP library. Same rows
+// the library's own strip shows (loadActiveRuns scopes them to viewable
+// documents); a runs outage just drops the block rather than the page.
+let activeRuns: ActiveRun[] = [];
+let runPeople: PeopleNames = {};
+if (db && access && canViewPage(access, '/admin/sops')) {
+  const viewer: SopViewer = {
+    role: await getSopRole(email, access),
+    email: normalizeEmail(email),
+  };
+  const { runs } = await loadActiveRuns(db, viewer);
+  activeRuns = ownRunsFirst(runs, email);
+  runPeople = await getPeopleNames(activeRuns.map((run) => run.started_by));
 }
 
 // Deep-link into the schedule board's month view, same as the calendar's
@@ -103,6 +126,54 @@ const chipWindow = nextShift
             )}
           </ChipTag>
         </div>
+      )
+    }
+    {
+      activeRuns.length > 0 && (
+        <section>
+          <h2 class="mb-3 font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
+            ☑ Checklists in progress
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeRuns.map((run) => {
+              const pct =
+                run.task_count > 0 ? Math.round((run.checked_count / run.task_count) * 100) : 0;
+              const mine = sameActor(run.started_by, email);
+              return (
+                <a
+                  href={`/admin/sops/${run.slug}`}
+                  class={`block rounded border bg-[var(--pyre-gold)]/5 p-4 transition-colors hover:border-[var(--pyre-gold)] ${
+                    mine ? 'border-[var(--pyre-gold)]' : 'border-[var(--pyre-gold)]/40'
+                  }`}
+                >
+                  <div class="flex items-baseline justify-between gap-2">
+                    <h3 class="flex flex-wrap items-baseline gap-x-2 font-semibold text-[var(--pyre-creme)]">
+                      {run.title}
+                      {mine && (
+                        <span class="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-sage)]">
+                          yours
+                        </span>
+                      )}
+                    </h3>
+                    <span class="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                      resume →
+                    </span>
+                  </div>
+                  <div class="mt-2 h-1 rounded-full bg-white/10">
+                    <div
+                      class="h-1 rounded-full bg-[var(--pyre-gold)]"
+                      style={`width: ${pct}%`}
+                    />
+                  </div>
+                  <p class="mt-2 font-mono text-[10px] text-white/40">
+                    {run.checked_count}/{run.task_count} done · started by{' '}
+                    {actorLabel(run.started_by, email, runPeople)} · {formatWhen(run.started_at)}
+                  </p>
+                </a>
+              );
+            })}
+          </div>
+        </section>
       )
     }
     <AdminToolsIndex client:load tools={tools} initialPins={pins} />

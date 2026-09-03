@@ -120,7 +120,7 @@ export function RunsList({
                 {status.label}
               </span>
               {mine && (
-                <span className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                <span className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-sage)]">
                   yours
                 </span>
               )}
