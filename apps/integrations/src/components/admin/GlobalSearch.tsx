@@ -25,30 +25,26 @@ import { Marked } from './Marked';
 
 const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes'];
 
-// One brand color per group, on the heading and as a rail down every row in
-// it, so where one group ends and the next begins reads at a glance even in a
-// long list. Pages take the red the nav uses for "where you are"; the two
-// SOP groups share gold (the library's own accent), the entries a step
-// dimmer; shift notes take sage.
-const GROUP_STYLE: Record<SearchGroup, { heading: string; rail: string; badge: string }> = {
+// One brand color per group heading (text, underline, and dot), so where one
+// group ends and the next begins reads at a glance even in a long list; the
+// rows themselves stay neutral. Pages take the red the nav uses for "where
+// you are"; the two SOP groups share gold (the library's own accent), the
+// entries a step dimmer; shift notes take sage.
+const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   pages: {
     heading: 'text-[var(--pyre-red)] border-[var(--pyre-red)]/40',
-    rail: 'border-l-[var(--pyre-red)]',
     badge: 'bg-[var(--pyre-red)]',
   },
   sops: {
     heading: 'text-[var(--pyre-gold)] border-[var(--pyre-gold)]/40',
-    rail: 'border-l-[var(--pyre-gold)]',
     badge: 'bg-[var(--pyre-gold)]',
   },
   entries: {
     heading: 'text-[var(--pyre-gold)]/80 border-[var(--pyre-gold)]/30',
-    rail: 'border-l-[var(--pyre-gold)]/50',
     badge: 'bg-[var(--pyre-gold)]/60',
   },
   notes: {
     heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
-    rail: 'border-l-[var(--pyre-sage)]',
     badge: 'bg-[var(--pyre-sage)]',
   },
 };
@@ -123,7 +119,7 @@ export function SearchResults({
                       aria-selected={active}
                       onMouseEnter={() => onSelect(index)}
                       onClick={onOpen}
-                      className={`block rounded-r border-l-2 px-2 py-2 transition-colors ${style.rail} ${
+                      className={`block rounded px-2 py-2 transition-colors ${
                         active ? 'bg-white/10' : 'hover:bg-white/5'
                       }`}
                     >
