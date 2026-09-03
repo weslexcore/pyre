@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatChipDate, formatChipTime, isUpcoming } from './next-shift';
+import { formatChipDate, formatChipTime, isInSession, isUpcoming } from './next-shift';
 
 const now = { date: '2026-08-31', minutes: 14 * 60 }; // Mon 2pm ET
 
@@ -20,6 +20,30 @@ describe('isUpcoming', () => {
   it("drops today's shift once it has ended", () => {
     expect(isUpcoming({ shift_date: '2026-08-31', ends_at: '14:00' }, now)).toBe(false);
     expect(isUpcoming({ shift_date: '2026-08-31', ends_at: '09:00' }, now)).toBe(false);
+  });
+});
+
+describe('isInSession', () => {
+  it('is live when today and the window contains now', () => {
+    expect(
+      isInSession({ shift_date: '2026-08-31', starts_at: '12:00', ends_at: '16:00' }, now)
+    ).toBe(true);
+    // Starting exactly now counts as live.
+    expect(
+      isInSession({ shift_date: '2026-08-31', starts_at: '14:00', ends_at: '16:00' }, now)
+    ).toBe(true);
+  });
+
+  it('is not live before it starts, once it ends, or on another day', () => {
+    expect(
+      isInSession({ shift_date: '2026-08-31', starts_at: '16:00', ends_at: '20:00' }, now)
+    ).toBe(false);
+    expect(
+      isInSession({ shift_date: '2026-08-31', starts_at: '10:00', ends_at: '14:00' }, now)
+    ).toBe(false);
+    expect(
+      isInSession({ shift_date: '2026-09-01', starts_at: '12:00', ends_at: '16:00' }, now)
+    ).toBe(false);
   });
 });
 

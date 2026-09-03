@@ -15,6 +15,8 @@ export interface NextShift {
   assignments: ShiftAssignmentRow[];
   /** On today's ET date — the shift may already be in progress. */
   isToday: boolean;
+  /** Started and not yet ended on the ET clock: the shift is live right now. */
+  isInSession: boolean;
 }
 
 /**
@@ -27,6 +29,18 @@ export function isUpcoming(
 ): boolean {
   if (shift.shift_date > now.date) return true;
   return shift.shift_date === now.date && timeToMinutes(shift.ends_at) > now.minutes;
+}
+
+/** Today's shift whose window contains the ET clock — live right now. */
+export function isInSession(
+  shift: Pick<ShiftRow, 'shift_date' | 'starts_at' | 'ends_at'>,
+  now: LocalWallClock
+): boolean {
+  return (
+    shift.shift_date === now.date &&
+    timeToMinutes(shift.starts_at) <= now.minutes &&
+    timeToMinutes(shift.ends_at) > now.minutes
+  );
 }
 
 // Plenty for the schedule's ~2-week commitment horizon plus any working plan
@@ -71,6 +85,7 @@ export async function getNextUpcomingShift(
       shift,
       assignments: (assignments ?? []) as ShiftAssignmentRow[],
       isToday: shift.shift_date === now.date,
+      isInSession: isInSession(shift, now),
     };
   }
 
@@ -98,6 +113,7 @@ export async function getNextUpcomingShift(
     shift,
     assignments: byShift.get(shift.id) ?? [],
     isToday: shift.shift_date === now.date,
+    isInSession: isInSession(shift, now),
   };
 }
 

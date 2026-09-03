@@ -57,6 +57,11 @@ const chipHref =
     : null;
 
 const ChipTag = chipHref ? 'a' : 'span';
+// A shift that's live right now reads "In session" in sage instead of the
+// gold "Next shift" — the tone comes from the same accent var throughout.
+const inSession = nextShift?.isInSession ?? false;
+const chipLabel = inSession ? 'In session' : chipIsOwn ? 'Your next shift' : 'Next shift';
+const chipAccent = inSession ? 'var(--pyre-sage)' : 'var(--pyre-gold)';
 const chipWhen = nextShift
   ? nextShift.isToday
     ? 'Today'
@@ -74,14 +79,21 @@ const chipWindow = nextShift
         <div>
           <ChipTag
             href={chipHref ?? undefined}
-            class={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/10 px-4 py-2 font-mono text-xs ${
+            class={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-[var(--chip-accent)]/60 bg-[var(--chip-accent)]/10 px-4 py-2 font-mono text-xs ${
               chipHref
-                ? 'transition-colors hover:border-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/20'
+                ? 'transition-colors hover:border-[var(--chip-accent)] hover:bg-[var(--chip-accent)]/20'
                 : ''
             }`}
+            style={`--chip-accent: ${chipAccent}`}
           >
-            <span class="font-bold uppercase tracking-wide text-[var(--pyre-gold)]">
-              {chipIsOwn ? 'Your next shift' : 'Next shift'}
+            <span class="font-bold uppercase tracking-wide text-[var(--chip-accent)]">
+              {inSession && (
+                <span
+                  aria-hidden="true"
+                  class="mr-1.5 inline-block h-2 w-2 rounded-full bg-[var(--chip-accent)] align-middle"
+                />
+              )}
+              {chipLabel}
             </span>
             <span class="text-[var(--pyre-creme)]">
               {chipWhen} · {chipWindow}
