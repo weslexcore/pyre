@@ -102,7 +102,7 @@ const listRequest = () => ({
 });
 
 async function body(res: Response) {
-  return (await res.json()) as { runs: { id: string }[]; scope: string };
+  return (await res.json()) as { runs: { id: string }[]; scope: string; viewer: string };
 }
 
 describe('GET /api/admin/sop-runs?view=list', () => {
@@ -130,6 +130,19 @@ describe('GET /api/admin/sop-runs?view=list', () => {
     const data = await body(res);
     expect(data.runs.map((r) => r.id)).toEqual(['mine', 'theirs']);
     expect(data.scope).toBe('visible');
+  });
+
+  it('names the viewer so the log can mark the runs they started', async () => {
+    signIn(false, 'Ada@Pyre.test');
+    const { db } = fakeDb({
+      sops: [sop(OPEN_SOP)],
+      sop_runs: [run('mine', OPEN_SOP, 'ada@pyre.test')],
+    });
+    getDb.mockReturnValue(db);
+
+    // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what GET reads
+    const res = await GET(listRequest() as any);
+    expect((await body(res)).viewer).toBe('ada@pyre.test');
   });
 
   it('hides runs of a SOP the viewer may not open', async () => {

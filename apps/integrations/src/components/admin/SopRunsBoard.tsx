@@ -2,11 +2,13 @@
 // what: everyone gets the same filter bar — status, SOP, person (anyone who
 // started, ended, or checked something), date, and checked-item text, which
 // surfaces matching checks inline so "who completed task X" reads at a glance.
-// A non-admin's log is narrowed to runs of the SOPs they may view; that
+// A "Started by me" toggle narrows to the runs the viewer opened themselves —
+// the ones they are answerable for — and those runs are tagged in the list
+// either way. A non-admin's log is narrowed to runs of the SOPs they may view; that
 // scoping is enforced by the API, and this island just renders what it's
 // given. isAdmin decides one thing here: whether a run can be deleted.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { type PeopleNames, personName } from '@/lib/sops/names';
+import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import { type RunEntry, RunsList } from './SopRunsList';
 
 const buttonClass =
@@ -52,10 +54,13 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
   const [runs, setRuns] = useState<RunEntry[]>([]);
   // Roster names for the emails the runs record, from the same response.
   const [names, setNames] = useState<PeopleNames>({});
+  // The session email, from the same response; marks and filters own runs.
+  const [viewerEmail, setViewerEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]['key']>('all');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [sopFilter, setSopFilter] = useState('all');
   const [personFilter, setPersonFilter] = useState('all');
   const [fromDate, setFromDate] = useState('');
@@ -68,9 +73,14 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
     try {
       const res = await fetch('/api/admin/sop-runs?view=list');
       if (!res.ok) throw new Error(await readError(res));
-      const body = (await res.json()) as { runs: RunEntry[]; people?: PeopleNames };
+      const body = (await res.json()) as {
+        runs: RunEntry[];
+        people?: PeopleNames;
+        viewer?: string;
+      };
       setRuns(body.runs);
       setNames(body.people ?? {});
+      setViewerEmail(body.viewer ?? '');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load runs');
     } finally {
@@ -107,6 +117,11 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
     return [...set].sort((a, b) => personName(a, names).localeCompare(personName(b, names)));
   }, [runs, names]);
 
+  const mineCount = useMemo(
+    () => runs.filter((run) => sameActor(run.started_by, viewerEmail)).length,
+    [runs, viewerEmail]
+  );
+
   const visible = useMemo(() => {
     const query = itemQuery.trim().toLowerCase();
     const from = fromDate ? Date.parse(fromDate) : null;
@@ -114,6 +129,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
     const to = toDate ? Date.parse(toDate) + 24 * 60 * 60 * 1000 : null;
     return runs.filter((run) => {
       if (status !== 'all' && run.status !== status) return false;
+      if (onlyMine && !sameActor(run.started_by, viewerEmail)) return false;
       if (sopFilter !== 'all' && run.sop_id !== sopFilter) return false;
       if (personFilter !== 'all' && !participants(run).includes(personFilter)) return false;
       if (from !== null && runTime(run) < from) return false;
@@ -123,7 +139,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
       }
       return true;
     });
-  }, [runs, status, sopFilter, personFilter, fromDate, toDate, itemQuery]);
+  }, [runs, status, onlyMine, viewerEmail, sopFilter, personFilter, fromDate, toDate, itemQuery]);
 
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
 
@@ -145,6 +161,16 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
             {key !== 'all' && ` (${runs.filter((r) => r.status === key).length})`}
           </button>
         ))}
+        <span className="mx-2 h-4 w-px bg-white/10" />
+        <button
+          type="button"
+          className={`${buttonClass} ${onlyMine ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
+          onClick={() => setOnlyMine((v) => !v)}
+          aria-pressed={onlyMine}
+          disabled={!viewerEmail}
+        >
+          Started by me ({mineCount})
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded border border-white/10 bg-white/5 p-3">
@@ -205,6 +231,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
           aria-label="Filter runs by checked item text"
         />
         {(status !== 'all' ||
+          onlyMine ||
           sopFilter !== 'all' ||
           personFilter !== 'all' ||
           fromDate ||
@@ -215,6 +242,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
             className={buttonClass}
             onClick={() => {
               setStatus('all');
+              setOnlyMine(false);
               setSopFilter('all');
               setPersonFilter('all');
               setFromDate('');
@@ -248,6 +276,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
       <RunsList
         runs={visible}
         people={names}
+        viewerEmail={viewerEmail}
         itemQuery={itemQuery}
         onDelete={isAdmin ? (run) => void deleteRun(run) : undefined}
       />

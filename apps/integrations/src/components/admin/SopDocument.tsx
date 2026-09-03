@@ -565,6 +565,7 @@ export function SopDocument({
             <RunsList
               runs={runsPanel}
               people={people}
+              viewerEmail={viewerEmail}
               showSopTitle={false}
               onDelete={isAdmin ? (run) => void deletePanelRun(run) : undefined}
             />

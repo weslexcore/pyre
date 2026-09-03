@@ -3,10 +3,11 @@
 // when, expandable into the per-item record of who checked what at what time.
 // `itemQuery` (from the board's item filter) auto-surfaces matching checks
 // under each run without expanding, so "who completed task X" reads at a
-// glance.
+// glance. Runs the viewer started themselves carry a "yours" tag and a gold
+// edge, so their own responsibilities stand out from everyone else's.
 import { useState } from 'react';
 import type { SopRunRow } from '@/lib/db';
-import { type PeopleNames, personName } from '@/lib/sops/names';
+import { actorLabel, type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 
 export interface RunCheck {
   item_index: number;
@@ -61,6 +62,7 @@ function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames })
 export function RunsList({
   runs,
   people,
+  viewerEmail = '',
   itemQuery = '',
   showSopTitle = true,
   onDelete,
@@ -68,6 +70,8 @@ export function RunsList({
   runs: RunEntry[];
   /** Roster names, so runs and checks read as people rather than emails. */
   people?: PeopleNames;
+  /** The session email; runs this person started are marked as theirs. */
+  viewerEmail?: string;
   /** When set, checks matching this text show inline under each run. */
   itemQuery?: string;
   /** Off for the per-SOP panel, where every run is the same document. */
@@ -98,8 +102,14 @@ export function RunsList({
           : [];
         const isOpen = expanded === run.id;
         const complete = checks.length >= run.task_count;
+        const mine = sameActor(run.started_by, viewerEmail);
         return (
-          <li key={run.id} className="rounded border border-white/10 bg-white/5">
+          <li
+            key={run.id}
+            className={`rounded border bg-white/5 ${
+              mine ? 'border-l-2 border-white/10 border-l-[var(--pyre-gold)]' : 'border-white/10'
+            }`}
+          >
             <button
               type="button"
               className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 p-4 text-left"
@@ -109,6 +119,11 @@ export function RunsList({
               <span className={`font-mono text-[10px] uppercase tracking-wide ${status.className}`}>
                 {status.label}
               </span>
+              {mine && (
+                <span className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                  yours
+                </span>
+              )}
               {showSopTitle && (
                 <span className="font-semibold text-[var(--pyre-creme)]">
                   {run.sops?.title ?? 'Deleted SOP'}
@@ -121,12 +136,13 @@ export function RunsList({
                 {run.status === 'completed' && !complete && ' — items skipped'}
               </span>
               <span className="ml-auto text-right font-mono text-[10px] text-white/40">
-                started by {personName(run.started_by, people)} · {formatWhen(run.started_at)}
+                started by {actorLabel(run.started_by, viewerEmail, people)} ·{' '}
+                {formatWhen(run.started_at)}
                 {run.ended_at && run.ended_by && (
                   <>
                     <br />
-                    ended by {personName(run.ended_by, people)} · {formatWhen(run.ended_at)} (
-                    {formatDuration(run.started_at, run.ended_at)})
+                    ended by {actorLabel(run.ended_by, viewerEmail, people)} ·{' '}
+                    {formatWhen(run.ended_at)} ({formatDuration(run.started_at, run.ended_at)})
                   </>
                 )}
               </span>

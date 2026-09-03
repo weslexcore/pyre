@@ -148,8 +148,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     });
 
     return json({
-      // Names for whoever started these runs, so the strip reads as people.
+      // Names for whoever started these runs, so the strip reads as people —
+      // and the caller's own email, so the ones they started stand out.
       runs,
+      viewer: viewer.email,
       people: await getPeopleNames(runs.map((run) => run.started_by)),
     });
   }
@@ -193,7 +195,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       const { ids, error: idsError } = await loadViewableSopIds(db, viewer, listSopId);
       if (idsError) return json({ error: idsError }, 500);
       // Nothing readable: answer directly rather than send an empty in.().
-      if (ids.length === 0) return json({ runs: [], scope: 'visible', people: {} });
+      if (ids.length === 0) {
+        return json({ runs: [], scope: 'visible', viewer: viewer.email, people: {} });
+      }
       query = query.in('sop_id', ids);
     }
 
@@ -203,6 +207,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return json({
       runs: runRows,
       scope: gate.access.isAdmin ? 'all' : 'visible',
+      // The caller's own email, so the log can mark the runs they started.
+      viewer: viewer.email,
       // Names for everyone these runs name — started, ended, or checked an
       // item — so the log reads as people rather than mailbox local parts.
       people: await getPeopleNames(

@@ -11,10 +11,10 @@
 // persists on drop via /api/admin/sop-order; releasing outside a drop target
 // (or pressing Escape) restores the previous order. The API enforces the real
 // guards — this island just mirrors them.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SopRow } from '@/lib/db';
 import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
-import { type PeopleNames, personName } from '@/lib/sops/names';
+import { actorLabel, type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import {
   categoriesInOrder,
   moveSopToCategoryEnd,
@@ -179,6 +179,17 @@ export function SopsIndex() {
   // document, so someone else's open checklist is the one you walk up to and
   // continue.
   const [activeRuns, setActiveRuns] = useState<ActiveRun[]>([]);
+  // The session email, from the runs response, so the strip can put the
+  // viewer's own open checklists first and label them as theirs.
+  const [viewerEmail, setViewerEmail] = useState('');
+
+  // Own open checklists first — they are the ones this person has to finish —
+  // then everyone else's, each group newest first as the API returns them.
+  const orderedActiveRuns = useMemo(() => {
+    const mine = activeRuns.filter((run) => sameActor(run.started_by, viewerEmail));
+    const others = activeRuns.filter((run) => !sameActor(run.started_by, viewerEmail));
+    return [...mine, ...others];
+  }, [activeRuns, viewerEmail]);
 
   // The caller's pinned document ids (personal; shown in the Pinned strip).
   const [pins, setPins] = useState<Set<string>>(new Set());
@@ -256,9 +267,14 @@ export function SopsIndex() {
       try {
         const res = await fetch('/api/admin/sop-runs?view=active');
         if (!res.ok) return;
-        const body = (await res.json()) as { runs?: ActiveRun[]; people?: PeopleNames };
+        const body = (await res.json()) as {
+          runs?: ActiveRun[];
+          people?: PeopleNames;
+          viewer?: string;
+        };
         if (!cancelled) {
           setActiveRuns(body.runs ?? []);
+          setViewerEmail(body.viewer ?? '');
           // Whoever started an open run may not be an editor of any document,
           // so the strip brings its own names.
           setPeople((prev) => ({ ...prev, ...body.people }));
@@ -625,17 +641,27 @@ export function SopsIndex() {
             ☑ In progress
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {activeRuns.map((run) => {
+            {orderedActiveRuns.map((run) => {
               const pct =
                 run.task_count > 0 ? Math.round((run.checked_count / run.task_count) * 100) : 0;
+              const mine = sameActor(run.started_by, viewerEmail);
               return (
                 <a
                   key={run.id}
                   href={`/admin/sops/${run.slug}`}
-                  className="block rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/5 p-4 transition-colors hover:border-[var(--pyre-gold)]"
+                  className={`block rounded border bg-[var(--pyre-gold)]/5 p-4 transition-colors hover:border-[var(--pyre-gold)] ${
+                    mine ? 'border-[var(--pyre-gold)]' : 'border-[var(--pyre-gold)]/40'
+                  }`}
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-semibold text-[var(--pyre-creme)]">{run.title}</h3>
+                    <h3 className="flex flex-wrap items-baseline gap-x-2 font-semibold text-[var(--pyre-creme)]">
+                      {run.title}
+                      {mine && (
+                        <span className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                          yours
+                        </span>
+                      )}
+                    </h3>
                     <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
                       resume →
                     </span>
@@ -648,7 +674,7 @@ export function SopsIndex() {
                   </div>
                   <p className="mt-2 font-mono text-[10px] text-white/40">
                     {run.checked_count}/{run.task_count} done · started by{' '}
-                    {personName(run.started_by, people)} · {formatWhen(run.started_at)}
+                    {actorLabel(run.started_by, viewerEmail, people)} · {formatWhen(run.started_at)}
                   </p>
                 </a>
               );
