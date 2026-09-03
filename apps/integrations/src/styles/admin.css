@@ -23,3 +23,62 @@
     font-weight: 600;
   }
 }
+
+/* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every
+ * same-origin navigation runs through the View Transition API in browsers
+ * that have it. The root snapshot crossfades with the browser's default
+ * 250ms animation; this only shortens it. It stays opacity-only, which the
+ * compositor animates without touching layout — never animate size or
+ * position of the root groups here. The sticky header is excluded from the
+ * root snapshot (see transition:name in AdminLayout) so it does not fade.
+ * Reduced motion is handled by Astro: its transition stylesheet turns every
+ * view-transition animation off under prefers-reduced-motion. Browsers
+ * without the API navigate instantly, with no fallback animation. */
+::view-transition-old(root) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-in;
+}
+
+::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: ease-out;
+}
+
+/* Slow-navigation indicator. The script in AdminLayout marks <html> with
+ * data-admin-loading once a ClientRouter fetch has run past its delay and
+ * clears it when the fetch settles; the bar sits on the bottom edge of the
+ * sticky header. The sweep animates transform only, so it stays on the
+ * compositor while the next document is still downloading. */
+.admin-loading-bar {
+  display: none;
+}
+
+:root[data-admin-loading] .admin-loading-bar {
+  display: block;
+}
+
+.admin-loading-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--pyre-red);
+  animation: admin-loading-sweep 1s ease-in-out infinite;
+}
+
+@keyframes admin-loading-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* Reduced motion: a still, full-width bar instead of a sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .admin-loading-bar::before {
+    width: 100%;
+    animation: none;
+  }
+}
