@@ -8,6 +8,7 @@ describe('turnFromHistory', () => {
     answer: null,
     status: 'answered' as const,
     error: null,
+    trail: [],
     askedAt: '2026-09-02T12:00:00Z',
   };
 
@@ -22,9 +23,26 @@ describe('turnFromHistory', () => {
       answer: 'Yesterday, per the [water log](/admin/water).',
       status: 'done',
       live: '',
-      activity: null,
+      trail: [],
+      trailOpen: false,
     });
     expect(turn.error).toBeUndefined();
+  });
+
+  it('carries the stored trail, closed by default', () => {
+    const trail = [
+      { kind: 'thought' as const, text: 'Let me check.' },
+      {
+        kind: 'tool' as const,
+        callId: 'a',
+        tool: 'read_sop',
+        input: { slug: 'closing' },
+        status: 'completed' as const,
+      },
+    ];
+    const turn = turnFromHistory({ ...base, answer: 'x', trail });
+    expect(turn.trail).toEqual(trail);
+    expect(turn.trailOpen).toBe(false);
   });
 
   it('carries a failed turn as an error with its detail', () => {

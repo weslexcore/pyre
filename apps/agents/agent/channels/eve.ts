@@ -14,8 +14,9 @@
 //
 // The event handlers below keep the knowledge assistant's audit log
 // (lib/knowledge/audit.ts): asker and scope at turn start, tool calls as
-// they are requested, the answer, and the outcome. They see the session's
-// auth, which hooks do not; the question itself is recorded by
+// they are requested and their results as they land, narration between
+// them, the answer, and the outcome. They see the session's auth, which
+// hooks do not; the question itself is recorded by
 // agent/hooks/knowledge_audit.ts.
 
 import { type AuthFn, extractBearerToken, localDev, vercelOidc } from 'eve/channels/auth';
@@ -23,7 +24,10 @@ import { defaultEveAuth, eveChannel } from 'eve/channels/eve';
 import {
   auditAnswer,
   auditOutcome,
+  auditThought,
   auditToolCalls,
+  auditTrailCalls,
+  auditTrailResult,
   auditTurnStarted,
 } from '../lib/knowledge/audit';
 import {
@@ -86,16 +90,49 @@ export default eveChannel({
       const calls = data.actions
         .filter((a) => a.kind === 'tool-call')
         .map((a) => ({
+          callId: a.callId,
           tool: (a as { toolName: string }).toolName,
           input: a.input as Record<string, unknown>,
         }));
-      await auditToolCalls(ctx.session.id, data.turnId, calls);
+      await Promise.all([
+        auditToolCalls(
+          ctx.session.id,
+          data.turnId,
+          calls.map(({ tool, input }) => ({ tool, input }))
+        ),
+        auditTrailCalls(ctx.session.id, data.turnId, calls),
+      ]);
+    },
+    async 'action.result'(data, _channel, ctx) {
+      if (!knowledgeScopeOf(ctx)) return;
+      if (data.result.kind !== 'tool-result') return;
+      const failed =
+        data.status === 'failed' || data.status === 'rejected' || data.result.isError === true;
+      await auditTrailResult(ctx.session.id, data.turnId, {
+        callId: data.result.callId,
+        status: failed ? 'failed' : 'completed',
+        output: data.result.output,
+        ...(failed
+          ? {
+              error:
+                data.error?.message ??
+                (data.status === 'rejected' ? 'The call was not allowed' : 'The tool failed'),
+            }
+          : {}),
+      });
+    },
+    async 'reasoning.completed'(data, _channel, ctx) {
+      if (!knowledgeScopeOf(ctx)) return;
+      await auditThought(ctx.session.id, data.turnId, data.reasoning);
     },
     async 'message.completed'(data, _channel, ctx) {
       if (!knowledgeScopeOf(ctx)) return;
-      // Narration before a tool call ends with 'tool-calls'; the answer is
-      // the block that ends the step for any other reason.
-      if (data.finishReason !== 'tool-calls' && data.message) {
+      if (!data.message) return;
+      // Narration before a tool call ends with 'tool-calls' and joins the
+      // trail; the answer is the block that ends the step for any other reason.
+      if (data.finishReason === 'tool-calls') {
+        await auditThought(ctx.session.id, data.turnId, data.message);
+      } else {
         await auditAnswer(ctx.session.id, data.turnId, data.message);
       }
     },

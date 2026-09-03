@@ -1,15 +1,34 @@
 // The reduced event feed between /api/admin/knowledge-ask and the Ask
-// island: the pyre-agents session stream boiled down to answer text, an
-// activity hint while tools run, and one terminal event that says where the
-// island should resume from. Client-bundle-safe (types + a pure reducer).
+// island: the pyre-agents session stream boiled down to answer text, the
+// assistant's trail (narration, tool calls and their results), and one
+// terminal event that says where the island should resume from.
+// Client-bundle-safe (types + a pure reducer).
+
+import { serializeToolOutput } from './trail';
+
+export interface AskToolCall {
+  callId: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
 
 export type AskStreamEvent =
   /** Cumulative text of the assistant block being written. */
   | { type: 'delta'; text: string }
   /** One assistant block finished; 'stop' marks the answer, anything else is narration before a tool call. */
   | { type: 'message'; text: string; finishReason: string }
-  /** The assistant called tools; the island shows a line for the first. */
-  | { type: 'activity'; tools: string[] }
+  /** A completed reasoning block, when the model exposes one. */
+  | { type: 'thought'; text: string }
+  /** The assistant called tools. */
+  | { type: 'activity'; calls: AskToolCall[] }
+  /** One tool call finished; output is serialised and capped. */
+  | {
+      type: 'result';
+      callId: string;
+      status: 'completed' | 'failed';
+      output?: string;
+      error?: string;
+    }
   /**
    * The proxy stopped. 'waiting' = the answer is complete and the session
    * takes follow-ups; 'failed' = the turn errored; 'gone' = the session
@@ -28,6 +47,13 @@ export interface UpstreamEvent {
   data?: Record<string, unknown>;
 }
 
+/** Reasoning blocks past this are cut; the trail wants the gist, not the transcript. */
+const THOUGHT_MAX_LENGTH = 4000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 /** Reduce one upstream Eve event to what the island needs, or null to skip it. */
 export function reduceStreamEvent(event: UpstreamEvent, nextIndex: number): AskStreamEvent | null {
   const data = event.data ?? {};
@@ -42,14 +68,44 @@ export function reduceStreamEvent(event: UpstreamEvent, nextIndex: number): AskS
         text: typeof data.message === 'string' ? data.message : '',
         finishReason: typeof data.finishReason === 'string' ? data.finishReason : 'stop',
       };
+    case 'reasoning.completed': {
+      const text = typeof data.reasoning === 'string' ? data.reasoning.trim() : '';
+      return text ? { type: 'thought', text: text.slice(0, THOUGHT_MAX_LENGTH) } : null;
+    }
     case 'actions.requested': {
-      const actions = Array.isArray(data.actions)
-        ? (data.actions as Array<Record<string, unknown>>)
-        : [];
-      const tools = actions
+      const actions = Array.isArray(data.actions) ? data.actions.filter(isRecord) : [];
+      const calls = actions
         .filter((a) => a.kind === 'tool-call' && typeof a.toolName === 'string')
-        .map((a) => a.toolName as string);
-      return tools.length > 0 ? { type: 'activity', tools } : null;
+        .map<AskToolCall>((a) => ({
+          callId: typeof a.callId === 'string' ? a.callId : '',
+          tool: a.toolName as string,
+          input: isRecord(a.input) ? a.input : {},
+        }));
+      return calls.length > 0 ? { type: 'activity', calls } : null;
+    }
+    case 'action.result': {
+      const result = isRecord(data.result) ? data.result : null;
+      if (result?.kind !== 'tool-result' || typeof result.callId !== 'string')
+        return null;
+      const error = isRecord(data.error) ? data.error : null;
+      const failed =
+        data.status === 'failed' || data.status === 'rejected' || result.isError === true;
+      return {
+        type: 'result',
+        callId: result.callId,
+        status: failed ? 'failed' : 'completed',
+        output: serializeToolOutput(result.output),
+        ...(failed
+          ? {
+              error:
+                error && typeof error.message === 'string'
+                  ? error.message
+                  : data.status === 'rejected'
+                    ? 'The call was not allowed'
+                    : 'The tool failed',
+            }
+          : {}),
+      };
     }
     case 'session.waiting':
       return { type: 'done', status: 'waiting', nextIndex };

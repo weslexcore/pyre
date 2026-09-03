@@ -23,7 +23,7 @@ describe('reduceStreamEvent', () => {
     ).toEqual({ type: 'message', text: 'Let me check.', finishReason: 'tool-calls' });
   });
 
-  it('reports the tools a step called, skipping non-tool actions', () => {
+  it('reports the tools a step called with their inputs, skipping non-tool actions', () => {
     expect(
       reduceStreamEvent(
         {
@@ -31,19 +31,92 @@ describe('reduceStreamEvent', () => {
           data: {
             actions: [
               { kind: 'load-skill', callId: 'a' },
-              { kind: 'tool-call', callId: 'b', toolName: 'search_knowledge_base' },
-              { kind: 'tool-call', callId: 'c', toolName: 'read_sop' },
+              {
+                kind: 'tool-call',
+                callId: 'b',
+                toolName: 'search_knowledge_base',
+                input: { query: 'shock' },
+              },
+              { kind: 'tool-call', callId: 'c', toolName: 'read_sop', input: { slug: 'closing' } },
             ],
           },
         },
         5
       )
-    ).toEqual({ type: 'activity', tools: ['search_knowledge_base', 'read_sop'] });
+    ).toEqual({
+      type: 'activity',
+      calls: [
+        { callId: 'b', tool: 'search_knowledge_base', input: { query: 'shock' } },
+        { callId: 'c', tool: 'read_sop', input: { slug: 'closing' } },
+      ],
+    });
     expect(
       reduceStreamEvent(
         { type: 'actions.requested', data: { actions: [{ kind: 'load-skill' }] } },
         5
       )
+    ).toBeNull();
+  });
+
+  it('reports a tool result with its output serialised', () => {
+    expect(
+      reduceStreamEvent(
+        {
+          type: 'action.result',
+          data: {
+            status: 'completed',
+            result: {
+              kind: 'tool-result',
+              callId: 'b',
+              toolName: 'read_sop',
+              output: { title: 'Closing' },
+            },
+          },
+        },
+        6
+      )
+    ).toEqual({
+      type: 'result',
+      callId: 'b',
+      status: 'completed',
+      output: '{\n  "title": "Closing"\n}',
+    });
+  });
+
+  it('marks a failed tool result with its error', () => {
+    expect(
+      reduceStreamEvent(
+        {
+          type: 'action.result',
+          data: {
+            status: 'failed',
+            error: { code: 'tool_error', message: 'timeout' },
+            result: { kind: 'tool-result', callId: 'b', toolName: 'read_sop', output: 'x' },
+          },
+        },
+        6
+      )
+    ).toEqual({ type: 'result', callId: 'b', status: 'failed', output: 'x', error: 'timeout' });
+    expect(
+      reduceStreamEvent(
+        {
+          type: 'action.result',
+          data: {
+            status: 'completed',
+            result: { kind: 'load-skill-result', callId: 'z', output: null },
+          },
+        },
+        6
+      )
+    ).toBeNull();
+  });
+
+  it('keeps a completed reasoning block as a thought', () => {
+    expect(
+      reduceStreamEvent({ type: 'reasoning.completed', data: { reasoning: ' Check the log. ' } }, 7)
+    ).toEqual({ type: 'thought', text: 'Check the log.' });
+    expect(
+      reduceStreamEvent({ type: 'reasoning.completed', data: { reasoning: '  ' } }, 7)
     ).toBeNull();
   });
 

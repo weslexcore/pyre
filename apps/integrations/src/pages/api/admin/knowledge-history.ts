@@ -5,8 +5,8 @@
 // admin-only review of everyone's is /api/admin/knowledge-log.
 //
 //   GET                → { conversations } — the caller's conversations, newest activity first
-//   GET ?sessionId=…   → { sessionId, token, turns } — one conversation's questions and
-//                        answers in order, plus a signed token that lets the caller
+//   GET ?sessionId=…   → { sessionId, token, turns } — one conversation's questions,
+//                        answers and trails in order, plus a signed token that lets the caller
 //                        continue it (the ask route decides whether the session is
 //                        still there; if not, the next question starts fresh)
 //
@@ -23,6 +23,7 @@ import {
   groupConversations,
   type HistoryRow,
 } from '@/lib/knowledge/history';
+import { trailFromJson } from '@/lib/knowledge/trail';
 import { normalizeEmail } from '@/lib/sops/levels';
 
 export const prerender = false;
@@ -48,6 +49,7 @@ interface TurnRow {
   answer: string | null;
   status: ConversationTurn['status'];
   error: string | null;
+  trail: unknown;
   asked_at: string;
 }
 
@@ -78,7 +80,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
 
   const { data, error } = await db
     .from('knowledge_queries')
-    .select('id, question, answer, status, error, asked_at')
+    .select('id, question, answer, status, error, trail, asked_at')
     .eq('asked_by', email)
     .eq('session_id', sessionId)
     .order('asked_at', { ascending: true })
@@ -94,6 +96,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     answer: row.answer,
     status: row.status,
     error: row.error,
+    trail: trailFromJson(row.trail),
     askedAt: row.asked_at,
   }));
 

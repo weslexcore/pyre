@@ -7,6 +7,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { trailFromJson } from '@/lib/knowledge/trail';
 import { getPeopleNames } from '@/lib/sops/people';
 
 export const prerender = false;
@@ -35,6 +36,7 @@ export interface KnowledgeQueryRow {
   question: string;
   answer: string | null;
   tool_calls: Array<{ tool: string; input: Record<string, unknown> }>;
+  trail: unknown;
   status: 'pending' | 'answered' | 'failed' | 'cancelled';
   error: string | null;
   asked_at: string;
@@ -59,7 +61,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   let query = db
     .from('knowledge_queries')
     .select(
-      'id, session_id, turn_id, asked_by, viewer_scope, question, answer, tool_calls, status, error, asked_at, answered_at'
+      'id, session_id, turn_id, asked_by, viewer_scope, question, answer, tool_calls, trail, status, error, asked_at, answered_at'
     )
     .order('asked_at', { ascending: false })
     .limit(limit + 1);
@@ -70,7 +72,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const rows = (data ?? []) as KnowledgeQueryRow[];
-  const page = rows.slice(0, limit);
+  const page = rows.slice(0, limit).map((row) => ({ ...row, trail: trailFromJson(row.trail) }));
   const people = await getPeopleNames(page.map((r) => r.asked_by));
 
   // Everyone who has asked, for the filter — distinct askers over the log.

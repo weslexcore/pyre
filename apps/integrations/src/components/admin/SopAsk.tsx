@@ -5,24 +5,33 @@
 //
 // Each question opens (or continues) a pyre-agents knowledge session through
 // /api/admin/knowledge-ask, then streams the answer as it is written. The
-// assistant's interim narration ("let me search…") is folded into a short
-// activity line; only its final answer is kept. Answers render through
-// SopMarkdown so in-library links open the peek modal instead of navigating
-// away mid-question; absolute dashboard links are made relative first so
-// they qualify.
+// assistant's interim narration ("let me search…") and every tool call,
+// with its input and result, collect into the turn's trail (AskTrail),
+// which stays beside the answer so any step can be opened afterwards; the
+// final block is the answer. Answers render through SopMarkdown so
+// in-library links open the peek modal instead of navigating away
+// mid-question; absolute dashboard links are made relative first so they
+// qualify.
 //
 // History comes from the assistant's own audit log, read back for the
 // caller by /api/admin/knowledge-history. Reopening a conversation loads its
-// questions and answers and a token to continue it; the next question then
-// either lands in the same session or, when the assistant has let it go,
-// starts a fresh one and says so.
+// questions, answers and trails and a token to continue it; the next
+// question then either lands in the same session or, when the assistant has
+// let it go, starts a fresh one and says so.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ConversationSummary, ConversationTurn } from '@/lib/knowledge/history';
 import { MAX_QUESTION_LENGTH } from '@/lib/knowledge/question';
 import type { AskStreamEvent } from '@/lib/knowledge/stream';
+import {
+  type TrailStep,
+  trailWithCalls,
+  trailWithResult,
+  trailWithThought,
+} from '@/lib/knowledge/trail';
 import { AskHistory } from './AskHistory';
+import { AskTrail, liveActivityLabel } from './AskTrail';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 
@@ -32,7 +41,10 @@ interface Turn {
   answer: string;
   /** Streaming text for the block currently being written (may be narration). */
   live: string;
-  activity: string | null;
+  /** Narration and tool calls so far, in order. */
+  trail: TrailStep[];
+  /** Whether the trail's steps are shown; live turns open, reopened ones closed. */
+  trailOpen: boolean;
   /** 'empty' is a logged question the assistant never answered (cancelled, or lost). */
   status: 'pending' | 'streaming' | 'done' | 'error' | 'empty';
   error?: string;
@@ -58,15 +70,6 @@ interface ConversationPayload {
 }
 
 const HISTORY_URL = '/api/admin/knowledge-history';
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  search_knowledge_base: 'Searching the knowledge base',
-  list_sops: 'Browsing the library',
-  read_sop: 'Reading a document',
-  get_water_log: 'Reading the water log',
-  get_shift_notes: 'Reading shift notes',
-  read_incident: 'Reading an incident report',
-};
 
 const EXAMPLES = [
   'What are the benefits of cold plunging?',
@@ -97,7 +100,8 @@ export function turnFromHistory(turn: ConversationTurn): Turn {
     question: turn.question || '(question not recorded)',
     answer,
     live: '',
-    activity: null,
+    trail: turn.trail,
+    trailOpen: false,
     status: answer ? 'done' : turn.status === 'failed' ? 'error' : 'empty',
     error:
       !answer && turn.status === 'failed'
@@ -215,18 +219,27 @@ export function SopAsk({ isAdmin = false }: Props) {
                 patchTurn(turnId, { live: event.text, status: 'streaming' });
                 break;
               case 'message':
-                // Narration before a tool call is dropped; the final block is the answer.
+                // Narration before a tool call joins the trail; the final block is the answer.
                 if (event.finishReason === 'stop' || event.finishReason === 'length') {
-                  patchTurn(turnId, { answer: event.text, live: '', activity: null });
+                  patchTurn(turnId, { answer: event.text, live: '' });
                 } else {
-                  patchTurn(turnId, { live: '' });
+                  patchTurn(turnId, (t) => ({
+                    live: '',
+                    trail: trailWithThought(t.trail, event.text),
+                  }));
                 }
                 break;
+              case 'thought':
+                patchTurn(turnId, (t) => ({ trail: trailWithThought(t.trail, event.text) }));
+                break;
               case 'activity':
-                patchTurn(turnId, {
-                  activity: ACTIVITY_LABELS[event.tools[0]] ?? 'Working',
+                patchTurn(turnId, (t) => ({
                   live: '',
-                });
+                  trail: trailWithCalls(t.trail, event.calls),
+                }));
+                break;
+              case 'result':
+                patchTurn(turnId, (t) => ({ trail: trailWithResult(t.trail, event) }));
                 break;
               case 'done':
                 outcome = event;
@@ -242,7 +255,6 @@ export function SopAsk({ isAdmin = false }: Props) {
         if (outcome.status === 'waiting') {
           patchTurn(turnId, (t) => ({
             status: 'done',
-            activity: null,
             answer: t.answer || t.live,
             live: '',
           }));
@@ -252,7 +264,6 @@ export function SopAsk({ isAdmin = false }: Props) {
           patchTurn(turnId, {
             status: 'error',
             error: outcome.error ?? 'The assistant hit an error',
-            activity: null,
           });
           return;
         }
@@ -261,7 +272,6 @@ export function SopAsk({ isAdmin = false }: Props) {
           patchTurn(turnId, (t) => ({
             status: t.answer ? 'done' : 'error',
             error: t.answer ? undefined : 'The conversation ended before an answer arrived',
-            activity: null,
           }));
           return;
         }
@@ -270,7 +280,6 @@ export function SopAsk({ isAdmin = false }: Props) {
       patchTurn(turnId, {
         status: 'error',
         error: 'The answer took too long — try asking again',
-        activity: null,
       });
     },
     [patchTurn]
@@ -294,7 +303,8 @@ export function SopAsk({ isAdmin = false }: Props) {
           question: text,
           answer: '',
           live: '',
-          activity: 'Searching the knowledge base',
+          trail: [],
+          trailOpen: true,
           status: 'pending',
         },
       ]);
@@ -338,7 +348,6 @@ export function SopAsk({ isAdmin = false }: Props) {
         patchTurn(id, {
           status: 'error',
           error: error instanceof Error ? error.message : 'Something went wrong',
-          activity: null,
         });
       } finally {
         setBusy(false);
@@ -538,6 +547,12 @@ export function SopAsk({ isAdmin = false }: Props) {
                           The earlier conversation had expired, so this answer starts fresh.
                         </p>
                       )}
+                      <AskTrail
+                        steps={turn.trail}
+                        live={turn.status === 'pending' || turn.status === 'streaming'}
+                        open={turn.trailOpen}
+                        onToggle={() => patchTurn(turn.id, (t) => ({ trailOpen: !t.trailOpen }))}
+                      />
                       {turn.status === 'error' ? (
                         <p className="text-sm text-[var(--pyre-red)]">{turn.error}</p>
                       ) : turn.status === 'empty' ? (
@@ -558,7 +573,7 @@ export function SopAsk({ isAdmin = false }: Props) {
                         </div>
                       ) : (
                         <p className="font-mono text-xs uppercase tracking-wide text-white/50">
-                          {turn.activity ?? 'Thinking'}…
+                          {liveActivityLabel(turn.trail)}…
                         </p>
                       )}
                       {turn.status === 'streaming' && turn.answer === '' && turn.live !== '' && (

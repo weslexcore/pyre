@@ -5,6 +5,8 @@
 // simply every row sharing a session id. Client-bundle-safe (types + pure
 // helpers); the reads live in /api/admin/knowledge-history.
 
+import type { TrailStep } from './trail';
+
 /** One conversation in the sidebar list. */
 export interface ConversationSummary {
   sessionId: string;
@@ -23,6 +25,8 @@ export interface ConversationTurn {
   answer: string | null;
   status: 'pending' | 'answered' | 'failed' | 'cancelled';
   error: string | null;
+  /** What the assistant said to itself and looked at on the way to the answer. */
+  trail: TrailStep[];
   askedAt: string;
 }
 

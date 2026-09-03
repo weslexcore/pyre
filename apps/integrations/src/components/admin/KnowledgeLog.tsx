@@ -1,10 +1,14 @@
 // Admin review of the knowledge assistant: every question asked on
 // /admin/ask, newest first, with who asked, the access the assistant had
-// for them, what it searched and read, and the answer it gave. Reads
-// /api/admin/knowledge-log (admin-only); rows are written by the agent.
+// for them, what it searched and read (the full trail with inputs and
+// results where the agent stored one, the bare tool calls on older rows),
+// and the answer it gave. Reads /api/admin/knowledge-log (admin-only);
+// rows are written by the agent.
 
 import { useCallback, useEffect, useState } from 'react';
+import { describeToolCall, type TrailStep } from '@/lib/knowledge/trail';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { AskTrail } from './AskTrail';
 import { relativizeDashboardLinks } from './SopAsk';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
@@ -23,6 +27,7 @@ interface LogRow {
   question: string;
   answer: string | null;
   tool_calls: Array<{ tool: string; input: Record<string, unknown> }>;
+  trail: TrailStep[];
   status: 'pending' | 'answered' | 'failed' | 'cancelled';
   error: string | null;
   asked_at: string;
@@ -47,15 +52,6 @@ const STATUS_CLASS: Record<LogRow['status'], string> = {
   pending: 'text-white/50',
   failed: 'text-[var(--pyre-red)]',
   cancelled: 'text-white/50',
-};
-
-const TOOL_LABELS: Record<string, string> = {
-  search_knowledge_base: 'Searched',
-  list_sops: 'Browsed the library',
-  read_sop: 'Read',
-  get_water_log: 'Read the water log',
-  get_shift_notes: 'Read shift notes',
-  read_incident: 'Read incident',
 };
 
 function when(iso: string): string {
@@ -85,23 +81,6 @@ export function describeScope(scope: LogRow['viewer_scope']): string {
   ].join(' · ');
 }
 
-/** A tool call as one readable line: what it did and the key argument. */
-export function describeToolCall(call: { tool: string; input: Record<string, unknown> }): string {
-  const label = TOOL_LABELS[call.tool] ?? call.tool;
-  const { input } = call;
-  const arg =
-    typeof input.query === 'string'
-      ? `"${input.query}"`
-      : typeof input.slug === 'string'
-        ? `${input.slug}${typeof input.section === 'string' ? `#${input.section}` : ''}`
-        : typeof input.reference === 'string'
-          ? input.reference
-          : Object.keys(input).length > 0
-            ? JSON.stringify(input)
-            : '';
-  return arg ? `${label} ${arg}` : label;
-}
-
 async function readError(res: Response): Promise<string> {
   try {
     return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
@@ -119,6 +98,7 @@ export function KnowledgeLog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [trailOpen, setTrailOpen] = useState<Set<string>>(new Set());
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
 
   const load = useCallback(async (filter: string, before?: string) => {
@@ -146,13 +126,14 @@ export function KnowledgeLog() {
     void load(asker);
   }, [asker, load]);
 
-  const toggle = (id: string) =>
-    setOpen((prev) => {
+  const toggleIn = (setter: typeof setOpen, id: string) =>
+    setter((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  const toggle = (id: string) => toggleIn(setOpen, id);
 
   return (
     <div className="space-y-4">
@@ -231,18 +212,32 @@ export function KnowledgeLog() {
                     Access: {describeScope(row.viewer_scope)}
                   </p>
 
-                  {row.tool_calls.length > 0 && (
+                  {row.trail.length > 0 ? (
                     <div>
                       <h3 className="mb-1 font-mono text-[11px] uppercase tracking-wide text-[var(--pyre-gold)]">
-                        What it looked at
+                        What it did
                       </h3>
-                      <ol className="space-y-0.5 text-sm text-white/70">
-                        {row.tool_calls.map((call, i) => (
-                          // biome-ignore lint/suspicious/noArrayIndexKey: calls are positional
-                          <li key={i}>{describeToolCall(call)}</li>
-                        ))}
-                      </ol>
+                      <AskTrail
+                        steps={row.trail}
+                        live={false}
+                        open={trailOpen.has(row.id)}
+                        onToggle={() => toggleIn(setTrailOpen, row.id)}
+                      />
                     </div>
+                  ) : (
+                    row.tool_calls.length > 0 && (
+                      <div>
+                        <h3 className="mb-1 font-mono text-[11px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                          What it looked at
+                        </h3>
+                        <ol className="space-y-0.5 text-sm text-white/70">
+                          {row.tool_calls.map((call, i) => (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: calls are positional
+                            <li key={i}>{describeToolCall(call)}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )
                   )}
 
                   <div>
