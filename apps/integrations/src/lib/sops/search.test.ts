@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { countMatches, highlightSegments, searchContent, searchEntries } from './search';
+import {
+  countMatches,
+  highlightSegments,
+  matchesTerm,
+  searchContent,
+  searchEntries,
+} from './search';
 
 describe('countMatches', () => {
   it('counts case-insensitively', () => {
@@ -98,5 +104,39 @@ describe('searchEntries', () => {
     expect(searchContent(content, 'sauna').snippets).toEqual(
       searchEntries(content, 'sauna').entries.map((entry) => entry.text)
     );
+  });
+});
+
+describe('space-insensitive matching', () => {
+  it('finds a term written as one word or two, either way round', () => {
+    expect(matchesTerm('Do a full breakdown of the tub', 'break down')).toBe(true);
+    expect(matchesTerm('Break down the boxes', 'breakdown')).toBe(true);
+    expect(matchesTerm('a break-down of costs', 'breakdown')).toBe(true);
+    expect(matchesTerm('cold-plunge care', 'cold plunge')).toBe(true);
+    expect(matchesTerm('breaking news', 'breakdown')).toBe(false);
+  });
+
+  it('counts and highlights the whole written form', () => {
+    expect(countMatches('breakdown, break down, break-down', 'breakdown')).toBe(3);
+    expect(highlightSegments('a break down here', 'breakdown')).toEqual([
+      { text: 'a ', match: false },
+      { text: 'break down', match: true },
+      { text: ' here', match: false },
+    ]);
+  });
+
+  it('escapes regex characters in the query', () => {
+    expect(countMatches('cost (est.) and cost (est.)', '(est.)')).toBe(2);
+    expect(matchesTerm('a+b', 'a+b')).toBe(true);
+  });
+
+  it('ignores a query that is only spaces or hyphens', () => {
+    expect(countMatches('anything', ' - ')).toBe(0);
+    expect(highlightSegments('anything', '-')).toEqual([{ text: 'anything', match: false }]);
+  });
+
+  it('snippets the written form from the document', () => {
+    const { entries } = searchEntries('- [ ] Break down the cardboard\n', 'breakdown');
+    expect(entries[0].text).toBe('Break down the cardboard');
   });
 });

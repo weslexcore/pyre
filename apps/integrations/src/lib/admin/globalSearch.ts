@@ -7,9 +7,9 @@
 // individual tools use. Client-bundle-safe.
 
 import type { SearchPage } from '@/components/admin/adminTools';
-import { MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import { MIN_QUERY_LENGTH, matchesTerm, queryLength } from '@/lib/sops/search';
 
-export { MIN_QUERY_LENGTH };
+export { MIN_QUERY_LENGTH, queryLength };
 
 /** One SOP document the server matched, with the entries inside it. */
 export interface SopHit {
@@ -72,16 +72,18 @@ export interface SearchItem {
  * dashboard's.
  */
 export function matchPages(pages: SearchPage[], query: string): SearchPage[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
+  const q = query.trim();
+  if (!queryLength(q)) return [];
+  // Same matcher as the content search, so "cold-plunge" finds the water log
+  // exactly as it finds the SOP line.
   const ranked: { page: SearchPage; rank: number }[] = [];
   for (const page of pages) {
     const title = page.title.toLowerCase();
     let rank: number;
-    if (title.startsWith(q)) rank = 0;
-    else if (title.includes(q)) rank = 1;
-    else if (page.keywords.some((keyword) => keyword.toLowerCase().includes(q))) rank = 2;
-    else if (page.description?.toLowerCase().includes(q)) rank = 3;
+    if (title.startsWith(q.toLowerCase())) rank = 0;
+    else if (matchesTerm(page.title, q)) rank = 1;
+    else if (page.keywords.some((keyword) => matchesTerm(keyword, q))) rank = 2;
+    else if (page.description && matchesTerm(page.description, q)) rank = 3;
     else continue;
     ranked.push({ page, rank });
   }

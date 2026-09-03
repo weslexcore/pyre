@@ -23,7 +23,7 @@ import {
 } from '@/lib/shift-notes/media';
 import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { highlightSegments } from '@/lib/sops/search';
+import { highlightSegments, matchesTerm } from '@/lib/sops/search';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
 
 const buttonClass =
@@ -544,12 +544,12 @@ export function ShiftNotes() {
   const term = query.trim();
 
   const visible = useMemo(() => {
-    const q = term.toLowerCase();
     return notes.filter((note) => {
       if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
         return false;
       }
-      if (q && !note.body.toLowerCase().includes(q)) return false;
+      // Same matcher as the highlight, so what filters is what marks.
+      if (term && !matchesTerm(note.body, term)) return false;
       return true;
     });
   }, [notes, personFilter, term, scope]);

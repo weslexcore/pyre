@@ -16,6 +16,7 @@ import {
   buildItems,
   GROUP_LABELS,
   MIN_QUERY_LENGTH,
+  queryLength,
   type SearchGroup,
   type SearchItem,
   type SearchResponse,
@@ -168,7 +169,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const term = query.trim();
-  const contentSearch = term.length >= MIN_QUERY_LENGTH;
+  const contentSearch = queryLength(term) >= MIN_QUERY_LENGTH;
 
   // cmd+K / ctrl+K anywhere on the page toggles the palette. The island is
   // remounted on every ClientRouter navigation, so the listener is always
