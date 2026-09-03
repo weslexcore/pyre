@@ -8,9 +8,10 @@ two roles, chosen per session:
   time off, hours, and history patterns, then drafts a week of assignments the
   admin reviews on `/admin/schedule` (approve week, ✓/✗ per item, or discard);
 - the **knowledge assistant**, which answers staff questions ("What are the
-  benefits of cold plunging?", "When was the left tub last shocked?") from
-  the SOP library, shift notes, the cold tub water log, and incident reports,
-  citing the dashboard pages it drew on. Staff reach it from
+  benefits of cold plunging?", "When was the left tub last shocked?", "When
+  is my next shift?") from the SOP library, shift notes, the cold tub water
+  log, incident reports, and the staff schedule, citing the dashboard pages
+  it drew on. Staff reach it from
   `/admin/sops/ask`.
 
 ## Two roles in one Eve app
@@ -38,13 +39,15 @@ never gets a shell.
 ```
 /admin/sops/ask ──▶ POST /api/admin/knowledge-ask (integrations)
                         resolves the asker's scope: SOP role + email,
-                        shift-notes / incidents (all | mine | none), water
+                        shift-notes / incidents (all | mine | none), water,
+                        schedule
                         │  x-pyre-agent: knowledge, x-pyre-knowledge-scope
                         ▼
                     POST {this app}/eve/v1/session
                         search_knowledge_base ─▶ knowledge_search() in Postgres
                         list_sops / read_sop ─▶ sops (grant-filtered)
                         get_water_log / get_shift_notes / read_incident
+                        get_shifts ─▶ shifts, shift_assignments, staff (names only)
                         ▼
                     GET /api/admin/knowledge-ask?sessionId… streams the answer
 ```
@@ -68,10 +71,20 @@ never gets a shell.
   show the same person: SOPs by the document's grants (admins everything,
   others by role or named email, archived hidden), shift notes all-or-own,
   incident reports all-or-own-filed with people fields withheld, the water
-  log by page grant. The scope comes from the integrations app's own access
-  code, tools re-derive it from the session on every call, and the SQL
-  function applies it row by row. `tests/access.test.ts` covers the
-  agent-side rules.
+  log and the schedule by page grant. The scope comes from the integrations
+  app's own access code, tools re-derive it from the session on every call,
+  and the SQL function applies it row by row. `tests/access.test.ts` covers
+  the agent-side rules.
+- **Schedule.** `get_shifts` (`agent/lib/knowledge/schedule.ts`) reads
+  shifts, assignments, and the roster directly for a date window and shapes
+  them the way the board shows an employee: every shift with its crew by
+  display name, the asker's own hours by week, their own pending shift
+  requests, and open sub requests (which every teammate sees). The asker is
+  the staff row matching the scope's email. Emails, pay rates, calendar
+  tokens, Momence ids, other people's requests, and draft (proposal) rows
+  never leave the database through it. The knowledge prompt gets today's
+  Eastern date appended per turn so "last week" resolves to real dates.
+  `tests/schedule.test.ts` pins the window and shaping logic.
 - **Who may ask** is the "Ask" checkbox on `/admin/users` (the
   `/admin/ask` page grant); the dashboard's ask route checks it on every
   request.

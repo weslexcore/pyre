@@ -1,8 +1,8 @@
 ---
 // Ask a question: a chat with the pyre-agents knowledge assistant, which
-// answers from the SOP library, shift notes, water log, and incident
-// reports — scoped to what this user may read, with links back to the
-// documents. Earlier conversations sit beside the chat (their own only).
+// answers from the SOP library, shift notes, water log, incident reports,
+// and the staff schedule — scoped to what this user may read, with links
+// back to the documents. Earlier conversations sit beside the chat (their own only).
 // Who may open it is the Ask page grant on /admin/users (the middleware +
 // AdminLayout gate); the island talks to /api/admin/knowledge-ask and
 // /api/admin/knowledge-history, which re-check the grant on every request.
@@ -15,7 +15,7 @@ const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
 
 <AdminLayout
   title="Ask a Question"
-  subtitle="Answers from the SOPs, shift notes, water log, and incident reports you can see — with links to where they come from"
+  subtitle="Answers from the SOPs, shift notes, water log, incident reports, and schedule you can see — with links to where they come from"
   fill
 >
   <SopAsk client:load isAdmin={isAdmin} />

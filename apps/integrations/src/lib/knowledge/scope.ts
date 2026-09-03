@@ -18,6 +18,8 @@ export interface KnowledgeScope {
   shiftNotes: 'all' | 'mine' | null;
   incidents: 'all' | 'mine' | null;
   water: boolean;
+  /** The staff schedule: shifts, crews, and hours — the board shows all of it to anyone with the page. */
+  schedule: boolean;
 }
 
 /** Request headers that turn a pyre-agents session into a knowledge session. */
@@ -44,6 +46,10 @@ export async function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope
         ? 'mine'
         : null,
     water: canViewPage(gate.access, '/admin/water'),
+    // Schedule: a plain page grant already shows every shift and who is on
+    // it (names only — emails and pay stay on the manage/admin side, and the
+    // agent never reads them), so the tool needs no all/mine split.
+    schedule: canViewPage(gate.access, '/admin/schedule'),
   };
 }
 

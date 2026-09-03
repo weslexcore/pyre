@@ -13,6 +13,7 @@
 import { defineDynamic, defineTool } from 'eve/tools';
 import { z } from 'zod';
 import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs';
+import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
 import { readSop, sopTableOfContents } from '../lib/knowledge/sops';
 import { type KnowledgeScope, resolveRole } from '../lib/role';
@@ -116,6 +117,24 @@ function knowledgeTools() {
       }),
       execute(input, ctx) {
         return getShiftNotes(scopeOf(ctx), input);
+      },
+    }),
+    get_shifts: defineTool({
+      description:
+        'The staff schedule (/admin/schedule) for a date window: shifts with date, times, and the crew on each (names, roles, hours), plus the asking staff member\'s own hours by week, their pending shift requests, and open sub requests anyone may claim. Default is their own shifts over the next four weeks; pass an earlier window for past shifts ("how many hours did I work last week"), and who: "everyone" for the whole board ("who is on Saturday", "are there open shifts"). Times are Eastern. Available only when the staff member holds the Schedule page.',
+      inputSchema: z.object({
+        from: dateString.optional().describe('Earliest shift date, inclusive (default today).'),
+        to: dateString
+          .optional()
+          .describe('Latest shift date, inclusive (default four weeks after from; at most a year).'),
+        who: z
+          .enum(['me', 'everyone'])
+          .optional()
+          .describe('"me" (default): only shifts the staff member is on. "everyone": every shift in the window.'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max shifts (default 50).'),
+      }),
+      execute(input, ctx) {
+        return getShifts(scopeOf(ctx), input);
       },
     }),
     read_incident: defineTool({

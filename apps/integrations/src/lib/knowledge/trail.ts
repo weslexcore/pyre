@@ -36,6 +36,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_water_log: 'Read the water log',
   get_shift_notes: 'Read shift notes',
   read_incident: 'Read incident',
+  get_shifts: 'Read the schedule',
 };
 
 /** The same tools, present tense, for the line shown while one runs. */
@@ -46,6 +47,7 @@ export const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   get_water_log: 'Reading the water log',
   get_shift_notes: 'Reading shift notes',
   read_incident: 'Reading an incident report',
+  get_shifts: 'Reading the schedule',
 };
 
 /** A tool's output as one string for the trail, cut to the cap with a marker. */
@@ -127,6 +129,15 @@ export function summarizeToolResult(step: TrailToolStep): string {
     }
     case 'read_incident':
       return typeof out.reference === 'string' ? out.reference : 'done';
+    case 'get_shifts': {
+      const count = typeof out.count === 'number' ? out.count : null;
+      const window = out.window as { from?: unknown; to?: unknown } | undefined;
+      const range =
+        window && typeof window.from === 'string' && typeof window.to === 'string'
+          ? ` ${window.from} to ${window.to}`
+          : '';
+      return count === null ? 'done' : `${count} shift${count === 1 ? '' : 's'}${range}`;
+    }
     default: {
       const rows = Array.isArray(out.entries)
         ? out.entries.length

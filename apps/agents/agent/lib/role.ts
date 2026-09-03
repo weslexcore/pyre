@@ -37,6 +37,13 @@ export interface KnowledgeScope {
   incidents: LogScope;
   /** Whether they hold the /admin/water page (the cold tub water log). */
   water: boolean;
+  /**
+   * Whether they hold the /admin/schedule page (the staff schedule: shifts,
+   * who is working them, hours). The board shows every shift and its crew to
+   * anyone with the grant, so this is all-or-nothing; the tools find the
+   * asker's own shifts through the staff row matching `email`.
+   */
+  schedule: boolean;
 }
 
 /** The scope a knowledge session gets when the caller sends none: staff-level SOPs only. */
@@ -46,6 +53,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScope = {
   shiftNotes: null,
   incidents: null,
   water: false,
+  schedule: false,
 };
 
 function logScope(value: unknown): LogScope {
@@ -74,6 +82,7 @@ export function parseKnowledgeScope(raw: unknown): KnowledgeScope {
     shiftNotes: logScope(v.shiftNotes),
     incidents: logScope(v.incidents),
     water: v.water === true,
+    schedule: v.schedule === true,
   };
 }
 

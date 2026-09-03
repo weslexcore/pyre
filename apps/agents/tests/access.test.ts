@@ -34,6 +34,7 @@ describe('resolveRole', () => {
       shiftNotes: null,
       incidents: null,
       water: true,
+      schedule: false,
     });
   });
 
@@ -60,8 +61,28 @@ describe('parseKnowledgeScope', () => {
 
   it('keeps only the recognised values', () => {
     expect(
-      parseKnowledgeScope({ role: 'admin', email: ' A@B.co ', shiftNotes: 'mine', incidents: 'all', water: true })
-    ).toEqual({ role: 'admin', email: 'a@b.co', shiftNotes: 'mine', incidents: 'all', water: true });
+      parseKnowledgeScope({
+        role: 'admin',
+        email: ' A@B.co ',
+        shiftNotes: 'mine',
+        incidents: 'all',
+        water: true,
+        schedule: true,
+      })
+    ).toEqual({
+      role: 'admin',
+      email: 'a@b.co',
+      shiftNotes: 'mine',
+      incidents: 'all',
+      water: true,
+      schedule: true,
+    });
+  });
+
+  it('treats the schedule grant as a strict boolean', () => {
+    expect(parseKnowledgeScope({ schedule: 'true' }).schedule).toBe(false);
+    expect(parseKnowledgeScope({ schedule: 1 }).schedule).toBe(false);
+    expect(parseKnowledgeScope({ schedule: true }).schedule).toBe(true);
   });
 });
 

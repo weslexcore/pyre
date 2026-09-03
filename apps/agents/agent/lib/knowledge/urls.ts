@@ -15,6 +15,12 @@ export function sopUrl(slug: string, anchor?: string | null): string {
 }
 
 export const WATER_LOG_URL_PATH = '/admin/water';
+export const SCHEDULE_URL_PATH = '/admin/schedule';
+
+/** The schedule board, opened on the week holding `date` (YYYY-MM-DD) when one is given. */
+export function scheduleUrl(date?: string | null): string {
+  return siteUrl(date ? `${SCHEDULE_URL_PATH}?view=week&date=${date}` : SCHEDULE_URL_PATH);
+}
 export const SHIFT_NOTES_URL_PATH = '/admin/shift-notes';
 
 export function incidentUrl(id: string): string {

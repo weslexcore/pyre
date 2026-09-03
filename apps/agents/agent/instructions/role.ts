@@ -3,15 +3,22 @@
 // session start and re-checked each turn; the initiator decides, so a
 // follow-up can never switch a conversation to the other role.
 
+import { utcToEastern } from '@pyre/schedule-core';
 import { defineDynamic, defineInstructions } from 'eve/instructions';
-import { KNOWLEDGE_INSTRUCTIONS } from '../lib/prompts/knowledge';
+import { knowledgeInstructionsFor } from '../lib/prompts/knowledge';
 import { SCHEDULER_INSTRUCTIONS } from '../lib/prompts/scheduler';
 import { resolveRole } from '../lib/role';
 
 function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
   const { role } = resolveRole(auth);
+  // The knowledge prompt carries today's date (Eastern) for schedule
+  // questions; it is re-resolved each turn, so a conversation that crosses
+  // midnight picks up the new day.
   return defineInstructions({
-    markdown: role === 'knowledge' ? KNOWLEDGE_INSTRUCTIONS : SCHEDULER_INSTRUCTIONS,
+    markdown:
+      role === 'knowledge'
+        ? knowledgeInstructionsFor(utcToEastern(new Date().toISOString()).date)
+        : SCHEDULER_INSTRUCTIONS,
   });
 }
 

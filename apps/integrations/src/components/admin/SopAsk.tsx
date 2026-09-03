@@ -76,6 +76,7 @@ const EXAMPLES = [
   'How do I break down the fire and water side at close?',
   'What do we tell a guest who is pregnant and wants to plunge?',
   'When was the left tub last shocked?',
+  'When is my next shift, and who am I on with?',
 ];
 
 /** Past this many lines the composer scrolls instead of growing. */
@@ -508,9 +509,9 @@ export function SopAsk({ isAdmin = false }: Props) {
             <div className="flex h-full flex-col justify-center">
               <div className="mx-auto w-full max-w-2xl">
                 <p className="mb-4 text-center text-sm text-white/60">
-                  Ask anything about how we run the sauna. Answers come only from the SOPs, shift
-                  notes, water log, and incident reports you can see, with links to where they come
-                  from.
+                  Ask anything about how we run the sauna, or about your shifts. Answers come only
+                  from the SOPs, shift notes, water log, incident reports, and schedule you can see,
+                  with links to where they come from.
                 </p>
                 <h2 className="mb-2 text-center font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
                   Try asking
