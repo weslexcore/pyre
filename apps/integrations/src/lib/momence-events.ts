@@ -36,6 +36,12 @@ export interface ResolvedSession {
   endIso: string;
   /** The event's own image (same one shown on the landing page), if it has one. */
   imageUrl?: string;
+  /**
+   * No other session in the feed starts later the same (bathhouse) day. Last
+   * entry is an hour before closing, so the confirmation's arrival window for
+   * a drop-in session is tightened when this is set.
+   */
+  isLastOfDay: boolean;
 }
 
 // Type used when an event carries no recognized type tag. It is intentionally
@@ -103,6 +109,25 @@ export function formatZoneAbbrev(date: Date): string {
   return part?.value ?? 'ET';
 }
 
+/** Calendar day in the bathhouse zone, e.g. "6/20/2026"; only used for equality. */
+function dayKey(date: Date): string {
+  return date.toLocaleDateString('en-US', { timeZone: TIME_ZONE });
+}
+
+/**
+ * True when nothing else in `allStarts` begins later on the same bathhouse
+ * day as `startIso`. Exported for tests; resolveSession feeds it the whole
+ * events feed.
+ */
+export function isLastSessionOfDay(startIso: string, allStarts: string[]): boolean {
+  const start = new Date(startIso);
+  const day = dayKey(start);
+  return !allStarts.some((iso) => {
+    const other = new Date(iso);
+    return other.getTime() > start.getTime() && dayKey(other) === day;
+  });
+}
+
 // The zone is spelled out once so guests booking from elsewhere (or reading on
 // a phone set to another zone) aren't left guessing which clock we mean.
 function formatTimeRange(isoDate: string, durationMinutes: number): string {
@@ -158,6 +183,10 @@ export async function resolveSession(sessionId: number): Promise<ResolvedSession
       isoDate: event.dateTime,
       endIso: new Date(new Date(event.dateTime).getTime() + event.duration * 60_000).toISOString(),
       imageUrl: event.image1 || event.image2 || undefined,
+      isLastOfDay: isLastSessionOfDay(
+        event.dateTime,
+        events.map((e) => e.dateTime)
+      ),
     };
   } catch (error) {
     log.warn(`Failed to resolve session ${sessionId}`, error);
