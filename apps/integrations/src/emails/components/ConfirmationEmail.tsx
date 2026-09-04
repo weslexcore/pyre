@@ -7,6 +7,7 @@ import {
   VENUE,
 } from '@/lib/email/confirmation-content';
 import { PARKING_DIRECTIONS, WEATHER_POLICY } from '@/lib/email/faq-content';
+import { CONFIRMATION_PREVIEWS } from '../preview-sessions';
 import type { ConfirmationEmailProps } from '../types';
 import { ASSET_BASE, proxyImageUrl } from './assets';
 import { button, COLORS, EmailLayout, heading, text } from './EmailLayout';
@@ -139,22 +140,6 @@ export function ConfirmationEmail({
         {timeLabel && <Text style={bigValueStyle}>{timeLabel}</Text>}
         {arrivalLabel && <Text style={noteStyle}>{arrivalLabel}</Text>}
 
-        <Text style={groupLabelStyle}>Where</Text>
-        {whereLines.map((line, index) => (
-          <Text key={line} style={index === 0 ? valueBoldStyle : valueStyle}>
-            {line}
-          </Text>
-        ))}
-        <Text style={{ margin: 0 }}>
-          <Button href={DIRECTIONS_URL} style={directionsButton}>
-            Get directions
-          </Button>
-          <Link href={APPLE_MAPS_URL} style={inlineLinkStyle}>
-            Apple Maps
-          </Link>
-        </Text>
-        <Text style={noteStyle}>Parking: {PARKING_DIRECTIONS}</Text>
-
         {calendarLinks && (
           <>
             <Text style={groupLabelStyle}>Add to calendar</Text>
@@ -177,6 +162,22 @@ export function ConfirmationEmail({
             </Text>
           </>
         )}
+
+        <Text style={groupLabelStyle}>Where</Text>
+        {whereLines.map((line, index) => (
+          <Text key={line} style={index === 0 ? valueBoldStyle : valueStyle}>
+            {line}
+          </Text>
+        ))}
+        <Text style={{ margin: 0 }}>
+          <Button href={DIRECTIONS_URL} style={directionsButton}>
+            Get directions
+          </Button>
+          <Link href={APPLE_MAPS_URL} style={inlineLinkStyle}>
+            Apple Maps
+          </Link>
+        </Text>
+        <Text style={noteStyle}>Parking: {PARKING_DIRECTIONS}</Text>
       </Section>
 
       <Text style={text}>{content.introBody}</Text>
@@ -209,20 +210,5 @@ export function ConfirmationEmail({
   );
 }
 
-export const sampleConfirmationProps: ConfirmationEmailProps = {
-  firstName: 'Julien',
-  sessionTitle: 'Signature Guided Class',
-  dateLabel: 'Sat, June 20, 2026',
-  timeLabel: '10:00 AM – 12:00 PM EDT',
-  arrivalLabel: 'Please arrive by 9:45 AM to check in and get changed before we begin.',
-  location: 'Pyre Sauna',
-  sessionType: 'guided',
-  // manageUrl: 'https://momence.com/sign-in',
-  calendarLinks: {
-    google:
-      'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Signature+Guided+Class+%40+Pyre&dates=20260620T140000Z%2F20260620T160000Z&location=Pyre+Sauna%2C+1000+Westover+Hills+Blvd%2C+Richmond%2C+VA+23225',
-    outlook:
-      'https://outlook.live.com/calendar/0/action/compose?rru=addevent&subject=Signature+Guided+Class+%40+Pyre&startdt=2026-06-20T14%3A00%3A00Z&enddt=2026-06-20T16%3A00%3A00Z',
-    ics: 'https://integrations.pyresauna.com/api/calendar/event.ics?d=sample',
-  },
-};
+// Re-exported so the per-type preview templates can keep importing it here.
+export const sampleConfirmationProps: ConfirmationEmailProps = CONFIRMATION_PREVIEWS.guided;

@@ -49,8 +49,13 @@ interface EmailTemplatePreviewProps {
   templates: TemplateOption[];
   /** Journeys from the code registry with their current pause state. */
   journeys: JourneyOption[];
-  /** Session types with dedicated confirmation copy — preset chips. */
-  confirmationSessionTypes: string[];
+  /**
+   * Full sample props per confirmation session type — the preset chips. Whole
+   * presets rather than a bare type list: labels like the arrival time are
+   * computed per session at send time, so patching only `sessionType` would
+   * leave the previous type's times on screen.
+   */
+  confirmationPresets: Record<string, Record<string, unknown>>;
   /** Raw EMAIL_LIVE_TEMPLATES value, for the config summary. */
   liveTemplatesConfig: string;
   /** Effective whitelist (env + dashboard) — receives ALL templates. */
@@ -77,7 +82,7 @@ const TEST_EMAIL_STORAGE_KEY = 'pyre-admin-test-email';
 export function EmailTemplatePreview({
   templates,
   journeys,
-  confirmationSessionTypes,
+  confirmationPresets,
   liveTemplatesConfig,
   whitelist,
   dbAvailable,
@@ -202,18 +207,14 @@ export function EmailTemplatePreview({
     void renderTemplate(selectedKey, json);
   };
 
-  // Patches sessionType into the current props (keeping any other edits) and
-  // re-renders — one-click browsing of the confirmation variants.
+  // Loads that session type's whole sample payload and re-renders — one-click
+  // browsing of the confirmation variants. Any hand edits in the box are
+  // replaced on purpose: the date, time, arrival line and calendar links all
+  // belong to one session and would otherwise disagree with each other.
   const applySessionType = (sessionType: string) => {
-    let props: Record<string, unknown>;
-    try {
-      props = JSON.parse(propsJson);
-    } catch {
-      const option = templates.find((t) => t.key === selectedKey);
-      props = { ...(option?.defaultProps ?? {}) };
-    }
-    props.sessionType = sessionType;
-    const json = JSON.stringify(props, null, 2);
+    const preset = confirmationPresets[sessionType];
+    if (!preset) return;
+    const json = JSON.stringify(preset, null, 2);
     setPropsJson(json);
     void renderTemplate(selectedKey, json);
   };
@@ -529,7 +530,7 @@ export function EmailTemplatePreview({
 
           {selectedKey === 'confirmation' && (
             <div className="flex flex-wrap gap-1.5">
-              {confirmationSessionTypes.map((sessionType) => (
+              {Object.keys(confirmationPresets).map((sessionType) => (
                 <button
                   key={sessionType}
                   type="button"

@@ -136,6 +136,39 @@ function formatTimeRange(isoDate: string, durationMinutes: number): string {
   return `${formatClockTime(start)} – ${formatClockTime(end)} ${formatZoneAbbrev(start)}`;
 }
 
+/** The raw facts about a session, before display formatting. */
+export interface SessionFacts {
+  sessionType: string;
+  title: string;
+  /** ISO 8601 start instant. */
+  startIso: string;
+  durationMinutes: number;
+  /** Momence's location string; defaults to the venue name when absent. */
+  location?: string;
+  imageUrl?: string;
+  isLastOfDay: boolean;
+}
+
+/**
+ * Turn session facts into the display shape the emails consume. Exported so
+ * preview/sample data is built by the same code path as a real send — a label
+ * can never drift between what an admin previews and what a guest receives.
+ */
+export function buildResolvedSession(facts: SessionFacts): ResolvedSession {
+  const { sessionType, title, startIso, durationMinutes, location, imageUrl, isLastOfDay } = facts;
+  return {
+    sessionType,
+    title,
+    dateLabel: formatDate(startIso),
+    timeLabel: formatTimeRange(startIso, durationMinutes),
+    location: location || 'Pyre Sauna',
+    isoDate: startIso,
+    endIso: new Date(new Date(startIso).getTime() + durationMinutes * 60_000).toISOString(),
+    imageUrl: imageUrl || undefined,
+    isLastOfDay,
+  };
+}
+
 async function fetchEvents(): Promise<MomenceEventLite[]> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
@@ -174,20 +207,18 @@ export async function resolveSession(sessionId: number): Promise<ResolvedSession
       return null;
     }
 
-    return {
+    return buildResolvedSession({
       sessionType: resolveTypeFromEvent(event),
       title: event.title,
-      dateLabel: formatDate(event.dateTime),
-      timeLabel: formatTimeRange(event.dateTime, event.duration),
-      location: event.location || 'Pyre Sauna',
-      isoDate: event.dateTime,
-      endIso: new Date(new Date(event.dateTime).getTime() + event.duration * 60_000).toISOString(),
+      startIso: event.dateTime,
+      durationMinutes: event.duration,
+      location: event.location,
       imageUrl: event.image1 || event.image2 || undefined,
       isLastOfDay: isLastSessionOfDay(
         event.dateTime,
         events.map((e) => e.dateTime)
       ),
-    };
+    });
   } catch (error) {
     log.warn(`Failed to resolve session ${sessionId}`, error);
     return null;

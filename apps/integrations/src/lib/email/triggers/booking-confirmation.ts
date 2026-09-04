@@ -1,8 +1,6 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
-import type { ConfirmationEmailProps } from '@/emails/types';
-import { buildCalendarLinks } from '@/lib/calendar/links';
-import { buildArrivalLabel } from '@/lib/email/arrival';
-import { DIRECTIONS_URL, getConfirmationContent } from '@/lib/email/confirmation-content';
+import { DIRECTIONS_URL } from '@/lib/email/confirmation-content';
+import { buildConfirmationProps } from '@/lib/email/confirmation-props';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { type ResolvedSession, resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
@@ -46,31 +44,7 @@ export async function sendBookingConfirmationEmails({
 
   const sessionType = session?.sessionType ?? 'unknown';
 
-  const props: ConfirmationEmailProps = {
-    firstName: member.firstName || 'there',
-    sessionTitle: session?.title ?? 'Your Pyre session',
-    dateLabel: session?.dateLabel ?? 'See your account for details',
-    timeLabel: session?.timeLabel ?? '',
-    arrivalLabel: session
-      ? buildArrivalLabel(
-          getConfirmationContent(sessionType).arrival,
-          session.isoDate,
-          session.endIso,
-          { lastOfDay: session.isLastOfDay }
-        )
-      : undefined,
-    location: session?.location ?? 'Pyre Sauna',
-    // manageUrl: `${siteUrl}/account`,
-    sessionImageUrl: session?.imageUrl,
-    sessionType,
-    calendarLinks: session
-      ? buildCalendarLinks({
-          title: session.title,
-          startIso: session.isoDate,
-          endIso: session.endIso,
-        })
-      : undefined,
-  };
+  const props = buildConfirmationProps(member.firstName, session);
 
   // --- Confirmation (always; idempotent per booking) ---
   const confirmationKey = `confirmation:${sessionBookingId}`;

@@ -1,4 +1,5 @@
 import { Button, Hr, Link, Section, Text } from '@react-email/components';
+import { DIRECTIONS_URL } from '@/lib/email/confirmation-content';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { FirstTimerEmailProps } from '../types';
@@ -68,12 +69,13 @@ export function FirstTimerWelcome({
   );
 }
 
-// Preview mirrors the real send path (booking-confirmation.ts), which passes
-// FIRST_TIMER_FAQS — keep them in sync by importing rather than restating.
+// Preview mirrors the real send path (booking-confirmation.ts): both the FAQ
+// set and the directions URL are imported rather than restated, so the preview
+// cannot drift from what actually sends.
 FirstTimerWelcome.PreviewProps = {
   firstName: 'Julien',
   // manageUrl: 'https://pyresauna.com/account',
-  directionsUrl: 'https://maps.google.com/?q=Pyre+Sauna',
+  directionsUrl: DIRECTIONS_URL,
   faqs: FIRST_TIMER_FAQS,
 } satisfies FirstTimerEmailProps;
 

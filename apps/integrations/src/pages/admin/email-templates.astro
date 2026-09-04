@@ -4,10 +4,10 @@
 // request (the page gate is UX; the API gate is the security boundary).
 import { EmailTemplatePreview } from '@/components/admin/EmailTemplatePreview';
 import { EMAIL_PREVIEW_PROPS } from '@/emails/preview-props';
+import { CONFIRMATION_PREVIEWS } from '@/emails/preview-sessions';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailTemplateKey } from '@/emails/types';
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import { CONFIRMATION_SESSION_TYPES } from '@/lib/email/confirmation-content';
 import { getEmailGate } from '@/lib/email/dev-mode';
 import { JOURNEYS } from '@/lib/email/journeys/registry';
 import { getJourneySettings } from '@/lib/email/journeys/settings';
@@ -46,7 +46,7 @@ const liveTemplatesConfig =
     client:load
     templates={templates}
     journeys={journeys}
-    confirmationSessionTypes={CONFIRMATION_SESSION_TYPES}
+    confirmationPresets={CONFIRMATION_PREVIEWS as unknown as Record<string, Record<string, unknown>>}
     liveTemplatesConfig={liveTemplatesConfig}
     whitelist={gate.whitelist}
     dbAvailable={gate.dbAvailable}

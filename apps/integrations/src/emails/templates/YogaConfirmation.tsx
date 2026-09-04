@@ -1,4 +1,5 @@
-import { ConfirmationEmail, sampleConfirmationProps } from '../components/ConfirmationEmail';
+import { ConfirmationEmail } from '../components/ConfirmationEmail';
+import { CONFIRMATION_PREVIEWS } from '../preview-sessions';
 import type { ConfirmationEmailProps } from '../types';
 
 // Preview-only: a yoga session (sessionType 'yoga'). Shows the yoga-mat
@@ -7,12 +8,6 @@ export function YogaConfirmation(props: ConfirmationEmailProps) {
   return <ConfirmationEmail {...props} />;
 }
 
-YogaConfirmation.PreviewProps = {
-  ...sampleConfirmationProps,
-  sessionType: 'yoga',
-  sessionTitle: 'Yoga // Sauna // Plunge',
-  sessionImageUrl:
-    'https://images.momence.com/h/169530/session-banner/32f8ce0d-8f97-4ac6-a013-d600c9a73d7d.jpeg',
-};
+YogaConfirmation.PreviewProps = CONFIRMATION_PREVIEWS.yoga;
 
 export default YogaConfirmation;

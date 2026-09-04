@@ -1,4 +1,5 @@
-import { ConfirmationEmail, sampleConfirmationProps } from '../components/ConfirmationEmail';
+import { ConfirmationEmail } from '../components/ConfirmationEmail';
+import { CONFIRMATION_PREVIEWS } from '../preview-sessions';
 import type { ConfirmationEmailProps } from '../types';
 
 // Preview-only. All copy lives in confirmation-content.ts (keyed by sessionType);
@@ -7,10 +8,6 @@ export function SpecialEventConfirmation(props: ConfirmationEmailProps) {
   return <ConfirmationEmail {...props} />;
 }
 
-SpecialEventConfirmation.PreviewProps = {
-  ...sampleConfirmationProps,
-  sessionType: 'special event',
-  sessionTitle: 'Special Event',
-};
+SpecialEventConfirmation.PreviewProps = CONFIRMATION_PREVIEWS['special event'];
 
 export default SpecialEventConfirmation;

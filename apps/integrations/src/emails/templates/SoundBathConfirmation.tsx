@@ -1,4 +1,5 @@
-import { ConfirmationEmail, sampleConfirmationProps } from '../components/ConfirmationEmail';
+import { ConfirmationEmail } from '../components/ConfirmationEmail';
+import { CONFIRMATION_PREVIEWS } from '../preview-sessions';
 import type { ConfirmationEmailProps } from '../types';
 
 // Preview-only: a sound bath session (sessionType 'sound bath'). Shows the
@@ -7,10 +8,6 @@ export function SoundBathConfirmation(props: ConfirmationEmailProps) {
   return <ConfirmationEmail {...props} />;
 }
 
-SoundBathConfirmation.PreviewProps = {
-  ...sampleConfirmationProps,
-  sessionType: 'sound bath',
-  sessionTitle: 'Sound Bath // Sauna // Plunge',
-};
+SoundBathConfirmation.PreviewProps = CONFIRMATION_PREVIEWS['sound bath'];
 
 export default SoundBathConfirmation;
