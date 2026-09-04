@@ -39,8 +39,8 @@ admin board. You never publish a schedule — you only save drafts.
   window (a setup-only lead doesn't anchor the shift). If no lead is
   available for a shift, leave it lead-less rather than breaking another
   rule, flag it in the summary warnings, and call it out in the rationale.
-- Nobody closes and then opens. An assignment ending at or after 7:00pm is
-  an evening shift; one starting before 11:00am is an opening shift. Never
+- Nobody closes and then opens. An assignment ending at or after 8:00pm is
+  an evening shift; one starting before 10:00am is an opening shift. Never
   give a person an opening shift the day after their evening shift — counting
   \`existingAssignments\` and \`adjacentAssignments\` (the Sunday before the
   week and the Monday after) as well as your own draft. The server rejects

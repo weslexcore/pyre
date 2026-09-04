@@ -20,14 +20,14 @@ const on = (staffId: string, date: string, startsAt: string, endsAt: string) => 
 
 describe('thresholds', () => {
   it('reads an evening off the end time and an opening off the start', () => {
-    expect(EVENING_SHIFT_ENDS_MIN).toBe(19 * 60);
-    expect(OPENING_SHIFT_STARTS_MIN).toBe(11 * 60);
+    expect(EVENING_SHIFT_ENDS_MIN).toBe(20 * 60);
+    expect(OPENING_SHIFT_STARTS_MIN).toBe(10 * 60);
     expect(isEveningAssignment('20:30:00')).toBe(true);
-    expect(isEveningAssignment('19:00')).toBe(true);
-    expect(isEveningAssignment('18:30')).toBe(false);
+    expect(isEveningAssignment('20:00')).toBe(true);
+    expect(isEveningAssignment('19:30')).toBe(false);
     expect(isOpeningAssignment('05:00:00')).toBe(true);
-    expect(isOpeningAssignment('10:59')).toBe(true);
-    expect(isOpeningAssignment('11:00')).toBe(false);
+    expect(isOpeningAssignment('09:59')).toBe(true);
+    expect(isOpeningAssignment('10:00')).toBe(false);
   });
 });
 
@@ -57,11 +57,11 @@ describe('findRestViolations', () => {
         on('sam', '2026-09-08', '05:00', '10:00'),
       ])
     ).toEqual([]);
-    // An afternoon start the day after a close is fine.
+    // A mid-morning start the day after a close is fine.
     expect(
       findRestViolations([
         on('sam', '2026-09-07', '14:30', '20:30'),
-        on('sam', '2026-09-08', '11:30', '16:30'),
+        on('sam', '2026-09-08', '10:00', '16:30'),
       ])
     ).toEqual([]);
   });

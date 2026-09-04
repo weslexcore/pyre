@@ -8,10 +8,10 @@
 import { timeToMinutes } from './availability';
 import { addDays } from './hours';
 
-/** An assignment ending at or after this is an evening shift (7pm). */
-export const EVENING_SHIFT_ENDS_MIN = 19 * 60;
-/** An assignment starting before this is an opening shift (11am). */
-export const OPENING_SHIFT_STARTS_MIN = 11 * 60;
+/** An assignment ending at or after this is an evening shift (8pm). */
+export const EVENING_SHIFT_ENDS_MIN = 20 * 60;
+/** An assignment starting before this is an opening shift (10am). */
+export const OPENING_SHIFT_STARTS_MIN = 10 * 60;
 
 export function isEveningAssignment(endsAt: string): boolean {
   return timeToMinutes(endsAt) >= EVENING_SHIFT_ENDS_MIN;
