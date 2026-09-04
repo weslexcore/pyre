@@ -102,8 +102,19 @@ const pillClass = (active: boolean) =>
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
-// A duty someone holds on a shift, read-only under their name on the board.
-const dutyChipClass = 'rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70';
+// Sage marks duties wherever they appear — chip and picker both — so they
+// read as their own axis next to the red role pills. The two answer different
+// questions about the same person: role is the hours, duties are the jobs.
+const dutyChipClass =
+  'rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-sage)]';
+
+/** The role pills' shape in sage, for the duty picker. */
+const dutyPillClass = (active: boolean) =>
+  `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+    active
+      ? 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/20 text-[var(--pyre-creme)]'
+      : 'border-white/10 bg-white/5 text-white/50 hover:border-[var(--pyre-sage)]/50 hover:text-white'
+  }`;
 
 /** "Set Up (A) should pair with Break Down (A)" — the fix, not just the fault. */
 const pairingAdvice = (setup: AssignmentDuty): string => {
@@ -1735,7 +1746,7 @@ function ShiftDetail({
                       canViewSops ? (
                         <a
                           key={duty}
-                          className={`${dutyChipClass} underline decoration-white/20 hover:text-white`}
+                          className={`${dutyChipClass} underline decoration-[var(--pyre-sage)]/40 hover:bg-[var(--pyre-sage)]/20 hover:text-[var(--pyre-creme)]`}
                           href={`/admin/sops/${ASSIGNMENT_DUTY_SOPS[duty]}`}
                           title={dutyTitle(duty)}
                         >
@@ -2293,7 +2304,7 @@ function AssignmentEditor({
             <button
               key={duty}
               type="button"
-              className={pillClass(duties.includes(duty))}
+              className={dutyPillClass(duties.includes(duty))}
               title={dutyTitle(duty)}
               aria-pressed={duties.includes(duty)}
               onClick={() => setDuties((current) => toggleDuty(current, duty))}

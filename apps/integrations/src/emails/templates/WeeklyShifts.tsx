@@ -29,10 +29,11 @@ const shiftNote = {
   fontSize: '13px',
 };
 
-// The duties they hold on the shift — set apart from the shift's own notes.
+// The duties they hold on the shift — sage, the same colour the board marks
+// them in, and set apart from the shift's own notes.
 const shiftDuties = {
   ...shiftDetail,
-  color: COLORS.gold,
+  color: COLORS.sage,
   fontSize: '13px',
 };
 
