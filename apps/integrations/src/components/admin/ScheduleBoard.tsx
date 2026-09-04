@@ -2243,7 +2243,8 @@ function AssignmentEditor({
   const [role, setRole] = useState<AssignmentRole>(assignment.role);
   // Duties are a set, independent of the hours above: someone can work the
   // full window and still hold only Set Up (A), or hold Host and Break Down (B).
-  // Taking a half brings the same letter in the other phase along (toggleDuty).
+  // Taking a half fills in the same letter in the other phase and that side's
+  // in-session duty (toggleDuty); every part of that stays editable.
   const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
   const mismatches = mismatchedDutyPairs(duties);
 
@@ -2319,6 +2320,10 @@ function AssignmentEditor({
           ))}
         </div>
       ))}
+      <p className="font-mono text-[10px] text-white/35">
+        Taking a half fills in its pair and that side's in-session duty — A is fire and water, B is
+        the space and guest areas. Change any of it.
+      </p>
       {mismatches.length > 0 && (
         <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
           ⚠ {mismatches.map(([setup]) => pairingAdvice(setup)).join('; ')} — whoever set a side up

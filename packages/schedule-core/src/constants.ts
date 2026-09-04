@@ -116,6 +116,19 @@ export const DUTY_PAIRS = {
   breakdown_b: 'setup_b',
 } as const satisfies Partial<Record<AssignmentDuty, AssignmentDuty>>;
 
+/**
+ * The in-session duty each side falls to. A is fire and water — the saunas
+ * and plunges the Customer Care SOP covers — and B is space prep and guest
+ * areas, which is the Host's front of house. A default only: taking a half
+ * fills this in, and an admin is free to change the mix afterwards.
+ */
+export const DUTY_SIDE_DEFAULTS = {
+  setup_a: 'customer_care',
+  breakdown_a: 'customer_care',
+  setup_b: 'host',
+  breakdown_b: 'host',
+} as const satisfies Partial<Record<AssignmentDuty, AssignmentDuty>>;
+
 /** The letters split across phases — Set Up (A) with Break Down (B). */
 const DUTY_SPLIT_SIDES = {
   setup_a: 'breakdown_b',
@@ -128,11 +141,13 @@ export function pairedDutyFor(duty: AssignmentDuty): AssignmentDuty | null {
 }
 
 /**
- * Add or remove `duty`, keeping the pairing: taking a set-up half brings the
- * matching break-down half along, so the usual case is one click instead of
- * two. Nothing is ever auto-removed — someone covering a shift alone holds
- * both halves of both phases, and splitting the letters on purpose has to
- * stay possible.
+ * Add or remove `duty`, filling in what taking a half usually implies: the
+ * matching half in the other phase, and that side's in-session duty. One
+ * click instead of three for the common case.
+ *
+ * Nothing is ever auto-removed, so every part of the mix stays an admin's to
+ * change — drop the in-session duty and pick the other one, split the
+ * letters, or (working a shift alone) hold every half at once.
  */
 export function toggleDuty(duties: readonly string[], duty: AssignmentDuty): AssignmentDuty[] {
   const held = new Set(normalizeDuties(duties));
@@ -143,6 +158,10 @@ export function toggleDuty(duties: readonly string[], duty: AssignmentDuty): Ass
   held.add(duty);
   const pair = pairedDutyFor(duty);
   if (pair) held.add(pair);
+  const inSession = duty in DUTY_SIDE_DEFAULTS
+    ? DUTY_SIDE_DEFAULTS[duty as keyof typeof DUTY_SIDE_DEFAULTS]
+    : null;
+  if (inSession) held.add(inSession);
   return normalizeDuties([...held]);
 }
 

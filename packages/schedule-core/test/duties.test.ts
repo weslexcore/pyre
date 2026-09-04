@@ -11,6 +11,7 @@ import {
 	ASSIGNMENT_DUTY_SOPS,
 	mismatchedDutyPairs,
 	DUTY_PHASES,
+	DUTY_SIDE_DEFAULTS,
 	formatDuties,
 	normalizeDuties,
 	pairedDutyFor,
@@ -59,12 +60,20 @@ describe("the A/B pairing rule", () => {
 		expect(pairedDutyFor("customer_care")).toBeNull();
 	});
 
-	it("brings the matching half along when a half is taken", () => {
-		expect(toggleDuty([], "setup_a")).toEqual(["setup_a", "breakdown_a"]);
-		expect(toggleDuty([], "breakdown_b")).toEqual(["setup_b", "breakdown_b"]);
+	it("brings the matching half and the side's in-session duty along", () => {
+		expect(toggleDuty([], "setup_a")).toEqual([
+			"setup_a",
+			"customer_care",
+			"breakdown_a",
+		]);
+		expect(toggleDuty([], "breakdown_b")).toEqual([
+			"setup_b",
+			"host",
+			"breakdown_b",
+		]);
 	});
 
-	it("adds an in-session duty on its own", () => {
+	it("adds an in-session duty on its own, implying no halves", () => {
 		expect(toggleDuty(["setup_a"], "host")).toEqual(["setup_a", "host"]);
 	});
 
@@ -74,15 +83,32 @@ describe("the A/B pairing rule", () => {
 		]);
 	});
 
+	it("lets an admin swap the in-session duty the side defaulted to", () => {
+		const defaulted = toggleDuty([], "setup_a");
+		const swapped = toggleDuty(toggleDuty(defaulted, "customer_care"), "host");
+		expect(swapped).toEqual(["setup_a", "host", "breakdown_a"]);
+	});
+
 	it("lets someone working alone hold both halves of both phases", () => {
 		const solo = toggleDuty(toggleDuty([], "setup_a"), "setup_b");
 		expect(solo).toEqual([
 			"setup_a",
 			"setup_b",
+			"host",
+			"customer_care",
 			"breakdown_a",
 			"breakdown_b",
 		]);
 		expect(mismatchedDutyPairs(solo)).toEqual([]);
+	});
+});
+
+describe("DUTY_SIDE_DEFAULTS", () => {
+	it("sends the fire-and-water side to customer care, the space side to host", () => {
+		expect(DUTY_SIDE_DEFAULTS.setup_a).toBe("customer_care");
+		expect(DUTY_SIDE_DEFAULTS.breakdown_a).toBe("customer_care");
+		expect(DUTY_SIDE_DEFAULTS.setup_b).toBe("host");
+		expect(DUTY_SIDE_DEFAULTS.breakdown_b).toBe("host");
 	});
 });
 
