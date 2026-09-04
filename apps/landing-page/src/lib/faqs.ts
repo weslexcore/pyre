@@ -11,7 +11,7 @@ const faqs: FAQContent = {
     {
       question: 'Where should I park?',
       answer:
-        "Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.",
+        'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.',
     },
     {
       question: 'How hot does the sauna get?',
