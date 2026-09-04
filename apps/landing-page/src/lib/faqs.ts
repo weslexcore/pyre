@@ -38,6 +38,11 @@ const faqs: FAQContent = {
         'We recommend booking in advance to guarantee your preferred time slot. Walk-ins are welcome based on availability, but booking ensures you get your desired session time.',
     },
     {
+      question: 'What happens in bad weather?',
+      answer:
+        "We're open rain or shine and only cancel for thunder, lightning, or other extreme weather. If weather ends your session before you've completed at least three-quarters of it, we refund your credits.",
+    },
+    {
       question: 'What are the benefits of contrast therapy?',
       answer:
         'Contrast therapy can improve circulation, reduce muscle soreness, boost immune function, enhance mental clarity, reduce stress, and promote better sleep. Regular practice amplifies these benefits.',
