@@ -1,7 +1,7 @@
 import type { MenuSheetData } from '../../templates/menu-sheet/types.ts';
 
 export const menu: MenuSheetData = {
-  eyebrow: 'Use credits for open hours, guided classes, + select events',
+  eyebrow: 'Use credits for open hours, guided classes and events',
   heading: 'PRICING',
   categories: [
     {
