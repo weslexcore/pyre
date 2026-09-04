@@ -1,0 +1,26 @@
+# Dependabot configuration for the Pyre monorepo.
+#
+# One npm entry, rooted at "/". This is a Yarn 4 workspaces monorepo, so the
+# whole tree resolves from the root lockfile — adding per-app entries makes
+# Dependabot open duplicate PRs for the same advisory (one for "/" and another
+# for "/apps/landing-page"), which is how the alert backlog got so noisy.
+#
+# Known limitation: Dependabot runs security updates with
+# update-subdependencies disabled, so an advisory on a *transitive* package
+# fails with "security_update_not_possible" and no PR is ever opened. Those
+# have to be fixed by hand with a "resolutions" entry in the root package.json.
+# If an alert seems stuck forever, that is why.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Bundle routine bumps into one reviewable PR instead of dozens.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch

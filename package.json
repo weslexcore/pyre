@@ -22,7 +22,6 @@
     "typescript": "^6.0.3"
   },
   "resolutions": {
-    "@vercel/routing-utils": "5.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "yaml@2.7.1": "^2.8.3"
