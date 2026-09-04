@@ -60,12 +60,18 @@ data file.
          ],
        },
      ],
+     footnote: 'Prices include tax',
    };
    ```
 
 4. Each item can have `chips` (pill-style variants) **or** `description` (a one-line note) — both
-   are optional, and both can be omitted for a bare name/price row. `MenuItem` / `MenuFooter` are
-   re-exported from the [`menu`](../menu/types.ts) template.
+   are optional, and both can be omitted for a bare name/price row. `note` adds muted fine print
+   directly under the name/price row (credit validity, rollover terms) and stacks with either.
+   `MenuItem` / `MenuFooter` are re-exported from the [`menu`](../menu/types.ts) template;
+   `MenuSheetItem` is `MenuItem` plus `note`.
+
+   A sheet-level `footnote` renders full-width, centered, between the categories and the pine
+   mark — use it for terms that apply to every item rather than repeating them per row.
 
 5. Export at the `letter` size (8.5×11" @ 300dpi = 2550×3300) from your `post.config.ts`. The
    template scales type up for that canvas via a `@media (min-width: 2000px)` block.
@@ -80,5 +86,7 @@ data file.
 | `.tpl-menu-sheet__name` | Item name | `categories[].items[].name` |
 | `.tpl-menu-sheet__price` | Item price, right-aligned on the name's line | `categories[].items[].price` |
 | `.tpl-menu-sheet__chips` / `.tpl-menu-sheet__chip` | Wrapping list of variants (optional) | `categories[].items[].chips` |
+| `.tpl-menu-sheet__note` | Muted fine print under the row, e.g. "valid 3 months" (optional) | `categories[].items[].note` |
 | `.tpl-menu-sheet__description` | Short note under the name (optional) | `categories[].items[].description` |
+| `.tpl-menu-sheet__footnote` | Full-width fine print above the pine mark (optional) | `footnote` |
 | `.tpl-menu-sheet__pine` | Single centered pine-tree logo at the bottom (fixed) | — |

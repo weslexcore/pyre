@@ -129,6 +129,18 @@
   max-width: 52ch;
 }
 
+/* Fine print under a row — credit validity, rollover terms. Muted so it reads
+   as a qualifier on the price, not as flavor copy. */
+.tpl-menu-sheet__note {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pyre-black);
+  opacity: 0.55;
+}
+
 /* Promotional description (e.g. "best value") called out in gold. */
 .tpl-menu-sheet__description--accent {
   color: var(--pyre-gold);
@@ -151,6 +163,16 @@
   padding: 7px 13px;
   border: 1px solid var(--pyre-blue);
   border-radius: 999px;
+}
+
+/* Full-width fine print between the categories and the pine mark. */
+.tpl-menu-sheet__footnote {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--pyre-black);
+  opacity: 0.6;
 }
 
 /* Single centered pine-tree logo in place of a text footer. */
@@ -203,6 +225,12 @@
   }
   .tpl-menu-sheet__description {
     font-size: 38px;
+  }
+  .tpl-menu-sheet__note {
+    font-size: 32px;
+  }
+  .tpl-menu-sheet__footnote {
+    font-size: 34px;
   }
   .tpl-menu-sheet__chips {
     gap: 16px;

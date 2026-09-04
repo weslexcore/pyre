@@ -1,11 +1,14 @@
-import type { MenuCategory, MenuItem, MenuSheetData } from './types.ts';
+import type { MenuCategory, MenuSheetData, MenuSheetItem } from './types.ts';
 
 export function renderMenuSheet(data: MenuSheetData, root: HTMLElement): void {
-  root.replaceChildren(
+  const children: HTMLElement[] = [
     buildHeader(data.eyebrow, data.heading),
     buildCategories(data.categories),
-    buildPineMark()
-  );
+  ];
+  if (data.footnote) children.push(buildFootnote(data.footnote));
+  children.push(buildPineMark());
+
+  root.replaceChildren(...children);
 }
 
 function buildHeader(eyebrow: string, heading: string): HTMLElement {
@@ -47,7 +50,7 @@ function buildCategory(category: MenuCategory): HTMLElement {
   return section;
 }
 
-function buildItem(item: MenuItem): HTMLElement {
+function buildItem(item: MenuSheetItem): HTMLElement {
   const li = document.createElement('li');
   li.className = 'tpl-menu-sheet__item';
 
@@ -72,6 +75,13 @@ function buildItem(item: MenuItem): HTMLElement {
   row.append(name, price);
   li.append(row);
 
+  if (item.note) {
+    const note = document.createElement('p');
+    note.className = 'tpl-menu-sheet__note';
+    note.textContent = item.note;
+    li.append(note);
+  }
+
   if (item.chips?.length) {
     const chips = document.createElement('ul');
     chips.className = 'tpl-menu-sheet__chips';
@@ -93,6 +103,14 @@ function buildItem(item: MenuItem): HTMLElement {
   }
 
   return li;
+}
+
+/* Full-width fine print (credit validity, sharing terms) above the pine mark. */
+function buildFootnote(text: string): HTMLElement {
+  const p = document.createElement('p');
+  p.className = 'tpl-menu-sheet__footnote';
+  p.textContent = text;
+  return p;
 }
 
 /* Single centered pine-tree logo in place of a text footer
