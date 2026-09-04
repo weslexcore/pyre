@@ -32,7 +32,11 @@ type Registry = { [K in EmailTemplateKey]: TemplateEntry<K> };
 // Add a template here and to EmailPropsByTemplate (types.ts) to register a new email.
 export const EMAIL_TEMPLATES: Registry = {
   confirmation: {
-    subject: (p) => `You're booked: ${p.sessionTitle}`,
+    // The date rides in the subject so the inbox row alone answers "when?".
+    subject: (p) =>
+      p.timeLabel
+        ? `You're booked: ${p.sessionTitle} · ${p.dateLabel}`
+        : `You're booked: ${p.sessionTitle}`,
     Component: ConfirmationEmail,
   },
   'first-timer-welcome': {

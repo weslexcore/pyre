@@ -10,7 +10,8 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 const log = createWebhookLogger('MomenceEvents');
 
 const MOMENCE_API_V1 = 'https://api.momence.com/api/v1';
-const TIME_ZONE = 'America/New_York';
+/** The bathhouse's wall-clock zone; every customer-facing time is rendered in it. */
+export const TIME_ZONE = 'America/New_York';
 
 interface MomenceEventLite {
   id: number;
@@ -28,7 +29,7 @@ export interface ResolvedSession {
   sessionType: string;
   title: string;
   dateLabel: string; // e.g. "Wed, February 12, 2026"
-  timeLabel: string; // e.g. "6:00 PM - 8:00 PM"
+  timeLabel: string; // e.g. "6:00 PM – 8:00 PM EST"
   location: string;
   isoDate: string;
   /** End of the session (`dateTime + duration`), ISO 8601 UTC. */
@@ -46,7 +47,7 @@ const DEFAULT_SESSION_TYPE = 'general';
 // vocabulary set on the event, so we key off them rather than parsing the
 // free-form title. Match is case-insensitive; add new tag spellings here.
 // Canonical types must match the keys in FAQS_BY_TYPE (faq-content.ts) and
-// CONFIRMATION_BY_TYPE (booking-confirmation.ts).
+// CONFIRMATION_CONTENT (confirmation-content.ts).
 const TAG_TO_TYPE: Record<string, string> = {
   guided: 'guided',
   social: 'social',
@@ -81,17 +82,33 @@ function formatDate(isoDate: string): string {
   });
 }
 
+/** Clock time in the bathhouse zone, e.g. "6:00 PM". */
+export function formatClockTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: TIME_ZONE,
+  });
+}
+
+/** Short zone abbreviation in effect on `date`, e.g. "EDT" or "EST". */
+export function formatZoneAbbrev(date: Date): string {
+  const part = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIME_ZONE,
+    timeZoneName: 'short',
+  })
+    .formatToParts(date)
+    .find((p) => p.type === 'timeZoneName');
+  return part?.value ?? 'ET';
+}
+
+// The zone is spelled out once so guests booking from elsewhere (or reading on
+// a phone set to another zone) aren't left guessing which clock we mean.
 function formatTimeRange(isoDate: string, durationMinutes: number): string {
   const start = new Date(isoDate);
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-  const fmt = (d: Date) =>
-    d.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: TIME_ZONE,
-    });
-  return `${fmt(start)} - ${fmt(end)}`;
+  return `${formatClockTime(start)} – ${formatClockTime(end)} ${formatZoneAbbrev(start)}`;
 }
 
 async function fetchEvents(): Promise<MomenceEventLite[]> {

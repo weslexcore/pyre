@@ -9,6 +9,8 @@ export function SocialConfirmation(props: ConfirmationEmailProps) {
 
 SocialConfirmation.PreviewProps = {
   ...sampleConfirmationProps,
+  timeLabel: '6:00 PM – 8:00 PM EDT',
+  arrivalLabel: 'Arrive anytime between 6:00 PM and 7:00 PM to check in and get changed.',
   sessionType: 'social',
   sessionTitle: 'Social Evening w/ Boy Lichtenstein',
   sessionImageUrl:
