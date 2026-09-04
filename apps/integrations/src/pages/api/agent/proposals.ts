@@ -349,6 +349,7 @@ export const POST: APIRoute = async ({ request }) => {
         starts_at: a.startsAt,
         ends_at: a.endsAt,
         role: (a.columns.role as string) ?? 'full',
+        duties: (a.columns.duties as string[]) ?? [],
         notes: (a.columns.notes as string | null) ?? null,
         proposal_id: proposalId,
         is_draft: true,

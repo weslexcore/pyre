@@ -66,6 +66,7 @@ const assignment = (over: Record<string, unknown> = {}) => ({
   starts_at: '14:30',
   ends_at: '20:30',
   role: 'full',
+  duties: [],
   is_draft: false,
   ...over,
 });
@@ -178,6 +179,27 @@ describe('runWeeklyShiftEmails', () => {
           'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-20&shift=shift-2',
       },
     ]);
+  });
+
+  it('spells out the duties someone holds, and omits the line when they hold none', async () => {
+    getDb.mockReturnValue(
+      fakeDb({
+        shifts: [shift(), shift({ id: 'shift-2', shift_date: '2026-08-20', label: 'Morning' })],
+        shift_assignments: [
+          assignment({ duties: ['breakdown_a', 'host'] }),
+          assignment({ id: 'a-2', shift_id: 'shift-2' }),
+        ],
+        staff: [person()],
+        sub_requests: [],
+      })
+    );
+
+    await runWeeklyShiftEmails(ctx);
+
+    const [withDuties, without] = sendTemplate.mock.calls[0][0].props.shifts;
+    // Phase order, not the order they were stored in.
+    expect(withDuties.dutiesLabel).toBe('Host · Break Down (A)');
+    expect(without).not.toHaveProperty('dutiesLabel');
   });
 
   it('does not email anyone without locked-in hours', async () => {

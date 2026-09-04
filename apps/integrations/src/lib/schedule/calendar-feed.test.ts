@@ -24,6 +24,7 @@ const assignment = (over: Partial<ShiftAssignmentRow> = {}): ShiftAssignmentRow 
     starts_at: '14:00:00',
     ends_at: '20:30:00',
     role: 'full',
+    duties: [],
     notes: null,
     is_draft: false,
     updated_at: '2026-08-13T14:22:11.000Z',
@@ -92,6 +93,14 @@ describe('buildPersonalEvents', () => {
     const [event] = personal(shift({ status: 'cancelled' }));
     expect(event.status).toBe('CANCELLED');
     expect(event.description).toContain('cancelled');
+  });
+
+  it('lists the duties they hold, and stays quiet when there are none', () => {
+    const [event] = personal(
+      shift({ assignments: [assignment({ duties: ['breakdown_b', 'setup'] })] })
+    );
+    expect(event.description).toContain('Duties: Setup · Break Down (B)');
+    expect(personal(shift())[0].description).not.toContain('Duties:');
   });
 
   it('carries shift notes into the description', () => {

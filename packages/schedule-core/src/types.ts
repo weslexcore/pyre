@@ -4,6 +4,8 @@
 // never UTC. Shared by apps/integrations (which re-exports them from lib/db)
 // and apps/agents.
 
+import type { AssignmentDuty } from "./constants";
+
 /**
  * A person: one row covers both the scheduling roster and dashboard access
  * (the two used to be separate tables — see the merge migration). Managed from
@@ -85,6 +87,13 @@ export interface ShiftAssignmentRow {
 	starts_at: string;
 	ends_at: string;
 	role: "full" | "setup" | "partial";
+	/**
+	 * The jobs this person holds within those hours — set-up, the in-session
+	 * roles (host, customer care), the break-down split. Orthogonal to `role`,
+	 * which is only the window; empty means nobody assigned any. See
+	 * ASSIGNMENT_DUTIES in constants.ts.
+	 */
+	duties: AssignmentDuty[];
 	notes: string | null;
 	proposal_id: string | null;
 	is_draft: boolean;
@@ -125,8 +134,8 @@ export interface ShiftRequestRow {
  * An employee's ask for a sub on a shift they're assigned to. Creating one
  * logs their hours as time off (time_off_id) and emails admins plus everyone
  * available that day; the requester keeps the assignment until a claim swaps
- * it to the claimer. The window/role are copied from the assignment at
- * request time so the swap can recreate them.
+ * it to the claimer. The window, role and duties are copied from the
+ * assignment at request time so the swap can recreate them.
  */
 export interface SubRequestRow {
 	id: string;
@@ -135,6 +144,8 @@ export interface SubRequestRow {
 	starts_at: string;
 	ends_at: string;
 	role: "full" | "setup" | "partial";
+	/** The assignment's duties, snapshotted so the claim can recreate them. */
+	duties: AssignmentDuty[];
 	/** The blackout entry created with the request; null if it was deleted. */
 	time_off_id: string | null;
 	status: "open" | "claimed" | "cancelled";

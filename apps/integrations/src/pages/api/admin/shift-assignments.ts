@@ -1,10 +1,11 @@
 // Assignment mutations for /admin/schedule: put a person on a shift (times
-// default to the shift window), adjust their times/role, or take them off.
+// default to the shift window), adjust their times/role/duties, or take them
+// off.
 // Admin-only, CSRF-guarded in-route. Availability is advisory — the UI warns
 // about time-off overlaps but the API doesn't block them (the admin may have
 // confirmed with the person, as the sheet's notes show).
 
-import type { AssignmentRole } from '@pyre/schedule-core';
+import type { AssignmentDuty, AssignmentRole } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
@@ -106,6 +107,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       starts_at: startsAt,
       ends_at: endsAt,
       role: (fields.role as AssignmentRole) ?? 'full',
+      duties: (fields.duties as AssignmentDuty[]) ?? [],
       notes: (fields.notes as string | null) ?? null,
     })
     .select('*')

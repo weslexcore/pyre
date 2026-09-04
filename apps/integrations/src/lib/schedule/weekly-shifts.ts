@@ -12,7 +12,13 @@
 // means a missed 7am tick self-heals on the 8am one, and somebody staffed
 // later on Monday still gets their email on the next tick.
 
-import { addDays, assignmentHours, utcToEastern, weekStartOf } from '@pyre/schedule-core';
+import {
+  addDays,
+  assignmentHours,
+  formatDuties,
+  utcToEastern,
+  weekStartOf,
+} from '@pyre/schedule-core';
 import type { WeeklyShiftItem } from '@/emails/types';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import {
@@ -177,6 +183,10 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       timeLabel: formatWindowLabel(assignment),
       shiftUrl: `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`,
       ...(ROLE_LABELS[assignment.role] && { roleLabel: ROLE_LABELS[assignment.role] }),
+      // "Setup · Host" — what they're on the hook for, not just when.
+      ...(formatDuties(assignment.duties) && {
+        dutiesLabel: formatDuties(assignment.duties) as string,
+      }),
       ...(shift.notes && { notes: shift.notes }),
       ...(pendingSubs.has(`${shift.id}:${person.id}`) && { subRequested: true }),
     }));

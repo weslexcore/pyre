@@ -6,18 +6,23 @@
 // picked out in gold, with their own name first in each shift's name list.
 
 import {
+  ASSIGNMENT_DUTY_LABELS,
+  ASSIGNMENT_DUTY_SOPS,
   ASSIGNMENT_ROLE_LABELS,
   ASSIGNMENT_ROLES,
+  type AssignmentDuty,
   type AssignmentRole,
   type Availability,
   addDays,
   assignmentHours,
   availabilityFor,
   DOW_LABELS,
+  DUTY_PHASES,
   firstTentativeDate,
   formatShiftNotes,
   minutesToTime,
   missingShiftLead,
+  normalizeDuties,
   SETUP_DURATION_MIN,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
@@ -61,6 +66,8 @@ interface BoardData {
   draftMessages?: ScheduleDraftMessageRow[];
   /** Manage side (schedule:manage / admin) — false renders a read-only board. */
   canManage?: boolean;
+  /** May open /admin/sops — decides whether duty chips link to their SOP. */
+  canViewSops?: boolean;
   /** Admins additionally see the employee-action toggles. */
   isAdmin?: boolean;
   selfStaffId?: string | null;
@@ -90,6 +97,9 @@ const pillClass = (active: boolean) =>
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+
+// A duty someone holds on a shift, read-only under their name on the board.
+const dutyChipClass = 'rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70';
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -363,6 +373,7 @@ export function ScheduleBoard() {
   }, [data]);
 
   const canManage = data?.canManage ?? false;
+  const canViewSops = data?.canViewSops ?? false;
   const isAdmin = data?.isAdmin ?? false;
   const selfId = data?.selfStaffId ?? null;
   const settings = data?.settings ?? DEFAULT_SETTINGS;
@@ -1271,6 +1282,7 @@ export function ScheduleBoard() {
                           busy={busy}
                           run={run}
                           canManage={canManage}
+                          canViewSops={canViewSops}
                           editMode={editShiftId === shift.id}
                           onToggleEditMode={() =>
                             setEditShiftId(editShiftId === shift.id ? null : shift.id)
@@ -1446,6 +1458,7 @@ function ShiftDetail({
   busy,
   run,
   canManage,
+  canViewSops,
   editMode,
   onToggleEditMode,
   selfId,
@@ -1464,6 +1477,8 @@ function ShiftDetail({
   busy: boolean;
   run: (action: () => Promise<{ error?: string }>) => Promise<void>;
   canManage: boolean;
+  /** Whether duty chips link to their SOP, or render as plain labels. */
+  canViewSops: boolean;
   /** Managers read the detail like everyone else until they click Edit —
    * only then do assignment edits and the add-person picker appear. */
   editMode: boolean;
@@ -1696,6 +1711,26 @@ function ShiftDetail({
                     )}
                   </span>
                 </div>
+                {a.duties.length > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {normalizeDuties(a.duties).map((duty) =>
+                      canViewSops ? (
+                        <a
+                          key={duty}
+                          className={`${dutyChipClass} underline decoration-white/20 hover:text-white`}
+                          href={`/admin/sops/${ASSIGNMENT_DUTY_SOPS[duty]}`}
+                          title={`Open the ${ASSIGNMENT_DUTY_LABELS[duty]} SOP`}
+                        >
+                          {ASSIGNMENT_DUTY_LABELS[duty]}
+                        </a>
+                      ) : (
+                        <span key={duty} className={dutyChipClass}>
+                          {ASSIGNMENT_DUTY_LABELS[duty]}
+                        </span>
+                      )
+                    )}
+                  </div>
+                )}
                 {editing && (
                   <AssignmentEditor
                     assignment={a}
@@ -2159,11 +2194,26 @@ function AssignmentEditor({
   assignment: ShiftAssignmentRow;
   shift: BoardShift;
   busy: boolean;
-  onSave: (fields: { startsAt: string; endsAt: string; role: AssignmentRole }) => Promise<void>;
+  onSave: (fields: {
+    startsAt: string;
+    endsAt: string;
+    role: AssignmentRole;
+    duties: AssignmentDuty[];
+  }) => Promise<void>;
 }) {
   const [startsAt, setStartsAt] = useState(hhmm(assignment.starts_at));
   const [endsAt, setEndsAt] = useState(hhmm(assignment.ends_at));
   const [role, setRole] = useState<AssignmentRole>(assignment.role);
+  // Duties are a set, independent of the hours above: someone can work the
+  // full window and still hold only Setup, or hold Host and Break Down (B).
+  const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
+
+  const toggleDuty = (duty: AssignmentDuty) =>
+    setDuties((current) =>
+      normalizeDuties(
+        current.includes(duty) ? current.filter((d) => d !== duty) : [...current, duty]
+      )
+    );
 
   // Full/Setup snap the times to the shift window. The window already carries
   // the buffers (90min lead before the first session, 30min close after the
@@ -2184,32 +2234,53 @@ function AssignmentEditor({
   };
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <input
-        type="time"
-        step={1800}
-        className={`${inputClass} w-auto`}
-        value={startsAt}
-        onChange={(e) => setStartsAt(e.target.value)}
-        aria-label="Assignment start"
-      />
-      <input
-        type="time"
-        step={1800}
-        className={`${inputClass} w-auto`}
-        value={endsAt}
-        onChange={(e) => setEndsAt(e.target.value)}
-        aria-label="Assignment end"
-      />
-      {ASSIGNMENT_ROLES.map((r) => (
-        <button
-          key={r}
-          type="button"
-          className={pillClass(role === r)}
-          onClick={() => applyRole(r)}
-        >
-          {ASSIGNMENT_ROLE_LABELS[r]}
-        </button>
+    <div className="mt-2 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="time"
+          step={1800}
+          className={`${inputClass} w-auto`}
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+          aria-label="Assignment start"
+        />
+        <input
+          type="time"
+          step={1800}
+          className={`${inputClass} w-auto`}
+          value={endsAt}
+          onChange={(e) => setEndsAt(e.target.value)}
+          aria-label="Assignment end"
+        />
+        {ASSIGNMENT_ROLES.map((r) => (
+          <button
+            key={r}
+            type="button"
+            className={pillClass(role === r)}
+            onClick={() => applyRole(r)}
+          >
+            {ASSIGNMENT_ROLE_LABELS[r]}
+          </button>
+        ))}
+      </div>
+      {DUTY_PHASES.map((phase) => (
+        <div key={phase.key} className="flex flex-wrap items-center gap-2">
+          <span className="w-20 shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/40">
+            {phase.label}
+          </span>
+          {phase.duties.map((duty) => (
+            <button
+              key={duty}
+              type="button"
+              className={pillClass(duties.includes(duty))}
+              title={`Assign or clear ${ASSIGNMENT_DUTY_LABELS[duty]}`}
+              aria-pressed={duties.includes(duty)}
+              onClick={() => toggleDuty(duty)}
+            >
+              {ASSIGNMENT_DUTY_LABELS[duty]}
+            </button>
+          ))}
+        </div>
       ))}
       <button
         type="button"
@@ -2220,7 +2291,7 @@ function AssignmentEditor({
             ? 'Saving accepts this AI draft onto the live schedule with your changes'
             : undefined
         }
-        onClick={() => void onSave({ startsAt, endsAt, role })}
+        onClick={() => void onSave({ startsAt, endsAt, role, duties })}
       >
         {assignment.is_draft ? 'Save & accept' : 'Save'}
       </button>

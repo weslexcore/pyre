@@ -7,7 +7,7 @@
 
 import { utcToEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { hasScheduleManage } from '@/components/admin/adminTools';
+import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
@@ -54,6 +54,12 @@ export interface ScheduleBoardPayload {
   draftMessages?: ScheduleDraftMessageRow[];
   /** Whether the caller holds schedule:manage (or is an admin). */
   canManage: boolean;
+  /**
+   * Whether the caller may open /admin/sops — the board links each duty to
+   * the SOP defining it, and a viewer without that grant gets a plain label
+   * instead of a link that would bounce them.
+   */
+  canViewSops: boolean;
   /**
    * Whether the caller is an admin — gates the hours report's cost column,
    * and only admins receive other people's pay_rate (see redactPay below).
@@ -253,6 +259,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       stipendIds.has(o.stipend_id)
     ),
     canManage,
+    canViewSops: canViewPage(gate.access, '/admin/sops'),
     isAdmin: gate.access.isAdmin,
     selfStaffId,
     shiftRequests,

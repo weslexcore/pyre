@@ -109,6 +109,8 @@ export interface ShapedShift {
   crew: Array<{
     name: string;
     role: ShiftAssignmentRow['role'];
+    /** The jobs they hold on the shift; empty when none were assigned. */
+    duties: ShiftAssignmentRow['duties'];
     startsAt: string;
     endsAt: string;
     hours: number;
@@ -147,6 +149,7 @@ export function shapeShifts(
         .map((a) => ({
           name: nameOf.get(a.staff_id) ?? 'Unknown',
           role: a.role,
+          duties: a.duties,
           startsAt: clock(a.starts_at),
           endsAt: clock(a.ends_at),
           hours: round1(assignmentHours(a.starts_at, a.ends_at)),

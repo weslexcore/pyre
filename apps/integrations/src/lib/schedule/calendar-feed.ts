@@ -6,6 +6,7 @@
 // Times come straight off the rows as ET wall clock; generateIcsCalendar names
 // that clock with TZID rather than converting to an instant.
 
+import { formatDuties } from '@pyre/schedule-core';
 import type { LocalCalendarEvent } from '@/lib/calendar/ics';
 import { VENUE_ADDRESS } from '@/lib/calendar/links';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
@@ -72,6 +73,9 @@ export function buildPersonalEvents(args: {
       location: VENUE_ADDRESS,
       description: describe([
         `${shift.label}, ${formatWindowLabel(mine)}`,
+        // Duties travel with the event so the phone shows what the shift is,
+        // not only when it is.
+        formatDuties(mine.duties) && `Duties: ${formatDuties(mine.duties)}`,
         coworkers.length > 0
           ? `With: ${coworkers.join(', ')}`
           : 'You are on your own for this one.',

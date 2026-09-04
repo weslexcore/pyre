@@ -177,6 +177,8 @@ export interface WeeklyShiftItem {
   shiftUrl: string;
   /** Set for 'setup'/'partial' assignments — omitted for a full window. */
   roleLabel?: string;
+  /** The jobs they hold, e.g. "Setup · Host"; omitted when none are assigned. */
+  dutiesLabel?: string;
   /** The shift's notes, if any (e.g. "Private event — 20 guests"). */
   notes?: string;
   /** True while the recipient has an open sub request on this shift. */

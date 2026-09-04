@@ -29,6 +29,13 @@ const shiftNote = {
   fontSize: '13px',
 };
 
+// The duties they hold on the shift — set apart from the shift's own notes.
+const shiftDuties = {
+  ...shiftDetail,
+  color: COLORS.gold,
+  fontSize: '13px',
+};
+
 const shiftLink = {
   color: COLORS.creme,
   textDecoration: 'underline',
@@ -46,6 +53,7 @@ function ShiftRow({ shift }: { shift: WeeklyShiftItem }) {
         {shift.shiftLabel}
         {shift.roleLabel ? ` (${shift.roleLabel})` : ''}
       </Text>
+      {shift.dutiesLabel ? <Text style={shiftDuties}>{shift.dutiesLabel}</Text> : null}
       {shift.notes ? <Text style={shiftNote}>{shift.notes}</Text> : null}
       {shift.subRequested ? (
         <Text style={shiftNote}>Sub requested — yours until someone claims it.</Text>
@@ -108,6 +116,7 @@ WeeklyShifts.PreviewProps = {
       shiftLabel: 'Morning',
       timeLabel: '8a–10a',
       roleLabel: 'setup',
+      dutiesLabel: 'Setup · Break Down (A)',
       notes: 'Private event — 20 guests',
       shiftUrl:
         'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-20&shift=example-2',

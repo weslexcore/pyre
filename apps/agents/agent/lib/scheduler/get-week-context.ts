@@ -201,6 +201,9 @@ export const getWeekContextTool = defineTool({
         startsAt: a.starts_at.slice(0, 5),
         endsAt: a.ends_at.slice(0, 5),
         role: a.role,
+        // Jobs already spoken for on this shift, so a draft doesn't hand the
+        // same one to two people.
+        duties: a.duties,
       })),
       recentWeeklyHours,
       historyPatterns,

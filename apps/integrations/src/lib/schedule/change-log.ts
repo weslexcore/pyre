@@ -116,16 +116,22 @@ export function summarizeDiff(diff: {
   const scalar = (v: unknown): string => {
     if (v == null || v === '') return '(none)';
     if (typeof v === 'string' && TIME_WITH_SECONDS_RE.test(v)) return v.slice(0, 5);
+    // Set-valued columns (an assignment's duties) read better spelled out
+    // than as "changed" — an emptied set is still "(none)".
+    if (Array.isArray(v)) return v.length > 0 ? v.join(', ') : '(none)';
     return String(v);
   };
+  const printable = (v: unknown): boolean =>
+    v == null ||
+    ['string', 'number', 'boolean'].includes(typeof v) ||
+    (Array.isArray(v) && v.every((item) => ['string', 'number', 'boolean'].includes(typeof item)));
   return Object.keys(diff.after)
     .map((key) => {
       const before = diff.before[key];
       const after = diff.after[key];
-      const scalars =
-        (before == null || ['string', 'number', 'boolean'].includes(typeof before)) &&
-        (after == null || ['string', 'number', 'boolean'].includes(typeof after));
-      return scalars ? `${key} ${scalar(before)} → ${scalar(after)}` : `${key} changed`;
+      return printable(before) && printable(after)
+        ? `${key} ${scalar(before)} → ${scalar(after)}`
+        : `${key} changed`;
     })
     .join(', ');
 }

@@ -51,6 +51,14 @@ export const saveProposalTool = defineTool({
           startsAt: timeString.nullish().describe('Defaults to the shift window'),
           endsAt: timeString.nullish(),
           role: z.enum(['full', 'setup', 'partial']).default('full'),
+          duties: z
+            .array(
+              z.enum(['setup', 'host', 'customer_care', 'breakdown', 'breakdown_a', 'breakdown_b'])
+            )
+            .default([])
+            .describe(
+              'Jobs this person holds within their hours — set-up, the in-session roles, the break-down split. Independent of role (the hours). Leave empty unless the week note or the existing schedule says who does what.'
+            ),
           notes: z.string().max(500).nullish(),
         })
       )

@@ -2,7 +2,13 @@
 // routes (cookie-authed edits) AND the agent proposals endpoint, so an
 // AI-drafted shift passes exactly the same rules as a hand-entered one.
 
-import { ASSIGNMENT_ROLES, type AssignmentRole } from '@pyre/schedule-core';
+import {
+  ASSIGNMENT_DUTIES,
+  ASSIGNMENT_ROLES,
+  type AssignmentDuty,
+  type AssignmentRole,
+  normalizeDuties,
+} from '@pyre/schedule-core';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
@@ -65,7 +71,7 @@ export function parseShiftFields(body: Record<string, unknown>): Record<string, 
   return fields;
 }
 
-/** Validate assignment time/role/notes fields. Same contract as parseShiftFields. */
+/** Validate assignment time/role/duties/notes fields. Same contract as parseShiftFields. */
 export function parseAssignmentFields(
   body: Record<string, unknown>
 ): Record<string, unknown> | string {
@@ -85,6 +91,20 @@ export function parseAssignmentFields(
       return `role must be one of: ${ASSIGNMENT_ROLES.join(', ')}`;
     }
     fields.role = body.role;
+  }
+  // Duties are a set, not a scalar: sending them at all replaces the whole
+  // set (an empty array clears them). Normalising here — dedupe and canonical
+  // phase order — keeps the stored array stable however it was clicked or
+  // drafted, since the array check constraint can't do either.
+  if (body.duties !== undefined) {
+    if (!Array.isArray(body.duties)) return 'duties must be an array';
+    const unknown = body.duties.find(
+      (d) => typeof d !== 'string' || !ASSIGNMENT_DUTIES.includes(d as AssignmentDuty)
+    );
+    if (unknown !== undefined) {
+      return `duties must each be one of: ${ASSIGNMENT_DUTIES.join(', ')}`;
+    }
+    fields.duties = normalizeDuties(body.duties as string[]);
   }
   if (body.notes !== undefined) {
     if (body.notes !== null && typeof body.notes !== 'string') return 'notes must be a string';
