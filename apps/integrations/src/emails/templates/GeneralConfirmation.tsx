@@ -10,6 +10,7 @@ export function GeneralConfirmation(props: ConfirmationEmailProps) {
 
 GeneralConfirmation.PreviewProps = {
   ...sampleConfirmationProps,
+  arrivalLabel: 'Arrive anytime between 10:00 AM and 11:00 AM to check in and get changed.',
   sessionType: 'open hours',
   sessionTitle: 'Open Hours',
 };

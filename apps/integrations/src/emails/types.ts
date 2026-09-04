@@ -12,8 +12,16 @@ export interface CalendarLinks {
 export interface ConfirmationEmailProps {
   firstName: string;
   sessionTitle: string;
+  /** e.g. "Sat, June 20, 2026" */
   dateLabel: string;
+  /** e.g. "10:00 AM – 12:00 PM EDT"; empty when the session couldn't be resolved. */
   timeLabel: string;
+  /**
+   * When to show up, as a clock time (lib/email/arrival.ts). Absent when the
+   * session couldn't be resolved — the line simply doesn't render.
+   */
+  arrivalLabel?: string;
+  /** Momence's event location; normalised to the venue address by the template. */
   location: string;
   // manageUrl: string;
   /** The booked event's own image; falls back to a stock header without it. */

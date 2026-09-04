@@ -34,11 +34,6 @@ const SAUNA_PLUNGE_TIMING: FaqItem = {
     'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits.',
 };
 
-const WHEN_TO_ARRIVE: Record<string, string> = {
-  early: 'Arrive 10-15 minutes early to check in and get changed before things get going.',
-  late: 'Arrive anytime during the first hour of your session to check in and get changed.',
-};
-
 // Shared first-timer FAQ items (mirrors the first-timer welcome email) appended
 // to every confirmation set so even returning guests have the basics on hand.
 const HAVE_QUESTIONS: FaqItem = {
@@ -47,10 +42,17 @@ const HAVE_QUESTIONS: FaqItem = {
     "We are two of America's first certified sauna masters and are here to help you get the most out of your session. If at any point you have questions, just let us know — we're always happy to provide guidance.",
 };
 
+/**
+ * Parking directions. The confirmation email prints this right under the
+ * address on its details card (so it's not repeated in that email's FAQ); the
+ * first-timer welcome still carries it as a question.
+ */
+export const PARKING_DIRECTIONS =
+  'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.';
+
 const PARKING: FaqItem = {
   question: 'Where should I park?',
-  answer:
-    'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.',
+  answer: PARKING_DIRECTIONS,
 };
 
 const CANCELLATION: FaqItem = {
@@ -65,8 +67,10 @@ const WEATHER: FaqItem = {
     "We're open rain or shine - we only close for thunder. If thunder ends your session before you've made it through at least 75% of it, we'll refund your credits.",
 };
 
-/** Shared items appended to the end of every confirmation FAQ set. */
-const FIRST_TIMER_TAIL: FaqItem[] = [HAVE_QUESTIONS, PARKING, CANCELLATION, WEATHER];
+// Shared items appended to the end of every confirmation FAQ set. Parking and
+// arrival time are deliberately absent: the confirmation's details card shows
+// both next to the address and start time, where guests actually look.
+const FIRST_TIMER_TAIL: FaqItem[] = [HAVE_QUESTIONS, CANCELLATION, WEATHER];
 
 /**
  * Curated FAQ set sent with the first-timer welcome email. Kept here (rather
@@ -86,10 +90,6 @@ export const FIRST_TIMER_FAQS: FaqItem[] = [
 /** Used for open hours and any session type without a bespoke set. */
 export const DEFAULT_FAQS: FaqItem[] = [
   WHAT_TO_BRING['regular'],
-  {
-    question: 'When should I arrive?',
-    answer: 'Arrive anytime during the first hour of your session to check in and get changed.',
-  },
   // SAUNA_TEMP,
   // SAUNA_PLUNGE_TIMING,
   ...FIRST_TIMER_TAIL,
@@ -97,46 +97,14 @@ export const DEFAULT_FAQS: FaqItem[] = [
 
 /** Bespoke FAQ sets per session type. */
 export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
-  'open hours': [
-    WHAT_TO_BRING['regular'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['late'],
-    },
-    ...FIRST_TIMER_TAIL,
-  ],
+  'open hours': [WHAT_TO_BRING['regular'], ...FIRST_TIMER_TAIL],
   // Yoga and other fitness classes (pilates, etc.) need a mat, not a swimsuit.
-  yoga: [
-    WHAT_TO_BRING['yoga'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['early'],
-    },
-    ...FIRST_TIMER_TAIL,
-  ],
-  fitness: [
-    WHAT_TO_BRING['yoga'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['early'],
-    },
-    ...FIRST_TIMER_TAIL,
-  ],
+  yoga: [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
+  fitness: [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
   // Sound baths are lie-down sessions, so guests bring a mat.
-  'sound bath': [
-    WHAT_TO_BRING['yoga'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['early'],
-    },
-    ...FIRST_TIMER_TAIL,
-  ],
+  'sound bath': [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
   guided: [
     WHAT_TO_BRING['regular'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['early'],
-    },
     {
       question: 'What happens during a guided session?',
       answer:
@@ -148,10 +116,6 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
   social: [
     WHAT_TO_BRING['regular'],
     {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['late'],
-    },
-    {
       question: 'What is a social session like?',
       answer:
         'Social sessions are a lively, communal sweat — come meet new people or bring a friend. Expect a relaxed, conversational atmosphere.',
@@ -161,10 +125,6 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
   ],
   'special event': [
     WHAT_TO_BRING['regular'],
-    {
-      question: 'When should I arrive?',
-      answer: WHEN_TO_ARRIVE['early'],
-    },
     // SAUNA_TEMP,
     // SAUNA_PLUNGE_TIMING,
     ...FIRST_TIMER_TAIL,

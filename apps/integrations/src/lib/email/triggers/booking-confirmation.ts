@@ -1,7 +1,8 @@
 import { createWebhookLogger, type WebhookTracer } from '@pyre/webhook-core';
 import type { ConfirmationEmailProps } from '@/emails/types';
 import { buildCalendarLinks } from '@/lib/calendar/links';
-import { DIRECTIONS_URL } from '@/lib/email/confirmation-content';
+import { buildArrivalLabel } from '@/lib/email/arrival';
+import { DIRECTIONS_URL, getConfirmationContent } from '@/lib/email/confirmation-content';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
 import { type ResolvedSession, resolveSession } from '@/lib/momence-events';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
@@ -50,6 +51,13 @@ export async function sendBookingConfirmationEmails({
     sessionTitle: session?.title ?? 'Your Pyre session',
     dateLabel: session?.dateLabel ?? 'See your account for details',
     timeLabel: session?.timeLabel ?? '',
+    arrivalLabel: session
+      ? buildArrivalLabel(
+          getConfirmationContent(sessionType).arrival,
+          session.isoDate,
+          session.endIso
+        )
+      : undefined,
     location: session?.location ?? 'Pyre Sauna',
     // manageUrl: `${siteUrl}/account`,
     sessionImageUrl: session?.imageUrl,
