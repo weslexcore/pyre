@@ -4,11 +4,13 @@
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
 // island renders the same filtered tool list the nav uses. Above the cards, a
 // next-shift chip: staff see their own next upcoming shift, admins see the
-// next one on the schedule overall — and under it, every checklist run still
-// open on an SOP this person may view, their own first, so what they are on
-// the hook to finish is the first thing they see.
+// next one on the schedule overall. Under the chip come the SOPs for the
+// duties this person holds on their own current-or-next shift, then every
+// checklist run still open on an SOP they may view, their own first, so what
+// they are on the hook to finish is the first thing they see.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
 import { canViewPage, toolsForAccess } from '@/components/admin/adminTools';
+import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
 import { formatWhen } from '@/components/admin/SopRunsList';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
@@ -25,6 +27,7 @@ import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sop
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { type ActiveRun, loadActiveRuns } from '@/lib/sops/runs';
+import { loadShiftSops, type ShiftSops } from '@/lib/sops/shift-sops';
 
 const access = Astro.locals.adminAccess ?? null;
 const tools = access ? toolsForAccess(access) : [];
@@ -57,19 +60,26 @@ if (db && access) {
   }
 }
 
-// Open checklist runs, for anyone who can reach the SOP library. Same rows
-// the library's own strip shows (loadActiveRuns scopes them to viewable
-// documents); a runs outage just drops the block rather than the page.
+// Open checklist runs and shift duties, for anyone who can reach the SOP
+// library. The runs are the same rows the library's own strip shows
+// (loadActiveRuns scopes them to viewable documents); the shift SOPs are
+// always the viewer's own duties, even for an admin whose chip above is the
+// schedule-wide next shift. Either outage just drops its block, not the page.
 let activeRuns: ActiveRun[] = [];
 let runPeople: PeopleNames = {};
+let shiftSops: ShiftSops | null = null;
 if (db && access && canViewPage(access, '/admin/sops')) {
   const viewer: SopViewer = {
     role: await getSopRole(email, access),
     email: normalizeEmail(email),
   };
-  const { runs } = await loadActiveRuns(db, viewer);
+  const [{ runs }, shift] = await Promise.all([
+    loadActiveRuns(db, viewer),
+    loadShiftSops(db, viewer),
+  ]);
   activeRuns = ownRunsFirst(runs, email);
   runPeople = await getPeopleNames(activeRuns.map((run) => run.started_by));
+  shiftSops = shift;
 }
 
 // Deep-link into the schedule board's month view, same as the calendar's
@@ -128,6 +138,7 @@ const chipWindow = nextShift
         </div>
       )
     }
+    {shiftSops && <ShiftSopsPanel shift={shiftSops} />}
     {
       activeRuns.length > 0 && (
         <section>

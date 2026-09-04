@@ -34,6 +34,7 @@ import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
+import { loadShiftSops } from '@/lib/sops/shift-sops';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -266,6 +267,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   return json({
     sops: sorted.map((sop) => toSummary(sop, role === 'admin')),
     categories: sections,
+    // The duty documents for this caller's own current-or-next shift, so the
+    // library opens on what they are about to do. Null when they hold no
+    // duties (or aren't working); never anyone else's shift.
+    shiftSops: await loadShiftSops(db, viewer),
     // The create form grants access at creation time, so it needs the same
     // roster the settings panel does. Admins only, for the same reason.
     staff: role === 'admin' ? await listGrantablePeople() : undefined,

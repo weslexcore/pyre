@@ -29,6 +29,8 @@ import {
 } from '@/lib/sops/order';
 import type { ActiveRun } from '@/lib/sops/runs';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
+import type { ShiftSops } from '@/lib/sops/shift-sops';
+import { ShiftSopsPanel } from './ShiftSops';
 import {
   type GrantablePerson,
   SopAccessPicker,
@@ -53,6 +55,8 @@ interface ListResponse {
   people?: PeopleNames;
   role: SopRole;
   pins: string[];
+  /** The caller's own current-or-next shift duties; null when they hold none. */
+  shiftSops: ShiftSops | null;
 }
 
 type Drag = { kind: 'sop'; id: string } | { kind: 'category'; name: string };
@@ -193,6 +197,11 @@ export function SopsIndex() {
     return map;
   }, [activeRuns]);
 
+  // The duty documents for the caller's own current-or-next shift, shown
+  // above everything else: what you are about to do beats what is merely
+  // filed on this page.
+  const [shiftSops, setShiftSops] = useState<ShiftSops | null>(null);
+
   // The caller's pinned document ids (personal; shown in the Pinned strip).
   const [pins, setPins] = useState<Set<string>>(new Set());
 
@@ -249,6 +258,7 @@ export function SopsIndex() {
       setRole(body.role);
       setStaff(body.staff ?? []);
       setPins(new Set(body.pins ?? []));
+      setShiftSops(body.shiftSops ?? null);
       setPeople((prev) => ({ ...prev, ...body.people }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load SOPs');
@@ -653,8 +663,11 @@ export function SopsIndex() {
         aria-label="Search SOPs"
       />
 
-      {/* Resume strip: an open checklist is the most urgent thing on this page,
-          so it sits above everything but the search box. */}
+      {/* Shift SOPs, then the resume strip: the duties you are on the hook for
+          this shift, then any checklist already open. Both step aside for a
+          search — a query is a deliberate ask for something else. */}
+      {!searchActive && shiftSops && <ShiftSopsPanel shift={shiftSops} />}
+
       {!searchActive && activeRuns.length > 0 && (
         <section>
           <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
