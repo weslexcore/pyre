@@ -12,7 +12,7 @@ export const menu: MenuSheetData = {
           price: '$25',
           originalPrice: '$50',
           note: 'valid 1 month',
-          description: 'first-timers · once per customer',
+          description: 'first-timers · once per customer, non-transferrable',
         },
         { name: 'single // 1 credit', price: '$25', note: 'valid 1 month' }, // description: 'drop-in visit' },
         { name: 'duo // 2 credits', price: '$45', originalPrice: '$50', note: 'valid 1 month' },
@@ -45,7 +45,7 @@ export const menu: MenuSheetData = {
             '10% off drinks + merch',
             'only 30 available',
           ],
-          description: 'discount for life · billing begins july 2026',
+          description: 'discount for life',
         },
         {
           name: 'founding limited',
@@ -53,11 +53,11 @@ export const menu: MenuSheetData = {
           originalPrice: '$200',
           note: 'credits roll over · valid 1 month from issue',
           chips: ['8 credits/mo', '1 guest pass/mo', '10% off drinks + merch', 'only 30 available'],
-          description: 'discount for life · billing begins july 2026',
+          description: 'discount for life',
         },
       ],
     },
   ],
   footnote:
-    'Credit expiration begins at your first session · all credits are shareable with friends + family',
+    'Credit packs are shareable with friends + family',
 };
