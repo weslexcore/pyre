@@ -25,6 +25,36 @@ describe('buildArrivalLabel', () => {
     );
   });
 
+  it('tells the last one-hour slot of the day to arrive at the start', () => {
+    // 3:00–4:00 PM EDT, closing at 4.
+    const lastStart = '2026-06-20T19:00:00.000Z';
+    const lastEnd = '2026-06-20T20:00:00.000Z';
+    expect(buildArrivalLabel('late', lastStart, lastEnd, { lastOfDay: true })).toBe(
+      'Please arrive at 3:00 PM — this is the last session of the day, and last entry is one hour before we close.'
+    );
+  });
+
+  it('closes the window an hour before the end on a longer last slot', () => {
+    // 2:00–4:00 PM EDT: first hour and last-entry cutoff coincide.
+    expect(
+      buildArrivalLabel('late', '2026-06-20T18:00:00.000Z', '2026-06-20T20:00:00.000Z', {
+        lastOfDay: true,
+      })
+    ).toBe('Arrive anytime between 2:00 PM and 3:00 PM to check in and get changed.');
+    // 2:30–4:00 PM EDT: the cutoff (3:00) wins over the first hour (3:30).
+    expect(
+      buildArrivalLabel('late', '2026-06-20T18:30:00.000Z', '2026-06-20T20:00:00.000Z', {
+        lastOfDay: true,
+      })
+    ).toBe('Arrive anytime between 2:30 PM and 3:00 PM to check in and get changed.');
+  });
+
+  it('leaves early-arrival sessions alone on the last slot', () => {
+    expect(buildArrivalLabel('early', START, END, { lastOfDay: true })).toBe(
+      'Please arrive by 9:45 AM to check in and get changed before we begin.'
+    );
+  });
+
   it('renders in bathhouse time, not UTC', () => {
     // 2026-01-10 18:00 EST (UTC-5).
     expect(buildArrivalLabel('early', '2026-01-10T23:00:00.000Z', '2026-01-11T01:00:00.000Z')).toBe(

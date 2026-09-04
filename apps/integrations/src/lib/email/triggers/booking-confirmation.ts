@@ -55,7 +55,8 @@ export async function sendBookingConfirmationEmails({
       ? buildArrivalLabel(
           getConfirmationContent(sessionType).arrival,
           session.isoDate,
-          session.endIso
+          session.endIso,
+          { lastOfDay: session.isLastOfDay }
         )
       : undefined,
     location: session?.location ?? 'Pyre Sauna',
