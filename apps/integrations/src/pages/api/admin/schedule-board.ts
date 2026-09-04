@@ -5,7 +5,7 @@
 // date filtering, just ownership). Availability and conflicts are computed
 // locally by the islands via lib/schedule.
 
-import { utcToEastern } from '@pyre/schedule-core';
+import { addDays, utcToEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
@@ -85,6 +85,19 @@ export interface ScheduleBoardPayload {
   pendingRequestCount: number;
   /** The admin toggles for the employee-facing actions. */
   settings: ScheduleSettings;
+  /**
+   * Live assignments on the day before `start` and the day after `end`, so
+   * the board's rest-rule check (an evening close followed by next-morning
+   * open) sees across the edges of the range. Names only — no ids to act on.
+   */
+  neighborAssignments: NeighborAssignment[];
+}
+
+export interface NeighborAssignment {
+  staff_id: string;
+  shift_date: string;
+  starts_at: string;
+  ends_at: string;
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -150,6 +163,39 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const byShift = new Map(shifts.map((s) => [s.id, s]));
     for (const assignment of (assignments ?? []) as ShiftAssignmentRow[]) {
       byShift.get(assignment.shift_id)?.assignments.push(assignment);
+    }
+  }
+
+  const { data: neighborShifts, error: neighborError } = await db
+    .from('shifts')
+    .select('id, shift_date')
+    .in('shift_date', [addDays(start, -1), addDays(end, 1)])
+    .eq('is_draft', false)
+    .eq('status', 'active');
+  if (neighborError) return json({ error: neighborError.message }, 500);
+  const neighborAssignments: NeighborAssignment[] = [];
+  if ((neighborShifts ?? []).length > 0) {
+    const dateOf = new Map(
+      (neighborShifts ?? []).map((s) => [s.id as string, s.shift_date as string])
+    );
+    const { data: rows, error } = await db
+      .from('shift_assignments')
+      .select('shift_id, staff_id, starts_at, ends_at')
+      .in('shift_id', [...dateOf.keys()])
+      .eq('is_draft', false);
+    if (error) return json({ error: error.message }, 500);
+    for (const a of (rows ?? []) as Array<{
+      shift_id: string;
+      staff_id: string;
+      starts_at: string;
+      ends_at: string;
+    }>) {
+      neighborAssignments.push({
+        staff_id: a.staff_id,
+        shift_date: dateOf.get(a.shift_id) as string,
+        starts_at: a.starts_at,
+        ends_at: a.ends_at,
+      });
     }
   }
 
@@ -266,6 +312,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     subRequests,
     pendingRequestCount,
     settings: await getScheduleSettings(),
+    neighborAssignments,
   };
 
   if (includeDrafts) {

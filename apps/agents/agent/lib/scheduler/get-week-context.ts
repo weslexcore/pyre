@@ -47,6 +47,10 @@ export const getWeekContextTool = defineTool({
       : addDays(weekStartOf(todayEastern), 7);
     const weekEnd = addDays(weekStart, 6);
     const historyStart = addDays(weekStart, -7 * HISTORY_WEEKS);
+    // The rest rule reaches a day past the week on each side: Sunday before
+    // into Monday, and Sunday into the Monday after.
+    const dayBefore = addDays(weekStart, -1);
+    const dayAfter = addDays(weekEnd, 1);
 
     const [staffRes, shiftsRes, timeOffRes] = await Promise.all([
       db.from('staff').select('*').eq('active', true).order('display_name'),
@@ -54,7 +58,7 @@ export const getWeekContextTool = defineTool({
         .from('shifts')
         .select('*')
         .gte('shift_date', historyStart)
-        .lte('shift_date', weekEnd)
+        .lte('shift_date', dayAfter)
         .eq('is_draft', false)
         .order('shift_date'),
       db.from('time_off').select('*'),
@@ -81,7 +85,7 @@ export const getWeekContextTool = defineTool({
 
     const shiftById = new Map(shifts.map((s) => [s.id, s]));
     const weekShifts = shifts.filter(
-      (s) => s.shift_date >= weekStart && s.status === 'active'
+      (s) => s.shift_date >= weekStart && s.shift_date <= weekEnd && s.status === 'active'
     );
     const historyAssignments = assignments.filter((a) => {
       const shift = shiftById.get(a.shift_id);
@@ -89,7 +93,15 @@ export const getWeekContextTool = defineTool({
     });
     const weekAssignments = assignments.filter((a) => {
       const shift = shiftById.get(a.shift_id);
-      return shift !== undefined && shift.shift_date >= weekStart;
+      return shift !== undefined && shift.shift_date >= weekStart && shift.shift_date <= weekEnd;
+    });
+    const adjacentAssignments = assignments.filter((a) => {
+      const shift = shiftById.get(a.shift_id);
+      return (
+        shift !== undefined &&
+        shift.status === 'active' &&
+        (shift.shift_date === dayBefore || shift.shift_date === dayAfter)
+      );
     });
 
     // Pending shift requests on the week's shifts: people who asked to work
@@ -205,6 +217,18 @@ export const getWeekContextTool = defineTool({
         // same one to two people.
         duties: a.duties,
       })),
+      // Live assignments the day before and after the week, for the rest
+      // rule: an evening close on the Sunday before rules out a Monday open,
+      // and a Sunday close in this week rules out opening the Monday after.
+      adjacentAssignments: adjacentAssignments.map((a) => {
+        const shift = shiftById.get(a.shift_id) as ShiftRow;
+        return {
+          date: shift.shift_date,
+          staffId: a.staff_id,
+          startsAt: a.starts_at.slice(0, 5),
+          endsAt: a.ends_at.slice(0, 5),
+        };
+      }),
       recentWeeklyHours,
       historyPatterns,
     };

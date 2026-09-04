@@ -85,6 +85,10 @@ export const saveProposalTool = defineTool({
         status,
         error: body.error ?? 'Unknown error',
         conflicts: body.conflicts ?? [],
+        // The other rejection reports, so the model can see exactly which
+        // shifts to drop or which evening/opening pairs to pull apart.
+        overfilled: body.overfilled ?? [],
+        restViolations: body.restViolations ?? [],
       };
     }
     return { saved: true, ...body };

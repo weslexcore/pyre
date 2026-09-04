@@ -15,7 +15,7 @@ import {
   timeWindow,
 } from '@/lib/schedule/change-log';
 import { acceptDraftRow } from '@/lib/schedule/draft-accept';
-import { parseShiftFields } from '@/lib/schedule/validate';
+import { checkShiftWindow, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
@@ -113,8 +113,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   // Cross-field time check when only one side changes.
   const starts = (fields.starts_at as string) ?? existing.starts_at;
   const ends = (fields.ends_at as string) ?? existing.ends_at;
-  if (ends.slice(0, 5) <= starts.slice(0, 5))
-    return json({ error: 'endsAt must be after startsAt' }, 400);
+  const windowError = checkShiftWindow(starts, ends);
+  if (windowError) return json({ error: windowError }, 400);
 
   // Editing a Momence shift takes ownership of it: lock it against the sync
   // and treat any divergence flag as resolved by the admin's adjustment.

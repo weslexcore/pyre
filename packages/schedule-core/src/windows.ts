@@ -26,7 +26,16 @@ export interface WindowOptions {
   /** Sessions closer together than this share one window. */
   mergeGapMin: number;
   defaultStaffNeeded: number;
+  /**
+   * A window longer than this is split into shifts, halved (at a :00/:30
+   * boundary) until every piece fits — nobody is scheduled for a nine-hour
+   * shift because Momence ran sessions all day.
+   */
+  maxShiftMin: number;
 }
+
+/** The longest a single shift may run; anything longer is two shifts. */
+export const MAX_SHIFT_MIN = 8 * 60;
 
 export const DEFAULT_WINDOW_OPTIONS: WindowOptions = {
   // 1.5h setup before the first session, 30min shutdown after the last.
@@ -34,6 +43,7 @@ export const DEFAULT_WINDOW_OPTIONS: WindowOptions = {
   closeMin: 30,
   mergeGapMin: 90,
   defaultStaffNeeded: 2,
+  maxShiftMin: MAX_SHIFT_MIN,
 };
 
 export interface CoverageWindow {
@@ -88,6 +98,10 @@ export function deriveCoverageWindows(
   const windows: CoverageWindow[] = [];
   for (const [date, dayEvents] of [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const sorted = [...dayEvents].sort((a, b) => a.startMin - b.startMin);
+    const dayWindows: CoverageWindow[] = [];
+    // The events behind each merged window, so a split can hand each one to
+    // the piece it starts in.
+    const eventsOf = new Map<CoverageWindow, CoverageEvent[]>();
     let current: CoverageWindow | null = null;
     let currentPaddedEnd = 0;
 
@@ -100,6 +114,7 @@ export function deriveCoverageWindows(
         current.endMin = ceilHalfHour(currentPaddedEnd);
         current.sessionRefs.push({ type: event.kind, id: event.id });
         if (!current.titles.includes(event.title)) current.titles.push(event.title);
+        eventsOf.get(current)?.push(event);
       } else {
         current = {
           date,
@@ -111,18 +126,53 @@ export function deriveCoverageWindows(
           titles: [event.title],
         };
         currentPaddedEnd = paddedEnd;
-        windows.push(current);
+        dayWindows.push(current);
+        eventsOf.set(current, [event]);
       }
     }
 
-    for (const window of windows) {
-      if (window.date === date && !window.label) {
-        window.label = labelForWindow(window.startMin, window.endMin);
+    for (const window of dayWindows) {
+      for (const piece of splitLongWindow(window, eventsOf.get(window) ?? [], options.maxShiftMin)) {
+        piece.label = labelForWindow(piece.startMin, piece.endMin);
+        windows.push(piece);
       }
     }
   }
 
   return windows;
+}
+
+/**
+ * Halve a window longer than `maxShiftMin`, and keep halving until every
+ * piece fits, so an all-day run of sessions becomes two shifts instead of
+ * one nine-hour one. The cut lands on a :00/:30 boundary (rounded toward the
+ * start). Each event belongs to the piece it starts in — never to both, so
+ * the sync planner can't match one session to two shifts and swap them.
+ */
+export function splitLongWindow(
+  window: CoverageWindow,
+  events: CoverageEvent[],
+  maxShiftMin: number
+): CoverageWindow[] {
+  const length = window.endMin - window.startMin;
+  if (length <= maxShiftMin) return [window];
+
+  const splitMin = window.startMin + floorHalfHour(length / 2);
+  const piece = (startMin: number, endMin: number, own: CoverageEvent[]): CoverageWindow => ({
+    date: window.date,
+    startMin,
+    endMin,
+    label: '',
+    staffNeeded: window.staffNeeded,
+    sessionRefs: own.map((e) => ({ type: e.kind, id: e.id })),
+    titles: [...new Set(own.map((e) => e.title))],
+  });
+  const first = events.filter((e) => e.startMin < splitMin);
+  const second = events.filter((e) => e.startMin >= splitMin);
+  return [
+    ...splitLongWindow(piece(window.startMin, splitMin, first), first, maxShiftMin),
+    ...splitLongWindow(piece(splitMin, window.endMin, second), second, maxShiftMin),
+  ];
 }
 
 /**

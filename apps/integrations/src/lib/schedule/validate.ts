@@ -7,7 +7,9 @@ import {
   ASSIGNMENT_ROLES,
   type AssignmentDuty,
   type AssignmentRole,
+  MAX_SHIFT_MIN,
   normalizeDuties,
+  timeToMinutes,
 } from '@pyre/schedule-core';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -60,15 +62,26 @@ export function parseShiftFields(body: Record<string, unknown>): Record<string, 
     fields.status = body.status;
   }
 
-  if (
-    typeof fields.starts_at === 'string' &&
-    typeof fields.ends_at === 'string' &&
-    fields.ends_at <= fields.starts_at
-  ) {
-    return 'endsAt must be after startsAt';
+  if (typeof fields.starts_at === 'string' && typeof fields.ends_at === 'string') {
+    const error = checkShiftWindow(fields.starts_at, fields.ends_at);
+    if (error) return error;
   }
 
   return fields;
+}
+
+/**
+ * The cross-field rules on a shift window: it runs forward, and no single
+ * shift is longer than eight hours — a longer stretch is two shifts. Called
+ * by parseShiftFields when both times arrive together, and by the PATCH
+ * route when only one side changes. Returns the error message, or null.
+ */
+export function checkShiftWindow(startsAt: string, endsAt: string): string | null {
+  if (endsAt.slice(0, 5) <= startsAt.slice(0, 5)) return 'endsAt must be after startsAt';
+  if (timeToMinutes(endsAt) - timeToMinutes(startsAt) > MAX_SHIFT_MIN) {
+    return `A shift can run at most ${MAX_SHIFT_MIN / 60} hours — split a longer one into two shifts`;
+  }
+  return null;
 }
 
 /** Validate assignment time/role/duties/notes fields. Same contract as parseShiftFields. */

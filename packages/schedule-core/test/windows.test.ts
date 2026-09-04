@@ -9,7 +9,9 @@ import {
   deriveCoverageWindows,
   formatShiftNotes,
   labelForWindow,
+  MAX_SHIFT_MIN,
   planShiftSync,
+  splitLongWindow,
   type SyncShiftInput,
   syncRange,
 } from '../src/windows';
@@ -104,6 +106,72 @@ describe('deriveCoverageWindows', () => {
     expect(windows).toHaveLength(1);
     expect(windows[0].titles).toEqual(['Open Hours', 'Yoga']);
     expect(windows[0].sessionRefs).toHaveLength(4);
+  });
+
+  it('splits a window longer than eight hours into two shifts', () => {
+    // Sessions from 6:30 to 20:00 → one 05:00–20:30 run (15.5h), cut at 12:30
+    const windows = deriveCoverageWindows([
+      event({ id: 1, startMin: min('06:30'), endMin: min('08:00') }),
+      event({ id: 2, startMin: min('09:00'), endMin: min('10:30') }),
+      event({ id: 3, startMin: min('12:00'), endMin: min('13:30') }),
+      event({ id: 4, startMin: min('15:00'), endMin: min('16:30') }),
+      event({ id: 5, startMin: min('18:00'), endMin: min('20:00') }),
+    ]);
+    expect(MAX_SHIFT_MIN).toBe(8 * 60);
+    expect(windows.map((w) => [w.startMin, w.endMin, w.label])).toEqual([
+      [min('05:00'), min('12:30'), 'Day'],
+      [min('12:30'), min('20:30'), 'Afternoon'],
+    ]);
+    // Each session sits in exactly one half — the one it starts in.
+    expect(windows[0].sessionRefs.map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(windows[1].sessionRefs.map((r) => r.id)).toEqual([4, 5]);
+    expect(DEFAULT_WINDOW_OPTIONS.maxShiftMin).toBe(MAX_SHIFT_MIN);
+  });
+
+  it('leaves an eight-hour window whole and cuts on a half hour', () => {
+    // 08:30–16:30 exactly 8h → one shift
+    const [whole] = deriveCoverageWindows([
+      event({ id: 1, startMin: min('10:00'), endMin: min('16:00') }),
+    ]);
+    expect([whole.startMin, whole.endMin]).toEqual([min('08:30'), min('16:30')]);
+    expect(deriveCoverageWindows([event({ id: 1, startMin: min('10:00'), endMin: min('16:00') })])).toHaveLength(1);
+
+    // 8.5h = 17 half-hours → 4h + 4.5h, never a :15 cut
+    const pieces = splitLongWindow(
+      {
+        date: '2026-08-12',
+        startMin: min('08:00'),
+        endMin: min('16:30'),
+        label: '',
+        staffNeeded: 2,
+        sessionRefs: [{ type: 'session', id: 1 }],
+        titles: ['Open Hours'],
+      },
+      [event({ id: 1, title: 'Open Hours', startMin: min('09:30'), endMin: min('16:00') })],
+      MAX_SHIFT_MIN
+    );
+    expect(pieces.map((p) => [p.startMin, p.endMin])).toEqual([
+      [min('08:00'), min('12:00')],
+      [min('12:00'), min('16:30')],
+    ]);
+    // A session straddling the cut is credited to the half it starts in.
+    expect(pieces[0].sessionRefs).toEqual([{ type: 'session', id: 1 }]);
+    expect(pieces[1].sessionRefs).toEqual([]);
+    expect(pieces[0].titles).toEqual(['Open Hours']);
+  });
+
+  it('keeps halving until every piece fits', () => {
+    // 05:00–24:00 (19h) → halves of 9.5h are still too long → four pieces
+    const windows = deriveCoverageWindows([
+      event({ id: 1, startMin: min('06:30'), endMin: min('23:45') }),
+    ]);
+    expect(windows.map((w) => [w.startMin, w.endMin])).toEqual([
+      [min('05:00'), min('09:30')],
+      [min('09:30'), min('14:30')],
+      [min('14:30'), min('19:00')],
+      [min('19:00'), 24 * 60],
+    ]);
+    expect(windows.every((w) => w.endMin - w.startMin <= MAX_SHIFT_MIN)).toBe(true);
   });
 
   it('interleaves appointments with sessions in the same window', () => {

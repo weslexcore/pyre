@@ -4,6 +4,7 @@ export * from "./horizon";
 export * from "./hours";
 export * from "./insights";
 export * from "./leads";
+export * from "./rest";
 export * from "./stipends";
 export * from "./types";
 export * from "./tz";

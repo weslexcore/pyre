@@ -19,6 +19,7 @@ import {
   availabilityFor,
   DOW_LABELS,
   DUTY_PHASES,
+  findRestViolations,
   firstTentativeDate,
   formatShiftNotes,
   minutesToTime,
@@ -82,7 +83,29 @@ interface BoardData {
   /** Manage side: outstanding shift + sub requests on upcoming shifts, whole horizon. */
   pendingRequestCount?: number;
   settings?: BoardSettings;
+  /** Live assignments the day before and after the range, for the rest rule. */
+  neighborAssignments?: Array<{
+    staff_id: string;
+    shift_date: string;
+    starts_at: string;
+    ends_at: string;
+  }>;
 }
+
+/** One assignment as the rest rule reads it; `id` is null for a neighbour or a hypothetical. */
+interface RestEntry {
+  id: string | null;
+  staffId: string;
+  date: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+/** "closes Sun 9/7 (to 8:30p), then opens Mon 9/8 (from 5a)" — the other side of the pair. */
+const restNoteFor = (side: 'evening' | 'opening', other: RestEntry): string =>
+  side === 'evening'
+    ? `opens ${formatDay(other.date)} at ${formatTime(other.startsAt)} — no evening before an opening`
+    : `closed ${formatDay(other.date)} at ${formatTime(other.endsAt)} — no opening after an evening`;
 
 const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
   sessions_cancelled: 'Momence sessions cancelled',
@@ -513,6 +536,58 @@ export function ScheduleBoard() {
     }
     return dates;
   }, [data, selfId]);
+
+  // The rest rule (an evening close followed by a next-morning open) over
+  // every assignment on the board plus the day either side of the range.
+  // Drafts count too — a proposal under review should show its faults.
+  const restEntries = useMemo<RestEntry[]>(() => {
+    const entries: RestEntry[] = [];
+    for (const shift of data?.shifts ?? []) {
+      if (shift.status !== 'active') continue;
+      for (const a of shift.assignments) {
+        entries.push({
+          id: a.id,
+          staffId: a.staff_id,
+          date: shift.shift_date,
+          startsAt: a.starts_at,
+          endsAt: a.ends_at,
+        });
+      }
+    }
+    for (const a of data?.neighborAssignments ?? []) {
+      entries.push({
+        id: null,
+        staffId: a.staff_id,
+        date: a.shift_date,
+        startsAt: a.starts_at,
+        endsAt: a.ends_at,
+      });
+    }
+    return entries;
+  }, [data]);
+
+  /** Assignment id → why it breaks the rest rule. */
+  const restNotes = useMemo(() => {
+    const notes = new Map<string, string>();
+    for (const v of findRestViolations(restEntries)) {
+      if (v.evening.id) notes.set(v.evening.id, restNoteFor('evening', v.opening));
+      if (v.opening.id) notes.set(v.opening.id, restNoteFor('opening', v.evening));
+    }
+    return notes;
+  }, [restEntries]);
+
+  /** What adding `staffId` to a shift for these hours would break, if anything. */
+  const restCheck = useCallback(
+    (staffId: string, date: string, startsAt: string, endsAt: string): string | null => {
+      const probe: RestEntry = { id: 'probe', staffId, date, startsAt, endsAt };
+      for (const v of findRestViolations([...restEntries, probe])) {
+        if (v.evening === probe) return restNoteFor('evening', v.opening);
+        if (v.opening === probe) return restNoteFor('opening', v.evening);
+      }
+      return null;
+    },
+    [restEntries]
+  );
 
   // Hours already scheduled per staff id, bucketed by Monday week start —
   // the month and uncovered views span several weeks, and the assignment
@@ -1179,6 +1254,12 @@ export function ScheduleBoard() {
                   const subs = subsByShift.get(shift.id) ?? [];
                   const noLead =
                     shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
+                  const restBreaks = shift.assignments
+                    .filter((a) => restNotes.has(a.id))
+                    .map(
+                      (a) =>
+                        `${staffById.get(a.staff_id)?.display_name ?? '?'} ${restNotes.get(a.id)}`
+                    );
                   const expanded = !collapsedIds.has(shift.id);
                   const toggleExpanded = () => {
                     const next = new Set(collapsedIds);
@@ -1227,6 +1308,14 @@ export function ScheduleBoard() {
                               title="Nobody on this shift is a founder or shift lead"
                             >
                               ⚠ no shift lead
+                            </span>
+                          )}
+                          {restBreaks.length > 0 && (
+                            <span
+                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                              title={restBreaks.join('; ')}
+                            >
+                              ⚠ evening then opening
                             </span>
                           )}
                           {requests.length > 0 && (
@@ -1324,6 +1413,8 @@ export function ScheduleBoard() {
                           editingAssignment={editingAssignment}
                           setEditingAssignment={setEditingAssignment}
                           proposalAction={proposalAction}
+                          restNotes={restNotes}
+                          restCheck={restCheck}
                         />
                       )}
 
@@ -1498,6 +1589,8 @@ function ShiftDetail({
   editingAssignment,
   setEditingAssignment,
   proposalAction,
+  restNotes,
+  restCheck,
 }: {
   shift: BoardShift;
   data: BoardData;
@@ -1522,6 +1615,10 @@ function ShiftDetail({
   editingAssignment: string | null;
   setEditingAssignment: (id: string | null) => void;
   proposalAction: (body: Record<string, unknown>) => Promise<void>;
+  /** Assignment id → how it breaks the rest rule (evening close, next-day open). */
+  restNotes: Map<string, string>;
+  /** What putting a person on this shift's hours would break, if anything. */
+  restCheck: (staffId: string, date: string, startsAt: string, endsAt: string) => string | null;
 }) {
   const startMin = timeToMinutes(shift.starts_at);
   const endMin = timeToMinutes(shift.ends_at);
@@ -1647,6 +1744,11 @@ function ShiftDetail({
                     <span className="font-mono text-xs text-[var(--pyre-red)]">
                       ⚠ time off:{' '}
                       {availability.conflicts.map((c) => c.note || 'unavailable').join('; ')}
+                    </span>
+                  )}
+                  {restNotes.has(a.id) && (
+                    <span className="font-mono text-xs text-[var(--pyre-gold)]">
+                      ⚠ {restNotes.get(a.id)}
                     </span>
                   )}
                   {personSub && (
@@ -2092,6 +2194,7 @@ function ShiftDetail({
                 endMin
               );
               const badge = availabilityBadge(availability);
+              const restNote = restCheck(s.id, shift.shift_date, shift.starts_at, shift.ends_at);
               const conflictNote = availability.conflicts
                 .map((c) => {
                   const when = c.wholeDay
@@ -2107,9 +2210,12 @@ function ShiftDetail({
                   disabled={busy}
                   className="rounded border border-white/10 bg-white/5 px-3 py-1.5 text-left text-sm hover:border-white/30 disabled:opacity-40"
                   title={
-                    availability.status === 'free'
-                      ? undefined
-                      : availability.conflicts.map((c) => c.note || 'unavailable').join('; ')
+                    [
+                      ...(availability.status === 'free'
+                        ? []
+                        : availability.conflicts.map((c) => c.note || 'unavailable')),
+                      ...(restNote ? [restNote] : []),
+                    ].join('; ') || undefined
                   }
                   onClick={() =>
                     void run(() =>
@@ -2128,6 +2234,11 @@ function ShiftDetail({
                   {availability.status !== 'free' && conflictNote && (
                     <span className="block font-mono text-[10px] text-white/40">
                       {conflictNote}
+                    </span>
+                  )}
+                  {restNote && (
+                    <span className="block font-mono text-[10px] text-[var(--pyre-gold)]">
+                      ⚠ {restNote}
                     </span>
                   )}
                 </button>

@@ -1,16 +1,21 @@
 // Agent-facing proposal writer: the pyre-agents scheduler submits one draft
 // batch per week — new shifts plus assignments (which may attach to existing
 // live shifts) — and this route validates everything with the SAME parsers
-// the admin edit routes use, enforces the hard time-off rule and the
+// the admin edit routes use, enforces the hard time-off rule, the
 // uncovered-shifts-only rule (no assignments to covered shifts, no
-// overfilling past staff_needed) server-side, supersedes the week's previous
-// draft, and writes the batch as is_draft rows for review on /admin/schedule.
+// overfilling past staff_needed) and the rest rule (nobody closes one
+// evening and opens the next morning) server-side, supersedes the week's
+// previous draft, and writes the batch as is_draft rows for review on
+// /admin/schedule.
 //
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). dryRun
 // validates and returns the conflict report without writing — used by evals.
 
 import {
   availabilityFor,
+  DOW_LABELS,
+  dayOfWeek,
+  findRestViolations,
   type StaffRow,
   type TimeOffRow,
   timeToMinutes,
@@ -109,13 +114,15 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // --- Load reference data ---
+  // Shifts a day either side of the week too: the rest rule pairs Sunday's
+  // close with Monday's open across the week boundary in both directions.
   const [staffRes, liveShiftsRes, timeOffRes] = await Promise.all([
     db.from('staff').select('*'),
     db
       .from('shifts')
       .select('id, shift_date, label, starts_at, ends_at, status, is_draft, staff_needed')
-      .gte('shift_date', weekStart)
-      .lte('shift_date', weekEnd),
+      .gte('shift_date', addDays(weekStart, -1))
+      .lte('shift_date', addDays(weekEnd, 1)),
     db.from('time_off').select('*'),
   ]);
   const refError = staffRes.error ?? liveShiftsRes.error ?? timeOffRes.error;
@@ -124,8 +131,22 @@ export const POST: APIRoute = async ({ request }) => {
   const staff = (staffRes.data ?? []) as StaffRow[];
   const staffById = new Map(staff.map((s) => [s.id, s]));
   const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
+  interface LiveShift {
+    id: string;
+    shift_date: string;
+    label: string;
+    starts_at: string;
+    ends_at: string;
+    status: 'active' | 'cancelled';
+    is_draft: boolean;
+    staff_needed: number;
+  }
+  const nearbyLiveShifts = ((liveShiftsRes.data ?? []) as LiveShift[]).filter((s) => !s.is_draft);
+  // Only the week's own shifts may receive assignments.
   const liveShiftById = new Map(
-    (liveShiftsRes.data ?? []).filter((s) => !s.is_draft).map((s) => [s.id as string, s])
+    nearbyLiveShifts
+      .filter((s) => s.shift_date >= weekStart && s.shift_date <= weekEnd)
+      .map((s) => [s.id, s])
   );
 
   // --- Validate assignments ---
@@ -228,20 +249,35 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
+  // --- Live assignments on the week and its neighbouring days ---
+  interface LiveAssignment {
+    shift_id: string;
+    staff_id: string;
+    starts_at: string;
+    ends_at: string;
+  }
+  let liveAssignments: LiveAssignment[] = [];
+  const activeNearby = nearbyLiveShifts.filter((s) => s.status === 'active');
+  if (activeNearby.length > 0) {
+    const { data, error: liveError } = await db
+      .from('shift_assignments')
+      .select('shift_id, staff_id, starts_at, ends_at')
+      .in(
+        'shift_id',
+        activeNearby.map((s) => s.id)
+      )
+      .eq('is_draft', false);
+    if (liveError) return json({ error: liveError.message }, 500);
+    liveAssignments = (data ?? []) as LiveAssignment[];
+  }
+
   // --- Drafts fill only uncovered shifts ---
   // An existing live shift may only receive assignments while it is below its
   // staff_needed count, and the batch must not push it past that count. (New
   // draft shifts are uncovered by definition.)
   const liveCounts = new Map<string, number>();
-  const liveShiftIds = [...liveShiftById.keys()];
-  if (liveShiftIds.length > 0) {
-    const { data: liveAssignments, error: liveError } = await db
-      .from('shift_assignments')
-      .select('shift_id')
-      .in('shift_id', liveShiftIds)
-      .eq('is_draft', false);
-    if (liveError) return json({ error: liveError.message }, 500);
-    for (const a of (liveAssignments ?? []) as Array<{ shift_id: string }>) {
+  for (const a of liveAssignments) {
+    if (liveShiftById.has(a.shift_id)) {
       liveCounts.set(a.shift_id, (liveCounts.get(a.shift_id) ?? 0) + 1);
     }
   }
@@ -251,11 +287,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const overfilled: string[] = [];
   for (const [shiftId, proposed] of proposedPerShift) {
-    const shift = liveShiftById.get(shiftId) as {
-      shift_date: string;
-      label: string;
-      staff_needed: number;
-    };
+    const shift = liveShiftById.get(shiftId) as LiveShift;
     const have = liveCounts.get(shiftId) ?? 0;
     if (have >= shift.staff_needed || have + proposed > shift.staff_needed) {
       overfilled.push(
@@ -269,6 +301,49 @@ export const POST: APIRoute = async ({ request }) => {
         error:
           'Drafts may only fill uncovered shifts up to their staffNeeded count — drop these assignments and resubmit',
         overfilled,
+      },
+      422
+    );
+  }
+
+  // --- Rest rule: nobody closes one evening and opens the next morning ---
+  // Judged on the person's own hours across live assignments (including the
+  // Sunday before and the Monday after) plus this draft; only pairs the
+  // draft creates are its fault. Wholly pre-existing pairs are the admin's.
+  const nearbyDateById = new Map(activeNearby.map((s) => [s.id, s.shift_date]));
+  const restInput = [
+    ...liveAssignments.map((a) => ({
+      staffId: a.staff_id,
+      date: nearbyDateById.get(a.shift_id) as string,
+      startsAt: a.starts_at,
+      endsAt: a.ends_at,
+      proposed: false,
+    })),
+    ...draftAssignments.map((a) => ({
+      staffId: a.staffId,
+      date: a.date,
+      startsAt: a.startsAt,
+      endsAt: a.endsAt,
+      proposed: true,
+    })),
+  ];
+  const describe = (a: { date: string; startsAt: string; endsAt: string }) =>
+    `${DOW_LABELS[dayOfWeek(a.date)]} ${a.date} ${a.startsAt.slice(0, 5)}–${a.endsAt.slice(0, 5)}`;
+  const restViolations = findRestViolations(restInput)
+    .filter((v) => v.evening.proposed || v.opening.proposed)
+    .map((v) => ({
+      staffId: v.staffId,
+      staffName: staffById.get(v.staffId)?.display_name ?? '?',
+      evening: describe(v.evening),
+      opening: describe(v.opening),
+      detail: `${staffById.get(v.staffId)?.display_name ?? '?'} closes ${describe(v.evening)} and opens ${describe(v.opening)}`,
+    }));
+  if (restViolations.length > 0) {
+    return json(
+      {
+        error:
+          'An evening shift may not be followed by an opening shift the next day — move one side of each pair and resubmit',
+        restViolations,
       },
       422
     );
