@@ -6,7 +6,7 @@ import {
   locationLines,
   VENUE,
 } from '@/lib/email/confirmation-content';
-import { PARKING_DIRECTIONS } from '@/lib/email/faq-content';
+import { PARKING_DIRECTIONS, WEATHER_POLICY } from '@/lib/email/faq-content';
 import type { ConfirmationEmailProps } from '../types';
 import { ASSET_BASE, proxyImageUrl } from './assets';
 import { button, COLORS, EmailLayout, heading, text } from './EmailLayout';
@@ -184,6 +184,7 @@ export function ConfirmationEmail({
         Need to change or cancel? Just reply to this email. Cancel at least 2 hours before your
         start time and your credits go straight back to your account.
       </Text>
+      <Text style={text}>Weather: {WEATHER_POLICY}</Text>
 
       {imageUrl && <Img src={imageUrl} width="512" alt="" style={sessionImage} />}
 

@@ -61,10 +61,16 @@ const CANCELLATION: FaqItem = {
     'Cancel at least 2 hours before your session starts and your credits will be returned to your account. Cancellations within 2 hours of start time are not eligible for credit back.',
 };
 
+/**
+ * The most-asked cancellation question. The confirmation also states the
+ * one-line version in its body (ConfirmationEmail.tsx) — keep the two in step.
+ */
+export const WEATHER_POLICY =
+  "We're open rain or shine and only cancel for thunder, lightning, or other extreme weather. If weather ends your session before you've completed at least three-quarters of it, we refund your credits.";
+
 const WEATHER: FaqItem = {
   question: 'What happens in bad weather?',
-  answer:
-    "We're open rain or shine - we only close for thunder. If thunder ends your session before you've made it through at least 75% of it, we'll refund your credits.",
+  answer: WEATHER_POLICY,
 };
 
 // Shared items appended to the end of every confirmation FAQ set. Parking and
