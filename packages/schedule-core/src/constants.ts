@@ -40,8 +40,9 @@ export const SETUP_DURATION_MIN = 120;
 // the SOP library so each duty deep-links to the doc defining it, and it
 // groups into the three phases of a shift: set up, work the session, break
 // down. Set-up and break-down are each split into an (A) and a (B) half, one
-// per person; a solo shift holds both. Mirrors the check constraint in the
-// setup_duty_halves migration.
+// per person, and a person keeps their letter across both phases; a solo
+// shift holds both. Mirrors the check constraint in the setup_duty_halves
+// migration.
 
 export const ASSIGNMENT_DUTIES = [
   'setup_a',
@@ -102,37 +103,36 @@ export const DUTY_PHASES = [
 export type DutyPhaseKey = (typeof DUTY_PHASES)[number]['key'];
 
 /**
- * The half someone should hold in the other phase: A at set-up pairs with B
- * at break down, and vice versa. Set Up (A) and Break Down (A) are both the
- * fire-and-water side, so crossing the letters is what keeps one person off
- * the same corner of the property all day. Advisory — the board pre-selects
- * the pair and flags a mismatch, the API never rejects one.
+ * The half someone holds in the other phase: whoever takes A at set-up takes A
+ * at break down. Set Up (A) and Break Down (A) are both the fire-and-water
+ * side, so keeping the letter means the person who lit the fire and balanced
+ * the water is the one who puts that side to bed knowing its state. Advisory —
+ * the board pre-selects the pair and flags a split, the API never rejects one.
  */
-export const DUTY_CROSS_PAIRS = {
-  setup_a: 'breakdown_b',
-  setup_b: 'breakdown_a',
-  breakdown_a: 'setup_b',
-  breakdown_b: 'setup_a',
-} as const satisfies Partial<Record<AssignmentDuty, AssignmentDuty>>;
-
-/** The other phase's half on the *same* side — what the pairing rule avoids. */
-const DUTY_SAME_SIDE = {
+export const DUTY_PAIRS = {
   setup_a: 'breakdown_a',
   setup_b: 'breakdown_b',
+  breakdown_a: 'setup_a',
+  breakdown_b: 'setup_b',
 } as const satisfies Partial<Record<AssignmentDuty, AssignmentDuty>>;
 
-/** The opposite-phase half this duty pairs with; null for host/customer care. */
-export function crossPairFor(duty: AssignmentDuty): AssignmentDuty | null {
-  return duty in DUTY_CROSS_PAIRS
-    ? DUTY_CROSS_PAIRS[duty as keyof typeof DUTY_CROSS_PAIRS]
-    : null;
+/** The letters split across phases — Set Up (A) with Break Down (B). */
+const DUTY_SPLIT_SIDES = {
+  setup_a: 'breakdown_b',
+  setup_b: 'breakdown_a',
+} as const satisfies Partial<Record<AssignmentDuty, AssignmentDuty>>;
+
+/** This duty's half in the other phase; null for host/customer care. */
+export function pairedDutyFor(duty: AssignmentDuty): AssignmentDuty | null {
+  return duty in DUTY_PAIRS ? DUTY_PAIRS[duty as keyof typeof DUTY_PAIRS] : null;
 }
 
 /**
- * Add or remove `duty`, keeping the cross-phase pairing: taking a set-up half
- * brings its break-down half along, so the usual case is one click instead of
+ * Add or remove `duty`, keeping the pairing: taking a set-up half brings the
+ * matching break-down half along, so the usual case is one click instead of
  * two. Nothing is ever auto-removed — someone covering a shift alone holds
- * both halves of both phases, and un-pairing on purpose has to stay possible.
+ * both halves of both phases, and splitting the letters on purpose has to
+ * stay possible.
  */
 export function toggleDuty(duties: readonly string[], duty: AssignmentDuty): AssignmentDuty[] {
   const held = new Set(normalizeDuties(duties));
@@ -141,27 +141,28 @@ export function toggleDuty(duties: readonly string[], duty: AssignmentDuty): Ass
     return normalizeDuties([...held]);
   }
   held.add(duty);
-  const pair = crossPairFor(duty);
+  const pair = pairedDutyFor(duty);
   if (pair) held.add(pair);
   return normalizeDuties([...held]);
 }
 
 /**
- * Set-up/break-down halves this person holds on the same side — the pairing
- * rule broken, as [set-up half, break-down half] pairs. Someone holding both
- * halves of a phase is working it alone rather than paired, so they are never
- * a mismatch.
+ * Halves this person holds under different letters (Set Up (A) with Break
+ * Down (B)) — the pairing rule broken, as [set-up half, break-down half]
+ * pairs. Someone holding both halves of a phase is working it alone rather
+ * than paired, so they are never a mismatch.
  */
-export function crossPairMismatches(
+export function mismatchedDutyPairs(
   duties: readonly string[]
 ): Array<[AssignmentDuty, AssignmentDuty]> {
   const held = new Set(normalizeDuties(duties));
   const soloSetup = held.has('setup_a') && held.has('setup_b');
   const soloBreakdown = held.has('breakdown_a') && held.has('breakdown_b');
   if (soloSetup || soloBreakdown) return [];
-  return Object.entries(DUTY_SAME_SIDE)
-    .filter(([setup, breakdown]) =>
-      held.has(setup as AssignmentDuty) && held.has(breakdown as AssignmentDuty)
+  return Object.entries(DUTY_SPLIT_SIDES)
+    .filter(
+      ([setup, breakdown]) =>
+        held.has(setup as AssignmentDuty) && held.has(breakdown as AssignmentDuty)
     )
     .map(([setup, breakdown]) => [setup as AssignmentDuty, breakdown as AssignmentDuty]);
 }

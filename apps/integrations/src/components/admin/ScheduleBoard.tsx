@@ -17,15 +17,15 @@ import {
   addDays,
   assignmentHours,
   availabilityFor,
-  crossPairFor,
-  crossPairMismatches,
   DOW_LABELS,
   DUTY_PHASES,
   firstTentativeDate,
   formatShiftNotes,
   minutesToTime,
+  mismatchedDutyPairs,
   missingShiftLead,
   normalizeDuties,
+  pairedDutyFor,
   SETUP_DURATION_MIN,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
@@ -105,9 +105,9 @@ const buttonClass =
 // A duty someone holds on a shift, read-only under their name on the board.
 const dutyChipClass = 'rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70';
 
-/** "Set Up (A) should pair with Break Down (B)" — the fix, not just the fault. */
+/** "Set Up (A) should pair with Break Down (A)" — the fix, not just the fault. */
 const pairingAdvice = (setup: AssignmentDuty): string => {
-  const pair = crossPairFor(setup);
+  const pair = pairedDutyFor(setup);
   return pair
     ? `${ASSIGNMENT_DUTY_LABELS[setup]} should pair with ${ASSIGNMENT_DUTY_LABELS[pair]}`
     : ASSIGNMENT_DUTY_LABELS[setup];
@@ -1747,12 +1747,12 @@ function ShiftDetail({
                         </span>
                       )
                     )}
-                    {crossPairMismatches(a.duties).length > 0 && (
+                    {mismatchedDutyPairs(a.duties).length > 0 && (
                       <span
                         className="font-mono text-[10px] text-[var(--pyre-gold)]"
-                        title="Whoever takes A at set-up should take B at break down — the same letter twice leaves one person on the same side of the property all day"
+                        title="Whoever takes A at set-up should take A at break down — the person who set a side up is the one who knows its state at close"
                       >
-                        ⚠ same letter both phases
+                        ⚠ letters split across phases
                       </span>
                     )}
                   </div>
@@ -2232,9 +2232,9 @@ function AssignmentEditor({
   const [role, setRole] = useState<AssignmentRole>(assignment.role);
   // Duties are a set, independent of the hours above: someone can work the
   // full window and still hold only Set Up (A), or hold Host and Break Down (B).
-  // Taking a half brings its cross-phase partner along (see toggleDuty).
+  // Taking a half brings the same letter in the other phase along (toggleDuty).
   const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
-  const mismatches = crossPairMismatches(duties);
+  const mismatches = mismatchedDutyPairs(duties);
 
   // Full/Setup snap the times to the shift window. The window already carries
   // the buffers (90min lead before the first session, 30min close after the
@@ -2310,8 +2310,8 @@ function AssignmentEditor({
       ))}
       {mismatches.length > 0 && (
         <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
-          ⚠ {mismatches.map(([setup]) => pairingAdvice(setup)).join('; ')} — the same letter in both
-          phases leaves one person on the same side of the property all day.
+          ⚠ {mismatches.map(([setup]) => pairingAdvice(setup)).join('; ')} — whoever set a side up
+          is the one who knows its state at close.
         </p>
       )}
       <button

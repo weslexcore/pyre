@@ -1,7 +1,7 @@
 // The duty vocabulary: an assignment's jobs (set up, work the session, break
 // down), independent of the role that sets its hours. Two rules live here —
 // normalising, because the array check constraint can neither dedupe nor
-// order, and the cross-phase pairing (A at set-up, B at break down).
+// order, and the pairing (whoever takes A at set-up takes A at break down).
 
 import { describe, expect, it } from "vitest";
 import {
@@ -9,11 +9,11 @@ import {
 	ASSIGNMENT_DUTY_DETAILS,
 	ASSIGNMENT_DUTY_LABELS,
 	ASSIGNMENT_DUTY_SOPS,
-	crossPairFor,
-	crossPairMismatches,
+	mismatchedDutyPairs,
 	DUTY_PHASES,
 	formatDuties,
 	normalizeDuties,
+	pairedDutyFor,
 	toggleDuty,
 } from "../src/constants";
 
@@ -47,32 +47,29 @@ describe("formatDuties", () => {
 });
 
 describe("the A/B pairing rule", () => {
-	it("pairs each set-up half with the opposite break-down half", () => {
-		expect(crossPairFor("setup_a")).toBe("breakdown_b");
-		expect(crossPairFor("setup_b")).toBe("breakdown_a");
-		expect(crossPairFor("breakdown_a")).toBe("setup_b");
-		expect(crossPairFor("breakdown_b")).toBe("setup_a");
+	it("keeps the letter across both phases", () => {
+		expect(pairedDutyFor("setup_a")).toBe("breakdown_a");
+		expect(pairedDutyFor("setup_b")).toBe("breakdown_b");
+		expect(pairedDutyFor("breakdown_a")).toBe("setup_a");
+		expect(pairedDutyFor("breakdown_b")).toBe("setup_b");
 	});
 
 	it("has no pair for the in-session duties", () => {
-		expect(crossPairFor("host")).toBeNull();
-		expect(crossPairFor("customer_care")).toBeNull();
+		expect(pairedDutyFor("host")).toBeNull();
+		expect(pairedDutyFor("customer_care")).toBeNull();
 	});
 
-	it("brings the paired half along when a half is taken", () => {
-		expect(toggleDuty([], "setup_a")).toEqual(["setup_a", "breakdown_b"]);
-		expect(toggleDuty([], "breakdown_a")).toEqual(["setup_b", "breakdown_a"]);
+	it("brings the matching half along when a half is taken", () => {
+		expect(toggleDuty([], "setup_a")).toEqual(["setup_a", "breakdown_a"]);
+		expect(toggleDuty([], "breakdown_b")).toEqual(["setup_b", "breakdown_b"]);
 	});
 
 	it("adds an in-session duty on its own", () => {
-		expect(toggleDuty(["setup_a"], "host")).toEqual([
-			"setup_a",
-			"host",
-		]);
+		expect(toggleDuty(["setup_a"], "host")).toEqual(["setup_a", "host"]);
 	});
 
-	it("removes only what was clicked, so a pair can be broken on purpose", () => {
-		expect(toggleDuty(["setup_a", "breakdown_b"], "breakdown_b")).toEqual([
+	it("removes only what was clicked, so a pair can be split on purpose", () => {
+		expect(toggleDuty(["setup_a", "breakdown_a"], "breakdown_a")).toEqual([
 			"setup_a",
 		]);
 	});
@@ -85,28 +82,28 @@ describe("the A/B pairing rule", () => {
 			"breakdown_a",
 			"breakdown_b",
 		]);
-		expect(crossPairMismatches(solo)).toEqual([]);
+		expect(mismatchedDutyPairs(solo)).toEqual([]);
 	});
 });
 
-describe("crossPairMismatches", () => {
-	it("flags the same side held in both phases", () => {
-		expect(crossPairMismatches(["setup_a", "breakdown_a"])).toEqual([
-			["setup_a", "breakdown_a"],
+describe("mismatchedDutyPairs", () => {
+	it("flags a letter split across the two phases", () => {
+		expect(mismatchedDutyPairs(["setup_a", "breakdown_b"])).toEqual([
+			["setup_a", "breakdown_b"],
 		]);
-		expect(crossPairMismatches(["setup_b", "host", "breakdown_b"])).toEqual([
-			["setup_b", "breakdown_b"],
+		expect(mismatchedDutyPairs(["setup_b", "host", "breakdown_a"])).toEqual([
+			["setup_b", "breakdown_a"],
 		]);
 	});
 
-	it("is quiet on a correctly crossed pair", () => {
-		expect(crossPairMismatches(["setup_a", "host", "breakdown_b"])).toEqual([]);
-		expect(crossPairMismatches(["setup_b", "breakdown_a"])).toEqual([]);
+	it("is quiet when the letter is kept", () => {
+		expect(mismatchedDutyPairs(["setup_a", "host", "breakdown_a"])).toEqual([]);
+		expect(mismatchedDutyPairs(["setup_b", "breakdown_b"])).toEqual([]);
 	});
 
 	it("is quiet on a half with no counterpart in the other phase", () => {
-		expect(crossPairMismatches(["setup_a"])).toEqual([]);
-		expect(crossPairMismatches(["host", "customer_care"])).toEqual([]);
+		expect(mismatchedDutyPairs(["setup_a"])).toEqual([]);
+		expect(mismatchedDutyPairs(["host", "customer_care"])).toEqual([]);
 	});
 });
 
