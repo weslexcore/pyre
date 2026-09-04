@@ -53,11 +53,18 @@ export const saveProposalTool = defineTool({
           role: z.enum(['full', 'setup', 'partial']).default('full'),
           duties: z
             .array(
-              z.enum(['setup', 'host', 'customer_care', 'breakdown', 'breakdown_a', 'breakdown_b'])
+              z.enum([
+                'setup_a',
+                'setup_b',
+                'host',
+                'customer_care',
+                'breakdown_a',
+                'breakdown_b',
+              ])
             )
             .default([])
             .describe(
-              'Jobs this person holds within their hours — set-up, the in-session roles, the break-down split. Independent of role (the hours). Leave empty unless the week note or the existing schedule says who does what.'
+              'Jobs this person holds within their hours, independent of role (the hours). Set-up and break-down each split into an (A) fire-and-water half and a (B) space/guest-areas half. Whoever takes A at set-up takes B at break down. Leave empty unless the week note or the existing schedule says who does what.'
             ),
           notes: z.string().max(500).nullish(),
         })

@@ -97,9 +97,9 @@ describe('buildPersonalEvents', () => {
 
   it('lists the duties they hold, and stays quiet when there are none', () => {
     const [event] = personal(
-      shift({ assignments: [assignment({ duties: ['breakdown_b', 'setup'] })] })
+      shift({ assignments: [assignment({ duties: ['breakdown_b', 'setup_a'] })] })
     );
-    expect(event.description).toContain('Duties: Setup · Break Down (B)');
+    expect(event.description).toContain('Duties: Set Up (A) · Break Down (B)');
     expect(personal(shift())[0].description).not.toContain('Duties:');
   });
 

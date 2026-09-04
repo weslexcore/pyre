@@ -7,8 +7,8 @@ import { parseAssignmentFields } from './validate';
 
 describe('parseAssignmentFields duties', () => {
   it('normalises the set into canonical phase order', () => {
-    expect(parseAssignmentFields({ duties: ['breakdown_a', 'setup', 'setup'] })).toEqual({
-      duties: ['setup', 'breakdown_a'],
+    expect(parseAssignmentFields({ duties: ['breakdown_a', 'setup_a', 'setup_a'] })).toEqual({
+      duties: ['setup_a', 'breakdown_a'],
     });
   });
 

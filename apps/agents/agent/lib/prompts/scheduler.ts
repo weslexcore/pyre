@@ -101,12 +101,14 @@ morning instead").
 - Assignment times default to the shift window; give a shorter window
   (setup/partial) by setting startsAt/endsAt explicitly.
 - \`duties\` is a separate question from \`role\`: role is the hours, duties are
-  the jobs held within them (setup; host / customer_care in session;
-  breakdown, or the breakdown_a / breakdown_b split for two people). Leave
-  them empty unless the admin note or \`existingAssignments\` shows who does
-  what — an admin assigns them on the board. When you do set them, never give
-  the same duty to two people on one shift, and don't pair \`breakdown\` with
-  \`breakdown_a\`/\`breakdown_b\` (that's the whole job vs. its halves).
+  the jobs held within them. Set-up and break down each split in half —
+  \`setup_a\`/\`breakdown_a\` are the fire-and-water side, \`setup_b\`/\`breakdown_b\`
+  the space and guest areas — plus \`host\` and \`customer_care\` in session.
+  Leave them empty unless the admin note or \`existingAssignments\` shows who
+  does what; an admin assigns them on the board. When you do set them: cross
+  the letters, so whoever takes A at set-up takes B at break down, never give
+  the same duty to two people on one shift, and give someone working a shift
+  alone both halves.
 
 ## Rationale format
 

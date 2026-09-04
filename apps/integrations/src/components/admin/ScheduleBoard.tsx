@@ -6,6 +6,7 @@
 // picked out in gold, with their own name first in each shift's name list.
 
 import {
+  ASSIGNMENT_DUTY_DETAILS,
   ASSIGNMENT_DUTY_LABELS,
   ASSIGNMENT_DUTY_SOPS,
   ASSIGNMENT_ROLE_LABELS,
@@ -16,6 +17,8 @@ import {
   addDays,
   assignmentHours,
   availabilityFor,
+  crossPairFor,
+  crossPairMismatches,
   DOW_LABELS,
   DUTY_PHASES,
   firstTentativeDate,
@@ -26,6 +29,7 @@ import {
   SETUP_DURATION_MIN,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
+  toggleDuty,
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -100,6 +104,20 @@ const buttonClass =
 
 // A duty someone holds on a shift, read-only under their name on the board.
 const dutyChipClass = 'rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70';
+
+/** "Set Up (A) should pair with Break Down (B)" — the fix, not just the fault. */
+const pairingAdvice = (setup: AssignmentDuty): string => {
+  const pair = crossPairFor(setup);
+  return pair
+    ? `${ASSIGNMENT_DUTY_LABELS[setup]} should pair with ${ASSIGNMENT_DUTY_LABELS[pair]}`
+    : ASSIGNMENT_DUTY_LABELS[setup];
+};
+
+/** "Set Up (A) — Fire + Water": the letter alone doesn't say which half it is. */
+const dutyTitle = (duty: AssignmentDuty): string => {
+  const detail = ASSIGNMENT_DUTY_DETAILS[duty];
+  return detail ? `${ASSIGNMENT_DUTY_LABELS[duty]} — ${detail}` : ASSIGNMENT_DUTY_LABELS[duty];
+};
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -1719,15 +1737,23 @@ function ShiftDetail({
                           key={duty}
                           className={`${dutyChipClass} underline decoration-white/20 hover:text-white`}
                           href={`/admin/sops/${ASSIGNMENT_DUTY_SOPS[duty]}`}
-                          title={`Open the ${ASSIGNMENT_DUTY_LABELS[duty]} SOP`}
+                          title={dutyTitle(duty)}
                         >
                           {ASSIGNMENT_DUTY_LABELS[duty]}
                         </a>
                       ) : (
-                        <span key={duty} className={dutyChipClass}>
+                        <span key={duty} className={dutyChipClass} title={dutyTitle(duty)}>
                           {ASSIGNMENT_DUTY_LABELS[duty]}
                         </span>
                       )
+                    )}
+                    {crossPairMismatches(a.duties).length > 0 && (
+                      <span
+                        className="font-mono text-[10px] text-[var(--pyre-gold)]"
+                        title="Whoever takes A at set-up should take B at break down — the same letter twice leaves one person on the same side of the property all day"
+                      >
+                        ⚠ same letter both phases
+                      </span>
                     )}
                   </div>
                 )}
@@ -2205,15 +2231,10 @@ function AssignmentEditor({
   const [endsAt, setEndsAt] = useState(hhmm(assignment.ends_at));
   const [role, setRole] = useState<AssignmentRole>(assignment.role);
   // Duties are a set, independent of the hours above: someone can work the
-  // full window and still hold only Setup, or hold Host and Break Down (B).
+  // full window and still hold only Set Up (A), or hold Host and Break Down (B).
+  // Taking a half brings its cross-phase partner along (see toggleDuty).
   const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
-
-  const toggleDuty = (duty: AssignmentDuty) =>
-    setDuties((current) =>
-      normalizeDuties(
-        current.includes(duty) ? current.filter((d) => d !== duty) : [...current, duty]
-      )
-    );
+  const mismatches = crossPairMismatches(duties);
 
   // Full/Setup snap the times to the shift window. The window already carries
   // the buffers (90min lead before the first session, 30min close after the
@@ -2273,15 +2294,26 @@ function AssignmentEditor({
               key={duty}
               type="button"
               className={pillClass(duties.includes(duty))}
-              title={`Assign or clear ${ASSIGNMENT_DUTY_LABELS[duty]}`}
+              title={dutyTitle(duty)}
               aria-pressed={duties.includes(duty)}
-              onClick={() => toggleDuty(duty)}
+              onClick={() => setDuties((current) => toggleDuty(current, duty))}
             >
               {ASSIGNMENT_DUTY_LABELS[duty]}
+              {ASSIGNMENT_DUTY_DETAILS[duty] && (
+                <span className="ml-1.5 normal-case tracking-normal opacity-60">
+                  {ASSIGNMENT_DUTY_DETAILS[duty]}
+                </span>
+              )}
             </button>
           ))}
         </div>
       ))}
+      {mismatches.length > 0 && (
+        <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
+          ⚠ {mismatches.map(([setup]) => pairingAdvice(setup)).join('; ')} — the same letter in both
+          phases leaves one person on the same side of the property all day.
+        </p>
+      )}
       <button
         type="button"
         className={buttonClass}
