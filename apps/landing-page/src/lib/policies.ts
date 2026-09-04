@@ -350,11 +350,11 @@ export const termsOfService: PolicyDocument = {
         {
           title: 'Cancellation and Refund Policy',
           items: [
-            { text: 'Cancellations: Must be made at least 24 hours before your scheduled session' },
+            { text: 'Cancellations: Must be made at least 2 hours before your scheduled session' },
             { text: 'No-shows: Will be charged the full session fee' },
             { text: 'Refunds: Available for cancellations made within the specified timeframe' },
             {
-              text: 'Weather/Emergency Cancellations: Full refunds provided for cancellations due to circumstances beyond our control',
+              text: 'Weather Cancellations: We only cancel for thunder, lightning, or other extreme weather. If weather ends your session before you have completed at least three-quarters of it, your credits are refunded',
             },
           ],
         },
