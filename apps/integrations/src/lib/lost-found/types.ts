@@ -95,7 +95,7 @@ export function indefiniteArticle(phrase: string): string {
  */
 export function guestItemClause(itemLabel: string): string {
   const label = itemLabel.trim() || 'item';
-  return `we found ${indefiniteArticle(label)} ${label.toLowerCase()} at Pyre`;
+  return `we found ${indefiniteArticle(label)} ${label.toLowerCase()}`;
 }
 
 export function isLostFoundStatus(v: unknown): v is LostFoundStatus {
