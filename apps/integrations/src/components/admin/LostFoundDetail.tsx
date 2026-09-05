@@ -376,6 +376,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
             itemId={itemId}
             windowStart={item.left_window_start}
             windowEnd={item.left_window_end}
+            chosenSessionIds={item.chosen_session_ids ?? []}
             alreadyAsked={askedMasked}
             onSent={(summary) => {
               setNotice(summary);

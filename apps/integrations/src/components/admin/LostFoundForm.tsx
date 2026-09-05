@@ -7,12 +7,16 @@
 // no wording beats seeing your own jacket.
 //
 // Then the question that decides everything downstream: do we know whose it
-// is? A name here means one email to one person, and the timing stops being a
-// decision — it collapses to a line you can correct if the item sat overnight.
-// Without a name, timing is all we have to go on: the left-in window is what
-// picks the sessions staff can offer to ask, so it stays open and explains
-// itself. Asking in that order means the common case where someone hands in a
-// friend's bottle never walks through a session window it doesn't need.
+// is? A name means one email to one person and there is nothing else to
+// decide. Without one, the question is which sessions this could have been
+// left in — asked as sessions, with names and headcounts, not as clock times.
+// The person logging it was there: they know the 6pm social had just let out.
+// Nobody knows, off the top of their head, that the window they want is 15:00
+// to 21:00, and the times were only ever a way of naming those sessions.
+//
+// The choice is stored on the item and pre-selected on the item page, so the
+// send is still a second, deliberate act — but not a second answering of the
+// same question.
 
 import { useMemo, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
@@ -29,12 +33,12 @@ import {
   DEFAULT_LOOKBACK_HOURS,
   DONATION_PARTNER,
   DONATION_WINDOW_DAYS,
+  MAX_WINDOW_HOURS,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
 import {
   buttonClass,
-  formatDateTime,
   inputClass,
   labelClass,
   primaryButtonClass,
@@ -42,6 +46,10 @@ import {
   SectionTitle,
   TileButton,
 } from './incidentUi';
+import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
+
+/** The log form has never emailed anyone yet, so nothing is "already asked". */
+const EMPTY_ASKED: Set<string> = new Set();
 
 interface PendingFile {
   id: string;
@@ -51,16 +59,8 @@ interface PendingFile {
   error?: string;
 }
 
-/** `datetime-local` wants a local-clock string, not an ISO instant. */
-function toLocalInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function fromLocalInput(value: string): string | null {
-  const ms = Date.parse(value);
-  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
-}
+/** How far back the session list reaches, and each widening of it. */
+const LOOKBACK_STEPS = [DEFAULT_LOOKBACK_HOURS, 12, 24, 48, MAX_WINDOW_HOURS];
 
 export function LostFoundForm() {
   const now = useMemo(() => new Date(), []);
@@ -69,12 +69,8 @@ export function LostFoundForm() {
   const [category, setCategory] = useState('bottle');
   const [description, setDescription] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
-  const [foundAt, setFoundAt] = useState(() => toLocalInput(now));
-  const [windowStart, setWindowStart] = useState(() =>
-    toLocalInput(new Date(now.getTime() - DEFAULT_LOOKBACK_HOURS * 3_600_000))
-  );
-  const [showWindow, setShowWindow] = useState(false);
-  const [showTiming, setShowTiming] = useState(false);
+  const [lookbackHours, setLookbackHours] = useState(DEFAULT_LOOKBACK_HOURS);
+  const [sessionIds, setSessionIds] = useState<Set<string>>(new Set());
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [owner, setOwner] = useState<PersonResult | null>(null);
 
@@ -82,11 +78,13 @@ export function LostFoundForm() {
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const donateOn = useMemo(() => {
-    const ms = Date.parse(foundAt);
-    if (Number.isNaN(ms)) return null;
-    return new Date(ms + DONATION_WINDOW_DAYS * 86_400_000);
-  }, [foundAt]);
+  // The item is found now, as far as the record is concerned: it is being
+  // logged as it is picked up. The server stamps found_at itself; this is only
+  // the date shown on the form.
+  const donateOn = useMemo(
+    () => new Date(now.getTime() + DONATION_WINDOW_DAYS * 86_400_000),
+    [now]
+  );
 
   const addFiles = async (incoming: FileList | null) => {
     if (!incoming) return;
@@ -141,9 +139,9 @@ export function LostFoundForm() {
           category,
           description: description.trim() || null,
           storageLocation: storageLocation.trim() || null,
-          foundAt: fromLocalInput(foundAt),
-          leftWindowStart: fromLocalInput(effectiveWindowStart),
-          leftWindowEnd: fromLocalInput(foundAt),
+          leftWindowStart: leftWindow.start,
+          leftWindowEnd: leftWindow.end,
+          sessionIds: [...sessionIds],
           ownerMemberId: owner?.memberId || null,
           ownerName: owner?.name || null,
           ownerEmail: owner?.email || null,
@@ -184,25 +182,73 @@ export function LostFoundForm() {
     }
   };
 
-  const { field: ownerField } = useGuestSearch({ selected: owner, onSelect: setOwner });
+  const { field: ownerField } = useGuestSearch({
+    selected: owner,
+    // Naming an owner drops any sessions already picked: the item page would
+    // otherwise open with a blast pre-selected for something we can hand back
+    // to one person.
+    onSelect: (person) => {
+      setOwner(person);
+      if (person) setSessionIds(new Set());
+    },
+  });
 
-  // With nobody named, the found time is a real decision — it picks the sessions
-  // we can ask. With a name, it is a detail worth correcting but not worth a
-  // step, so it sits on one line until someone asks for it.
-  const timingOpen = !owner || showTiming;
+  // Sessions are only a question when nobody is named — with an owner there is
+  // one person to email and no list to read. Passing an empty range skips the
+  // Momence call entirely rather than fetching a list we would not show.
+  const lookbackStart = useMemo(
+    () => new Date(now.getTime() - lookbackHours * 3_600_000).toISOString(),
+    [now, lookbackHours]
+  );
+  const lookbackEnd = useMemo(() => now.toISOString(), [now]);
+  const { data, loading, sessions, hiddenCount } = useSessionChoices(
+    owner ? '' : lookbackStart,
+    owner ? '' : lookbackEnd
+  );
 
-  // Left alone, the window trails the found time rather than the moment the
-  // form loaded — otherwise correcting "found at" to last night submits a
-  // window that ends before it starts, and the server rejects the whole log.
-  const effectiveWindowStart = useMemo(() => {
-    if (showWindow) return windowStart;
-    const ms = Date.parse(foundAt);
-    if (Number.isNaN(ms)) return windowStart;
-    return toLocalInput(new Date(ms - DEFAULT_LOOKBACK_HOURS * 3_600_000));
-  }, [showWindow, windowStart, foundAt]);
+  const toggleSession = (id: string) => {
+    setSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const nextLookback = LOOKBACK_STEPS.find((h) => h > lookbackHours) ?? null;
+
+  const pickedPeople = useMemo(() => {
+    let count = 0;
+    for (const session of sessions) {
+      if (sessionIds.has(session.id)) count += session.attendees.length;
+    }
+    return count;
+  }, [sessions, sessionIds]);
+
+  // The window we store has to span every session picked, because the notify
+  // route re-derives who may be emailed from the window alone and would drop
+  // anything outside it. With nothing picked it falls back to the range that
+  // was on screen, so the item page still has something to offer.
+  const leftWindow = useMemo(() => {
+    const chosen = sessions.filter((s) => sessionIds.has(s.id));
+    if (chosen.length === 0) return { start: lookbackStart, end: lookbackEnd };
+    const starts = chosen.map((s) => Date.parse(s.startsAt)).filter((n) => !Number.isNaN(n));
+    const ends = chosen.map((s) => Date.parse(s.endsAt)).filter((n) => !Number.isNaN(n));
+    if (starts.length === 0 || ends.length === 0) {
+      return { start: lookbackStart, end: lookbackEnd };
+    }
+    return {
+      start: new Date(Math.min(...starts)).toISOString(),
+      end: new Date(Math.max(...ends)).toISOString(),
+    };
+  }, [sessions, sessionIds, lookbackStart, lookbackEnd]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 pb-24">
+      <a href="/admin/lost-found" className="font-mono text-xs text-white/45 hover:text-white/70">
+        ← All items
+      </a>
+
       <section>
         <SectionTitle note="Upload a clear photo of the item">Photo</SectionTitle>
 
@@ -325,79 +371,46 @@ export function LostFoundForm() {
         </div>
       </section>
 
-      <section>
-        <SectionTitle
-          note={
-            owner
-              ? `We're emailing ${owner.name}, so this is only for the record.`
-              : 'Nothing is sent from here. This decides which sessions we can offer to ask.'
-          }
-        >
-          When was it found?
-        </SectionTitle>
+      {!owner && (
+        <section>
+          <SectionTitle note="Nothing is sent from here — you send from the item page once it's logged.">
+            Which sessions could it have been left in?
+          </SectionTitle>
 
-        {timingOpen ? (
-          <>
-            <div className={owner ? '' : 'mb-4'}>
-              <label className={labelClass} htmlFor="lf-found-at">
-                Found at
-              </label>
-              <input
-                id="lf-found-at"
-                type="datetime-local"
-                className={inputClass}
-                value={foundAt}
-                onChange={(e) => setFoundAt(e.target.value)}
-              />
-            </div>
+          <SessionChoices
+            data={data}
+            loading={loading}
+            sessions={sessions}
+            hiddenCount={hiddenCount}
+            picked={sessionIds}
+            alreadyAsked={EMPTY_ASKED}
+            onToggle={toggleSession}
+            emptyHint="Log it anyway — you can pick sessions on the item page."
+          />
 
-            {!owner &&
-              (showWindow ? (
-                <div>
-                  <label className={labelClass} htmlFor="lf-window-start">
-                    Could have been left any time after
-                  </label>
-                  <input
-                    id="lf-window-start"
-                    type="datetime-local"
-                    className={inputClass}
-                    value={windowStart}
-                    onChange={(e) => setWindowStart(e.target.value)}
-                  />
-                  <p className="mt-1 text-xs text-white/40">
-                    Everyone booked into a session touching this window can be offered an email.
-                    Widen it if this could have been sitting there a while.
-                  </p>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className={buttonClass}
-                  onClick={() => {
-                    setWindowStart(effectiveWindowStart);
-                    setShowWindow(true);
-                  }}
-                >
-                  Sitting there a while?
-                </button>
-              ))}
-          </>
-        ) : (
-          <div className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/5 px-3 py-2.5">
-            <span className="text-sm text-white/70">{formatDateTime(fromLocalInput(foundAt))}</span>
-            <button type="button" className={buttonClass} onClick={() => setShowTiming(true)}>
-              Adjust
-            </button>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {nextLookback && (
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setLookbackHours(nextLookback)}
+              >
+                Look further back
+              </button>
+            )}
+            <span className="font-mono text-xs text-white/35">
+              Last {lookbackHours} hours
+              {sessionIds.size > 0 &&
+                ` · ${sessionIds.size} selected, ${pickedPeople} ${pickedPeople === 1 ? 'person' : 'people'}`}
+            </span>
           </div>
-        )}
-      </section>
-
-      {donateOn && (
-        <p className="text-xs text-white/40">
-          Unclaimed, this goes to {DONATION_PARTNER} on{' '}
-          {donateOn.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.
-        </p>
+        </section>
       )}
+
+      <p className="text-xs text-white/40">
+        Unclaimed, this goes to {DONATION_PARTNER} on{' '}
+        {donateOn.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.
+      </p>
 
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 

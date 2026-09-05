@@ -28,6 +28,10 @@ export type Normalized<T> = { ok: true; value: T } | { ok: false; error: string 
 
 const HOUR_MS = 3_600_000;
 
+/** Sessions staff may pick in one log. A day of classes, with room to spare. */
+const MAX_CHOSEN_SESSIONS = 50;
+const SESSION_ID_MAX = 64;
+
 function text(value: unknown, limit: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -38,6 +42,24 @@ function timestamp(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
   const ms = Date.parse(value);
   return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
+
+/**
+ * Momence session ids off the log form. Ids only — they say who *may* be
+ * emailed later, and the notify route re-derives that set from the item's
+ * window anyway, so a crafted list here widens nothing.
+ */
+function sessionIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (!trimmed || trimmed.length > SESSION_ID_MAX || ids.includes(trimmed)) continue;
+    ids.push(trimmed);
+    if (ids.length === MAX_CHOSEN_SESSIONS) break;
+  }
+  return ids;
 }
 
 /** Basic shape only — the mail provider is the real judge of an address. */
@@ -53,6 +75,7 @@ export interface ItemSubmission {
   found_at: string;
   left_window_start: string;
   left_window_end: string;
+  chosen_session_ids: string[];
   donate_after: string;
   owner_member_id: string | null;
   owner_name: string | null;
@@ -105,6 +128,7 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
       found_at: foundAt,
       left_window_start: windowStart,
       left_window_end: windowEnd,
+      chosen_session_ids: sessionIds(body.sessionIds),
       donate_after: new Date(foundMs + DONATION_WINDOW_DAYS * 24 * HOUR_MS).toISOString(),
       owner_member_id: text(body.ownerMemberId, 64),
       owner_name: text(body.ownerName, FIELD_LIMITS.personName),
