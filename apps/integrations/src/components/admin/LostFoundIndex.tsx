@@ -31,16 +31,26 @@ interface ListResponse {
 const FILTERS = [
   { key: 'on_hand', label: 'In the bin' },
   { key: 'due_for_donation', label: 'Due for donation' },
-  { key: 'claim_pending', label: 'Claimed' },
+  // Both ways an item gets spoken for: a claim link click, and a guest who
+  // told staff directly. Either way somebody is coming for it.
+  { key: 'claims', label: 'Claimed' },
   { key: 'closed', label: 'Gone' },
   { key: '', label: 'Everything' },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 
+/** "Alex Chen" -> "Alex". A card has room for a first name, not a full one. */
+function firstNameOf(name: string | null): string {
+  return (name ?? '').trim().split(/\s+/)[0] ?? '';
+}
+
 /** How the deadline reads on a card, and whether it should shout. */
 function donationNote(item: LostFoundItemRow): { text: string; urgent: boolean } | null {
   if ((CLOSED_STATUSES as readonly string[]).includes(item.status)) return null;
+  // Held for someone who told us it's theirs — the sweep only ever moves
+  // 'unclaimed' rows, so a countdown here would be a deadline that never runs.
+  if (item.owner_confirmed) return null;
   const days = daysUntilDonation(item.donate_after);
   if (days <= 0) return { text: `Ready for ${DONATION_PARTNER}`, urgent: true };
   if (days === 1) return { text: 'Donated tomorrow', urgent: true };
@@ -162,6 +172,11 @@ export function LostFoundIndex() {
 
                   <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] uppercase tracking-wide">
                     <span className="text-white/30">{item.reference}</span>
+                    {item.owner_confirmed && (
+                      <span className="text-[var(--pyre-gold)]">
+                        Held for {firstNameOf(item.owner_name) || 'its owner'}
+                      </span>
+                    )}
                     {asked > 0 && <span className="text-white/40">Asked {asked}</span>}
                     {note && (
                       <span className={note.urgent ? 'text-[var(--pyre-red)]' : 'text-white/35'}>

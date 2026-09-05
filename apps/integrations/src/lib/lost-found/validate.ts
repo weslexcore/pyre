@@ -74,6 +74,12 @@ export interface ItemSubmission {
   owner_member_id: string | null;
   owner_name: string | null;
   owner_email: string | null;
+  /**
+   * The guest already told us it's theirs, so the log is the whole job and
+   * nobody gets emailed. It is a fact about the item, not a status: the route
+   * derives the status from it, which is what keeps `status` off the body.
+   */
+  owner_confirmed: boolean;
 }
 
 /**
@@ -109,6 +115,14 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
     return { ok: false, error: "That owner email doesn't look right" };
   }
 
+  // "They told us it's theirs" with nobody named is a contradiction, and
+  // quietly dropping it would log the item as unclaimed and put it on the
+  // donation pile — the one outcome this flag exists to prevent.
+  const ownerConfirmed = body.ownerConfirmed === true;
+  if (ownerConfirmed && !ownerEmail) {
+    return { ok: false, error: 'Say whose it is before marking it theirs' };
+  }
+
   return {
     ok: true,
     value: {
@@ -123,11 +137,17 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
       owner_member_id: text(body.ownerMemberId, 64),
       owner_name: text(body.ownerName, FIELD_LIMITS.personName),
       owner_email: ownerEmail,
+      owner_confirmed: ownerConfirmed,
     },
   };
 }
 
-/** Fields an edit may touch. `status` and every identity column are excluded. */
+/**
+ * Fields an edit may touch. `status` and every identity column are excluded.
+ * `owner_confirmed` is in the type but never read off the body: confirming an
+ * owner moves the status too, so it has its own path in the route, and the
+ * only thing an edit does with it is clear it when the owner is cleared.
+ */
 export type ItemPatch = Partial<
   Pick<
     ItemSubmission,
@@ -139,6 +159,7 @@ export type ItemPatch = Partial<
     | 'owner_member_id'
     | 'owner_name'
     | 'owner_email'
+    | 'owner_confirmed'
   >
 >;
 
@@ -160,6 +181,10 @@ export function normalizeItemPatch(body: Record<string, unknown>): Normalized<It
       return { ok: false, error: "That owner email doesn't look right" };
     }
     patch.owner_email = ownerEmail;
+    // Whoever the record said it belonged to is gone, so the note saying they
+    // told us so goes with them. Leaving it set would show "we know this is
+    // theirs" over an empty name.
+    if (!ownerEmail) patch.owner_confirmed = false;
   }
   if ('ownerName' in body) patch.owner_name = text(body.ownerName, FIELD_LIMITS.personName);
   if ('ownerMemberId' in body) patch.owner_member_id = text(body.ownerMemberId, 64);

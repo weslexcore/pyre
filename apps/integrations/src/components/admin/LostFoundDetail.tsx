@@ -104,10 +104,14 @@ function landingNotice(): { notice: string | null; problem: string | null } {
     );
   }
 
-  return {
-    notice: asked === 'sent' ? "Logged, and we've emailed them about it." : null,
-    problem: problems.length > 0 ? problems.join(' ') : null,
-  };
+  const notice =
+    asked === 'sent'
+      ? "Logged, and we've emailed them about it."
+      : asked === 'silent'
+        ? "Logged as theirs. Nobody was emailed — it's set aside until they collect it."
+        : null;
+
+  return { notice, problem: problems.length > 0 ? problems.join(' ') : null };
 }
 
 export function LostFoundDetail({ itemId }: { itemId: string }) {
@@ -159,6 +163,37 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
     } finally {
       setBusy(false);
       setPending(null);
+    }
+  };
+
+  /**
+   * "They told us it's theirs" — the same thing the log form's second button
+   * records, for when the guest gets in touch after the item was logged.
+   * Sends nothing; the route moves the item out of the donation queue.
+   */
+  const setOwnerConfirmed = async (confirmed: boolean) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch('/api/admin/lost-found', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, ownerConfirmed: confirmed }),
+      });
+      if (!res.ok) {
+        setActionError(await readError(res));
+        return;
+      }
+      setNotice(
+        confirmed
+          ? 'Marked as theirs. No email went out.'
+          : "Unmarked — it's back in the queue with everything else."
+      );
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -365,7 +400,8 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
               {formatDayAndTime(item.left_window_start)} – {formatDayAndTime(item.left_window_end)}
             </dd>
           </div>
-          {!closed && (
+          {/* A countdown the sweep will never reach is worse than no countdown. */}
+          {!closed && !item.owner_confirmed && (
             <div className="sm:col-span-2">
               <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
                 {DONATION_PARTNER}
@@ -380,32 +416,66 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
         </dl>
       </section>
 
-      {!closed && data?.canManage && (
-        <section>
-          <SectionTitle note="Everyone is asked once per item, and the email says when it goes to Furbish.">
-            Ask whether it's theirs
-          </SectionTitle>
-
-          {item.owner_email ? (
-            <div className={`${cardClass} mb-4`}>
-              <p className="text-sm text-white/80">
-                We think this belongs to{' '}
-                <strong className="text-[var(--pyre-creme)]">
-                  {item.owner_name || item.owner_email}
-                </strong>
-                .
-              </p>
+      {/*
+        The person on the record, and the two different things that can be true
+        of them. Outside the manage gate on purpose: writing down that a guest
+        told us it's theirs sends nothing, and the person who took that message
+        is whoever happened to be on shift.
+      */}
+      {!closed && item.owner_email && (
+        <section className={cardClass}>
+          {item.owner_confirmed ? (
+            <>
+              <SectionTitle note="They told us it was theirs, so nobody was emailed. It's held for them and out of the donation queue.">
+                Held for {item.owner_name || item.owner_email}
+              </SectionTitle>
               <p className="mb-3 font-mono text-xs text-white/45">{item.owner_email}</p>
               <button
                 type="button"
-                className={primaryButtonClass}
+                className={buttonClass}
                 disabled={busy}
-                onClick={() => void askOwner()}
+                onClick={() => void setOwnerConfirmed(false)}
               >
-                Ask them
+                Not theirs after all
               </button>
-            </div>
-          ) : null}
+            </>
+          ) : (
+            <>
+              <SectionTitle note="Asking emails them the photo and a claim link. If they are the one who told us it was missing, there is nothing to ask.">
+                We think this is {item.owner_name || item.owner_email}'s
+              </SectionTitle>
+              <p className="mb-3 font-mono text-xs text-white/45">{item.owner_email}</p>
+              <div className="flex flex-wrap gap-2">
+                {data?.canManage && (
+                  <button
+                    type="button"
+                    className={primaryButtonClass}
+                    disabled={busy}
+                    onClick={() => void askOwner()}
+                  >
+                    Ask them
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy}
+                  onClick={() => void setOwnerConfirmed(true)}
+                >
+                  They already told us — no email
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* No blast for an item we already know the owner of. */}
+      {!closed && !item.owner_confirmed && data?.canManage && (
+        <section>
+          <SectionTitle note="Everyone is asked once per item, and the email says when it goes to Furbish.">
+            Ask whoever was here
+          </SectionTitle>
 
           <LostFoundSessionPicker
             itemId={itemId}
@@ -421,7 +491,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
         </section>
       )}
 
-      {!closed && !data?.canManage && (
+      {!closed && !item.owner_confirmed && !data?.canManage && (
         <p className="text-xs text-white/40">
           Emailing guests about an item needs the lost-found:manage permission — ask an admin.
         </p>

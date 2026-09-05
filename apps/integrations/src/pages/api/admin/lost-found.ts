@@ -11,6 +11,10 @@
 //   * lost-found:manage (or admin) additionally emails guests (the notify
 //     route) and records donations. Both reach outside the building.
 //
+// Marking an item as already-known-theirs is deliberately on the near side of
+// that line: it sends nothing and is exactly what whoever took the guest's
+// message needs to record.
+//
 // Identity always comes from the session: logged_by, picked_up_by, donated_by
 // and every audit actor are the authenticated email, never a value from the
 // request body. claimed_by_* is not settable here at all — a claim arrives
@@ -24,6 +28,7 @@ import { getDb } from '@/lib/db';
 import { loadLostFoundEvents, logLostFoundEvent } from '@/lib/lost-found/log';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import {
+  CLAIM_STATUSES,
   CLOSED_STATUSES,
   isLostFoundStatus,
   ON_HAND_STATUSES,
@@ -124,6 +129,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const status = url.searchParams.get('status');
   if (status === 'on_hand') {
     query = query.in('status', ON_HAND_STATUSES);
+  } else if (status === 'claims') {
+    // Both ways an item gets spoken for: a claim link click and a guest who
+    // told us at the desk. The tab reads "Claimed"; either one belongs in it.
+    query = query.in('status', CLAIM_STATUSES);
   } else if (status === 'closed') {
     query = query.in('status', CLOSED_STATUSES);
   } else if (status) {
@@ -207,6 +216,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .from('lost_found_items')
     .insert({
       ...normalized.value,
+      // An owner who has already told us it's theirs skips 'unclaimed'
+      // entirely: they are on their way to collect it, and 'unclaimed' is the
+      // one status the donation sweep acts on. The client never names a
+      // status — it states the fact, and the status follows from it.
+      ...(normalized.value.owner_confirmed ? { status: 'claimed' } : {}),
       logged_by: email,
       logged_by_name: displayName({ ...gate.user, email }),
     })
@@ -225,8 +239,22 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       found_at: item.found_at,
       chosen_sessions: item.chosen_session_ids?.length ?? 0,
       owner_email: item.owner_email,
+      owner_confirmed: item.owner_confirmed,
     },
   });
+
+  // A claim that arrived by phone or email rather than through the link. Same
+  // audit line as a link click, with a staff address as the actor rather than
+  // 'guest', because that is the whole difference between them.
+  if (item.owner_confirmed) {
+    await logLostFoundEvent(db, {
+      itemId: item.id,
+      action: 'claim_received',
+      actor: email,
+      detail: { source: 'staff', owner_email: item.owner_email },
+      note: 'They told us it was theirs — logged without emailing them.',
+    });
+  }
 
   return json({ item }, 201);
 };
@@ -254,8 +282,15 @@ function statusTransition(
       return { patch: { status: next }, needsManage: false };
     case 'unclaimed':
       // Reopening: a claim fell through, or the donation run was called off.
+      // Whichever it was, "they told us it's theirs" no longer holds either.
       return {
-        patch: { status: next, claimed_by_email: null, claimed_by_name: null, claimed_at: null },
+        patch: {
+          status: next,
+          claimed_by_email: null,
+          claimed_by_name: null,
+          claimed_at: null,
+          owner_confirmed: false,
+        },
         needsManage: false,
       };
     default:
@@ -303,6 +338,58 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       ? body.note.trim().slice(0, FIELD_LIMITS.note)
       : null;
 
+  // Recording that the owner told us it's theirs. Its own branch because it
+  // moves the status as well as the flag, and because the audit line it writes
+  // is a claim, not an edit. Sends nothing, so it needs no manage permission:
+  // whoever took the message is whoever should be able to write it down.
+  if (typeof body.ownerConfirmed === 'boolean') {
+    if ((CLOSED_STATUSES as readonly string[]).includes(item.status)) {
+      return json({ error: 'That item has already left our hands' }, 409);
+    }
+    if (body.ownerConfirmed && !item.owner_email) {
+      return json({ error: 'Say whose it is before marking it theirs' }, 400);
+    }
+    if (item.owner_confirmed === body.ownerConfirmed) return json({ item });
+
+    // Confirming parks it in 'claimed', out of the donation sweep's way.
+    // Taking it back returns it to the queue it would have been in, but only
+    // from the status this flag put it in — a guest's own claim link click, or
+    // a donation flag, is not ours to undo from here.
+    const status = body.ownerConfirmed
+      ? 'claimed'
+      : item.status === 'claimed'
+        ? 'unclaimed'
+        : item.status;
+
+    const { data: updated, error } = await db
+      .from('lost_found_items')
+      .update({
+        owner_confirmed: body.ownerConfirmed,
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) return json({ error: error.message }, 500);
+
+    await logLostFoundEvent(db, {
+      itemId: id,
+      action: body.ownerConfirmed ? 'claim_received' : 'status_changed',
+      actor: email,
+      detail: body.ownerConfirmed
+        ? { source: 'staff', owner_email: item.owner_email }
+        : { owner_confirmed: { from: true, to: false }, from: item.status, to: status },
+      note:
+        note ??
+        (body.ownerConfirmed
+          ? 'They told us it was theirs — nobody was emailed.'
+          : 'No longer sure it is theirs.'),
+    });
+
+    return json({ item: updated as LostFoundItemRow });
+  }
+
   // A status move and a field edit are different acts with different audit
   // lines, so they are handled separately rather than merged into one update.
   if (typeof body.status === 'string') {
@@ -347,15 +434,23 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const normalized = normalizeItemPatch(body);
   if (!normalized.ok) return json({ error: normalized.error }, 400);
 
+  // Clearing the owner takes the confirmation with it (normalizeItemPatch),
+  // and with it the reason the item was parked in 'claimed'.
+  const unpark =
+    normalized.value.owner_confirmed === false && item.owner_confirmed && item.status === 'claimed'
+      ? { status: 'unclaimed' }
+      : {};
+  const fields = { ...normalized.value, ...unpark };
+
   const diff = diffItemFields(
     item as unknown as Record<string, unknown>,
-    normalized.value as Record<string, unknown>
+    fields as Record<string, unknown>
   );
   if (Object.keys(diff).length === 0) return json({ item });
 
   const { data: updated, error } = await db
     .from('lost_found_items')
-    .update({ ...normalized.value, updated_at: new Date().toISOString() })
+    .update({ ...fields, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select('*')
     .single();

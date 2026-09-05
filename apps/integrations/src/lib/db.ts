@@ -479,6 +479,12 @@ export interface LostFoundItemRow {
   owner_member_id: string | null;
   owner_name: string | null;
   owner_email: string | null;
+  /**
+   * The guest told us it's theirs — they reached out, or said so at the desk —
+   * so there is nobody to ask. Weaker than claimed_by_*, which only the signed
+   * claim link may write.
+   */
+  owner_confirmed: boolean;
   donate_after: string;
   claimed_by_email: string | null;
   claimed_by_name: string | null;
