@@ -1,11 +1,13 @@
 // One lost-and-found item: its photos, who has been asked, who claimed it, and
 // everything that has happened to it.
 //
-// The page is ordered by what a staff member is here to do. If someone has
-// claimed it, that is the first thing on screen, because the next action is
-// handing it over. Otherwise the ask panel is — the item is only useful to its
-// owner if its owner hears about it. The audit trail is last: it matters when
-// something goes wrong, not when things are going right.
+// The page is ordered by what a staff member is here to do. Handing something
+// back is the commonest reason this page is open at all — someone is at the
+// desk, waiting — so picked up / donated / discarded sit directly under the
+// title rather than at the bottom of everything. Then who claimed it, then the
+// ask panel, because an item is only useful to its owner if its owner hears
+// about it. The audit trail is last: it matters when something goes wrong, not
+// when things are going right.
 
 import { useMemo, useState } from 'react';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
@@ -198,6 +200,62 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
       {notice && <p className="text-sm text-[var(--pyre-sage)]">{notice}</p>}
       {actionError && <p className="text-sm text-[var(--pyre-red)]">{actionError}</p>}
 
+      {!closed && (
+        <section className="flex flex-wrap gap-2 border-b border-white/10 pb-6">
+          <button
+            type="button"
+            className={primaryButtonClass}
+            disabled={busy}
+            onClick={() =>
+              setPending({
+                status: 'picked_up',
+                title: 'Hand it back?',
+                body: `Marks ${item.reference} as collected. Check the distinguishing details against what they describe first.`,
+                confirmLabel: 'Picked up',
+              })
+            }
+          >
+            Picked up
+          </button>
+
+          {data?.canManage && (
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy}
+              onClick={() =>
+                setPending({
+                  status: 'donated',
+                  title: `Donated to ${DONATION_PARTNER}?`,
+                  body: `Records that ${item.reference} went to ${DONATION_PARTNER}. Only mark this once it has actually been dropped off.`,
+                  confirmLabel: 'Donated',
+                  danger: true,
+                })
+              }
+            >
+              Donated to {DONATION_PARTNER}
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={busy}
+            onClick={() =>
+              setPending({
+                status: 'discarded',
+                title: 'Bin it?',
+                body: `Records that ${item.reference} was thrown away. For things nobody would want back.`,
+                confirmLabel: 'Discard',
+                danger: true,
+              })
+            }
+          >
+            Discard
+          </button>
+        </section>
+      )}
+
       {item.claimed_by_email && !closed && (
         <div className={`${cardClass} border-[var(--pyre-gold)]/50`}>
           <SectionTitle note="Check the description against what they tell you before handing it over.">
@@ -359,65 +417,6 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
               </li>
             ))}
           </ul>
-        </section>
-      )}
-
-      {!closed && (
-        <section>
-          <SectionTitle>When it leaves</SectionTitle>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={primaryButtonClass}
-              disabled={busy}
-              onClick={() =>
-                setPending({
-                  status: 'picked_up',
-                  title: 'Hand it back?',
-                  body: `Marks ${item.reference} as collected. Check the distinguishing details against what they describe first.`,
-                  confirmLabel: 'Picked up',
-                })
-              }
-            >
-              Picked up
-            </button>
-
-            {data?.canManage && (
-              <button
-                type="button"
-                className={buttonClass}
-                disabled={busy}
-                onClick={() =>
-                  setPending({
-                    status: 'donated',
-                    title: `Donated to ${DONATION_PARTNER}?`,
-                    body: `Records that ${item.reference} went to ${DONATION_PARTNER}. Only mark this once it has actually been dropped off.`,
-                    confirmLabel: 'Donated',
-                    danger: true,
-                  })
-                }
-              >
-                Donated to {DONATION_PARTNER}
-              </button>
-            )}
-
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={busy}
-              onClick={() =>
-                setPending({
-                  status: 'discarded',
-                  title: 'Bin it?',
-                  body: `Records that ${item.reference} was thrown away. For things nobody would want back.`,
-                  confirmLabel: 'Discard',
-                  danger: true,
-                })
-              }
-            >
-              Discard
-            </button>
-          </div>
         </section>
       )}
 
