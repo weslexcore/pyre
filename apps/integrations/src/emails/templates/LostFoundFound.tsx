@@ -89,7 +89,7 @@ LostFoundFound.PreviewProps = {
   reference: 'LF-2026-0007',
   itemLabel: 'Black water bottle',
   foundDateLabel: 'Tuesday, September 2',
-  areaLabel: 'Changing area',
+  areaLabel: 'Social area',
   donateDateLabel: 'October 2',
   donationPartner: 'Furbish Thrift',
   claimUrl: 'https://pyre-integrations.vercel.app/api/lost-found/claim?token=preview.preview',

@@ -70,7 +70,7 @@ export function LostFoundForm() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('bottle');
   const [description, setDescription] = useState('');
-  const [area, setArea] = useState('changing_area');
+  const [area, setArea] = useState('check_in');
   const [storageLocation, setStorageLocation] = useState('');
   const [foundAt, setFoundAt] = useState(() => toLocalInput(now));
   const [windowStart, setWindowStart] = useState(() =>
