@@ -9,5 +9,5 @@
 -- Rows already logged keep their value in the `created` event detail, so the
 -- audit trail of what was recorded at the time stays intact.
 
-alter table public.lost_and_found
+alter table public.lost_found_items
   drop column if exists area;
