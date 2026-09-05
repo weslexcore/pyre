@@ -387,12 +387,68 @@ export interface HostSession {
 }
 
 /** One seat in a session. `cancelledAt` is set on withdrawn bookings, which
- * stay in the list; `checkedIn` is the attendance signal. */
+ * stay in the list; `checkedIn` is the attendance signal.
+ *
+ * The identity fields are optional and deliberately over-broad. Attendance
+ * reporting (lib/reports/activity.ts) only ever needed the four counters
+ * above, so who the seat belongs to was never modelled; Lost & Found needs it
+ * to ask "was this yours?". Momence's booking rows have carried the customer
+ * under more than one shape across API revisions, so every known spelling is
+ * declared optional and `bookingMember()` below picks whichever is present
+ * rather than any single one being load-bearing. */
 export interface SessionBooking {
   id: number;
   checkedIn: boolean;
   ticketsBought: number;
   cancelledAt: string | null;
+  member?: MomenceBookingPerson | null;
+  customer?: MomenceBookingPerson | null;
+  memberId?: number | string | null;
+  customerId?: number | string | null;
+  memberEmail?: string | null;
+  customerEmail?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}
+
+/** The customer on a booking, however Momence spells it on a given endpoint. */
+export interface MomenceBookingPerson {
+  id?: number | string | null;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
+}
+
+/** Who a seat belongs to, normalised across the shapes above. */
+export interface BookingPerson {
+  memberId: string;
+  name: string;
+  email: string;
+}
+
+function personName(source: MomenceBookingPerson): string {
+  const joined = [source.firstName, source.lastName].filter(Boolean).join(' ').trim();
+  return joined || (source.name ?? '').trim();
+}
+
+/**
+ * Pull the customer off a booking row, or null when this endpoint revision
+ * carries no identity at all — in which case the caller degrades rather than
+ * guessing (see lib/lost-found/attendees.ts).
+ */
+export function bookingMember(booking: SessionBooking): BookingPerson | null {
+  const nested = booking.member ?? booking.customer ?? null;
+  const memberId = String(nested?.id ?? booking.memberId ?? booking.customerId ?? '').trim();
+  const email = (nested?.email ?? booking.memberEmail ?? booking.customerEmail ?? '')
+    .trim()
+    .toLowerCase();
+  const name = nested
+    ? personName(nested)
+    : [booking.firstName, booking.lastName].filter(Boolean).join(' ').trim();
+
+  if (!memberId && !email) return null;
+  return { memberId, name, email };
 }
 
 export interface AppointmentReservation {

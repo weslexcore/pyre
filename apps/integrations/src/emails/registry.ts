@@ -5,6 +5,8 @@ import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
+import { LostFoundClaimed } from './templates/LostFoundClaimed';
+import { LostFoundFound } from './templates/LostFoundFound';
 import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
@@ -118,6 +120,17 @@ export const EMAIL_TEMPLATES: Registry = {
     subject: (p) =>
       `${p.severityLabel} incident: ${p.categoryLabel} in the ${p.areaLabel} (${p.reference})`,
     Component: IncidentReported,
+  },
+  'lost-found-found': {
+    // A question, not an announcement — it has to read as worth opening from
+    // the subject line alone, because most recipients of a session blast will
+    // correctly decide it isn't theirs.
+    subject: (p) => `Did you leave a ${p.itemLabel.toLowerCase()} at Pyre?`,
+    Component: LostFoundFound,
+  },
+  'lost-found-claimed': {
+    subject: (p) => `Claimed: ${p.itemLabel} (${p.reference})`,
+    Component: LostFoundClaimed,
   },
 };
 

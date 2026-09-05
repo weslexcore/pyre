@@ -84,6 +84,15 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/lost-found',
+    title: 'Lost & Found',
+    navLabel: 'Lost & Found',
+    keywords: ['lost', 'found', 'left behind', 'missing', 'belongings', 'bin', 'furbish'],
+    description:
+      'Photograph what a guest left behind, ask the people who were here whether it is theirs, and hand it back — or send it to Furbish Thrift after 30 days.',
+    section: 'operations',
+  },
+  {
     href: SHIFT_NOTES_HREF,
     title: 'Shift Notes',
     navLabel: 'Shift Notes',
@@ -220,12 +229,25 @@ export function hasIncidentsManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(INCIDENTS_MANAGE);
 }
 
+// Same split for lost and found. A plain '/admin/lost-found' grant is the
+// floor level: log what you found, browse the log, and hand something back to
+// the person standing at the desk — all of which is the job of whoever is on
+// shift. This key (or admin) unlocks the two acts that reach outside the
+// building: emailing guests to ask whether an item is theirs, and recording
+// that a bag of unclaimed things went to Furbish.
+export const LOST_FOUND_MANAGE = 'lost-found:manage';
+
+export function hasLostFoundManage(access: PageAccess): boolean {
+  return access.isAdmin || access.pages.includes(LOST_FOUND_MANAGE);
+}
+
 /** Manage capabilities that imply view access to the page they govern. */
 const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/schedule': SCHEDULE_MANAGE,
   '/admin/partners': PARTNERS_MANAGE,
   '/admin/referrals': REFERRALS_MANAGE,
   '/admin/incidents': INCIDENTS_MANAGE,
+  '/admin/lost-found': LOST_FOUND_MANAGE,
 };
 
 /** Whether this user may view the tool page at `href` (manage implies view). */
@@ -319,6 +341,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'Report an Incident',
     parent: '/admin/incidents',
     keywords: ['file', 'new incident', 'injury', 'accident'],
+  },
+  {
+    href: '/admin/lost-found/new',
+    title: 'Log a Found Item',
+    parent: '/admin/lost-found',
+    keywords: ['new', 'found something', 'left behind'],
   },
   {
     href: '/admin/ask/log',

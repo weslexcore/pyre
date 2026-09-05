@@ -3,7 +3,7 @@
 // the 50 MB ceiling, browser-side downscaling — are deliberately identical to
 // incident media (both are "staff uploads phone media from the floor" and
 // both buckets are provisioned with the same limits), so the primitives are
-// re-exported from lib/incidents/media rather than copied.
+// re-exported from lib/media/attachments rather than copied.
 
 export {
   ACCEPT_ATTRIBUTE,
@@ -15,9 +15,9 @@ export {
   kindForMime,
   MAX_FILE_BYTES,
   objectName,
-} from '@/lib/incidents/media';
+} from '@/lib/media/attachments';
 
-import { objectName } from '@/lib/incidents/media';
+import { objectName } from '@/lib/media/attachments';
 
 /** A note documents one shift's observation, not an evidence locker. */
 export const MAX_ATTACHMENTS_PER_NOTE = 8;
