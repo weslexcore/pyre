@@ -87,6 +87,15 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Flags lost-and-found items nobody claimed in 30 days as due for
+    // donation. Only ever flags — a person confirms the Furbish drop-off.
+    name: 'lost-found-sweep',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/lost-found/sweep')).runLostFoundSweep(ctx);
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
+  {
     // Monday morning: each employee's locked-in shifts for the week ahead,
     // one deep link per shift. Runs after sync-shifts so the roundup reflects
     // the latest Momence coverage. No-op on every other day/hour.

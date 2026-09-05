@@ -66,6 +66,19 @@ export async function requirePage(
 }
 
 /**
+ * Same, for a route serving more than one admin page — the guest lookup is
+ * used by both the incident form and the lost-and-found form, and a person
+ * granted either page may use it. Passes admins and anyone holding view
+ * access to any of `pages`.
+ */
+export async function requireAnyPage(
+  cookies: AstroCookies,
+  pages: string[]
+): Promise<AdminGate | Response> {
+  return requireAccess(cookies, (access) => pages.some((page) => canViewPage(access, page)));
+}
+
+/**
  * Weakest gate: passes anyone getAccess resolves — i.e. any user with
  * dashboard access at all, including roster-only staff who hold nothing but
  * the implicit shift-notes grant. For routes serving the /admin directory

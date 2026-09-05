@@ -9,6 +9,8 @@ import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
+import { LostFoundClaimed } from './templates/LostFoundClaimed';
+import { LostFoundFound } from './templates/LostFoundFound';
 import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
@@ -46,4 +48,6 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'weekly-shifts': WeeklyShifts.PreviewProps,
   'shift-request-decision': ShiftRequestDecision.PreviewProps,
   'incident-reported': IncidentReported.PreviewProps,
+  'lost-found-found': LostFoundFound.PreviewProps,
+  'lost-found-claimed': LostFoundClaimed.PreviewProps,
 };

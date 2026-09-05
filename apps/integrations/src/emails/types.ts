@@ -231,6 +231,45 @@ export interface IncidentReportedProps {
   incidentUrl: string;
 }
 
+/**
+ * "Did you leave something at Pyre?" — to the person we think owns an item, or
+ * to everyone who was in session while it was left. The photo does the
+ * identifying; the description stays vague on purpose, so the email is not a
+ * recipe for claiming someone else's ring.
+ */
+export interface LostFoundFoundProps {
+  /** Empty when we're asking a whole session and don't know who they are. */
+  firstName: string;
+  /** Case number, e.g. "LF-2026-0007". */
+  reference: string;
+  /** What it is, in the words a guest would recognise: "Black water bottle". */
+  itemLabel: string;
+  /** e.g. "Tuesday, September 2" (bathhouse wall-clock time). */
+  foundDateLabel: string;
+  /** Where on site it turned up, e.g. "Changing area". */
+  areaLabel: string;
+  /** The date it goes to the donation partner, e.g. "October 2". */
+  donateDateLabel: string;
+  /** Where unclaimed items go — "Furbish Thrift". */
+  donationPartner: string;
+  /** Signed one-click claim link. Absent when link signing isn't configured. */
+  claimUrl?: string;
+  /** A signed URL to the item's photo. Absent when there is no photo. */
+  photoUrl?: string;
+}
+
+/** To staff, the moment a guest clicks "this is mine". */
+export interface LostFoundClaimedProps {
+  reference: string;
+  itemLabel: string;
+  /** Who claimed it — the person we emailed, not a typed-in name. */
+  claimantLabel: string;
+  claimantEmail: string;
+  /** Which session put them on site, or "" for a known-owner send. */
+  sessionLabel: string;
+  itemUrl: string;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -252,6 +291,8 @@ export interface EmailPropsByTemplate {
   'weekly-shifts': WeeklyShiftsProps;
   'shift-request-decision': ShiftRequestDecisionProps;
   'incident-reported': IncidentReportedProps;
+  'lost-found-found': LostFoundFoundProps;
+  'lost-found-claimed': LostFoundClaimedProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;
