@@ -50,6 +50,11 @@ import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 /** The log form has never emailed anyone yet, so nothing is "already asked". */
 const EMPTY_ASKED: Set<string> = new Set();
 
+/** "Alex Chen" -> "Alex", for the one place the form speaks about a person. */
+function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? '';
+}
+
 interface PendingFile {
   id: string;
   file: File;
@@ -178,8 +183,30 @@ export function LostFoundForm() {
         }
       }
 
+      // Naming an owner is the decision to email them — the photo is uploaded
+      // by now, so the mail carries it. Anything that goes wrong here leaves a
+      // logged item and a button on the item page, never a lost item.
+      let asked: string | null = null;
+      if (owner?.email) {
+        setProgress(`Emailing ${firstNameOf(owner.name) || 'them'}…`);
+        try {
+          const res = await fetch('/api/admin/lost-found-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemId: item.id, mode: 'owner' }),
+          });
+          asked = res.ok ? 'sent' : res.status === 403 ? 'denied' : 'failed';
+        } catch {
+          asked = 'failed';
+        }
+      }
+
       invalidateJson('/api/admin/lost-found');
-      window.location.href = `/admin/lost-found/${item.id}${failed > 0 ? '?uploads=failed' : ''}`;
+      const params = new URLSearchParams();
+      if (failed > 0) params.set('uploads', 'failed');
+      if (asked) params.set('asked', asked);
+      const query = params.toString();
+      window.location.href = `/admin/lost-found/${item.id}${query ? `?${query}` : ''}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
       setSubmitting(false);
@@ -348,7 +375,13 @@ export function LostFoundForm() {
       </section>
 
       <section>
-        <SectionTitle note="A name here means one email to one person, and nobody else gets asked.">
+        <SectionTitle
+          note={
+            owner
+              ? `Logging this emails ${owner.name} the photo and a claim link. Nobody else is asked.`
+              : 'A name here means one email to one person, and nobody else gets asked.'
+          }
+        >
           Do we know whose it is?
         </SectionTitle>
         {ownerField}
@@ -424,7 +457,11 @@ export function LostFoundForm() {
           disabled={submitting}
           onClick={() => void submit()}
         >
-          {submitting ? 'Saving…' : 'Log the item'}
+          {submitting
+            ? 'Saving…'
+            : owner
+              ? `Log it and email ${firstNameOf(owner.name) || 'them'}`
+              : 'Log the item'}
         </button>
         {progress && <span className="font-mono text-xs text-white/50">{progress}</span>}
       </div>

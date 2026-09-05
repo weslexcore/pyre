@@ -15,11 +15,6 @@ import type { LostFoundFoundProps } from '../types';
 // The donation date is stated plainly rather than as "30 days": a date is
 // something you can act on.
 
-const detailRow = {
-  ...text,
-  margin: '0 0 4px',
-};
-
 const photo = {
   borderRadius: '6px',
   display: 'block',
@@ -48,17 +43,13 @@ export function LostFoundFound({
 
   return (
     <EmailLayout preview={`Is this yours? ${itemLabel} left at Pyre`}>
-      <Text style={heading}>Did you leave this behind?</Text>
+      <Text style={heading}>Did you leave something behind?</Text>
 
       {photoUrl && <Img src={photoUrl} alt={itemLabel} style={photo} />}
 
       <Text style={text}>
         {greeting} found {indefiniteArticle(itemLabel)} {itemLabel.toLowerCase()} at Pyre on{' '}
         {foundDateLabel} and we're trying to get it back to whoever it belongs to.
-      </Text>
-
-      <Text style={{ ...detailRow, margin: '0 0 20px' }}>
-        <strong>Found:</strong> {foundDateLabel}
       </Text>
 
       {claimUrl && (
