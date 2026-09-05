@@ -7,8 +7,14 @@
 // no wording beats seeing your own jacket.
 //
 // Then the question that decides everything downstream: do we know whose it
-// is? A name means one email to one person and there is nothing else to
-// decide. Without one, the question is which sessions this could have been
+// is? A name means one email to one person — unless they are the reason we
+// went looking. A guest who emailed to say they left their ring has already
+// told us everything the email would ask, so naming them offers two buttons
+// rather than one: ask them, or just write down that it's theirs. The second
+// sends nothing and parks the item in 'claimed', which is what keeps it off
+// the donation pile while they arrange to come by.
+//
+// Without a name, the question is which sessions this could have been
 // left in — asked as sessions, with names and headcounts, not as clock times.
 // The person logging it was there: they know the 6pm social had just let out.
 // Nobody knows, off the top of their head, that the window they want is 15:00
@@ -131,11 +137,18 @@ export function LostFoundForm() {
     });
   };
 
-  const submit = async () => {
+  /**
+   * `ask` is the difference between the two buttons: whether logging this also
+   * emails the person named on it. Silent means the guest already told us it's
+   * theirs, which the item is marked with — not an email we chose to skip, a
+   * fact about who it belongs to.
+   */
+  const submit = async ({ ask }: { ask: boolean }) => {
     if (!title.trim()) {
       setError('Say what the item is');
       return;
     }
+    const confirmedOwner = Boolean(owner?.email) && !ask;
 
     setSubmitting(true);
     setError(null);
@@ -155,6 +168,7 @@ export function LostFoundForm() {
           ownerMemberId: owner?.memberId || null,
           ownerName: owner?.name || null,
           ownerEmail: owner?.email || null,
+          ownerConfirmed: confirmedOwner,
         }),
       });
       if (!res.ok) {
@@ -186,8 +200,8 @@ export function LostFoundForm() {
       // Naming an owner is the decision to email them — the photo is uploaded
       // by now, so the mail carries it. Anything that goes wrong here leaves a
       // logged item and a button on the item page, never a lost item.
-      let asked: string | null = null;
-      if (owner?.email) {
+      let asked: string | null = confirmedOwner ? 'silent' : null;
+      if (owner?.email && ask) {
         setProgress(`Emailing ${firstNameOf(owner.name) || 'them'}…`);
         try {
           const res = await fetch('/api/admin/lost-found-notify', {
@@ -378,7 +392,7 @@ export function LostFoundForm() {
         <SectionTitle
           note={
             owner
-              ? `Logging this emails ${owner.name} the photo and a claim link. Nobody else is asked.`
+              ? `Two ways to finish below: email ${firstNameOf(owner.name) || 'them'} the photo and a claim link, or — if they are the one who told us it was missing — just log it as theirs and send nothing.`
               : 'A name here means one email to one person, and nobody else gets asked.'
           }
         >
@@ -446,16 +460,17 @@ export function LostFoundForm() {
       <p className="text-xs text-white/40">
         Unclaimed, this goes to {DONATION_PARTNER} on{' '}
         {donateOn.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.
+        {owner && ' Logged as theirs, it waits for them instead.'}
       </p>
 
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           className={primaryButtonClass}
           disabled={submitting}
-          onClick={() => void submit()}
+          onClick={() => void submit({ ask: true })}
         >
           {submitting
             ? 'Saving…'
@@ -463,6 +478,23 @@ export function LostFoundForm() {
               ? `Log it and email ${firstNameOf(owner.name) || 'them'}`
               : 'Log the item'}
         </button>
+
+        {/*
+          The quiet path, and only ever offered next to a name: they already
+          know we have it, so an email asking whether it's theirs would be a
+          worse version of the conversation we've already had.
+        */}
+        {owner && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={submitting}
+            onClick={() => void submit({ ask: false })}
+          >
+            They already told us — log it, no email
+          </button>
+        )}
+
         {progress && <span className="font-mono text-xs text-white/50">{progress}</span>}
       </div>
     </div>
