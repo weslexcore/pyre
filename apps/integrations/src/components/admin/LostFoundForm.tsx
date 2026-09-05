@@ -85,7 +85,7 @@ export function LostFoundForm() {
   // logged as it is picked up. The server stamps found_at itself; this is only
   // the date shown on the form.
   // What the guest will read, composed exactly as the email composes it. Staff
-  // see "we found a bottle, black at Pyre" while they can still fix it, rather
+  // see "we found a bottle, black" while they can still fix it, rather
   // than after it has gone to forty people.
   const emailClause = useMemo(() => {
     const clause = guestItemClause(title);

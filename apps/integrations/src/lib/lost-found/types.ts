@@ -90,7 +90,7 @@ export function indefiniteArticle(phrase: string): string {
 /**
  * The clause the guest reads in "Did you leave this behind?". The log form
  * shows it live under the item field so whoever is typing can see that "Bottle,
- * black" reads as "we found a bottle, black at Pyre" before it goes to forty
+ * black" reads as "we found a bottle, black" before it goes to forty
  * people. The email template composes the same clause the same way.
  */
 export function guestItemClause(itemLabel: string): string {
