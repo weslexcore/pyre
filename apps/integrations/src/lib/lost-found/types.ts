@@ -3,49 +3,12 @@
 // islands import it directly, and the check constraints in the
 // lost_and_found migration mirror these lists.
 //
-// Areas are the shorter list a bin of bottles needs, not the incident
-// taxonomy. An incident report has to distinguish the showers from the
-// restroom because that is where a fall happened; a lost jacket only ever came
-// off in one of the handful of places a guest sets something down. Where a
-// place exists in both lists it keeps the incident slug (check_in, deck,
-// sauna, parking_lot, other), so a search across both logs still lines up.
-
-import { areaLabel as incidentAreaLabel } from '@/lib/incidents/types';
-
-export const LOST_FOUND_AREAS = [
-  'check_in',
-  'deck',
-  'sauna',
-  'firepit',
-  'social_area',
-  'parking_lot',
-  'other',
-] as const;
-
-export type LostFoundArea = (typeof LOST_FOUND_AREAS)[number];
-
-export const AREA_LABELS: Record<LostFoundArea, string> = {
-  check_in: 'Check-in',
-  deck: 'Deck',
-  sauna: 'Sauna',
-  firepit: 'Firepit',
-  social_area: 'Social area',
-  parking_lot: 'Parking lot',
-  other: 'Somewhere else',
-};
-
-export function isLostFoundArea(v: unknown): v is LostFoundArea {
-  return typeof v === 'string' && (LOST_FOUND_AREAS as readonly string[]).includes(v);
-}
-
-/**
- * Label for a stored area. Falls through to the incident vocabulary so an item
- * logged under the old borrowed list still reads as "Changing area" rather
- * than a raw slug.
- */
-export function areaLabel(value: string): string {
-  return isLostFoundArea(value) ? AREA_LABELS[value] : incidentAreaLabel(value);
-}
+// There is deliberately no list of places an item was found. Incidents need
+// one — where a fall happened is the point of the report — but a bottle in the
+// bin only raises one question of place, and it is "where do I go to get it?".
+// That is storage_location, free text, because "shelf B" and "staff room hook"
+// are what staff actually say to each other. Where it was picked up told
+// nobody anything and made the guest email longer.
 
 export const LOST_FOUND_CATEGORIES = [
   'bottle',

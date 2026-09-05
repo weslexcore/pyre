@@ -38,7 +38,6 @@ export function LostFoundFound({
   reference,
   itemLabel,
   foundDateLabel,
-  areaLabel,
   donateDateLabel,
   donationPartner,
   claimUrl,
@@ -57,11 +56,8 @@ export function LostFoundFound({
         get it back to whoever it belongs to.
       </Text>
 
-      <Text style={detailRow}>
-        <strong>Found:</strong> {foundDateLabel}
-      </Text>
       <Text style={{ ...detailRow, margin: '0 0 20px' }}>
-        <strong>Where:</strong> {areaLabel}
+        <strong>Found:</strong> {foundDateLabel}
       </Text>
 
       {claimUrl && (
@@ -89,7 +85,6 @@ LostFoundFound.PreviewProps = {
   reference: 'LF-2026-0007',
   itemLabel: 'Black water bottle',
   foundDateLabel: 'Tuesday, September 2',
-  areaLabel: 'Social area',
   donateDateLabel: 'October 2',
   donationPartner: 'Furbish Thrift',
   claimUrl: 'https://pyre-integrations.vercel.app/api/lost-found/claim?token=preview.preview',

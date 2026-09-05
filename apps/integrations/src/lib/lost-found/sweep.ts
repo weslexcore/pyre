@@ -11,8 +11,8 @@
 // past their deadline, so a second run in the same hour matches nothing.
 
 import type { CronJobContext } from '@/lib/cron/jobs';
-import { getDb } from '@/lib/db';
 import type { LostFoundItemRow } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { logLostFoundEvent } from './log';
 
 /** Bounded so one tick can't spend its whole budget here after a long outage. */

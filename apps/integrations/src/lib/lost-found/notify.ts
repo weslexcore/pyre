@@ -18,7 +18,7 @@ import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { buildClaimUrl } from './claim-token';
 import { logLostFoundEvent } from './log';
-import { areaLabel, categoryLabel, DONATION_PARTNER } from './types';
+import { categoryLabel, DONATION_PARTNER } from './types';
 
 /** One person to ask, as the notify route hands them over. */
 export interface NotifyRecipient {
@@ -107,7 +107,6 @@ export async function notifyAboutItem(
     reference: item.reference,
     itemLabel: itemLabelFor(item),
     foundDateLabel: formatDay(item.found_at),
-    areaLabel: areaLabel(item.area),
     donateDateLabel: formatShortDay(item.donate_after),
     donationPartner: DONATION_PARTNER,
     ...(photoUrl ? { photoUrl } : {}),

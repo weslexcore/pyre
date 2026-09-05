@@ -246,8 +246,6 @@ export interface LostFoundFoundProps {
   itemLabel: string;
   /** e.g. "Tuesday, September 2" (bathhouse wall-clock time). */
   foundDateLabel: string;
-  /** Where on site it turned up, e.g. "Changing area". */
-  areaLabel: string;
   /** The date it goes to the donation partner, e.g. "October 2". */
   donateDateLabel: string;
   /** Where unclaimed items go — "Furbish Thrift". */

@@ -473,7 +473,7 @@ export interface LostFoundItemRow {
   found_at: string;
   left_window_start: string;
   left_window_end: string;
-  area: string;
+  /** Where staff will find it: "front desk bin", "shelf B". Free text. */
   storage_location: string | null;
   owner_member_id: string | null;
   owner_name: string | null;
