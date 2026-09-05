@@ -23,12 +23,7 @@ import {
   downscaleImage,
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
-import {
-  CLOSED_STATUSES,
-  categoryLabel,
-  DONATION_PARTNER,
-  daysUntilDonation,
-} from '@/lib/lost-found/types';
+import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -192,8 +187,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
           <LostFoundStatusBadge status={item.status} />
         </div>
         <p className="font-mono text-xs text-white/45">
-          {item.reference} · {categoryLabel(item.category)} · Found{' '}
-          {formatDayAndTime(item.found_at)}
+          {item.reference} · Found {formatDayAndTime(item.found_at)}
         </p>
       </header>
 

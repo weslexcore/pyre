@@ -10,48 +10,10 @@
 // are what staff actually say to each other. Where it was picked up told
 // nobody anything and made the guest email longer.
 
-export const LOST_FOUND_CATEGORIES = [
-  'bottle',
-  'clothing',
-  'towel',
-  'jewelry',
-  'electronics',
-  'bag',
-  'eyewear',
-  'keys',
-  'wallet',
-  'book',
-  'toiletries',
-  'other',
-] as const;
-
-export type LostFoundCategory = (typeof LOST_FOUND_CATEGORIES)[number];
-
-export interface CategoryOption {
-  value: LostFoundCategory;
-  label: string;
-}
-
-// Order matters: these render as tap targets, and a water bottle is most of
-// what ever goes in the bin.
-export const CATEGORY_OPTIONS: CategoryOption[] = [
-  // { value: 'bottle', label: 'Water bottle' },
-  // { value: 'clothing', label: 'Clothing' },
-  // { value: 'towel', label: 'Towel' },
-  // { value: 'bag', label: 'Bag' },
-  // { value: 'electronics', label: 'Electronics' },
-  // { value: 'jewelry', label: 'Jewelry' },
-  // { value: 'eyewear', label: 'Glasses / sunglasses' },
-  // { value: 'keys', label: 'Keys' },
-  // { value: 'wallet', label: 'Wallet / cards' },
-  // { value: 'toiletries', label: 'Toiletries' },
-  // { value: 'book', label: 'Book' },
-  // { value: 'other', label: 'Something else' },
-];
-
-export const CATEGORY_LABELS: Record<LostFoundCategory, string> = Object.fromEntries(
-  CATEGORY_OPTIONS.map((o) => [o.value, o.label])
-) as Record<LostFoundCategory, string>;
+// There is no category. "Black water bottle" is already the category and the
+// description in the words a guest would use, and picking "Water bottle" from
+// a grid after typing it was a tap that told us nothing the title didn't. The
+// search box reads titles; the photo does the recognising.
 
 export const LOST_FOUND_STATUSES = [
   'unclaimed',
@@ -111,23 +73,33 @@ export const DEFAULT_LOOKBACK_HOURS = 6;
 /** Widest window we will ask Momence about — a guard, not a policy. */
 export const MAX_WINDOW_HOURS = 72;
 
-export function isLostFoundCategory(v: unknown): v is LostFoundCategory {
-  return typeof v === 'string' && (LOST_FOUND_CATEGORIES as readonly string[]).includes(v);
+/**
+ * "a" or "an" for what staff actually type into the item field. The vowel test
+ * is enough here — the words that break it ("a unicorn", "an hour") are not
+ * things that turn up in a bathhouse bin, and "an umbrella", "an orange
+ * hoodie", "an AirPod" are.
+ */
+export function indefiniteArticle(phrase: string): string {
+  const head = phrase
+    .trim()
+    .toLowerCase()
+    .replace(/^[^a-z]+/, '');
+  return /^[aeiou]/.test(head) ? 'an' : 'a';
+}
+
+/**
+ * The clause the guest reads in "Did you leave this behind?". The log form
+ * shows it live under the item field so whoever is typing can see that "Bottle,
+ * black" reads as "we found a bottle, black at Pyre" before it goes to forty
+ * people. The email template composes the same clause the same way.
+ */
+export function guestItemClause(itemLabel: string): string {
+  const label = itemLabel.trim() || 'item';
+  return `we found ${indefiniteArticle(label)} ${label.toLowerCase()} at Pyre`;
 }
 
 export function isLostFoundStatus(v: unknown): v is LostFoundStatus {
   return typeof v === 'string' && (LOST_FOUND_STATUSES as readonly string[]).includes(v);
-}
-
-/**
- * Label for a stored category. Falls back to the stored value for anything the
- * label map doesn't cover — a category dropped from CATEGORY_OPTIONS but still
- * in LOST_FOUND_CATEGORIES used to return undefined here, and the first thing
- * downstream of it is a guest email being composed. A missing label should read
- * as "bottle", not throw halfway through a blast.
- */
-export function categoryLabel(value: string): string {
-  return CATEGORY_LABELS[value as LostFoundCategory] ?? value;
 }
 
 export function statusLabel(value: string): string {

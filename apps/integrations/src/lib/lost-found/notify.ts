@@ -18,7 +18,7 @@ import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { buildClaimUrl } from './claim-token';
 import { logLostFoundEvent } from './log';
-import { categoryLabel, DONATION_PARTNER } from './types';
+import { DONATION_PARTNER } from './types';
 
 /** One person to ask, as the notify route hands them over. */
 export interface NotifyRecipient {
@@ -60,16 +60,13 @@ function firstNameOf(name: string | undefined): string {
 }
 
 /**
- * What the guest sees the item called. The category gives the sentence a noun
- * when the title is a bare adjective, and the title carries the recognisable
- * part — but never the distinguishing detail, which stays on the record.
+ * What the guest sees the item called: the title staff typed, which is written
+ * for exactly this — "black water bottle", not "bottle, dented near the base
+ * with a faded REI sticker". The distinguishing detail stays on the record, so
+ * a blast is never a recipe for claiming someone else's ring.
  */
 export function itemLabelFor(item: LostFoundItemRow): string {
-  const title = (item.title ?? '').trim();
-  const category = categoryLabel(item.category ?? '').trim();
-  if (!title) return category || 'item';
-  if (!category) return title;
-  return title.toLowerCase().includes(category.toLowerCase()) ? title : `${title} (${category})`;
+  return (item.title ?? '').trim() || 'item';
 }
 
 /**
