@@ -13,11 +13,10 @@ import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
 import {
-  areaLabel,
-  categoryLabel,
   CLOSED_STATUSES,
-  daysUntilDonation,
+  categoryLabel,
   DONATION_PARTNER,
+  daysUntilDonation,
 } from '@/lib/lost-found/types';
 import type { PeopleNames } from '@/lib/sops/names';
 import { cardClass, formatDayAndTime, inputClass, primaryButtonClass } from './incidentUi';
@@ -160,7 +159,8 @@ export function LostFoundIndex() {
                   </span>
 
                   <span className="mt-1 block truncate font-mono text-xs text-white/45">
-                    {categoryLabel(item.category)} · {areaLabel(item.area)}
+                    {categoryLabel(item.category)}
+                    {item.storage_location ? ` · ${item.storage_location}` : ''}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-xs text-white/35">
                     Found {formatDayAndTime(item.found_at)}

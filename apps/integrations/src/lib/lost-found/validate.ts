@@ -11,7 +11,6 @@ import {
   DEFAULT_LOOKBACK_HOURS,
   DONATION_WINDOW_DAYS,
   isLostFoundCategory,
-  LOST_FOUND_AREAS,
   MAX_WINDOW_HOURS,
 } from './types';
 
@@ -50,7 +49,6 @@ export interface ItemSubmission {
   title: string;
   description: string | null;
   category: string;
-  area: string;
   storage_location: string | null;
   found_at: string;
   left_window_start: string;
@@ -73,11 +71,6 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
 
   const category = typeof body.category === 'string' ? body.category : 'other';
   if (!isLostFoundCategory(category)) return { ok: false, error: 'Unknown category' };
-
-  const area = typeof body.area === 'string' && body.area ? body.area : 'other';
-  if (!(LOST_FOUND_AREAS as readonly string[]).includes(area)) {
-    return { ok: false, error: 'Unknown area' };
-  }
 
   const foundAt = timestamp(body.foundAt) ?? new Date().toISOString();
   const foundMs = Date.parse(foundAt);
@@ -108,7 +101,6 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
       title,
       description: text(body.description, FIELD_LIMITS.description),
       category,
-      area,
       storage_location: text(body.storageLocation, FIELD_LIMITS.storageLocation),
       found_at: foundAt,
       left_window_start: windowStart,
@@ -128,7 +120,6 @@ export type ItemPatch = Partial<
     | 'title'
     | 'description'
     | 'category'
-    | 'area'
     | 'storage_location'
     | 'left_window_start'
     | 'left_window_end'
@@ -153,15 +144,6 @@ export function normalizeItemPatch(body: Record<string, unknown>): Normalized<It
   if ('category' in body) {
     if (!isLostFoundCategory(body.category)) return { ok: false, error: 'Unknown category' };
     patch.category = body.category;
-  }
-  if ('area' in body) {
-    if (
-      typeof body.area !== 'string' ||
-      !(LOST_FOUND_AREAS as readonly string[]).includes(body.area)
-    ) {
-      return { ok: false, error: 'Unknown area' };
-    }
-    patch.area = body.area;
   }
   if ('ownerEmail' in body) {
     const ownerEmail = text(body.ownerEmail, FIELD_LIMITS.email)?.toLowerCase() ?? null;

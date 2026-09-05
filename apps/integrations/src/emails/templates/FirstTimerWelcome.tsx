@@ -39,7 +39,7 @@ export function FirstTimerWelcome({
         walk in feeling relaxed and ready.
       </Text>
       <Text style={text}>
-        Bring a swimsuit and a water bottle. We'll provide everything else you'll need. 
+        Bring a swimsuit and a water bottle. We'll provide everything else you'll need.
       </Text>
 
       <Button href={directionsUrl} style={button}>
