@@ -9,7 +9,7 @@
 // about it. The audit trail is last: it matters when something goes wrong, not
 // when things are going right.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
   LostFoundAttachmentRow,
@@ -77,14 +77,55 @@ const EVENT_LABELS: Record<string, string> = {
   donation_due: 'Flagged for donation',
 };
 
+/**
+ * What the log form couldn't finish saying. It hands over through the URL
+ * rather than holding that page open: the item is saved by then, and a staff
+ * member who has already put the bottle in the bin should not be watching a
+ * spinner to learn whether an email went.
+ *
+ * Pure — the query is cleared in an effect below, because a state initializer
+ * runs more than once and a wipe in here would eat its own second read.
+ */
+function landingNotice(): { notice: string | null; problem: string | null } {
+  if (typeof window === 'undefined') return { notice: null, problem: null };
+  const params = new URLSearchParams(window.location.search);
+  const asked = params.get('asked');
+  const uploads = params.get('uploads');
+  if (!asked && !uploads) return { notice: null, problem: null };
+
+  const problems: string[] = [];
+  if (uploads === 'failed') problems.push("Some photos didn't upload — add them again below.");
+  if (asked === 'failed') {
+    problems.push("Logged, but the email didn't go. Ask them below when you get a moment.");
+  }
+  if (asked === 'denied') {
+    problems.push(
+      'Logged. Emailing guests needs the lost-found:manage permission, so nobody was contacted.'
+    );
+  }
+
+  return {
+    notice: asked === 'sent' ? "Logged, and we've emailed them about it." : null,
+    problem: problems.length > 0 ? problems.join(' ') : null,
+  };
+}
+
 export function LostFoundDetail({ itemId }: { itemId: string }) {
   const url = itemId ? `/api/admin/lost-found?id=${itemId}` : null;
   const { data, error, loading, reload } = useCachedJson<DetailResponse>(url);
 
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(() => landingNotice().notice);
+  const [actionError, setActionError] = useState<string | null>(() => landingNotice().problem);
   const [pending, setPending] = useState<PendingAction | null>(null);
+
+  // Said once. A refresh should show the item, not re-announce an email that
+  // went out minutes ago.
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const item = data?.item ?? null;
   const closed = item ? (CLOSED_STATUSES as readonly string[]).includes(item.status) : false;
