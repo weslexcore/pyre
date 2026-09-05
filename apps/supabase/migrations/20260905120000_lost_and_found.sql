@@ -74,8 +74,9 @@ create table public.lost_found_items (
   left_window_end timestamptz not null,
   check (left_window_end >= left_window_start),
 
-  -- Where on site it turned up. Same vocabulary as incidents.area so the two
-  -- tools describe the site the same way.
+  -- Where on site it turned up. Free text against LOST_FOUND_AREAS rather than
+  -- a check constraint, so the list can shrink or grow without a migration and
+  -- rows logged under an older list still read back.
   area text not null default 'other',
   -- Where it lives now: "front desk bin", "shelf B", "staff room hook".
   storage_location text,
