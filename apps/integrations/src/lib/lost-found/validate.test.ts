@@ -84,6 +84,31 @@ describe('normalizeItemSubmission', () => {
     expect(result).toMatchObject({ ok: false });
   });
 
+  it('records that the guest told us it was theirs', () => {
+    const result = normalizeItemSubmission({
+      title: 'Silver ring',
+      ownerEmail: 'alex@example.com',
+      ownerName: 'Alex Chen',
+      ownerConfirmed: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.owner_confirmed).toBe(true);
+  });
+
+  it('will not mark an item as theirs when nobody is named', () => {
+    expect(normalizeItemSubmission({ title: 'Silver ring', ownerConfirmed: true })).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it('defaults to unconfirmed — the ordinary log is a guess about nobody', () => {
+    const result = normalizeItemSubmission({ title: 'Towel', ownerEmail: 'alex@example.com' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.owner_confirmed).toBe(false);
+  });
+
   it('lowercases the owner address it does accept', () => {
     const result = normalizeItemSubmission({ title: 'Ring', ownerEmail: '  Alex@Example.COM ' });
     expect(result.ok).toBe(true);
@@ -117,11 +142,19 @@ describe('normalizeItemPatch', () => {
     expect(normalizeItemPatch({})).toMatchObject({ ok: false });
   });
 
-  it('clears the owner when handed an empty address', () => {
+  it('clears the owner when handed an empty address, and the claim with it', () => {
     const result = normalizeItemPatch({ ownerEmail: '' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.owner_email).toBeNull();
+    expect(result.value.owner_confirmed).toBe(false);
+  });
+
+  it('never takes ownerConfirmed off an edit — that moves through its own path', () => {
+    const result = normalizeItemPatch({ title: 'Blue bottle', ownerConfirmed: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).not.toHaveProperty('owner_confirmed');
   });
 });
 

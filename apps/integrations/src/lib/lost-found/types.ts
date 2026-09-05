@@ -45,6 +45,13 @@ export const ON_HAND_STATUSES: LostFoundStatus[] = [
   'due_for_donation',
 ];
 
+/**
+ * Statuses where somebody has said an item is theirs and it is waiting for
+ * them: a guest clicked the claim link, or staff recorded that the owner told
+ * them directly. The log's "Claimed" tab is this pair, not either one alone.
+ */
+export const CLAIM_STATUSES: LostFoundStatus[] = ['claim_pending', 'claimed'];
+
 /** Statuses where the item has left our hands — no more emails, no more claims. */
 export const CLOSED_STATUSES: LostFoundStatus[] = ['picked_up', 'donated', 'discarded'];
 
