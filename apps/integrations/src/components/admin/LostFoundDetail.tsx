@@ -22,11 +22,10 @@ import {
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import {
-  areaLabel,
-  categoryLabel,
   CLOSED_STATUSES,
-  daysUntilDonation,
+  categoryLabel,
   DONATION_PARTNER,
+  daysUntilDonation,
 } from '@/lib/lost-found/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -192,7 +191,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
         </div>
         <p className="font-mono text-xs text-white/45">
           {item.reference} · {categoryLabel(item.category)} · Found{' '}
-          {formatDayAndTime(item.found_at)} in the {areaLabel(item.area).toLowerCase()}
+          {formatDayAndTime(item.found_at)}
         </p>
       </header>
 

@@ -25,12 +25,10 @@ import {
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import {
-  AREA_LABELS,
   CATEGORY_OPTIONS,
   DEFAULT_LOOKBACK_HOURS,
   DONATION_PARTNER,
   DONATION_WINDOW_DAYS,
-  LOST_FOUND_AREAS,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
@@ -70,7 +68,6 @@ export function LostFoundForm() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('bottle');
   const [description, setDescription] = useState('');
-  const [area, setArea] = useState('check_in');
   const [storageLocation, setStorageLocation] = useState('');
   const [foundAt, setFoundAt] = useState(() => toLocalInput(now));
   const [windowStart, setWindowStart] = useState(() =>
@@ -143,7 +140,6 @@ export function LostFoundForm() {
           title: title.trim(),
           category,
           description: description.trim() || null,
-          area,
           storageLocation: storageLocation.trim() || null,
           foundAt: fromLocalInput(foundAt),
           leftWindowStart: fromLocalInput(effectiveWindowStart),
@@ -310,24 +306,13 @@ export function LostFoundForm() {
       </section>
 
       <section>
-        <SectionTitle note="Where you picked it up, and where it's waiting for them.">
-          Where
+        <SectionTitle note="So whoever is on shift can put their hand on it.">
+          Where is it now?
         </SectionTitle>
-
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {LOST_FOUND_AREAS.map((value) => (
-            <TileButton
-              key={value}
-              selected={area === value}
-              label={AREA_LABELS[value]}
-              onClick={() => setArea(value)}
-            />
-          ))}
-        </div>
 
         <div>
           <label className={labelClass} htmlFor="lf-storage">
-            Where it is now
+            Where it's kept
           </label>
           <input
             id="lf-storage"

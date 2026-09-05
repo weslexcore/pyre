@@ -21,12 +21,11 @@ import { hasLostFoundManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
-import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import { loadLostFoundEvents, logLostFoundEvent } from '@/lib/lost-found/log';
+import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import {
   CLOSED_STATUSES,
   isLostFoundStatus,
-  LOST_FOUND_AREAS,
   LOST_FOUND_CATEGORIES,
   ON_HAND_STATUSES,
   STAFF_SETTABLE_STATUSES,
@@ -141,14 +140,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     query = query.eq('category', category);
   }
 
-  const area = url.searchParams.get('area');
-  if (area) {
-    if (!(LOST_FOUND_AREAS as readonly string[]).includes(area)) {
-      return json({ error: 'Unknown area filter' }, 400);
-    }
-    query = query.eq('area', area);
-  }
-
   const since = url.searchParams.get('since');
   if (since) {
     if (Number.isNaN(Date.parse(since))) return json({ error: 'since must be a date' }, 400);
@@ -241,7 +232,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     detail: {
       title: item.title,
       category: item.category,
-      area: item.area,
       found_at: item.found_at,
       owner_email: item.owner_email,
     },
