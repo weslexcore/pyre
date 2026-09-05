@@ -6,10 +6,13 @@
 // sensible default. The picture is also what a guest recognises in an email —
 // no wording beats seeing your own jacket.
 //
-// The left-in window defaults to the hours before it was found and is only
-// worth touching when staff know better ("this was on the bench at open, so it
-// was here overnight"). It is what decides which sessions we can offer to
-// email, so it is visible rather than hidden.
+// Then the question that decides everything downstream: do we know whose it
+// is? A name here means one email to one person, and the timing stops being a
+// decision — it collapses to a line you can correct if the item sat overnight.
+// Without a name, timing is all we have to go on: the left-in window is what
+// picks the sessions staff can offer to ask, so it stays open and explains
+// itself. Asking in that order means the common case where someone hands in a
+// friend's bottle never walks through a session window it doesn't need.
 
 import { useMemo, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
@@ -30,8 +33,10 @@ import {
   LOST_FOUND_AREAS,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
+import { type PersonResult, useGuestSearch } from './GuestSearch';
 import {
   buttonClass,
+  formatDateTime,
   inputClass,
   labelClass,
   primaryButtonClass,
@@ -39,7 +44,6 @@ import {
   SectionTitle,
   TileButton,
 } from './incidentUi';
-import { type PersonResult, useGuestSearch } from './GuestSearch';
 
 interface PendingFile {
   id: string;
@@ -73,6 +77,7 @@ export function LostFoundForm() {
     toLocalInput(new Date(now.getTime() - DEFAULT_LOOKBACK_HOURS * 3_600_000))
   );
   const [showWindow, setShowWindow] = useState(false);
+  const [showTiming, setShowTiming] = useState(false);
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [owner, setOwner] = useState<PersonResult | null>(null);
 
@@ -141,7 +146,7 @@ export function LostFoundForm() {
           area,
           storageLocation: storageLocation.trim() || null,
           foundAt: fromLocalInput(foundAt),
-          leftWindowStart: fromLocalInput(windowStart),
+          leftWindowStart: fromLocalInput(effectiveWindowStart),
           leftWindowEnd: fromLocalInput(foundAt),
           ownerMemberId: owner?.memberId || null,
           ownerName: owner?.name || null,
@@ -185,12 +190,25 @@ export function LostFoundForm() {
 
   const { field: ownerField } = useGuestSearch({ selected: owner, onSelect: setOwner });
 
+  // With nobody named, the found time is a real decision — it picks the sessions
+  // we can ask. With a name, it is a detail worth correcting but not worth a
+  // step, so it sits on one line until someone asks for it.
+  const timingOpen = !owner || showTiming;
+
+  // Left alone, the window trails the found time rather than the moment the
+  // form loaded — otherwise correcting "found at" to last night submits a
+  // window that ends before it starts, and the server rejects the whole log.
+  const effectiveWindowStart = useMemo(() => {
+    if (showWindow) return windowStart;
+    const ms = Date.parse(foundAt);
+    if (Number.isNaN(ms)) return windowStart;
+    return toLocalInput(new Date(ms - DEFAULT_LOOKBACK_HOURS * 3_600_000));
+  }, [showWindow, windowStart, foundAt]);
+
   return (
     <div className="mx-auto max-w-2xl space-y-8 pb-24">
       <section>
-        <SectionTitle note="The fastest way to describe a thing — and what its owner will recognise.">
-          Photo
-        </SectionTitle>
+        <SectionTitle note="Upload a clear photo of the item">Photo</SectionTitle>
 
         <div className="flex flex-wrap gap-3">
           {files.map((file) => (
@@ -285,7 +303,16 @@ export function LostFoundForm() {
       </section>
 
       <section>
-        <SectionTitle>Where and when</SectionTitle>
+        <SectionTitle note="A name here means one email to one person, and nobody else gets asked.">
+          Do we know whose it is?
+        </SectionTitle>
+        {ownerField}
+      </section>
+
+      <section>
+        <SectionTitle note="Where you picked it up, and where it's waiting for them.">
+          Where
+        </SectionTitle>
 
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {LOST_FOUND_AREAS.map((value) => (
@@ -298,20 +325,7 @@ export function LostFoundForm() {
           ))}
         </div>
 
-        <div className="mb-4">
-          <label className={labelClass} htmlFor="lf-found-at">
-            Found at
-          </label>
-          <input
-            id="lf-found-at"
-            type="datetime-local"
-            className={inputClass}
-            value={foundAt}
-            onChange={(e) => setFoundAt(e.target.value)}
-          />
-        </div>
-
-        <div className="mb-4">
+        <div>
           <label className={labelClass} htmlFor="lf-storage">
             Where it is now
           </label>
@@ -324,36 +338,73 @@ export function LostFoundForm() {
             onChange={(e) => setStorageLocation(e.target.value)}
           />
         </div>
-
-        {showWindow ? (
-          <div>
-            <label className={labelClass} htmlFor="lf-window-start">
-              Could have been left any time after
-            </label>
-            <input
-              id="lf-window-start"
-              type="datetime-local"
-              className={inputClass}
-              value={windowStart}
-              onChange={(e) => setWindowStart(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-white/40">
-              Decides which sessions we can offer to email. Widen it if this could have been sitting
-              there a while.
-            </p>
-          </div>
-        ) : (
-          <button type="button" className={buttonClass} onClick={() => setShowWindow(true)}>
-            Sitting there a while?
-          </button>
-        )}
       </section>
 
       <section>
-        <SectionTitle note="If you already know whose it is, we can email just them.">
-          Do we know whose it is?
+        <SectionTitle
+          note={
+            owner
+              ? `We're emailing ${owner.name}, so this is only for the record.`
+              : 'Nothing is sent from here. This decides which sessions we can offer to ask.'
+          }
+        >
+          When was it found?
         </SectionTitle>
-        {ownerField}
+
+        {timingOpen ? (
+          <>
+            <div className={owner ? '' : 'mb-4'}>
+              <label className={labelClass} htmlFor="lf-found-at">
+                Found at
+              </label>
+              <input
+                id="lf-found-at"
+                type="datetime-local"
+                className={inputClass}
+                value={foundAt}
+                onChange={(e) => setFoundAt(e.target.value)}
+              />
+            </div>
+
+            {!owner &&
+              (showWindow ? (
+                <div>
+                  <label className={labelClass} htmlFor="lf-window-start">
+                    Could have been left any time after
+                  </label>
+                  <input
+                    id="lf-window-start"
+                    type="datetime-local"
+                    className={inputClass}
+                    value={windowStart}
+                    onChange={(e) => setWindowStart(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-white/40">
+                    Everyone booked into a session touching this window can be offered an email.
+                    Widen it if this could have been sitting there a while.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  onClick={() => {
+                    setWindowStart(effectiveWindowStart);
+                    setShowWindow(true);
+                  }}
+                >
+                  Sitting there a while?
+                </button>
+              ))}
+          </>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/5 px-3 py-2.5">
+            <span className="text-sm text-white/70">{formatDateTime(fromLocalInput(foundAt))}</span>
+            <button type="button" className={buttonClass} onClick={() => setShowTiming(true)}>
+              Adjust
+            </button>
+          </div>
+        )}
       </section>
 
       {donateOn && (
