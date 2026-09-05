@@ -233,6 +233,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       title: item.title,
       category: item.category,
       found_at: item.found_at,
+      chosen_sessions: item.chosen_session_ids?.length ?? 0,
       owner_email: item.owner_email,
     },
   });

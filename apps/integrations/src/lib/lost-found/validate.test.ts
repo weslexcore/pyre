@@ -34,6 +34,23 @@ describe('normalizeItemSubmission', () => {
     expect(result.value.left_window_end).toBe(foundAt);
   });
 
+  it('keeps the sessions staff picked, deduped and capped', () => {
+    const result = normalizeItemSubmission({
+      title: 'Towel',
+      sessionIds: ['sess-1', 'sess-1', '  sess-2  ', '', 7, 'x'.repeat(65)],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.chosen_session_ids).toEqual(['sess-1', 'sess-2']);
+  });
+
+  it('takes no sessions at all — an item with a known owner has none', () => {
+    const result = normalizeItemSubmission({ title: 'Towel' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.chosen_session_ids).toEqual([]);
+  });
+
   it('rejects a window that runs backwards', () => {
     const result = normalizeItemSubmission({
       title: 'Towel',

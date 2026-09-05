@@ -473,6 +473,8 @@ export interface LostFoundItemRow {
   found_at: string;
   left_window_start: string;
   left_window_end: string;
+  /** Momence sessions staff picked at log time. Pre-selected on the item page. */
+  chosen_session_ids: string[];
   /** Where staff will find it: "front desk bin", "shelf B". Free text. */
   storage_location: string | null;
   owner_member_id: string | null;

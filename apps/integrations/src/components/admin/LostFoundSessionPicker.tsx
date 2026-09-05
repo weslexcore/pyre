@@ -1,99 +1,55 @@
-// Choosing who to ask when we don't know whose it is.
+// Sending the "is this yours?" blast to whole sessions, from the item page.
 //
 // This is the one screen in the tool that can email dozens of strangers, so it
-// is built to make that deliberate rather than easy: nothing is pre-selected,
-// the count of people about to be emailed is stated in words next to the
-// button, and the button says how many. Momence attendee addresses are masked
-// here — picking a session doesn't require reading forty guests' emails, and
-// the server resolves the real ones from the session ids.
+// is built to make that deliberate rather than easy: the count of people about
+// to be emailed is stated in words next to the button, and the button says how
+// many. The sessions themselves come from the shared chooser.
 //
-// The "no contact details" case is called out explicitly instead of rendering
-// an empty list, because "nobody was here" and "we can't see who was here" are
-// different problems and only one of them is worth escalating.
+// What is pre-selected is whatever staff picked when they logged the item —
+// their own answer to "which sessions could this have been left in?", made at
+// the desk minutes earlier with the bottle in hand. Carrying it forward saves
+// asking the same question twice; it does not send anything, and the count in
+// the button still has to be read before the press.
 
-import { useMemo, useState } from 'react';
-import { useCachedJson } from '@/lib/client/cachedJson';
-import { buttonClass, cardClass, primaryButtonClass, readError } from './incidentUi';
-
-interface SessionAttendee {
-  name: string;
-  maskedEmail: string;
-  checkedIn: boolean;
-}
-
-interface PickerSession {
-  id: string;
-  name: string;
-  startsAt: string;
-  endsAt: string;
-  bookingCount: number;
-  identityAvailable: boolean;
-  attendees: SessionAttendee[];
-}
-
-interface SessionsResponse {
-  available: boolean;
-  identityAvailable: boolean;
-  sessions: PickerSession[];
-  error?: string;
-}
-
-function sessionTime(iso: string): string {
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return '—';
-  return new Date(ms).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+import { useEffect, useMemo, useState } from 'react';
+import { buttonClass, primaryButtonClass, readError } from './incidentUi';
+import { countReachable, SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
 export function LostFoundSessionPicker({
   itemId,
   windowStart,
   windowEnd,
+  chosenSessionIds,
   alreadyAsked,
   onSent,
 }: {
   itemId: string;
   windowStart: string;
   windowEnd: string;
+  /** Sessions picked when the item was logged. Pre-selected, never sent. */
+  chosenSessionIds: string[];
   /** Masked addresses we've already emailed about this item. */
   alreadyAsked: Set<string>;
   onSent: (summary: string) => void;
 }) {
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(chosenSessionIds));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const url = `/api/admin/lost-found-sessions?start=${encodeURIComponent(windowStart)}&end=${encodeURIComponent(windowEnd)}`;
-  const { data, loading } = useCachedJson<SessionsResponse>(url);
+  const { data, loading, sessions, hiddenCount } = useSessionChoices(windowStart, windowEnd);
 
-  const sessions = data?.sessions ?? [];
+  // The item arrives with the page, so the first render of this component
+  // already has the log-time choice; a later reload only re-seeds if the stored
+  // choice itself changed, so it never fights a staff member mid-selection.
+  const chosenKey = chosenSessionIds.join(',');
+  useEffect(() => {
+    setPicked(new Set(chosenKey ? chosenKey.split(',') : []));
+  }, [chosenKey]);
 
-  // A session nobody booked is not a choice, it is noise between the ones that
-  // are. Sessions that had bookings but came back without contact details stay
-  // on the list: "nobody was here" and "we can't see who was here" are
-  // different problems, and only the second is worth escalating.
-  const askable = useMemo(
-    () => sessions.filter((s) => s.attendees.length > 0 || s.bookingCount > 0),
-    [sessions]
+  const reachable = useMemo(
+    () => countReachable(sessions, picked, alreadyAsked),
+    [sessions, picked, alreadyAsked]
   );
-  const emptyCount = sessions.length - askable.length;
-
-  const reachable = useMemo(() => {
-    let count = 0;
-    for (const session of askable) {
-      if (!picked.has(session.id)) continue;
-      for (const attendee of session.attendees) {
-        if (!alreadyAsked.has(attendee.maskedEmail)) count += 1;
-      }
-    }
-    return count;
-  }, [askable, picked, alreadyAsked]);
 
   const toggle = (id: string) => {
     setPicked((prev) => {
@@ -135,122 +91,47 @@ export function LostFoundSessionPicker({
     }
   };
 
-  if (loading) return <p className="font-mono text-xs text-white/40">Checking who was here…</p>;
-
-  if (data?.available === false) {
-    return (
-      <div className={cardClass}>
-        <p className="text-sm text-white/60">
-          {data.error ?? "Momence is unreachable — can't look up who was in session."}
-        </p>
-      </div>
-    );
-  }
-
-  if (askable.length === 0) {
-    return (
-      <div className={cardClass}>
-        <p className="text-sm text-white/60">
-          {sessions.length === 0
-            ? 'No sessions were running in that window.'
-            : `Sessions ran in that window, but nobody was booked into ${sessions.length === 1 ? 'it' : 'them'}.`}{' '}
-          Widen the window on the item if this could have been sitting there longer.
-        </p>
-      </div>
-    );
-  }
+  const nothingToPick = !loading && data?.available !== false && sessions.length === 0;
 
   return (
     <div className="space-y-3">
-      {data?.identityAvailable === false && (
-        <div className={`${cardClass} border-[var(--pyre-red)]/40`}>
-          <p className="text-sm text-[var(--pyre-creme)]">
-            Momence returned bookings for these sessions but no contact details, so there is nobody
-            to email. Worth flagging — the booking data changed shape.
-          </p>
-        </div>
-      )}
-
-      <ul className="space-y-2">
-        {askable.map((session) => {
-          const selected = picked.has(session.id);
-          const fresh = session.attendees.filter((a) => !alreadyAsked.has(a.maskedEmail));
-          const disabled = fresh.length === 0;
-          return (
-            <li key={session.id}>
-              <button
-                type="button"
-                onClick={() => toggle(session.id)}
-                disabled={disabled}
-                aria-pressed={selected}
-                className={`w-full rounded border px-3 py-3 text-left transition-colors ${
-                  selected
-                    ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/10'
-                    : 'border-white/10 bg-white/5 hover:border-white/30'
-                } ${disabled ? 'opacity-45' : ''}`}
-              >
-                <span className="flex items-start justify-between gap-3">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-[var(--pyre-creme)]">
-                      {session.name}
-                    </span>
-                    <span className="block font-mono text-xs text-white/45">
-                      {sessionTime(session.startsAt)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right font-mono text-xs text-white/50">
-                    {session.attendees.length}{' '}
-                    {session.attendees.length === 1 ? 'person' : 'people'}
-                    {session.attendees.length !== fresh.length && (
-                      <span className="block text-[10px] uppercase text-white/30">
-                        {session.attendees.length - fresh.length} already asked
-                      </span>
-                    )}
-                  </span>
-                </span>
-
-                {session.bookingCount > 0 && !session.identityAvailable && (
-                  <span className="mt-1.5 block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-red)]">
-                    {session.bookingCount} booked, no contact details
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {emptyCount > 0 && (
-        <p className="font-mono text-xs text-white/30">
-          {emptyCount} {emptyCount === 1 ? 'session' : 'sessions'} in this window had nobody booked
-          and {emptyCount === 1 ? 'is' : 'are'} not listed.
-        </p>
-      )}
+      <SessionChoices
+        data={data}
+        loading={loading}
+        sessions={sessions}
+        hiddenCount={hiddenCount}
+        picked={picked}
+        alreadyAsked={alreadyAsked}
+        onToggle={toggle}
+        emptyHint="Nobody to ask about this one."
+      />
 
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={sending || reachable === 0}
-          onClick={() => void send()}
-        >
-          {sending
-            ? 'Sending…'
-            : reachable === 0
-              ? 'Pick a session'
-              : `Ask ${reachable} ${reachable === 1 ? 'person' : 'people'}`}
-        </button>
-        {picked.size > 0 && (
-          <button type="button" className={buttonClass} onClick={() => setPicked(new Set())}>
-            Clear
+      {!nothingToPick && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+          <button
+            type="button"
+            className={primaryButtonClass}
+            disabled={sending || reachable === 0}
+            onClick={() => void send()}
+          >
+            {sending
+              ? 'Sending…'
+              : reachable === 0
+                ? 'Pick a session'
+                : `Ask ${reachable} ${reachable === 1 ? 'person' : 'people'}`}
           </button>
-        )}
-        <span className="text-xs text-white/40">
-          Each person is asked once about this item, however many sessions they were in.
-        </span>
-      </div>
+          {picked.size > 0 && (
+            <button type="button" className={buttonClass} onClick={() => setPicked(new Set())}>
+              Clear
+            </button>
+          )}
+          <span className="text-xs text-white/40">
+            Each person is asked once about this item, however many sessions they were in.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
