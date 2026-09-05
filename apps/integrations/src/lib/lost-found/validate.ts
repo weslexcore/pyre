@@ -7,12 +7,7 @@
 // a request body must never be able to reach them. Neither may `status`: it
 // moves through the dedicated status path, which writes an audit event.
 
-import {
-  DEFAULT_LOOKBACK_HOURS,
-  DONATION_WINDOW_DAYS,
-  isLostFoundCategory,
-  MAX_WINDOW_HOURS,
-} from './types';
+import { DEFAULT_LOOKBACK_HOURS, DONATION_WINDOW_DAYS, MAX_WINDOW_HOURS } from './types';
 
 export const FIELD_LIMITS = {
   title: 200,
@@ -70,7 +65,6 @@ export function looksLikeEmail(value: string): boolean {
 export interface ItemSubmission {
   title: string;
   description: string | null;
-  category: string;
   storage_location: string | null;
   found_at: string;
   left_window_start: string;
@@ -91,9 +85,6 @@ export interface ItemSubmission {
 export function normalizeItemSubmission(body: Record<string, unknown>): Normalized<ItemSubmission> {
   const title = text(body.title, FIELD_LIMITS.title);
   if (!title) return { ok: false, error: 'Say what the item is' };
-
-  const category = typeof body.category === 'string' ? body.category : 'other';
-  if (!isLostFoundCategory(category)) return { ok: false, error: 'Unknown category' };
 
   const foundAt = timestamp(body.foundAt) ?? new Date().toISOString();
   const foundMs = Date.parse(foundAt);
@@ -123,7 +114,6 @@ export function normalizeItemSubmission(body: Record<string, unknown>): Normaliz
     value: {
       title,
       description: text(body.description, FIELD_LIMITS.description),
-      category,
       storage_location: text(body.storageLocation, FIELD_LIMITS.storageLocation),
       found_at: foundAt,
       left_window_start: windowStart,
@@ -143,7 +133,6 @@ export type ItemPatch = Partial<
     ItemSubmission,
     | 'title'
     | 'description'
-    | 'category'
     | 'storage_location'
     | 'left_window_start'
     | 'left_window_end'
@@ -164,10 +153,6 @@ export function normalizeItemPatch(body: Record<string, unknown>): Normalized<It
   if ('description' in body) patch.description = text(body.description, FIELD_LIMITS.description);
   if ('storageLocation' in body) {
     patch.storage_location = text(body.storageLocation, FIELD_LIMITS.storageLocation);
-  }
-  if ('category' in body) {
-    if (!isLostFoundCategory(body.category)) return { ok: false, error: 'Unknown category' };
-    patch.category = body.category;
   }
   if ('ownerEmail' in body) {
     const ownerEmail = text(body.ownerEmail, FIELD_LIMITS.email)?.toLowerCase() ?? null;

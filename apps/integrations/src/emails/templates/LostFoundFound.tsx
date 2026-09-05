@@ -1,4 +1,5 @@
 import { Button, Img, Text } from '@react-email/components';
+import { indefiniteArticle } from '@/lib/lost-found/types';
 import { button, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { LostFoundFoundProps } from '../types';
 
@@ -52,8 +53,8 @@ export function LostFoundFound({
       {photoUrl && <Img src={photoUrl} alt={itemLabel} style={photo} />}
 
       <Text style={text}>
-        {greeting} found a {itemLabel.toLowerCase()} at Pyre on {foundDateLabel} and we're trying to
-        get it back to whoever it belongs to.
+        {greeting} found {indefiniteArticle(itemLabel)} {itemLabel.toLowerCase()} at Pyre on{' '}
+        {foundDateLabel} and we're trying to get it back to whoever it belongs to.
       </Text>
 
       <Text style={{ ...detailRow, margin: '0 0 20px' }}>

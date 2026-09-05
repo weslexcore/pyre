@@ -12,12 +12,7 @@
 import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
-import {
-  CLOSED_STATUSES,
-  categoryLabel,
-  DONATION_PARTNER,
-  daysUntilDonation,
-} from '@/lib/lost-found/types';
+import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
 import type { PeopleNames } from '@/lib/sops/names';
 import { cardClass, formatDayAndTime, inputClass, primaryButtonClass } from './incidentUi';
 import { LostFoundStatusBadge } from './LostFoundStatusBadge';
@@ -159,8 +154,7 @@ export function LostFoundIndex() {
                   </span>
 
                   <span className="mt-1 block truncate font-mono text-xs text-white/45">
-                    {categoryLabel(item.category)}
-                    {item.storage_location ? ` · ${item.storage_location}` : ''}
+                    {item.storage_location || 'Not said where'}
                   </span>
                   <span className="mt-0.5 block truncate font-mono text-xs text-white/35">
                     Found {formatDayAndTime(item.found_at)}

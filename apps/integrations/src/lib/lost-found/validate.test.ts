@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DONATION_WINDOW_DAYS } from './types';
+import { DONATION_WINDOW_DAYS, guestItemClause } from './types';
 import { diffItemFields, normalizeItemPatch, normalizeItemSubmission } from './validate';
 
 const HOUR_MS = 3_600_000;
@@ -90,12 +90,6 @@ describe('normalizeItemSubmission', () => {
     if (!result.ok) return;
     expect(result.value.owner_email).toBe('alex@example.com');
   });
-
-  it('rejects an unknown category rather than silently defaulting', () => {
-    expect(normalizeItemSubmission({ title: 'Thing', category: 'spaceship' })).toMatchObject({
-      ok: false,
-    });
-  });
 });
 
 describe('normalizeItemPatch', () => {
@@ -142,5 +136,20 @@ describe('diffItemFields', () => {
 
   it('treats undefined and null as the same absence', () => {
     expect(diffItemFields({ description: null }, { description: null })).toEqual({});
+  });
+});
+
+describe('guestItemClause', () => {
+  it('reads as the sentence the guest gets', () => {
+    expect(guestItemClause('Black water bottle')).toBe('we found a black water bottle at Pyre');
+  });
+
+  it('picks the article off the word, not the letter case', () => {
+    expect(guestItemClause('Orange hoodie')).toBe('we found an orange hoodie at Pyre');
+    expect(guestItemClause('  "Umbrella"  ')).toBe('we found an "umbrella" at Pyre');
+  });
+
+  it('says something for an empty field, so the hint is never a fragment', () => {
+    expect(guestItemClause('   ')).toBe('we found an item at Pyre');
   });
 });
