@@ -65,9 +65,10 @@ function firstNameOf(name: string | undefined): string {
  * part — but never the distinguishing detail, which stays on the record.
  */
 export function itemLabelFor(item: LostFoundItemRow): string {
-  const title = item.title.trim();
-  const category = categoryLabel(item.category);
-  if (!title) return category;
+  const title = (item.title ?? '').trim();
+  const category = categoryLabel(item.category ?? '').trim();
+  if (!title) return category || 'item';
+  if (!category) return title;
   return title.toLowerCase().includes(category.toLowerCase()) ? title : `${title} (${category})`;
 }
 

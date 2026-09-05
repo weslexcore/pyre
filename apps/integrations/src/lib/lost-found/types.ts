@@ -35,18 +35,18 @@ export interface CategoryOption {
 // Order matters: these render as tap targets, and a water bottle is most of
 // what ever goes in the bin.
 export const CATEGORY_OPTIONS: CategoryOption[] = [
-  { value: 'bottle', label: 'Water bottle' },
-  { value: 'clothing', label: 'Clothing' },
-  { value: 'towel', label: 'Towel' },
-  { value: 'bag', label: 'Bag' },
-  { value: 'electronics', label: 'Electronics' },
-  { value: 'jewelry', label: 'Jewelry' },
-  { value: 'eyewear', label: 'Glasses / sunglasses' },
-  { value: 'keys', label: 'Keys' },
-  { value: 'wallet', label: 'Wallet / cards' },
-  { value: 'toiletries', label: 'Toiletries' },
-  { value: 'book', label: 'Book' },
-  { value: 'other', label: 'Something else' },
+  // { value: 'bottle', label: 'Water bottle' },
+  // { value: 'clothing', label: 'Clothing' },
+  // { value: 'towel', label: 'Towel' },
+  // { value: 'bag', label: 'Bag' },
+  // { value: 'electronics', label: 'Electronics' },
+  // { value: 'jewelry', label: 'Jewelry' },
+  // { value: 'eyewear', label: 'Glasses / sunglasses' },
+  // { value: 'keys', label: 'Keys' },
+  // { value: 'wallet', label: 'Wallet / cards' },
+  // { value: 'toiletries', label: 'Toiletries' },
+  // { value: 'book', label: 'Book' },
+  // { value: 'other', label: 'Something else' },
 ];
 
 export const CATEGORY_LABELS: Record<LostFoundCategory, string> = Object.fromEntries(
@@ -119,9 +119,15 @@ export function isLostFoundStatus(v: unknown): v is LostFoundStatus {
   return typeof v === 'string' && (LOST_FOUND_STATUSES as readonly string[]).includes(v);
 }
 
-/** Label for a stored category, tolerating rows written before a list change. */
+/**
+ * Label for a stored category. Falls back to the stored value for anything the
+ * label map doesn't cover — a category dropped from CATEGORY_OPTIONS but still
+ * in LOST_FOUND_CATEGORIES used to return undefined here, and the first thing
+ * downstream of it is a guest email being composed. A missing label should read
+ * as "bottle", not throw halfway through a blast.
+ */
 export function categoryLabel(value: string): string {
-  return isLostFoundCategory(value) ? CATEGORY_LABELS[value] : value;
+  return CATEGORY_LABELS[value as LostFoundCategory] ?? value;
 }
 
 export function statusLabel(value: string): string {
