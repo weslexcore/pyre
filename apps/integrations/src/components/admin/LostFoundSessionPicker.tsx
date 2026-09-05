@@ -74,16 +74,26 @@ export function LostFoundSessionPicker({
 
   const sessions = data?.sessions ?? [];
 
+  // A session nobody booked is not a choice, it is noise between the ones that
+  // are. Sessions that had bookings but came back without contact details stay
+  // on the list: "nobody was here" and "we can't see who was here" are
+  // different problems, and only the second is worth escalating.
+  const askable = useMemo(
+    () => sessions.filter((s) => s.attendees.length > 0 || s.bookingCount > 0),
+    [sessions]
+  );
+  const emptyCount = sessions.length - askable.length;
+
   const reachable = useMemo(() => {
     let count = 0;
-    for (const session of sessions) {
+    for (const session of askable) {
       if (!picked.has(session.id)) continue;
       for (const attendee of session.attendees) {
         if (!alreadyAsked.has(attendee.maskedEmail)) count += 1;
       }
     }
     return count;
-  }, [sessions, picked, alreadyAsked]);
+  }, [askable, picked, alreadyAsked]);
 
   const toggle = (id: string) => {
     setPicked((prev) => {
@@ -137,12 +147,14 @@ export function LostFoundSessionPicker({
     );
   }
 
-  if (sessions.length === 0) {
+  if (askable.length === 0) {
     return (
       <div className={cardClass}>
         <p className="text-sm text-white/60">
-          No sessions were running in that window. Widen the window on the item if this could have
-          been sitting there longer.
+          {sessions.length === 0
+            ? 'No sessions were running in that window.'
+            : `Sessions ran in that window, but nobody was booked into ${sessions.length === 1 ? 'it' : 'them'}.`}{' '}
+          Widen the window on the item if this could have been sitting there longer.
         </p>
       </div>
     );
@@ -160,7 +172,7 @@ export function LostFoundSessionPicker({
       )}
 
       <ul className="space-y-2">
-        {sessions.map((session) => {
+        {askable.map((session) => {
           const selected = picked.has(session.id);
           const fresh = session.attendees.filter((a) => !alreadyAsked.has(a.maskedEmail));
           const disabled = fresh.length === 0;
@@ -207,6 +219,13 @@ export function LostFoundSessionPicker({
           );
         })}
       </ul>
+
+      {emptyCount > 0 && (
+        <p className="font-mono text-xs text-white/30">
+          {emptyCount} {emptyCount === 1 ? 'session' : 'sessions'} in this window had nobody booked
+          and {emptyCount === 1 ? 'is' : 'are'} not listed.
+        </p>
+      )}
 
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
