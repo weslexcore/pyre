@@ -141,15 +141,15 @@ describe('diffItemFields', () => {
 
 describe('guestItemClause', () => {
   it('reads as the sentence the guest gets', () => {
-    expect(guestItemClause('Black water bottle')).toBe('we found a black water bottle at Pyre');
+    expect(guestItemClause('Black water bottle')).toBe('we found a black water bottle');
   });
 
   it('picks the article off the word, not the letter case', () => {
-    expect(guestItemClause('Orange hoodie')).toBe('we found an orange hoodie at Pyre');
-    expect(guestItemClause('  "Umbrella"  ')).toBe('we found an "umbrella" at Pyre');
+    expect(guestItemClause('Orange hoodie')).toBe('we found an orange hoodie');
+    expect(guestItemClause('  "Umbrella"  ')).toBe('we found an "umbrella"');
   });
 
   it('says something for an empty field, so the hint is never a fragment', () => {
-    expect(guestItemClause('   ')).toBe('we found an item at Pyre');
+    expect(guestItemClause('   ')).toBe('we found an item');
   });
 });

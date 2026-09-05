@@ -1,5 +1,5 @@
 import { Button, Img, Text } from '@react-email/components';
-import { indefiniteArticle } from '@/lib/lost-found/types';
+import { guestItemClause } from '@/lib/lost-found/types';
 import { button, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { LostFoundFoundProps } from '../types';
 
@@ -44,7 +44,14 @@ export function LostFoundFound({
   claimUrl,
   photoUrl,
 }: LostFoundFoundProps) {
-  const greeting = firstName ? `${firstName} — we` : 'We';
+  // Composed from the same helper the log form previews, so what staff read
+  // under the item field is literally what goes out. The subject line keeps
+  // its "at Pyre" — that one tells the recipient who is writing before they
+  // open it — but the body sits under the Pyre header, where it only repeats.
+  const clause = guestItemClause(itemLabel);
+  const opener = firstName
+    ? `${firstName} — ${clause}`
+    : clause.charAt(0).toUpperCase() + clause.slice(1);
 
   return (
     <EmailLayout preview={`Is this yours? ${itemLabel} left at Pyre`}>
@@ -53,8 +60,7 @@ export function LostFoundFound({
       {photoUrl && <Img src={photoUrl} alt={itemLabel} style={photo} />}
 
       <Text style={text}>
-        {greeting} found {indefiniteArticle(itemLabel)} {itemLabel.toLowerCase()} at Pyre on{' '}
-        {foundDateLabel} and we're trying to get it back to whoever it belongs to.
+        {opener} on {foundDateLabel} and we're trying to get it back to whoever it belongs to.
       </Text>
 
       <Text style={{ ...detailRow, margin: '0 0 20px' }}>
