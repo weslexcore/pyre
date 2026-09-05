@@ -29,10 +29,10 @@ import {
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import {
-  CATEGORY_OPTIONS,
   DEFAULT_LOOKBACK_HOURS,
   DONATION_PARTNER,
   DONATION_WINDOW_DAYS,
+  guestItemClause,
   MAX_WINDOW_HOURS,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
@@ -44,7 +44,6 @@ import {
   primaryButtonClass,
   readError,
   SectionTitle,
-  TileButton,
 } from './incidentUi';
 import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
@@ -66,7 +65,6 @@ export function LostFoundForm() {
   const now = useMemo(() => new Date(), []);
 
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('bottle');
   const [description, setDescription] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
   const [lookbackHours, setLookbackHours] = useState(DEFAULT_LOOKBACK_HOURS);
@@ -81,6 +79,14 @@ export function LostFoundForm() {
   // The item is found now, as far as the record is concerned: it is being
   // logged as it is picked up. The server stamps found_at itself; this is only
   // the date shown on the form.
+  // What the guest will read, composed exactly as the email composes it. Staff
+  // see "we found a bottle, black at Pyre" while they can still fix it, rather
+  // than after it has gone to forty people.
+  const emailClause = useMemo(() => {
+    const clause = guestItemClause(title);
+    return clause.charAt(0).toUpperCase() + clause.slice(1);
+  }, [title]);
+
   const donateOn = useMemo(
     () => new Date(now.getTime() + DONATION_WINDOW_DAYS * 86_400_000),
     [now]
@@ -136,7 +142,6 @@ export function LostFoundForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
-          category,
           description: description.trim() || null,
           storageLocation: storageLocation.trim() || null,
           leftWindowStart: leftWindow.start,
@@ -304,6 +309,15 @@ export function LostFoundForm() {
           <label className={labelClass} htmlFor="lf-title">
             Item
           </label>
+          <p className="mb-2 text-xs text-white/45" aria-live="polite">
+            {title.trim() ? (
+              <>
+                The email will say: <span className="text-white/70">“{emailClause}.”</span>
+              </>
+            ) : (
+              'Whatever you type here is the noun the guest reads in their email.'
+            )}
+          </p>
           <input
             id="lf-title"
             className={inputClass}
@@ -312,17 +326,6 @@ export function LostFoundForm() {
             placeholder="Black water bottle"
             onChange={(e) => setTitle(e.target.value)}
           />
-        </div>
-
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {CATEGORY_OPTIONS.map((option) => (
-            <TileButton
-              key={option.value}
-              selected={category === option.value}
-              label={option.label}
-              onClick={() => setCategory(option.value)}
-            />
-          ))}
         </div>
 
         <div>

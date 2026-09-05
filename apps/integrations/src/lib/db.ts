@@ -469,7 +469,6 @@ export interface LostFoundItemRow {
   title: string;
   /** Distinguishing detail for staff to check at pickup — kept out of the guest email. */
   description: string | null;
-  category: string;
   found_at: string;
   left_window_start: string;
   left_window_end: string;

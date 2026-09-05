@@ -26,7 +26,6 @@ import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import {
   CLOSED_STATUSES,
   isLostFoundStatus,
-  LOST_FOUND_CATEGORIES,
   ON_HAND_STATUSES,
   STAFF_SETTABLE_STATUSES,
 } from '@/lib/lost-found/types';
@@ -132,14 +131,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     query = query.eq('status', status);
   }
 
-  const category = url.searchParams.get('category');
-  if (category) {
-    if (!(LOST_FOUND_CATEGORIES as readonly string[]).includes(category)) {
-      return json({ error: 'Unknown category filter' }, 400);
-    }
-    query = query.eq('category', category);
-  }
-
   const since = url.searchParams.get('since');
   if (since) {
     if (Number.isNaN(Date.parse(since))) return json({ error: 'since must be a date' }, 400);
@@ -231,7 +222,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     actor: email,
     detail: {
       title: item.title,
-      category: item.category,
       found_at: item.found_at,
       chosen_sessions: item.chosen_session_ids?.length ?? 0,
       owner_email: item.owner_email,
