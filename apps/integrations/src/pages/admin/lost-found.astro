@@ -1,0 +1,16 @@
+---
+// The lost-and-found log. Anyone granted /admin/lost-found lands here: log
+// what you found, browse what's in the bin, and hand something back. Emailing
+// guests and recording donations need lost-found:manage, which the
+// /api/admin/lost-found* routes re-check on every request; this page's gate is
+// UX.
+import { LostFoundIndex } from '@/components/admin/LostFoundIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Lost & Found"
+  subtitle="What guests left behind, and getting it back to them"
+>
+  <LostFoundIndex client:load />
+</AdminLayout>

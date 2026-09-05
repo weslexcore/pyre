@@ -10,6 +10,7 @@ import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
   ADMIN_TOOLS,
   INCIDENTS_MANAGE,
+  LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
@@ -66,6 +67,10 @@ const MANAGE_CAPABILITIES: Record<string, { key: string; hint: string }> = {
   '/admin/incidents': {
     key: INCIDENTS_MANAGE,
     hint: 'Read the whole incident log, review and edit reports, and resolve them. Without it: file reports and read back the ones you were part of.',
+  },
+  '/admin/lost-found': {
+    key: LOST_FOUND_MANAGE,
+    hint: 'Email guests to ask whether a found item is theirs, and record donations to Furbish. Without it: log what you find, browse the log, and hand things back at the desk.',
   },
 };
 

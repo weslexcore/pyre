@@ -1,0 +1,13 @@
+---
+// One item: its photos, who has been asked about it, the claim, and the audit
+// trail. The island fetches everything from /api/admin/lost-found, which
+// re-checks the page grant and the manage capability on every request.
+import { LostFoundDetail } from '@/components/admin/LostFoundDetail';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const { id } = Astro.params;
+---
+
+<AdminLayout title="Lost & Found" subtitle="One item, and everything that has happened to it">
+  <LostFoundDetail itemId={id ?? ''} client:load />
+</AdminLayout>
