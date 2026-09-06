@@ -250,6 +250,74 @@ export async function fetchMemberActivePacks(
   return packs;
 }
 
+/**
+ * Every bought membership on a member's record, expired and used-up ones
+ * included — the purchase history the guest profile shows. Undocumented
+ * sibling of the /active endpoint above; returns null (rather than throwing)
+ * when this Momence revision does not serve it, so callers fall back to the
+ * active list.
+ */
+export async function fetchMemberBoughtMemberships(
+  memberId: number
+): Promise<BoughtMembership[] | null> {
+  try {
+    const data = await momenceRequest<Paginated<BoughtMembership>>(
+      'GET',
+      `/host/members/${memberId}/bought-memberships`,
+      { query: { page: '0', pageSize: '100' } }
+    );
+    return data.payload ?? [];
+  } catch (e) {
+    if (e instanceof MomenceApiError && (e.status === 404 || e.status === 400)) return null;
+    throw e;
+  }
+}
+
+/**
+ * One member's session history (past and upcoming bookings). The row shape
+ * is undocumented and has moved between revisions, so this returns the raw
+ * rows and lib/guests/insights.ts normalises them defensively. Newest first;
+ * capped at a few pages — a regular with hundreds of visits does not need
+ * every one of them read to describe their habits.
+ */
+export async function fetchMemberSessions(
+  memberId: number,
+  { maxPages = 3 }: { maxPages?: number } = {}
+): Promise<unknown[]> {
+  const path = `/host/members/${memberId}/sessions`;
+  // Newest-first is what we want, but whether this endpoint accepts sort
+  // parameters is undocumented; a 400 on the first page means it doesn't,
+  // and we take the rows in whatever order it serves them.
+  let sort: Record<string, string> = { sortBy: 'startsAt', sortOrder: 'DESC' };
+  const items: unknown[] = [];
+  for (let page = 0; page < maxPages; page += 1) {
+    let data: Paginated<unknown>;
+    try {
+      data = await momenceRequest<Paginated<unknown>>('GET', path, {
+        query: { page: String(page), pageSize: '100', ...sort },
+      });
+    } catch (e) {
+      if (
+        page === 0 &&
+        Object.keys(sort).length > 0 &&
+        e instanceof MomenceApiError &&
+        e.status === 400
+      ) {
+        sort = {};
+        data = await momenceRequest<Paginated<unknown>>('GET', path, {
+          query: { page: '0', pageSize: '100' },
+        });
+      } else {
+        throw e;
+      }
+    }
+    const batch = data.payload ?? [];
+    items.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return items;
+}
+
 // --- Sales (experimental endpoint — the purchase-trigger source) ---
 
 export type SaleItemType =

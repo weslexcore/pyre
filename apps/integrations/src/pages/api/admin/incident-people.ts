@@ -11,9 +11,9 @@
 // report to the account. Anyone the search can't find is still enterable by
 // hand on the form ('other'), so a lookup outage never blocks a report.
 //
-// Gated on the pages that use it — the incident form and the lost-and-found
-// log, which asks the same question ("who is this guest, and how do we reach
-// them?") of the same source. Read-only, so no CSRF preamble: there is
+// Gated on the pages that use it — the incident form, the lost-and-found
+// log, and the guest profiles, which all ask the same question ("who is this
+// guest, and how do we reach them?") of the same source. Read-only, so no CSRF preamble: there is
 // nothing here to forge.
 
 import type { APIRoute } from 'astro';
@@ -27,7 +27,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-const PAGES = ['/admin/incidents', '/admin/lost-found'];
+const PAGES = ['/admin/incidents', '/admin/lost-found', '/admin/guests'];
 
 /** Below this a search matches half the customer list; the form waits. */
 const MIN_QUERY_LENGTH = 2;

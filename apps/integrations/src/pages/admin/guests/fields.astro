@@ -1,0 +1,21 @@
+---
+// The question list every guest profile is built from. Needs guests:manage
+// — changing the questions changes what every profile means — so anyone
+// else is bounced back to the guest list here (UX; the
+// /api/admin/guest-fields route's own check is the security boundary).
+import { hasGuestsManage } from '@/components/admin/adminTools';
+import { GuestFieldsManager } from '@/components/admin/GuestFieldsManager';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const access = Astro.locals.adminAccess ?? null;
+if (!access || !hasGuestsManage(access)) return Astro.redirect('/admin/guests');
+---
+
+<AdminLayout
+  title="Profile Fields"
+  subtitle="The questions on every guest profile — add, rename, re-order, retire"
+>
+  <GuestTabs current="/admin/guests/fields" />
+  <GuestFieldsManager client:load />
+</AdminLayout>

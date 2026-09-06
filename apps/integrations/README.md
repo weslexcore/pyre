@@ -136,6 +136,7 @@ Monitoring.
 | --- | --- | --- |
 | `/admin` | — | Tool directory |
 | `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
+| `/admin/guests` | Operations | Guest profiles — staff-facing preferences and notes per Momence member, beside their live Momence account; `/admin/guests/sessions` shows who is booked into each session |
 | `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
 | `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
 | `/admin/campaigns` | Marketing | Campaign performance (short-link clicks + PostHog attribution) |
@@ -148,6 +149,32 @@ additionally needs `POSTHOG_PERSONAL_API_KEY` (Query Read scope) and
 `POSTHOG_PROJECT_ID` set on this deployment. `PUBLIC_SITE_URL` supplies the
 landing-site origin for short links (`/s/<code>` redirects stay on the landing
 site), event links, and the blog-posts/events feeds UTM Assist consumes.
+
+### Guest profiles
+
+`/admin/guests` is what staff know about a guest that Momence has no room for:
+how hot they like it, which scents, whether they plunge, what they drink,
+whether they live nearby or are visiting. Three tables back it (migration
+`20260906120000_guest_profiles.sql`):
+
+- **`guest_profile_fields`** — the questions, configured on
+  `/admin/guests/fields` (needs `guests:manage`). Each has a kind (pick one,
+  pick any, yes/no, text, number), options, a section heading, and a
+  `show_on_roster` flag. Keys and kinds are permanent; fields are retired, not
+  mutated, so old answers stay readable. A starting set is seeded.
+- **`guest_profiles`** — one row per Momence member: a one-line summary plus
+  `field_values` (jsonb keyed by field key, validated against the fields at
+  write time). Name and email are cached copies for search; Momence stays the
+  source of truth and the profile page reads the account, active packs,
+  purchase history, and session history live via `/api/admin/guest-momence`.
+- **`guest_profile_notes`** — dated free-text observations with the author's
+  session email; the flexible half of a profile.
+
+`/admin/guests/sessions` lists the day's Momence sessions and, per session,
+everyone booked with their profile summary, roster-flagged answers, latest
+note, first-visit flag, and member/pack standing (one Host API call per person,
+inside a time budget — `enriched: false` means it ran out). Nothing here is ever
+shown to a guest.
 
 ## The hourly cron
 

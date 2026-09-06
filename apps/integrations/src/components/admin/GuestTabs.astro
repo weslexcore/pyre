@@ -1,0 +1,38 @@
+---
+// Sub-nav shared by the /admin/guests pages. The fields page is the managed
+// half (guests:manage), so it is only linked for people who can use it; the
+// page itself bounces anyone else.
+import { hasGuestsManage } from '@/components/admin/adminTools';
+
+interface Props {
+  current: string;
+}
+const { current } = Astro.props;
+
+const access = Astro.locals.adminAccess ?? null;
+const canManage = !!access && hasGuestsManage(access);
+
+const tabs = [
+  { href: '/admin/guests', label: 'Guests' },
+  { href: '/admin/guests/sessions', label: "Who's coming" },
+  ...(canManage ? [{ href: '/admin/guests/fields', label: 'Fields' }] : []),
+];
+---
+
+<nav class="mb-6 flex flex-wrap gap-2">
+  {
+    tabs.map((tab) => (
+      <a
+        href={tab.href}
+        data-astro-prefetch
+        class={`px-3 py-1.5 rounded border text-xs font-mono uppercase tracking-wide transition-colors ${
+          current === tab.href
+            ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
+            : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+        }`}
+      >
+        {tab.label}
+      </a>
+    ))
+  }
+</nav>

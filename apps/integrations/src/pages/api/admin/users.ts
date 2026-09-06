@@ -9,7 +9,15 @@
 // time off are deactivated instead of deleted, so schedule history survives.
 
 import type { APIRoute } from 'astro';
-import { ADMIN_TOOLS, PARTNERS_MANAGE, SCHEDULE_MANAGE } from '@/components/admin/adminTools';
+import {
+  ADMIN_TOOLS,
+  GUESTS_MANAGE,
+  INCIDENTS_MANAGE,
+  LOST_FOUND_MANAGE,
+  PARTNERS_MANAGE,
+  REFERRALS_MANAGE,
+  SCHEDULE_MANAGE,
+} from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
@@ -24,18 +32,23 @@ function json(body: unknown, status = 200): Response {
 }
 
 // Tool hrefs plus the manage capabilities (see adminTools.ts).
-const GRANTABLE_PAGES = new Set([
-  ...ADMIN_TOOLS.map((t) => t.href),
-  SCHEDULE_MANAGE,
-  PARTNERS_MANAGE,
-]);
-
 // Each manage capability implies view access to the page it governs, so a row
-// can never hold manage without the matching page grant.
+// can never hold manage without the matching page grant. Every key offered
+// as a checkbox on /admin/users must be listed here, or saving that checkbox
+// is rejected as an unknown page.
 const MANAGE_IMPLIED_PAGE: Record<string, string> = {
   [SCHEDULE_MANAGE]: '/admin/schedule',
   [PARTNERS_MANAGE]: '/admin/partners',
+  [REFERRALS_MANAGE]: '/admin/referrals',
+  [INCIDENTS_MANAGE]: '/admin/incidents',
+  [LOST_FOUND_MANAGE]: '/admin/lost-found',
+  [GUESTS_MANAGE]: '/admin/guests',
 };
+
+const GRANTABLE_PAGES = new Set([
+  ...ADMIN_TOOLS.map((t) => t.href),
+  ...Object.keys(MANAGE_IMPLIED_PAGE),
+]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

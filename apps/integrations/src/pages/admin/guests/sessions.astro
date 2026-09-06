@@ -1,0 +1,16 @@
+---
+// Who is coming: the day's sessions from Momence, and for each one the
+// people booked into it with what we know about them — first visit, member
+// or pack, the preferences flagged for the roster, the latest note.
+import { GuestSessions } from '@/components/admin/GuestSessions';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Who's Coming"
+  subtitle="Today's sessions and the people booked into them, with what we know before they arrive"
+>
+  <GuestTabs current="/admin/guests/sessions" />
+  <GuestSessions client:load />
+</AdminLayout>

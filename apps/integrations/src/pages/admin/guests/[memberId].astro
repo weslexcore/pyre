@@ -1,0 +1,26 @@
+---
+// One guest: their Momence account beside our own notes and preferences. The
+// island fetches our side from /api/admin/guests (fast) and the Momence side
+// from /api/admin/guest-momence (slower), and paints each as it lands. The
+// name and email in the query string are a fallback from the search results
+// so the header is never blank while Momence is being asked.
+import { GuestProfile } from '@/components/admin/GuestProfile';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const { memberId } = Astro.params;
+if (!memberId || !/^\d{1,20}$/.test(memberId)) return Astro.redirect('/admin/guests');
+
+const fallbackName = Astro.url.searchParams.get('name') ?? '';
+const fallbackEmail = Astro.url.searchParams.get('email') ?? '';
+---
+
+<AdminLayout title="Guest Profile" subtitle="Their account, their preferences, and what we've noticed">
+  <GuestTabs current="/admin/guests" />
+  <GuestProfile
+    memberId={memberId}
+    fallbackName={fallbackName}
+    fallbackEmail={fallbackEmail}
+    client:load
+  />
+</AdminLayout>

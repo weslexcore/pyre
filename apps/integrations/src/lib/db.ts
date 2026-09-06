@@ -556,6 +556,61 @@ export interface LostFoundEventRow {
   created_at: string;
 }
 
+// A question on a guest profile, configured from /admin/guests/fields (see
+// the guest_profiles migration). Answers on guest_profiles.field_values are
+// keyed by `key`, which is permanent; everything else here can change.
+export interface GuestProfileFieldRow {
+  key: string;
+  label: string;
+  kind: 'text' | 'number' | 'yes_no' | 'choice' | 'multi_choice';
+  /** Offered answers for choice / multi_choice; empty for other kinds. */
+  options: string[];
+  /** Heading the field sits under on the profile. */
+  section: string;
+  hint: string | null;
+  /** Surfaced next to the guest's name on the session roster. */
+  show_on_roster: boolean;
+  sort_order: number;
+  /** No longer asked, but existing answers still read back. */
+  archived: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One answer: shape depends on the field's kind (see GuestProfileFieldRow). */
+export type GuestFieldValue = string | number | boolean | string[];
+
+// What staff know about one Momence member (see the guest_profiles
+// migration). Momence stays the source of truth for the account; name and
+// email here are cached display copies so the list can be searched offline.
+export interface GuestProfileRow {
+  id: string;
+  momence_member_id: string;
+  email: string | null;
+  name: string | null;
+  /** The one line to read before greeting them; shown on the roster. */
+  summary: string | null;
+  /** Field key -> answer, validated against guest_profile_fields on write. */
+  field_values: Record<string, GuestFieldValue>;
+  /** Session emails, set by the route — never from a request body. */
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// A dated observation about a guest, appended by whoever noticed it.
+export interface GuestProfileNoteRow {
+  id: string;
+  profile_id: string;
+  body: string;
+  author_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // OAuth tokens for a connected QuickBooks Online company (see the
 // quickbooks_tokens migration and lib/quickbooks). Refresh tokens rotate on
 // every refresh, so this row is rewritten each time; service-role only —
