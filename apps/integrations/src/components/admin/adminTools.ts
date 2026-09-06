@@ -93,6 +93,25 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
+    href: '/admin/guests',
+    title: 'Guest Profiles',
+    navLabel: 'Guests',
+    keywords: [
+      'customers',
+      'members',
+      'preferences',
+      'regulars',
+      'roster',
+      "who's coming",
+      'notes',
+      'scents',
+      'plunge',
+    ],
+    description:
+      'What we know about the people who come in — heat, scents, plunge, drinks, local or visiting — next to their Momence visits and purchases, and who is booked into each session today.',
+    section: 'operations',
+  },
+  {
     href: SHIFT_NOTES_HREF,
     title: 'Shift Notes',
     navLabel: 'Shift Notes',
@@ -241,6 +260,18 @@ export function hasLostFoundManage(access: PageAccess): boolean {
   return access.isAdmin || access.pages.includes(LOST_FOUND_MANAGE);
 }
 
+// Same split for guest profiles. A plain '/admin/guests' grant is the working
+// level: look a guest up, read and write their preferences and notes, and
+// see who is booked into today's sessions — all of which is the job of
+// whoever is greeting people at the door. This key (or admin) unlocks the
+// question list itself: adding, renaming, re-ordering, and retiring the
+// fields every profile is built from.
+export const GUESTS_MANAGE = 'guests:manage';
+
+export function hasGuestsManage(access: PageAccess): boolean {
+  return access.isAdmin || access.pages.includes(GUESTS_MANAGE);
+}
+
 /** Manage capabilities that imply view access to the page they govern. */
 const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/schedule': SCHEDULE_MANAGE,
@@ -248,6 +279,7 @@ const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/referrals': REFERRALS_MANAGE,
   '/admin/incidents': INCIDENTS_MANAGE,
   '/admin/lost-found': LOST_FOUND_MANAGE,
+  '/admin/guests': GUESTS_MANAGE,
 };
 
 /** Whether this user may view the tool page at `href` (manage implies view). */
@@ -347,6 +379,21 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'Log a Found Item',
     parent: '/admin/lost-found',
     keywords: ['new', 'found something', 'left behind'],
+  },
+  {
+    href: '/admin/guests/sessions',
+    title: "Who's Coming",
+    parent: '/admin/guests',
+    keywords: ['roster', 'today', 'sessions', 'attendees', 'booked', 'check in'],
+  },
+  {
+    href: '/admin/guests/fields',
+    title: 'Profile Fields',
+    parent: '/admin/guests',
+    keywords: ['questions', 'preferences', 'configure', 'options'],
+    // Needs guests:manage rather than admin; the page itself checks, and the
+    // search only knows the admin flag, so it stays out of non-admin results.
+    adminOnly: true,
   },
   {
     href: '/admin/ask/log',
