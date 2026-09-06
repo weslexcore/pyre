@@ -1,0 +1,18 @@
+---
+// Guest profiles: find a guest (ours or Momence's), see who was written
+// about recently, and get to their profile. Anyone granted /admin/guests
+// lands here; the field list needs guests:manage, which the
+// /api/admin/guest-fields route re-checks on every request. This page's gate
+// is UX.
+import { GuestsIndex } from '@/components/admin/GuestsIndex';
+import GuestTabs from '@/components/admin/GuestTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Guest Profiles"
+  subtitle="What we know about the people who come in — next to what Momence knows"
+>
+  <GuestTabs current="/admin/guests" />
+  <GuestsIndex client:load />
+</AdminLayout>

@@ -9,6 +9,7 @@ import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
   ADMIN_TOOLS,
+  GUESTS_MANAGE,
   INCIDENTS_MANAGE,
   LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
@@ -67,6 +68,10 @@ const MANAGE_CAPABILITIES: Record<string, { key: string; hint: string }> = {
   '/admin/incidents': {
     key: INCIDENTS_MANAGE,
     hint: 'Read the whole incident log, review and edit reports, and resolve them. Without it: file reports and read back the ones you were part of.',
+  },
+  '/admin/guests': {
+    key: GUESTS_MANAGE,
+    hint: 'Add, rename, re-order, and retire the questions on a guest profile. Without it: look guests up, edit their preferences and notes, and see who is booked into each session.',
   },
   '/admin/lost-found': {
     key: LOST_FOUND_MANAGE,
