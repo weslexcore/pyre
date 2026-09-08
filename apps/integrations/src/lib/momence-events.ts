@@ -13,7 +13,14 @@ const MOMENCE_API_V1 = 'https://api.momence.com/api/v1';
 /** The bathhouse's wall-clock zone; every customer-facing time is rendered in it. */
 export const TIME_ZONE = 'America/New_York';
 
-interface MomenceEventLite {
+/**
+ * One row of the v1 Events feed. The feed carries more than this (see the
+ * landing page's MomenceEvent for the full shape); these are the fields
+ * something here reads. Everything past `duration` is optional because the
+ * feed has dropped and renamed fields across revisions — readers must cope
+ * with their absence.
+ */
+export interface MomenceEvent {
   id: number;
   title: string;
   tags?: string[];
@@ -22,6 +29,15 @@ interface MomenceEventLite {
   location?: string;
   image1?: string | null;
   image2?: string | null;
+  isCancelled?: boolean;
+  isDeleted?: boolean;
+  /** Absent means published — the v1 feed is the public one. */
+  published?: boolean;
+  capacity?: number;
+  spotsRemaining?: number;
+  ticketsSold?: number;
+  /** Momence's public booking page for the event. */
+  link?: string;
 }
 
 export interface ResolvedSession {
@@ -70,12 +86,25 @@ const TAG_TO_TYPE: Record<string, string> = {
   'special event': 'special event',
 };
 
-function resolveTypeFromEvent(event: MomenceEventLite): string {
-  for (const tag of event.tags ?? []) {
+/** The canonical type for a special event's own tag. */
+export const SPECIAL_EVENT_TYPE = 'special event';
+
+/**
+ * Canonical session type for a set of Momence tags — the first recognised
+ * tag wins, unrecognised or missing tags fall back to the generic type.
+ * Exported for the conflict check, which classifies every event in the feed
+ * rather than one booked session.
+ */
+export function sessionTypeForTags(tags: string[] | undefined): string {
+  for (const tag of tags ?? []) {
     const type = TAG_TO_TYPE[tag.toLowerCase().trim()];
     if (type) return type;
   }
   return DEFAULT_SESSION_TYPE;
+}
+
+function resolveTypeFromEvent(event: MomenceEvent): string {
+  return sessionTypeForTags(event.tags);
 }
 
 function formatDate(isoDate: string): string {
@@ -136,28 +165,42 @@ function formatTimeRange(isoDate: string, durationMinutes: number): string {
   return `${formatClockTime(start)} – ${formatClockTime(end)} ${formatZoneAbbrev(start)}`;
 }
 
-async function fetchEvents(): Promise<MomenceEventLite[]> {
+/**
+ * The whole upcoming-events feed, drafts and all, exactly as Momence serves
+ * it. Throws when the feed cannot be read — missing config, a non-2xx, or an
+ * unrecognised shape — because the callers that want the whole feed (the
+ * special-event conflict check) must not mistake an outage for an empty
+ * calendar. resolveSession() below keeps its swallow-and-fall-back contract
+ * through the private wrapper.
+ */
+export async function fetchMomenceEvents(): Promise<MomenceEvent[]> {
   const hostId = import.meta.env.MOMENCE_HOST_ID;
   const apiToken = import.meta.env.MOMENCE_API_TOKEN;
 
   if (!hostId || !apiToken) {
-    log.warn('Missing MOMENCE_HOST_ID or MOMENCE_API_TOKEN — cannot resolve session');
-    return [];
+    throw new Error('Missing MOMENCE_HOST_ID or MOMENCE_API_TOKEN — cannot read the events feed');
   }
 
   const url = `${MOMENCE_API_V1}/Events?hostId=${hostId}&token=${apiToken}`;
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
 
   if (!response.ok) {
-    log.warn(`Events API returned ${response.status}`);
-    return [];
+    throw new Error(`Momence Events API returned ${response.status}`);
   }
 
   const data = await response.json();
-  if (Array.isArray(data)) return data as MomenceEventLite[];
-  if (Array.isArray(data?.events)) return data.events as MomenceEventLite[];
-  log.warn('Unexpected Events API response shape');
-  return [];
+  if (Array.isArray(data)) return data as MomenceEvent[];
+  if (Array.isArray(data?.events)) return data.events as MomenceEvent[];
+  throw new Error('Unexpected Events API response shape');
+}
+
+async function fetchEvents(): Promise<MomenceEvent[]> {
+  try {
+    return await fetchMomenceEvents();
+  } catch (error) {
+    log.warn(error instanceof Error ? error.message : String(error));
+    return [];
+  }
 }
 
 /**

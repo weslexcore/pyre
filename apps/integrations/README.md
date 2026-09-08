@@ -107,6 +107,7 @@ Key design decisions:
 | `/api/webhooks/resend` | POST | Svix HMAC signature | Email engagement events + bounce/complaint suppression |
 | `/api/webhooks/mailchimp` | GET/POST | URL secret param + HMAC signature | Mailchimp unsubscribes/cleans into the suppression store |
 | `/api/cron/tick` | GET/POST | `Bearer CRON_SECRET` | Hourly cron entry point (QStash schedule) — runs all registered jobs |
+| `/api/admin/session-conflicts` | GET/POST | Admin session cookie | The special-event conflict review: read it, re-check Momence, cancel the ticked sessions in Momence |
 | `/api/unsubscribe` | GET/POST | HMAC-signed token | Footer-link (GET) and RFC 8058 one-click (POST) unsubscribe |
 | `/api/partner/request` | POST | `Bearer PARTNER_API_SECRET` | Partner-discount verification intake, relayed server-to-server from the landing page |
 | `/api/partner/decision` | GET | HMAC-signed token | One-click partner confirm/deny — tags the member in Momence on confirm |
@@ -136,6 +137,7 @@ Monitoring.
 | --- | --- | --- |
 | `/admin` | — | Tool directory |
 | `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
+| `/admin/session-conflicts` | Operations | Special-event conflicts — Open Hours and Social sessions sitting under a special event, flagged every Monday; admins cancel them in Momence from here (admin-only) |
 | `/admin/guests` | Operations | Guest profiles — staff-facing preferences and notes per Momence member, beside their live Momence account; `/admin/guests/sessions` shows who is booked into each session |
 | `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
 | `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
@@ -194,7 +196,8 @@ flowchart TD
         J2["2 · journey-sweeps<br/>scan member audiences, enroll matches"]
         J3["3 · journey-advance<br/>send due journey steps"]
         J4["4 · credit-reminders<br/>expiring / unused credit pack nudges"]
-        J1 --> J2 --> J3 --> J4
+        J5["… partner / referral maintenance, sync-shifts,<br/>session-conflicts (Mondays), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
+        J1 --> J2 --> J3 --> J4 --> J5
     end
     J1 -. "purchase triggers can enroll members<br/>whose steps advance in the same tick" .-> J3
 ```
@@ -210,7 +213,29 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/ti
 
 # Manually enroll a member into a journey (for whitelist testing)
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?enroll=<memberId>&journey=<journeyId>"
+
+# Does Momence let us cancel a session? Point it at a throwaway published session —
+# it really cancels it when a route works. Pin the winning route with
+# MOMENCE_SESSION_CANCEL_ROUTE afterwards.
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?probeCancel=<sessionId>"
 ```
+
+### Special-event conflicts (Mondays)
+
+The schedule is built by hand in Momence: hourly Open Hours slots and Friday
+Social evenings are stacks of overlapping sessions, and when a one-off special
+event (Momence tag `Special Event`) lands on top of them the regular sessions in
+that window have to be cancelled or guests keep booking into a private event.
+The `session-conflicts` job runs on the first tick after 7am ET on Mondays,
+reads the Momence events feed, finds every regular session overlapping a
+special event in the next 28 days, records it as a review
+(`session_conflict_reviews`), and emails the admins (`session-conflicts`
+template). It never cancels anything itself. An admin opens
+`/admin/session-conflicts`, ticks the sessions (Open Hours and Social rows start
+ticked, anything else starts unticked), confirms, and the page cancels them
+through the Momence host API — or, if that account exposes no cancel route,
+points at each session in the Momence dashboard. `Check now` on the page re-reads
+Momence into the open review any day of the week.
 
 ## Email system
 

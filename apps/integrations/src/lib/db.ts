@@ -1,4 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type {
+  Resolution,
+  ReviewSource,
+  ReviewStatus,
+  SessionConflict,
+} from './session-conflicts/types';
 
 // Service-role Supabase client for durable engine state (journey enrollments,
 // the email send log, and the suppression list — see the email_marketing
@@ -607,6 +613,31 @@ export interface GuestProfileNoteRow {
   profile_id: string;
   body: string;
   author_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// One run of the special-event conflict check (see the
+// session_conflict_reviews migration and lib/session-conflicts): the
+// detector's snapshot of regular sessions overlapping a special event, and
+// what an admin decided about each one. Momence stays the source of truth.
+export interface SessionConflictReviewRow {
+  id: string;
+  /** ISO Monday (ET) of the run. */
+  week_start: string;
+  horizon_start: string;
+  horizon_end: string;
+  status: ReviewStatus;
+  source: ReviewSource;
+  conflicts: SessionConflict[];
+  session_count: number;
+  resolution: Resolution;
+  notified_at: string | null;
+  notified_count: number;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  checked_at: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }

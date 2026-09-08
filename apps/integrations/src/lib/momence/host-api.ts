@@ -580,3 +580,106 @@ export async function fetchAppointmentReservations(params: {
   );
   return reservations.filter((r) => !r.isCancelled);
 }
+
+// --- Cancelling a session (the special-event conflict check's one write) ---
+
+export type CancelSessionResult =
+  /** Momence accepted; `via` names the route that worked, e.g. "POST /host/sessions/{id}/cancel". */
+  | { outcome: 'cancelled'; via: string }
+  /** Every candidate route answered 404/405: this account exposes no way to cancel a session. */
+  | { outcome: 'unsupported'; tried: string[] }
+  /** A route exists but refused this call (400/403/409/5xx) — retryable, not a capability gap. */
+  | { outcome: 'error'; status: number; message: string };
+
+interface CancelRoute {
+  method: 'POST' | 'PUT' | 'DELETE';
+  /** Path template with `{id}` where the session id goes. */
+  template: string;
+}
+
+// Momence's published schema could not be checked for a session-cancel
+// operation when this was written, so the routes below are the shapes the
+// rest of the host API uses, tried in order. Cancel-in-place comes first: it
+// is what the dashboard's "Cancel session" does — bookings survive as
+// cancelled rows and Momence emails the guests — whereas DELETE may erase the
+// session and its booking history. Once one route is known to work, pin it
+// with MOMENCE_SESSION_CANCEL_ROUTE ("POST /host/sessions/{id}/cancel") and
+// the probing stops.
+const CANCEL_ROUTE_CANDIDATES: CancelRoute[] = [
+  { method: 'POST', template: '/host/sessions/{id}/cancel' },
+  { method: 'PUT', template: '/host/sessions/{id}/cancel' },
+  { method: 'DELETE', template: '/host/sessions/{id}' },
+];
+
+const describeRoute = (route: CancelRoute): string => `${route.method} ${route.template}`;
+
+/** "POST /host/sessions/{id}/cancel" -> a CancelRoute, or null when malformed. */
+function parseCancelRoute(value: string | undefined): CancelRoute | null {
+  const match = value?.trim().match(/^(POST|PUT|DELETE)\s+(\/\S*\{id\}\S*)$/i);
+  if (!match) return null;
+  return { method: match[1].toUpperCase() as CancelRoute['method'], template: match[2] };
+}
+
+// Per-instance memo of what the probe learned. Serverless instances are
+// short-lived, so at worst a fresh instance re-spends two or three tiny calls.
+let learnedRoute: CancelRoute | 'unsupported' | null = null;
+
+/** What we currently know about cancelling sessions on this account. */
+export function cancelRouteStatus(): 'unknown' | 'supported' | 'unsupported' {
+  if (parseCancelRoute(import.meta.env.MOMENCE_SESSION_CANCEL_ROUTE)) return 'supported';
+  if (learnedRoute === 'unsupported') return 'unsupported';
+  if (learnedRoute) return 'supported';
+  return 'unknown';
+}
+
+/** Test seam: forget what the probe learned. */
+export function resetCancelRouteMemo(): void {
+  learnedRoute = null;
+}
+
+/**
+ * Cancel one session in Momence. Tries the pinned route when configured,
+ * otherwise probes the candidates: a 404/405 means "no such operation" and
+ * the next candidate is tried; any other failure is reported as-is, because
+ * a route that exists but rejects the call is not evidence that a different
+ * verb would do better.
+ */
+export async function cancelHostSession(sessionId: number): Promise<CancelSessionResult> {
+  const pinned = parseCancelRoute(import.meta.env.MOMENCE_SESSION_CANCEL_ROUTE);
+  if (learnedRoute === 'unsupported' && !pinned) {
+    return { outcome: 'unsupported', tried: CANCEL_ROUTE_CANDIDATES.map(describeRoute) };
+  }
+
+  const candidates = pinned
+    ? [pinned]
+    : learnedRoute && learnedRoute !== 'unsupported'
+      ? [learnedRoute]
+      : CANCEL_ROUTE_CANDIDATES;
+
+  const tried: string[] = [];
+  for (const route of candidates) {
+    const path = route.template.replace('{id}', String(sessionId));
+    tried.push(describeRoute(route));
+    try {
+      await momenceRequest<unknown>(route.method, path);
+      if (!pinned) learnedRoute = route;
+      return { outcome: 'cancelled', via: describeRoute(route) };
+    } catch (error) {
+      if (error instanceof MomenceApiError && (error.status === 404 || error.status === 405)) {
+        continue;
+      }
+      const status = error instanceof MomenceApiError ? error.status : 0;
+      return {
+        outcome: 'error',
+        status,
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  // A pinned route answering 404 is more likely a session that is already
+  // gone than a missing capability, so only the unpinned probe learns
+  // "unsupported".
+  if (!pinned) learnedRoute = 'unsupported';
+  return { outcome: 'unsupported', tried };
+}

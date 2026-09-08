@@ -10,9 +10,14 @@ interface ImportMetaEnv {
   readonly MOMENCE_HOST_PASSWORD?: string;
   readonly MOMENCE_OAUTH_CLIENT_ID?: string;
   readonly MOMENCE_OAUTH_CLIENT_SECRET?: string;
-  // Momence v1 Events API (session-type resolution)
+  // Momence v1 Events API (session-type resolution + the special-event
+  // conflict check)
   readonly MOMENCE_HOST_ID?: string;
   readonly MOMENCE_API_TOKEN?: string;
+  // The host-API route that cancels a session, once the probe has found it
+  // (e.g. "POST /host/sessions/{id}/cancel"). Unset = probe the candidates in
+  // lib/momence/host-api.ts on first use.
+  readonly MOMENCE_SESSION_CANCEL_ROUTE?: string;
   // Mailchimp
   readonly MAILCHIMP_API_KEY?: string;
   readonly MAILCHIMP_AUDIENCE_ID?: string;

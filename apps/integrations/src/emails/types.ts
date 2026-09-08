@@ -268,6 +268,48 @@ export interface LostFoundClaimedProps {
   itemUrl: string;
 }
 
+/** One regular session sitting under a special event, on the Monday notice. */
+export interface SessionConflictItem {
+  title: string;
+  /** e.g. "Thu, Sep 18 · 6:00 PM – 7:00 PM EDT" */
+  whenLabel: string;
+  /** "Open hours" / "Social" / "Guided" */
+  typeLabel: string;
+  /** "3 booked" / "No bookings" / "" when unknown */
+  bookingLabel: string;
+  /** True for the recurring types the check pre-selects for cancellation. */
+  preselected: boolean;
+  link?: string;
+}
+
+/** A special event and everything overlapping it. */
+export interface SessionConflictGroup {
+  eventTitle: string;
+  whenLabel: string;
+  location?: string;
+  link?: string;
+  /** Chronological; never empty. */
+  sessions: SessionConflictItem[];
+}
+
+/**
+ * To the admins on Monday morning: the regular sessions that would run into a
+ * special event over the next four weeks. Acting on it happens on the review
+ * page, never from the email.
+ */
+export interface SessionConflictsProps {
+  /** e.g. "Oct 12" — the last day scanned. */
+  horizonLabel: string;
+  /** Distinct sessions across all groups. */
+  sessionCount: number;
+  preselectedCount: number;
+  eventCount: number;
+  groups: SessionConflictGroup[];
+  reviewUrl: string;
+  /** False only once the API is known not to cancel sessions on this account. */
+  cancelSupported?: boolean;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -291,6 +333,7 @@ export interface EmailPropsByTemplate {
   'incident-reported': IncidentReportedProps;
   'lost-found-found': LostFoundFoundProps;
   'lost-found-claimed': LostFoundClaimedProps;
+  'session-conflicts': SessionConflictsProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

@@ -83,9 +83,13 @@ sync per member, for bootstrapping or repair.
 
 ## 3. The hourly cron tick
 
-Everything Momence can't push to us is pulled on an hourly tick. Four jobs run
-sequentially inside one ~50-second budget; any job that runs out of time saves a
-Redis cursor and resumes on the next tick.
+Everything Momence can't push to us is pulled on an hourly tick. The jobs in
+[src/lib/cron/jobs.ts](../src/lib/cron/jobs.ts) run sequentially inside one
+~50-second budget; any job that runs out of time saves a cursor (Redis, or a
+send-log claim) and resumes on the next tick. The four email-engine jobs are
+drawn below; the rest (partner and referral maintenance, the Momence → shifts
+sync, the Monday special-event conflict check, the business-report syncs, the
+lost-and-found sweep, the Monday shift roundup) follow the same contract.
 
 ```mermaid
 flowchart TD
@@ -261,3 +265,42 @@ sequenceDiagram
 This closes the loop: `journey_enrolled` → `journey_email_sent` →
 `email_delivered/opened/clicked` → (ideally) `purchase_completed`, all stitched by
 email in PostHog.
+
+## Special-event conflicts (Mondays)
+
+The `session-conflicts` job is the one cron job whose output a person has to act
+on. It never writes to Momence.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Tick as cron tick (Mon ≥ 7am ET)
+    participant Job as session-conflicts
+    participant Mom as Momence v1 /Events
+    participant SB as Supabase
+    participant Admin as admin (email → /admin/session-conflicts)
+    participant Host as Momence host API
+
+    Tick->>Job: run
+    Job->>SB: cron review for this week?
+    SB-->>Job: none
+    Job->>Mom: GET /Events (tags, times, capacity)
+    Mom-->>Job: feed
+    Job->>Job: findSessionConflicts(): regular sessions overlapping a "Special Event" in the next 28 days
+    Job->>SB: insert session_conflict_reviews (pending, or clear when empty)
+    Job->>Admin: sendTemplate('session-conflicts') per admin, send_key session-conflicts:{reviewId}:{email}
+    Admin->>SB: GET review; tick Open Hours / Social rows (pre-selected), confirm
+    Admin->>Host: POST /api/admin/session-conflicts {action:'cancel'} → cancelHostSession() per session
+    Host-->>Admin: cancelled / error / unsupported
+    Admin->>SB: resolution per session; status → resolved when nothing is undecided
+```
+
+Two things keep this safe. The email carries no action: cancelling happens on the
+admin page behind the Momence OAuth session, so a mail scanner prefetching a link
+can never cancel a session. And the cancel route is probed, not assumed: Momence's
+schema could not be checked for a session-cancel operation, so `cancelHostSession`
+tries `POST /host/sessions/{id}/cancel`, then `PUT`, then `DELETE /host/sessions/{id}`,
+treats 404/405 as "no such operation", and reports `unsupported` when none work —
+at which point the page degrades to "open each session in Momence and mark it
+handled". `?probeCancel=<sessionId>` on the tick runs the probe against a throwaway
+session; `MOMENCE_SESSION_CANCEL_ROUTE` pins the route once it is known.

@@ -66,6 +66,19 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Monday morning: regular sessions (Open Hours, Social) sitting under a
+    // special event in the next four weeks, written up as a review and
+    // emailed to the admins — who cancel them from /admin/session-conflicts.
+    // Never cancels anything itself. No-op on every other day/hour.
+    name: 'session-conflicts',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/session-conflicts/job')).runSessionConflictCheck(
+        ctx
+      );
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
+  {
     // Daily (first tick at/after 6am ET): pull the Momence total-sales report
     // into Supabase for /admin/business. Runs after sync-shifts so the
     // dashboard's labor join sees fresh shifts.

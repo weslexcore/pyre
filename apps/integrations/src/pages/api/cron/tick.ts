@@ -11,6 +11,7 @@ export const prerender = false;
 //   curl -H "Authorization: Bearer $CRON_SECRET" \
 //     "https://<integrations>/api/cron/tick?dryRun=1"        # all jobs, no writes
 //   curl ... "/api/cron/tick?job=journey-advance"            # a single job
+//   curl ... "/api/cron/tick?probeCancel=<sessionId>"        # can Momence cancel a session?
 
 // Leave headroom under the function's max duration so we always return a
 // response (jobs persist cursors and resume next tick).
@@ -54,6 +55,27 @@ const handler: APIRoute = async ({ request, url }) => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Manual probe of Momence's session-cancel capability, for the
+  // special-event conflict check. Point it at a throwaway published session:
+  //   /api/cron/tick?probeCancel=<sessionId>
+  // It really does cancel the session when a route works — that is the test.
+  const probeCancel = url.searchParams.get('probeCancel');
+  if (probeCancel) {
+    const sessionId = Number.parseInt(probeCancel, 10);
+    if (!Number.isFinite(sessionId)) {
+      return new Response(JSON.stringify({ error: 'probeCancel must be a session id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const { cancelHostSession, cancelRouteStatus } = await import('@/lib/momence/host-api');
+    const result = await cancelHostSession(sessionId);
+    return new Response(
+      JSON.stringify({ probeCancel: sessionId, result, cancelSupport: cancelRouteStatus() }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   const jobs = only ? CRON_JOBS.filter((j) => j.name === only) : CRON_JOBS;
