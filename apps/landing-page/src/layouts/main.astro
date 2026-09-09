@@ -35,6 +35,13 @@ interface Props {
     tags?: string[];
   };
   isHomePage?: boolean;
+  /**
+   * A remote image the page paints above the fold — an event banner, say. It is
+   * the LCP element, and without this the browser can't discover it until the
+   * body has parsed; preloading it opens the cross-origin connection and starts
+   * the download while the head is still being read.
+   */
+  preloadImage?: string;
   transparentNav?: boolean;
   darkLogoText?: boolean;
   logoOnly?: boolean;
@@ -51,6 +58,7 @@ const {
   ogType = 'website',
   article,
   isHomePage = false,
+  preloadImage,
   transparentNav = false,
   darkLogoText = false,
   logoOnly = false,
@@ -280,6 +288,8 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 				})),
 			})} />
 		)}
+		{/* Ahead of the fonts: it's the largest paint, and the fonts are already same-origin. */}
+		{preloadImage && <link rel="preload" as="image" href={preloadImage} fetchpriority="high" />}
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
 		{isHomePage && <link rel="preload" as="font" href={fontLogoWoff2} type="font/woff2" crossorigin />}

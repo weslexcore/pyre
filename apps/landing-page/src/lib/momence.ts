@@ -8,6 +8,13 @@ import type { EventItem, EventsContent, Practitioner } from './types';
 const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 
 /**
+ * Momence sits in front of the first byte of every server-rendered events page,
+ * so a slow response must fail fast rather than hold the request open until the
+ * platform kills it. Callers already treat a failure as "no events".
+ */
+const FETCH_TIMEOUT_MS = 6_000;
+
+/**
  * Tag used in Momence to mark volunteer / work-trade events.
  * Tagged events are surfaced on /volunteer and excluded from the main schedule.
  */
@@ -44,6 +51,7 @@ export async function fetchMomenceEvents(): Promise<MomenceEvent[]> {
       headers: {
         Accept: 'application/json',
       },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -85,7 +93,10 @@ export async function fetchMomenceTeachers(): Promise<MomenceTeacher[]> {
   const url = `${MOMENCE_API_BASE}/Teachers?hostId=${hostId}&token=${apiToken}`;
 
   try {
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
 
     if (!response.ok) {
       console.error(`[Momence] Teachers API returned ${response.status}: ${response.statusText}`);
