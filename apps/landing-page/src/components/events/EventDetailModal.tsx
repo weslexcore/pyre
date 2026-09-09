@@ -324,7 +324,6 @@ export default function EventDetailModal({
       try {
         await navigator.share({
           title: event.title,
-          text: `Check out ${event.title} at Pyre`,
           url: shareUrl,
         });
       } catch (err) {
