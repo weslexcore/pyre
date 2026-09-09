@@ -328,7 +328,10 @@ const analyticsEvent = event
       <article class="relative z-10">
         {/* The banner sits whole inside a fixed-height band — capped in both
             directions and centred, so a tall portrait and a wide flyer are each
-            shown complete rather than cropped to fit. The site's repeating logo
+            shown complete rather than cropped to fit. It takes the full content
+            width whenever its shape allows, and only shrinks when that would
+            push it past the bottom of the viewport — the height cap is what
+            keeps the whole banner in view on short screens. The site's repeating logo
             fills whatever space the image doesn't, which is also why the band
             needs no fade: nothing is cut off, so there's no edge to hide.
 
@@ -339,17 +342,21 @@ const analyticsEvent = event
             The cost is that artwork running right to its own edge softens there;
             a flyer with edge-to-edge text would want a gentler percentage. */}
         {event.image ? (
-          <div class="relative flex h-[58vh] max-h-[640px] min-h-[340px] w-full items-center justify-center overflow-hidden px-4 pb-8 pt-24 md:pt-28">
+          <div class="relative flex min-h-[340px] w-full items-center justify-center overflow-hidden pb-8 pt-24 md:pt-28">
             {/* Faded at the bottom so the band has no hard line for the drifting
                 gradient to catch. Safe to fade here because it's decoration —
                 unlike the image, nothing is lost. */}
             <RepeatingLogoBackground tileSizePx={96} class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
-            <img
-              src={event.image.src}
-              alt={event.image.alt ?? event.title}
-              class="relative max-h-full w-auto max-w-3xl object-contain mask-x-from-88% mask-x-to-100% mask-y-from-88% mask-y-to-100%"
-              fetchpriority="high"
-            />
+            {/* Same width constraints as the content column below, so a banner
+                that fits lines up with the title rather than floating narrower. */}
+            <div class="relative mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
+              <img
+                src={event.image.src}
+                alt={event.image.alt ?? event.title}
+                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain mask-x-from-88% mask-x-to-100% mask-y-from-88% mask-y-to-100%"
+                fetchpriority="high"
+              />
+            </div>
           </div>
         ) : (
           <div class="h-24 md:h-32"></div>
