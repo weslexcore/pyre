@@ -330,7 +330,14 @@ const analyticsEvent = event
             directions and centred, so a tall portrait and a wide flyer are each
             shown complete rather than cropped to fit. The site's repeating logo
             fills whatever space the image doesn't, which is also why the band
-            needs no fade: nothing is cut off, so there's no edge to hide. */}
+            needs no fade: nothing is cut off, so there's no edge to hide.
+
+            The banner's own edges feather out over the last ~12%, so it settles
+            into the pattern instead of sitting on it as a hard rectangle. This
+            is alpha on the image rather than anything painted over it, so the
+            pattern and the drifting gradient carry straight through the blend.
+            The cost is that artwork running right to its own edge softens there;
+            a flyer with edge-to-edge text would want a gentler percentage. */}
         {event.image ? (
           <div class="relative flex h-[58vh] max-h-[640px] min-h-[340px] w-full items-center justify-center overflow-hidden px-4 pb-8 pt-24 md:pt-28">
             {/* Faded at the bottom so the band has no hard line for the drifting
@@ -340,7 +347,7 @@ const analyticsEvent = event
             <img
               src={event.image.src}
               alt={event.image.alt ?? event.title}
-              class="relative max-h-full w-auto max-w-3xl object-contain"
+              class="relative max-h-full w-auto max-w-3xl object-contain mask-x-from-88% mask-x-to-100% mask-y-from-88% mask-y-to-100%"
               fetchpriority="high"
             />
           </div>
