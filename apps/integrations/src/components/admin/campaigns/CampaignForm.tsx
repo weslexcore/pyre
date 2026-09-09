@@ -211,15 +211,15 @@ export function CampaignForm({
               </button>
             </p>
           )}
-          {events.events && (
+          {events.items && (
             <SearchSelect
               id="campaign-event"
-              options={events.events.map((event) => ({
+              options={events.items.map((event) => ({
                 value: event.id,
                 label: eventLabel(event),
               }))}
               value={eventId}
-              onChange={(id) => pickEvent(events.events?.find((ev) => ev.id === id))}
+              onChange={(id) => pickEvent(events.items?.find((ev) => ev.id === id))}
               placeholder="Type to find an event; it fills in the name and link"
               emptyText="No upcoming event matches"
             />

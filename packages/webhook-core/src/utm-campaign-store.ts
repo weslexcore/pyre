@@ -28,7 +28,15 @@ const campaignLinksKey = (id: string) => `${CAMPAIGN_PREFIX}${id}:links`;
 export type CampaignType = 'event' | 'sale' | 'newsletter' | 'launch' | 'evergreen' | 'other';
 export type CampaignStatus = 'active' | 'archived';
 /** Where a campaign's links point by default. '' on legacy campaigns. */
-export type DestinationKind = 'home' | 'events' | 'linktree' | 'event' | 'blog' | 'custom' | '';
+export type DestinationKind =
+  | 'home'
+  | 'events'
+  | 'linktree'
+  | 'event'
+  | 'blog'
+  | 'partner'
+  | 'custom'
+  | '';
 
 export interface UtmCampaign {
   id: string;
@@ -155,6 +163,7 @@ const DESTINATION_KINDS: readonly DestinationKind[] = [
   'linktree',
   'event',
   'blog',
+  'partner',
   'custom',
 ];
 

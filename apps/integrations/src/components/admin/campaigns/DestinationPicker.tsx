@@ -9,6 +9,7 @@ import {
   DESTINATION_KINDS,
   type DestinationKind,
   type EventOption,
+  type PartnerRef,
 } from '@/lib/campaigns/types';
 import { inputClass, TileButton } from '../incidentUi';
 import { SearchSelect } from '../SearchSelect';
@@ -19,17 +20,19 @@ export interface DestinationValue {
   value: string;
 }
 
-export interface EventsState {
-  events: EventOption[] | null;
+/** A list fetched from an admin route the first time something needs it. */
+export interface LazyList<T> {
+  items: T[] | null;
   loading: boolean;
   error: string | null;
   sessionExpired: boolean;
   load: () => void;
 }
 
-/** Upcoming events from Momence, fetched once on demand. */
-export function useEvents(): EventsState {
-  const [events, setEvents] = useState<EventOption[] | null>(null);
+export type EventsState = LazyList<EventOption>;
+
+function useLazyList<T>(url: string, pick: (json: unknown) => T[]): LazyList<T> {
+  const [items, setItems] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -40,24 +43,38 @@ export function useEvents(): EventsState {
     started.current = true;
     setLoading(true);
     setError(null);
-    fetch('/api/admin/events')
+    fetch(url)
       .then(async (res) => {
         if (res.status === 401 || res.status === 403) {
           setSessionExpired(true);
           throw new Error('Session expired');
         }
-        if (!res.ok) throw new Error(`Failed to load events (${res.status})`);
-        const json = (await res.json()) as { events: EventOption[] };
-        setEvents(json.events ?? []);
+        if (!res.ok) throw new Error(`Failed to load (${res.status})`);
+        setItems(pick(await res.json()));
       })
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to load events');
+        setError(err instanceof Error ? err.message : 'Failed to load');
         started.current = false; // allow a retry
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [url, pick]);
 
-  return { events, loading, error, sessionExpired, load };
+  return { items, loading, error, sessionExpired, load };
+}
+
+const pickEvents = (json: unknown): EventOption[] =>
+  (json as { events?: EventOption[] }).events ?? [];
+const pickPartners = (json: unknown): PartnerRef[] =>
+  (json as { partners?: PartnerRef[] }).partners ?? [];
+
+/** Upcoming events from Momence, fetched once on demand. */
+export function useEvents(): EventsState {
+  return useLazyList('/api/admin/events', pickEvents);
+}
+
+/** Enabled partners from the registry, fetched once on demand. */
+export function usePartners(): LazyList<PartnerRef> {
+  return useLazyList('/api/admin/campaign-partners', pickPartners);
 }
 
 export function eventLabel(event: EventOption): string {
@@ -81,9 +98,12 @@ export function DestinationPicker({
   /** Smaller tiles for the per-link override panel. */
   compact?: boolean;
 }) {
+  const partners = usePartners();
+
   useEffect(() => {
     if (value.kind === 'event') events.load();
-  }, [value.kind, events.load]);
+    if (value.kind === 'partner') partners.load();
+  }, [value.kind, events.load, partners.load]);
 
   const resolved = useMemo(
     () => resolveDestination(origin, value.kind, value.value),
@@ -97,7 +117,7 @@ export function DestinationPicker({
       kind === 'blog'
         ? (blogPosts[0]?.slug ?? '')
         : kind === 'event'
-          ? (events.events?.[0]?.id ?? '')
+          ? (events.items?.[0]?.id ?? '')
           : '';
     onChange({ kind, value: first });
   };
@@ -105,7 +125,7 @@ export function DestinationPicker({
   return (
     <div className="space-y-3">
       <div
-        className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}
+        className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7'}`}
       >
         {DESTINATION_KINDS.map((kind) => (
           <TileButton
@@ -132,13 +152,13 @@ export function DestinationPicker({
               </button>
             </p>
           )}
-          {events.events && events.events.length === 0 && (
+          {events.items && events.items.length === 0 && (
             <p className="text-xs text-white/50">No upcoming events on the site right now.</p>
           )}
-          {events.events && events.events.length > 0 && (
+          {events.items && events.items.length > 0 && (
             <SearchSelect
               id="dest-event"
-              options={events.events.map((event) => ({
+              options={events.items.map((event) => ({
                 value: event.id,
                 label: eventLabel(event),
               }))}
@@ -174,6 +194,43 @@ export function DestinationPicker({
               emptyText="No post matches"
             />
           )}
+        </div>
+      )}
+
+      {value.kind === 'partner' && (
+        <div>
+          <label htmlFor="dest-partner" className={smallLabelClass}>
+            Which partner
+          </label>
+          {partners.loading && <p className="font-mono text-xs text-white/40">Loading partners…</p>}
+          {partners.error && !partners.sessionExpired && (
+            <p className="text-xs text-[var(--pyre-red)]">
+              {partners.error}{' '}
+              <button type="button" className="underline" onClick={partners.load}>
+                Try again
+              </button>
+            </p>
+          )}
+          {partners.items && partners.items.length === 0 && (
+            <p className="text-xs text-white/50">No enabled partners in the registry.</p>
+          )}
+          {partners.items && partners.items.length > 0 && (
+            <SearchSelect
+              id="dest-partner"
+              options={partners.items.map((partner) => ({
+                value: partner.slug,
+                label: partner.name,
+                hint: `/${partner.slug}`,
+              }))}
+              value={value.value}
+              onChange={(slug) => onChange({ kind: 'partner', value: slug })}
+              placeholder="Type to find a partner"
+              emptyText="No partner matches"
+            />
+          )}
+          <p className="mt-1 text-xs text-white/40">
+            Links open pyresauna.com/&lt;partner slug&gt;. The page has to exist on the site first.
+          </p>
         </div>
       )}
 

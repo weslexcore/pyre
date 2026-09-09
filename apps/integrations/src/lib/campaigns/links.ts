@@ -54,6 +54,11 @@ export function resolveDestination(
       if (!trimmed) return { ok: false, error: 'Pick a blog post' };
       return { ok: true, url: new URL(`/blog/${encodeURIComponent(trimmed)}`, origin).toString() };
     }
+    case 'partner': {
+      if (!trimmed) return { ok: false, error: 'Pick a partner' };
+      // Partner pages live at /<partner slug> (bft.astro is /bft).
+      return { ok: true, url: new URL(`/${encodeURIComponent(trimmed)}`, origin).toString() };
+    }
     case 'custom': {
       const parsed = parseExternalUrl(trimmed);
       if (!parsed)

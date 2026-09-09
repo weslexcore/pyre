@@ -56,8 +56,15 @@ export const DESTINATION_KINDS: ReadonlyArray<{
   { key: 'linktree', label: 'Link tree', hint: 'pyresauna.com/hi, the link-in-bio page.' },
   { key: 'event', label: 'One event', hint: 'Opens straight to a session.' },
   { key: 'blog', label: 'Blog post', hint: 'A published article.' },
+  { key: 'partner', label: 'Partner page', hint: 'A partner offer page, like /bft.' },
   { key: 'custom', label: 'Another site', hint: 'Eventbrite, a partner, anything external.' },
 ];
+
+/** A partner from the registry whose page the destination picker can target. */
+export interface PartnerRef {
+  slug: string;
+  name: string;
+}
 
 /** A published blog article the destination picker can target. */
 export interface BlogPostRef {

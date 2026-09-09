@@ -63,6 +63,14 @@ describe('resolveDestination', () => {
     });
   });
 
+  it('sends partner links to the partner page', () => {
+    expect(resolveDestination(ORIGIN, 'partner', 'bft')).toEqual({
+      ok: true,
+      url: 'https://pyresauna.com/bft',
+    });
+    expect(resolveDestination(ORIGIN, 'partner', '').ok).toBe(false);
+  });
+
   it('requires a value for event and blog', () => {
     expect(resolveDestination(ORIGIN, 'event', ' ').ok).toBe(false);
     expect(resolveDestination(ORIGIN, 'blog', '').ok).toBe(false);

@@ -58,6 +58,18 @@ describe('normalizeCampaignInput', () => {
     expect(result).toEqual({ ok: false, error: 'Pick an event' });
   });
 
+  it('resolves a partner page and requires the partner', () => {
+    const result = normalizeCampaignInput(
+      { ...good, destination: { kind: 'partner', value: 'bft' } },
+      ORIGIN
+    );
+    expect(result.ok && result.value.destinationUrl).toBe('https://pyresauna.com/bft');
+    expect(result.ok && result.value.destinationValue).toBe('bft');
+    expect(
+      normalizeCampaignInput({ ...good, destination: { kind: 'partner', value: '' } }, ORIGIN)
+    ).toEqual({ ok: false, error: 'Pick a partner' });
+  });
+
   it('resolves the link tree page', () => {
     const result = normalizeCampaignInput(
       { ...good, destination: { kind: 'linktree', value: '' } },
