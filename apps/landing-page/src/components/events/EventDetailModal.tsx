@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { trackBookingLinkClicked } from '@/lib/analytics';
 import { creditsForPriceUsd } from '@/lib/credits';
+import { eventPath } from '@/lib/event-url';
 import { specialEventPractitioners } from '@/lib/practitioners';
+import { durationRowLabel, spotsColor, spotsLabel } from '@/lib/spots';
 import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
 import PractitionerByline from './PractitionerByline';
 
@@ -140,37 +142,6 @@ function CheckIcon() {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
     </svg>
   );
-}
-
-// -- Helpers ------------------------------------------------------------------
-
-function spotsColor(spots: number | undefined): string {
-  if (spots === undefined) return 'text-[var(--pyre-creme)] opacity-70';
-  if (spots === 0) return 'text-[var(--pyre-red)]';
-  if (spots <= 3) return 'text-[var(--pyre-gold)]';
-  return 'text-[var(--pyre-creme)] opacity-70';
-}
-
-function spotsLabel(
-  spotsRemaining: number | undefined,
-  totalSpots: number | undefined
-): string | null {
-  if (spotsRemaining === undefined) return null;
-  if (spotsRemaining === 0) return 'Waitlist';
-  if (totalSpots !== undefined) return `${spotsRemaining}/${totalSpots} open`;
-  return `${spotsRemaining} open`;
-}
-
-// Duration-only label for a booking row, e.g. "1 Hour" / "2 Hours". Non-whole
-// hours fall back to a minutes label, then to stripping the "Book " prefix from
-// the option label when the duration is unknown.
-function durationRowLabel(minutes: number, fallbackLabel = ''): string {
-  if (minutes > 0 && minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return `${hours} Hour${hours > 1 ? 's' : ''}`;
-  }
-  if (minutes > 0) return `${minutes} Min`;
-  return fallbackLabel.replace(/^Book\s+/i, '');
 }
 
 // -- Booking row --------------------------------------------------------------
@@ -342,8 +313,7 @@ export default function EventDetailModal({
   async function handleShare() {
     if (!event) return;
 
-    const url = new URL(`${window.location.origin}/events`);
-    url.searchParams.set('event', event.id);
+    const url = new URL(`${window.location.origin}${eventPath(event)}`);
     url.searchParams.set('utm_source', 'share');
     url.searchParams.set('utm_medium', 'referral');
     url.searchParams.set('utm_campaign', 'event_share');

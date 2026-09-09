@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEvents } from '@/hooks/useEvents';
+import { eventPath } from '@/lib/event-url';
 import type { EventItem } from '@/lib/types';
 
 type CarouselVariant = 'default' | 'compact';
@@ -186,11 +187,7 @@ function EventCard({
 
   if (event.cta?.href) {
     return (
-      <a
-        href={`/events?event=${encodeURIComponent(event.id)}`}
-        aria-label={event.cta.ariaLabel}
-        className="group cursor-pointer"
-      >
+      <a href={eventPath(event)} aria-label={event.cta.ariaLabel} className="group cursor-pointer">
         <EventCardContent event={event} styles={styles} />
       </a>
     );

@@ -15,6 +15,7 @@ import {
   scheduleOutlook,
 } from '@/lib/events-config';
 import { specialEventPractitioners } from '@/lib/practitioners';
+import { spotsColor, spotsLabel } from '@/lib/spots';
 import type { EventItem, PooledBookingOption, Practitioner } from '@/lib/types';
 import PractitionerByline from './PractitionerByline';
 
@@ -203,25 +204,6 @@ function LoadErrorMessage({ onRetry }: { onRetry: () => void }) {
       </div>
     </div>
   );
-}
-
-function spotsColor(spots: number | undefined): string {
-  if (spots === undefined) return 'text-[var(--pyre-creme)] opacity-70';
-  if (spots === 0) return 'text-[var(--pyre-red)]';
-  if (spots <= 3) return 'text-[var(--pyre-gold)]';
-  return 'text-[var(--pyre-creme)] opacity-70';
-}
-
-function spotsLabel(
-  spotsRemaining: number | undefined,
-  totalSpots: number | undefined
-): string | null {
-  if (spotsRemaining === undefined) return null;
-  if (spotsRemaining === 0) return 'Waitlist';
-  if (totalSpots !== undefined) {
-    return `${spotsRemaining}/${totalSpots} open`;
-  }
-  return `${spotsRemaining} open`;
 }
 
 function SlotRow({

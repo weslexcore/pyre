@@ -65,6 +65,12 @@ const faviconHref = `data:image/svg+xml,${encodeURIComponent(faviconSvgColored)}
 
 // Use custom OG image if provided, otherwise use default
 const socialImageSrc = ogImage || SOCIAL_IMAGE.src;
+// Dimensions are only known for the default image and for callers that pass a
+// local asset's real width/height. A remote image (e.g. a Momence event banner)
+// has neither, and shipping the default 1920x1293 for it makes scrapers crop
+// badly — so the tags are omitted rather than guessed.
+const socialImageWidth = ogImage ? ogImageWidth : (ogImageWidth ?? SOCIAL_IMAGE_WIDTH);
+const socialImageHeight = ogImage ? ogImageHeight : (ogImageHeight ?? SOCIAL_IMAGE_HEIGHT);
 const absoluteSocialImage = Astro.site
   ? new URL(socialImageSrc, Astro.site).toString()
   : socialImageSrc;
@@ -102,8 +108,8 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		<meta property="og:site_name" content={SITE_NAME} />
 		<meta property="og:locale" content={SITE_LOCALE} />
     <meta property="og:image" content={absoluteSocialImage} />
-    <meta property="og:image:width" content={String(ogImageWidth ?? SOCIAL_IMAGE_WIDTH)} />
-    <meta property="og:image:height" content={String(ogImageHeight ?? SOCIAL_IMAGE_HEIGHT)} />
+    {socialImageWidth && <meta property="og:image:width" content={String(socialImageWidth)} />}
+    {socialImageHeight && <meta property="og:image:height" content={String(socialImageHeight)} />}
     <meta property="og:image:alt" content={ogImage ? title : SOCIAL_IMAGE_ALT} />
 		
 		<!-- Article-specific Open Graph tags -->
