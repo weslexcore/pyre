@@ -334,25 +334,24 @@ const analyticsEvent = event
             fills whatever space the image doesn't, which is also why the band
             needs no fade: nothing is cut off, so there's no edge to hide.
 
-            The banner's own edges feather out over the last ~9%, so it settles
-            into the pattern instead of sitting on it as a hard rectangle. This
-            is alpha on the image rather than anything painted over it, so the
-            pattern and the drifting gradient carry straight through the blend.
-            The cost is that artwork running right to its own edge softens there;
-            a flyer with edge-to-edge text would want a gentler percentage. */}
+            A soft drop shadow lifts the banner off the pattern, so it reads as
+            sitting above the page rather than printed onto it — and it keeps the
+            artwork itself untouched, which matters for flyers whose text runs to
+            the edge. The band deliberately doesn't clip its overflow, so the
+            shadow can fall past it onto the page below. */}
         {event.image ? (
-          <div class="relative flex min-h-[340px] w-full items-center justify-center overflow-hidden pb-8 pt-24 md:pt-28">
+          <div class="relative flex min-h-[340px] w-full items-center justify-center pb-8 pt-24 md:pt-28">
             {/* Faded at the bottom so the band has no hard line for the drifting
                 gradient to catch. Safe to fade here because it's decoration —
                 unlike the image, nothing is lost. */}
-            <RepeatingLogoBackground tileSizePx={96} class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
+            <RepeatingLogoBackground tileSizePx={56} class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
             {/* Same width constraints as the content column below, so a banner
                 that fits lines up with the title rather than floating narrower. */}
             <div class="relative mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
               <img
                 src={event.image.src}
                 alt={event.image.alt ?? event.title}
-                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain mask-x-from-91% mask-x-to-100% mask-y-from-91% mask-y-to-100%"
+                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_6px_16px_-6px_rgba(0,0,0,0.6)]"
                 fetchpriority="high"
               />
             </div>
