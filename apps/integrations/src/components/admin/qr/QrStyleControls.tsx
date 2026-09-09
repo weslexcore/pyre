@@ -9,6 +9,7 @@ import {
   PYRE_COLORS,
   type QrStyle,
 } from '@/lib/qr/style';
+import { InfoTip } from '../InfoTip';
 
 /** One-click Pyre brand-color swatches for a color field. */
 function Swatches({ onPick }: { onPick: (hex: string) => void }) {
@@ -146,7 +147,13 @@ export function QrStyleControls({
         />
       </div>
       <div>
-        <span className={labelClass}>Quiet zone {style.margin}</span>
+        <span className={`${labelClass} flex items-center gap-1.5`}>
+          Quiet zone {style.margin}
+          <InfoTip
+            label="quiet zone"
+            text="The empty border around the code. Phone cameras use it to find the edges, so keep some when the code is printed small or sits on a busy background."
+          />
+        </span>
         <input
           type="range"
           min={0}
