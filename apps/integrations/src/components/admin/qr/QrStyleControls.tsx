@@ -158,7 +158,7 @@ export function QrStyleControls({
           type="range"
           min={0}
           max={40}
-          step={2}
+          step={1}
           value={style.margin}
           onChange={(e) => set('margin', Number(e.target.value))}
           className="w-full"
