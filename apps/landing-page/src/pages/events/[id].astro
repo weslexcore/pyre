@@ -21,6 +21,7 @@ export const prerender = false;
 
 import ogFallback from '@/assets/images/warm_sauna.webp';
 import PractitionerByline from '@/components/events/PractitionerByline';
+import RepeatingLogoBackground from '@/components/RepeatingLogoBackground.astro';
 import GradientOverlay from '@/components/GradientOverlay.astro';
 import MainLayout from '@/layouts/main.astro';
 import { buildPooledBookingModel } from '@/lib/booking-model';
@@ -325,31 +326,23 @@ const analyticsEvent = event
 
     {event ? (
       <article class="relative z-10">
-        {/* Same shape as the BFT hero: a fixed-height band with the banner
-            covering it, so a tall portrait and a wide flyer both land at a
-            predictable size instead of the image dictating the page. The crop
-            sits above centre because promo art puts faces and headlines in the
-            upper third — dead centre cuts them off. */}
+        {/* The banner sits whole inside a fixed-height band — capped in both
+            directions and centred, so a tall portrait and a wide flyer are each
+            shown complete rather than cropped to fit. The site's repeating logo
+            fills whatever space the image doesn't, which is also why the band
+            needs no fade: nothing is cut off, so there's no edge to hide. */}
         {event.image ? (
-          <div class="relative h-[58vh] max-h-[620px] min-h-[320px] w-full overflow-hidden">
+          <div class="relative flex h-[58vh] max-h-[640px] min-h-[340px] w-full items-center justify-center overflow-hidden px-4 pb-8 pt-24 md:pt-28">
+            {/* Faded at the bottom so the band has no hard line for the drifting
+                gradient to catch. Safe to fade here because it's decoration —
+                unlike the image, nothing is lost. */}
+            <RepeatingLogoBackground class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
             <img
               src={event.image.src}
               alt={event.image.alt ?? event.title}
-              class="absolute inset-0 h-full w-full object-cover object-[50%_35%]"
+              class="relative max-h-full w-auto max-w-3xl object-contain"
               fetchpriority="high"
             />
-            {/* Keeps the floating nav legible over a bright banner. */}
-            <div
-              aria-hidden="true"
-              class="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[var(--pyre-black)] via-[var(--pyre-black)]/60 to-transparent"
-            >
-            </div>
-            {/* Dissolves the banner into the page so the title can sit over it. */}
-            <div
-              aria-hidden="true"
-              class="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-[var(--pyre-black)] via-[var(--pyre-black)]/85 to-transparent"
-            >
-            </div>
           </div>
         ) : (
           <div class="h-24 md:h-32"></div>
@@ -358,7 +351,7 @@ const analyticsEvent = event
         <div
           class:list={[
             'mx-auto max-w-3xl px-4 sm:px-6 lg:px-8',
-            event.image ? 'relative -mt-28 md:-mt-40' : 'pt-8',
+            event.image ? 'relative pt-10' : 'pt-8',
           ]}
         >
           <a
