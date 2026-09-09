@@ -44,6 +44,9 @@ Allow: /
 
 # Sitemap and LLMs.txt
 Sitemap: ${baseUrl}/sitemap-index.xml
+# Per-event pages are rendered on demand, so they can't appear in the generated
+# index above — they get their own sitemap, refreshed from the live calendar.
+Sitemap: ${baseUrl}/events-sitemap.xml
 `;
 
   return new Response(content, {
