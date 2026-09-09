@@ -325,15 +325,17 @@ const analyticsEvent = event
 
     {event ? (
       <article class="relative z-10">
-        {/* Full-bleed at the banner's own aspect ratio — the whole image, edge to
-            edge, never cropped. Height follows the width rather than being capped,
-            so nothing gets letterboxed into bands. */}
+        {/* Same shape as the BFT hero: a fixed-height band with the banner
+            covering it, so a tall portrait and a wide flyer both land at a
+            predictable size instead of the image dictating the page. The crop
+            sits above centre because promo art puts faces and headlines in the
+            upper third — dead centre cuts them off. */}
         {event.image ? (
-          <div class="relative">
+          <div class="relative h-[58vh] max-h-[620px] min-h-[320px] w-full overflow-hidden">
             <img
               src={event.image.src}
               alt={event.image.alt ?? event.title}
-              class="block h-auto w-full"
+              class="absolute inset-0 h-full w-full object-cover object-[50%_35%]"
               fetchpriority="high"
             />
             {/* Keeps the floating nav legible over a bright banner. */}
