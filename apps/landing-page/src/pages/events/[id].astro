@@ -16,6 +16,14 @@
 // Momence's Events API only returns upcoming sessions, so any id it doesn't know
 // — past, cancelled, unpublished, or mistyped — falls through to the "already
 // happened" placeholder, which sends the visitor back to /events.
+//
+// Momence has no per-session endpoint, so rendering one event costs the whole
+// calendar (~180 sessions) plus the teacher roster. Doing that per request put a
+// third-party round trip in front of every first byte — and twice over for the
+// links that redirect, which is most of them: a day's Open Hours all share one
+// page, so every start time but the first is a redirect to a sibling. Both
+// fetches now go through lib/momence-cache, which serves them from memory or the
+// shared snapshot; Momence is reached only when both are cold.
 
 export const prerender = false;
 
@@ -29,14 +37,13 @@ import { creditsForPriceUsd } from '@/lib/credits';
 import { eventPath, parseEventId } from '@/lib/event-url';
 import {
   excludeVolunteerEvents,
-  fetchMomenceEvents,
-  fetchMomenceTeachers,
   filterValidEvents,
   formatStartTime,
   indexTeachersById,
   sortEventsByDate,
   transformToEventItem,
 } from '@/lib/momence';
+import { loadMomenceCalendar } from '@/lib/momence-cache';
 import { specialEventPractitioners } from '@/lib/practitioners';
 import { durationRowLabel, spotsColor, spotsLabel } from '@/lib/spots';
 import type { EventItem, PooledBookingOption } from '@/lib/types';
@@ -98,15 +105,21 @@ const eventId = parseEventId(Astro.params.id);
 let event: EventItem | null = null;
 let slots: Slot[] = [];
 let groupEvents: EventItem[] = [];
+// Momence is unreachable and nothing is cached, so we can't tell "this session
+// has ended" from "we can't see the calendar right now". The page says the
+// former either way, but an outage must not be cached as if it were the truth.
+let calendarUnavailable = false;
 
 if (eventId) {
+  const calendar = await loadMomenceCalendar();
+  calendarUnavailable = calendar === null;
+
   // Same pipeline as /api/events — the site's one definition of "a session we
   // show". Practitioners are best-effort and resolve to an empty roster.
-  const [rawEvents, teachers] = await Promise.all([fetchMomenceEvents(), fetchMomenceTeachers()]);
-  const teachersById = indexTeachersById(teachers);
-  const events = sortEventsByDate(excludeVolunteerEvents(filterValidEvents(rawEvents))).map((raw) =>
-    transformToEventItem(raw, teachersById)
-  );
+  const teachersById = indexTeachersById(calendar?.teachers ?? []);
+  const events = sortEventsByDate(
+    excludeVolunteerEvents(filterValidEvents(calendar?.events ?? []))
+  ).map((raw) => transformToEventItem(raw, teachersById));
 
   const requested = events.find((candidate) => candidate.id === eventId) ?? null;
 
@@ -143,15 +156,31 @@ if (eventId) {
 // Every sibling renders the same page, so they all resolve to one URL — which
 // also keeps the layout's pathname-derived canonical honest. Any utm_* params
 // ride along.
+//
+// Cached at the edge in its own right: which sibling is canonical only changes
+// when the calendar does, and every one of these hops is a round trip the
+// visitor waits through before the real page even starts loading.
 if (event) {
   const canonical = eventPath(event);
   if (Astro.url.pathname !== canonical) {
-    return Astro.redirect(`${canonical}${Astro.url.search}`, 302);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `${canonical}${Astro.url.search}`,
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=86400',
+      },
+    });
   }
 }
 
-// A link blasted into a group chat should cost one origin hit.
-Astro.response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+// A link blasted into a group chat should cost one origin hit. The long
+// stale-while-revalidate is the point: after the first visitor, everyone else
+// is served from the edge immediately while the refresh happens behind them.
+// An outage is deliberately left uncacheable so recovery is picked up at once.
+Astro.response.headers.set(
+  'Cache-Control',
+  calendarUnavailable ? 'no-store' : 'public, s-maxage=60, stale-while-revalidate=3600'
+);
 
 // -- Metadata ----------------------------------------------------------------
 
@@ -302,6 +331,7 @@ const analyticsEvent = event
   description={description}
   transparentNav
   ogImage={ogImage}
+  preloadImage={event?.image?.src}
   noIndex={!event}
   {...ogDimensions}
 >
@@ -353,6 +383,7 @@ const analyticsEvent = event
                 alt={event.image.alt ?? event.title}
                 class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_6px_16px_-6px_rgba(0,0,0,0.6)]"
                 fetchpriority="high"
+                decoding="async"
               />
             </div>
           </div>
@@ -416,7 +447,7 @@ const analyticsEvent = event
 
           {practitioners.length > 0 && (
             <div class="mt-8 border-t border-[var(--pyre-creme)]/10 pt-6">
-              <PractitionerCredit practitioners={practitioners} client:idle />
+              <PractitionerCredit practitioners={practitioners} client:visible />
             </div>
           )}
 

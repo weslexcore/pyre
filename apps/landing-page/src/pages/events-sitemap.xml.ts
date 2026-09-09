@@ -21,26 +21,29 @@ import { buildPooledBookingModel } from '@/lib/booking-model';
 import { eventPath } from '@/lib/event-url';
 import {
   excludeVolunteerEvents,
-  fetchMomenceEvents,
   filterValidEvents,
   sortEventsByDate,
   transformToEventItem,
 } from '@/lib/momence';
+import { loadMomenceCalendar } from '@/lib/momence-cache';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ site }) => {
   const origin = site?.origin ?? 'https://pyresauna.com';
 
-  // The teacher roster only feeds practitioner bylines, so the sitemap skips
-  // that fetch entirely.
+  // Shares the cached calendar with the event pages, so a crawler working
+  // through this list doesn't set off a Momence fetch per URL. The teacher
+  // roster rides along in the same snapshot but only feeds practitioner
+  // bylines, so nothing here uses it.
+  const calendar = await loadMomenceCalendar();
+
   const events = sortEventsByDate(
-    excludeVolunteerEvents(filterValidEvents(await fetchMomenceEvents()))
+    excludeVolunteerEvents(filterValidEvents(calendar?.events ?? []))
   ).map((raw) => transformToEventItem(raw));
 
-  // fetchMomenceEvents() resolves to [] on failure rather than throwing, and
-  // Pyre always has sessions on the calendar — so an empty list means the fetch
-  // failed. Say so instead of publishing an empty sitemap, and don't cache it.
+  // Pyre always has sessions on the calendar, so an empty list means we can't
+  // see it. Say so instead of publishing an empty sitemap, and don't cache it.
   if (events.length === 0) {
     return new Response('Events are temporarily unavailable', {
       status: 503,
