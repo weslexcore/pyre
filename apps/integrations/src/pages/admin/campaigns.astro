@@ -1,14 +1,15 @@
 ---
-// Campaign performance report. The /api/admin/campaign-performance route it
-// calls re-checks the session on every request — the AdminLayout gate is UX;
-// the API gate is the security boundary.
-import { CampaignPerformance } from '@/components/admin/CampaignPerformance';
+// The campaign hub. Anyone granted /admin/campaigns lands here: every
+// campaign the team is promoting, what it is, and how it is doing. The
+// /api/admin/campaigns routes re-check the grant on every request — this
+// page's gate is UX.
+import { CampaignsIndex } from '@/components/admin/campaigns/CampaignsIndex';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
 <AdminLayout
-  title="Campaign Performance"
-  subtitle="Short-link clicks from Redis; visits, signups, and bookings attributed by first-touch utm_campaign in PostHog."
+  title="Campaigns"
+  subtitle="Create a campaign, then generate a tagged link for every place you promote it"
 >
-  <CampaignPerformance client:load />
+  <CampaignsIndex client:load />
 </AdminLayout>

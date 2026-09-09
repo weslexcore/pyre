@@ -1,6 +1,6 @@
-// Admin-gated proxy for the landing site's public events feed. UTM Assist runs
-// on this app but builds links to landing-site events; proxying server-side
-// avoids adding CORS headers to the public endpoint.
+// Admin-gated proxy for the landing site's public events feed. The Campaigns
+// tool runs on this app but builds links to landing-site events; proxying
+// server-side avoids adding CORS headers to the public endpoint.
 
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
@@ -10,7 +10,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-
 const LANDING_ORIGIN = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requirePage(cookies, '/admin/utm-assist');
+  const gate = await requirePage(cookies, '/admin/campaigns');
   if (gate instanceof Response) return gate;
 
   try {

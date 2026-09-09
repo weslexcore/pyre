@@ -1,4 +1,4 @@
-// Campaign performance report, ported from the landing-page admin. Auth is
+// Cross-campaign performance report (/admin/campaigns/performance). Auth is
 // handled server-side by AdminLayout; a 401/403 from the API mid-session
 // renders a re-login prompt instead of a client-side gate.
 import { Fragment, useCallback, useEffect, useState } from 'react';
@@ -9,7 +9,7 @@ interface CampaignRow {
   slug: string;
   createdAt: number;
   linkCount: number;
-  shortlinks: Array<{ code: string; label: string; clicks: number }>;
+  shortlinks: Array<{ code: string; label: string; clicks: number; placementKey: string }>;
   shortlinkClicks: number;
   pageviews: number;
   visitors: number;
@@ -74,7 +74,7 @@ export function CampaignPerformance() {
         </h2>
         <p className="text-white/60 mb-6">Log in again to continue.</p>
         <a
-          href="/api/auth/login?returnUrl=%2Fadmin%2Fcampaigns"
+          href="/api/auth/login?returnUrl=%2Fadmin%2Fcampaigns%2Fperformance"
           className="inline-block px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
         >
           Log In
@@ -138,7 +138,11 @@ export function CampaignPerformance() {
 
       {data && data.campaigns.length === 0 && (
         <div className="text-center py-16 text-white/40">
-          No campaigns yet. Create tracked links in UTM Assist to start measuring.
+          No campaigns yet.{' '}
+          <a href="/admin/campaigns/new" className="underline">
+            Create one
+          </a>{' '}
+          and generate its links to start measuring.
         </div>
       )}
 
@@ -167,7 +171,13 @@ export function CampaignPerformance() {
                     >
                       <td className="px-4 py-3">
                         <span className="text-white/30 mr-2">{expanded ? '▾' : '▸'}</span>
-                        {campaign.name}
+                        <a
+                          href={`/admin/campaigns/${campaign.id}`}
+                          className="hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {campaign.name}
+                        </a>
                         <span className="ml-2 font-mono text-xs text-white/30">
                           {campaign.slug}
                         </span>
@@ -196,8 +206,11 @@ export function CampaignPerformance() {
                         <td colSpan={7} className="px-6 py-3">
                           {campaign.shortlinks.length === 0 ? (
                             <p className="text-xs text-white/40">
-                              No short links for this campaign ({campaign.linkCount} tracked link
-                              {campaign.linkCount === 1 ? '' : 's'} without short codes).
+                              No short links for this campaign ({campaign.linkCount} link
+                              {campaign.linkCount === 1 ? '' : 's'} without short codes).{' '}
+                              <a href={`/admin/campaigns/${campaign.id}`} className="underline">
+                                Open the campaign
+                              </a>
                             </p>
                           ) : (
                             <ul className="space-y-1">
@@ -229,7 +242,7 @@ export function CampaignPerformance() {
       {data && data.unattributed.length > 0 && (
         <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-white/40 mb-2">
-            Seen in PostHog, not tracked in UTM Assist
+            Seen in PostHog, not a campaign here
           </div>
           <ul className="space-y-1">
             {data.unattributed.map((row) => (

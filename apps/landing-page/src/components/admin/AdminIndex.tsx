@@ -19,11 +19,6 @@ const ADMIN_LINKS: AdminLink[] = [
     description: 'Look up tag IDs for the configured Mailchimp audience.',
   },
   {
-    href: '/admin/utm-assist',
-    title: 'UTM Assist',
-    description: 'Build tracked links to the site, a blog post, the events page, or an event.',
-  },
-  {
     href: '/admin/campaigns',
     title: 'Campaign Performance',
     description: 'Clicks, visits, signups, and bookings per campaign, attributed via PostHog.',

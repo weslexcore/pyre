@@ -2132,7 +2132,6 @@ __metadata:
     baseline-browser-mapping: "npm:^2.11.0"
     chart.js: "npm:^4.5.1"
     fuse.js: "npm:^7.5.0"
-    qr-code-styling: "npm:^1.9.2"
     react: "npm:^19.2.8"
     react-dom: "npm:^19.2.8"
     sharp: "npm:^0.35.3"

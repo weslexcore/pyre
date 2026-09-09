@@ -128,18 +128,23 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'marketing',
   },
   {
-    href: '/admin/utm-assist',
-    title: 'UTM Assist',
-    navLabel: 'UTM',
-    description: 'Build tracked links to the site, a blog post, the events page, or an event.',
-    section: 'marketing',
-  },
-  {
     href: '/admin/campaigns',
-    title: 'Campaign Performance',
+    title: 'Campaigns',
     navLabel: 'Campaigns',
-    description: 'Clicks, visits, signups, and bookings per campaign, attributed via PostHog.',
+    description:
+      'Create a campaign, generate consistently tagged links and QR codes for every placement, and see clicks, signups, and bookings per campaign.',
     section: 'marketing',
+    keywords: [
+      'utm',
+      'utm assist',
+      'links',
+      'short link',
+      'qr',
+      'tracking',
+      'instagram',
+      'newsletter',
+      'performance',
+    ],
   },
   {
     href: '/admin/partners',
@@ -282,9 +287,19 @@ const MANAGE_IMPLIES_VIEW: Record<string, string> = {
   '/admin/guests': GUESTS_MANAGE,
 };
 
-/** Whether this user may view the tool page at `href` (manage implies view). */
+// Grants that used to be issued under a page this tool replaced. A staff row
+// still holding the old href keeps working (pages, APIs, nav, and search) —
+// the /admin/users checkbox list derives from ADMIN_TOOLS, so the old grant
+// stops being offered without anyone losing access.
+const LEGACY_PAGE_GRANTS: Record<string, string[]> = {
+  '/admin/campaigns': ['/admin/utm-assist'],
+};
+
+/** Whether this user may view `href` — admin, a direct grant, a legacy grant
+ * for a page this one replaced, or the manage capability that implies it. */
 export function canViewPage(access: PageAccess, href: string): boolean {
   if (access.isAdmin || access.pages.includes(href)) return true;
+  if (LEGACY_PAGE_GRANTS[href]?.some((legacy) => access.pages.includes(legacy))) return true;
   const manageKey = MANAGE_IMPLIES_VIEW[href];
   return manageKey !== undefined && access.pages.includes(manageKey);
 }
@@ -379,6 +394,18 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'Log a Found Item',
     parent: '/admin/lost-found',
     keywords: ['new', 'found something', 'left behind'],
+  },
+  {
+    href: '/admin/campaigns/new',
+    title: 'New Campaign',
+    parent: '/admin/campaigns',
+    keywords: ['utm', 'link', 'create', 'event', 'sale'],
+  },
+  {
+    href: '/admin/campaigns/performance',
+    title: 'Campaign Performance',
+    parent: '/admin/campaigns',
+    keywords: ['report', 'clicks', 'bookings', 'posthog', 'attribution'],
   },
   {
     href: '/admin/guests/sessions',

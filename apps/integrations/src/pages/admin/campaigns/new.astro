@@ -1,0 +1,15 @@
+---
+// Creating a campaign. Blog posts come from the landing site's public feed
+// (fetched server-side at request time); events load lazily in the client via
+// the admin-gated /api/admin/events proxy.
+import { CampaignForm } from '@/components/admin/campaigns/CampaignForm';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { loadBlogPosts } from '@/lib/campaigns/blog';
+
+const origin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const blogPosts = await loadBlogPosts(origin);
+---
+
+<AdminLayout title="New Campaign" subtitle="Name it once. Every link you generate carries that name.">
+  <CampaignForm client:load origin={origin} blogPosts={blogPosts} />
+</AdminLayout>

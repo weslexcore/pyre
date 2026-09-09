@@ -1,0 +1,16 @@
+---
+// One campaign: its placements, the links generated for them, and how it is
+// performing. The island fetches everything from /api/admin/campaigns/[id],
+// which re-checks the page grant on every request.
+import { CampaignDetail } from '@/components/admin/campaigns/CampaignDetail';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { loadBlogPosts } from '@/lib/campaigns/blog';
+
+const { id } = Astro.params;
+const origin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const blogPosts = await loadBlogPosts(origin);
+---
+
+<AdminLayout title="Campaign" subtitle="Pick a placement to generate its link">
+  <CampaignDetail client:load campaignId={id ?? ''} origin={origin} blogPosts={blogPosts} />
+</AdminLayout>

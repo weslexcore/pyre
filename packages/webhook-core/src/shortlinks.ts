@@ -154,11 +154,42 @@ export async function updateShortLinkLabel(
 // Remove a short link entirely. After this the /s/<code> route 404s (redirects
 // home). Drops both the record hash and the index entry.
 export async function deleteShortLink(code: string): Promise<void> {
+  return deleteShortLinks([code]);
+}
+
+/** Remove several short links in one round-trip (a campaign's worth). */
+export async function deleteShortLinks(codes: string[]): Promise<void> {
   const redis = getRedis();
-  if (!redis) return;
+  if (!redis || codes.length === 0) return;
 
   const pipeline = redis.pipeline();
-  pipeline.del(`${RECORD_PREFIX}${code}`);
-  pipeline.zrem(INDEX_KEY, code);
+  for (const code of codes) {
+    pipeline.del(`${RECORD_PREFIX}${code}`);
+    pipeline.zrem(INDEX_KEY, code);
+  }
   await pipeline.exec();
+}
+
+/**
+ * Fetch several short links by code in one round-trip. Codes with no record
+ * are absent from the map, so a link whose short link was deleted by hand
+ * simply reads as having none.
+ */
+export async function getShortLinks(codes: string[]): Promise<Map<string, ShortLink>> {
+  const out = new Map<string, ShortLink>();
+  const redis = getRedis();
+  if (!redis || codes.length === 0) return out;
+
+  const unique = [...new Set(codes.filter(Boolean))];
+  const pipeline = redis.pipeline();
+  for (const code of unique) {
+    pipeline.hgetall(`${RECORD_PREFIX}${code}`);
+  }
+  const results = await pipeline.exec<Array<Record<string, unknown> | null>>();
+  results.forEach((record, i) => {
+    if (record && typeof record.code === 'string') {
+      out.set(unique[i], { ...(record as unknown as ShortLink), clicks: Number(record.clicks) || 0 });
+    }
+  });
+  return out;
 }
