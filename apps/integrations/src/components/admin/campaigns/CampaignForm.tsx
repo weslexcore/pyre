@@ -178,7 +178,7 @@ export function CampaignForm({
     >
       {!editing && (
         <a href="/admin/campaigns" className={`${buttonClass} inline-block`}>
-          All campaigns
+          <span aria-hidden="true">&larr;</span> All campaigns
         </a>
       )}
 
