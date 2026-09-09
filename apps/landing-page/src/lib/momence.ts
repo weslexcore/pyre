@@ -170,6 +170,20 @@ function formatTimeRange(isoDate: string, durationMinutes: number): string {
 }
 
 /**
+ * Just the start time, e.g. "6:00 PM". Used where a session's start is a label
+ * in its own right — an evening that sells several entry times lists one block
+ * per start.
+ */
+export function formatStartTime(isoDate: string): string {
+  return new Date(isoDate).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'America/New_York',
+  });
+}
+
+/**
  * Append `skipPreview=true` to a Momence checkout link so customers land
  * directly in the booking flow instead of the session preview page.
  */
