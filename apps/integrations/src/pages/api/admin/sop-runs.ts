@@ -39,6 +39,7 @@ import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import {
+  attachUncheckedItems,
   completeIfFull,
   loadActiveRuns,
   loadRunChecks,
@@ -46,6 +47,7 @@ import {
   loadViewableSopIds,
   resolveRunContent,
   runActors,
+  type UncheckedItem,
 } from '@/lib/sops/runs';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -99,7 +101,10 @@ function parseCheckItems(value: unknown): { items: CheckItem[] } | { error: stri
 }
 
 /** A run row as the log query returns it, with its checks embedded. */
-type RunWithChecks = SopRunRow & { sop_run_checks: Pick<SopRunCheckRow, 'checked_by'>[] };
+type RunWithChecks = SopRunRow & {
+  sop_run_checks: Pick<SopRunCheckRow, 'item_index' | 'checked_by'>[];
+  unchecked?: UncheckedItem[];
+};
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, PAGE);
@@ -175,6 +180,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const { data, error } = await query;
     if (error) return json({ error: error.message }, 500);
     const runRows = (data ?? []) as RunWithChecks[];
+    // Name the items each short-ended run skipped, so the log shows what was
+    // left undone rather than only how many items were. Best effort: a
+    // snapshot lookup failure keeps the log itself readable.
+    const { error: uncheckedError } = await attachUncheckedItems(db, runRows);
+    if (uncheckedError) console.error('sop-runs: unchecked items lookup failed', uncheckedError);
     return json({
       runs: runRows,
       scope: gate.access.isAdmin ? 'all' : 'visible',

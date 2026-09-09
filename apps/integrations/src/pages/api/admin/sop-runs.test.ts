@@ -210,6 +210,48 @@ describe('GET /api/admin/sop-runs?view=list', () => {
     expect(data.runs.map((r) => r.id)).toEqual(['visible', 'secret']);
     expect(data.scope).toBe('all');
     // No library read at all for an admin: nothing to narrow on.
-    expect(tablesQueried).toEqual(['sop_runs']);
+    expect(tablesQueried).not.toContain('sops');
+  });
+
+  it('names the items a short-ended run skipped, from the version it pinned', async () => {
+    signIn(false);
+    const { db } = fakeDb({
+      sops: [sop(OPEN_SOP)],
+      sop_runs: [
+        {
+          ...run('short', OPEN_SOP, 'bob@pyre.test'),
+          sop_version: 2,
+          task_count: 3,
+          sop_run_checks: [{ item_index: 1, item_text: 'Lock the gate' }],
+        },
+        { ...run('open', OPEN_SOP, 'ada@pyre.test'), status: 'in_progress', task_count: 3 },
+      ],
+      sop_versions: [
+        // The run pinned v2; v3 renamed an item, and must not be what the log quotes.
+        {
+          sop_id: OPEN_SOP,
+          version: 2,
+          content_md: '- [ ] Rake coals\n- [ ] Lock the gate\n- [ ] Lights off\n',
+        },
+        {
+          sop_id: OPEN_SOP,
+          version: 3,
+          content_md: '- [ ] Rake coals\n- [ ] Lock the gate\n- [ ] All lights off\n',
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+
+    // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what GET reads
+    const res = await GET(listRequest() as any);
+    const { runs } = (await res.json()) as {
+      runs: { id: string; unchecked?: { item_index: number; item_text: string }[] }[];
+    };
+    expect(runs.find((r) => r.id === 'short')?.unchecked).toEqual([
+      { item_index: 0, item_text: 'Rake coals' },
+      { item_index: 2, item_text: 'Lights off' },
+    ]);
+    // Still running: nothing has been skipped yet.
+    expect(runs.find((r) => r.id === 'open')?.unchecked).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SopAccessFields, SopRole, SopViewer } from './levels';
-import { visibleSopIds } from './runs';
+import { uncheckedItems, visibleSopIds } from './runs';
 
 type Row = SopAccessFields & { id: string };
 
@@ -48,5 +48,31 @@ describe('visibleSopIds', () => {
     const rows = [sop('locked', { view_roles: ['admin'], edit_roles: ['admin'] })];
     expect(visibleSopIds(viewer('staff'), rows)).toEqual([]);
     expect(visibleSopIds(viewer('staff'), [])).toEqual([]);
+  });
+});
+
+describe('uncheckedItems', () => {
+  const content = `## Close
+
+- [ ] Rake coals
+- [ ] Lock the gate
+  - [ ] Check the padlock
+- [ ] Lights off
+`;
+
+  it('names every task the run never checked, in document order', () => {
+    expect(uncheckedItems(content, [{ item_index: 0 }, { item_index: 2 }])).toEqual([
+      { item_index: 1, item_text: 'Lock the gate' },
+      { item_index: 3, item_text: 'Lights off' },
+    ]);
+  });
+
+  it('is empty once every task is checked', () => {
+    const all = [0, 1, 2, 3].map((item_index) => ({ item_index }));
+    expect(uncheckedItems(content, all)).toEqual([]);
+  });
+
+  it('lists the whole document when nothing was checked', () => {
+    expect(uncheckedItems(content, []).map((item) => item.item_index)).toEqual([0, 1, 2, 3]);
   });
 });

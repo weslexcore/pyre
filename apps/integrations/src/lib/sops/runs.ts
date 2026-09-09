@@ -3,7 +3,7 @@
 // in-progress run in its first response instead of fetching it afterwards.
 
 import type { getDb, SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
-import { countTasks } from './checklist';
+import { countTasks, parseChecklist } from './checklist';
 import { canViewSop, type SopAccessFields, type SopViewer } from './levels';
 import { type LinkedProgressMap, linkedSopSlugs } from './links';
 
@@ -92,6 +92,76 @@ export async function resolveRunContent(
   const { snapshot, error } = await loadRunContent(db, run);
   if (error) return { content: sop.content_md, error: error.message };
   return { content: snapshot?.content_md ?? sop.content_md, error: null };
+}
+
+/** A task item a run ended without checking: its snapshot position and text. */
+export interface UncheckedItem {
+  item_index: number;
+  item_text: string;
+}
+
+/** The shape attachUncheckedItems reads and writes on a run log row. */
+export interface RunWithUnchecked
+  extends Pick<SopRunRow, 'sop_id' | 'sop_version' | 'task_count' | 'status'> {
+  sop_run_checks: Pick<SopRunCheckRow, 'item_index'>[] | null;
+  unchecked?: UncheckedItem[];
+}
+
+/**
+ * The task items of `content` that `checks` never covered, in document order.
+ * Pure: the log's "what was skipped" list for one run, given the snapshot the
+ * run pinned.
+ */
+export function uncheckedItems(
+  content: string,
+  checks: Pick<SopRunCheckRow, 'item_index'>[]
+): UncheckedItem[] {
+  const checked = new Set(checks.map((check) => check.item_index));
+  return parseChecklist(content)
+    .tasks.filter((task) => !checked.has(task.index))
+    .map((task) => ({ item_index: task.index, item_text: task.text }));
+}
+
+/**
+ * Fill in `unchecked` on every finished run that ended short of its
+ * task_count, so the log can name what was skipped rather than only count
+ * it. Checks quote their item text, but an unchecked item leaves no row —
+ * its text lives only in the sop_versions snapshot the run pinned, so those
+ * snapshots are read here (one query for all the runs that need one; runs
+ * still in progress, and complete ones, need nothing). A failed or missing
+ * snapshot leaves `unchecked` unset and the caller's count-only summary
+ * stands — this enriches the record, it does not gate it.
+ */
+export async function attachUncheckedItems<T extends RunWithUnchecked>(
+  db: Db,
+  runs: T[]
+): Promise<{ error: string | null }> {
+  const short = runs.filter(
+    (run) => run.status !== 'in_progress' && (run.sop_run_checks?.length ?? 0) < run.task_count
+  );
+  if (short.length === 0) return { error: null };
+
+  // .in() on each column over-fetches other (sop, version) pairings slightly;
+  // the exact match happens below. Both lists are tiny.
+  const sopIds = [...new Set(short.map((run) => run.sop_id))];
+  const versions = [...new Set(short.map((run) => run.sop_version))];
+  const { data, error } = await db
+    .from('sop_versions')
+    .select('sop_id, version, content_md')
+    .in('sop_id', sopIds)
+    .in('version', versions);
+  if (error) return { error: error.message };
+
+  const snapshots = new Map<string, string>();
+  for (const row of (data ?? []) as { sop_id: string; version: number; content_md: string }[]) {
+    snapshots.set(`${row.sop_id}:${row.version}`, row.content_md);
+  }
+  for (const run of short) {
+    const content = snapshots.get(`${run.sop_id}:${run.sop_version}`);
+    if (content === undefined) continue;
+    run.unchecked = uncheckedItems(content, run.sop_run_checks ?? []);
+  }
+  return { error: null };
 }
 
 /** One unfinished run as the library strip and the admin home show it. */

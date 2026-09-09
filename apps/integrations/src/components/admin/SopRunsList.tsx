@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import type { SopRunRow } from '@/lib/db';
 import { actorLabel, type PeopleNames, personName, sameActor } from '@/lib/sops/names';
+import type { UncheckedItem } from '@/lib/sops/runs';
 
 export interface RunCheck {
   item_index: number;
@@ -19,6 +20,13 @@ export interface RunCheck {
 export interface RunEntry extends SopRunRow {
   sops: { title: string; slug: string; category: string } | null;
   sop_run_checks: RunCheck[];
+  /**
+   * The items a finished run never checked, from the document snapshot it
+   * pinned (see attachUncheckedItems). Absent while a run is in progress,
+   * when it completed every item, or when the snapshot could not be read —
+   * the record then falls back to counting what was skipped.
+   */
+  unchecked?: UncheckedItem[];
 }
 
 // 'abandoned' is historical: ending a run early now discards it outright, so
@@ -56,6 +64,93 @@ function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames })
         {personName(check.checked_by, people)} · {formatWhen(check.checked_at)}
       </span>
     </li>
+  );
+}
+
+function UncheckedLine({ item }: { item: UncheckedItem }) {
+  return (
+    <li className="flex flex-wrap items-baseline gap-x-3 text-xs">
+      <span className="text-white/30">–</span>
+      <span className="text-white/50">{item.item_text}</span>
+      <span className="ml-auto font-mono text-[10px] text-white/30">not checked</span>
+    </li>
+  );
+}
+
+/**
+ * The expanded record of one run: the SOP link, every check with who and
+ * when, and — for a run that ended short — the items nobody checked, by name.
+ * Exported for the static render test; the list opens it on tap.
+ */
+export function RunRecord({
+  run,
+  checks,
+  people,
+  showSopTitle = true,
+  onDelete,
+}: {
+  run: RunEntry;
+  /** The run's checks in the order the record lists them. */
+  checks: RunCheck[];
+  people?: PeopleNames;
+  showSopTitle?: boolean;
+  onDelete?: (run: RunEntry) => void;
+}) {
+  const skipped = run.task_count - checks.length;
+  return (
+    <div className="border-t border-white/10 p-4">
+      {showSopTitle && run.sops && (
+        <a
+          href={`/admin/sops/${run.sops.slug}`}
+          className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)] underline hover:text-white"
+        >
+          Open SOP (v{run.sop_version} at run time)
+        </a>
+      )}
+      {checks.length === 0 ? (
+        <p className="mt-2 text-xs text-white/40">No items were checked.</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {checks.map((check) => (
+            <CheckLine key={check.item_index} check={check} people={people} />
+          ))}
+        </ul>
+      )}
+      {run.status !== 'in_progress' && skipped > 0 && (
+        <div className="mt-3">
+          <p className="font-mono text-[10px] text-white/40">
+            {skipped} item{skipped === 1 ? '' : 's'} never checked
+            {run.unchecked && run.unchecked.length > 0 ? ':' : '.'}
+          </p>
+          {run.unchecked && run.unchecked.length > 0 && (
+            <ul className="mt-1 space-y-1">
+              {run.unchecked.map((item) => (
+                <UncheckedLine key={item.item_index} item={item} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {onDelete && (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <button
+            type="button"
+            className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:border-[var(--pyre-red)]"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Delete this run of "${run.sops?.title ?? 'this SOP'}" and its ${checks.length} check record${checks.length === 1 ? '' : 's'}? This cannot be undone.`
+                )
+              ) {
+                onDelete(run);
+              }
+            }}
+          >
+            Delete run
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -155,50 +250,13 @@ export function RunsList({
               </ul>
             )}
             {isOpen && (
-              <div className="border-t border-white/10 p-4">
-                {showSopTitle && run.sops && (
-                  <a
-                    href={`/admin/sops/${run.sops.slug}`}
-                    className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)] underline hover:text-white"
-                  >
-                    Open SOP (v{run.sop_version} at run time)
-                  </a>
-                )}
-                {checks.length === 0 ? (
-                  <p className="mt-2 text-xs text-white/40">No items were checked.</p>
-                ) : (
-                  <ul className="mt-2 space-y-1">
-                    {checks.map((check) => (
-                      <CheckLine key={check.item_index} check={check} people={people} />
-                    ))}
-                  </ul>
-                )}
-                {run.status !== 'in_progress' && checks.length < run.task_count && (
-                  <p className="mt-2 font-mono text-[10px] text-white/40">
-                    {run.task_count - checks.length} item
-                    {run.task_count - checks.length === 1 ? '' : 's'} never checked.
-                  </p>
-                )}
-                {onDelete && (
-                  <div className="mt-3 border-t border-white/10 pt-3">
-                    <button
-                      type="button"
-                      className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:border-[var(--pyre-red)]"
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            `Delete this run of "${run.sops?.title ?? 'this SOP'}" and its ${checks.length} check record${checks.length === 1 ? '' : 's'}? This cannot be undone.`
-                          )
-                        ) {
-                          onDelete(run);
-                        }
-                      }}
-                    >
-                      Delete run
-                    </button>
-                  </div>
-                )}
-              </div>
+              <RunRecord
+                run={run}
+                checks={checks}
+                people={people}
+                showSopTitle={showSopTitle}
+                onDelete={onDelete}
+              />
             )}
           </li>
         );
