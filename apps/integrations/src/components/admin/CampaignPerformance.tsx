@@ -203,6 +203,9 @@ export function CampaignPerformance() {
 
   return (
     <div>
+      <a href="/admin/campaigns" className={`${buttonClass} mb-4 inline-block`}>
+        <span aria-hidden="true">&larr;</span> All campaigns
+      </a>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1" role="tablist" aria-label="Group by">
           <button
