@@ -1,6 +1,6 @@
-// One generated link: PATCH relabels it or mints a short link for a legacy
-// link that has none; DELETE removes it along with its short link (after
-// which the /s/<code> URL redirects home).
+// One generated link: PATCH relabels it, saves its QR style, or mints a
+// short link for a legacy link that has none; DELETE removes it along with
+// its short link (after which the /s/<code> URL redirects home).
 
 import {
   createShortLink,
@@ -14,6 +14,7 @@ import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { shortUrlFor } from '@/lib/campaigns/server';
 import type { LinkRow } from '@/lib/campaigns/types';
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
+import { parseQrStyle, serializeQrStyle } from '@/lib/qr/style';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -27,11 +28,19 @@ export const PATCH: APIRoute = async ({ cookies, params, request }) => {
   const csrf = assertSameOrigin(request);
   if (csrf) return csrf;
 
-  let body: { label?: unknown; mintShort?: unknown };
+  let body: { label?: unknown; mintShort?: unknown; qrStyle?: unknown };
   try {
-    body = (await request.json()) as { label?: unknown; mintShort?: unknown };
+    body = (await request.json()) as { label?: unknown; mintShort?: unknown; qrStyle?: unknown };
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  // Validated up front so a bad style never half-applies alongside a label.
+  let qrStyle: string | undefined;
+  if (body.qrStyle !== undefined) {
+    const parsed = parseQrStyle(body.qrStyle);
+    if (!parsed) return json({ error: 'invalid_qr_style' }, 400);
+    qrStyle = serializeQrStyle(parsed);
   }
 
   try {
@@ -50,9 +59,10 @@ export const PATCH: APIRoute = async ({ cookies, params, request }) => {
       clicks = 0;
     }
 
-    const patch: { label?: string; shortCode?: string } = {};
+    const patch: { label?: string; shortCode?: string; qrStyle?: string } = {};
     if (typeof body.label === 'string') patch.label = body.label.slice(0, FIELD_LIMITS.label);
     if (shortCode !== link.shortCode) patch.shortCode = shortCode;
+    if (qrStyle !== undefined && qrStyle !== link.qrStyle) patch.qrStyle = qrStyle;
 
     const updated = Object.keys(patch).length > 0 ? await updateLink(link.id, patch) : link;
     if (!updated) return json({ error: 'not_found' }, 404);

@@ -1,7 +1,8 @@
 // One campaign (/admin/campaigns/[id]): the header, the placement tiles that
-// generate links, the links themselves, and how the campaign is doing.
+// generate links (behind an accordion once links exist), the links
+// themselves, and how the campaign is doing.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
 import type {
   BlogPostRef,
@@ -10,11 +11,10 @@ import type {
   UtmCampaign,
 } from '@/lib/campaigns/types';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
-import { loadQrStyle, type QrStyle, saveQrStyle } from '@/lib/qr/style';
+import type { QrStyle } from '@/lib/qr/style';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CopyButton } from '../CopyButton';
 import { buttonClass, cardClass, readError, SectionTitle } from '../incidentUi';
-import { QrStyleControls } from '../qr/QrStyleControls';
 import { CampaignForm } from './CampaignForm';
 import { CampaignStats } from './CampaignStats';
 import {
@@ -40,8 +40,12 @@ export function CampaignDetail({
   const url = `/api/admin/campaigns/${encodeURIComponent(campaignId)}`;
   const { data, error, loading, setData } = useCachedJson<CampaignDetailResponse>(url);
   const events = useEvents();
+  const generatePanelId = useId();
 
   const [editing, setEditing] = useState(false);
+  // null until the user toggles: open while the campaign has no links, then
+  // collapsed so the links themselves lead the page.
+  const [generateOpen, setGenerateOpen] = useState<boolean | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [busyLink, setBusyLink] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -49,16 +53,10 @@ export function CampaignDetail({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
-  const [showQrStyle, setShowQrStyle] = useState(false);
-  const [qrStyle, setQrStyle] = useState<QrStyle>(() => loadQrStyle());
-
-  const updateQrStyle = useCallback((next: QrStyle) => {
-    setQrStyle(next);
-    saveQrStyle(next);
-  }, []);
 
   const campaign = data?.campaign ?? null;
   const links = useMemo(() => data?.links ?? [], [data?.links]);
+  const showGenerate = generateOpen ?? links.length === 0;
 
   const patchCampaign = useCallback(
     async (body: Record<string, unknown>): Promise<UtmCampaign | null> => {
@@ -90,7 +88,10 @@ export function CampaignDetail({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(req),
         });
-        const json = (await res.json().catch(() => ({}))) as { link?: LinkRowData; error?: string };
+        const json = (await res.json().catch(() => ({}))) as {
+          link?: LinkRowData;
+          error?: string;
+        };
         if (!res.ok || !json.link) {
           setGenerateError(campaignErrorMessage(json.error, `Could not generate (${res.status})`));
           return false;
@@ -109,10 +110,12 @@ export function CampaignDetail({
     [url, setData]
   );
 
+  // `quiet` skips the row's busy flag — used by the QR style autosave, which
+  // must never grey out the buttons someone is about to click.
   const patchLink = useCallback(
-    async (linkId: string, body: Record<string, unknown>) => {
-      setBusyLink(linkId);
-      setActionError(null);
+    async (linkId: string, body: Record<string, unknown>, quiet = false): Promise<void> => {
+      if (!quiet) setBusyLink(linkId);
+      if (!quiet) setActionError(null);
       try {
         const res = await fetch(`${url}/links/${encodeURIComponent(linkId)}`, {
           method: 'PATCH',
@@ -120,8 +123,9 @@ export function CampaignDetail({
           body: JSON.stringify(body),
         });
         if (!res.ok) {
-          setActionError(campaignErrorMessage(await readError(res)));
-          return;
+          const message = campaignErrorMessage(await readError(res));
+          if (!quiet) setActionError(message);
+          throw new Error(message);
         }
         const json = (await res.json()) as { link: LinkRowData };
         setData((prev) =>
@@ -135,7 +139,7 @@ export function CampaignDetail({
             : prev
         );
       } finally {
-        setBusyLink(null);
+        if (!quiet) setBusyLink(null);
       }
     },
     [url, setData]
@@ -146,7 +150,9 @@ export function CampaignDetail({
       setBusyLink(linkId);
       setActionError(null);
       try {
-        const res = await fetch(`${url}/links/${encodeURIComponent(linkId)}`, { method: 'DELETE' });
+        const res = await fetch(`${url}/links/${encodeURIComponent(linkId)}`, {
+          method: 'DELETE',
+        });
         if (!res.ok) {
           setActionError(campaignErrorMessage(await readError(res)));
           return;
@@ -279,36 +285,49 @@ export function CampaignDetail({
       </header>
 
       <section className={cardClass}>
-        <SectionTitle note="One click per placement. The link gets its utm values from the placement and this campaign's name, so nothing needs typing.">
-          Generate a link
-        </SectionTitle>
-        <PlacementGrid
-          links={links}
-          slug={campaign.slug}
-          destinationSet={Boolean(campaign.destinationUrl)}
-          origin={origin}
-          blogPosts={blogPosts}
-          events={events}
-          busyKey={busyKey}
-          error={generateError}
-          onGenerate={generate}
-        />
+        <button
+          type="button"
+          aria-expanded={showGenerate}
+          aria-controls={generatePanelId}
+          onClick={() => setGenerateOpen(!showGenerate)}
+          className="flex w-full items-start justify-between gap-3 text-left"
+        >
+          <div className="[&>div]:mb-0">
+            <SectionTitle
+              note={
+                showGenerate
+                  ? "One click per placement. The link gets its utm values from the placement and this campaign's name, so nothing needs typing."
+                  : `${links.length} link${links.length === 1 ? '' : 's'} generated. Open to add more.`
+              }
+            >
+              Generate a link
+            </SectionTitle>
+          </div>
+          <span className={`${buttonClass} shrink-0`}>{showGenerate ? 'Hide' : 'Show'}</span>
+        </button>
+        {showGenerate && (
+          <div id={generatePanelId} className="mt-4">
+            <PlacementGrid
+              links={links}
+              slug={campaign.slug}
+              destinationSet={Boolean(campaign.destinationUrl)}
+              origin={origin}
+              blogPosts={blogPosts}
+              events={events}
+              busyKey={busyKey}
+              error={generateError}
+              onGenerate={generate}
+            />
+          </div>
+        )}
       </section>
 
       <section className={cardClass}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle
-            note={links.length ? 'Copy the highlighted link for each placement.' : undefined}
-          >
-            Links
-          </SectionTitle>
-          {links.length > 0 && (
-            <button type="button" onClick={() => setShowQrStyle((v) => !v)} className={buttonClass}>
-              {showQrStyle ? 'Hide QR style' : 'QR style'}
-            </button>
-          )}
-        </div>
-        {showQrStyle && <QrStyleControls style={qrStyle} onChange={updateQrStyle} />}
+        <SectionTitle
+          note={links.length ? 'Copy the highlighted link for each placement.' : undefined}
+        >
+          Links
+        </SectionTitle>
         {links.length === 0 ? (
           <p className="text-sm text-white/50">No links yet. Pick a placement above.</p>
         ) : (
@@ -318,10 +337,10 @@ export function CampaignDetail({
                 key={link.id}
                 link={link}
                 campaign={campaign}
-                qrStyle={qrStyle}
                 busy={busyLink === link.id}
                 onRelabel={(label) => patchLink(link.id, { label })}
                 onMintShort={() => patchLink(link.id, { mintShort: true })}
+                onSaveQrStyle={(style: QrStyle) => patchLink(link.id, { qrStyle: style }, true)}
                 onDelete={() => deleteLink(link.id)}
               />
             ))}

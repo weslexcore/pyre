@@ -30,7 +30,7 @@ import {
   queryHogQL,
 } from '@/lib/analytics/posthog-query';
 import { requirePage } from '@/lib/auth/admin';
-import { placementByKey } from '@/lib/campaigns/placements';
+import { describeLink } from '@/lib/campaigns/describe';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -255,10 +255,10 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       const short = link.shortCode ? shortlinksByCode.get(link.shortCode) : undefined;
       if (!short) continue;
       claimed.add(short.code);
-      const placement = placementByKey(link.placementKey);
-      const label =
-        link.label ||
-        (placement ? `${placement.label}${link.variant ? ` (${link.variant})` : ''}` : short.label);
+      // The placement (with partner / custom values spelled out), then the
+      // staff note if there is one.
+      const described = describeLink(link);
+      const label = link.label ? `${described} (${link.label})` : described;
       shortlinks.push({
         code: short.code,
         label,

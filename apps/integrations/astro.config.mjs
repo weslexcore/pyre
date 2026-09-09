@@ -30,5 +30,10 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
+    // qr-code-styling is only ever imported lazily (the QR button on a
+    // campaign link). Without pre-bundling, the dev server discovers it on
+    // that first click, re-optimizes, and reloads the page — which closes
+    // the QR panel the click just opened and looks like nothing rendered.
+    optimizeDeps: { include: ['qr-code-styling'] },
   },
 });

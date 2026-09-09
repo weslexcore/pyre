@@ -1,6 +1,6 @@
 // Presentation bits shared by the campaign islands.
 
-import { placementByKey } from '@/lib/campaigns/placements';
+import { describeLink } from '@/lib/campaigns/describe';
 import type { LinkRow, UtmCampaign } from '@/lib/campaigns/types';
 import { campaignTypeLabel } from '@/lib/campaigns/types';
 
@@ -27,11 +27,13 @@ export function dateRangeLabel(campaign: Pick<UtmCampaign, 'startsAt' | 'endsAt'
   return '';
 }
 
-/** What a generated link reads as: its placement, or "Custom" for legacy rows. */
-export function linkTitle(link: Pick<LinkRow, 'placementKey' | 'variant' | 'label'>): string {
-  const placement = placementByKey(link.placementKey);
-  const base = placement && !placement.custom ? placement.label : 'Custom';
-  return link.variant ? `${base} (${link.variant})` : base;
+/** What a generated link reads as: its placement, with the partner or the
+ * custom values spelled out where the placement alone would not tell two
+ * links apart. */
+export function linkTitle(
+  link: Pick<LinkRow, 'placementKey' | 'variant' | 'source' | 'medium' | 'content'>
+): string {
+  return describeLink(link);
 }
 
 const TYPE_STYLES: Record<string, string> = {

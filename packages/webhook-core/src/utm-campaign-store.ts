@@ -68,6 +68,10 @@ export interface UtmLink {
   variant: string;
   /** Code of the /s/<code> short link minted for this link, '' when none. */
   shortCode: string;
+  /** JSON-serialized QR appearance for this link, '' until customized. The
+   * shape is owned by the integrations app (lib/qr/style); the store only
+   * round-trips the string. */
+  qrStyle: string;
   createdAt: number;
   createdBy: string; // admin email
 }
@@ -182,6 +186,7 @@ export function normalizeLinkRecord(raw: Record<string, unknown>): UtmLink | nul
     placementKey: str(raw.placementKey),
     variant: str(raw.variant),
     shortCode: str(raw.shortCode),
+    qrStyle: str(raw.qrStyle),
     createdAt: num(raw.createdAt),
     createdBy: str(raw.createdBy),
   };
@@ -402,12 +407,12 @@ export async function saveLink(
   return link;
 }
 
-/** Update a link's friendly label and/or short code. The URL, UTM params, and
- * campaign membership are untouched. Returns the updated link, or null if it's
- * gone or storage is unavailable. */
+/** Update a link's friendly label, short code, and/or QR style. The URL, UTM
+ * params, and campaign membership are untouched. Returns the updated link, or
+ * null if it's gone or storage is unavailable. */
 export async function updateLink(
   id: string,
-  patch: Partial<Pick<UtmLink, 'label' | 'shortCode'>>
+  patch: Partial<Pick<UtmLink, 'label' | 'shortCode' | 'qrStyle'>>
 ): Promise<UtmLink | null> {
   const redis = getRedis();
   if (!redis) return null;
@@ -418,6 +423,7 @@ export async function updateLink(
   const fields: Record<string, string> = {};
   if (patch.label !== undefined) fields.label = patch.label.trim();
   if (patch.shortCode !== undefined) fields.shortCode = patch.shortCode;
+  if (patch.qrStyle !== undefined) fields.qrStyle = patch.qrStyle;
   if (Object.keys(fields).length > 0) await redis.hset(`${LINK_PREFIX}${id}`, fields);
   return getLink(id);
 }

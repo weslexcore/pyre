@@ -98,6 +98,7 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
       placementKey: placement.key,
       variant,
       shortCode: short.code,
+      qrStyle: '',
       createdBy: gate.user.email ?? '',
     });
     if (!link) {

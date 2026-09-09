@@ -1,9 +1,8 @@
-// QR appearance shared by every code the Campaigns tool renders, persisted
-// per-browser so an admin's chosen look sticks between visits. Pure config;
-// the qr-code-styling import happens lazily in the QrCode component.
-
-import type { Options as QrCodeStylingOptions } from 'qr-code-styling';
-import pyreLogoRaw from '@/assets/pyre_logo.svg?raw';
+// QR appearance for a campaign link. Each link stores its own style as a JSON
+// string on the link record (the shared store only round-trips it); this
+// module owns the shape, the defaults, and the validation both the API and
+// the island run it through. Pure: no DOM, no assets — buildQrOptions lives
+// in ./options so the server never imports the logo.
 
 export type DotType = 'square' | 'dots' | 'rounded' | 'extra-rounded' | 'classy' | 'classy-rounded';
 export type CornerSquareType = 'square' | 'dot' | 'extra-rounded';
@@ -32,6 +31,9 @@ export const DOT_TYPES: DotType[] = [
 export const CORNER_SQUARE_TYPES: CornerSquareType[] = ['square', 'dot', 'extra-rounded'];
 export const CORNER_DOT_TYPES: CornerDotType[] = ['square', 'dot'];
 
+export const SIZE_RANGE = { min: 120, max: 600 } as const;
+export const MARGIN_RANGE = { min: 0, max: 40 } as const;
+
 // Pyre brand palette (hex from src/styles/global.css). Offered as one-click
 // swatches for the QR dot and background colors.
 export const PYRE_COLORS: Array<{ name: string; hex: string }> = [
@@ -57,53 +59,80 @@ export const DEFAULT_QR_STYLE: QrStyle = {
   logo: true,
 };
 
-// The Pyre mark uses fill="currentColor"; recolor it to `color` and inline it as
-// a data URL so qr-code-styling can drop it in the center.
-function pyreLogoDataUrl(color: string): string {
-  const svg = pyreLogoRaw.replace(/currentColor/g, color);
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+const HEX = /^#[0-9a-f]{6}$/i;
+
+function hex(value: unknown, fallback: string): string | null {
+  if (value === undefined) return fallback;
+  return typeof value === 'string' && HEX.test(value) ? value.toLowerCase() : null;
 }
 
-// Kept from the UTM Assist era so saved preferences survive the rework.
-const QR_STYLE_KEY = 'pyre-utm-qr-style';
+function bool(value: unknown, fallback: boolean): boolean | null {
+  if (value === undefined) return fallback;
+  return typeof value === 'boolean' ? value : null;
+}
 
-export function loadQrStyle(): QrStyle {
-  if (typeof window === 'undefined') return DEFAULT_QR_STYLE;
+function oneOf<T extends string>(value: unknown, options: readonly T[], fallback: T): T | null {
+  if (value === undefined) return fallback;
+  return options.includes(value as T) ? (value as T) : null;
+}
+
+function int(value: unknown, range: { min: number; max: number }, fallback: number): number | null {
+  if (value === undefined) return fallback;
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= range.min &&
+    value <= range.max
+    ? value
+    : null;
+}
+
+/**
+ * A style off the wire or out of storage. Unknown fields are dropped and
+ * missing ones take the default (so a row saved before a field existed still
+ * parses); a present-but-wrong field fails the whole thing, because a bad
+ * color or size would throw inside the renderer.
+ */
+export function parseQrStyle(raw: unknown): QrStyle | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const d = DEFAULT_QR_STYLE;
+
+  const dark = hex(r.dark, d.dark);
+  const light = hex(r.light, d.light);
+  const transparent = bool(r.transparent, d.transparent);
+  const dotType = oneOf(r.dotType, DOT_TYPES, d.dotType);
+  const cornerSquareType = oneOf(r.cornerSquareType, CORNER_SQUARE_TYPES, d.cornerSquareType);
+  const cornerDotType = oneOf(r.cornerDotType, CORNER_DOT_TYPES, d.cornerDotType);
+  const size = int(r.size, SIZE_RANGE, d.size);
+  const margin = int(r.margin, MARGIN_RANGE, d.margin);
+  const logo = bool(r.logo, d.logo);
+
+  if (
+    dark === null ||
+    light === null ||
+    transparent === null ||
+    dotType === null ||
+    cornerSquareType === null ||
+    cornerDotType === null ||
+    size === null ||
+    margin === null ||
+    logo === null
+  ) {
+    return null;
+  }
+  return { dark, light, transparent, dotType, cornerSquareType, cornerDotType, size, margin, logo };
+}
+
+/** The style stored on a link record: '' or unparseable means the default. */
+export function qrStyleOf(serialized: string): QrStyle {
+  if (!serialized) return DEFAULT_QR_STYLE;
   try {
-    const raw = window.localStorage.getItem(QR_STYLE_KEY);
-    if (!raw) return DEFAULT_QR_STYLE;
-    return { ...DEFAULT_QR_STYLE, ...(JSON.parse(raw) as Partial<QrStyle>) };
+    return parseQrStyle(JSON.parse(serialized)) ?? DEFAULT_QR_STYLE;
   } catch {
     return DEFAULT_QR_STYLE;
   }
 }
 
-export function saveQrStyle(style: QrStyle): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(QR_STYLE_KEY, JSON.stringify(style));
-  } catch {
-    // Best-effort persistence.
-  }
-}
-
-const TRANSPARENT = 'rgba(0,0,0,0)';
-
-export function buildQrOptions(url: string, style: QrStyle): QrCodeStylingOptions {
-  return {
-    width: style.size,
-    height: style.size,
-    type: 'canvas',
-    data: url,
-    margin: style.margin,
-    // Highest error correction when a center logo covers part of the code.
-    qrOptions: { errorCorrectionLevel: style.logo ? 'H' : 'M' },
-    // Recolor the logo to match the dots; empty string clears it on toggle-off.
-    image: style.logo ? pyreLogoDataUrl(style.dark) : '',
-    imageOptions: { imageSize: 0.3, margin: 4, hideBackgroundDots: true, crossOrigin: 'anonymous' },
-    dotsOptions: { color: style.dark, type: style.dotType },
-    backgroundOptions: { color: style.transparent ? TRANSPARENT : style.light },
-    cornersSquareOptions: { color: style.dark, type: style.cornerSquareType },
-    cornersDotOptions: { color: style.dark, type: style.cornerDotType },
-  };
+export function serializeQrStyle(style: QrStyle): string {
+  return JSON.stringify(style);
 }
