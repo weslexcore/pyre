@@ -334,7 +334,7 @@ const analyticsEvent = event
             fills whatever space the image doesn't, which is also why the band
             needs no fade: nothing is cut off, so there's no edge to hide.
 
-            The banner's own edges feather out over the last ~12%, so it settles
+            The banner's own edges feather out over the last ~9%, so it settles
             into the pattern instead of sitting on it as a hard rectangle. This
             is alpha on the image rather than anything painted over it, so the
             pattern and the drifting gradient carry straight through the blend.
@@ -352,7 +352,7 @@ const analyticsEvent = event
               <img
                 src={event.image.src}
                 alt={event.image.alt ?? event.title}
-                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain mask-x-from-88% mask-x-to-100% mask-y-from-88% mask-y-to-100%"
+                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain mask-x-from-91% mask-x-to-100% mask-y-from-91% mask-y-to-100%"
                 fetchpriority="high"
               />
             </div>
