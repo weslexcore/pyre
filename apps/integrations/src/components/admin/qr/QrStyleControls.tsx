@@ -8,6 +8,7 @@ import {
   type DotType,
   PYRE_COLORS,
   type QrStyle,
+  QUIET_ZONE_RANGE,
 } from '@/lib/qr/style';
 import { InfoTip } from '../InfoTip';
 
@@ -134,35 +135,22 @@ export function QrStyleControls({
         </select>
       </div>
       <div>
-        <span className={labelClass}>Size {style.size}px</span>
-        <input
-          type="range"
-          min={120}
-          max={600}
-          step={20}
-          value={style.size}
-          onChange={(e) => set('size', Number(e.target.value))}
-          className="w-full"
-          aria-label="Size"
-        />
-      </div>
-      <div>
         <span className={`${labelClass} flex items-center gap-1.5`}>
-          Quiet zone {style.margin}
+          Quiet zone {style.quietZone} module{style.quietZone === 1 ? '' : 's'}
           <InfoTip
             label="quiet zone"
-            text="The empty border around the code. Phone cameras use it to find the edges, so keep some when the code is printed small or sits on a busy background."
+            text="The empty border around the code, measured in modules (the small squares) so it scales with the code. Phone cameras use it to find the edges; the standard asks for 4."
           />
         </span>
         <input
           type="range"
-          min={0}
-          max={40}
+          min={QUIET_ZONE_RANGE.min}
+          max={QUIET_ZONE_RANGE.max}
           step={1}
-          value={style.margin}
-          onChange={(e) => set('margin', Number(e.target.value))}
+          value={style.quietZone}
+          onChange={(e) => set('quietZone', Number(e.target.value))}
           className="w-full"
-          aria-label="Quiet zone margin"
+          aria-label="Quiet zone in modules"
         />
       </div>
       <div className="flex items-end pb-0.5">

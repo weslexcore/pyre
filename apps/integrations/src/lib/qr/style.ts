@@ -1,8 +1,14 @@
 // QR appearance for a campaign link. Each link stores its own style as a JSON
 // string on the link record (the shared store only round-trips it); this
 // module owns the shape, the defaults, and the validation both the API and
-// the island run it through. Pure: no DOM, no assets — buildQrOptions lives
-// in ./options so the server never imports the logo.
+// the island run it through. Pure: no DOM, no assets — the renderer options
+// live in ./options so the server never imports the logo.
+//
+// There is no pixel size here on purpose. A QR is a grid of modules; the
+// preview draws it small, the PNG export draws it at print resolution, and
+// the SVG export has no resolution at all. The quiet zone is therefore in
+// modules (the spec's unit — it asks for 4) so it means the same thing at
+// every size.
 
 export type DotType = 'square' | 'dots' | 'rounded' | 'extra-rounded' | 'classy' | 'classy-rounded';
 export type CornerSquareType = 'square' | 'dot' | 'extra-rounded';
@@ -15,8 +21,8 @@ export interface QrStyle {
   dotType: DotType;
   cornerSquareType: CornerSquareType;
   cornerDotType: CornerDotType;
-  size: number;
-  margin: number;
+  /** Blank border around the code, in modules. */
+  quietZone: number;
   logo: boolean;
 }
 
@@ -31,8 +37,11 @@ export const DOT_TYPES: DotType[] = [
 export const CORNER_SQUARE_TYPES: CornerSquareType[] = ['square', 'dot', 'extra-rounded'];
 export const CORNER_DOT_TYPES: CornerDotType[] = ['square', 'dot'];
 
-export const SIZE_RANGE = { min: 120, max: 600 } as const;
-export const MARGIN_RANGE = { min: 0, max: 40 } as const;
+export const QUIET_ZONE_RANGE = { min: 0, max: 8 } as const;
+
+// Styles saved before the quiet zone was measured in modules stored a pixel
+// margin on a 240px canvas, where a typical short-URL code has ~8px modules.
+const LEGACY_MODULE_PX = 8;
 
 // Pyre brand palette (hex from src/styles/global.css). Offered as one-click
 // swatches for the QR dot and background colors.
@@ -54,8 +63,7 @@ export const DEFAULT_QR_STYLE: QrStyle = {
   dotType: 'classy-rounded',
   cornerSquareType: 'extra-rounded',
   cornerDotType: 'dot',
-  size: 240,
-  margin: 8,
+  quietZone: 4,
   logo: true,
 };
 
@@ -86,11 +94,23 @@ function int(value: unknown, range: { min: number; max: number }, fallback: numb
     : null;
 }
 
+function quietZoneOf(r: Record<string, unknown>): number | null {
+  if (r.quietZone !== undefined)
+    return int(r.quietZone, QUIET_ZONE_RANGE, DEFAULT_QR_STYLE.quietZone);
+  // Legacy pixel margin: approximate, and never fail on it — it was valid
+  // when it was written.
+  if (typeof r.margin === 'number' && Number.isFinite(r.margin)) {
+    const modules = Math.round(r.margin / LEGACY_MODULE_PX);
+    return Math.min(QUIET_ZONE_RANGE.max, Math.max(QUIET_ZONE_RANGE.min, modules));
+  }
+  return DEFAULT_QR_STYLE.quietZone;
+}
+
 /**
  * A style off the wire or out of storage. Unknown fields are dropped and
  * missing ones take the default (so a row saved before a field existed still
  * parses); a present-but-wrong field fails the whole thing, because a bad
- * color or size would throw inside the renderer.
+ * color would throw inside the renderer.
  */
 export function parseQrStyle(raw: unknown): QrStyle | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -103,8 +123,7 @@ export function parseQrStyle(raw: unknown): QrStyle | null {
   const dotType = oneOf(r.dotType, DOT_TYPES, d.dotType);
   const cornerSquareType = oneOf(r.cornerSquareType, CORNER_SQUARE_TYPES, d.cornerSquareType);
   const cornerDotType = oneOf(r.cornerDotType, CORNER_DOT_TYPES, d.cornerDotType);
-  const size = int(r.size, SIZE_RANGE, d.size);
-  const margin = int(r.margin, MARGIN_RANGE, d.margin);
+  const quietZone = quietZoneOf(r);
   const logo = bool(r.logo, d.logo);
 
   if (
@@ -114,13 +133,12 @@ export function parseQrStyle(raw: unknown): QrStyle | null {
     dotType === null ||
     cornerSquareType === null ||
     cornerDotType === null ||
-    size === null ||
-    margin === null ||
+    quietZone === null ||
     logo === null
   ) {
     return null;
   }
-  return { dark, light, transparent, dotType, cornerSquareType, cornerDotType, size, margin, logo };
+  return { dark, light, transparent, dotType, cornerSquareType, cornerDotType, quietZone, logo };
 }
 
 /** The style stored on a link record: '' or unparseable means the default. */
