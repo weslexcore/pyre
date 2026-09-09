@@ -5,6 +5,7 @@ describe('parseQrStyle', () => {
   it('fills missing fields from the default', () => {
     expect(parseQrStyle({})).toEqual(DEFAULT_QR_STYLE);
     expect(parseQrStyle({ dark: '#FF0000' })).toEqual({ ...DEFAULT_QR_STYLE, dark: '#ff0000' });
+    expect(DEFAULT_QR_STYLE).toMatchObject({ dark: '#d15232', transparent: true });
   });
 
   it('drops unknown fields', () => {
@@ -42,7 +43,7 @@ describe('parseQrStyle', () => {
 
   it('migrates a legacy pixel margin to modules and ignores the old size', () => {
     expect(parseQrStyle({ size: 240, margin: 8 })?.quietZone).toBe(1);
-    expect(parseQrStyle({ size: 240, margin: 32 })).toEqual(DEFAULT_QR_STYLE);
+    expect(parseQrStyle({ size: 240, margin: 32 })?.quietZone).toBe(4);
     expect(parseQrStyle({ size: 600, margin: 0 })?.quietZone).toBe(0);
     expect(parseQrStyle({ margin: 40 })?.quietZone).toBe(5);
     expect(parseQrStyle({ margin: 400 })?.quietZone).toBe(8);

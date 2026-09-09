@@ -57,13 +57,13 @@ export const PYRE_COLORS: Array<{ name: string; hex: string }> = [
 ];
 
 export const DEFAULT_QR_STYLE: QrStyle = {
-  dark: '#23221c', // Pyre black
-  light: '#f5f1e9', // Pyre creme
-  transparent: false,
+  dark: '#d15232', // Pyre red
+  light: '#f5f1e9', // Pyre creme, only used when transparency is switched off
+  transparent: true,
   dotType: 'classy-rounded',
   cornerSquareType: 'extra-rounded',
   cornerDotType: 'dot',
-  quietZone: 4,
+  quietZone: 2,
   logo: true,
 };
 
