@@ -1,9 +1,9 @@
-// Display helpers shared by the email and the cron job's summaries. All
+// Display helpers shared by the rules, the email, and the tick summaries. All
 // clock times are the bathhouse's (America/New_York), spelled with the zone
 // so nobody reading on a phone set elsewhere has to guess.
 
 import { formatClockTime, formatZoneAbbrev, TIME_ZONE } from '@/lib/momence-events';
-import type { ConflictSession } from './types';
+import type { SessionRef } from './types';
 
 /** "Thu, Sep 18" */
 export function formatDayLabel(iso: string): string {
@@ -41,7 +41,7 @@ export function formatWhenLabel(startIso: string, endIso: string): string {
 }
 
 /** "3 booked" / "No bookings" / "" when the feed didn't say. */
-export function bookingLabel(session: Pick<ConflictSession, 'bookingCount'>): string {
+export function bookingLabel(session: Pick<SessionRef, 'bookingCount'>): string {
   if (session.bookingCount === null) return '';
   if (session.bookingCount === 0) return 'No bookings';
   return `${session.bookingCount} booked`;

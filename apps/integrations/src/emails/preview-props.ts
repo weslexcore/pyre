@@ -19,7 +19,7 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
-import { SessionConflicts } from './templates/SessionConflicts';
+import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
@@ -51,5 +51,5 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'incident-reported': IncidentReported.PreviewProps,
   'lost-found-found': LostFoundFound.PreviewProps,
   'lost-found-claimed': LostFoundClaimed.PreviewProps,
-  'session-conflicts': SessionConflicts.PreviewProps,
+  'schedule-lint': ScheduleLint.PreviewProps,
 };

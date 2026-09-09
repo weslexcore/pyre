@@ -28,6 +28,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@upstash/qstash": "^2.11.3",
     "astro": "^7.1.6",
     "posthog-node": "^5.46.0",
     "qr-code-styling": "^1.9.2",

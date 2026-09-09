@@ -2096,6 +2096,7 @@ __metadata:
     "@types/node": "npm:^22.20.1"
     "@types/react": "npm:^19.2.17"
     "@types/react-dom": "npm:^19.2.3"
+    "@upstash/qstash": "npm:^2.11.3"
     astro: "npm:^7.1.6"
     posthog-node: "npm:^5.46.0"
     qr-code-styling: "npm:^1.9.2"
@@ -4054,6 +4055,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@upstash/qstash@npm:^2.11.3":
+  version: 2.11.3
+  resolution: "@upstash/qstash@npm:2.11.3"
+  dependencies:
+    crypto-js: "npm:>=4.2.0"
+    jose: "npm:^5.2.3"
+    neverthrow: "npm:^7.0.1"
+  checksum: 10c0/ba7f463772e8654705e466478cc3717bd04dd52eeead304a4e37ea728c55ee0bae1785095a5f9e646e333f1a03140174d8450a694192de828627260f2ef9cc2c
+  languageName: node
+  linkType: hard
+
 "@upstash/redis@npm:^1.38.0":
   version: 1.38.0
   resolution: "@upstash/redis@npm:1.38.0"
@@ -5205,6 +5217,13 @@ __metadata:
     srvx:
       optional: true
   checksum: 10c0/dae29657672f4d9fc964150ae4ce7c31fd065885812c86c00ee29a2843813c6f5aaf9556d91dc75fecf9c606771b709f2d1b9ed26c7fa44d374b2c23fba84114
+  languageName: node
+  linkType: hard
+
+"crypto-js@npm:>=4.2.0":
+  version: 4.2.0
+  resolution: "crypto-js@npm:4.2.0"
+  checksum: 10c0/8fbdf9d56f47aea0794ab87b0eb9833baf80b01a7c5c1b0edc7faf25f662fb69ab18dc2199e2afcac54670ff0cd9607a9045a3f7a80336cccd18d77a55b9fdf0
   languageName: node
   linkType: hard
 
@@ -6651,6 +6670,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jose@npm:^5.2.3":
+  version: 5.10.0
+  resolution: "jose@npm:5.10.0"
+  checksum: 10c0/e20d9fc58d7e402f2e5f04e824b8897d5579aae60e64cb88ebdea1395311c24537bf4892f7de413fab1acf11e922797fb1b42269bc8fc65089a3749265ccb7b0
+  languageName: node
+  linkType: hard
+
 "jose@npm:^6.2.3":
   version: 6.2.6
   resolution: "jose@npm:6.2.6"
@@ -7911,6 +7937,13 @@ __metadata:
   version: 1.0.1
   resolution: "neotraverse@npm:1.0.1"
   checksum: 10c0/98e5d2d1974f91d527851a9dcfceb62701a1d31970b324b9f35fbdd244d173edc7a379ea1773f64771a9dc282486e3d3b693b24e14b1e969291612b2ff6b5054
+  languageName: node
+  linkType: hard
+
+"neverthrow@npm:^7.0.1":
+  version: 7.2.0
+  resolution: "neverthrow@npm:7.2.0"
+  checksum: 10c0/16d1b07638e109c3e96a737fdb59703aa65e89cb68318db3cfe04c03a17a64d47e8462c8d25cb51d4199f15f37596db3097ff74ef33074eaa4b2248d3d5b599d
   languageName: node
   linkType: hard
 

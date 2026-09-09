@@ -24,6 +24,19 @@ export interface MomenceAddressPayload {
 }
 
 /** Fired when an async report run (POST /host/reports) finishes. */
+/**
+ * `session-created` / `session-updated`. Momence sends the session's shape
+ * but not its tags, so the schedule lint re-reads the feed rather than
+ * trusting this payload for anything beyond "something changed".
+ */
+export interface MomenceSessionPayload {
+  sessionId: number;
+  type?: string;
+  name?: string;
+  startsAt?: string;
+  endsAt?: string;
+}
+
 export interface MomenceReportRunPayload {
   /** The report run id — matches what createReportRun returned. */
   id: number;
@@ -39,6 +52,8 @@ export type MomenceEventType =
   | 'member-address-deleted'
   | 'session-booked'
   | 'session-booking-cancelled'
+  | 'session-created'
+  | 'session-updated'
   | 'host-report-run-completed';
 
 export interface MomenceWebhookResult<T = unknown> {

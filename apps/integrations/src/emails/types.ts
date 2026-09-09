@@ -268,8 +268,8 @@ export interface LostFoundClaimedProps {
   itemUrl: string;
 }
 
-/** One regular session sitting under a special event, on the Monday notice. */
-export interface SessionConflictItem {
+/** One session line on the schedule check. */
+export interface ScheduleLintSession {
   title: string;
   /** e.g. "Thu, Sep 18 · 6:00 PM – 7:00 PM EDT" */
   whenLabel: string;
@@ -277,37 +277,45 @@ export interface SessionConflictItem {
   typeLabel: string;
   /** "3 booked" / "No bookings" / "" when unknown */
   bookingLabel: string;
-  /** True for the recurring types the check pre-selects for cancellation. */
-  preselected: boolean;
+  /** The session's Momence page, when the feed carries one. */
   link?: string;
 }
 
+/** A regular session under a special event: cancel it, or just look at it. */
+export interface ScheduleLintOverlapSession extends ScheduleLintSession {
+  cancel: boolean;
+}
+
 /** A special event and everything overlapping it. */
-export interface SessionConflictGroup {
+export interface ScheduleLintOverlapGroup {
   eventTitle: string;
   whenLabel: string;
   location?: string;
   link?: string;
   /** Chronological; never empty. */
-  sessions: SessionConflictItem[];
+  sessions: ScheduleLintOverlapSession[];
+}
+
+/** Any other finding: what is wrong, and the session it is about (if one). */
+export interface ScheduleLintLine {
+  message: string;
+  session?: ScheduleLintSession;
 }
 
 /**
- * To the admins on Monday morning: the regular sessions that would run into a
- * special event over the next four weeks. Acting on it happens on the review
- * page, never from the email.
+ * To the admins whenever the schedule lint finds a list it has not reported
+ * before: overlaps grouped by special event, then fixes, then notices. Every
+ * change happens in Momence; the email only points there.
  */
-export interface SessionConflictsProps {
+export interface ScheduleLintProps {
   /** e.g. "Oct 12" — the last day scanned. */
   horizonLabel: string;
-  /** Distinct sessions across all groups. */
-  sessionCount: number;
-  preselectedCount: number;
-  eventCount: number;
-  groups: SessionConflictGroup[];
-  reviewUrl: string;
-  /** False only once the API is known not to cancel sessions on this account. */
-  cancelSupported?: boolean;
+  cancelCount: number;
+  fixCount: number;
+  noticeCount: number;
+  overlaps: ScheduleLintOverlapGroup[];
+  fixes: ScheduleLintLine[];
+  notices: ScheduleLintLine[];
 }
 
 export interface EmailPropsByTemplate {
@@ -333,7 +341,7 @@ export interface EmailPropsByTemplate {
   'incident-reported': IncidentReportedProps;
   'lost-found-found': LostFoundFoundProps;
   'lost-found-claimed': LostFoundClaimedProps;
-  'session-conflicts': SessionConflictsProps;
+  'schedule-lint': ScheduleLintProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

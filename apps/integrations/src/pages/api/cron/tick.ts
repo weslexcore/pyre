@@ -11,7 +11,7 @@ export const prerender = false;
 //   curl -H "Authorization: Bearer $CRON_SECRET" \
 //     "https://<integrations>/api/cron/tick?dryRun=1"        # all jobs, no writes
 //   curl ... "/api/cron/tick?job=journey-advance"            # a single job
-//   curl ... "/api/cron/tick?probeCancel=<sessionId>"        # can Momence cancel a session?
+//   curl ... "/api/cron/tick?job=schedule-lint&force=1"      # one job, ignoring its own day gate
 
 // Leave headroom under the function's max duration so we always return a
 // response (jobs persist cursors and resume next tick).
@@ -23,6 +23,7 @@ const handler: APIRoute = async ({ request, url }) => {
   const started = Date.now();
   const dryRun = url.searchParams.get('dryRun') === '1';
   const only = url.searchParams.get('job');
+  const force = url.searchParams.get('force') === '1';
 
   // Manual test enrollment (whitelist testing with JOURNEY_FAST_MODE):
   //   /api/cron/tick?enroll=<memberId>&journey=<journeyId>
@@ -57,27 +58,6 @@ const handler: APIRoute = async ({ request, url }) => {
     });
   }
 
-  // Manual probe of Momence's session-cancel capability, for the
-  // special-event conflict check. Point it at a throwaway published session:
-  //   /api/cron/tick?probeCancel=<sessionId>
-  // It really does cancel the session when a route works — that is the test.
-  const probeCancel = url.searchParams.get('probeCancel');
-  if (probeCancel) {
-    const sessionId = Number.parseInt(probeCancel, 10);
-    if (!Number.isFinite(sessionId)) {
-      return new Response(JSON.stringify({ error: 'probeCancel must be a session id' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    const { cancelHostSession, cancelRouteStatus } = await import('@/lib/momence/host-api');
-    const result = await cancelHostSession(sessionId);
-    return new Response(
-      JSON.stringify({ probeCancel: sessionId, result, cancelSupport: cancelRouteStatus() }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
   const jobs = only ? CRON_JOBS.filter((j) => j.name === only) : CRON_JOBS;
   if (only && jobs.length === 0) {
     return new Response(
@@ -88,6 +68,7 @@ const handler: APIRoute = async ({ request, url }) => {
 
   const ctx: CronJobContext = {
     dryRun,
+    force,
     timeRemainingMs: () => TIME_BUDGET_MS - (Date.now() - started),
   };
 

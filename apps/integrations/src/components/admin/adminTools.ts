@@ -192,29 +192,6 @@ export const BUSINESS_TOOL: AdminTool = {
 };
 
 // Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
-// can't show up in the page-permission checkboxes. Confirming here cancels
-// sessions in Momence, guests' bookings included.
-export const SESSION_CONFLICTS_TOOL: AdminTool = {
-  href: '/admin/session-conflicts',
-  title: 'Special Event Conflicts',
-  navLabel: 'Conflicts',
-  description:
-    'Open Hours and Social sessions sitting under a special event, flagged every Monday — review them and cancel them in Momence.',
-  section: 'operations',
-  keywords: [
-    'overlap',
-    'special events',
-    'open hours',
-    'social',
-    'cancel sessions',
-    'momence',
-    'dj',
-    'monday',
-    'schedule clash',
-  ],
-};
-
-// Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
 // can't show up in the page-permission checkboxes.
 export const USERS_TOOL: AdminTool = {
   href: '/admin/users',
@@ -329,7 +306,7 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) return [...ADMIN_TOOLS, SESSION_CONFLICTS_TOOL, USERS_TOOL, BUSINESS_TOOL];
+  if (access.isAdmin) return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL];
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 

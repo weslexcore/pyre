@@ -107,7 +107,6 @@ Key design decisions:
 | `/api/webhooks/resend` | POST | Svix HMAC signature | Email engagement events + bounce/complaint suppression |
 | `/api/webhooks/mailchimp` | GET/POST | URL secret param + HMAC signature | Mailchimp unsubscribes/cleans into the suppression store |
 | `/api/cron/tick` | GET/POST | `Bearer CRON_SECRET` | Hourly cron entry point (QStash schedule) — runs all registered jobs |
-| `/api/admin/session-conflicts` | GET/POST | Admin session cookie | The special-event conflict review: read it, re-check Momence, cancel the ticked sessions in Momence |
 | `/api/unsubscribe` | GET/POST | HMAC-signed token | Footer-link (GET) and RFC 8058 one-click (POST) unsubscribe |
 | `/api/partner/request` | POST | `Bearer PARTNER_API_SECRET` | Partner-discount verification intake, relayed server-to-server from the landing page |
 | `/api/partner/decision` | GET | HMAC-signed token | One-click partner confirm/deny — tags the member in Momence on confirm |
@@ -137,7 +136,6 @@ Monitoring.
 | --- | --- | --- |
 | `/admin` | — | Tool directory |
 | `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
-| `/admin/session-conflicts` | Operations | Special-event conflicts — Open Hours and Social sessions sitting under a special event, flagged every Monday; admins cancel them in Momence from here (admin-only) |
 | `/admin/guests` | Operations | Guest profiles — staff-facing preferences and notes per Momence member, beside their live Momence account; `/admin/guests/sessions` shows who is booked into each session |
 | `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
 | `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
@@ -196,7 +194,7 @@ flowchart TD
         J2["2 · journey-sweeps<br/>scan member audiences, enroll matches"]
         J3["3 · journey-advance<br/>send due journey steps"]
         J4["4 · credit-reminders<br/>expiring / unused credit pack nudges"]
-        J5["… partner / referral maintenance, sync-shifts,<br/>session-conflicts (Mondays), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
+        J5["… partner / referral maintenance, sync-shifts,<br/>schedule-lint (daily), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
         J1 --> J2 --> J3 --> J4 --> J5
     end
     J1 -. "purchase triggers can enroll members<br/>whose steps advance in the same tick" .-> J3
@@ -214,28 +212,49 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/ti
 # Manually enroll a member into a journey (for whitelist testing)
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?enroll=<memberId>&journey=<journeyId>"
 
-# Does Momence let us cancel a session? Point it at a throwaway published session —
-# it really cancels it when a route works. Pin the winning route with
-# MOMENCE_SESSION_CANCEL_ROUTE afterwards.
-curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?probeCancel=<sessionId>"
+# Run one job now, ignoring its own day gate (the schedule lint's webhook follow-up uses this)
+curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?job=schedule-lint&force=1"
 ```
 
-### Special-event conflicts (Mondays)
+### Schedule lint
 
-The schedule is built by hand in Momence: hourly Open Hours slots and Friday
-Social evenings are stacks of overlapping sessions, and when a one-off special
-event (Momence tag `Special Event`) lands on top of them the regular sessions in
-that window have to be cancelled or guests keep booking into a private event.
-The `session-conflicts` job runs on the first tick after 7am ET on Mondays,
-reads the Momence events feed, finds every regular session overlapping a
-special event in the next 28 days, records it as a review
-(`session_conflict_reviews`), and emails the admins (`session-conflicts`
-template). It never cancels anything itself. An admin opens
-`/admin/session-conflicts`, ticks the sessions (Open Hours and Social rows start
-ticked, anything else starts unticked), confirms, and the page cancels them
-through the Momence host API — or, if that account exposes no cancel route,
-points at each session in the Momence dashboard. `Check now` on the page re-reads
-Momence into the open review any day of the week.
+The schedule is built by hand in Momence, and Momence's API has no way to edit
+a session, so the most the integrations app can do is notice when the schedule
+is wrong and say so. The `schedule-lint` job reads the Momence events feed for
+the next 28 days and runs every rule in `src/lib/schedule-lint/rules/`:
+
+| Rule | Severity | What it catches |
+| --- | --- | --- |
+| `special-event-overlap` | cancel / notice | Regular sessions sitting under a `Special Event`-tagged session. Open Hours and Social slots are "cancel"; anything else is "review". |
+| `untagged` | fix | A published session with no recognised type tag (it gets the generic confirmation email and no category on the site). |
+| `draft-soon` | fix | A draft starting within 7 days. |
+| `duplicate` | fix | Two published sessions with the same title, type, room, start, and length. |
+| `capacity-outlier` | notice | A session whose capacity differs from the other sessions of its type and length (needs 6 siblings). |
+| `horizon-short` | notice | Open Hours / Social published fewer than 14 days out. |
+
+Findings go to the admins as one `schedule-lint` email, grouped by severity,
+every title linking to the session in Momence. The send key is
+`schedule-lint:{week}:{digest}:{email}`, where the digest hashes the finding
+keys — so the same list is emailed once, a changed list goes out again, and
+anything still open comes back on Monday. Nothing is stored beyond that key.
+
+It runs three ways:
+
+- **Daily**: the first tick at or after 6am ET, gated by a Redis done-key.
+- **On a Momence change**: the `session-created` / `session-updated` webhooks
+  call `requestLintRun()`, which publishes a QStash message to
+  `/api/cron/tick?job=schedule-lint&force=1` delayed ten minutes and
+  deduplicated on a ten-minute bucket, so a burst of edits becomes one run
+  after they settle. Without `QSTASH_TOKEN` it sets a Redis dirty flag and the
+  next hourly tick runs the lint.
+- **By hand**: `?job=schedule-lint&force=1`, or `&dryRun=1` to see the findings
+  and who would be emailed without sending.
+
+Setup: add `QSTASH_TOKEN` (the QStash publish token) alongside the existing
+`CRON_SECRET`, confirm in the Momence dashboard that the webhook endpoint
+receives `session-created` / `session-updated` (subscriptions are per endpoint;
+Momence enables webhooks through support), and add `schedule-lint` to
+`EMAIL_LIVE_TEMPLATES` once the first real run looks right on the whitelist.
 
 ## Email system
 

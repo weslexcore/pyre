@@ -15,7 +15,7 @@ import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
-import { SessionConflicts } from './templates/SessionConflicts';
+import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
@@ -133,14 +133,17 @@ export const EMAIL_TEMPLATES: Registry = {
     subject: (p) => `Claimed: ${p.itemLabel} (${p.reference})`,
     Component: LostFoundClaimed,
   },
-  'session-conflicts': {
-    // The count is the whole story: "4 sessions" means four cancellations to
-    // confirm before Thursday, and the horizon says how far the look-ahead went.
+  'schedule-lint': {
+    // The counts are the whole story; zero parts are left out.
     subject: (p) =>
-      `${p.sessionCount === 1 ? '1 session overlaps' : `${p.sessionCount} sessions overlap`} ${
-        p.eventCount === 1 ? 'a special event' : 'special events'
-      } through ${p.horizonLabel}`,
-    Component: SessionConflicts,
+      `Schedule check: ${[
+        p.cancelCount > 0 && `${p.cancelCount} to cancel`,
+        p.fixCount > 0 && `${p.fixCount} to fix`,
+        p.noticeCount > 0 && `${p.noticeCount} notice${p.noticeCount === 1 ? '' : 's'}`,
+      ]
+        .filter(Boolean)
+        .join(', ')}`,
+    Component: ScheduleLint,
   },
 };
 

@@ -88,8 +88,8 @@ Everything Momence can't push to us is pulled on an hourly tick. The jobs in
 ~50-second budget; any job that runs out of time saves a cursor (Redis, or a
 send-log claim) and resumes on the next tick. The four email-engine jobs are
 drawn below; the rest (partner and referral maintenance, the Momence → shifts
-sync, the Monday special-event conflict check, the business-report syncs, the
-lost-and-found sweep, the Monday shift roundup) follow the same contract.
+sync, the daily schedule lint, the business-report syncs, the lost-and-found
+sweep, the Monday shift roundup) follow the same contract.
 
 ```mermaid
 flowchart TD
@@ -266,41 +266,44 @@ This closes the loop: `journey_enrolled` → `journey_email_sent` →
 `email_delivered/opened/clicked` → (ideally) `purchase_completed`, all stitched by
 email in PostHog.
 
-## Special-event conflicts (Mondays)
+## Schedule lint
 
-The `session-conflicts` job is the one cron job whose output a person has to act
-on. It never writes to Momence.
+The `schedule-lint` job is the one cron job whose output a person has to act
+on. Momence's API cannot edit a session, so it never writes to Momence: it
+reads the events feed, runs the rules in `src/lib/schedule-lint/rules/`, and
+emails the admins when the list of findings changes.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Tick as cron tick (Mon ≥ 7am ET)
-    participant Job as session-conflicts
-    participant Mom as Momence v1 /Events
-    participant SB as Supabase
-    participant Admin as admin (email → /admin/session-conflicts)
-    participant Host as Momence host API
+    participant Mom as Momence
+    participant WH as /api/webhooks/momence
+    participant Q as QStash
+    participant Tick as /api/cron/tick
+    participant Job as schedule-lint
+    participant Feed as Momence v1 /Events
+    participant Admin as admins (email)
 
-    Tick->>Job: run
-    Job->>SB: cron review for this week?
-    SB-->>Job: none
-    Job->>Mom: GET /Events (tags, times, capacity)
-    Mom-->>Job: feed
-    Job->>Job: findSessionConflicts(): regular sessions overlapping a "Special Event" in the next 28 days
-    Job->>SB: insert session_conflict_reviews (pending, or clear when empty)
-    Job->>Admin: sendTemplate('session-conflicts') per admin, send_key session-conflicts:{reviewId}:{email}
-    Admin->>SB: GET review; tick Open Hours / Social rows (pre-selected), confirm
-    Admin->>Host: POST /api/admin/session-conflicts {action:'cancel'} → cancelHostSession() per session
-    Host-->>Admin: cancelled / error / unsupported
-    Admin->>SB: resolution per session; status → resolved when nothing is undecided
+    Mom->>WH: session-created / session-updated (a burst, one per slot)
+    WH->>Q: publishJSON(tick?job=schedule-lint&force=1, delay 10m, dedup on 10-min bucket)
+    Note over WH,Q: the burst collapses to one message
+    Q->>Tick: POST after the delay (Authorization forwarded)
+    Tick->>Job: run (forced: no day gate)
+    Job->>Feed: GET /Events (tags, times, capacity, published)
+    Feed-->>Job: feed
+    Job->>Job: runLint(): overlaps, untagged, drafts, duplicates, capacities, horizon → digest
+    Job->>Admin: sendTemplate('schedule-lint') per admin, send_key schedule-lint:{week}:{digest}:{email}
+    Note over Job,Admin: same digest this week → already-sent, no email
+    Admin->>Mom: fix it in the dashboard (each title links to the session)
 ```
 
-Two things keep this safe. The email carries no action: cancelling happens on the
-admin page behind the Momence OAuth session, so a mail scanner prefetching a link
-can never cancel a session. And the cancel route is probed, not assumed: Momence's
-schema could not be checked for a session-cancel operation, so `cancelHostSession`
-tries `POST /host/sessions/{id}/cancel`, then `PUT`, then `DELETE /host/sessions/{id}`,
-treats 404/405 as "no such operation", and reports `unsupported` when none work —
-at which point the page degrades to "open each session in Momence and mark it
-handled". `?probeCancel=<sessionId>` on the tick runs the probe against a throwaway
-session; `MOMENCE_SESSION_CANCEL_ROUTE` pins the route once it is known.
+The daily run at 6am ET follows the same path from step 4, gated by a Redis
+done-key instead of `force=1`; it is the backstop for anything the webhooks
+missed. Without `QSTASH_TOKEN`, step 2 becomes a Redis dirty flag that the next
+hourly tick honours.
+
+Two things keep this quiet and safe. The digest is a hash of the finding keys,
+so a re-run that finds the same problems is a no-op in the send log, a run that
+finds a changed list emails at once, and the week in the key brings anything
+still open back on Monday. And the email carries no action: every fix happens
+in Momence, so a mail scanner prefetching a link can never change the schedule.

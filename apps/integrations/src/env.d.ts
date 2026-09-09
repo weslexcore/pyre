@@ -14,10 +14,6 @@ interface ImportMetaEnv {
   // conflict check)
   readonly MOMENCE_HOST_ID?: string;
   readonly MOMENCE_API_TOKEN?: string;
-  // The host-API route that cancels a session, once the probe has found it
-  // (e.g. "POST /host/sessions/{id}/cancel"). Unset = probe the candidates in
-  // lib/momence/host-api.ts on first use.
-  readonly MOMENCE_SESSION_CANCEL_ROUTE?: string;
   // Mailchimp
   readonly MAILCHIMP_API_KEY?: string;
   readonly MAILCHIMP_AUDIENCE_ID?: string;
@@ -59,6 +55,10 @@ interface ImportMetaEnv {
   readonly STAFF_EMAILS?: string;
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
+  // QStash publish token. Lets a Momence session webhook schedule a debounced
+  // schedule-lint run (lib/schedule-lint/trigger.ts); unset = the next hourly
+  // tick runs it instead.
+  readonly QSTASH_TOKEN?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)
   readonly UNSUBSCRIBE_SECRET?: string;
   // Partner verification: shared secret the landing page sends on /api/partner/request

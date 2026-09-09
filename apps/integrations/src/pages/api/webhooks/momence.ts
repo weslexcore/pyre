@@ -11,6 +11,7 @@ import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { resolveSession } from '@/lib/momence-events';
 import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
+import { requestLintRun } from '@/lib/schedule-lint/trigger';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
@@ -19,6 +20,7 @@ import {
   type MomenceEventType,
   type MomenceMemberPayload,
   type MomenceReportRunPayload,
+  type MomenceSessionPayload,
   verifyMomenceWebhook,
   WebhookVerificationError,
 } from '@/lib/webhooks/momence';
@@ -34,6 +36,7 @@ const ADDRESS_EVENTS: MomenceEventType[] = [
   'member-address-deleted',
 ];
 const BOOKING_EVENTS: MomenceEventType[] = ['session-booked', 'session-booking-cancelled'];
+const SESSION_EVENTS: MomenceEventType[] = ['session-created', 'session-updated'];
 
 interface MomenceBookingPayload {
   sessionId: number;
@@ -135,6 +138,28 @@ async function handleBookingEvent(
   // Flag a converted referral whose converting booking was cancelled (admin
   // decides on clawback). Catches its own errors.
   await handleReferralCancellation(payload.sessionBookingId);
+}
+
+/**
+ * A session was added or changed: ask for a schedule-lint run once the burst
+ * of edits settles (lib/schedule-lint/trigger.ts). Best-effort — a QStash or
+ * Redis hiccup must never 500 the webhook, and the daily run is the backstop.
+ */
+async function handleSessionEvent(
+  event: MomenceEventType,
+  payload: MomenceSessionPayload,
+  tracer: WebhookTracer
+): Promise<void> {
+  try {
+    const outcome = await tracer.span(
+      'Request schedule lint',
+      () => requestLintRun({ reason: event, sessionId: payload.sessionId }),
+      { sessionId: payload.sessionId }
+    );
+    log.info(`Schedule lint requested via ${outcome.via}`, { event, sessionId: payload.sessionId });
+  } catch (error) {
+    log.warn(`Schedule lint request failed for session ${payload.sessionId}`, error);
+  }
 }
 
 async function handleMemberEvent(
@@ -259,6 +284,8 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleAddressEvent(event as MomenceEventType, payload as MomenceAddressPayload, tracer);
     } else if (BOOKING_EVENTS.includes(event as MomenceEventType)) {
       await handleBookingEvent(event as MomenceEventType, payload as MomenceBookingPayload, tracer);
+    } else if (SESSION_EVENTS.includes(event as MomenceEventType)) {
+      await handleSessionEvent(event as MomenceEventType, payload as MomenceSessionPayload, tracer);
     } else if (event === 'host-report-run-completed') {
       await handleReportRunCompleted(payload as MomenceReportRunPayload, tracer);
     } else {

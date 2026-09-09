@@ -11,6 +11,11 @@
 export interface CronJobContext {
   /** When true, report what WOULD happen without sending or writing state. */
   dryRun: boolean;
+  /**
+   * When true, a job that gates itself on the clock (daily, Monday) runs
+   * anyway. Set by `?force=1` on the tick; only meaningful with `?job=`.
+   */
+  force?: boolean;
   /** Deadline check — jobs should stop cleanly (persisting cursors) when out of time. */
   timeRemainingMs(): number;
 }
@@ -66,15 +71,13 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
-    // Monday morning: regular sessions (Open Hours, Social) sitting under a
-    // special event in the next four weeks, written up as a review and
-    // emailed to the admins — who cancel them from /admin/session-conflicts.
-    // Never cancels anything itself. No-op on every other day/hour.
-    name: 'session-conflicts',
+    // The schedule lint: regular sessions under a special event, untagged
+    // sessions, late drafts, duplicates, odd capacities, a schedule running
+    // out — emailed to the admins when the list changes. Daily at 6am ET as
+    // the backstop; a Momence session webhook schedules a run sooner.
+    name: 'schedule-lint',
     run: async (ctx) => {
-      const summary = await (await import('@/lib/session-conflicts/job')).runSessionConflictCheck(
-        ctx
-      );
+      const summary = await (await import('@/lib/schedule-lint/job')).runScheduleLint(ctx);
       return summary as unknown as Record<string, unknown>;
     },
   },
