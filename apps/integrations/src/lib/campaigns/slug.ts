@@ -24,3 +24,16 @@ export function slugifyPart(value: string): string {
     .replace(/[^a-z0-9_]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
+
+/**
+ * A display name for a slug the report saw in PostHog, chosen so it slugifies
+ * back to exactly that slug ("credit-expiry" -> "Credit expiry"). Report
+ * slugs are canonical (already run through slugifyCampaign), so the
+ * round-trip holds.
+ */
+export function slugToName(slug: string): string {
+  const words = slugifyCampaign(slug).split('-').filter(Boolean);
+  if (words.length === 0) return '';
+  const [first, ...rest] = words;
+  return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(' ');
+}

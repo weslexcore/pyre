@@ -47,6 +47,7 @@ describe('normalizeCampaignInput', () => {
 
   it('rejects unknown types', () => {
     expect(normalizeCampaignInput({ ...good, type: 'party' }, ORIGIN).ok).toBe(false);
+    expect(normalizeCampaignInput({ ...good, type: 'newsletter' }, ORIGIN).ok).toBe(true);
   });
 
   it('needs an event id for event destinations', () => {

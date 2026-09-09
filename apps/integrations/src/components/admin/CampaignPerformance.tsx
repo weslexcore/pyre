@@ -1,7 +1,19 @@
 // Cross-campaign performance report (/admin/campaigns/performance). Auth is
 // handled server-side by AdminLayout; a 401/403 from the API mid-session
 // renders a re-login prompt instead of a client-side gate.
+//
+// Two views of the same numbers: by campaign (what each initiative did) and
+// by utm_source (how each channel did across every campaign — the newsletter,
+// the automated lifecycle emails, Instagram). Campaign slugs PostHog has seen
+// with no campaign record can be added as campaigns from here in one click,
+// which is how the automated journeys become proper rows.
+
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { PLACEMENTS } from '@/lib/campaigns/placements';
+import { slugToName } from '@/lib/campaigns/slug';
+import { invalidateJson } from '@/lib/client/cachedJson';
+import { buttonClass } from './incidentUi';
 
 interface CampaignRow {
   id: string;
@@ -18,6 +30,16 @@ interface CampaignRow {
   bookings: number;
 }
 
+interface SourceRow {
+  source: string;
+  shortlinkClicks: number;
+  pageviews: number;
+  visitors: number;
+  introOfferSignups: number;
+  mailingListSignups: number;
+  bookings: number;
+}
+
 interface PerformanceResponse {
   generatedAt: string;
   days: number;
@@ -25,18 +47,40 @@ interface PerformanceResponse {
   /** PostHog failed; numbers are from the last successful report (generatedAt). */
   stale: boolean;
   campaigns: CampaignRow[];
+  sources?: SourceRow[];
   unattributed: Array<{ slug: string; pageviews: number; visitors: number }>;
   posthog: { configured: boolean; missingEvents: string[]; error: string | null };
 }
 
 const DAY_OPTIONS = [7, 30, 90] as const;
+type View = 'campaign' | 'source';
+
+// Sources the code sets that no placement tile produces.
+const SOURCE_NOTES: Record<string, string> = {
+  lifecycle: 'Automated emails',
+  referral: 'Referral links',
+  'referral-reward': 'Referral rewards',
+  share: 'Event share button',
+};
+
+/** A friendly reading of a utm_source: the placement that produces it, or a
+ * known code-set source. */
+function sourceNote(source: string): string | null {
+  return SOURCE_NOTES[source] ?? PLACEMENTS.find((p) => p.source === source)?.label ?? null;
+}
+
+const headCell = 'px-4 py-3';
+const numCell = 'px-4 py-3 text-right tabular-nums';
 
 export function CampaignPerformance() {
   const [data, setData] = useState<PerformanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<number>(30);
+  const [view, setView] = useState<View>('campaign');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const fetchReport = useCallback(async (currentDays: number, fresh = false) => {
     setLoading(true);
@@ -65,6 +109,40 @@ export function CampaignPerformance() {
   useEffect(() => {
     fetchReport(days);
   }, [days, fetchReport]);
+
+  // Register a slug PostHog has seen as a campaign so it gets a real row.
+  // Evergreen, pointing home: the automated journeys this exists for never
+  // change, and anything else can be edited once it has a page.
+  const addAsCampaign = useCallback(
+    async (slug: string) => {
+      setAdding(slug);
+      setAddError(null);
+      try {
+        const res = await fetch('/api/admin/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: slugToName(slug),
+            type: 'evergreen',
+            destination: { kind: 'home', value: '' },
+          }),
+        });
+        // 409: someone added it a moment ago; the refetch below picks it up.
+        if (!res.ok && res.status !== 409) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          setAddError(campaignErrorMessage(body?.error, `Could not add (${res.status})`));
+          return;
+        }
+        invalidateJson('/api/admin/campaigns');
+        await fetchReport(days, true);
+      } catch {
+        setAddError('Network error');
+      } finally {
+        setAdding(null);
+      }
+    },
+    [days, fetchReport]
+  );
 
   if (error === 'session_expired') {
     return (
@@ -95,33 +173,79 @@ export function CampaignPerformance() {
           : null
     : null;
 
+  const sources = data?.sources ?? [];
+  const toggleClass = (active: boolean) =>
+    `px-2.5 py-1 rounded text-xs font-mono-bold transition-colors ${
+      active ? 'bg-white/15 text-[var(--pyre-creme)]' : 'text-white/40 hover:text-white/70'
+    }`;
+
+  const numberHead = (
+    <>
+      <th className={`${headCell} text-right`}>Clicks</th>
+      <th className={`${headCell} text-right`}>Pageviews</th>
+      <th className={`${headCell} text-right`}>Visitors</th>
+      <th className={`${headCell} text-right`}>Intro Offers</th>
+      <th className={`${headCell} text-right`}>Mailing List</th>
+      <th className={`${headCell} text-right`}>Bookings</th>
+    </>
+  );
+
+  const numberCells = (row: SourceRow | CampaignRow) => (
+    <>
+      <td className={numCell}>{row.shortlinkClicks}</td>
+      <td className={`${numCell} text-white/60`}>{row.pageviews}</td>
+      <td className={`${numCell} text-white/60`}>{row.visitors}</td>
+      <td className={numCell}>{row.introOfferSignups}</td>
+      <td className={numCell}>{row.mailingListSignups}</td>
+      <td className={`${numCell} font-mono-bold`}>{row.bookings}</td>
+    </>
+  );
+
   return (
     <div>
-      <div className="flex items-center justify-end gap-3">
-        <div className="flex gap-1">
-          {DAY_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setDays(option)}
-              className={`px-2.5 py-1 rounded text-xs font-mono-bold transition-colors ${
-                days === option
-                  ? 'bg-white/15 text-[var(--pyre-creme)]'
-                  : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {option}d
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1" role="tablist" aria-label="Group by">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'campaign'}
+            onClick={() => setView('campaign')}
+            className={toggleClass(view === 'campaign')}
+          >
+            By campaign
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'source'}
+            onClick={() => setView('source')}
+            className={toggleClass(view === 'source')}
+          >
+            By source
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => fetchReport(days, true)}
-          disabled={loading}
-          className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
-        >
-          {loading ? 'Loading...' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            {DAY_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setDays(option)}
+                className={toggleClass(days === option)}
+              >
+                {option}d
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchReport(days, true)}
+            disabled={loading}
+            className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {posthogIssue && (
@@ -136,7 +260,7 @@ export function CampaignPerformance() {
         </div>
       )}
 
-      {data && data.campaigns.length === 0 && (
+      {view === 'campaign' && data && data.campaigns.length === 0 && (
         <div className="text-center py-16 text-white/40">
           No campaigns yet.{' '}
           <a href="/admin/campaigns/new" className="underline">
@@ -146,18 +270,13 @@ export function CampaignPerformance() {
         </div>
       )}
 
-      {data && data.campaigns.length > 0 && (
+      {view === 'campaign' && data && data.campaigns.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-lg border border-white/10">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-white/40 text-xs uppercase tracking-wider">
-                <th className="px-4 py-3">Campaign</th>
-                <th className="px-4 py-3 text-right">Clicks</th>
-                <th className="px-4 py-3 text-right">Pageviews</th>
-                <th className="px-4 py-3 text-right">Visitors</th>
-                <th className="px-4 py-3 text-right">Intro Offers</th>
-                <th className="px-4 py-3 text-right">Mailing List</th>
-                <th className="px-4 py-3 text-right">Bookings</th>
+                <th className={headCell}>Campaign</th>
+                {numberHead}
               </tr>
             </thead>
             <tbody className="text-[var(--pyre-creme)]">
@@ -169,7 +288,7 @@ export function CampaignPerformance() {
                       className="border-b border-white/5 hover:bg-white/5 cursor-pointer"
                       onClick={() => setExpandedId(expanded ? null : campaign.id)}
                     >
-                      <td className="px-4 py-3">
+                      <td className={headCell}>
                         <span className="text-white/30 mr-2">{expanded ? '▾' : '▸'}</span>
                         <a
                           href={`/admin/campaigns/${campaign.id}`}
@@ -182,24 +301,7 @@ export function CampaignPerformance() {
                           {campaign.slug}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {campaign.shortlinkClicks}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-white/60">
-                        {campaign.pageviews}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-white/60">
-                        {campaign.visitors}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {campaign.introOfferSignups}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {campaign.mailingListSignups}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-mono-bold">
-                        {campaign.bookings}
-                      </td>
+                      {numberCells(campaign)}
                     </tr>
                     {expanded && (
                       <tr className="border-b border-white/5 bg-white/[0.03]">
@@ -239,22 +341,73 @@ export function CampaignPerformance() {
         </div>
       )}
 
-      {data && data.unattributed.length > 0 && (
+      {view === 'source' && data && sources.length === 0 && (
+        <div className="text-center py-16 text-white/40">No tagged traffic in this window yet.</div>
+      )}
+
+      {view === 'source' && data && sources.length > 0 && (
+        <div className="mt-6 overflow-x-auto rounded-lg border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-white/40 text-xs uppercase tracking-wider">
+                <th className={headCell}>Source</th>
+                {numberHead}
+              </tr>
+            </thead>
+            <tbody className="text-[var(--pyre-creme)]">
+              {sources.map((row) => {
+                const note = sourceNote(row.source);
+                return (
+                  <tr key={row.source} className="border-b border-white/5 hover:bg-white/5">
+                    <td className={headCell}>
+                      <span className="font-mono">{row.source}</span>
+                      {note && <span className="ml-2 text-xs text-white/40">{note}</span>}
+                    </td>
+                    {numberCells(row)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="px-4 py-2 text-xs text-white/40">
+            utm_source across every campaign. Conversions are first-touch, so a person counts for
+            the source that first brought them.
+          </p>
+        </div>
+      )}
+
+      {view === 'campaign' && data && data.unattributed.length > 0 && (
         <div className="mt-6 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
           <div className="text-xs uppercase tracking-wider text-white/40 mb-2">
             Seen in PostHog, not a campaign here
           </div>
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {data.unattributed.map((row) => (
-              <li key={row.slug} className="text-xs text-white/60">
+              <li
+                key={row.slug}
+                className="flex flex-wrap items-center gap-2 text-xs text-white/60"
+              >
                 <span className="font-mono">{row.slug}</span>
                 <span className="text-white/40">
-                  {' '}
                   · {row.pageviews} pageviews · {row.visitors} visitors
                 </span>
+                <button
+                  type="button"
+                  disabled={adding !== null}
+                  onClick={() => void addAsCampaign(row.slug)}
+                  className={`${buttonClass} !py-1 !text-[10px]`}
+                >
+                  {adding === row.slug ? 'Adding…' : 'Add as campaign'}
+                </button>
               </li>
             ))}
           </ul>
+          {addError && <p className="mt-2 text-xs text-[var(--pyre-red)]">{addError}</p>}
+          <p className="mt-2 text-xs text-white/40">
+            Automated emails tag their own links with their journey id, so they show up here until
+            added. Added campaigns start as Evergreen pointing at the home page. Open one to change
+            that.
+          </p>
         </div>
       )}
 

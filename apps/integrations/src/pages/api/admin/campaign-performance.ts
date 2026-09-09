@@ -11,6 +11,10 @@
 // the link record; older ones (from the free-form UTM Assist era, or minted by
 // hand) only by the utm_campaign baked into their URL.
 //
+// The same rollups are also grouped by utm_source (`sources`), so a channel
+// like the newsletter or the automated lifecycle emails can be read across
+// every campaign its links belonged to.
+//
 // `?campaign=<slug>` narrows a report to one campaign for the detail page. It
 // is applied after the cache, so the detail page never costs a PostHog query
 // of its own.
@@ -22,6 +26,7 @@ import {
   listShortLinks,
   slugifyCampaign,
   utmCampaignOfUrl,
+  utmSourceOfUrl,
 } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import {
@@ -34,11 +39,13 @@ import { describeLink } from '@/lib/campaigns/describe';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-const CACHE_PREFIX = 'cache:campaign-perf:';
+// v2: the report gained `sources`; a v1 entry must never be served to a UI
+// that expects it.
+const CACHE_PREFIX = 'cache:campaign-perf:v2:';
 const CACHE_TTL_SECONDS = 5 * 60;
 // Last report that came back with PostHog data intact, kept much longer so a
 // transient PostHog outage degrades to stale numbers instead of an empty table.
-const LAST_GOOD_PREFIX = 'cache:campaign-perf:last-good:';
+const LAST_GOOD_PREFIX = 'cache:campaign-perf:v2:last-good:';
 const LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ALLOWED_DAYS = [7, 30, 90];
 
@@ -78,6 +85,17 @@ interface CampaignRow {
   bookings: number;
 }
 
+/** The same numbers rolled up by utm_source across every campaign. */
+interface SourceRow {
+  source: string;
+  shortlinkClicks: number;
+  pageviews: number;
+  visitors: number;
+  introOfferSignups: number;
+  mailingListSignups: number;
+  bookings: number;
+}
+
 interface PerformanceResponse {
   generatedAt: string;
   days: number;
@@ -86,6 +104,7 @@ interface PerformanceResponse {
    * that succeeded (see generatedAt); posthog.error carries the failure. */
   stale: boolean;
   campaigns: CampaignRow[];
+  sources: SourceRow[];
   unattributed: Array<{ slug: string; pageviews: number; visitors: number }>;
   posthog: { configured: boolean; missingEvents: string[]; error: string | null };
 }
@@ -140,6 +159,43 @@ function buildRollupQuery(days: number): string {
       AND campaign != ''
     GROUP BY campaign, event
     ORDER BY n DESC
+    LIMIT ${ROW_LIMIT}
+    UNION ALL
+    -- The same two rollups keyed by utm_source (the campaign column name
+    -- is shared so the branches union; it holds the source here).
+    SELECT 'traffic_source' AS section,
+           lower(toString(properties.utm_source)) AS campaign,
+           event,
+           count() AS n,
+           count(DISTINCT person_id) AS people
+    FROM events
+    WHERE event = '$pageview'
+      AND properties.utm_source IS NOT NULL
+      AND properties.utm_source != ''
+      AND timestamp >= now() - INTERVAL ${days} DAY
+    GROUP BY campaign, event
+    ORDER BY n DESC
+    LIMIT ${ROW_LIMIT}
+    UNION ALL
+    SELECT 'conversion_source' AS section,
+           lower(if(event = '${BOOKING_BACKFILL}',
+             nullif(toString(properties.attributed_utm_source), ''),
+             coalesce(
+               nullif(toString(person.properties.$initial_utm_source), ''),
+               if(event = '${BOOKING}',
+                  nullif(toString(properties.attributed_utm_source), ''),
+                  NULL)
+             ))) AS campaign,
+           event,
+           count() AS n,
+           0 AS people
+    FROM events
+    WHERE event IN (${sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])})
+      AND timestamp >= now() - INTERVAL ${days} DAY
+      AND campaign IS NOT NULL
+      AND campaign != ''
+    GROUP BY campaign, event
+    ORDER BY n DESC
     LIMIT ${ROW_LIMIT}`;
 }
 
@@ -175,6 +231,9 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
   // slug (lowercase) -> traffic / conversion rollups from PostHog
   const traffic = new Map<string, { pageviews: number; visitors: number }>();
   const conversions = new Map<string, Map<string, number>>();
+  // utm_source (lowercase) -> the same rollups
+  const sourceTraffic = new Map<string, { pageviews: number; visitors: number }>();
+  const sourceConversions = new Map<string, Map<string, number>>();
 
   const campaignsWithLinks = await listCampaignsWithLinks();
   const explicitCodes = campaignsWithLinks.flatMap((c) =>
@@ -198,20 +257,29 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
 
   if (rollupRows) {
     for (const row of rollupRows) {
-      const [section, rawSlug, event, count, people] = row as [
+      const [section, rawKey, event, count, people] = row as [
         string,
         string,
         string,
         number,
         number,
       ];
-      const slug = rawSlug ? slugifyCampaign(rawSlug) : '';
-      if (!slug) continue;
-      if (section === 'traffic') {
+      const bySource = section.endsWith('_source');
+      // Campaign values slugify so free-text variants roll up; sources are
+      // already short tokens and only need lowercasing.
+      const key = bySource
+        ? (rawKey ?? '').trim().toLowerCase()
+        : rawKey
+          ? slugifyCampaign(rawKey)
+          : '';
+      if (!key) continue;
+      const trafficMap = bySource ? sourceTraffic : traffic;
+      const conversionMap = bySource ? sourceConversions : conversions;
+      if (section === 'traffic' || section === 'traffic_source') {
         // Sum across raw variants that slugify to the same campaign. Visitors can
         // double-count a person seen under two variants; acceptable for a report.
-        const prev = traffic.get(slug);
-        traffic.set(slug, {
+        const prev = trafficMap.get(key);
+        trafficMap.set(key, {
           pageviews: (prev?.pageviews ?? 0) + Number(count),
           visitors: (prev?.visitors ?? 0) + Number(people),
         });
@@ -219,9 +287,9 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
         // Backfilled attribution counts as a booking. A backfill event only
         // exists for bookings with no attribution of their own, so no double count.
         const bucket = event === BOOKING_BACKFILL ? BOOKING : event;
-        const byEvent = conversions.get(slug) ?? new Map<string, number>();
+        const byEvent = conversionMap.get(key) ?? new Map<string, number>();
         byEvent.set(bucket, (byEvent.get(bucket) ?? 0) + Number(count));
-        conversions.set(slug, byEvent);
+        conversionMap.set(key, byEvent);
       }
     }
   }
@@ -243,6 +311,16 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
   }
 
   const knownSlugs = new Set<string>();
+  // Short-link clicks by utm_source: a generated link knows its source; a
+  // legacy short link only through its URL. Codes claimed by a link are
+  // skipped in the legacy pass so nothing counts twice.
+  const sourceClicks = new Map<string, number>();
+  const claimedCodes = new Set<string>();
+  const addSourceClicks = (source: string | null, clicks: number) => {
+    if (!source) return;
+    sourceClicks.set(source, (sourceClicks.get(source) ?? 0) + clicks);
+  };
+
   const campaigns: CampaignRow[] = campaignsWithLinks.map(({ campaign, links }) => {
     const slug = campaign.slug.toLowerCase();
     knownSlugs.add(slug);
@@ -255,6 +333,8 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       const short = link.shortCode ? shortlinksByCode.get(link.shortCode) : undefined;
       if (!short) continue;
       claimed.add(short.code);
+      claimedCodes.add(short.code);
+      addSourceClicks(link.source.trim().toLowerCase() || null, Number(short.clicks) || 0);
       // The placement (with partner / custom values spelled out), then the
       // staff note if there is one.
       const described = describeLink(link);
@@ -287,8 +367,33 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
     };
   });
 
-  // utm_campaign values seen in PostHog with no stored campaign — usually links
-  // built by hand outside UTM Assist.
+  for (const link of shortlinkPage.links) {
+    if (claimedCodes.has(link.code)) continue;
+    addSourceClicks(utmSourceOfUrl(link.url), Number(link.clicks) || 0);
+  }
+
+  const sourceKeys = new Set<string>([
+    ...sourceTraffic.keys(),
+    ...sourceConversions.keys(),
+    ...sourceClicks.keys(),
+  ]);
+  const sources: SourceRow[] = [...sourceKeys]
+    .map((source) => {
+      const byEvent = sourceConversions.get(source);
+      return {
+        source,
+        shortlinkClicks: sourceClicks.get(source) ?? 0,
+        pageviews: sourceTraffic.get(source)?.pageviews ?? 0,
+        visitors: sourceTraffic.get(source)?.visitors ?? 0,
+        introOfferSignups: byEvent?.get(SIGNUP_INTRO) ?? 0,
+        mailingListSignups: byEvent?.get(SIGNUP_MAILING) ?? 0,
+        bookings: byEvent?.get(BOOKING) ?? 0,
+      };
+    })
+    .sort((a, b) => b.pageviews - a.pageviews || b.shortlinkClicks - a.shortlinkClicks);
+
+  // utm_campaign values seen in PostHog with no stored campaign — automated
+  // journeys (their id is their campaign) and links built by hand.
   const unattributed = [...traffic.entries()]
     .filter(([slug]) => !knownSlugs.has(slug))
     .map(([slug, t]) => ({ slug, pageviews: t.pageviews, visitors: t.visitors }))
@@ -300,6 +405,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
     cached: false,
     stale: false,
     campaigns,
+    sources,
     unattributed,
     posthog,
   };

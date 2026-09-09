@@ -25,7 +25,7 @@ const CAMPAIGN_PREFIX = 'utm:campaign:';
 const LINK_PREFIX = 'utm:link:';
 const campaignLinksKey = (id: string) => `${CAMPAIGN_PREFIX}${id}:links`;
 
-export type CampaignType = 'event' | 'sale' | 'launch' | 'evergreen' | 'other';
+export type CampaignType = 'event' | 'sale' | 'newsletter' | 'launch' | 'evergreen' | 'other';
 export type CampaignStatus = 'active' | 'archived';
 /** Where a campaign's links point by default. '' on legacy campaigns. */
 export type DestinationKind = 'home' | 'events' | 'event' | 'blog' | 'custom' | '';
@@ -141,7 +141,14 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const CAMPAIGN_TYPES: readonly CampaignType[] = ['event', 'sale', 'launch', 'evergreen', 'other'];
+const CAMPAIGN_TYPES: readonly CampaignType[] = [
+  'event',
+  'sale',
+  'newsletter',
+  'launch',
+  'evergreen',
+  'other',
+];
 const DESTINATION_KINDS: readonly DestinationKind[] = ['home', 'events', 'event', 'blog', 'custom'];
 
 /** Fill defaults for records written before the campaign-centric rework. */
@@ -190,6 +197,16 @@ export function normalizeLinkRecord(raw: Record<string, unknown>): UtmLink | nul
     createdAt: num(raw.createdAt),
     createdBy: str(raw.createdBy),
   };
+}
+
+/** The utm_source a URL carries, lowercased; null when absent or unparseable. */
+export function utmSourceOfUrl(url: string): string | null {
+  try {
+    const raw = new URL(url).searchParams.get('utm_source');
+    return raw ? raw.trim().toLowerCase() || null : null;
+  } catch {
+    return null;
+  }
 }
 
 async function getAllCampaigns(): Promise<UtmCampaign[]> {

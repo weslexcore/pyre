@@ -23,6 +23,11 @@ export const CAMPAIGN_TYPES: ReadonlyArray<{ key: CampaignType; label: string; h
     hint: 'A discount, intro offer, or limited-time deal.',
   },
   {
+    key: 'newsletter',
+    label: 'Newsletter',
+    hint: 'One send of the monthly email. Name it by month.',
+  },
+  {
     key: 'launch',
     label: 'Launch',
     hint: 'Something new: a membership, a series, a space.',

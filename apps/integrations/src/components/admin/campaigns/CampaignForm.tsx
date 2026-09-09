@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { newsletterDefaults } from '@/lib/campaigns/newsletter';
 import { slugifyCampaign } from '@/lib/campaigns/slug';
 import {
   type BlogPostRef,
@@ -78,6 +79,25 @@ export function CampaignForm({
   }, [type, events.load]);
 
   const slug = useMemo(() => slugifyCampaign(name), [name]);
+
+  // Newsletter sends are one a month, named by month. Picking the type on a
+  // fresh form fills the name, the month, and the home page as destination;
+  // a name someone already typed is left alone.
+  const pickType = useCallback(
+    (next: CampaignType) => {
+      setType(next);
+      if (next !== 'newsletter' || editing) return;
+      const defaults = newsletterDefaults(new Date());
+      setName((current) =>
+        current.trim() === '' || current === autoName ? defaults.name : current
+      );
+      setAutoName(defaults.name);
+      setStartsAt((current) => current || defaults.startsAt);
+      setEndsAt((current) => current || defaults.endsAt);
+      setDestination({ kind: 'home', value: '' });
+    },
+    [autoName, editing]
+  );
 
   const pickEvent = useCallback(
     (event: EventOption | undefined) => {
@@ -164,7 +184,7 @@ export function CampaignForm({
               selected={type === option.key}
               label={option.label}
               hint={option.hint}
-              onClick={() => setType(option.key)}
+              onClick={() => pickType(option.key)}
             />
           ))}
         </div>

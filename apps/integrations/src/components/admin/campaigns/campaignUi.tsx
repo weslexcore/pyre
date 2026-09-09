@@ -39,6 +39,7 @@ export function linkTitle(
 const TYPE_STYLES: Record<string, string> = {
   event: 'border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]',
   sale: 'border-[var(--pyre-red)]/60 text-[var(--pyre-red)]',
+  newsletter: 'border-[var(--pyre-blue)] text-white/70',
   launch: 'border-[var(--pyre-sky)]/60 text-[var(--pyre-sky)]',
   evergreen: 'border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]',
   other: 'border-white/20 text-white/50',

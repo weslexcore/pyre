@@ -49,6 +49,7 @@ export {
   type UtmCampaign,
   utmCampaignOfUrl,
   type UtmLink,
+  utmSourceOfUrl,
 } from './utm-campaign-store';
 export {
   codeExists,
