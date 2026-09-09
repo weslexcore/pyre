@@ -236,8 +236,13 @@ export function transformToEventItem(
   event: MomenceEvent,
   teachersById?: Map<number, MomenceTeacher>
 ): EventItem {
-  // Use image1 if available, otherwise fall back to image2
-  const imageUrl = event.image1 || event.image2;
+  // `image1` is the session banner. `image2` is NOT a second banner — it is the
+  // teacher's profile photo (it is always `<teacherId>-picture.jpg`, verified
+  // across the whole calendar), which the roster already surfaces as the
+  // practitioner avatar. Falling back to it dressed a host's headshot up as the
+  // event's artwork, on the card, the detail page and the link preview alike, so
+  // a session with no banner now simply has no image.
+  const imageUrl = event.image1;
 
   const isPrivate = event.type === 'private';
 

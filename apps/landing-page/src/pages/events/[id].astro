@@ -336,7 +336,7 @@ const analyticsEvent = event
             {/* Faded at the bottom so the band has no hard line for the drifting
                 gradient to catch. Safe to fade here because it's decoration —
                 unlike the image, nothing is lost. */}
-            <RepeatingLogoBackground class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
+            <RepeatingLogoBackground tileSizePx={96} class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
             <img
               src={event.image.src}
               alt={event.image.alt ?? event.title}
