@@ -16,6 +16,7 @@ import {
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { buttonClass, inputClass, labelClass, primaryButtonClass, TileButton } from '../incidentUi';
+import { SearchSelect } from '../SearchSelect';
 import { SessionExpired, smallLabelClass } from './campaignUi';
 import {
   DestinationPicker,
@@ -175,6 +176,12 @@ export function CampaignForm({
         void submit();
       }}
     >
+      {!editing && (
+        <a href="/admin/campaigns" className={`${buttonClass} inline-block`}>
+          All campaigns
+        </a>
+      )}
+
       <section>
         <span className={labelClass}>What kind of campaign</span>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -205,19 +212,17 @@ export function CampaignForm({
             </p>
           )}
           {events.events && (
-            <select
+            <SearchSelect
               id="campaign-event"
-              className={inputClass}
+              options={events.events.map((event) => ({
+                value: event.id,
+                label: eventLabel(event),
+              }))}
               value={eventId}
-              onChange={(e) => pickEvent(events.events?.find((ev) => ev.id === e.target.value))}
-            >
-              <option value="">Choose an event to fill in the name and link</option>
-              {events.events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {eventLabel(event)}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => pickEvent(events.events?.find((ev) => ev.id === id))}
+              placeholder="Type to find an event; it fills in the name and link"
+              emptyText="No upcoming event matches"
+            />
           )}
         </section>
       )}

@@ -4,13 +4,15 @@
 // immediately and revalidates behind it.
 
 import { useMemo, useState } from 'react';
+import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type { CampaignListResponse } from '@/lib/campaigns/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { buttonClass, cardClass, inputClass, primaryButtonClass } from '../incidentUi';
 import {
-  ArchivedBadge,
   dateRangeLabel,
+  formatCreated,
   isSessionExpired,
+  PhaseChip,
   SessionExpired,
   TypeBadge,
 } from './campaignUi';
@@ -19,6 +21,7 @@ export function CampaignsIndex() {
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState('');
 
+  const today = useMemo(() => todayYmd(), []);
   const url = `/api/admin/campaigns?status=${showArchived ? 'all' : 'active'}`;
   const { data, error, loading, refreshing } = useCachedJson<CampaignListResponse>(url);
 
@@ -86,11 +89,17 @@ export function CampaignsIndex() {
       <ul className="grid gap-3 sm:grid-cols-2">
         {campaigns.map((campaign) => {
           const range = dateRangeLabel(campaign);
+          const phase = campaignPhase(campaign, today);
+          // Live campaigns read in sage so what is running right now stands out.
+          const cardStyle =
+            phase === 'live'
+              ? 'border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/10 hover:border-[var(--pyre-sage)]'
+              : 'hover:border-white/30';
           return (
             <li key={campaign.id}>
               <a
                 href={`/admin/campaigns/${campaign.id}`}
-                className={`${cardClass} block h-full transition-colors hover:border-white/30`}
+                className={`${cardClass} block h-full transition-colors ${cardStyle}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -100,8 +109,8 @@ export function CampaignsIndex() {
                     <p className="font-mono text-xs text-white/35 truncate">{campaign.slug}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
+                    <PhaseChip phase={phase} />
                     <TypeBadge type={campaign.type} />
-                    {campaign.status === 'archived' && <ArchivedBadge />}
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-white/50">
@@ -112,6 +121,7 @@ export function CampaignsIndex() {
                     {campaign.clicks} click{campaign.clicks === 1 ? '' : 's'}
                   </span>
                   {range && <span>{range}</span>}
+                  <span>Created {formatCreated(campaign.createdAt)}</span>
                 </div>
                 {!campaign.destinationUrl && (
                   <p className="mt-2 text-xs text-[var(--pyre-gold)]">Destination not set</p>

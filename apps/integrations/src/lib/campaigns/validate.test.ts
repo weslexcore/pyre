@@ -27,7 +27,7 @@ describe('normalizeCampaignInput', () => {
         type: 'event',
         destinationKind: 'event',
         destinationValue: 'evt-1',
-        destinationUrl: 'https://pyresauna.com/events?event=evt-1',
+        destinationUrl: 'https://pyresauna.com/events/evt-1',
         startsAt: '2026-09-01',
         endsAt: '2026-09-20',
         notes: 'Big one.',
@@ -56,6 +56,15 @@ describe('normalizeCampaignInput', () => {
       ORIGIN
     );
     expect(result).toEqual({ ok: false, error: 'Pick an event' });
+  });
+
+  it('resolves the link tree page', () => {
+    const result = normalizeCampaignInput(
+      { ...good, destination: { kind: 'linktree', value: '' } },
+      ORIGIN
+    );
+    expect(result.ok && result.value.destinationUrl).toBe('https://pyresauna.com/hi');
+    expect(result.ok && result.value.destinationValue).toBe('');
   });
 
   it('drops the value for home and events destinations', () => {

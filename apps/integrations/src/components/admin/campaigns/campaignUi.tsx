@@ -1,6 +1,7 @@
 // Presentation bits shared by the campaign islands.
 
 import { describeLink } from '@/lib/campaigns/describe';
+import { type CampaignPhase, PHASE_LABEL } from '@/lib/campaigns/phase';
 import type { LinkRow, UtmCampaign } from '@/lib/campaigns/types';
 import { campaignTypeLabel } from '@/lib/campaigns/types';
 
@@ -54,6 +55,29 @@ export function TypeBadge({ type }: { type: string }) {
       {campaignTypeLabel(type)}
     </span>
   );
+}
+
+/** "Sep 9, 2026" for a stored createdAt, on the bathhouse clock. */
+export function formatCreated(ms: number): string {
+  if (!ms) return '';
+  return new Date(ms).toLocaleDateString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+const PHASE_STYLES: Record<CampaignPhase, string> = {
+  live: 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/15 text-[var(--pyre-sage)]',
+  upcoming: 'border-white/25 text-white/60',
+  ended: 'border-white/15 text-white/40',
+  archived: 'border-white/15 text-white/35',
+};
+
+/** Where the campaign is in its run: Live in sage, the rest muted. */
+export function PhaseChip({ phase }: { phase: CampaignPhase }) {
+  return <span className={`${badgeBase} ${PHASE_STYLES[phase]}`}>{PHASE_LABEL[phase]}</span>;
 }
 
 export function ArchivedBadge() {

@@ -72,7 +72,7 @@ function destination(
 ): Normalized<Pick<CampaignInput, 'destinationKind' | 'destinationValue' | 'destinationUrl'>> {
   const raw = (body ?? {}) as DestinationBody;
   const kind = typeof raw.kind === 'string' ? raw.kind : '';
-  if (!['home', 'events', 'event', 'blog', 'custom'].includes(kind)) {
+  if (!['home', 'events', 'linktree', 'event', 'blog', 'custom'].includes(kind)) {
     return { ok: false, error: 'Choose where the links should go' };
   }
   const value = text(raw.value, FIELD_LIMITS.destinationValue);
@@ -83,7 +83,7 @@ function destination(
     value: {
       destinationKind: kind as Exclude<DestinationKind, ''>,
       // Store the value the picker needs to re-select, not the resolved URL.
-      destinationValue: kind === 'home' || kind === 'events' ? '' : value,
+      destinationValue: kind === 'home' || kind === 'events' || kind === 'linktree' ? '' : value,
       destinationUrl: resolved.url,
     },
   };

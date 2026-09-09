@@ -11,6 +11,7 @@ import {
   type EventOption,
 } from '@/lib/campaigns/types';
 import { inputClass, TileButton } from '../incidentUi';
+import { SearchSelect } from '../SearchSelect';
 import { smallLabelClass } from './campaignUi';
 
 export interface DestinationValue {
@@ -104,7 +105,7 @@ export function DestinationPicker({
   return (
     <div className="space-y-3">
       <div
-        className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}
+        className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-6'}`}
       >
         {DESTINATION_KINDS.map((kind) => (
           <TileButton
@@ -135,19 +136,17 @@ export function DestinationPicker({
             <p className="text-xs text-white/50">No upcoming events on the site right now.</p>
           )}
           {events.events && events.events.length > 0 && (
-            <select
+            <SearchSelect
               id="dest-event"
-              className={inputClass}
+              options={events.events.map((event) => ({
+                value: event.id,
+                label: eventLabel(event),
+              }))}
               value={value.value}
-              onChange={(e) => onChange({ kind: 'event', value: e.target.value })}
-            >
-              <option value="">Choose an event</option>
-              {events.events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {eventLabel(event)}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => onChange({ kind: 'event', value: id })}
+              placeholder="Type to find an event"
+              emptyText="No upcoming event matches"
+            />
           )}
         </div>
       )}
@@ -162,19 +161,18 @@ export function DestinationPicker({
               Could not load the blog list. Try another destination.
             </p>
           ) : (
-            <select
+            <SearchSelect
               id="dest-blog"
-              className={inputClass}
+              options={blogPosts.map((post) => ({
+                value: post.slug,
+                label: post.title,
+                hint: post.slug,
+              }))}
               value={value.value}
-              onChange={(e) => onChange({ kind: 'blog', value: e.target.value })}
-            >
-              <option value="">Choose a post</option>
-              {blogPosts.map((post) => (
-                <option key={post.slug} value={post.slug}>
-                  {post.title}
-                </option>
-              ))}
-            </select>
+              onChange={(slug) => onChange({ kind: 'blog', value: slug })}
+              placeholder="Type to find a post"
+              emptyText="No post matches"
+            />
           )}
         </div>
       )}

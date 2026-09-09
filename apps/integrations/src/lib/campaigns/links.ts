@@ -38,11 +38,17 @@ export function resolveDestination(
       return { ok: true, url: new URL('/', origin).toString() };
     case 'events':
       return { ok: true, url: new URL('/events', origin).toString() };
+    case 'linktree':
+      // The link-in-bio page.
+      return { ok: true, url: new URL('/hi', origin).toString() };
     case 'event': {
       if (!trimmed) return { ok: false, error: 'Pick an event' };
-      const url = new URL('/events', origin);
-      url.searchParams.set('event', trimmed);
-      return { ok: true, url: url.toString() };
+      // The event's own page (not the modal on /events): it carries the
+      // event's image for link previews and survives the list changing.
+      return {
+        ok: true,
+        url: new URL(`/events/${encodeURIComponent(trimmed)}`, origin).toString(),
+      };
     }
     case 'blog': {
       if (!trimmed) return { ok: false, error: 'Pick a blog post' };

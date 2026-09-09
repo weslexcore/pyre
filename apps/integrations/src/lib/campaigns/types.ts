@@ -53,6 +53,7 @@ export const DESTINATION_KINDS: ReadonlyArray<{
 }> = [
   { key: 'home', label: 'Home page', hint: 'pyresauna.com' },
   { key: 'events', label: 'Events page', hint: 'The full schedule.' },
+  { key: 'linktree', label: 'Link tree', hint: 'pyresauna.com/hi, the link-in-bio page.' },
   { key: 'event', label: 'One event', hint: 'Opens straight to a session.' },
   { key: 'blog', label: 'Blog post', hint: 'A published article.' },
   { key: 'custom', label: 'Another site', hint: 'Eventbrite, a partner, anything external.' },

@@ -49,9 +49,13 @@ describe('resolveDestination', () => {
       ok: true,
       url: 'https://pyresauna.com/events',
     });
+    expect(resolveDestination(ORIGIN, 'linktree', '')).toEqual({
+      ok: true,
+      url: 'https://pyresauna.com/hi',
+    });
     expect(resolveDestination(ORIGIN, 'event', 'abc 1')).toEqual({
       ok: true,
-      url: 'https://pyresauna.com/events?event=abc+1',
+      url: 'https://pyresauna.com/events/abc%201',
     });
     expect(resolveDestination(ORIGIN, 'blog', 'why-sauna')).toEqual({
       ok: true,
@@ -98,6 +102,18 @@ describe('applyUtm', () => {
 });
 
 describe('buildPlacementLink', () => {
+  it('links an event campaign to the event page, not the modal', () => {
+    const dest = resolveDestination(ORIGIN, 'event', '12345');
+    expect(dest.ok && dest.url).toBe('https://pyresauna.com/events/12345');
+    const built = buildPlacementLink({
+      destinationUrl: dest.ok ? dest.url : '',
+      slug: 'rest-fest-2026',
+      placement: must('sms-blast'),
+      variant: '',
+    });
+    expect(built.url.startsWith('https://pyresauna.com/events/12345?utm_source=sms')).toBe(true);
+  });
+
   it('builds the Instagram bio link from the catalog values', () => {
     const built = buildPlacementLink({
       destinationUrl: 'https://pyresauna.com/',

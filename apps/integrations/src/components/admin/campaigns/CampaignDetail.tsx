@@ -4,6 +4,7 @@
 
 import { useCallback, useId, useMemo, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type {
   BlogPostRef,
   CampaignDetailResponse,
@@ -18,9 +19,10 @@ import { buttonClass, cardClass, readError, SectionTitle } from '../incidentUi';
 import { CampaignForm } from './CampaignForm';
 import { CampaignStats } from './CampaignStats';
 import {
-  ArchivedBadge,
   dateRangeLabel,
+  formatCreated,
   isSessionExpired,
+  PhaseChip,
   SessionExpired,
   TypeBadge,
 } from './campaignUi';
@@ -201,13 +203,11 @@ export function CampaignDetail({
 
   const range = dateRangeLabel(campaign);
   const archived = campaign.status === 'archived';
+  const phase = campaignPhase(campaign, todayYmd());
 
   return (
     <div className="space-y-6">
-      <a
-        href="/admin/campaigns"
-        className="inline-block font-mono text-xs text-white/40 hover:text-white"
-      >
+      <a href="/admin/campaigns" className={`${buttonClass} inline-block`}>
         All campaigns
       </a>
 
@@ -233,8 +233,8 @@ export function CampaignDetail({
                   <h2 className="font-primary-semibold text-xl text-[var(--pyre-creme)]">
                     {campaign.name}
                   </h2>
+                  <PhaseChip phase={phase} />
                   <TypeBadge type={campaign.type} />
-                  {archived && <ArchivedBadge />}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-xs text-white/50">
                   <span>utm_campaign={campaign.slug}</span>
@@ -245,6 +245,10 @@ export function CampaignDetail({
                   />
                 </div>
                 {range && <p className="mt-1 text-xs text-white/50">{range}</p>}
+                <p className="mt-1 text-xs text-white/40">
+                  Created {formatCreated(campaign.createdAt)}
+                  {campaign.createdBy ? ` by ${campaign.createdBy}` : ''}
+                </p>
                 {campaign.destinationUrl ? (
                   <p className="mt-1 font-mono text-xs text-white/40 break-all">
                     Links open {campaign.destinationUrl}
