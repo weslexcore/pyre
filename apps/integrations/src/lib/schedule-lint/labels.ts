@@ -47,6 +47,13 @@ export function formatClockLabel(hhmm: string): string {
   return `${hour12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
+/** "1 hour" / "2 hours" / "90 minutes" — a length setting, spelled how staff say it. */
+export function formatDurationLabel(minutes: number): string {
+  if (minutes % 60 !== 0) return `${minutes} minutes`;
+  const hours = minutes / 60;
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+}
+
 /** "3 booked" / "No bookings" / "" when the feed didn't say. */
 export function bookingLabel(session: Pick<SessionRef, 'bookingCount'>): string {
   if (session.bookingCount === null) return '';

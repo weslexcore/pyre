@@ -137,7 +137,7 @@ Monitoring.
 | --- | --- | --- |
 | `/admin` | — | Tool directory |
 | `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
-| `/admin/schedule-lint` | Operations | The checks run against the Momence schedule: switch built-in rules off or tune them, add opening-hours / required-tag / expected-capacity rules, preview what they catch, run the email by hand |
+| `/admin/schedule-lint` | Operations | The checks run against the Momence schedule: switch built-in rules off or tune them, add opening-hours / required-tag / expected-capacity / duration-variants rules, preview what they catch, run the email by hand |
 | `/admin/guests` | Operations | Guest profiles — staff-facing preferences and notes per Momence member, beside their live Momence account; `/admin/guests/sessions` shows who is booked into each session |
 | `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
 | `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |

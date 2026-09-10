@@ -4,6 +4,7 @@ import { horizonOf, normalizeFeed } from '../feed';
 import { capacityOutlier, MIN_GROUP_SIZE } from './capacity-outlier';
 import { DRAFT_SOON_DAYS, draftSoon } from './draft-soon';
 import { duplicate } from './duplicate';
+import { durationVariants } from './duration-variants';
 import { expectedCapacity } from './expected-capacity';
 import { horizonShort, MIN_PUBLISHED_DAYS } from './horizon-short';
 import { dayKeyOf, openingHours, toMinutes } from './opening-hours';
@@ -291,5 +292,67 @@ describe('expected-capacity', () => {
         capacity: 6,
       })
     ).toHaveLength(1);
+  });
+});
+
+describe('duration-variants', () => {
+  // Thursday Sep 17, open 16:00–20:00 in the rule's default hours.
+  const at = (time: string, over: Partial<MomenceEvent> = {}): MomenceEvent =>
+    event({ dateTime: et('2026-09-17', time), ...over });
+
+  it('flags the length a start time is missing and leaves a complete one alone', () => {
+    const findings = run(durationVariants, [
+      at('18:00', { id: 1 }),
+      at('17:00', { id: 2 }),
+      at('17:00', { id: 3, duration: 120 }),
+    ]);
+    expect(findings.map((f) => f.session?.id)).toEqual([1]);
+    expect(findings[0]).toMatchObject({
+      rule: 'duration-variants',
+      severity: 'fix',
+      key: 'variants:open hours:2026-09-17T22:00:00.000Z:120',
+      message: 'No 2 hours Open hours option at this start time; only 1 hour',
+    });
+  });
+
+  it('asks Social for all three lengths', () => {
+    const findings = run(
+      durationVariants,
+      [event({ id: 1, tags: ['Social'], dateTime: et('2026-09-18', '16:00') })],
+      { type: 'social', durations: [60, 120, 180] }
+    );
+    expect(findings.map((f) => f.message)).toEqual([
+      'No 2 hours Social option at this start time; only 1 hour',
+      'No 3 hours Social option at this start time; only 1 hour',
+    ]);
+  });
+
+  it('stays quiet when the missing length would not fit', () => {
+    // 19:00 + 2h runs an hour past the 20:00 close.
+    expect(run(durationVariants, [at('19:00')])).toEqual([]);
+    // Monday is closed, and 15:00 is before Thursday's open.
+    expect(run(durationVariants, [event({ dateTime: et('2026-09-21', '18:00') })])).toEqual([]);
+    expect(run(durationVariants, [at('15:00')])).toEqual([]);
+  });
+
+  it('stays quiet when a special event is in the way', () => {
+    const special = at('19:00', {
+      id: 9,
+      title: 'DJ Night',
+      tags: ['Special Event'],
+      duration: 120,
+    });
+    expect(run(durationVariants, [at('18:00'), special])).toEqual([]);
+    // A draft special event blocks nothing; it may never run.
+    expect(run(durationVariants, [at('18:00'), { ...special, published: false }])).toHaveLength(1);
+  });
+
+  it('ignores drafts, special events, and other types when reading a slot', () => {
+    const findings = run(durationVariants, [
+      at('18:00', { id: 1 }),
+      at('18:00', { id: 2, duration: 120, published: false }),
+      at('18:00', { id: 3, duration: 120, tags: ['Social'] }),
+    ]);
+    expect(findings.map((f) => f.session?.id)).toEqual([1]);
   });
 });

@@ -7,6 +7,7 @@ import type { RuleKind } from '../types';
 import { capacityOutlier } from './capacity-outlier';
 import { draftSoon } from './draft-soon';
 import { duplicate } from './duplicate';
+import { durationVariants } from './duration-variants';
 import { expectedCapacity } from './expected-capacity';
 import { horizonShort } from './horizon-short';
 import { openingHours } from './opening-hours';
@@ -29,6 +30,7 @@ export const DEFINITIONS: readonly RuleDefinition<any>[] = [
   openingHours,
   requiredTag,
   expectedCapacity,
+  durationVariants,
 ];
 
 export const BUILT_IN_DEFINITIONS = DEFINITIONS.filter((d) => d.builtIn);

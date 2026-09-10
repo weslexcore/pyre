@@ -51,6 +51,27 @@ describe('normalizeParams', () => {
     });
   });
 
+  it('parses a typed list of lengths, sorted and de-duplicated', () => {
+    const variants = def('duration-variants');
+    expect(normalizeParams(variants, { durations: '180, 60, 120, 60' })).toMatchObject({
+      ok: true,
+      params: expect.objectContaining({ durations: [60, 120, 180] }),
+    });
+    expect(normalizeParams(variants, { durations: [120, 60] })).toMatchObject({
+      ok: true,
+      params: expect.objectContaining({ durations: [60, 120] }),
+    });
+    expect(normalizeParams(variants, { durations: '' })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('at least one length'),
+    });
+    expect(normalizeParams(variants, { durations: '60, abc' })).toMatchObject({ ok: false });
+    expect(normalizeParams(variants, { durations: '2' })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('at least 5 minutes'),
+    });
+  });
+
   it('validates a week of opening hours', () => {
     const hours = def('opening-hours');
     const ok = normalizeParams(hours, {
@@ -163,10 +184,14 @@ describe('summarizeParams', () => {
         types: ['open hours'],
       })
     ).toBe('Wed 4:00 PM–8:00 PM · Sat 10:00 AM–4:00 PM · Only check these types: open hours');
+    expect(
+      summarizeParams(def('duration-variants'), { type: 'social', durations: [60, 120, 180] })
+    ).toContain('Lengths offered: 1 hour, 2 hours, 3 hours');
     expect(CUSTOM_DEFINITIONS.map((d) => d.kind)).toEqual([
       'opening-hours',
       'required-tag',
       'expected-capacity',
+      'duration-variants',
     ]);
   });
 });

@@ -8,7 +8,7 @@
 
 import type { ScheduleLintRuleRow } from '@/lib/db';
 import { SESSION_TYPES } from '@/lib/momence-events';
-import { formatClockLabel } from './labels';
+import { formatClockLabel, formatDurationLabel } from './labels';
 import { BUILT_IN_DEFINITIONS, definitionFor, type RuleDefinition } from './rules';
 import {
   DAY_KEYS,
@@ -88,6 +88,31 @@ function normalizeField(field: ParamField, raw: unknown): { value: unknown } | {
         if (!values.includes(type)) values.push(type);
       }
       return { value: values };
+    }
+    case 'durations': {
+      // The form sends what was typed ("60, 120"); the API may send the list.
+      const items = Array.isArray(raw)
+        ? raw
+        : typeof raw === 'string'
+          ? raw.split(',').filter((part) => part.trim() !== '')
+          : null;
+      if (!items) return { error: `${field.label} must be a list of lengths in minutes` };
+      const values: number[] = [];
+      for (const item of items) {
+        const n = typeof item === 'string' ? Number(item.trim()) : item;
+        if (typeof n !== 'number' || !Number.isInteger(n)) {
+          return { error: `${field.label} must be whole numbers of minutes` };
+        }
+        if (field.min !== undefined && n < field.min) {
+          return { error: `${field.label}: each length must be at least ${field.min} minutes` };
+        }
+        if (field.max !== undefined && n > field.max) {
+          return { error: `${field.label}: each length must be at most ${field.max} minutes` };
+        }
+        if (!values.includes(n)) values.push(n);
+      }
+      if (values.length === 0) return { error: `${field.label} needs at least one length` };
+      return { value: values.sort((a, b) => a - b) };
     }
     case 'opening-hours': {
       if (!raw || typeof raw !== 'object') return { error: `${field.label} must list each day` };
@@ -214,6 +239,11 @@ export function summarizeParams(def: RuleDefinition, params: Record<string, unkn
       case 'types': {
         const list = Array.isArray(value) ? value : [];
         parts.push(`${field.label}: ${list.length ? list.join(', ') : 'any'}`);
+        break;
+      }
+      case 'durations': {
+        const list = Array.isArray(value) ? (value as number[]) : [];
+        parts.push(`${field.label}: ${list.map(formatDurationLabel).join(', ') || '—'}`);
         break;
       }
       case 'opening-hours': {

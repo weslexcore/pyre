@@ -31,7 +31,11 @@ export type BuiltInKind =
   | 'horizon-short';
 
 /** Rule templates an admin can add as many of as they like, each with its own settings. */
-export type CustomKind = 'opening-hours' | 'required-tag' | 'expected-capacity';
+export type CustomKind =
+  | 'opening-hours'
+  | 'required-tag'
+  | 'expected-capacity'
+  | 'duration-variants';
 
 export type RuleKind = BuiltInKind | CustomKind;
 
@@ -108,15 +112,24 @@ export type OpeningHours = Record<DayKey, DayWindow | null>;
  *   boolean        — a checkbox
  *   type           — one session type
  *   types          — a set of session types (empty allowed)
+ *   durations      — one or more lengths in minutes, each within [min, max]
  *   opening-hours  — a week of open/close windows
  */
-export type ParamFieldType = 'number' | 'text' | 'boolean' | 'type' | 'types' | 'opening-hours';
+export type ParamFieldType =
+  | 'number'
+  | 'text'
+  | 'boolean'
+  | 'type'
+  | 'types'
+  | 'durations'
+  | 'opening-hours';
 
 export interface ParamField {
   key: string;
   label: string;
   type: ParamFieldType;
   hint?: string;
+  /** Numbers, and every entry of a `durations` list. */
   min?: number;
   max?: number;
   /** Text fields: may be left blank. */

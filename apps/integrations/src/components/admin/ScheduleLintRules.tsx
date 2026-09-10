@@ -179,6 +179,21 @@ function ParamInput({
         </div>
       );
     }
+    case 'durations': {
+      // Kept as typed text so a half-finished "60, 12" doesn't fight the
+      // cursor; registry.ts parses the same string on save.
+      const text = Array.isArray(value) ? (value as number[]).join(', ') : String(value ?? '');
+      return (
+        <input
+          id={id}
+          className={inputClass}
+          inputMode="numeric"
+          placeholder="60, 120"
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    }
     case 'opening-hours': {
       const days = (value ?? {}) as Partial<OpeningHours>;
       const setDay = (day: DayKey, next: DayWindow | null) => onChange({ ...days, [day]: next });
