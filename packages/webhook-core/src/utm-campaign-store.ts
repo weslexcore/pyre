@@ -186,7 +186,22 @@ export function utmCampaignOfUrl(url: string): string | null {
   }
 }
 
-const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+/**
+ * Read a stored hash field as text.
+ *
+ * Upstash parses hash values as JSON on the way out, so a field whose text
+ * happens to look like a number comes back as a number rather than the string
+ * that was written — a Momence event id in `destinationValue`, a variant of
+ * "2", a campaign named "2026". Coerce those back instead of dropping them,
+ * which read as an empty destination and asked the admin to pick the event
+ * again on every edit.
+ */
+const str = (v: unknown): string => {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  if (typeof v === 'boolean') return String(v);
+  return '';
+};
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
