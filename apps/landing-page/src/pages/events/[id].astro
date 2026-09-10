@@ -25,13 +25,19 @@
 // fetches now go through lib/momence-cache, which serves them from memory or the
 // shared snapshot and refreshes Momence behind the response rather than in front
 // of it; a visitor waits on Momence only when nothing recent is cached at all.
+//
+// The page is also the only one most visitors open cold on a phone, so its
+// decoration is painted, not filtered: no CSS blur, backdrop-filter or mask.
+// Those force the compositor to rasterise large offscreen textures as tiles
+// scroll in, which on mobile showed as blank content snapping into place. The
+// colour bloom, the lit card edge and the tile fade are all plain gradients.
 
 export const prerender = false;
 
 import ogFallback from '@/assets/images/warm_sauna.webp';
 import PractitionerCredit from '@/components/events/PractitionerCredit';
-import RepeatingLogoBackground from '@/components/RepeatingLogoBackground.astro';
 import GradientOverlay from '@/components/GradientOverlay.astro';
+import RepeatingLogoBackground from '@/components/RepeatingLogoBackground.astro';
 import MainLayout from '@/layouts/main.astro';
 import { buildPooledBookingModel } from '@/lib/booking-model';
 import { creditsForPriceUsd } from '@/lib/credits';
@@ -177,10 +183,12 @@ if (event) {
 // A link blasted into a group chat should cost one origin hit. The long
 // stale-while-revalidate is the point: after the first visitor, everyone else
 // is served from the edge immediately while the refresh happens behind them.
+// Fresh for as long as the redirect hop above, so both hops of a shared link
+// age together and the second visitor hits the edge twice rather than once.
 // An outage is deliberately left uncacheable so recovery is picked up at once.
 Astro.response.headers.set(
   'Cache-Control',
-  calendarUnavailable ? 'no-store' : 'public, s-maxage=60, stale-while-revalidate=3600'
+  calendarUnavailable ? 'no-store' : 'public, s-maxage=300, stale-while-revalidate=3600'
 );
 
 // -- Metadata ----------------------------------------------------------------
@@ -334,6 +342,7 @@ const analyticsEvent = event
   ogImage={ogImage}
   preloadImage={event?.image?.src}
   noIndex={!event}
+  hidePromos
   {...ogDimensions}
 >
   {/* JSON-LD is valid in the body, which keeps MainLayout free of a head slot. */}
@@ -347,23 +356,26 @@ const analyticsEvent = event
     <GradientOverlay variant="hero-mobile" />
 
     {/* Colour bloom behind the content — anchored to the page rather than the
-        viewport, so it drifts past as you scroll instead of sitting flat. */}
-    <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
-      <div class="absolute -left-40 -top-24 h-[32rem] w-[32rem] rounded-full bg-[var(--pyre-red)]/25 blur-[130px]"></div>
-      <div class="absolute -right-52 top-1/3 h-[38rem] w-[38rem] rounded-full bg-[var(--pyre-gold)]/20 blur-[150px]"></div>
-      <div class="absolute bottom-8 left-1/4 h-[30rem] w-[30rem] rounded-full bg-[var(--pyre-sky)]/15 blur-[140px]"></div>
-    </div>
+        viewport, so it drifts past as you scroll instead of sitting flat. Sits
+        between the banner band's tile (below) and the content (above); see the
+        scoped style at the end of the file. */}
+    <div aria-hidden="true" class="event-bloom pointer-events-none absolute inset-0 z-[1]"></div>
 
     {event ? (
-      <article class="relative z-10">
+      <article class="relative">
         {/* The banner sits whole inside a fixed-height band — capped in both
             directions and centred, so a tall portrait and a wide flyer are each
             shown complete rather than cropped to fit. It takes the full content
             width whenever its shape allows, and only shrinks when that would
             push it past the bottom of the viewport — the height cap is what
             keeps the whole banner in view on short screens. The site's repeating logo
-            fills whatever space the image doesn't, which is also why the band
-            needs no fade: nothing is cut off, so there's no edge to hide.
+            fills whatever space the image doesn't.
+
+            The band is as tall as the image is allowed to be, whatever the image
+            turns out to be: Momence doesn't tell us its dimensions, and sizing
+            the band to the image meant everything below it jumped when the
+            JPEG arrived. So the same cap (--banner-h) sets both the image's
+            max-height and the band's height, plus the band's own padding.
 
             A soft drop shadow lifts the banner off the pattern, so it reads as
             sitting above the page rather than printed onto it — and it keeps the
@@ -371,18 +383,20 @@ const analyticsEvent = event
             the edge. The band deliberately doesn't clip its overflow, so the
             shadow can fall past it onto the page below. */}
         {event.image ? (
-          <div class="relative flex min-h-[340px] w-full items-center justify-center pb-8 pt-24 md:pt-28">
+          <div class="relative flex w-full items-center justify-center pb-8 pt-24 md:pt-28 [--banner-h:max(13rem,calc(100svh-15rem))] h-[calc(var(--banner-h)+8rem)] md:h-[calc(var(--banner-h)+9rem)]">
+            <RepeatingLogoBackground tileSizePx={56} class="absolute inset-0" />
             {/* Faded at the bottom so the band has no hard line for the drifting
-                gradient to catch. Safe to fade here because it's decoration —
-                unlike the image, nothing is lost. */}
-            <RepeatingLogoBackground tileSizePx={56} class="absolute inset-0 mask-b-from-65% mask-b-to-100%" />
+                gradient to catch. Painted over the tile in the page's own black
+                rather than masked: the bloom and the fixed overlay both sit above
+                this, so the two are indistinguishable — and paint is cheap. */}
+            <div aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-0 h-[35%] bg-gradient-to-t from-[var(--pyre-black)] to-transparent"></div>
             {/* Same width constraints as the content column below, so a banner
                 that fits lines up with the title rather than floating narrower. */}
-            <div class="relative mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
+            <div class="relative z-10 mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
               <img
                 src={event.image.src}
                 alt={event.image.alt ?? event.title}
-                class="mx-auto h-auto max-h-[calc(100svh-15rem)] w-auto max-w-full object-contain shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_6px_16px_-6px_rgba(0,0,0,0.6)]"
+                class="mx-auto h-auto max-h-[var(--banner-h)] w-auto max-w-full object-contain shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),0_6px_16px_-6px_rgba(0,0,0,0.6)]"
                 fetchpriority="high"
                 decoding="async"
               />
@@ -394,8 +408,8 @@ const analyticsEvent = event
 
         <div
           class:list={[
-            'mx-auto max-w-3xl px-4 sm:px-6 lg:px-8',
-            event.image ? 'relative pt-10' : 'pt-8',
+            'relative z-10 mx-auto max-w-3xl px-4 sm:px-6 lg:px-8',
+            event.image ? 'pt-10' : 'pt-8',
           ]}
         >
           <a
@@ -416,21 +430,21 @@ const analyticsEvent = event
               a chip when there's a single start — several starts are named by
               their own headings below. */}
           <div class="mt-7 flex flex-wrap gap-2">
-            <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/5 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80 backdrop-blur-sm">
+            <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/8 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80">
               <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               {event.date}
             </span>
             {!showSlotHeadings && (
-              <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/5 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80 backdrop-blur-sm">
+              <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/8 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80">
                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {event.time}
               </span>
             )}
-            <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/5 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80 backdrop-blur-sm">
+            <span class="inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/8 px-4 py-2 font-mono text-xs uppercase tracking-widest text-[var(--pyre-creme)]/80">
               <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -439,7 +453,7 @@ const analyticsEvent = event
             </span>
             {spots && (
               <span
-                class={`inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/5 px-4 py-2 font-mono text-xs uppercase tracking-widest backdrop-blur-sm ${spotsColor(event.spotsRemaining)}`}
+                class={`inline-flex items-center gap-2 rounded-full border border-[var(--pyre-creme)]/15 bg-[var(--pyre-creme)]/8 px-4 py-2 font-mono text-xs uppercase tracking-widest ${spotsColor(event.spotsRemaining)}`}
               >
                 {spots}
               </span>
@@ -448,7 +462,7 @@ const analyticsEvent = event
 
           {practitioners.length > 0 && (
             <div class="mt-8 border-t border-[var(--pyre-creme)]/10 pt-6">
-              <PractitionerCredit practitioners={practitioners} client:visible />
+              <PractitionerCredit practitioners={practitioners} client:idle />
             </div>
           )}
 
@@ -459,18 +473,15 @@ const analyticsEvent = event
           )}
 
           {bookableSlots.length > 0 && (
-            <div class="relative mt-12 overflow-hidden rounded-2xl border border-[var(--pyre-creme)]/12 bg-[var(--pyre-black)]/70 px-5 py-4 backdrop-blur-md sm:px-6">
-              {/* Lit top edge — the page's one piece of pure decoration. */}
+            <div class="relative mt-12 overflow-hidden rounded-2xl border border-[var(--pyre-creme)]/12 bg-[var(--pyre-black)]/85 px-5 py-4 sm:px-6">
+              {/* Lit top edge — the page's one piece of pure decoration: a 1px
+                  line and a soft glow beneath it, both painted gradients. */}
               <div
                 aria-hidden="true"
                 class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--pyre-gold)] to-transparent"
               >
               </div>
-              <div
-                aria-hidden="true"
-                class="pointer-events-none absolute -top-10 left-1/2 h-20 w-2/3 -translate-x-1/2 bg-gradient-to-r from-[var(--pyre-sage)] via-[var(--pyre-gold)] to-[var(--pyre-red)] opacity-40 blur-3xl"
-              >
-              </div>
+              <div aria-hidden="true" class="booking-glow pointer-events-none absolute inset-x-0 top-0 h-16"></div>
 
               {showSlotHeadings && (
                 <p class="relative font-mono text-[11px] uppercase tracking-widest text-[var(--pyre-creme)]/40">
@@ -607,3 +618,41 @@ const analyticsEvent = event
     </script>
   )}
 </MainLayout>
+
+<style>
+  /* The colour bloom, as gradients. Each stands in for a blurred disc: its
+     centre is where the disc's was, its radius the disc's plus the spread the
+     blur gave it, and the mid stop at half strength approximates the Gaussian
+     edge. color-mix is what Tailwind emits for bg-[var(--pyre-red)]/25, so the
+     palette stays single-sourced. */
+  .event-bloom {
+    background:
+      radial-gradient(
+        circle 32rem at 6rem 10rem,
+        color-mix(in oklab, var(--pyre-red) 25%, transparent) 0%,
+        color-mix(in oklab, var(--pyre-red) 12%, transparent) 50%,
+        transparent 100%
+      ),
+      radial-gradient(
+        circle 38rem at calc(100% - 6rem) calc(33.33% + 19rem),
+        color-mix(in oklab, var(--pyre-gold) 20%, transparent) 0%,
+        color-mix(in oklab, var(--pyre-gold) 10%, transparent) 50%,
+        transparent 100%
+      ),
+      radial-gradient(
+        circle 32rem at calc(25% + 15rem) calc(100% - 17rem),
+        color-mix(in oklab, var(--pyre-sky) 15%, transparent) 0%,
+        color-mix(in oklab, var(--pyre-sky) 7%, transparent) 50%,
+        transparent 100%
+      );
+  }
+
+  /* The glow under the booking card's lit edge: gold in the middle, sage and
+     red at the ends, all anchored to the top and gone by the strip's bottom. */
+  .booking-glow {
+    background:
+      radial-gradient(45% 100% at 50% 0%, color-mix(in oklab, var(--pyre-gold) 30%, transparent), transparent 100%),
+      radial-gradient(35% 100% at 20% 0%, color-mix(in oklab, var(--pyre-sage) 22%, transparent), transparent 100%),
+      radial-gradient(35% 100% at 80% 0%, color-mix(in oklab, var(--pyre-red) 22%, transparent), transparent 100%);
+  }
+</style>

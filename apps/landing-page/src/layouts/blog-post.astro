@@ -1,5 +1,6 @@
 ---
 import { Image } from 'astro:assets';
+import fontSemiBoldWoff2 from '@/assets/fonts/PPNeueMontreal-SemiBold.woff2';
 import BlogTags from '@/components/blog/BlogTags.astro';
 import ReadingTime from '@/components/blog/ReadingTime.astro';
 import RelatedPosts from '@/components/blog/RelatedPosts.astro';
@@ -52,6 +53,7 @@ const articleMetadata = {
   article={articleMetadata}
   transparentNav
   darkLogoText={true}
+  preloadFonts={[fontSemiBoldWoff2]}
 >
   <article class="min-h-screen bg-background pb-16 pt-24 md:pt-32">
     <div class="blog-content-container mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">

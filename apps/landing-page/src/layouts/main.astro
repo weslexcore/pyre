@@ -2,8 +2,8 @@
 import '../styles/global.css';
 
 import fontLogoWoff2 from '../assets/fonts/Eckmannpsych-Small.woff2';
+import fontMonoWoff2 from '../assets/fonts/PPNeueMontreal-Mono.woff2';
 import fontRegularWoff2 from '../assets/fonts/PPNeueMontreal-Regular.woff2';
-import fontSemiBoldWoff2 from '../assets/fonts/PPNeueMontreal-SemiBold.woff2';
 import faviconSvg from '../assets/logos/pyre_logo.svg?raw';
 import AnnouncementBanner from '../components/AnnouncementBanner.astro';
 import Footer from '../components/Footer.astro';
@@ -42,6 +42,12 @@ interface Props {
    * the download while the head is still being read.
    */
   preloadImage?: string;
+  /**
+   * Extra font files to preload, for a layout that renders a face the site
+   * otherwise never uses above the fold (the blog's semibold heading, say).
+   * Every page already preloads the body, sans and logo faces.
+   */
+  preloadFonts?: string[];
   transparentNav?: boolean;
   darkLogoText?: boolean;
   logoOnly?: boolean;
@@ -59,6 +65,7 @@ const {
   article,
   isHomePage = false,
   preloadImage,
+  preloadFonts = [],
   transparentNav = false,
   darkLogoText = false,
   logoOnly = false,
@@ -290,9 +297,15 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
 		)}
 		{/* Ahead of the fonts: it's the largest paint, and the fonts are already same-origin. */}
 		{preloadImage && <link rel="preload" as="image" href={preloadImage} fetchpriority="high" />}
+		{/* The three faces on screen before anything else: the body (mono), the sans
+		    used for headings and copy, and the logo face — the navbar wordmark on every
+		    page but the homepage, where the hero uses it instead. */}
+		<link rel="preload" as="font" href={fontMonoWoff2} type="font/woff2" crossorigin />
 		<link rel="preload" as="font" href={fontRegularWoff2} type="font/woff2" crossorigin />
-		<link rel="preload" as="font" href={fontSemiBoldWoff2} type="font/woff2" crossorigin />
-		{isHomePage && <link rel="preload" as="font" href={fontLogoWoff2} type="font/woff2" crossorigin />}
+		<link rel="preload" as="font" href={fontLogoWoff2} type="font/woff2" crossorigin />
+		{preloadFonts.map((href) => (
+			<link rel="preload" as="font" href={href} type="font/woff2" crossorigin />
+		))}
 
 		{import.meta.env.PROD && <PostHog />}
 		<script>

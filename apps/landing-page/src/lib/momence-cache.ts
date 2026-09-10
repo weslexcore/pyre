@@ -33,7 +33,7 @@
 // single retry, and treats a failure as a miss.
 //
 // Staleness compounds across the layers and the edge cache in front of them:
-// worst case a spot count is a few minutes behind, and Momence itself remains
+// worst case a spot count is an hour or so behind, and Momence itself remains
 // authoritative at checkout.
 //
 // A snapshot older than SNAPSHOT_SERVE_STALE_MS is still kept as the outage
@@ -68,8 +68,13 @@ const SNAPSHOT_FRESH_MS = 45_000;
  * refresh happening behind the response rather than in front of it. Beyond
  * this the data is old enough — spot counts, a session pulled from the
  * calendar — that a visitor should wait for Momence.
+ *
+ * An hour, to match the edge cache in front of the event page: it already
+ * serves HTML up to an hour old, so a stricter window here only put Momence
+ * back in front of the first byte. At the traffic an event link sees, five
+ * minutes meant nearly every first visit waited on it.
  */
-const SNAPSHOT_SERVE_STALE_MS = 5 * 60_000;
+const SNAPSHOT_SERVE_STALE_MS = 60 * 60_000;
 
 /**
  * How long a total failure is remembered. Short, so recovery is picked up

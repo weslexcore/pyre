@@ -21,6 +21,8 @@ vi.mock('@/lib/momence', () => ({ fetchMomenceTeachers }));
 
 const SNAPSHOT_KEY = 'events:momence:last-good';
 const NOW = new Date('2026-09-10T12:00:00Z');
+/** Past the serve-stale window: a visitor has to wait for Momence. */
+const TOO_OLD_MS = 2 * 60 * 60_000;
 
 function event(id: number): MomenceEvent {
   return { id, title: `Session ${id}` } as MomenceEvent;
@@ -103,7 +105,7 @@ describe('loadMomenceCalendar', () => {
   });
 
   it('serves a recent-but-stale snapshot immediately and refreshes it behind the response', async () => {
-    seedSnapshot(2 * 60_000);
+    seedSnapshot(45 * 60_000);
     const fetchMock = momenceResponds([event(9)]);
     const loadCalendar = await load();
 
@@ -156,7 +158,7 @@ describe('loadMomenceCalendar', () => {
   });
 
   it('waits for Momence when the snapshot is too old to show', async () => {
-    seedSnapshot(10 * 60_000);
+    seedSnapshot(TOO_OLD_MS);
     const fetchMock = momenceResponds([event(9)]);
 
     const calendar = await (await load())();
@@ -169,7 +171,7 @@ describe('loadMomenceCalendar', () => {
   });
 
   it('falls back to an old snapshot, marked stale, when Momence is down', async () => {
-    seedSnapshot(10 * 60_000);
+    seedSnapshot(TOO_OLD_MS);
     momenceResponds(new Error('gateway timeout'));
 
     const calendar = await (await load())();
@@ -195,7 +197,7 @@ describe('loadMomenceCalendar', () => {
   });
 
   it('keeps the last good teacher roster when the roster fetch flakes', async () => {
-    seedSnapshot(10 * 60_000);
+    seedSnapshot(TOO_OLD_MS);
     fetchMomenceTeachers.mockResolvedValue([]);
     momenceResponds([event(9)]);
 
