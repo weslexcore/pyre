@@ -40,15 +40,24 @@ const special = (over: Partial<MomenceEvent> = {}): MomenceEvent =>
     ...over,
   });
 
-const detect = (events: MomenceEvent[]): Finding[] =>
-  specialEventOverlap.run(normalizeFeed(events, { now: NOW }), {
-    now: NOW,
-    horizon: horizonOf({ now: NOW }),
-  });
+const detect = (
+  events: MomenceEvent[],
+  params = specialEventOverlap.defaults
+): Omit<Finding, 'ruleId' | 'ruleLabel'>[] =>
+  specialEventOverlap.run(
+    normalizeFeed(events, { now: NOW }),
+    { now: NOW, horizon: horizonOf({ now: NOW }) },
+    params
+  );
 
 /** Findings grouped by the special event they sit under, in report order. */
+type RuleFinding = ReturnType<typeof detect>[number];
+
 const grouped = (events: MomenceEvent[]) => {
-  const groups = new Map<number, { eventId: number; sessionIds: number[]; findings: Finding[] }>();
+  const groups = new Map<
+    number,
+    { eventId: number; sessionIds: number[]; findings: RuleFinding[] }
+  >();
   for (const f of detect(events)) {
     const id = f.context?.id ?? -1;
     const g = groups.get(id) ?? { eventId: id, sessionIds: [], findings: [] };
@@ -150,6 +159,11 @@ describe('special-event-overlap', () => {
       }),
     ]);
     expect(group.findings[0].message).toContain('check whether it should still run');
+    // …unless the admins say guided sessions should be cancelled too.
+    const widened = detect([special(), guided, untagged], {
+      cancelTypes: ['open hours', 'guided'],
+    });
+    expect(widened.map((f) => f.severity)).toEqual(['cancel', 'notice']);
   });
 
   it('treats a session tagged Social AND Special Event as the special event', () => {

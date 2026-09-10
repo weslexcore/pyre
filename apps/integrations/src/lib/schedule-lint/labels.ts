@@ -40,6 +40,13 @@ export function formatWhenLabel(startIso: string, endIso: string): string {
   return `${formatDayLabel(startIso)} · ${formatClockTime(start)} – ${endPart} ${formatZoneAbbrev(start)}`;
 }
 
+/** "16:00" -> "4:00 PM"; a wall-clock setting, no zone involved. */
+export function formatClockLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 /** "3 booked" / "No bookings" / "" when the feed didn't say. */
 export function bookingLabel(session: Pick<SessionRef, 'bookingCount'>): string {
   if (session.bookingCount === null) return '';

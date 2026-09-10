@@ -270,8 +270,10 @@ email in PostHog.
 
 The `schedule-lint` job is the one cron job whose output a person has to act
 on. Momence's API cannot edit a session, so it never writes to Momence: it
-reads the events feed, runs the rules in `src/lib/schedule-lint/rules/`, and
-emails the admins when the list of findings changes.
+reads the events feed, runs the rules as configured on `/admin/schedule-lint`
+(built-ins from `src/lib/schedule-lint/rules/`, tuned or disabled per the
+`schedule_lint_rules` table, plus any custom rules added there), and emails
+the admins when the list of findings changes.
 
 ```mermaid
 sequenceDiagram

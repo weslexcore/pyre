@@ -8,15 +8,20 @@
 // title, type, location, and start, and are not duplicates.
 
 import { type NormalizedSession, norm, toRef } from '../feed';
-import type { Finding } from '../types';
-import type { LintRule } from './rule';
+import type { RuleDefinition, RuleFinding } from './rule';
 
 const identity = (s: NormalizedSession): string =>
   [norm(s.title), s.type, norm(s.location ?? ''), s.start, s.durationMinutes].join('|');
 
-export const duplicate: LintRule = {
-  name: 'duplicate',
-  run(sessions: NormalizedSession[]): Finding[] {
+export const duplicate: RuleDefinition = {
+  kind: 'duplicate',
+  title: 'Duplicate sessions',
+  description:
+    'Two published sessions with the same title, type, room, start, and length: an accidental double-create.',
+  builtIn: true,
+  defaults: {},
+  fields: [],
+  run(sessions: NormalizedSession[]): RuleFinding[] {
     const groups = new Map<string, NormalizedSession[]>();
     for (const s of sessions) {
       if (!s.isPublished) continue;
@@ -26,7 +31,7 @@ export const duplicate: LintRule = {
       else groups.set(key, [s]);
     }
 
-    const findings: Finding[] = [];
+    const findings: RuleFinding[] = [];
     for (const group of groups.values()) {
       if (group.length < 2) continue;
       // The lowest id is the original; every later copy is the finding.

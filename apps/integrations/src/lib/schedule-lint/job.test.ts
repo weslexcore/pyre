@@ -4,6 +4,8 @@ import type { MomenceEvent } from '@/lib/momence-events';
 const sendTemplate = vi.fn();
 const fetchMomenceEvents = vi.fn();
 const listStaff = vi.fn();
+const listRuleRows = vi.fn();
+const getDb = vi.fn();
 
 /** In-memory stand-in for the Upstash client: get/set/del over a Map. */
 const store = new Map<string, unknown>();
@@ -23,6 +25,8 @@ vi.mock('@/lib/momence-events', async (importOriginal) => ({
   fetchMomenceEvents: () => fetchMomenceEvents(),
 }));
 vi.mock('@/lib/auth/access', () => ({ listStaff: () => listStaff() }));
+vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
+vi.mock('./store', () => ({ listRuleRows: () => listRuleRows() }));
 vi.mock('@pyre/webhook-core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@pyre/webhook-core')>()),
   getRedis: () => (redisAvailable ? fakeRedis : null),
@@ -84,7 +88,10 @@ describe('runScheduleLint', () => {
         farOut(),
       ]);
     listStaff.mockReset().mockResolvedValue(admins);
+    getDb.mockReset().mockReturnValue(null);
+    listRuleRows.mockReset().mockResolvedValue([]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -213,6 +220,32 @@ describe('runScheduleLint', () => {
     listStaff.mockResolvedValue([]);
     expect((await runScheduleLint(ctx)).skipped).toBe('no-admins');
     expect(store.get(DONE_KEY)).toBeTruthy();
+  });
+
+  it('runs the rules as configured in Supabase', async () => {
+    getDb.mockReturnValue({});
+    listRuleRows.mockResolvedValue([
+      {
+        id: 'special-event-overlap',
+        kind: 'special-event-overlap',
+        label: 'Overlaps',
+        enabled: false,
+        params: {},
+        updated_by: null,
+        created_at: '2026-09-01T00:00:00Z',
+        updated_at: '2026-09-01T00:00:00Z',
+      },
+    ]);
+    const summary = await runScheduleLint({ ...ctx, force: true });
+    expect(summary.findings).toBe(0);
+    expect(sendTemplate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the default rules when the rule table cannot be read', async () => {
+    getDb.mockReturnValue({});
+    listRuleRows.mockRejectedValue(new Error('schedule_lint_rules: relation does not exist'));
+    const summary = await runScheduleLint({ ...ctx, force: true });
+    expect(summary.findings).toBe(2);
   });
 
   it('surfaces a Momence outage as an error and leaves nothing marked done', async () => {

@@ -1,0 +1,16 @@
+---
+// The schedule lint's rules: what is checked against the Momence schedule,
+// with what settings, plus a preview of what they catch right now. Admins
+// have it by default; it can be granted like any other page (the
+// /api/admin/schedule-lint route re-checks on every request — this page gate
+// is UX, the API gate is the security boundary).
+import { ScheduleLintRules } from '@/components/admin/ScheduleLintRules';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Schedule Lint"
+  subtitle="The checks run against the Momence schedule, daily and whenever a session changes. Findings are emailed to the admins; fixes happen in Momence."
+>
+  <ScheduleLintRules client:load />
+</AdminLayout>

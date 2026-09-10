@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { MomenceEvent } from '@/lib/momence-events';
 import { buildEmailProps } from './email';
 import { countFindings, digestOf, runLint } from './lint';
+import { defaultRules } from './registry';
+import type { RuleInstance } from './types';
 
 // "now" is Monday Sep 14 2026, 8:00 AM EDT; the horizon runs to Oct 12.
 const NOW = new Date('2026-09-14T12:00:00Z');
@@ -109,6 +111,52 @@ describe('runLint', () => {
   });
 });
 
+describe('runLint with configured rules', () => {
+  const feed = () => [
+    ...cleanSchedule(),
+    event({ id: 2, title: 'Community Night', tags: [], dateTime: et('2026-09-20', '20:00') }),
+    event({ id: 5, dateTime: et('2026-09-14', '18:00') }), // a Monday slot
+  ];
+
+  it('skips disabled rules', () => {
+    const rules = defaultRules().map((r) => (r.kind === 'untagged' ? { ...r, enabled: false } : r));
+    expect(runLint(feed(), { now: NOW }, rules).findings.map((f) => f.rule)).toEqual([]);
+  });
+
+  it('runs custom rules under their own id and label, with prefixed keys', () => {
+    const hours: RuleInstance = {
+      id: 'r-hours',
+      kind: 'opening-hours',
+      label: 'Winter hours',
+      enabled: true,
+      params: {
+        days: {
+          sun: { open: '16:00', close: '20:00' },
+          mon: null,
+          tue: null,
+          wed: { open: '16:00', close: '20:00' },
+          thu: { open: '16:00', close: '20:00' },
+          fri: { open: '16:00', close: '20:00' },
+          sat: { open: '16:00', close: '20:00' },
+        },
+        types: [],
+      },
+      builtIn: false,
+    };
+    const report = runLint(feed(), { now: NOW }, [...defaultRules(), hours]);
+    // The Monday slot, and Community Night running past Sunday's 8pm close.
+    const mine = report.findings.filter((f) => f.ruleId === 'r-hours');
+    expect(mine.map((f) => f.key)).toEqual(['r-hours:hours:5', 'r-hours:hours:2']);
+    expect(mine[0]).toMatchObject({ rule: 'opening-hours', ruleLabel: 'Winter hours' });
+    expect(report.findings.find((f) => f.rule === 'untagged')).toMatchObject({
+      ruleId: 'untagged',
+      ruleLabel: 'Untagged sessions',
+      key: 'untagged:2',
+    });
+    expect(countFindings(report.findings).byRule).toEqual({ 'r-hours': 2, untagged: 1 });
+  });
+});
+
 describe('buildEmailProps', () => {
   it('groups overlaps by special event and splits the rest by severity', () => {
     const feed = [
@@ -160,7 +208,10 @@ describe('buildEmailProps', () => {
   it('carries a schedule-wide notice without a session', () => {
     const props = buildEmailProps(runLint([], { now: NOW }));
     expect(props.notices).toEqual([
-      { message: 'No Open Hours or Social sessions are published in the next four weeks' },
+      {
+        rule: 'Schedule running out',
+        message: 'No Open Hours or Social sessions are published in the next four weeks',
+      },
     ]);
     expect(props.noticeCount).toBe(1);
   });

@@ -90,6 +90,12 @@ const TAG_TO_TYPE: Record<string, string> = {
 export const SPECIAL_EVENT_TYPE = 'special event';
 
 /**
+ * Every canonical session type, the special-event type included, in first-
+ * appearance order. What the schedule lint's settings offer to choose from.
+ */
+export const SESSION_TYPES: readonly string[] = [...new Set(Object.values(TAG_TO_TYPE))];
+
+/**
  * Canonical session type for a set of Momence tags — the first recognised
  * tag wins, unrecognised or missing tags fall back to the generic type.
  * Exported for the conflict check, which classifies every event in the feed

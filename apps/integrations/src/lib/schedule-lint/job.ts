@@ -18,13 +18,16 @@ import { utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { getRedis } from '@pyre/webhook-core';
 import { listStaff } from '@/lib/auth/access';
 import type { CronJobContext } from '@/lib/cron/jobs';
+import { getDb } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { fetchMomenceEvents } from '@/lib/momence-events';
 import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 import { buildEmailProps } from './email';
 import { countFindings, runLint } from './lint';
+import { defaultRules, resolveRules } from './registry';
+import { listRuleRows } from './store';
 import { DIRTY_KEY, type LintTrigger } from './trigger';
-import type { Severity } from './types';
+import type { RuleInstance, Severity } from './types';
 
 const DONE_PREFIX = 'schedule-lint:done:';
 /** A day plus slack for a run that had to resume. */
@@ -38,6 +41,7 @@ export interface ScheduleLintSummary {
   horizonStart?: string;
   horizonEnd?: string;
   findings: number;
+  /** Findings per rule instance id. */
   byRule?: Record<string, number>;
   bySeverity?: Record<Severity, number>;
   digest?: string;
@@ -49,6 +53,24 @@ export interface ScheduleLintSummary {
   outOfTime?: boolean;
   /** Dry runs: who would be emailed. */
   wouldSend?: string[];
+}
+
+/**
+ * The rules as configured on /admin/schedule-lint; the built-in defaults
+ * when Supabase is unavailable, so a storage hiccup never silences the lint.
+ */
+export async function loadRules(): Promise<RuleInstance[]> {
+  const db = getDb();
+  if (!db) return defaultRules();
+  try {
+    return resolveRules(await listRuleRows(db));
+  } catch (e) {
+    console.warn(
+      '[schedule-lint] could not load rules, using defaults:',
+      e instanceof Error ? e.message : e
+    );
+    return defaultRules();
+  }
 }
 
 /** Everyone with the admin flag and an address — the notice audience. */
@@ -89,7 +111,7 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
   // Throws on an outage; the tick records the error and nothing is marked
   // done, so the next tick simply tries again.
   const events = await fetchMomenceEvents();
-  const report = runLint(events, { now });
+  const report = runLint(events, { now }, await loadRules());
   const summary: ScheduleLintSummary = {
     ...base,
     horizonStart: report.horizonStart,

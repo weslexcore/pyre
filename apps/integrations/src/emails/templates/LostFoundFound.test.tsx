@@ -1,8 +1,8 @@
 import { render } from '@react-email/components';
 import { describe, expect, it } from 'vitest';
 import { guestItemClause } from '@/lib/lost-found/types';
-import { LostFoundFound } from './LostFoundFound';
 import type { LostFoundFoundProps } from '../types';
+import { LostFoundFound } from './LostFoundFound';
 
 // The log form shows staff a live preview of the sentence the guest will read,
 // composed with guestItemClause. That promise is only worth anything if the

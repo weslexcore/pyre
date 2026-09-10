@@ -48,6 +48,24 @@ export const ADMIN_TOOLS: AdminTool[] = [
     keywords: ['shifts', 'roster', 'week', 'who is working'],
   },
   {
+    href: '/admin/schedule-lint',
+    title: 'Schedule Lint',
+    navLabel: 'Lint',
+    description:
+      'The checks run against the Momence schedule: special-event overlaps, untagged sessions, drafts, duplicates, capacities, opening hours. Tune them, add your own, preview what they catch.',
+    section: 'operations',
+    keywords: [
+      'momence',
+      'schedule check',
+      'special events',
+      'overlap',
+      'conflicts',
+      'open hours',
+      'rules',
+      'lint',
+    ],
+  },
+  {
     href: '/admin/water',
     title: 'Cold Tub Water Log',
     navLabel: 'Water',

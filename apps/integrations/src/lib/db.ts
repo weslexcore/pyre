@@ -611,6 +611,21 @@ export interface GuestProfileNoteRow {
   updated_at: string;
 }
 
+// One configured schedule-lint rule (see the schedule_lint_rules migration
+// and lib/schedule-lint/registry.ts). Built-in rules are rows keyed by their
+// kind, present only once an admin has changed something; custom rules are
+// uuid-keyed instances of a custom kind.
+export interface ScheduleLintRuleRow {
+  id: string;
+  kind: string;
+  label: string;
+  enabled: boolean;
+  params: Record<string, unknown>;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // OAuth tokens for a connected QuickBooks Online company (see the
 // quickbooks_tokens migration and lib/quickbooks). Refresh tokens rotate on
 // every refresh, so this row is rewritten each time; service-role only —

@@ -8,8 +8,8 @@
 // two events, the tag-order trap) is a unit test rather than a surprise.
 
 import { type NormalizedSession, sameLocation, toRef } from '../feed';
-import { type Finding, PRESELECT_TYPES } from '../types';
-import type { LintRule } from './rule';
+import { PRESELECT_TYPES } from '../types';
+import type { RuleDefinition, RuleFinding } from './rule';
 
 /**
  * Strict overlap — touching intervals (one ends exactly when the other
@@ -19,29 +19,47 @@ export function overlaps(a: { start: number; end: number }, b: { start: number; 
   return a.start < b.end && a.end > b.start;
 }
 
+export interface SpecialEventOverlapParams extends Record<string, unknown> {
+  /** Types whose overlap is "cancel it"; every other type is "review". */
+  cancelTypes: string[];
+}
+
 /**
  * One finding per (special event, overlapping session) pair. A session under
  * two special events is reported under both; the email groups by event.
  * Within an event the sessions come in start order, shortest first (an hour
  * slot before the 2h partner sharing its start), then by id.
  */
-export const specialEventOverlap: LintRule = {
-  name: 'special-event-overlap',
-  run(sessions: NormalizedSession[]): Finding[] {
+export const specialEventOverlap: RuleDefinition<SpecialEventOverlapParams> = {
+  kind: 'special-event-overlap',
+  title: 'Special event overlaps',
+  description:
+    'Regular sessions sitting under a session tagged Special Event. Guests can still book them until they are cancelled in Momence.',
+  builtIn: true,
+  defaults: { cancelTypes: [...PRESELECT_TYPES] },
+  fields: [
+    {
+      key: 'cancelTypes',
+      label: 'Mark these types cancel',
+      type: 'types',
+      hint: 'Overlapping sessions of any other type are listed as review, since they may be intentional.',
+    },
+  ],
+  run(sessions: NormalizedSession[], _ctx, { cancelTypes }): RuleFinding[] {
     const live = sessions.filter((s) => s.isPublished);
     const specials = live
       .filter((s) => s.isSpecialEvent)
       .sort((a, b) => a.start - b.start || a.id - b.id);
     const candidates = live.filter((s) => !s.isSpecialEvent);
 
-    const findings: Finding[] = [];
+    const findings: RuleFinding[] = [];
     for (const special of specials) {
       const under = candidates
         .filter((c) => overlaps(c, special) && sameLocation(c.location, special.location))
         .sort((a, b) => a.start - b.start || a.durationMinutes - b.durationMinutes || a.id - b.id);
       const context = toRef(special);
       for (const session of under) {
-        const cancel = PRESELECT_TYPES.includes(session.type);
+        const cancel = cancelTypes.includes(session.type);
         findings.push({
           rule: 'special-event-overlap',
           severity: cancel ? 'cancel' : 'notice',

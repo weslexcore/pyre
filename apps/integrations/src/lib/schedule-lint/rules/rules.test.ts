@@ -4,8 +4,11 @@ import { horizonOf, normalizeFeed } from '../feed';
 import { capacityOutlier, MIN_GROUP_SIZE } from './capacity-outlier';
 import { DRAFT_SOON_DAYS, draftSoon } from './draft-soon';
 import { duplicate } from './duplicate';
+import { expectedCapacity } from './expected-capacity';
 import { horizonShort, MIN_PUBLISHED_DAYS } from './horizon-short';
-import type { LintRule } from './rule';
+import { dayKeyOf, openingHours, toMinutes } from './opening-hours';
+import { requiredTag } from './required-tag';
+import type { RuleDefinition } from './rule';
 import { untagged } from './untagged';
 
 // The rules that are not the overlap check. Same September 2026 fixtures:
@@ -28,8 +31,15 @@ const event = (over: Partial<MomenceEvent> = {}): MomenceEvent => ({
   ...over,
 });
 
-const run = (rule: LintRule, events: MomenceEvent[]) =>
-  rule.run(normalizeFeed(events, { now: NOW }), { now: NOW, horizon: horizonOf({ now: NOW }) });
+const run = <P extends Record<string, unknown>>(
+  rule: RuleDefinition<P>,
+  events: MomenceEvent[],
+  params: Partial<P> = {}
+) =>
+  rule.run(normalizeFeed(events, { now: NOW }), { now: NOW, horizon: horizonOf({ now: NOW }) }, {
+    ...rule.defaults,
+    ...params,
+  } as P);
 
 /** N hourly Open Hours slots on consecutive days from Sep 16. */
 const stack = (n: number, over: Partial<MomenceEvent> = {}): MomenceEvent[] =>
@@ -123,10 +133,11 @@ describe('capacity-outlier', () => {
     });
   });
 
-  it('needs enough siblings to call anything an outlier', () => {
+  it('needs enough siblings to call anything an outlier, as configured', () => {
     const rows = stack(MIN_GROUP_SIZE - 1);
     rows[0] = { ...rows[0], capacity: 4, spotsRemaining: 4 };
     expect(run(capacityOutlier, rows)).toEqual([]);
+    expect(run(capacityOutlier, rows, { minGroup: 3 })).toHaveLength(1);
   });
 
   it('compares within type and length, so a 2h partner is not an outlier of the 1h slot', () => {
@@ -173,12 +184,17 @@ describe('horizon-short', () => {
     expect(findings[0].message).toContain('through Fri, Sep 25 only');
   });
 
-  it('is silent once the schedule reaches the minimum window', () => {
+  it('is silent once the schedule reaches the minimum window, as configured', () => {
     const rows = [
       event({ id: 1, dateTime: et('2026-09-17', '18:00') }),
       event({ id: 2, dateTime: et(`2026-09-${14 + MIN_PUBLISHED_DAYS}`, '18:00') }),
     ];
     expect(run(horizonShort, rows)).toEqual([]);
+    expect(run(horizonShort, rows, { minDays: 21 })).toHaveLength(1);
+    // A guided session counts once the regular schedule is said to include it.
+    const guided = [event({ id: 3, tags: ['Guided'], dateTime: et('2026-10-09', '19:00') })];
+    expect(run(horizonShort, guided)[0].key).toBe('horizon-short:none');
+    expect(run(horizonShort, guided, { types: ['guided'] })).toEqual([]);
   });
 
   it('says so when nothing regular is published at all, ignoring drafts', () => {
@@ -188,5 +204,92 @@ describe('horizon-short', () => {
     ]);
     expect(findings[0]).toMatchObject({ key: 'horizon-short:none' });
     expect(findings[0].message).toContain('No Open Hours or Social sessions');
+  });
+});
+
+// --- Custom rule kinds -------------------------------------------------------
+
+describe('opening-hours', () => {
+  it('reads ET weekdays and wall-clock minutes', () => {
+    expect(dayKeyOf('2026-09-16')).toBe('wed');
+    expect(dayKeyOf('2026-09-20')).toBe('sun');
+    expect(toMinutes('16:30')).toBe(990);
+  });
+
+  it('flags closed days, early starts, and late finishes; leaves the rest alone', () => {
+    const findings = run(openingHours, [
+      event({ id: 1, dateTime: et('2026-09-16', '18:00') }), // Wed 6–7pm: fine
+      event({ id: 2, dateTime: et('2026-09-14', '18:00') }), // Mon: closed
+      event({ id: 3, dateTime: et('2026-09-17', '15:00') }), // Thu 3pm: before 4pm open
+      event({ id: 4, dateTime: et('2026-09-17', '19:30'), duration: 60 }), // Thu ends 8:30 > 8pm
+      event({ id: 5, dateTime: et('2026-09-18', '20:00') }), // Fri 8–9pm: fine (closes 9)
+      event({ id: 6, tags: ['Special Event'], dateTime: et('2026-09-14', '20:00') }), // never checked
+      event({ id: 7, published: false, dateTime: et('2026-09-14', '18:00') }),
+    ]);
+    expect(findings.map((f) => [f.session?.id, f.message])).toEqual([
+      [2, 'On a Monday, when Pyre is closed'],
+      [3, 'Starts before Thursday opening at 4:00 PM'],
+      [4, 'Runs past Thursday close at 8:00 PM'],
+    ]);
+    expect(findings[0]).toMatchObject({ rule: 'opening-hours', severity: 'fix', key: 'hours:2' });
+  });
+
+  it('checks only the chosen types, and a session over midnight is past close', () => {
+    const rows = [
+      event({ id: 1, dateTime: et('2026-09-14', '18:00') }),
+      event({ id: 2, tags: ['Guided'], dateTime: et('2026-09-14', '18:00') }),
+      event({ id: 3, tags: ['Social'], dateTime: et('2026-09-18', '20:00'), duration: 5 * 60 }),
+    ];
+    expect(run(openingHours, rows, { types: ['guided'] }).map((f) => f.session?.id)).toEqual([2]);
+    expect(run(openingHours, rows).map((f) => f.session?.id)).toEqual([1, 2, 3]);
+    expect(run(openingHours, rows)[2].message).toBe('Runs past Friday close at 9:00 PM');
+  });
+});
+
+describe('required-tag', () => {
+  it('flags a title that promises a tag the session does not carry', () => {
+    const findings = run(requiredTag, [
+      event({ id: 1, title: 'Social Evening', tags: ['Open Hours'] }),
+      event({ id: 2, title: 'social sauna', tags: ['social'] }),
+      event({ id: 3, title: 'Open Hours', tags: [] }),
+      event({ id: 4, title: 'Social Evening', tags: [], published: false }),
+    ]);
+    expect(findings.map((f) => f.session?.id)).toEqual([1]);
+    expect(findings[0]).toMatchObject({
+      rule: 'required-tag',
+      severity: 'fix',
+      key: 'tag:1:social',
+      message: 'Title says "Social" but the session is not tagged Social',
+    });
+  });
+
+  it('does nothing with blank settings', () => {
+    expect(run(requiredTag, [event({ title: 'Social', tags: [] })], { tag: ' ' })).toEqual([]);
+  });
+});
+
+describe('expected-capacity', () => {
+  it('flags the matching type and length only', () => {
+    const findings = run(expectedCapacity, [
+      event({ id: 1, capacity: 12, spotsRemaining: 12 }),
+      event({ id: 2, capacity: 10, spotsRemaining: 10 }),
+      event({ id: 3, capacity: 4, spotsRemaining: 4, duration: 120 }),
+      event({ id: 4, capacity: 10, spotsRemaining: 10, tags: ['Social'] }),
+      event({ id: 5, capacity: undefined, spotsRemaining: undefined }),
+      event({ id: 6, capacity: 10, spotsRemaining: 10, published: false }),
+    ]);
+    expect(findings.map((f) => f.session?.id)).toEqual([2]);
+    expect(findings[0]).toMatchObject({
+      rule: 'expected-capacity',
+      severity: 'fix',
+      key: 'expected-capacity:2:10',
+      message: 'Capacity 10; 60-minute Open hours sessions should be 12',
+    });
+    expect(
+      run(expectedCapacity, [event({ id: 3, capacity: 4, spotsRemaining: 4, duration: 120 })], {
+        durationMinutes: 120,
+        capacity: 6,
+      })
+    ).toHaveLength(1);
   });
 });

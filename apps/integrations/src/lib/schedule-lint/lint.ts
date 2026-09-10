@@ -1,11 +1,13 @@
-// The schedule lint, as a pure function: feed in, report out. The job and
-// the tests both call this; only the job touches the clock, Redis, and email.
+// The schedule lint, as a pure function: feed and rules in, report out. The
+// job, the admin page's preview, and the tests all call this; only the job
+// and the route touch the clock, Redis, Supabase, and email.
 
 import { createHash } from 'node:crypto';
 import type { MomenceEvent } from '@/lib/momence-events';
 import { type FeedWindow, horizonOf, normalizeFeed } from './feed';
-import { RULES } from './rules';
-import type { Finding, LintReport, Severity } from './types';
+import { defaultRules } from './registry';
+import { definitionFor } from './rules';
+import type { Finding, LintReport, RuleInstance, Severity } from './types';
 
 const SEVERITY_ORDER: Record<Severity, number> = { cancel: 0, fix: 1, notice: 2 };
 
@@ -19,13 +21,31 @@ export function digestOf(findings: Pick<Finding, 'key'>[]): string {
   return createHash('sha1').update(keys.join('\n')).digest('hex').slice(0, 12);
 }
 
-export function runLint(events: MomenceEvent[], window: FeedWindow): LintReport {
+export function runLint(
+  events: MomenceEvent[],
+  window: FeedWindow,
+  rules: RuleInstance[] = defaultRules()
+): LintReport {
   const sessions = normalizeFeed(events, window);
   const horizon = horizonOf(window);
   const ctx = { now: window.now, horizon };
 
   const findings: Finding[] = [];
-  for (const rule of RULES) findings.push(...rule.run(sessions, ctx));
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const def = definitionFor(rule.kind);
+    if (!def) continue;
+    for (const f of def.run(sessions, ctx, rule.params)) {
+      findings.push({
+        ...f,
+        // Two custom rules of one kind must not share keys; built-ins are
+        // singletons and keep their bare keys.
+        key: rule.builtIn ? f.key : `${rule.id}:${f.key}`,
+        ruleId: rule.id,
+        ruleLabel: rule.label,
+      });
+    }
+  }
 
   findings.sort(
     (a, b) =>
@@ -43,7 +63,7 @@ export function runLint(events: MomenceEvent[], window: FeedWindow): LintReport 
   };
 }
 
-/** Findings per rule and per severity, for the tick summary. */
+/** Findings per rule instance and per severity, for the tick summary and the page. */
 export function countFindings(findings: Finding[]): {
   byRule: Record<string, number>;
   bySeverity: Record<Severity, number>;
@@ -51,7 +71,7 @@ export function countFindings(findings: Finding[]): {
   const byRule: Record<string, number> = {};
   const bySeverity: Record<Severity, number> = { cancel: 0, fix: 0, notice: 0 };
   for (const f of findings) {
-    byRule[f.rule] = (byRule[f.rule] ?? 0) + 1;
+    byRule[f.ruleId] = (byRule[f.ruleId] ?? 0) + 1;
     bySeverity[f.severity] += 1;
   }
   return { byRule, bySeverity };

@@ -298,6 +298,8 @@ export interface ScheduleLintOverlapGroup {
 
 /** Any other finding: what is wrong, and the session it is about (if one). */
 export interface ScheduleLintLine {
+  /** The rule that raised it, as named on /admin/schedule-lint. */
+  rule: string;
   message: string;
   session?: ScheduleLintSession;
 }

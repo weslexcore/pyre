@@ -43,6 +43,7 @@ function overlapGroups(findings: Finding[]): ScheduleLintOverlapGroup[] {
 
 function lines(findings: Finding[]): ScheduleLintLine[] {
   return findings.map((f) => ({
+    rule: f.ruleLabel,
     message: f.message,
     ...(f.session && { session: toLine(f.session) }),
   }));

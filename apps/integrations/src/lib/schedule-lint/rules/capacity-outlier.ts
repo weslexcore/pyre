@@ -6,11 +6,12 @@
 //
 // Grouped by type AND length because the long partners in a stack (2h, 3h,
 // 4h Open Hours) legitimately carry a smaller capacity than the hourly slot.
+// For a room whose right capacity is known, the "Expected capacity" custom
+// rule is the stricter check; this one needs no configuration.
 
 import { type NormalizedSession, toRef } from '../feed';
 import { typeLabel } from '../labels';
-import type { Finding } from '../types';
-import type { LintRule } from './rule';
+import type { RuleDefinition, RuleFinding } from './rule';
 
 /** Fewer sessions than this in a group and there is no norm to compare with. */
 export const MIN_GROUP_SIZE = 6;
@@ -34,9 +35,28 @@ function modeOf(values: number[]): number | null {
   return tie ? null : best;
 }
 
-export const capacityOutlier: LintRule = {
-  name: 'capacity-outlier',
-  run(sessions: NormalizedSession[]): Finding[] {
+export interface CapacityOutlierParams extends Record<string, unknown> {
+  minGroup: number;
+}
+
+export const capacityOutlier: RuleDefinition<CapacityOutlierParams> = {
+  kind: 'capacity-outlier',
+  title: 'Capacity outliers',
+  description:
+    'A session whose capacity differs from the other sessions of its type and length: a hand-typed number where a template value belongs.',
+  builtIn: true,
+  defaults: { minGroup: MIN_GROUP_SIZE },
+  fields: [
+    {
+      key: 'minGroup',
+      label: 'Sessions needed before comparing',
+      type: 'number',
+      min: 2,
+      max: 100,
+      hint: 'With fewer sessions of one type and length there is no norm to compare against.',
+    },
+  ],
+  run(sessions: NormalizedSession[], _ctx, { minGroup }): RuleFinding[] {
     const groups = new Map<string, NormalizedSession[]>();
     for (const s of sessions) {
       if (!s.isPublished || s.isSpecialEvent || s.capacity === null) continue;
@@ -46,9 +66,9 @@ export const capacityOutlier: LintRule = {
       else groups.set(key, [s]);
     }
 
-    const findings: Finding[] = [];
+    const findings: RuleFinding[] = [];
     for (const group of groups.values()) {
-      if (group.length < MIN_GROUP_SIZE) continue;
+      if (group.length < minGroup) continue;
       const mode = modeOf(group.map((s) => s.capacity as number));
       if (mode === null) continue;
       for (const s of group) {

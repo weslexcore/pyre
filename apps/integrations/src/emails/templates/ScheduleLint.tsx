@@ -112,11 +112,24 @@ function OverlapGroup({ group }: { group: ScheduleLintOverlapGroup }) {
   );
 }
 
+const ruleTag = {
+  color: COLORS.sky,
+  fontSize: '11px',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase' as const,
+};
+
 function Line({ line }: { line: ScheduleLintLine }) {
-  if (!line.session) return <Text style={row}>{line.message}</Text>;
+  if (!line.session) {
+    return (
+      <Text style={row}>
+        <span style={ruleTag}>{line.rule}</span> {line.message}
+      </Text>
+    );
+  }
   return (
     <Text style={row}>
-      <Title session={line.session} />
+      <span style={ruleTag}>{line.rule}</span> <Title session={line.session} />
       <br />
       <Meta session={line.session} />
       <br />
@@ -262,6 +275,7 @@ ScheduleLint.PreviewProps = {
   ],
   fixes: [
     {
+      rule: 'Untagged sessions',
       message:
         'No session tag; guests get the generic confirmation and the site has no category for it',
       session: {
@@ -273,6 +287,7 @@ ScheduleLint.PreviewProps = {
       },
     },
     {
+      rule: 'Drafts starting soon',
       message: 'Still a draft and starts Sat, Sep 19; publish it or delete it',
       session: {
         title: 'Open Hours',
@@ -284,6 +299,7 @@ ScheduleLint.PreviewProps = {
   ],
   notices: [
     {
+      rule: 'Capacity outliers',
       message: 'Capacity 4; the other Open hours sessions of this length are 12',
       session: {
         title: 'Open Hours',
@@ -294,6 +310,7 @@ ScheduleLint.PreviewProps = {
       },
     },
     {
+      rule: 'Schedule running out',
       message:
         'Open Hours and Social are published through Sun, Sep 27 only; the site promises about three weeks ahead',
     },

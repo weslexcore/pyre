@@ -107,6 +107,7 @@ Key design decisions:
 | `/api/webhooks/resend` | POST | Svix HMAC signature | Email engagement events + bounce/complaint suppression |
 | `/api/webhooks/mailchimp` | GET/POST | URL secret param + HMAC signature | Mailchimp unsubscribes/cleans into the suppression store |
 | `/api/cron/tick` | GET/POST | `Bearer CRON_SECRET` | Hourly cron entry point (QStash schedule) — runs all registered jobs |
+| `/api/admin/schedule-lint` | GET/POST | Admin session cookie | Schedule-lint rules: list, create, update, delete, preview findings, run and email |
 | `/api/unsubscribe` | GET/POST | HMAC-signed token | Footer-link (GET) and RFC 8058 one-click (POST) unsubscribe |
 | `/api/partner/request` | POST | `Bearer PARTNER_API_SECRET` | Partner-discount verification intake, relayed server-to-server from the landing page |
 | `/api/partner/decision` | GET | HMAC-signed token | One-click partner confirm/deny — tags the member in Momence on confirm |
@@ -136,6 +137,7 @@ Monitoring.
 | --- | --- | --- |
 | `/admin` | — | Tool directory |
 | `/admin/water` | Operations | Cold tub water log — test results, chemical doses, dosing recommendations |
+| `/admin/schedule-lint` | Operations | The checks run against the Momence schedule: switch built-in rules off or tune them, add opening-hours / required-tag / expected-capacity rules, preview what they catch, run the email by hand |
 | `/admin/guests` | Operations | Guest profiles — staff-facing preferences and notes per Momence member, beside their live Momence account; `/admin/guests/sessions` shows who is booked into each session |
 | `/admin/email-templates` | Marketing | Every registered template rendered with editable props |
 | `/admin/utm-assist` | Marketing | Tracked-link builder: UTM links, QR codes, short links, shared campaigns |
@@ -231,6 +233,17 @@ the next 28 days and runs every rule in `src/lib/schedule-lint/rules/`:
 | `duplicate` | fix | Two published sessions with the same title, type, room, start, and length. |
 | `capacity-outlier` | notice | A session whose capacity differs from the other sessions of its type and length (needs 6 siblings). |
 | `horizon-short` | notice | Open Hours / Social published fewer than 14 days out. |
+
+Every built-in can be switched off or tuned on `/admin/schedule-lint`, and
+admins can add rules from three templates there — **opening hours** (sessions on
+a closed day or outside the day's window), **required tag** (a title phrase that
+must carry a tag), **expected capacity** (a type and length that must have
+exactly N seats). Rows live in `schedule_lint_rules`; a built-in has a row only
+once someone changes it, and every row is validated against the rule kind's
+fields on write and on read (`src/lib/schedule-lint/registry.ts`). The page's
+**Preview findings** runs every rule (disabled ones too) against Momence right
+now and lists what each catches, so a new setting can be checked before the
+next email; **Email admins now** runs the real job.
 
 Findings go to the admins as one `schedule-lint` email, grouped by severity,
 every title linking to the session in Momence. The send key is
