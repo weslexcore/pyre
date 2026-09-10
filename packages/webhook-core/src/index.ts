@@ -6,7 +6,7 @@
 // and write the SAME Upstash instance, so this package is the single source of
 // truth for that schema — do not fork it.
 
-export { getRedis } from './redis';
+export { createRedis, getRedis } from './redis';
 export {
   getExecution,
   getExecutionSummariesSince,

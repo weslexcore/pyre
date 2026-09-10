@@ -23,7 +23,8 @@
 // links that redirect, which is most of them: a day's Open Hours all share one
 // page, so every start time but the first is a redirect to a sibling. Both
 // fetches now go through lib/momence-cache, which serves them from memory or the
-// shared snapshot; Momence is reached only when both are cold.
+// shared snapshot and refreshes Momence behind the response rather than in front
+// of it; a visitor waits on Momence only when nothing recent is cached at all.
 
 export const prerender = false;
 
