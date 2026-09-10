@@ -6,8 +6,17 @@
 // The window defaults to the shortest report window that still reaches back
 // to the day the campaign started, so a goal is read against the whole run
 // rather than an arbitrary 30 days.
+//
+// A campaign built around one event also reads that event's own booking total
+// from Momence, so the attributed number has a denominator: the rest of the
+// event's bookings came from somewhere this campaign cannot claim.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  campaignEventId,
+  type EventBookings,
+  eventBookingSummary,
+} from '@/lib/campaigns/event-bookings';
 import {
   elapsedFraction,
   GOAL_STATE_LABEL,
@@ -129,6 +138,38 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
     void fetchReport(days);
   }, [days, fetchReport]);
 
+  // An event campaign names the Momence session its links open; that session's
+  // booking list is what "every booking for this event" means.
+  const eventId = useMemo(() => campaignEventId(campaign), [campaign]);
+
+  const [eventBookings, setEventBookings] = useState<EventBookings | null>(null);
+  const [eventError, setEventError] = useState<string | null>(null);
+
+  const fetchEventBookings = useCallback(
+    async (fresh = false) => {
+      if (!eventId) return;
+      setEventError(null);
+      try {
+        const res = await fetch(
+          `/api/admin/event-bookings?event=${encodeURIComponent(eventId)}${fresh ? '&fresh=1' : ''}`
+        );
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          setEventError(body?.error ?? `Could not read this event's bookings (${res.status})`);
+          return;
+        }
+        setEventBookings((await res.json()) as EventBookings);
+      } catch {
+        setEventError("Could not read this event's bookings.");
+      }
+    },
+    [eventId]
+  );
+
+  useEffect(() => {
+    void fetchEventBookings();
+  }, [fetchEventBookings]);
+
   const row = data?.campaigns[0];
   const maxClicks = useMemo(() => Math.max(1, ...links.map((l) => l.clicks)), [links]);
   const sorted = useMemo(() => [...links].sort((a, b) => b.clicks - a.clicks), [links]);
@@ -171,6 +212,11 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
 
   const metGoals = progress.filter((p) => p.state === 'hit').length;
 
+  const eventSummary = useMemo(
+    () => (eventBookings ? eventBookingSummary(eventBookings, row?.bookings ?? null) : null),
+    [eventBookings, row]
+  );
+
   const posthogIssue = data
     ? !data.posthog.configured
       ? 'PostHog querying is not configured. Showing link clicks only.'
@@ -181,19 +227,26 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
         : null
     : null;
 
-  const stat = (label: string, value: number | undefined) => (
+  const stat = (label: string, value: number | undefined, note?: string) => (
     <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
       <div className="font-mono text-[10px] uppercase tracking-wide text-white/40">{label}</div>
       <div className="font-mono-bold text-lg text-[var(--pyre-creme)] tabular-nums">
         {value ?? '–'}
       </div>
+      {note && <div className="font-mono text-[10px] text-white/35 tabular-nums">{note}</div>}
     </div>
   );
 
   return (
     <section className={cardClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle note="Visits, signups, bookings and purchases are first-touch attributed by utm_campaign in PostHog. Clicks are live from the short links.">
+        <SectionTitle
+          note={`Visits, signups, bookings and purchases are first-touch attributed by utm_campaign in PostHog. Clicks are live from the short links.${
+            eventId
+              ? " The event's booking total comes from Momence, counting every booking however it arrived."
+              : ''
+          }`}
+        >
           Performance
         </SectionTitle>
         <div className="flex items-center gap-2">
@@ -213,7 +266,10 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
           ))}
           <button
             type="button"
-            onClick={() => void fetchReport(days, true)}
+            onClick={() => {
+              void fetchReport(days, true);
+              void fetchEventBookings(true);
+            }}
             disabled={loading}
             className="px-3 py-1.5 rounded text-xs font-mono-bold uppercase tracking-wide border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
           >
@@ -284,11 +340,26 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
         {stat('Pageviews', row?.pageviews)}
         {stat('Visitors', row?.visitors)}
         {stat('Signups', row ? row.introOfferSignups + row.mailingListSignups : undefined)}
-        {stat('Bookings', row?.bookings)}
+        {stat(
+          'Bookings',
+          row?.bookings,
+          eventBookings ? `of ${eventBookings.bookings} on this event` : undefined
+        )}
         {stat('Intro purchases', row?.introPurchases)}
         {stat('Packs', row?.creditPacks)}
         {stat('Memberships', row?.memberships)}
       </div>
+
+      {eventId && (
+        <p className="mt-2 text-[11px] text-white/45">
+          {eventSummary ?? (eventError ? null : "Reading this event's bookings from Momence…")}
+          {eventError && (
+            <span className="text-[var(--pyre-gold)]">
+              {eventSummary ? ` ${eventError}` : eventError}
+            </span>
+          )}
+        </p>
+      )}
 
       {sorted.length > 0 && (
         <ul className="mt-4 space-y-1.5">
