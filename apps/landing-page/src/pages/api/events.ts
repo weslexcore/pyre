@@ -9,9 +9,11 @@
 import type { APIRoute } from 'astro';
 import {
   excludeVolunteerEvents,
+  filterPublishedEvents,
   filterValidEvents,
   indexTeachersById,
   sortEventsByDate,
+  sortEventsUpcomingFirst,
   transformToEventItem,
 } from '@/lib/momence';
 import { loadMomenceCalendar } from '@/lib/momence-cache';
@@ -40,6 +42,11 @@ function parseLimit(raw: string | null): number | null {
 export const GET: APIRoute = async ({ url }) => {
   try {
     const limit = parseLimit(url.searchParams.get('limit'));
+    // `all=1` keeps events that have already happened. The campaigns admin
+    // picker asks for it: a campaign built for an event has to keep naming
+    // that event after the date passes, instead of reading as if nothing was
+    // ever picked. Public callers omit it and see upcoming events only.
+    const includePast = url.searchParams.get('all') === '1';
 
     const calendar = await loadMomenceCalendar();
 
@@ -68,9 +75,13 @@ export const GET: APIRoute = async ({ url }) => {
 
     const { events: rawEvents, teachers, stale: servedFromSnapshot } = calendar;
 
-    const validEvents = filterValidEvents(rawEvents);
+    const validEvents = includePast
+      ? filterPublishedEvents(rawEvents)
+      : filterValidEvents(rawEvents);
     const nonVolunteerEvents = excludeVolunteerEvents(validEvents);
-    const sortedEvents = sortEventsByDate(nonVolunteerEvents);
+    const sortedEvents = includePast
+      ? sortEventsUpcomingFirst(nonVolunteerEvents)
+      : sortEventsByDate(nonVolunteerEvents);
     const teachersById = indexTeachersById(teachers);
     const allEvents = sortedEvents.map((event) => transformToEventItem(event, teachersById));
 
@@ -79,13 +90,17 @@ export const GET: APIRoute = async ({ url }) => {
     // truncates for compact surfaces like the homepage carousel.
     const events = limit !== null ? allEvents.slice(0, limit) : allEvents;
     const hasMore = limit !== null && allEvents.length > limit;
+    // Still a count of what is coming up, even when past events ride along.
+    const totalUpcoming = includePast
+      ? excludeVolunteerEvents(filterValidEvents(rawEvents)).length
+      : allEvents.length;
 
     const response: EventsApiResponse = {
       events,
       cached: servedFromSnapshot,
       timestamp: new Date().toISOString(),
       hasMore,
-      totalUpcoming: allEvents.length,
+      totalUpcoming,
     };
 
     return new Response(JSON.stringify(response), {

@@ -117,25 +117,41 @@ export function indexTeachersById(teachers: MomenceTeacher[]): Map<number, Momen
 }
 
 /**
+ * Filter out cancelled, deleted, and unpublished events, keeping past ones.
+ *
+ * Public surfaces want `filterValidEvents` below. This is for the admin tools,
+ * which still have to name the event an old campaign points at.
+ */
+export function filterPublishedEvents(events: MomenceEvent[]): MomenceEvent[] {
+  return events.filter((event) => !event.isCancelled && !event.isDeleted && event.published);
+}
+
+/**
  * Filter out cancelled, deleted, unpublished, and past events
  */
 export function filterValidEvents(events: MomenceEvent[]): MomenceEvent[] {
   const now = new Date();
 
-  return events.filter((event) => {
-    // Skip cancelled, deleted, or unpublished events
-    if (event.isCancelled || event.isDeleted || !event.published) {
-      return false;
-    }
+  // An unparseable date is kept, as it always has been: it is not evidence the
+  // event is over.
+  return filterPublishedEvents(events).filter((event) => !(new Date(event.dateTime) < now));
+}
 
-    // Skip past events
-    const eventDate = new Date(event.dateTime);
-    if (eventDate < now) {
-      return false;
-    }
-
-    return true;
-  });
+/**
+ * Order for the admin pickers, which see past events too: what is still to
+ * come, soonest first, then what has already happened, most recent first.
+ */
+export function sortEventsUpcomingFirst(
+  events: MomenceEvent[],
+  now: Date = new Date()
+): MomenceEvent[] {
+  const upcoming: MomenceEvent[] = [];
+  const past: MomenceEvent[] = [];
+  for (const event of events) {
+    if (new Date(event.dateTime) < now) past.push(event);
+    else upcoming.push(event);
+  }
+  return [...sortEventsByDate(upcoming), ...sortEventsByDate(past).reverse()];
 }
 
 /**

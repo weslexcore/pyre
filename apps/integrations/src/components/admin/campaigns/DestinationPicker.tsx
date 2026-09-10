@@ -110,6 +110,21 @@ export function DestinationPicker({
     [origin, value.kind, value.value]
   );
 
+  // The event this campaign already points at, kept selectable even when the
+  // feed no longer carries it — it was cancelled or unpublished in Momence, or
+  // the list failed to load. Editing a campaign should never quietly drop the
+  // event someone picked and make them find it again; the link works either
+  // way, since it is built from the id.
+  const eventOptions = useMemo(() => {
+    const options = (events.items ?? []).map((event) => ({
+      value: event.id,
+      label: eventLabel(event),
+    }));
+    const current = value.kind === 'event' ? value.value.trim() : '';
+    if (!current || options.some((option) => option.value === current)) return options;
+    return [{ value: current, label: `Event ${current}`, hint: 'No longer listed' }, ...options];
+  }, [events.items, value.kind, value.value]);
+
   const pick = (kind: DestinationKind) => {
     if (kind === value.kind) return;
     // Preselect the first option so a tile click alone yields a working link.
@@ -152,16 +167,13 @@ export function DestinationPicker({
               </button>
             </p>
           )}
-          {events.items && events.items.length === 0 && (
+          {events.items && events.items.length === 0 && eventOptions.length === 0 && (
             <p className="text-xs text-white/50">No upcoming events on the site right now.</p>
           )}
-          {events.items && events.items.length > 0 && (
+          {!events.loading && eventOptions.length > 0 && (
             <SearchSelect
               id="dest-event"
-              options={events.items.map((event) => ({
-                value: event.id,
-                label: eventLabel(event),
-              }))}
+              options={eventOptions}
               value={value.value}
               onChange={(id) => onChange({ kind: 'event', value: id })}
               placeholder="Type to find an event"
