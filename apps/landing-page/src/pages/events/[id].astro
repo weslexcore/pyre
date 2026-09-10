@@ -207,17 +207,21 @@ const description = event
   ? metaDescription(event)
   : 'This session has already happened. Browse upcoming sauna and cold plunge sessions at Pyre in Richmond, VA.';
 
-// Momence banners are remote URLs of unknown size, so they ship without
-// og:image:width/height; the local fallback knows its own dimensions.
-const remoteImage = event?.image?.src;
+// -- View model --------------------------------------------------------------
+
+const practitioners = event ? specialEventPractitioners(event) : [];
+
+// Social preview: the event banner when Momence has one, else the host's
+// headshot (a shared link for a guest-led event should show the guest), else
+// the generic sauna image. Banners and headshots are URLs of unknown size, so
+// they ship without og:image:width/height; only the local fallback knows its
+// own dimensions.
+const practitionerPhoto = practitioners.find((p) => p.photo?.src)?.photo?.src;
+const remoteImage = event?.image?.src ?? practitionerPhoto;
 const ogImage = remoteImage ?? ogFallback.src;
 const ogDimensions = remoteImage
   ? {}
   : { ogImageWidth: ogFallback.width, ogImageHeight: ogFallback.height };
-
-// -- View model --------------------------------------------------------------
-
-const practitioners = event ? specialEventPractitioners(event) : [];
 const bookableSlots = slots.filter((slot) => slot.rows.length > 0);
 // Several start times each need their own heading; a single one is already
 // named by the time chip above.
