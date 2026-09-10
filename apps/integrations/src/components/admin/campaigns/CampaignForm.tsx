@@ -17,7 +17,14 @@ import {
 } from '@/lib/campaigns/types';
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
 import { invalidateJson } from '@/lib/client/cachedJson';
-import { buttonClass, inputClass, labelClass, primaryButtonClass, TileButton } from '../incidentUi';
+import {
+  buttonClass,
+  inputBaseClass,
+  inputClass,
+  labelClass,
+  primaryButtonClass,
+  TileButton,
+} from '../incidentUi';
 import { SearchSelect } from '../SearchSelect';
 import { SessionExpired, smallLabelClass } from './campaignUi';
 import {
@@ -338,8 +345,12 @@ export function CampaignForm({
               className="flex items-center gap-3 rounded border border-white/10 bg-white/5 px-3 py-2"
             >
               <span className="min-w-0 flex-1">
-                <span className="block text-sm text-[var(--pyre-creme)]">{metric.label}</span>
-                <span className="block text-xs text-white/40">{metric.hint}</span>
+                <span className="block text-sm leading-snug text-[var(--pyre-creme)]">
+                  {metric.label}
+                </span>
+                <span className="mt-0.5 block text-xs leading-snug text-balance text-white/40">
+                  {metric.hint}
+                </span>
               </span>
               <input
                 type="number"
@@ -347,7 +358,8 @@ export function CampaignForm({
                 max={MAX_GOAL_TARGET}
                 inputMode="numeric"
                 aria-label={`${metric.label} target`}
-                className={`${inputClass} w-24 shrink-0 !py-2 text-right`}
+                placeholder="—"
+                className={`${inputBaseClass} w-24 shrink-0 !py-2 text-right tabular-nums placeholder-white/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                 value={targets[metric.key] ?? ''}
                 onChange={(e) => setTargets((prev) => ({ ...prev, [metric.key]: e.target.value }))}
               />

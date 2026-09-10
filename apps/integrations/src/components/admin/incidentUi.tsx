@@ -12,8 +12,14 @@ import {
 
 // Touch targets first: this form is filled out on a phone, one-handed,
 // usually while something else still needs attention.
-export const inputClass =
-  'w-full px-3 py-3 rounded bg-white/5 border border-white/10 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+//
+// The width is kept out of the base so a control that wants its own can say so:
+// Tailwind emits `w-full` after the numeric widths, so `${inputClass} w-24` is
+// still full width, and any input that also refuses to shrink overflows its row.
+export const inputBaseClass =
+  'px-3 py-3 rounded bg-white/5 border border-white/10 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+
+export const inputClass = `w-full ${inputBaseClass}`;
 
 export const labelClass = 'block mb-1.5 font-mono text-xs uppercase tracking-wide text-white/50';
 
