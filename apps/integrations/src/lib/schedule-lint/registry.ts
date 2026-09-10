@@ -6,7 +6,7 @@
 // its enabled flag and settings; no row means defaults, enabled. Custom rows
 // are instances of a custom kind, as many as the admins like.
 
-import type { ScheduleLintRuleRow } from '@/lib/db';
+import type { ScheduleLintResolutionRow, ScheduleLintRuleRow } from '@/lib/db';
 import { SESSION_TYPES } from '@/lib/momence-events';
 import { formatClockLabel, formatDurationLabel } from './labels';
 import { BUILT_IN_DEFINITIONS, definitionFor, type RuleDefinition } from './rules';
@@ -14,12 +14,16 @@ import {
   DAY_KEYS,
   type DayKey,
   type DayWindow,
+  NOTE_MAX,
   type OpeningHours,
   type ParamField,
+  type Resolution,
   type RuleInstance,
 } from './types';
 
 export const LABEL_MAX = 80;
+/** A resolution's snapshot of the finding it was made against. */
+export const SUMMARY_MAX = 300;
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -260,4 +264,29 @@ export function summarizeParams(def: RuleDefinition, params: Record<string, unkn
     }
   }
   return parts.join(' · ');
+}
+
+// --- Resolutions ------------------------------------------------------------
+
+export function toResolution(row: ScheduleLintResolutionRow): Resolution {
+  return {
+    key: row.key,
+    ruleId: row.rule_id,
+    summary: row.summary,
+    note: row.note,
+    resolvedBy: row.resolved_by,
+    resolvedAt: row.created_at,
+    lastSeenAt: row.last_seen_at,
+  };
+}
+
+/** The finding line a resolution is filed under; the key itself if none came. */
+export function normalizeSummary(raw: unknown, fallback: string): string {
+  const summary = typeof raw === 'string' ? raw.trim() : '';
+  return (summary || fallback).slice(0, SUMMARY_MAX);
+}
+
+export function normalizeNote(raw: unknown): string | null {
+  const note = typeof raw === 'string' ? raw.trim() : '';
+  return note ? note.slice(0, NOTE_MAX) : null;
 }

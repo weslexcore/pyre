@@ -86,10 +86,33 @@ export interface LintReport {
   /** ET calendar dates. */
   horizonStart: string;
   horizonEnd: string;
+  /** What is still open: resolved findings are not here. */
   findings: Finding[];
-  /** Short hash of the sorted finding keys; the send key's identity. */
+  /**
+   * Findings an admin has marked resolved that this run raised again. Held
+   * apart so the email can leave them out and say how many it left out, and
+   * so the admin page can list them with a way back.
+   */
+  resolved: Finding[];
+  /** Short hash of the sorted open finding keys; the send key's identity. */
   digest: string;
 }
+
+/** A finding an admin has called fine, as the page lists it. */
+export interface Resolution {
+  key: string;
+  ruleId: string;
+  /** The finding's message as it read when it was resolved. */
+  summary: string;
+  note: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string;
+  /** ISO 8601; the last run that raised this finding again. */
+  lastSeenAt: string;
+}
+
+/** Note length accepted on a resolution. */
+export const NOTE_MAX = 200;
 
 // --- Rule configuration -----------------------------------------------------
 

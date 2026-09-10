@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ScheduleLintRuleRow } from '@/lib/db';
-import { defaultRules, normalizeParams, resolveRules, summarizeParams } from './registry';
+import type { ScheduleLintResolutionRow, ScheduleLintRuleRow } from '@/lib/db';
+import {
+  defaultRules,
+  normalizeNote,
+  normalizeParams,
+  normalizeSummary,
+  resolveRules,
+  SUMMARY_MAX,
+  summarizeParams,
+  toResolution,
+} from './registry';
 import { BUILT_IN_DEFINITIONS, CUSTOM_DEFINITIONS, definitionFor } from './rules';
+import { NOTE_MAX } from './types';
 
 const row = (over: Partial<ScheduleLintRuleRow>): ScheduleLintRuleRow => ({
   id: 'r1',
@@ -193,5 +203,43 @@ describe('summarizeParams', () => {
       'expected-capacity',
       'duration-variants',
     ]);
+  });
+});
+
+describe('resolutions', () => {
+  const row = (over: Partial<ScheduleLintResolutionRow> = {}): ScheduleLintResolutionRow => ({
+    key: 'untagged:1',
+    rule_id: 'untagged',
+    summary: 'No session tag',
+    note: null,
+    resolved_by: 'wes@pyre.test',
+    created_at: '2026-09-14T12:00:00Z',
+    last_seen_at: '2026-09-15T12:00:00Z',
+    ...over,
+  });
+
+  it('maps a row to what the page lists', () => {
+    expect(toResolution(row())).toEqual({
+      key: 'untagged:1',
+      ruleId: 'untagged',
+      summary: 'No session tag',
+      note: null,
+      resolvedBy: 'wes@pyre.test',
+      resolvedAt: '2026-09-14T12:00:00Z',
+      lastSeenAt: '2026-09-15T12:00:00Z',
+    });
+  });
+
+  it('falls back to the key when no summary came, and caps both fields', () => {
+    expect(normalizeSummary('  ', 'untagged:1')).toBe('untagged:1');
+    expect(normalizeSummary(' Under DJ Night ', 'k')).toBe('Under DJ Night');
+    expect(normalizeSummary('x'.repeat(400), 'k')).toHaveLength(SUMMARY_MAX);
+  });
+
+  it('keeps a note only when one was written', () => {
+    expect(normalizeNote('   ')).toBeNull();
+    expect(normalizeNote(undefined)).toBeNull();
+    expect(normalizeNote('  Intentional  ')).toBe('Intentional');
+    expect(normalizeNote('n'.repeat(400))).toHaveLength(NOTE_MAX);
   });
 });

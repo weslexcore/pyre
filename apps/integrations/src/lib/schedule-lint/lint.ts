@@ -21,10 +21,17 @@ export function digestOf(findings: Pick<Finding, 'key'>[]): string {
   return createHash('sha1').update(keys.join('\n')).digest('hex').slice(0, 12);
 }
 
+/**
+ * `resolvedKeys` are the findings an admin has already called fine (see the
+ * schedule_lint_resolutions migration). They are computed like any other —
+ * a rule never knows it is being second-guessed — and then split off, so
+ * they leave the email and the digest but stay visible on the page.
+ */
 export function runLint(
   events: MomenceEvent[],
   window: FeedWindow,
-  rules: RuleInstance[] = defaultRules()
+  rules: RuleInstance[] = defaultRules(),
+  resolvedKeys: ReadonlySet<string> = new Set()
 ): LintReport {
   const sessions = normalizeFeed(events, window);
   const horizon = horizonOf(window);
@@ -55,11 +62,15 @@ export function runLint(
       a.key.localeCompare(b.key)
   );
 
+  const open = findings.filter((f) => !resolvedKeys.has(f.key));
   return {
     horizonStart: horizon.start,
     horizonEnd: horizon.end,
-    findings,
-    digest: digestOf(findings),
+    findings: open,
+    resolved: findings.filter((f) => resolvedKeys.has(f.key)),
+    // Built from the open list alone: resolving the last item has to read as
+    // "nothing to report", and resolving one of five as a changed list.
+    digest: digestOf(open),
   };
 }
 

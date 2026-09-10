@@ -315,6 +315,12 @@ export interface ScheduleLintProps {
   cancelCount: number;
   fixCount: number;
   noticeCount: number;
+  /**
+   * Findings this run raised that an admin has marked resolved. Not listed —
+   * only counted, so nobody has to wonder whether the email is the whole
+   * picture. Manage them on /admin/schedule-lint.
+   */
+  resolvedCount: number;
   overlaps: ScheduleLintOverlapGroup[];
   fixes: ScheduleLintLine[];
   notices: ScheduleLintLine[];

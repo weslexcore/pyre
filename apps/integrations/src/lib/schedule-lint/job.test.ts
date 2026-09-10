@@ -5,6 +5,8 @@ const sendTemplate = vi.fn();
 const fetchMomenceEvents = vi.fn();
 const listStaff = vi.fn();
 const listRuleRows = vi.fn();
+const listResolutions = vi.fn();
+const touchResolutions = vi.fn();
 const getDb = vi.fn();
 
 /** In-memory stand-in for the Upstash client: get/set/del over a Map. */
@@ -26,7 +28,11 @@ vi.mock('@/lib/momence-events', async (importOriginal) => ({
 }));
 vi.mock('@/lib/auth/access', () => ({ listStaff: () => listStaff() }));
 vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
-vi.mock('./store', () => ({ listRuleRows: () => listRuleRows() }));
+vi.mock('./store', () => ({
+  listRuleRows: () => listRuleRows(),
+  listResolutions: () => listResolutions(),
+  touchResolutions: (_db: unknown, keys: string[]) => touchResolutions(keys),
+}));
 vi.mock('@pyre/webhook-core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@pyre/webhook-core')>()),
   getRedis: () => (redisAvailable ? fakeRedis : null),
@@ -90,6 +96,8 @@ describe('runScheduleLint', () => {
     listStaff.mockReset().mockResolvedValue(admins);
     getDb.mockReset().mockReturnValue(null);
     listRuleRows.mockReset().mockResolvedValue([]);
+    listResolutions.mockReset().mockResolvedValue([]);
+    touchResolutions.mockReset().mockResolvedValue(0);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
@@ -246,6 +254,64 @@ describe('runScheduleLint', () => {
     listRuleRows.mockRejectedValue(new Error('schedule_lint_rules: relation does not exist'));
     const summary = await runScheduleLint({ ...ctx, force: true });
     expect(summary.findings).toBe(2);
+  });
+
+  describe('resolutions', () => {
+    // Fixed ids so the finding keys are known: both Open Hours slots sit
+    // under the Sound Bath, so the overlap rule raises overlap:1:2 and
+    // overlap:1:3.
+    beforeEach(() => {
+      getDb.mockReturnValue({});
+      fetchMomenceEvents.mockResolvedValue([
+        special({ id: 1 }),
+        event({ id: 2 }),
+        event({ id: 3, dateTime: et('2026-09-17', '20:00') }),
+        farOut(),
+      ]);
+    });
+
+    it('leaves a resolved finding out of the email and counts it', async () => {
+      const before = await runScheduleLint({ ...ctx, force: true });
+      expect(before.findings).toBe(2);
+
+      sendTemplate.mockClear();
+      listResolutions.mockResolvedValue([{ key: 'overlap:1:2' }]);
+      const after = await runScheduleLint({ ...ctx, force: true });
+      expect(after.findings).toBe(1);
+      expect(after.resolved).toBe(1);
+      // A shorter list is a different list, so the admins hear about it.
+      expect(after.digest).not.toBe(before.digest);
+      expect(sendTemplate).toHaveBeenCalled();
+    });
+
+    it('sends nothing when every finding is resolved', async () => {
+      listResolutions.mockResolvedValue([{ key: 'overlap:1:2' }, { key: 'overlap:1:3' }]);
+      const summary = await runScheduleLint({ ...ctx, force: true });
+      expect(summary.findings).toBe(0);
+      expect(summary.resolved).toBe(2);
+      expect(sendTemplate).not.toHaveBeenCalled();
+    });
+
+    it('touches the resolutions it raised again and reports what was pruned', async () => {
+      listResolutions.mockResolvedValue([{ key: 'overlap:1:2' }, { key: 'gone:from:the:feed' }]);
+      touchResolutions.mockResolvedValue(1);
+      const summary = await runScheduleLint({ ...ctx, force: true });
+      // Only the key this run actually raised is kept alive.
+      expect(touchResolutions).toHaveBeenCalledWith(['overlap:1:2']);
+      expect(summary.pruned).toBe(1);
+    });
+
+    it('reports everything when the resolutions cannot be read', async () => {
+      listResolutions.mockRejectedValue(new Error('schedule_lint_resolutions: no such table'));
+      const summary = await runScheduleLint({ ...ctx, force: true });
+      expect(summary.findings).toBe(2);
+      expect(summary.resolved).toBe(0);
+    });
+
+    it('does not write resolutions on a dry run', async () => {
+      await runScheduleLint({ ...ctx, dryRun: true });
+      expect(touchResolutions).not.toHaveBeenCalled();
+    });
   });
 
   it('surfaces a Momence outage as an error and leaves nothing marked done', async () => {

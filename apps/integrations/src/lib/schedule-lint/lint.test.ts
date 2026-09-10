@@ -157,6 +157,53 @@ describe('runLint with configured rules', () => {
   });
 });
 
+describe('resolved findings', () => {
+  /** A schedule with two untagged sessions: two findings, two keys. */
+  const feed = () => [
+    ...cleanSchedule(),
+    event({ id: 1, title: 'Community Night', tags: [] }),
+    event({ id: 2, title: 'Workshop', tags: [], dateTime: et('2026-09-18', '18:00') }),
+  ];
+
+  it('splits them off, leaving the open list and the digest to the rest', () => {
+    const all = runLint(feed(), { now: NOW });
+    expect(all.findings.map((f) => f.key)).toEqual(['untagged:1', 'untagged:2']);
+    expect(all.resolved).toEqual([]);
+
+    const report = runLint(feed(), { now: NOW }, defaultRules(), new Set(['untagged:1']));
+    expect(report.findings.map((f) => f.key)).toEqual(['untagged:2']);
+    expect(report.resolved.map((f) => f.key)).toEqual(['untagged:1']);
+    expect(report.digest).toBe(digestOf([{ key: 'untagged:2' }]));
+    expect(report.digest).not.toBe(all.digest);
+  });
+
+  it('reads as nothing to report once the last one is resolved', () => {
+    const report = runLint(
+      feed(),
+      { now: NOW },
+      defaultRules(),
+      new Set(['untagged:1', 'untagged:2'])
+    );
+    expect(report.findings).toEqual([]);
+    expect(report.digest).toBe(digestOf([]));
+    expect(report.resolved).toHaveLength(2);
+  });
+
+  it('ignores a key nothing raises', () => {
+    const report = runLint(feed(), { now: NOW }, defaultRules(), new Set(['untagged:999']));
+    expect(report.findings).toHaveLength(2);
+    expect(report.resolved).toEqual([]);
+  });
+
+  it('counts them in the email without listing them', () => {
+    const report = runLint(feed(), { now: NOW }, defaultRules(), new Set(['untagged:1']));
+    const props = buildEmailProps(report);
+    expect(props.resolvedCount).toBe(1);
+    expect(props.fixes).toHaveLength(1);
+    expect(props.fixCount).toBe(1);
+  });
+});
+
 describe('buildEmailProps', () => {
   it('groups overlaps by special event and splits the rest by severity', () => {
     const feed = [

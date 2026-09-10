@@ -1,13 +1,16 @@
 // The schedule lint's rules, behind /admin/schedule-lint.
 //
 // GET  — every rule as configured (built-ins with defaults filled in, then
-//        custom rules), the kinds an admin can add, and the session types the
-//        settings forms offer.
-// POST — one of five actions, same-origin, JSON-only:
+//        custom rules), the findings marked resolved, the kinds an admin can
+//        add, and the session types the settings forms offer.
+// POST — one of seven actions, same-origin, JSON-only:
 //        { action: 'create', kind, label, params }        add a custom rule
 //        { action: 'update', id, label?, enabled?, params? }
 //                                                        tune or toggle any rule
 //        { action: 'delete', id }                         remove a custom rule
+//        { action: 'resolve', key, ruleId, summary?, note? }
+//                                                        call one finding fine
+//        { action: 'unresolve', key }                     reopen it
 //        { action: 'preview' }                            run the saved rules
 //                                                        against Momence now
 //        { action: 'send' }                               run for real and email
@@ -25,9 +28,12 @@ import { runScheduleLint } from '@/lib/schedule-lint/job';
 import { countFindings, runLint } from '@/lib/schedule-lint/lint';
 import {
   normalizeLabel,
+  normalizeNote,
   normalizeParams,
+  normalizeSummary,
   resolveRules,
   summarizeParams,
+  toResolution,
 } from '@/lib/schedule-lint/registry';
 import {
   BUILT_IN_DEFINITIONS,
@@ -35,7 +41,16 @@ import {
   definitionFor,
   isRuleKind,
 } from '@/lib/schedule-lint/rules';
-import { deleteRuleRow, findRuleRow, listRuleRows, saveRuleRow } from '@/lib/schedule-lint/store';
+import {
+  deleteResolution,
+  deleteResolutionsForRule,
+  deleteRuleRow,
+  findRuleRow,
+  listResolutions,
+  listRuleRows,
+  saveResolution,
+  saveRuleRow,
+} from '@/lib/schedule-lint/store';
 import { HORIZON_DAYS, SCHEDULE_LINT_PAGE } from '@/lib/schedule-lint/types';
 
 export const prerender = false;
@@ -64,13 +79,14 @@ const describeKind = (kind: string) => {
 };
 
 async function loadState(db: NonNullable<ReturnType<typeof getDb>>) {
-  const rows = await listRuleRows(db);
+  const [rows, resolutionRows] = await Promise.all([listRuleRows(db), listResolutions(db)]);
   const rules = resolveRules(rows).map((rule) => {
     const def = definitionFor(rule.kind);
     return { ...rule, summary: def ? summarizeParams(def, rule.params) : '' };
   });
   return {
     rules,
+    resolutions: resolutionRows.map(toResolution),
     kinds: [...BUILT_IN_DEFINITIONS, ...CUSTOM_DEFINITIONS]
       .map((d) => describeKind(d.kind))
       .filter(Boolean),
@@ -183,16 +199,56 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           return json({ error: 'Built-in rules cannot be deleted; disable it instead' }, 400);
         }
         await deleteRuleRow(db, id);
+        // Its findings can never be raised again, so its resolutions are dead
+        // weight; leaving them would also revive them if the id were reused.
+        await deleteResolutionsForRule(db, id);
         console.info(`[schedule-lint] ${actor} deleted rule ${id} (${existing.kind})`);
+        return json({ ok: true, ...(await loadState(db)) });
+      }
+
+      case 'resolve': {
+        const key = typeof body.key === 'string' ? body.key.trim() : '';
+        const ruleId = typeof body.ruleId === 'string' ? body.ruleId.trim() : '';
+        if (!key || !ruleId) return json({ error: 'key and ruleId are required' }, 400);
+        // The key is the rule's own, opaque here; what is checked is that the
+        // rule it claims to come from exists, so a typo cannot file a
+        // resolution nothing will ever prune.
+        const known =
+          BUILT_IN_DEFINITIONS.some((d) => d.kind === ruleId) || (await findRuleRow(db, ruleId));
+        if (!known) return json({ error: 'Rule not found' }, 404);
+
+        await saveResolution(db, {
+          key,
+          ruleId,
+          summary: normalizeSummary(body.summary, key),
+          note: normalizeNote(body.note),
+          actor,
+        });
+        console.info(`[schedule-lint] ${actor} resolved ${key} (${ruleId})`);
+        return json({ ok: true, ...(await loadState(db)) });
+      }
+
+      case 'unresolve': {
+        const key = typeof body.key === 'string' ? body.key.trim() : '';
+        if (!key) return json({ error: 'key is required' }, 400);
+        await deleteResolution(db, key);
+        console.info(`[schedule-lint] ${actor} reopened ${key}`);
         return json({ ok: true, ...(await loadState(db)) });
       }
 
       case 'preview': {
         // What the saved rules find right now, disabled ones included so an
         // admin can see what switching one on would send.
-        const rules = resolveRules(await listRuleRows(db)).map((r) => ({ ...r, enabled: true }));
+        const saved = resolveRules(await listRuleRows(db));
+        const rules = saved.map((r) => ({ ...r, enabled: true }));
+        const resolutions = await listResolutions(db);
         const events = await fetchMomenceEvents();
-        const report = runLint(events, { now: new Date() }, rules);
+        const report = runLint(
+          events,
+          { now: new Date() },
+          rules,
+          new Set(resolutions.map((r) => r.key))
+        );
         return json({
           ok: true,
           report: {
@@ -200,13 +256,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
             horizonEnd: report.horizonEnd,
             digest: report.digest,
             findings: report.findings,
+            // Shown on the page so a resolved finding can be reopened where
+            // it is read, rather than from a key in a list.
+            resolved: report.resolved,
             ...countFindings(report.findings),
           },
-          disabled: rules.length
-            ? resolveRules(await listRuleRows(db))
-                .filter((r) => !r.enabled)
-                .map((r) => r.id)
-            : [],
+          disabled: saved.filter((r) => !r.enabled).map((r) => r.id),
         });
       }
 
@@ -222,7 +277,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       }
 
       default:
-        return json({ error: 'action must be create, update, delete, preview, or send' }, 400);
+        return json(
+          {
+            error: 'action must be create, update, delete, resolve, unresolve, preview, or send',
+          },
+          400
+        );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Request failed';

@@ -50,7 +50,7 @@ function lines(findings: Finding[]): ScheduleLintLine[] {
 }
 
 export function buildEmailProps(
-  report: Pick<LintReport, 'findings' | 'horizonEnd'>
+  report: Pick<LintReport, 'findings' | 'horizonEnd'> & Partial<Pick<LintReport, 'resolved'>>
 ): ScheduleLintProps {
   const overlaps = report.findings.filter((f) => f.rule === 'special-event-overlap');
   const rest = report.findings.filter((f) => f.rule !== 'special-event-overlap');
@@ -63,6 +63,7 @@ export function buildEmailProps(
     cancelCount: overlaps.filter((f) => f.severity === 'cancel').length,
     fixCount: fixes.length,
     noticeCount: notices.length + overlaps.filter((f) => f.severity !== 'cancel').length,
+    resolvedCount: report.resolved?.length ?? 0,
     overlaps: overlapGroups(overlaps),
     fixes: lines(fixes),
     notices: lines(notices),

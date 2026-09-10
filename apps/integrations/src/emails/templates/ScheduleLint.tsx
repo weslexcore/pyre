@@ -145,6 +145,7 @@ export function ScheduleLint({
   cancelCount,
   fixCount,
   noticeCount,
+  resolvedCount,
   overlaps,
   fixes,
   notices,
@@ -164,6 +165,13 @@ export function ScheduleLint({
         email changes nothing on its own. You will not hear about the same list twice — the next
         email comes when something on it changes.
       </Text>
+
+      {resolvedCount > 0 && (
+        <Text style={text}>
+          {plural(resolvedCount, 'finding')} marked resolved and left out of this list. They are on
+          the schedule lint page, where they can be reopened.
+        </Text>
+      )}
 
       {overlaps.length > 0 && (
         <>
@@ -213,6 +221,7 @@ ScheduleLint.PreviewProps = {
   cancelCount: 5,
   fixCount: 2,
   noticeCount: 3,
+  resolvedCount: 1,
   overlaps: [
     {
       eventTitle: 'Sound Bath with Anna',

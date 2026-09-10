@@ -626,6 +626,19 @@ export interface ScheduleLintRuleRow {
   updated_at: string;
 }
 
+// One resolved schedule-lint finding (see the schedule_lint_resolutions
+// migration). Keyed by the finding's own key; `summary` is what the finding
+// said when it was resolved, kept because the session behind it may be gone.
+export interface ScheduleLintResolutionRow {
+  key: string;
+  rule_id: string;
+  summary: string;
+  note: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  last_seen_at: string;
+}
+
 // OAuth tokens for a connected QuickBooks Online company (see the
 // quickbooks_tokens migration and lib/quickbooks). Refresh tokens rotate on
 // every refresh, so this row is rewritten each time; service-role only —

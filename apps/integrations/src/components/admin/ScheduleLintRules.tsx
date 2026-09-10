@@ -6,16 +6,22 @@
 // against Momence right now and paints what each one catches under it, so a
 // new setting can be checked before the next email goes out; "Email admins
 // now" runs the real job.
+//
+// A finding that is genuinely fine can be resolved from here: it leaves the
+// email and the digest but stays on this page, with an optional note, until
+// somebody reopens it or the lint stops raising it altogether.
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import {
   DAY_KEYS,
   type DayKey,
   type DayWindow,
   type Finding,
+  NOTE_MAX,
   type OpeningHours,
   type ParamField,
+  type Resolution,
   type RuleInstance,
   type RuleKind,
   type Severity,
@@ -48,6 +54,7 @@ interface ListedRule extends RuleInstance {
 
 interface StateResponse {
   rules: ListedRule[];
+  resolutions: Resolution[];
   kinds: KindInfo[];
   sessionTypes: string[];
   horizonDays: number;
@@ -58,6 +65,8 @@ interface PreviewReport {
   horizonEnd: string;
   digest: string;
   findings: Finding[];
+  /** Raised by a rule, but marked resolved; listed apart, not counted. */
+  resolved: Finding[];
   byRule: Record<string, number>;
   bySeverity: Record<Severity, number>;
 }
@@ -283,32 +292,65 @@ function ParamsForm({
   );
 }
 
-function FindingRow({ finding }: { finding: Finding }) {
+function FindingRow({ finding, action }: { finding: Finding; action?: React.ReactNode }) {
   return (
-    <li className="py-1.5 text-xs">
-      <span className={`font-mono uppercase tracking-wide ${SEVERITY_STYLE[finding.severity]}`}>
-        {finding.severity}
-      </span>{' '}
-      {finding.session ? (
-        <>
-          {finding.session.link ? (
-            <a
-              href={finding.session.link}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--pyre-creme)] underline"
-            >
-              {finding.session.title}
-            </a>
-          ) : (
-            <span className="text-[var(--pyre-creme)]">{finding.session.title}</span>
-          )}
-          <span className="text-white/50"> · {when(finding.session.startsAt)}</span>
-          <span className="block text-white/60">{finding.message}</span>
-        </>
-      ) : (
-        <span className="text-white/60">{finding.message}</span>
-      )}
+    <li className="flex items-start justify-between gap-3 py-1.5 text-xs">
+      <div className="min-w-0">
+        <span className={`font-mono uppercase tracking-wide ${SEVERITY_STYLE[finding.severity]}`}>
+          {finding.severity}
+        </span>{' '}
+        {finding.session ? (
+          <>
+            {finding.session.link ? (
+              <a
+                href={finding.session.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--pyre-creme)] underline"
+              >
+                {finding.session.title}
+              </a>
+            ) : (
+              <span className="text-[var(--pyre-creme)]">{finding.session.title}</span>
+            )}
+            <span className="text-white/50"> · {when(finding.session.startsAt)}</span>
+            <span className="block text-white/60">{finding.message}</span>
+          </>
+        ) : (
+          <span className="text-white/60">{finding.message}</span>
+        )}
+      </div>
+      {action}
+    </li>
+  );
+}
+
+/** The line a resolution is filed under, and the way back. */
+function ResolvedRow({
+  entry,
+  ruleLabel,
+  disabled,
+  onReopen,
+}: {
+  entry: Resolution;
+  ruleLabel?: string;
+  disabled: boolean;
+  onReopen: () => void;
+}) {
+  return (
+    <li className="flex items-start justify-between gap-3 py-1.5 text-xs">
+      <div className="min-w-0">
+        <span className="font-mono uppercase tracking-wide text-white/35">resolved</span>{' '}
+        <span className="text-white/60">{entry.summary}</span>
+        {entry.note && <span className="block text-white/45">"{entry.note}"</span>}
+        <span className="block text-white/30">
+          {ruleLabel ? `${ruleLabel} · ` : ''}
+          {entry.resolvedBy ?? 'an admin'} · {when(entry.resolvedAt)}
+        </span>
+      </div>
+      <button type="button" className={buttonClass} disabled={disabled} onClick={onReopen}>
+        Reopen
+      </button>
     </li>
   );
 }
@@ -316,6 +358,7 @@ function FindingRow({ finding }: { finding: Finding }) {
 export function ScheduleLintRules() {
   const { data, error, loading, setData, reload } = useCachedJson<StateResponse>(API);
   const rules = useMemo(() => data?.rules ?? [], [data]);
+  const resolutions = useMemo(() => data?.resolutions ?? [], [data]);
   const kinds = useMemo(() => data?.kinds ?? [], [data]);
   const sessionTypes = data?.sessionTypes ?? [];
   const kindOf = (kind: string) => kinds.find((k) => k.kind === kind);
@@ -335,10 +378,17 @@ export function ScheduleLintRules() {
   const [deleting, setDeleting] = useState<ListedRule | null>(null);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<PreviewReport | null>(null);
+  /** The finding whose "why this is fine" note is being typed. */
+  const [resolving, setResolving] = useState<{ finding: Finding; note: string } | null>(null);
 
   const builtIns = rules.filter((r) => r.builtIn);
   const customs = rules.filter((r) => !r.builtIn);
   const customKinds = kinds.filter((k) => !k.builtIn);
+  // The ones a preview already showed under their rule are not repeated here;
+  // what is left are resolutions nothing is raising any more.
+  const stray = preview
+    ? resolutions.filter((r) => !preview.resolved.some((f) => f.key === r.key))
+    : resolutions;
 
   const post = async (body: Record<string, unknown>, key: string) => {
     setBusy(key);
@@ -346,7 +396,16 @@ export function ScheduleLintRules() {
     try {
       const result = await send<StateResponse & Record<string, unknown>>(API, 'POST', body);
       if (result.rules) {
-        setData((prev) => (prev ? { ...prev, rules: result.rules, kinds: result.kinds } : prev));
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                rules: result.rules,
+                resolutions: result.resolutions ?? prev.resolutions,
+                kinds: result.kinds,
+              }
+            : prev
+        );
         invalidateJson(API);
       }
       return result;
@@ -411,14 +470,19 @@ export function ScheduleLintRules() {
     if (result?.report) {
       const report = result.report as PreviewReport;
       setPreview(report);
+      const resolvedNote = report.resolved.length
+        ? ` ${report.resolved.length} resolved finding${
+            report.resolved.length === 1 ? ' is' : 's are'
+          } listed separately and stay out of the email.`
+        : '';
       setNotice(
         report.findings.length === 0
-          ? 'Checked Momence: nothing to report.'
+          ? `Checked Momence: nothing to report.${resolvedNote}`
           : `Checked Momence: ${report.findings.length} finding${
               report.findings.length === 1 ? '' : 's'
             } (${report.bySeverity.cancel} to cancel, ${report.bySeverity.fix} to fix, ${
               report.bySeverity.notice
-            } notices). Disabled rules are shown too, so you can see what switching one on would send.`
+            } notices). Disabled rules are shown too, so you can see what switching one on would send.${resolvedNote}`
       );
     }
   };
@@ -428,7 +492,13 @@ export function ScheduleLintRules() {
     setNotice(null);
     const result = await post({ action: 'send' }, 'send');
     const summary = result?.summary as
-      | { findings: number; sent: number; duplicates: number; failed: string[] }
+      | {
+          findings: number;
+          sent: number;
+          duplicates: number;
+          failed: string[];
+          resolved?: number;
+        }
       | undefined;
     if (summary) {
       setNotice(
@@ -440,7 +510,9 @@ export function ScheduleLintRules() {
               summary.duplicates
                 ? `, ${summary.duplicates} already had this exact list this week`
                 : ''
-            }${summary.failed.length ? `, ${summary.failed.length} failed` : ''}.`
+            }${summary.failed.length ? `, ${summary.failed.length} failed` : ''}.${
+              summary.resolved ? ` ${summary.resolved} resolved, left out.` : ''
+            }`
       );
       await reload();
     }
@@ -449,10 +521,68 @@ export function ScheduleLintRules() {
   const findingsFor = (ruleId: string): Finding[] =>
     preview?.findings.filter((f) => f.ruleId === ruleId) ?? [];
 
+  const resolvedFor = (ruleId: string): Finding[] =>
+    preview?.resolved.filter((f) => f.ruleId === ruleId) ?? [];
+
+  /**
+   * Resolving moves the finding across in the preview rather than re-running
+   * it: the schedule has not changed, only what we have said about it.
+   */
+  const resolve = async () => {
+    if (!resolving) return;
+    const { finding, note } = resolving;
+    const result = await post(
+      {
+        action: 'resolve',
+        key: finding.key,
+        ruleId: finding.ruleId,
+        summary: finding.message,
+        note,
+      },
+      finding.key
+    );
+    if (!result) return;
+    setResolving(null);
+    setPreview((prev) =>
+      prev
+        ? {
+            ...prev,
+            findings: prev.findings.filter((f) => f.key !== finding.key),
+            resolved: [...prev.resolved, finding],
+            byRule: { ...prev.byRule, [finding.ruleId]: (prev.byRule[finding.ruleId] ?? 1) - 1 },
+            bySeverity: {
+              ...prev.bySeverity,
+              [finding.severity]: prev.bySeverity[finding.severity] - 1,
+            },
+          }
+        : prev
+    );
+  };
+
+  const unresolve = async (key: string) => {
+    const result = await post({ action: 'unresolve', key }, key);
+    if (!result) return;
+    setPreview((prev) => {
+      const finding = prev?.resolved.find((f) => f.key === key);
+      if (!prev || !finding) return prev;
+      return {
+        ...prev,
+        findings: [...prev.findings, finding],
+        resolved: prev.resolved.filter((f) => f.key !== key),
+        byRule: { ...prev.byRule, [finding.ruleId]: (prev.byRule[finding.ruleId] ?? 0) + 1 },
+        bySeverity: {
+          ...prev.bySeverity,
+          [finding.severity]: prev.bySeverity[finding.severity] + 1,
+        },
+      };
+    });
+  };
+
   const renderRule = (rule: ListedRule) => {
     const info = kindOf(rule.kind);
     const isEditing = editing === rule.id && draft;
     const found = findingsFor(rule.id);
+    const settled = resolvedFor(rule.id);
     return (
       <li key={rule.id} className={`${cardClass} ${rule.enabled ? '' : 'opacity-70'}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -558,11 +688,63 @@ export function ScheduleLintRules() {
           </div>
         )}
 
-        {preview && found.length > 0 && (
+        {preview && (found.length > 0 || settled.length > 0) && (
           <ul className="mt-3 divide-y divide-white/5 border-t border-white/10 pt-2">
             {found.map((f) => (
-              <FindingRow key={f.key} finding={f} />
+              <Fragment key={f.key}>
+                <FindingRow
+                  finding={f}
+                  action={
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy !== null}
+                      onClick={() => setResolving({ finding: f, note: '' })}
+                    >
+                      Resolve
+                    </button>
+                  }
+                />
+                {resolving?.finding.key === f.key && (
+                  <li className="flex flex-wrap items-center gap-2 py-2">
+                    <input
+                      className={`${inputClass} w-auto grow`}
+                      maxLength={NOTE_MAX}
+                      placeholder="Why this one is fine (optional)"
+                      value={resolving.note}
+                      onChange={(e) => setResolving({ ...resolving, note: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      disabled={busy !== null}
+                      onClick={() => void resolve()}
+                    >
+                      {busy === f.key ? 'Resolving…' : 'Resolve'}
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy !== null}
+                      onClick={() => setResolving(null)}
+                    >
+                      Cancel
+                    </button>
+                  </li>
+                )}
+              </Fragment>
             ))}
+            {settled.map((f) => {
+              const entry = resolutions.find((r) => r.key === f.key);
+              return entry ? (
+                <ResolvedRow
+                  key={f.key}
+                  entry={entry}
+                  disabled={busy !== null}
+                  onReopen={() => void unresolve(f.key)}
+                />
+              ) : null;
+            })}
           </ul>
         )}
       </li>
@@ -683,6 +865,31 @@ export function ScheduleLintRules() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {stray.length > 0 && (
+        <section className="space-y-3">
+          <SectionTitle
+            note={
+              preview
+                ? 'Resolved, and not raised by the check just now — the schedule has moved on. Dropped automatically after 30 days without being raised.'
+                : 'Findings called fine. They stay out of the email until reopened. Preview to see which of them the schedule still raises.'
+            }
+          >
+            Resolved
+          </SectionTitle>
+          <ul className={`${cardClass} divide-y divide-white/5`}>
+            {stray.map((entry) => (
+              <ResolvedRow
+                key={entry.key}
+                entry={entry}
+                ruleLabel={rules.find((r) => r.id === entry.ruleId)?.label}
+                disabled={busy !== null}
+                onReopen={() => void unresolve(entry.key)}
+              />
+            ))}
+          </ul>
         </section>
       )}
 

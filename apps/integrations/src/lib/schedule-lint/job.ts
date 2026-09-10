@@ -25,7 +25,7 @@ import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 import { buildEmailProps } from './email';
 import { countFindings, runLint } from './lint';
 import { defaultRules, resolveRules } from './registry';
-import { listRuleRows } from './store';
+import { listResolutions, listRuleRows, touchResolutions } from './store';
 import { DIRTY_KEY, type LintTrigger } from './trigger';
 import type { RuleInstance, Severity } from './types';
 
@@ -45,6 +45,10 @@ export interface ScheduleLintSummary {
   byRule?: Record<string, number>;
   bySeverity?: Record<Severity, number>;
   digest?: string;
+  /** Findings raised but left out because an admin marked them resolved. */
+  resolved?: number;
+  /** Resolutions dropped because nothing has raised their finding lately. */
+  pruned?: number;
   sent: number;
   /** Admins whose email was already claimed for this digest this week. */
   duplicates: number;
@@ -70,6 +74,25 @@ export async function loadRules(): Promise<RuleInstance[]> {
       e instanceof Error ? e.message : e
     );
     return defaultRules();
+  }
+}
+
+/**
+ * The keys of findings the admins have already called fine. An unreachable
+ * Supabase reads as "nothing resolved": the lint is noisier than it should
+ * be for one run, which is the right way round to fail.
+ */
+export async function loadResolvedKeys(): Promise<Set<string>> {
+  const db = getDb();
+  if (!db) return new Set();
+  try {
+    return new Set((await listResolutions(db)).map((r) => r.key));
+  } catch (e) {
+    console.warn(
+      '[schedule-lint] could not load resolutions, reporting everything:',
+      e instanceof Error ? e.message : e
+    );
+    return new Set();
   }
 }
 
@@ -111,7 +134,8 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
   // Throws on an outage; the tick records the error and nothing is marked
   // done, so the next tick simply tries again.
   const events = await fetchMomenceEvents();
-  const report = runLint(events, { now }, await loadRules());
+  const [rules, resolvedKeys] = await Promise.all([loadRules(), loadResolvedKeys()]);
+  const report = runLint(events, { now }, rules, resolvedKeys);
   const summary: ScheduleLintSummary = {
     ...base,
     horizonStart: report.horizonStart,
@@ -119,7 +143,29 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
     findings: report.findings.length,
     ...countFindings(report.findings),
     digest: report.digest,
+    resolved: report.resolved.length,
   };
+
+  // A resolution lives as long as its finding keeps coming back; this is the
+  // heartbeat that says it did, and the sweep for the ones that stopped.
+  // Bookkeeping, never a reason to fail a run that has already found things.
+  if (!ctx.dryRun) {
+    const db = getDb();
+    if (db) {
+      try {
+        const pruned = await touchResolutions(
+          db,
+          report.resolved.map((f) => f.key)
+        );
+        if (pruned > 0) summary.pruned = pruned;
+      } catch (e) {
+        console.warn(
+          '[schedule-lint] could not update resolutions:',
+          e instanceof Error ? e.message : e
+        );
+      }
+    }
+  }
 
   const finish = async () => {
     if (!redis) return;
