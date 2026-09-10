@@ -2,6 +2,8 @@
 // type imports from the store, so the islands never pull in the Redis client.
 
 import type {
+  CampaignGoal,
+  CampaignGoalMetric,
   CampaignStatus,
   CampaignType,
   DestinationKind,
@@ -9,7 +11,15 @@ import type {
   UtmLink,
 } from '@pyre/webhook-core';
 
-export type { CampaignStatus, CampaignType, DestinationKind, UtmCampaign, UtmLink };
+export type {
+  CampaignGoal,
+  CampaignGoalMetric,
+  CampaignStatus,
+  CampaignType,
+  DestinationKind,
+  UtmCampaign,
+  UtmLink,
+};
 
 export const CAMPAIGN_TYPES: ReadonlyArray<{ key: CampaignType; label: string; hint: string }> = [
   {

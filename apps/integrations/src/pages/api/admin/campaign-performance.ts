@@ -21,6 +21,7 @@
 // of its own.
 
 import {
+  type CampaignGoal,
   getRedis,
   getShortLinks,
   listCampaignsWithLinks,
@@ -52,13 +53,13 @@ import { describeLink } from '@/lib/campaigns/describe';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-// v3: rows gained the purchase columns (v2 added `sources`); an older entry
-// must never be served to a UI that expects them.
-const CACHE_PREFIX = 'cache:campaign-perf:v3:';
+// v4: rows carry the campaign's goals (v3 added the purchase columns, v2
+// `sources`); an older entry must never be served to a UI that expects them.
+const CACHE_PREFIX = 'cache:campaign-perf:v4:';
 const CACHE_TTL_SECONDS = 5 * 60;
 // Last report that came back with PostHog data intact, kept much longer so a
 // transient PostHog outage degrades to stale numbers instead of an empty table.
-const LAST_GOOD_PREFIX = 'cache:campaign-perf:v3:last-good:';
+const LAST_GOOD_PREFIX = 'cache:campaign-perf:v4:last-good:';
 const LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ALLOWED_DAYS = [7, 30, 90];
 
@@ -89,6 +90,9 @@ interface CampaignRow extends ConversionCounts {
   shortlinkClicks: number;
   pageviews: number;
   visitors: number;
+  /** Targets set when the campaign was created, so the report can be read
+   * against what someone committed to rather than against nothing. */
+  goals: CampaignGoal[];
 }
 
 /** The same numbers rolled up by utm_source across every campaign. */
@@ -351,6 +355,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       shortlinkClicks: shortlinks.reduce((sum, s) => sum + s.clicks, 0),
       pageviews: traffic.get(slug)?.pageviews ?? 0,
       visitors: traffic.get(slug)?.visitors ?? 0,
+      goals: campaign.goals,
       ...conversionCounts(conversions.get(slug)),
     };
   });

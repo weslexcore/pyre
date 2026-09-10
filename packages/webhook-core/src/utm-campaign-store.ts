@@ -38,6 +38,45 @@ export type DestinationKind =
   | 'custom'
   | '';
 
+/**
+ * What a campaign is trying to achieve, chosen when it is set up so the
+ * result can be read against a number someone committed to beforehand rather
+ * than a number that looks fine in hindsight. Every metric is a column the
+ * campaign performance report already produces.
+ */
+export type CampaignGoalMetric =
+  | 'clicks'
+  | 'visitors'
+  | 'mailingListSignups'
+  | 'introOfferSignups'
+  | 'bookings'
+  | 'introPurchases'
+  | 'creditPacks'
+  | 'memberships';
+
+export interface CampaignGoal {
+  metric: CampaignGoalMetric;
+  /** How many of that metric the campaign is aiming for. A positive integer. */
+  target: number;
+}
+
+export const CAMPAIGN_GOAL_METRICS: readonly CampaignGoalMetric[] = [
+  'clicks',
+  'visitors',
+  'mailingListSignups',
+  'introOfferSignups',
+  'bookings',
+  'introPurchases',
+  'creditPacks',
+  'memberships',
+];
+
+/** One goal per metric, so a campaign can never carry two numbers for the
+ * same thing; the cap keeps the record (and the form) honest. */
+export const MAX_CAMPAIGN_GOALS = 6;
+/** Sanity ceiling on a target — anything larger is a typo, not an ambition. */
+export const MAX_CAMPAIGN_GOAL_TARGET = 1_000_000;
+
 export interface UtmCampaign {
   id: string;
   name: string;
@@ -54,6 +93,8 @@ export interface UtmCampaign {
   startsAt: string;
   endsAt: string;
   notes: string;
+  /** Targets set before the campaign runs; empty when none were set. */
+  goals: CampaignGoal[];
   createdAt: number;
   createdBy: string; // admin email
   updatedAt: number;
@@ -98,6 +139,7 @@ export interface CreateCampaignInput {
   startsAt: string;
   endsAt: string;
   notes: string;
+  goals: CampaignGoal[];
   createdBy: string;
 }
 
@@ -118,6 +160,7 @@ export type CampaignPatch = Partial<
     | 'startsAt'
     | 'endsAt'
     | 'notes'
+    | 'goals'
   >
 >;
 
@@ -148,6 +191,41 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Goals are stored as one JSON string field on the campaign hash. Upstash
+ * parses JSON-looking values back into objects on read, so both an array and
+ * a string arrive here; anything malformed (a legacy record with no goals, a
+ * hand-edited key) reads as no goals rather than throwing on a page load.
+ */
+export function parseGoals(raw: unknown): CampaignGoal[] {
+  const list = typeof raw === 'string' ? safeJson(raw) : raw;
+  if (!Array.isArray(list)) return [];
+
+  const goals: CampaignGoal[] = [];
+  const seen = new Set<string>();
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const metric = (entry as { metric?: unknown }).metric;
+    const target = Math.floor(Number((entry as { target?: unknown }).target));
+    if (typeof metric !== 'string') continue;
+    if (!CAMPAIGN_GOAL_METRICS.includes(metric as CampaignGoalMetric)) continue;
+    if (!Number.isFinite(target) || target <= 0 || target > MAX_CAMPAIGN_GOAL_TARGET) continue;
+    if (seen.has(metric)) continue;
+    seen.add(metric);
+    goals.push({ metric: metric as CampaignGoalMetric, target });
+    if (goals.length >= MAX_CAMPAIGN_GOALS) break;
+  }
+  return goals;
+}
 
 const CAMPAIGN_TYPES: readonly CampaignType[] = [
   'event',
@@ -186,6 +264,7 @@ export function normalizeCampaignRecord(raw: Record<string, unknown>): UtmCampai
     startsAt: str(raw.startsAt),
     endsAt: str(raw.endsAt),
     notes: str(raw.notes),
+    goals: parseGoals(raw.goals),
     createdAt,
     createdBy: str(raw.createdBy),
     updatedAt: num(raw.updatedAt) || createdAt,
@@ -347,6 +426,7 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Create
     startsAt: input.startsAt,
     endsAt: input.endsAt,
     notes: input.notes,
+    goals: input.goals,
     createdAt: now,
     createdBy: input.createdBy,
     updatedAt: now,
@@ -361,7 +441,11 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Create
   }
 
   const pipeline = redis.pipeline();
-  pipeline.hset(`${CAMPAIGN_PREFIX}${campaign.id}`, campaign);
+  // Goals are the one non-scalar field, so they go in as JSON (see parseGoals).
+  pipeline.hset(`${CAMPAIGN_PREFIX}${campaign.id}`, {
+    ...campaign,
+    goals: JSON.stringify(campaign.goals),
+  });
   pipeline.zadd(CAMPAIGNS_SET, { score: campaign.createdAt, member: campaign.id });
   await pipeline.exec();
 
@@ -381,7 +465,8 @@ export async function updateCampaign(id: string, patch: CampaignPatch): Promise<
 
   const fields: Record<string, string | number> = { updatedAt: Date.now() };
   for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) fields[key] = value;
+    if (value === undefined) continue;
+    fields[key] = key === 'goals' ? JSON.stringify(value) : (value as string | number);
   }
   await redis.hset(`${CAMPAIGN_PREFIX}${id}`, fields);
   return getCampaign(id);

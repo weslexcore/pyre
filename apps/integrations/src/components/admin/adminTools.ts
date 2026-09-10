@@ -150,7 +150,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     title: 'Campaigns',
     navLabel: 'Campaigns',
     description:
-      'Create a campaign, generate consistently tagged links and QR codes for every placement, and see clicks, signups, and bookings per campaign.',
+      'Create a campaign, set the goals it is meant to hit, generate consistently tagged links and QR codes for every placement, and read clicks, signups, bookings, and purchases against those goals.',
     section: 'marketing',
     keywords: [
       'utm',
@@ -162,6 +162,9 @@ export const ADMIN_TOOLS: AdminTool[] = [
       'instagram',
       'newsletter',
       'performance',
+      'goal',
+      'goals',
+      'target',
     ],
   },
   {
@@ -417,7 +420,7 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     href: '/admin/campaigns/new',
     title: 'New Campaign',
     parent: '/admin/campaigns',
-    keywords: ['utm', 'link', 'create', 'event', 'sale'],
+    keywords: ['utm', 'link', 'create', 'event', 'sale', 'goal'],
   },
   {
     href: '/admin/campaigns/performance',

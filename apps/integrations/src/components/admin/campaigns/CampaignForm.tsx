@@ -4,11 +4,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { GOAL_METRICS, MAX_GOAL_TARGET, MAX_GOALS } from '@/lib/campaigns/goals';
 import { newsletterDefaults } from '@/lib/campaigns/newsletter';
 import { slugifyCampaign } from '@/lib/campaigns/slug';
 import {
   type BlogPostRef,
   CAMPAIGN_TYPES,
+  type CampaignGoal,
   type CampaignType,
   type EventOption,
   type UtmCampaign,
@@ -64,6 +66,11 @@ export function CampaignForm({
   const [startsAt, setStartsAt] = useState(initial?.startsAt ?? '');
   const [endsAt, setEndsAt] = useState(initial?.endsAt ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  // Targets are held as the raw strings the number inputs carry, so a
+  // half-typed "1" never becomes a goal of 1 on its way to the server.
+  const [targets, setTargets] = useState<Record<string, string>>(() =>
+    Object.fromEntries((initial?.goals ?? []).map((goal) => [goal.metric, String(goal.target)]))
+  );
   const [eventId, setEventId] = useState(
     initial?.destinationKind === 'event' ? initial.destinationValue : ''
   );
@@ -80,6 +87,16 @@ export function CampaignForm({
   }, [type, events.load]);
 
   const slug = useMemo(() => slugifyCampaign(name), [name]);
+
+  const goals = useMemo<CampaignGoal[]>(
+    () =>
+      GOAL_METRICS.map((metric) => ({
+        metric: metric.key,
+        target: Number.parseInt(targets[metric.key] ?? '', 10),
+      })).filter((goal) => Number.isInteger(goal.target) && goal.target > 0),
+    [targets]
+  );
+  const tooManyGoals = goals.length > MAX_GOALS;
 
   // Newsletter sends are one a month, named by month. Picking the type on a
   // fresh form fills the name, the month, and the home page as destination;
@@ -124,6 +141,7 @@ export function CampaignForm({
       startsAt,
       endsAt,
       notes,
+      goals,
     };
     try {
       const res = await fetch(
@@ -158,7 +176,7 @@ export function CampaignForm({
     } finally {
       setSaving(false);
     }
-  }, [name, type, destination, startsAt, endsAt, notes, editing, initial?.id, onSaved]);
+  }, [name, type, destination, startsAt, endsAt, notes, goals, editing, initial?.id, onSaved]);
 
   if (events.sessionExpired) {
     return (
@@ -307,6 +325,44 @@ export function CampaignForm({
       </section>
 
       <section>
+        <span className={labelClass}>Goals (optional)</span>
+        <p className="-mt-1 mb-2 text-xs text-white/40">
+          What this campaign is meant to produce. Fill in the ones that matter and leave the rest
+          empty; the campaign page reads each one against the report while it runs, against the pace
+          its dates imply.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {GOAL_METRICS.map((metric) => (
+            <label
+              key={metric.key}
+              className="flex items-center gap-3 rounded border border-white/10 bg-white/5 px-3 py-2"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm text-[var(--pyre-creme)]">{metric.label}</span>
+                <span className="block text-xs text-white/40">{metric.hint}</span>
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={MAX_GOAL_TARGET}
+                inputMode="numeric"
+                aria-label={`${metric.label} target`}
+                className={`${inputClass} w-24 shrink-0 !py-2 text-right`}
+                value={targets[metric.key] ?? ''}
+                onChange={(e) => setTargets((prev) => ({ ...prev, [metric.key]: e.target.value }))}
+              />
+            </label>
+          ))}
+        </div>
+        {tooManyGoals && (
+          <p className="mt-2 text-xs text-[var(--pyre-gold)]">
+            Pick at most {MAX_GOALS} goals. A campaign that is chasing everything is not being
+            measured against anything.
+          </p>
+        )}
+      </section>
+
+      <section>
         <label htmlFor="campaign-notes" className={smallLabelClass}>
           Notes (optional)
         </label>
@@ -332,7 +388,11 @@ export function CampaignForm({
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={saving || !slug} className={primaryButtonClass}>
+        <button
+          type="submit"
+          disabled={saving || !slug || tooManyGoals}
+          className={primaryButtonClass}
+        >
           {saving ? 'Saving…' : editing ? 'Save changes' : 'Create campaign'}
         </button>
         {editing ? (

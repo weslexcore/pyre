@@ -24,6 +24,9 @@ export {
   type StatsInput,
 } from './webhook-stats';
 export {
+  CAMPAIGN_GOAL_METRICS,
+  type CampaignGoal,
+  type CampaignGoalMetric,
   type CampaignPatch,
   type CampaignStatus,
   type CampaignType,
@@ -40,7 +43,10 @@ export {
   getLink,
   listCampaigns,
   listCampaignsWithLinks,
+  MAX_CAMPAIGN_GOAL_TARGET,
+  MAX_CAMPAIGN_GOALS,
   normalizeCampaignRecord,
+  parseGoals,
   normalizeLinkRecord,
   saveLink,
   slugifyCampaign,

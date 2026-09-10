@@ -10,6 +10,6 @@ const origin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
 const blogPosts = await loadBlogPosts(origin);
 ---
 
-<AdminLayout title="New Campaign" subtitle="Name it once. Every link you generate carries that name.">
+<AdminLayout title="New Campaign" subtitle="Name it once, say what it should produce. Every link you generate carries that name.">
   <CampaignForm client:load origin={origin} blogPosts={blogPosts} />
 </AdminLayout>

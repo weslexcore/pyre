@@ -4,6 +4,7 @@
 // immediately and revalidates behind it.
 
 import { useMemo, useState } from 'react';
+import { goalMetricLabel } from '@/lib/campaigns/goals';
 import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type { CampaignListResponse } from '@/lib/campaigns/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
@@ -123,6 +124,14 @@ export function CampaignsIndex() {
                   {range && <span>{range}</span>}
                   <span>Created {formatCreated(campaign.createdAt)}</span>
                 </div>
+                {campaign.goals.length > 0 && (
+                  <p className="mt-2 font-mono text-xs text-white/40">
+                    Goal:{' '}
+                    {campaign.goals
+                      .map((goal) => `${goal.target} ${goalMetricLabel(goal.metric).toLowerCase()}`)
+                      .join(', ')}
+                  </p>
+                )}
                 {!campaign.destinationUrl && (
                   <p className="mt-2 text-xs text-[var(--pyre-gold)]">Destination not set</p>
                 )}

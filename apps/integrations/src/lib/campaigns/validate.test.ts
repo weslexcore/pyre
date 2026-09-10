@@ -31,8 +31,42 @@ describe('normalizeCampaignInput', () => {
         startsAt: '2026-09-01',
         endsAt: '2026-09-20',
         notes: 'Big one.',
+        goals: [],
       },
     });
+  });
+
+  it('takes goals and drops none of them', () => {
+    const result = normalizeCampaignInput(
+      {
+        ...good,
+        goals: [
+          { metric: 'bookings', target: 25 },
+          { metric: 'clicks', target: '400' },
+        ],
+      },
+      ORIGIN
+    );
+    expect(result.ok && result.value.goals).toEqual([
+      { metric: 'bookings', target: 25 },
+      { metric: 'clicks', target: 400 },
+    ]);
+  });
+
+  it('refuses unknown metrics, repeats, and targets that are not whole counts', () => {
+    const bad = (goals: unknown) => normalizeCampaignInput({ ...good, goals }, ORIGIN).ok;
+    expect(bad([{ metric: 'vibes', target: 3 }])).toBe(false);
+    expect(
+      bad([
+        { metric: 'bookings', target: 3 },
+        { metric: 'bookings', target: 4 },
+      ])
+    ).toBe(false);
+    expect(bad([{ metric: 'bookings', target: 0 }])).toBe(false);
+    expect(bad([{ metric: 'bookings', target: -2 }])).toBe(false);
+    expect(bad([{ metric: 'bookings', target: 2.5 }])).toBe(false);
+    expect(bad([{ metric: 'bookings', target: 2_000_000 }])).toBe(false);
+    expect(bad('twenty five')).toBe(false);
   });
 
   it('requires a name that slugifies to something', () => {
@@ -106,6 +140,16 @@ describe('normalizeCampaignPatch', () => {
     expect(normalizeCampaignPatch({ slug: 'new-slug' }, ORIGIN)).toEqual({
       ok: false,
       error: 'slug_immutable',
+    });
+  });
+
+  it('takes goals, and an empty list clears them', () => {
+    expect(
+      normalizeCampaignPatch({ goals: [{ metric: 'memberships', target: 5 }] }, ORIGIN)
+    ).toEqual({ ok: true, value: { goals: [{ metric: 'memberships', target: 5 }] } });
+    expect(normalizeCampaignPatch({ goals: [] }, ORIGIN)).toEqual({
+      ok: true,
+      value: { goals: [] },
     });
   });
 

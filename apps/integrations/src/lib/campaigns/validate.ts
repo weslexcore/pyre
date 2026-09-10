@@ -6,12 +6,15 @@
 // at create time and locked afterwards, because every generated link and
 // every PostHog join carries it. `status` is accepted on PATCH only.
 
+import { GOAL_METRICS, MAX_GOAL_TARGET, MAX_GOALS } from './goals';
 import { type CustomUtm, resolveDestination } from './links';
 import { type Placement, placementByKey } from './placements';
 import { slugifyCampaign } from './slug';
 import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_TYPES,
+  type CampaignGoal,
+  type CampaignGoalMetric,
   type CampaignStatus,
   type CampaignType,
   type DestinationKind,
@@ -55,6 +58,7 @@ export interface CampaignInput {
   startsAt: string;
   endsAt: string;
   notes: string;
+  goals: CampaignGoal[];
 }
 
 function campaignType(value: unknown): CampaignType | null {
@@ -103,6 +107,35 @@ function dateRange(
   return { ok: true, value: { startsAt, endsAt } };
 }
 
+/**
+ * The targets a campaign is being measured against. An absent `goals` is no
+ * goals rather than an error, so a client that never learned about them (or a
+ * campaign created from the performance report in one click) still saves.
+ */
+function goals(value: unknown): Normalized<CampaignGoal[]> {
+  if (value == null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, error: 'Goals need to be a list' };
+  if (value.length > MAX_GOALS) return { ok: false, error: `Set at most ${MAX_GOALS} goals` };
+
+  const out: CampaignGoal[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    const entry = (raw ?? {}) as { metric?: unknown; target?: unknown };
+    const metric = typeof entry.metric === 'string' ? entry.metric : '';
+    if (!GOAL_METRICS.some((m) => m.key === metric)) {
+      return { ok: false, error: 'Pick a goal from the list' };
+    }
+    if (seen.has(metric)) return { ok: false, error: 'Only one target per goal' };
+    const target = Number(entry.target);
+    if (!Number.isInteger(target) || target < 1 || target > MAX_GOAL_TARGET) {
+      return { ok: false, error: 'A goal needs a whole number above zero' };
+    }
+    seen.add(metric);
+    out.push({ metric: metric as CampaignGoalMetric, target });
+  }
+  return { ok: true, value: out };
+}
+
 /** A new campaign off the form. */
 export function normalizeCampaignInput(
   body: Record<string, unknown>,
@@ -123,6 +156,9 @@ export function normalizeCampaignInput(
   const dates = dateRange(body);
   if (!dates.ok) return dates;
 
+  const targets = goals(body.goals);
+  if (!targets.ok) return targets;
+
   return {
     ok: true,
     value: {
@@ -131,6 +167,7 @@ export function normalizeCampaignInput(
       ...dest.value,
       ...dates.value,
       notes: text(body.notes, FIELD_LIMITS.notes),
+      goals: targets.value,
     },
   };
 }
@@ -178,6 +215,11 @@ export function normalizeCampaignPatch(
     if ('endsAt' in body) patch.endsAt = dates.value.endsAt;
   }
   if ('notes' in body) patch.notes = text(body.notes, FIELD_LIMITS.notes);
+  if ('goals' in body) {
+    const targets = goals(body.goals);
+    if (!targets.ok) return targets;
+    patch.goals = targets.value;
+  }
 
   return { ok: true, value: patch };
 }

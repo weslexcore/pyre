@@ -382,7 +382,7 @@ export function CampaignDetail({
         )}
       </section>
 
-      <CampaignStats slug={campaign.slug} links={links} />
+      <CampaignStats campaign={campaign} links={links} />
 
       {confirmDelete && (
         <ConfirmDialog

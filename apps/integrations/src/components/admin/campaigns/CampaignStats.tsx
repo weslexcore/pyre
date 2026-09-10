@@ -1,9 +1,25 @@
-// How one campaign is doing: PostHog traffic and conversions for its slug
-// (from the shared, cached performance report) and live short-link clicks
-// per placement (from Redis, via the links already loaded on the page).
+// How one campaign is doing: its goals read against the shared, cached
+// performance report for its slug (PostHog traffic and conversions), plus
+// live short-link clicks per placement (from Redis, via the links already
+// loaded on the page).
+//
+// The window defaults to the shortest report window that still reaches back
+// to the day the campaign started, so a goal is read against the whole run
+// rather than an arbitrary 30 days.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { LinkRow } from '@/lib/campaigns/types';
+import {
+  elapsedFraction,
+  GOAL_STATE_LABEL,
+  type GoalProgress,
+  type GoalState,
+  goalMetricDef,
+  goalProgress,
+  goalWindow,
+  measurementsOf,
+} from '@/lib/campaigns/goals';
+import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
+import type { LinkRow, UtmCampaign } from '@/lib/campaigns/types';
 import { cardClass, SectionTitle } from '../incidentUi';
 import { linkTitle } from './campaignUi';
 
@@ -31,11 +47,60 @@ interface PerformanceResponse {
 
 const DAY_OPTIONS = [7, 30, 90] as const;
 
-export function CampaignStats({ slug, links }: { slug: string; links: LinkRow[] }) {
+const STATE_TEXT: Record<GoalState, string> = {
+  hit: 'text-[var(--pyre-sage)]',
+  ahead: 'text-[var(--pyre-sage)]',
+  'on-track': 'text-white/60',
+  behind: 'text-[var(--pyre-gold)]',
+  missed: 'text-[var(--pyre-red)]',
+  running: 'text-white/50',
+  untracked: 'text-[var(--pyre-gold)]',
+};
+
+const STATE_BAR: Record<GoalState, string> = {
+  hit: 'bg-[var(--pyre-sage)]',
+  ahead: 'bg-[var(--pyre-sage)]',
+  'on-track': 'bg-[var(--pyre-sage)]/70',
+  behind: 'bg-[var(--pyre-gold)]/80',
+  missed: 'bg-[var(--pyre-red)]/70',
+  running: 'bg-white/40',
+  untracked: 'bg-white/15',
+};
+
+function GoalBar({ progress }: { progress: GoalProgress }) {
+  const filled = Math.min(100, Math.round(progress.pct * 100));
+  const pace =
+    progress.expected !== null && progress.target > 0
+      ? Math.min(100, Math.round((progress.expected / progress.target) * 100))
+      : null;
+  return (
+    <div className="relative h-2 overflow-hidden rounded bg-white/5">
+      <div
+        className={`h-full rounded ${STATE_BAR[progress.state]}`}
+        style={{ width: `${filled}%` }}
+      />
+      {pace !== null && pace > 0 && pace < 100 && (
+        // Where the campaign should be by now, if its dates are to be believed.
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-0 w-px bg-white/50"
+          style={{ left: `${pace}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
+export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; links: LinkRow[] }) {
+  const slug = campaign.slug;
+  const today = useMemo(() => todayYmd(), []);
+  const window = useMemo(() => goalWindow(campaign, today), [campaign, today]);
+
   const [data, setData] = useState<PerformanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [days, setDays] = useState<number>(30);
+  // Goals are read against the whole run; without any, 30 days is the habit.
+  const [days, setDays] = useState<number>(campaign.goals.length > 0 ? window.days : 30);
 
   const fetchReport = useCallback(
     async (currentDays: number, fresh = false) => {
@@ -67,6 +132,44 @@ export function CampaignStats({ slug, links }: { slug: string; links: LinkRow[] 
   const row = data?.campaigns[0];
   const maxClicks = useMemo(() => Math.max(1, ...links.map((l) => l.clicks)), [links]);
   const sorted = useMemo(() => [...links].sort((a, b) => b.clicks - a.clicks), [links]);
+  const liveClicks = useMemo(() => links.reduce((n, l) => n + l.clicks, 0), [links]);
+
+  // A metric whose event has never reached PostHog reads zero for want of
+  // instrumentation; the goal says so instead of calling the campaign behind.
+  const isTracked = useCallback(
+    (metric: string) => {
+      const event = goalMetricDef(metric)?.event ?? '';
+      if (!event || !data) return true;
+      return data.posthog.configured && !data.posthog.missingEvents.includes(event);
+    },
+    [data]
+  );
+
+  const progress = useMemo<GoalProgress[]>(() => {
+    if (campaign.goals.length === 0) return [];
+    const measurements = measurementsOf({
+      shortlinkClicks: row?.shortlinkClicks ?? liveClicks,
+      visitors: row?.visitors ?? 0,
+      mailingListSignups: row?.mailingListSignups ?? 0,
+      introOfferSignups: row?.introOfferSignups ?? 0,
+      bookings: row?.bookings ?? 0,
+      introPurchases: row?.introPurchases ?? 0,
+      creditPacks: row?.creditPacks ?? 0,
+      memberships: row?.memberships ?? 0,
+    });
+    const phase = campaignPhase(campaign, today);
+    const elapsed = elapsedFraction(campaign, today);
+    return campaign.goals.map((goal) =>
+      goalProgress(goal, {
+        value: measurements[goal.metric],
+        phase,
+        elapsed,
+        tracked: isTracked(goal.metric),
+      })
+    );
+  }, [campaign, row, liveClicks, today, isTracked]);
+
+  const metGoals = progress.filter((p) => p.state === 'hit').length;
 
   const posthogIssue = data
     ? !data.posthog.configured
@@ -122,8 +225,62 @@ export function CampaignStats({ slug, links }: { slug: string; links: LinkRow[] 
       {posthogIssue && <p className="mb-3 text-xs text-[var(--pyre-gold)]">{posthogIssue}</p>}
       {error && <p className="mb-3 text-xs text-[var(--pyre-red)]">{error}</p>}
 
+      {progress.length > 0 && (
+        <div className="mb-4 rounded border border-white/10 bg-white/[0.02] p-3">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-wide text-white/40">
+              Goals
+            </span>
+            <span className="font-mono text-[10px] text-white/40 tabular-nums">
+              {metGoals} of {progress.length} met
+            </span>
+          </div>
+          <ul className="space-y-3">
+            {progress.map((goal) => (
+              <li key={goal.metric} className="space-y-1">
+                <div className="flex items-baseline justify-between gap-3 text-xs">
+                  <span className="text-white/70">{goal.label}</span>
+                  <span className="font-mono text-[var(--pyre-creme)] tabular-nums">
+                    {goal.value}
+                    <span className="text-white/35"> / {goal.target}</span>
+                  </span>
+                </div>
+                <GoalBar progress={goal} />
+                <div className="flex flex-wrap items-baseline justify-between gap-2 font-mono text-[10px]">
+                  <span className={STATE_TEXT[goal.state]}>{GOAL_STATE_LABEL[goal.state]}</span>
+                  {goal.state !== 'untracked' && goal.expected !== null && (
+                    <span className="text-white/35 tabular-nums">
+                      {goal.expected} expected by now
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {!window.coversRun && (
+            <p className="mt-3 text-[10px] text-white/35">
+              This campaign started more than 90 days ago, and the report only reaches back 90 days,
+              so goal counts miss its opening stretch.
+            </p>
+          )}
+          {window.coversRun && days < window.days && (
+            <p className="mt-3 text-[10px] text-white/35">
+              The last {days} days is shorter than this campaign's run. Switch to {window.days}d to
+              count all of it.
+            </p>
+          )}
+        </div>
+      )}
+
+      {campaign.goals.length === 0 && (
+        <p className="mb-3 text-xs text-white/40">
+          No goals set. Edit the campaign to say what it should produce, and this panel will read
+          the numbers against it.
+        </p>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {stat('Clicks', row?.shortlinkClicks ?? links.reduce((n, l) => n + l.clicks, 0))}
+        {stat('Clicks', row?.shortlinkClicks ?? liveClicks)}
         {stat('Pageviews', row?.pageviews)}
         {stat('Visitors', row?.visitors)}
         {stat('Signups', row ? row.introOfferSignups + row.mailingListSignups : undefined)}

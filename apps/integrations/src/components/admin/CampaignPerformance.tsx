@@ -12,8 +12,10 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { goalMetricLabel, measurementsOf } from '@/lib/campaigns/goals';
 import { PLACEMENTS } from '@/lib/campaigns/placements';
 import { slugToName } from '@/lib/campaigns/slug';
+import type { CampaignGoal } from '@/lib/campaigns/types';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { buttonClass } from './incidentUi';
 
@@ -22,6 +24,8 @@ interface CampaignRow {
   name: string;
   slug: string;
   createdAt: number;
+  /** Absent on a report served from an older cache entry. */
+  goals?: CampaignGoal[];
   linkCount: number;
   shortlinks: Array<{ code: string; label: string; clicks: number; placementKey: string }>;
   shortlinkClicks: number;
@@ -75,6 +79,33 @@ const SOURCE_NOTES: Record<string, string> = {
  * known code-set source. */
 function sourceNote(source: string): string | null {
   return SOURCE_NOTES[source] ?? PLACEMENTS.find((p) => p.source === source)?.label ?? null;
+}
+
+/** A campaign's goals against this row's numbers. No pace here — the report
+ * carries no dates, so a chip only says met or not yet. */
+function GoalChips({ row }: { row: CampaignRow }) {
+  if (!row.goals || row.goals.length === 0) return null;
+  const measurements = measurementsOf(row);
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {row.goals.map((goal) => {
+        const value = measurements[goal.metric];
+        const hit = value >= goal.target;
+        return (
+          <span
+            key={goal.metric}
+            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ${
+              hit
+                ? 'border-[var(--pyre-sage)]/60 text-[var(--pyre-sage)]'
+                : 'border-white/15 text-white/45'
+            }`}
+          >
+            {goalMetricLabel(goal.metric)} {value}/{goal.target}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 const headCell = 'px-4 py-3';
@@ -317,6 +348,7 @@ export function CampaignPerformance() {
                         <span className="ml-2 font-mono text-xs text-white/30">
                           {campaign.slug}
                         </span>
+                        <GoalChips row={campaign} />
                       </td>
                       {numberCells(campaign)}
                     </tr>
