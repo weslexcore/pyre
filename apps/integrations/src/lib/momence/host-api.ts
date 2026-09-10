@@ -318,7 +318,11 @@ export async function fetchMemberSessions(
   return items;
 }
 
-// --- Sales (experimental endpoint — the purchase-trigger source) ---
+// --- Sales and payment transactions ---
+//
+// Momence has no purchase webhook as such; it sends payment-transaction-*
+// events carrying only a transaction id, and this lookup turns the id into
+// the sale line items (what was bought, by whom, for whom, at what price).
 
 export type SaleItemType =
   | 'membership'
@@ -348,6 +352,10 @@ export interface HostSaleItem {
   targetMember: SaleMember | null;
   quantity: number;
   unitPriceExcludingTaxInCurrency: string;
+  /** Present on payment-transaction lookups; null when no code was applied. */
+  discountCode?: { code: string; type: string } | null;
+  /** Present on payment-transaction lookups: item name plus its date/variant. */
+  descriptiveItemName?: string;
 }
 
 export interface HostSale {
@@ -356,15 +364,31 @@ export interface HostSale {
   items: HostSaleItem[];
 }
 
-export async function fetchSales(
-  page: number,
-  pageSize = 50,
-  sortOrder: 'ASC' | 'DESC' = 'DESC'
-): Promise<HostSale[]> {
-  const data = await momenceRequest<Paginated<HostSale>>('GET', '/host/sales', {
-    query: { page: String(page), pageSize: String(pageSize), sortOrder },
-  });
-  return data.payload ?? [];
+export interface HostPaymentTransaction {
+  id: number;
+  paymentStatus: 'succeeded' | 'failed' | 'pending' | 'voided' | 'unpaid' | 'incomplete';
+  currency: string;
+  /** What the customer actually paid, tax included, as a decimal string. */
+  paidInCurrency: string;
+  priceExcludingVatInCurrency: string;
+  /** Where the charge came from — 'checkout-pages', 'pos', and the
+   * 'scheduled-job-*' / 'auto-*' sources Momence uses for renewals. */
+  paymentSource: string;
+  purchaseType: string;
+  payingMember: (SaleMember & { phoneNumber?: string | null }) | null;
+  sales: HostSale[];
+  refunds: Array<{ id: number; refundedInCurrency: string; createdAt: string }>;
+  createdAt: string;
+}
+
+/** Everything about one payment: GET /host/payment-transactions/{id}. */
+export async function fetchPaymentTransaction(
+  paymentTransactionId: number
+): Promise<HostPaymentTransaction> {
+  return momenceRequest<HostPaymentTransaction>(
+    'GET',
+    `/host/payment-transactions/${paymentTransactionId}`
+  );
 }
 
 // --- Tags (name -> id map, plus write-back so staff see journey status) ---

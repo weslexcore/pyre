@@ -31,24 +31,32 @@ interface CaptureParams {
   distinctId: string;
   event: string;
   properties?: Record<string, unknown>;
+  /** When the event really happened, for captures that trail the fact (a
+   * backfill, a webhook that arrives after the sale). Defaults to now. */
+  timestamp?: Date;
 }
 
 /**
  * Capture a server-side event and flush before returning. Best-effort: any
  * failure is swallowed so analytics can never break a webhook's critical path.
+ * Resolves true only when the event was handed to PostHog and flushed, so a
+ * caller with its own idempotency marker can decide whether to set it.
  */
 export async function captureEvent({
   distinctId,
   event,
   properties,
-}: CaptureParams): Promise<void> {
+  timestamp,
+}: CaptureParams): Promise<boolean> {
   const posthog = getPostHog();
-  if (!posthog) return;
+  if (!posthog) return false;
 
   try {
-    posthog.capture({ distinctId, event, properties });
+    posthog.capture({ distinctId, event, properties, ...(timestamp && { timestamp }) });
     await posthog.flush();
+    return true;
   } catch (error) {
     console.warn(`[PostHog] failed to capture ${event}`, error);
+    return false;
   }
 }

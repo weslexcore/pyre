@@ -1,0 +1,18 @@
+---
+// Click tracking for CTAs marked with `data-track-placement`: booking links
+// (momence.com/s/<session>) and pack/membership buy links (momence.com/m/<id>)
+// each feed their own funnel step in PostHog. Delegated so it covers links
+// rendered after load. Drop it once per page; Astro dedupes the script.
+---
+
+<script>
+  import { trackCtaLinkClicked } from '@/lib/analytics';
+
+  document.addEventListener('click', (e) => {
+    const link = (e.target as HTMLElement | null)?.closest<HTMLAnchorElement>(
+      'a[data-track-placement]'
+    );
+    if (!link?.dataset.trackPlacement) return;
+    trackCtaLinkClicked(link.href, link.dataset.trackPlacement);
+  });
+</script>

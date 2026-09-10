@@ -1,6 +1,7 @@
 // Campaign performance report. Short-link clicks come from the shared Upstash
-// store; visits, signups, and bookings are attributed by first-touch
-// utm_campaign in PostHog.
+// store; visits, signups, bookings, and pack/membership purchases are
+// attributed by first-touch utm_campaign in PostHog (with click inference
+// filling in for bookers and buyers who never identified on the site).
 //
 // utm_campaign values observed in the wild are free text (e.g. "Instagram Bio
 // Links" from hand-built links), while campaigns are stored under their
@@ -35,17 +36,29 @@ import {
   queryHogQL,
 } from '@/lib/analytics/posthog-query';
 import { requirePage } from '@/lib/auth/admin';
+import {
+  BOOKING,
+  BOOKING_BACKFILL,
+  bucketColumn,
+  type ConversionColumn,
+  type ConversionCounts,
+  conversionCounts,
+  PURCHASE,
+  PURCHASE_BUCKET_PREFIX,
+  SIGNUP_INTRO,
+  SIGNUP_MAILING,
+} from '@/lib/campaigns/conversion-buckets';
 import { describeLink } from '@/lib/campaigns/describe';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-// v2: the report gained `sources`; a v1 entry must never be served to a UI
-// that expects it.
-const CACHE_PREFIX = 'cache:campaign-perf:v2:';
+// v3: rows gained the purchase columns (v2 added `sources`); an older entry
+// must never be served to a UI that expects them.
+const CACHE_PREFIX = 'cache:campaign-perf:v3:';
 const CACHE_TTL_SECONDS = 5 * 60;
 // Last report that came back with PostHog data intact, kept much longer so a
 // transient PostHog outage degrades to stale numbers instead of an empty table.
-const LAST_GOOD_PREFIX = 'cache:campaign-perf:v2:last-good:';
+const LAST_GOOD_PREFIX = 'cache:campaign-perf:v3:last-good:';
 const LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ALLOWED_DAYS = [7, 30, 90];
 
@@ -61,16 +74,12 @@ const PRESENCE_WINDOW_DAYS = 180;
 const ROW_LIMIT = 1000;
 
 // Conversion events attributed via the person's first-touch utm_campaign.
-const SIGNUP_INTRO = 'Intro Offer Signup';
-const SIGNUP_MAILING = 'Mailing List Signup';
-const BOOKING = 'booking_completed';
-const CONVERSION_EVENTS = [SIGNUP_INTRO, SIGNUP_MAILING, BOOKING];
-// Companion events from the one-off attribution backfill (see apps/integrations
-// scripts/backfill-booking-attribution.mts). Counted into the bookings bucket;
-// kept out of CONVERSION_EVENTS so the instrumentation-gap check ignores them.
-const BOOKING_BACKFILL = 'booking_attribution_backfill';
+// BOOKING_BACKFILL is deliberately absent: it is counted into the bookings
+// column but must not trip the instrumentation-gap check.
+const CONVERSION_EVENTS = [SIGNUP_INTRO, SIGNUP_MAILING, BOOKING, PURCHASE];
 
-interface CampaignRow {
+/** Per-campaign numbers; the conversion columns come from ConversionCounts. */
+interface CampaignRow extends ConversionCounts {
   id: string;
   name: string;
   slug: string;
@@ -80,20 +89,14 @@ interface CampaignRow {
   shortlinkClicks: number;
   pageviews: number;
   visitors: number;
-  introOfferSignups: number;
-  mailingListSignups: number;
-  bookings: number;
 }
 
 /** The same numbers rolled up by utm_source across every campaign. */
-interface SourceRow {
+interface SourceRow extends ConversionCounts {
   source: string;
   shortlinkClicks: number;
   pageviews: number;
   visitors: number;
-  introOfferSignups: number;
-  mailingListSignups: number;
-  bookings: number;
 }
 
 interface PerformanceResponse {
@@ -111,92 +114,78 @@ interface PerformanceResponse {
 
 const sqlList = (events: readonly string[]) => events.map((e) => `'${e}'`).join(', ');
 
+// Campaign (or source) a conversion is attributed to: first-touch via the
+// person's $initial_utm_*, else the event-level attributed_utm_* stamped by
+// click inference on bookings and purchases whose buyer never identified on
+// the site (their person has no first-touch data). Backfill events count ONLY
+// by their stamped value — their person properties reflect ingestion
+// (backfill run) time, not booking time.
+function attributedExpr(field: 'campaign' | 'source'): string {
+  return `lower(if(event = '${BOOKING_BACKFILL}',
+             nullif(toString(properties.attributed_utm_${field}), ''),
+             coalesce(
+               nullif(toString(person.properties.$initial_utm_${field}), ''),
+               if(event IN ('${BOOKING}', '${PURCHASE}'),
+                  nullif(toString(properties.attributed_utm_${field}), ''),
+                  NULL)
+             )))`;
+}
+
+// Conversions group by "bucket": the event name, except purchases, which carry
+// their purchase_kind so intro offers, packs and memberships split in the same
+// GROUP BY (mapped to columns by lib/campaigns/conversion-buckets.ts).
+const BUCKET_EXPR = `if(event = '${PURCHASE}',
+             concat('${PURCHASE_BUCKET_PREFIX}',
+                    coalesce(nullif(toString(properties.purchase_kind), ''), 'unknown')),
+             event)`;
+
 // Traffic and conversions in a single round-trip. Every query to PostHog's
 // personal-API-key pool pays several seconds of queueing and a real chance of a
-// 503, regardless of how little data it touches, so the two rollups ride the
-// same request as UNION ALL branches (each branch keeps its own plan, and the
-// person join stays confined to the conversion side). Rows come back tagged by
-// `section`; the `people` column is only meaningful for traffic.
+// 503, regardless of how little data it touches, so the rollups ride the same
+// request as UNION ALL branches (each branch keeps its own plan, and the person
+// join stays confined to the conversion side). Rows come back tagged by
+// `section`; the `people` column is only meaningful for traffic. The `campaign`
+// column holds the utm_source in the *_source sections (the name is shared so
+// the branches union).
 function buildRollupQuery(days: number): string {
-  return `
-    -- Traffic: pageviews carrying utm_campaign, grouped by campaign value.
-    SELECT 'traffic' AS section,
-           lower(toString(properties.utm_campaign)) AS campaign,
-           event,
+  const traffic = (section: string, field: 'campaign' | 'source') => `
+    SELECT '${section}' AS section,
+           lower(toString(properties.utm_${field})) AS campaign,
+           event AS bucket,
            count() AS n,
            count(DISTINCT person_id) AS people
     FROM events
     WHERE event = '$pageview'
-      AND properties.utm_campaign IS NOT NULL
-      AND properties.utm_campaign != ''
+      AND properties.utm_${field} IS NOT NULL
+      AND properties.utm_${field} != ''
       AND timestamp >= now() - INTERVAL ${days} DAY
-    GROUP BY campaign, event
-    ORDER BY n DESC
-    LIMIT ${ROW_LIMIT}
-    UNION ALL
-    -- Conversions: first-touch attribution via $initial_utm_campaign, with
-    -- the event-level attributed_utm_campaign fallback for bookings whose
-    -- campaign was inferred from a same-session click (the booker never
-    -- identified on the site, so their person has no first-touch data).
-    -- Backfill events count ONLY by their stamped campaign — their person
-    -- properties reflect ingestion (backfill run) time, not booking time.
-    SELECT 'conversion' AS section,
-           lower(if(event = '${BOOKING_BACKFILL}',
-             nullif(toString(properties.attributed_utm_campaign), ''),
-             coalesce(
-               nullif(toString(person.properties.$initial_utm_campaign), ''),
-               if(event = '${BOOKING}',
-                  nullif(toString(properties.attributed_utm_campaign), ''),
-                  NULL)
-             ))) AS campaign,
-           event,
-           count() AS n,
-           0 AS people
-    FROM events
-    WHERE event IN (${sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])})
-      AND timestamp >= now() - INTERVAL ${days} DAY
-      AND campaign IS NOT NULL
-      AND campaign != ''
-    GROUP BY campaign, event
-    ORDER BY n DESC
-    LIMIT ${ROW_LIMIT}
-    UNION ALL
-    -- The same two rollups keyed by utm_source (the campaign column name
-    -- is shared so the branches union; it holds the source here).
-    SELECT 'traffic_source' AS section,
-           lower(toString(properties.utm_source)) AS campaign,
-           event,
-           count() AS n,
-           count(DISTINCT person_id) AS people
-    FROM events
-    WHERE event = '$pageview'
-      AND properties.utm_source IS NOT NULL
-      AND properties.utm_source != ''
-      AND timestamp >= now() - INTERVAL ${days} DAY
-    GROUP BY campaign, event
-    ORDER BY n DESC
-    LIMIT ${ROW_LIMIT}
-    UNION ALL
-    SELECT 'conversion_source' AS section,
-           lower(if(event = '${BOOKING_BACKFILL}',
-             nullif(toString(properties.attributed_utm_source), ''),
-             coalesce(
-               nullif(toString(person.properties.$initial_utm_source), ''),
-               if(event = '${BOOKING}',
-                  nullif(toString(properties.attributed_utm_source), ''),
-                  NULL)
-             ))) AS campaign,
-           event,
-           count() AS n,
-           0 AS people
-    FROM events
-    WHERE event IN (${sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])})
-      AND timestamp >= now() - INTERVAL ${days} DAY
-      AND campaign IS NOT NULL
-      AND campaign != ''
-    GROUP BY campaign, event
+    GROUP BY campaign, bucket
     ORDER BY n DESC
     LIMIT ${ROW_LIMIT}`;
+
+  const conversion = (section: string, field: 'campaign' | 'source') => `
+    SELECT '${section}' AS section,
+           ${attributedExpr(field)} AS campaign,
+           ${BUCKET_EXPR} AS bucket,
+           count() AS n,
+           0 AS people
+    FROM events
+    WHERE event IN (${sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])})
+      AND timestamp >= now() - INTERVAL ${days} DAY
+      AND campaign IS NOT NULL
+      AND campaign != ''
+    GROUP BY campaign, bucket
+    ORDER BY n DESC
+    LIMIT ${ROW_LIMIT}`;
+
+  return [
+    // Pageviews carrying utm_campaign, grouped by campaign value.
+    traffic('traffic', 'campaign'),
+    conversion('conversion', 'campaign'),
+    // The same two rollups keyed by utm_source.
+    traffic('traffic_source', 'source'),
+    conversion('conversion_source', 'source'),
+  ].join('\n    UNION ALL');
 }
 
 // Which conversion events reach PostHog at all — flags instrumentation gaps
@@ -230,10 +219,10 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
 
   // slug (lowercase) -> traffic / conversion rollups from PostHog
   const traffic = new Map<string, { pageviews: number; visitors: number }>();
-  const conversions = new Map<string, Map<string, number>>();
+  const conversions = new Map<string, Map<ConversionColumn, number>>();
   // utm_source (lowercase) -> the same rollups
   const sourceTraffic = new Map<string, { pageviews: number; visitors: number }>();
-  const sourceConversions = new Map<string, Map<string, number>>();
+  const sourceConversions = new Map<string, Map<ConversionColumn, number>>();
 
   const campaignsWithLinks = await listCampaignsWithLinks();
   const explicitCodes = campaignsWithLinks.flatMap((c) =>
@@ -257,7 +246,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
 
   if (rollupRows) {
     for (const row of rollupRows) {
-      const [section, rawKey, event, count, people] = row as [
+      const [section, rawKey, bucket, count, people] = row as [
         string,
         string,
         string,
@@ -284,12 +273,14 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
           visitors: (prev?.visitors ?? 0) + Number(people),
         });
       } else {
-        // Backfilled attribution counts as a booking. A backfill event only
-        // exists for bookings with no attribution of their own, so no double count.
-        const bucket = event === BOOKING_BACKFILL ? BOOKING : event;
-        const byEvent = conversionMap.get(key) ?? new Map<string, number>();
-        byEvent.set(bucket, (byEvent.get(bucket) ?? 0) + Number(count));
-        conversionMap.set(key, byEvent);
+        // Backfilled attribution counts as a booking (a backfill event only
+        // exists for bookings with no attribution of their own, so no double
+        // count); renewals and uncounted purchase kinds map to nothing.
+        const column = bucketColumn(bucket);
+        if (!column) continue;
+        const byColumn = conversionMap.get(key) ?? new Map<ConversionColumn, number>();
+        byColumn.set(column, (byColumn.get(column) ?? 0) + Number(count));
+        conversionMap.set(key, byColumn);
       }
     }
   }
@@ -350,7 +341,6 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       if (!claimed.has(legacy.code)) shortlinks.push(legacy);
     }
 
-    const byEvent = conversions.get(slug);
     return {
       id: campaign.id,
       name: campaign.name,
@@ -361,9 +351,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       shortlinkClicks: shortlinks.reduce((sum, s) => sum + s.clicks, 0),
       pageviews: traffic.get(slug)?.pageviews ?? 0,
       visitors: traffic.get(slug)?.visitors ?? 0,
-      introOfferSignups: byEvent?.get(SIGNUP_INTRO) ?? 0,
-      mailingListSignups: byEvent?.get(SIGNUP_MAILING) ?? 0,
-      bookings: byEvent?.get(BOOKING) ?? 0,
+      ...conversionCounts(conversions.get(slug)),
     };
   });
 
@@ -378,18 +366,13 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
     ...sourceClicks.keys(),
   ]);
   const sources: SourceRow[] = [...sourceKeys]
-    .map((source) => {
-      const byEvent = sourceConversions.get(source);
-      return {
-        source,
-        shortlinkClicks: sourceClicks.get(source) ?? 0,
-        pageviews: sourceTraffic.get(source)?.pageviews ?? 0,
-        visitors: sourceTraffic.get(source)?.visitors ?? 0,
-        introOfferSignups: byEvent?.get(SIGNUP_INTRO) ?? 0,
-        mailingListSignups: byEvent?.get(SIGNUP_MAILING) ?? 0,
-        bookings: byEvent?.get(BOOKING) ?? 0,
-      };
-    })
+    .map((source) => ({
+      source,
+      shortlinkClicks: sourceClicks.get(source) ?? 0,
+      pageviews: sourceTraffic.get(source)?.pageviews ?? 0,
+      visitors: sourceTraffic.get(source)?.visitors ?? 0,
+      ...conversionCounts(sourceConversions.get(source)),
+    }))
     .sort((a, b) => b.pageviews - a.pageviews || b.shortlinkClicks - a.shortlinkClicks);
 
   // utm_campaign values seen in PostHog with no stored campaign — automated

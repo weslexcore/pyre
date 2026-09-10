@@ -15,6 +15,9 @@ interface CampaignRow {
   introOfferSignups: number;
   mailingListSignups: number;
   bookings: number;
+  introPurchases: number;
+  creditPacks: number;
+  memberships: number;
 }
 
 interface PerformanceResponse {
@@ -87,7 +90,7 @@ export function CampaignStats({ slug, links }: { slug: string; links: LinkRow[] 
   return (
     <section className={cardClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle note="Visits and conversions are first-touch attributed by utm_campaign in PostHog. Clicks are live from the short links.">
+        <SectionTitle note="Visits, signups, bookings and purchases are first-touch attributed by utm_campaign in PostHog. Clicks are live from the short links.">
           Performance
         </SectionTitle>
         <div className="flex items-center gap-2">
@@ -119,12 +122,15 @@ export function CampaignStats({ slug, links }: { slug: string; links: LinkRow[] 
       {posthogIssue && <p className="mb-3 text-xs text-[var(--pyre-gold)]">{posthogIssue}</p>}
       {error && <p className="mb-3 text-xs text-[var(--pyre-red)]">{error}</p>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {stat('Clicks', row?.shortlinkClicks ?? links.reduce((n, l) => n + l.clicks, 0))}
         {stat('Pageviews', row?.pageviews)}
         {stat('Visitors', row?.visitors)}
         {stat('Signups', row ? row.introOfferSignups + row.mailingListSignups : undefined)}
         {stat('Bookings', row?.bookings)}
+        {stat('Intro purchases', row?.introPurchases)}
+        {stat('Packs', row?.creditPacks)}
+        {stat('Memberships', row?.memberships)}
       </div>
 
       {sorted.length > 0 && (

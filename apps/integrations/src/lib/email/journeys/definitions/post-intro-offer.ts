@@ -22,9 +22,10 @@ export const postIntroOffer: Journey = {
         );
       }
       if (event.type === 'session-booked') {
-        // Fallback trigger while the experimental /host/sales endpoint is
-        // unavailable: a member's first-ever booking is (almost always) the
-        // intro offer. Fails safe — null/false means no enrollment.
+        // The live trigger: nothing dispatches 'purchase' today (purchases are
+        // captured for analytics only — see lib/purchases/capture.ts), and a
+        // member's first-ever booking is (almost always) the intro offer.
+        // Fails safe — null/false means no enrollment.
         const first = await isMemberFirstBooking(String(event.memberId), event.sessionBookingId);
         return first === true;
       }

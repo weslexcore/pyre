@@ -10,6 +10,7 @@ import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { resolveSession } from '@/lib/momence-events';
+import { handlePaymentTransaction } from '@/lib/purchases/capture';
 import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
 import { requestLintRun } from '@/lib/schedule-lint/trigger';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
@@ -19,6 +20,7 @@ import {
   type MomenceAddressPayload,
   type MomenceEventType,
   type MomenceMemberPayload,
+  type MomencePaymentTransactionPayload,
   type MomenceReportRunPayload,
   type MomenceSessionPayload,
   verifyMomenceWebhook,
@@ -288,6 +290,10 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       await handleSessionEvent(event as MomenceEventType, payload as MomenceSessionPayload, tracer);
     } else if (event === 'host-report-run-completed') {
       await handleReportRunCompleted(payload as MomenceReportRunPayload, tracer);
+    } else if (event === 'payment-transaction-succeeded') {
+      // Packs and memberships for the campaign report. Momence sends this for
+      // every charge; the handler drops the ones that are not purchases.
+      await handlePaymentTransaction((payload as MomencePaymentTransactionPayload).id, tracer);
     } else {
       log.info(`Ignoring unhandled event: ${event}`);
     }

@@ -21,10 +21,60 @@ export function getAttribution(): Attribution {
 }
 
 /** Extract the numeric Momence session id from a checkout href like https://momence.com/s/123456?... */
-function sessionIdFromHref(href: string | undefined): string | null {
+export function sessionIdFromHref(href: string | undefined): string | null {
   if (!href) return null;
   const match = /\/s\/(\d+)/.exec(href);
   return match ? match[1] : null;
+}
+
+/** Extract the catalog membership id from a pack/membership buy link like https://momence.com/m/630916 */
+export function membershipIdFromHref(href: string | undefined): string | null {
+  if (!href) return null;
+  const match = /\/m\/(\d+)/.exec(href);
+  return match ? match[1] : null;
+}
+
+function capture(event: string, properties: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return;
+  const posthog = (
+    window as { posthog?: { capture: (e: string, p?: Record<string, unknown>) => void } }
+  ).posthog;
+  if (!posthog) return;
+  try {
+    posthog.capture(event, { ...properties, ...getAttribution() });
+  } catch {
+    // analytics must never break a purchase or booking flow
+  }
+}
+
+/**
+ * Track an outbound click on a Momence pack or membership buy link. The
+ * completed purchase arrives server-side from the Momence payment webhook (see
+ * apps/integrations), and `membership_id` is the join key for click→purchase
+ * attribution inference: the webhook's sale item names the same catalog id as
+ * the /m/<id> in the link.
+ */
+export function trackPurchaseLinkClicked(href: string, placement: string): void {
+  capture('purchase_link_clicked', {
+    placement,
+    membership_id: membershipIdFromHref(href),
+    href,
+  });
+}
+
+/**
+ * Track a click on any CTA that carries `data-track-placement`: a Momence
+ * checkout link (/s/<session>) is booking intent, a buy link (/m/<membership>)
+ * is purchase intent, and anything else is left alone. Used by the shared
+ * CtaTracking component.
+ */
+export function trackCtaLinkClicked(href: string, placement: string): void {
+  const sessionId = sessionIdFromHref(href);
+  if (sessionId) {
+    capture('booking_link_clicked', { placement, session_id: sessionId, href });
+    return;
+  }
+  if (membershipIdFromHref(href)) trackPurchaseLinkClicked(href, placement);
 }
 
 /**

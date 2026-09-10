@@ -58,6 +58,7 @@ import SectionDivider from './SectionDivider.astro';
             {item.href && (
               <a
                 href={item.href}
+                data-track-placement="home_credit_packs"
                 class={`px-4 py-2 text-sm font-mono-bold uppercase tracking-wide rounded transition-all duration-300 ${
                   item.highlighted
                     ? 'bg-[var(--pyre-muted-gold)] text-[var(--pyre-black)] hover:bg-[var(--pyre-muted-gold)]/80'

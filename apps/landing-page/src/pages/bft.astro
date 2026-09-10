@@ -4,6 +4,7 @@ export const prerender = true;
 import { Image } from 'astro:assets';
 import BftLogo from '../components/BftLogo.astro';
 import Button from '../components/Button.astro';
+import CtaTracking from '../components/CtaTracking.astro';
 import PartnerVerifyForm from '../components/PartnerVerifyForm.astro';
 import SectionDivider from '../components/SectionDivider.astro';
 import SignupForm from '../components/SignupForm.astro';
@@ -380,25 +381,4 @@ const pageDescription =
   </div>
 </Layout>
 
-<script>
-  const analyticsWindow = window as {
-    posthog?: { capture: (event: string, properties?: Record<string, unknown>) => void };
-    pyreAttribution?: () => Record<string, unknown>;
-  };
-
-  const capture = (event: string, properties: Record<string, unknown>) => {
-    analyticsWindow.posthog?.capture(event, {
-      ...properties,
-      ...(analyticsWindow.pyreAttribution?.() ?? {}),
-    });
-  };
-
-  document.querySelectorAll<HTMLAnchorElement>('a[data-track-placement]').forEach((link) => {
-    link.addEventListener('click', () => {
-      capture('booking_link_clicked', {
-        placement: link.dataset.trackPlacement,
-        href: link.href,
-      });
-    });
-  });
-</script>
+<CtaTracking />

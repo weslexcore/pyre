@@ -4,7 +4,9 @@
 //
 // Two views of the same numbers: by campaign (what each initiative did) and
 // by utm_source (how each channel did across every campaign — the newsletter,
-// the automated lifecycle emails, Instagram). Campaign slugs PostHog has seen
+// the automated lifecycle emails, Instagram). Conversions run from web signups
+// through bookings to what people actually bought (intro offer, credit pack,
+// membership), all attributed the same way. Campaign slugs PostHog has seen
 // with no campaign record can be added as campaigns from here in one click,
 // which is how the automated journeys become proper rows.
 
@@ -28,6 +30,9 @@ interface CampaignRow {
   introOfferSignups: number;
   mailingListSignups: number;
   bookings: number;
+  introPurchases: number;
+  creditPacks: number;
+  memberships: number;
 }
 
 interface SourceRow {
@@ -38,6 +43,9 @@ interface SourceRow {
   introOfferSignups: number;
   mailingListSignups: number;
   bookings: number;
+  introPurchases: number;
+  creditPacks: number;
+  memberships: number;
 }
 
 interface PerformanceResponse {
@@ -184,9 +192,12 @@ export function CampaignPerformance() {
       <th className={`${headCell} text-right`}>Clicks</th>
       <th className={`${headCell} text-right`}>Pageviews</th>
       <th className={`${headCell} text-right`}>Visitors</th>
-      <th className={`${headCell} text-right`}>Intro Offers</th>
-      <th className={`${headCell} text-right`}>Mailing List</th>
+      <th className={`${headCell} text-right`}>Intro signups</th>
+      <th className={`${headCell} text-right`}>Mailing list</th>
       <th className={`${headCell} text-right`}>Bookings</th>
+      <th className={`${headCell} text-right`}>Intro purchases</th>
+      <th className={`${headCell} text-right`}>Packs</th>
+      <th className={`${headCell} text-right`}>Memberships</th>
     </>
   );
 
@@ -198,6 +209,9 @@ export function CampaignPerformance() {
       <td className={numCell}>{row.introOfferSignups}</td>
       <td className={numCell}>{row.mailingListSignups}</td>
       <td className={`${numCell} font-mono-bold`}>{row.bookings}</td>
+      <td className={numCell}>{row.introPurchases}</td>
+      <td className={`${numCell} font-mono-bold`}>{row.creditPacks}</td>
+      <td className={`${numCell} font-mono-bold`}>{row.memberships}</td>
     </>
   );
 
@@ -308,7 +322,7 @@ export function CampaignPerformance() {
                     </tr>
                     {expanded && (
                       <tr className="border-b border-white/5 bg-white/[0.03]">
-                        <td colSpan={7} className="px-6 py-3">
+                        <td colSpan={10} className="px-6 py-3">
                           {campaign.shortlinks.length === 0 ? (
                             <p className="text-xs text-white/40">
                               No short links for this campaign ({campaign.linkCount} link

@@ -29,11 +29,6 @@ export interface CronJob {
 // registry is only materialized when the cron tick runs.
 export const CRON_JOBS: CronJob[] = [
   {
-    // Purchases first: they can enroll members whose steps then advance below.
-    name: 'sales-poll',
-    run: async (ctx) => (await import('@/lib/triggers/sales-poll')).runSalesPoll(ctx),
-  },
-  {
     name: 'journey-sweeps',
     run: async (ctx) => (await import('@/lib/email/journeys/engine')).runEnrollmentSweeps(ctx),
   },

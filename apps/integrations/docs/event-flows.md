@@ -7,7 +7,7 @@ high-level architecture, see the [README](../README.md).
 - [1. A guest books a session](#1-a-guest-books-a-session)
 - [2. A new member is created in Momence](#2-a-new-member-is-created-in-momence)
 - [3. The hourly cron tick](#3-the-hourly-cron-tick)
-- [4. A purchase enrolls someone in a journey](#4-a-purchase-enrolls-someone-in-a-journey)
+- [4. A guest buys a pack or a membership](#4-a-guest-buys-a-pack-or-a-membership)
 - [5. A journey step comes due](#5-a-journey-step-comes-due)
 - [6. Someone unsubscribes (any channel)](#6-someone-unsubscribes-any-channel)
 - [7. Email engagement flows back as analytics](#7-email-engagement-flows-back-as-analytics)
@@ -86,7 +86,7 @@ sync per member, for bootstrapping or repair.
 Everything Momence can't push to us is pulled on an hourly tick. The jobs in
 [src/lib/cron/jobs.ts](../src/lib/cron/jobs.ts) run sequentially inside one
 ~50-second budget; any job that runs out of time saves a cursor (Redis, or a
-send-log claim) and resumes on the next tick. The four email-engine jobs are
+send-log claim) and resumes on the next tick. The three email-engine jobs are
 drawn below; the rest (partner and referral maintenance, the Momence → shifts
 sync, the daily schedule lint, the business-report syncs, the lost-and-found
 sweep, the Monday shift roundup) follow the same contract.
@@ -95,60 +95,68 @@ sweep, the Monday shift roundup) follow the same contract.
 flowchart TD
     CRON["Upstash QStash schedule: 0 * * * *<br/>POST with forwarded Authorization header"] --> AUTH{"Bearer CRON_SECRET valid?"}
     AUTH -- no --> DENY["401"]
-    AUTH -- yes --> SP
+    AUTH -- yes --> JS
 
     subgraph tick["/api/cron/tick — shared time budget"]
-        SP["sales-poll<br/>new sales since sales:cursor →<br/>purchase_completed events + purchase triggers"]
         JS["journey-sweeps<br/>page through sweep-journey audiences<br/>(e.g. 4+ visits for review-request), enroll matches"]
         JA["journey-advance<br/>load enrollments where next_at <= now,<br/>re-check exits live, send due steps"]
         CR["credit-reminders<br/>members with active packs →<br/>expiry (14d/3d) and unused-credit nudges"]
-        SP --> JS --> JA --> CR
+        JS --> JA --> CR
     end
 
-    SP -. "cursor: sales:cursor" .-> REDIS[("Redis")]
-    JS -. "cursor: sweep:journey:*:cursor" .-> REDIS
+    JS -. "cursor: sweep:journey:*:cursor" .-> REDIS[("Redis")]
     CR -. "cursor: sweep:credit-reminders:cursor" .-> REDIS
     JA -. "state: journey_enrollments" .-> SB[("Supabase")]
 ```
 
-The order matters: `sales-poll` runs first because a purchase it discovers can
-enroll a member whose first step then advances later in the very same tick.
+## 4. A guest buys a pack or a membership
 
-## 4. A purchase enrolls someone in a journey
-
-Momence has no purchase webhook, so purchases are discovered by polling. Example:
-someone buys the intro offer, which enrolls them in the `post-intro-offer` journey.
+Momence fires `payment-transaction-succeeded` for every successful charge — a
+pack, a membership, a product, and even the $0 booking a pack pays for — carrying
+nothing but a transaction id. The handler looks the transaction up, keeps the
+line items that are packs or memberships, and captures one `purchase_completed`
+per item so the campaign report can count intro offers, credit packs and
+memberships next to bookings.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Tick as cron tick
-    participant Poll as sales-poll
-    participant API as Momence /host/sales
+    participant Momence
+    participant WH as /api/webhooks/momence
+    participant API as Momence API
     participant Redis
     participant PH as PostHog
-    participant Engine as Journey engine
-    participant SB as Supabase
 
-    Tick->>Poll: run
-    Poll->>Redis: read sales:cursor (highest processed sale id)
-    Poll->>API: fetch sales pages until cursor reached
-    loop each new sale item of interest (membership, credits, gift card)
-        Poll->>PH: capture purchase_completed
-        Poll->>Engine: dispatchTrigger(purchase)
-        Engine->>Engine: post-intro-offer.enroll.when()?<br/>itemType is membership AND saleItemId is an intro-offer id
-        alt matches
-            Engine->>SB: upsert journey_enrollments<br/>(journey_id, member_id) unique — step 0, next_at = now + 72h
-            Note over SB: If a row already exists (even completed/exited)<br/>the upsert is a no-op — once per lifetime.
-            Engine->>PH: capture journey_enrolled
-        end
+    Momence->>WH: POST payment-transaction-succeeded {id}
+    WH->>Redis: purchase:captured:{id} exists?
+    alt already captured
+        WH-->>Momence: 200 (no-op)
     end
-    Poll->>Redis: advance sales:cursor
+    WH->>API: GET /host/payment-transactions/{id}
+    alt no pack/membership line items (session, product, gift card)
+        WH-->>Momence: 200 (not a purchase)
+    end
+    loop each pack / membership line item
+        opt gifted (target ≠ payer)
+            WH->>API: GET /host/members/{targetId} (recipient email)
+        end
+        WH->>API: GET /host/members/{targetId}/bought-memberships/active<br/>(subscription vs package — the sale item alone doesn't say)
+        Note over WH: classify: intro_offer (catalog id) · membership · credit_pack ·<br/>renewal (scheduled-job paymentSource) · other
+        WH->>PH: query purchase_link_clicked / booking_link_clicked<br/>for momence.com/m/{membershipId} in the last 30 min
+        WH->>PH: capture purchase_completed<br/>{purchase_kind, membership_id, amount_paid, attributed_utm_* …}<br/>distinct_id = recipient email, timestamp = sale time
+    end
+    WH->>Redis: set purchase:captured:{id} (30d)
+    WH-->>Momence: 200 OK
 ```
 
-On its very first run the poller **baselines** the cursor at the newest sale rather
-than replaying history — journeys react to purchases from now on, not to every old
-customer at once.
+Renewals are captured (as `purchase_kind: renewal`) but not counted as campaign
+conversions. Nothing here dispatches a journey trigger: the `post-intro-offer`
+journey still enrolls from a member's first booking, which for an intro buyer
+happens in the same checkout. `bought-membership-activated` is deliberately
+ignored — it fires when a pack is first *used*, not when it is bought.
+
+Sales from before this handler existed can be replayed from the daily sales
+report snapshot with `scripts/backfill-purchases.mts`.
 
 ## 5. A journey step comes due
 

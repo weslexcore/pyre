@@ -44,6 +44,13 @@ export interface MomenceReportRunPayload {
   reportUrlApi: string;
 }
 
+/** Fired for every successful charge — a pack, a membership, a product, and
+ * the $0 booking a pack pays for. Only the transaction id is included; see
+ * fetchPaymentTransaction for the rest. */
+export interface MomencePaymentTransactionPayload {
+  id: number;
+}
+
 export type MomenceEventType =
   | 'member-assigned'
   | 'member-updated'
@@ -54,7 +61,8 @@ export type MomenceEventType =
   | 'session-booking-cancelled'
   | 'session-created'
   | 'session-updated'
-  | 'host-report-run-completed';
+  | 'host-report-run-completed'
+  | 'payment-transaction-succeeded';
 
 export interface MomenceWebhookResult<T = unknown> {
   event: string;

@@ -1,11 +1,13 @@
-// Click→booking attribution inference.
+// Click→booking (and click→purchase) attribution inference.
 //
-// Bookings complete on Momence, so the web visitor who drove a booking is
-// invisible to the server-side booking_completed event unless their email was
-// identified on the site. But the booking CTA links to momence.com/s/<sessionId>
-// and emits a client-side `booking_link_clicked` event — so when the Momence
-// webhook delivers a booking for that same session id, recent clickers of that
-// exact session are strong candidates for "the person who booked".
+// Bookings and purchases complete on Momence, so the web visitor who drove one
+// is invisible to the server-side booking_completed / purchase_completed event
+// unless their email was identified on the site. But the booking CTA links to
+// momence.com/s/<sessionId> and the pack/membership CTAs to momence.com/m/<id>,
+// each emitting a client-side click event — so when the Momence webhook
+// delivers a booking for that session, or a purchase of that catalog item,
+// recent clickers of that exact link are strong candidates for "the person
+// who bought".
 //
 // This module queries PostHog for those clickers and decides:
 //   - exactly one clicking person  → attribute person + campaign
@@ -49,14 +51,12 @@ export interface ClickerRow {
 }
 
 /**
- * One row per distinct person who clicked this session's booking link in the
- * lookback window, with each person's most recent click's attribution. The
- * click's own utm_* (landing-URL attribution) wins over the person's
- * first-touch $initial_utm_* fallback. Session matching prefers the explicit
- * session_id property (newer clients) and falls back to parsing the /s/<id>
- * checkout href (older events).
+ * One row per distinct person who clicked a matching link in the lookback
+ * window, with each person's most recent click's attribution. The click's own
+ * utm_* (landing-URL attribution) wins over the person's first-touch
+ * $initial_utm_* fallback. `match` is the SQL predicate that names the link.
  */
-function buildClickersQuery(sessionId: number): string {
+function clickersQuery(match: string): string {
   const utm = (field: string) =>
     `argMax(coalesce(
        nullif(toString(properties.utm_${field}), ''),
@@ -68,14 +68,31 @@ function buildClickersQuery(sessionId: number): string {
        ${utm('source')},
        ${utm('medium')}
 FROM events
-WHERE event = 'booking_link_clicked'
+WHERE ${match}
   AND timestamp >= now() - INTERVAL ${LOOKBACK_MINUTES} MINUTE
+GROUP BY person_id
+LIMIT ${MAX_CLICKERS}`;
+}
+
+/** Session matching prefers the explicit session_id property (newer clients)
+ * and falls back to parsing the /s/<id> checkout href (older events). */
+export function buildClickersQuery(sessionId: number): string {
+  return clickersQuery(`event = 'booking_link_clicked'
   AND coalesce(
         nullif(toString(properties.session_id), ''),
         extract(toString(properties.href), 's/([0-9]+)')
-      ) = '${sessionId}'
-GROUP BY person_id
-LIMIT ${MAX_CLICKERS}`;
+      ) = '${sessionId}'`);
+}
+
+/** Pack and membership CTAs link to momence.com/m/<catalog id>. Newer clients
+ * emit purchase_link_clicked with membership_id; older pages tracked the same
+ * links as booking_link_clicked, so both are matched by href as a fallback. */
+export function buildPurchaseClickersQuery(membershipId: number): string {
+  return clickersQuery(`event IN ('purchase_link_clicked', 'booking_link_clicked')
+  AND coalesce(
+        nullif(toString(properties.membership_id), ''),
+        extract(toString(properties.href), 'm/([0-9]+)')
+      ) = '${membershipId}'`);
 }
 
 function parseRows(rows: unknown[][]): ClickerRow[] {
@@ -120,25 +137,45 @@ export function decideAttribution(rows: ClickerRow[]): BookingAttribution | null
   return null;
 }
 
-/**
- * Best-effort: never throws; resolves null on any failure, timeout, or when the
- * PostHog query API is unconfigured. Adds at most ~`timeoutMs` to the caller.
- */
-export async function inferBookingAttribution(
-  sessionId: number,
-  options?: { timeoutMs?: number }
+interface InferOptions {
+  timeoutMs?: number;
+}
+
+/** Shared fail-safe body: never throws; null on failure, timeout, or when the
+ * PostHog query API is unconfigured. Adds at most ~`timeoutMs` to the caller. */
+async function inferFromClicks(
+  id: number,
+  buildQuery: (id: number) => string,
+  label: string,
+  options?: InferOptions
 ): Promise<BookingAttribution | null> {
   if (!isPostHogQueryConfigured()) return null;
   // Positive-integer check doubles as the SQL-interpolation guard.
-  if (!Number.isInteger(sessionId) || sessionId <= 0) return null;
+  if (!Number.isInteger(id) || id <= 0) return null;
 
   try {
-    const rows = await queryHogQL(buildClickersQuery(sessionId), {
+    const rows = await queryHogQL(buildQuery(id), {
       signal: AbortSignal.timeout(options?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
     return decideAttribution(parseRows(rows));
   } catch (error) {
-    console.warn(`[attribution] click inference failed for session ${sessionId}`, error);
+    console.warn(`[attribution] click inference failed for ${label} ${id}`, error);
     return null;
   }
+}
+
+/** Who clicked this session's booking link in the last 30 minutes. */
+export async function inferBookingAttribution(
+  sessionId: number,
+  options?: InferOptions
+): Promise<BookingAttribution | null> {
+  return inferFromClicks(sessionId, buildClickersQuery, 'session', options);
+}
+
+/** Who clicked this pack's or membership's buy link in the last 30 minutes. */
+export async function inferPurchaseAttribution(
+  membershipId: number,
+  options?: InferOptions
+): Promise<BookingAttribution | null> {
+  return inferFromClicks(membershipId, buildPurchaseClickersQuery, 'membership', options);
 }

@@ -9,7 +9,7 @@ There is no UI here (aside from a placeholder index page). The entire app is API
 routes driven by two kinds of input:
 
 - **Webhooks** — Momence, Resend, and Mailchimp push events to us.
-- **A single hourly cron** — polls for what Momence can't push (purchases), sweeps
+- **A single hourly cron** — sweeps
   member audiences, and advances email journeys.
 
 For step-by-step walkthroughs of how events move through the system, see
@@ -192,14 +192,12 @@ and resume next tick.
 flowchart TD
     TICK["/api/cron/tick<br/>(hourly QStash schedule)"] --> J1
     subgraph jobs["Jobs, in order, sharing one time budget"]
-        J1["1 · sales-poll<br/>poll Momence /host/sales for new purchases"]
-        J2["2 · journey-sweeps<br/>scan member audiences, enroll matches"]
-        J3["3 · journey-advance<br/>send due journey steps"]
-        J4["4 · credit-reminders<br/>expiring / unused credit pack nudges"]
-        J5["… partner / referral maintenance, sync-shifts,<br/>schedule-lint (daily), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
-        J1 --> J2 --> J3 --> J4 --> J5
+        J1["1 · journey-sweeps<br/>scan member audiences, enroll matches"]
+        J2["2 · journey-advance<br/>send due journey steps"]
+        J3["3 · credit-reminders<br/>expiring / unused credit pack nudges"]
+        J4["… partner / referral maintenance, sync-shifts,<br/>schedule-lint (daily), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
+        J1 --> J2 --> J3 --> J4
     end
-    J1 -. "purchase triggers can enroll members<br/>whose steps advance in the same tick" .-> J3
 ```
 
 Useful manual invocations:
@@ -442,9 +440,8 @@ src/
     │   ├── journeys/                # engine, types, journey definitions
     │   └── triggers/                # booking confirmation, credit reminders, ...
     ├── momence/host-api.ts          # authenticated Momence Host API client
-    ├── triggers/
-    │   ├── dispatch.ts              # tiny internal event bus (webhook/poller → engine)
-    │   └── sales-poll.ts            # purchase discovery via /host/sales polling
+    ├── purchases/                   # payment webhook → purchase_completed (packs, memberships)
+    ├── triggers/dispatch.ts         # tiny internal event bus (webhook → engine)
     └── webhooks/
         ├── momence.ts               # webhook verification + member API helpers
         └── instrument.ts            # execution tracing for the admin dashboard

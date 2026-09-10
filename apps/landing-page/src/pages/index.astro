@@ -3,6 +3,7 @@ export const prerender = true;
 
 import ogImg from '../assets/images/cyano_sweat_logo.jpg';
 import AboutSection from '../components/AboutSection.astro';
+import CtaTracking from '../components/CtaTracking.astro';
 import EventsSection from '../components/EventsSection.astro';
 import ExperiencesSection from '../components/ExperiencesSection.astro';
 import FAQAccordion from '../components/FAQAccordion.astro';
@@ -96,6 +97,8 @@ import { heroGrainGradient } from '../lib/shader-configs';
     </div>
   </div>
 </Layout>
+
+<CtaTracking />
 
 <style>
   .hero-wave-mask {

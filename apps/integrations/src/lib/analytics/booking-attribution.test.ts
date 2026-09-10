@@ -1,85 +1,59 @@
-// Wrong inferred attribution is stamped onto immutable PostHog events, so the
-// decision rules (especially the strict multi-clicker disqualifiers) get pinned
-// down here.
-
 import { describe, expect, it } from 'vitest';
-import { type ClickerRow, decideAttribution } from './booking-attribution';
+import {
+  buildClickersQuery,
+  buildPurchaseClickersQuery,
+  decideAttribution,
+} from './booking-attribution';
 
-const clicker = (overrides: Partial<ClickerRow> = {}): ClickerRow => ({
-  personId: 'person-1',
-  utmCampaign: null,
-  utmSource: null,
-  utmMedium: null,
-  ...overrides,
+describe('click queries', () => {
+  it('matches a booking by session id with the checkout-href fallback', () => {
+    const q = buildClickersQuery(142162708);
+    expect(q).toContain("event = 'booking_link_clicked'");
+    expect(q).toContain('properties.session_id');
+    expect(q).toContain("'s/([0-9]+)'");
+    expect(q).toContain("= '142162708'");
+    expect(q).toContain('INTERVAL 30 MINUTE');
+    expect(q).toContain('LIMIT 10');
+  });
+
+  it('matches a purchase by membership id across both click events', () => {
+    const q = buildPurchaseClickersQuery(630916);
+    expect(q).toContain("event IN ('purchase_link_clicked', 'booking_link_clicked')");
+    expect(q).toContain('properties.membership_id');
+    expect(q).toContain("'m/([0-9]+)'");
+    expect(q).toContain("= '630916'");
+    expect(q).toContain('INTERVAL 30 MINUTE');
+  });
 });
 
 describe('decideAttribution', () => {
-  it('returns null when nobody clicked', () => {
-    expect(decideAttribution([])).toBeNull();
+  const row = (personId: string, utmCampaign: string | null) => ({
+    personId,
+    utmCampaign,
+    utmSource: null,
+    utmMedium: null,
   });
 
-  it('attributes a single clicker with full utm attribution', () => {
-    expect(
-      decideAttribution([
-        clicker({
-          personId: 'abc',
-          utmCampaign: 'Instagram Bio Links',
-          utmSource: 'instagram',
-          utmMedium: 'social',
-        }),
-      ])
-    ).toEqual({
+  it('attributes person and campaign to a lone clicker', () => {
+    expect(decideAttribution([row('p1', 'Instagram Bio Links')])).toEqual({
       attribution_method: 'session_click_inference',
-      attributed_web_person_id: 'abc',
+      attributed_web_person_id: 'p1',
       attributed_utm_campaign: 'Instagram Bio Links',
-      attributed_utm_source: 'instagram',
-      attributed_utm_medium: 'social',
     });
   });
 
-  it('attributes a single clicker without utm values (person link only)', () => {
-    expect(decideAttribution([clicker({ personId: 'abc' })])).toEqual({
-      attribution_method: 'session_click_inference',
-      attributed_web_person_id: 'abc',
-    });
-  });
-
-  it('attributes campaign only when multiple clickers share one campaign', () => {
-    const result = decideAttribution([
-      clicker({ personId: 'a', utmCampaign: 'summer-launch' }),
-      clicker({ personId: 'b', utmCampaign: 'summer-launch' }),
-    ]);
-    expect(result).toEqual({
+  it('keeps the campaign when every clicker shares it, in any spelling', () => {
+    expect(
+      decideAttribution([row('p1', 'Instagram Bio Links'), row('p2', 'instagram-bio-links')])
+    ).toEqual({
       attribution_method: 'session_click_shared_campaign',
-      attributed_utm_campaign: 'summer-launch',
+      attributed_utm_campaign: 'Instagram Bio Links',
     });
-    expect(result?.attributed_web_person_id).toBeUndefined();
   });
 
-  it('rolls raw campaign variants up via slugification for the shared match', () => {
-    expect(
-      decideAttribution([
-        clicker({ personId: 'a', utmCampaign: 'Instagram Bio Links' }),
-        clicker({ personId: 'b', utmCampaign: 'instagram-bio-links' }),
-      ])
-    ).toMatchObject({ attribution_method: 'session_click_shared_campaign' });
-  });
-
-  it('returns null when any of several clickers lacks a campaign', () => {
-    expect(
-      decideAttribution([
-        clicker({ personId: 'a', utmCampaign: 'summer-launch' }),
-        clicker({ personId: 'b', utmCampaign: null }),
-      ])
-    ).toBeNull();
-  });
-
-  it('returns null when several clickers carry different campaigns', () => {
-    expect(
-      decideAttribution([
-        clicker({ personId: 'a', utmCampaign: 'summer-launch' }),
-        clicker({ personId: 'b', utmCampaign: 'friday-social' }),
-      ])
-    ).toBeNull();
+  it('gives up when clickers disagree or one has no campaign', () => {
+    expect(decideAttribution([row('p1', 'a'), row('p2', 'b')])).toBeNull();
+    expect(decideAttribution([row('p1', 'a'), row('p2', null)])).toBeNull();
+    expect(decideAttribution([])).toBeNull();
   });
 });
