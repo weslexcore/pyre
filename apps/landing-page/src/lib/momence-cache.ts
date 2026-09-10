@@ -16,18 +16,32 @@
 //   2. Across instances, in Redis. This reuses the snapshot /api/events already
 //      wrote as an outage fallback — but reads it as a *cache* first: a
 //      snapshot younger than SNAPSHOT_FRESH_MS means another instance has
-//      already paid for the fetch, so this one just borrows the result. The
-//      grid keeps it warm, which is why event pages rarely touch Momence.
+//      already paid for the fetch, so this one just borrows the result.
 //
-// Staleness compounds across the layers and the edge cache in front of them, so
-// the numbers are deliberately small: worst case a spot count is ~2 minutes
-// behind, and Momence itself remains authoritative at checkout.
+// Momence is the slow, unreliable part — it answers in anything from 300ms to
+// a gateway timeout, and the logs show it doing the latter a few times a
+// week. So the rule is that a visitor never waits on it while there is
+// anything recent to show instead: a snapshot older than SNAPSHOT_FRESH_MS
+// but younger than SNAPSHOT_SERVE_STALE_MS is served immediately and refreshed
+// *behind* the response (stale-while-revalidate, at the data layer). Only a
+// missing or genuinely old snapshot blocks on Momence, and even that is
+// capped by FETCH_TIMEOUT_MS.
 //
-// A snapshot older than SNAPSHOT_FRESH_MS is still kept as the outage fallback,
-// which is what the 7-day TTL is for — a stale calendar renders correctly
-// because the transform pipeline drops past sessions by date anyway.
+// Redis is bounded too. Upstash's client defaults to five retries with
+// exponential backoff and no request timeout, which on a bad day is a page
+// that never loads; the cache uses its own client with a hard deadline and a
+// single retry, and treats a failure as a miss.
+//
+// Staleness compounds across the layers and the edge cache in front of them:
+// worst case a spot count is a few minutes behind, and Momence itself remains
+// authoritative at checkout.
+//
+// A snapshot older than SNAPSHOT_SERVE_STALE_MS is still kept as the outage
+// fallback, which is what the 7-day TTL is for — a stale calendar renders
+// correctly because the transform pipeline drops past sessions by date anyway.
 
-import { getRedis } from '@pyre/webhook-core';
+import { createRedis } from '@pyre/webhook-core';
+import { waitUntil } from '@vercel/functions';
 import { fetchMomenceTeachers } from '@/lib/momence';
 import type { MomenceEvent, MomenceTeacher } from '@/lib/momence-types';
 
@@ -36,11 +50,26 @@ const MOMENCE_API_BASE = 'https://api.momence.com/api/v1';
 /** A slow Momence must never hold a page open to the platform's limit. */
 const FETCH_TIMEOUT_MS = 6_000;
 
+/**
+ * Hard deadline on a Redis round trip, retries included. Reading the snapshot
+ * normally takes tens of milliseconds; anything approaching this is an
+ * Upstash problem, and the page is better off going to Momence than waiting.
+ */
+const REDIS_TIMEOUT_MS = 2_000;
+
 /** How long one instance trusts its own copy. */
 const MEMO_TTL_MS = 30_000;
 
-/** How fresh a shared snapshot has to be to serve without calling Momence. */
+/** How fresh a shared snapshot has to be to serve without a refresh at all. */
 const SNAPSHOT_FRESH_MS = 45_000;
+
+/**
+ * How old a shared snapshot can be and still be served immediately, with the
+ * refresh happening behind the response rather than in front of it. Beyond
+ * this the data is old enough — spot counts, a session pulled from the
+ * calendar — that a visitor should wait for Momence.
+ */
+const SNAPSHOT_SERVE_STALE_MS = 5 * 60_000;
 
 /**
  * How long a total failure is remembered. Short, so recovery is picked up
@@ -79,6 +108,8 @@ interface Memo {
 
 let memo: Memo | null = null;
 let inflight: Promise<MomenceCalendar | null> | null = null;
+/** The background refresh in progress on this instance, if any. */
+let revalidating: Promise<void> | null = null;
 
 /**
  * Fetch the upcoming calendar from Momence. Unlike `fetchMomenceEvents`, this
@@ -117,12 +148,33 @@ export async function fetchMomenceEventsOrThrow(): Promise<MomenceEvent[]> {
   throw new Error('Unexpected response format from Momence');
 }
 
+// -- Redis -------------------------------------------------------------------
+
+type CacheRedis = NonNullable<ReturnType<typeof createRedis>>;
+
+// `undefined` until first use; `null` once we know Redis isn't configured, so
+// the warning isn't repeated per request.
+let redis: CacheRedis | null | undefined;
+
+function cacheRedis(): CacheRedis | null {
+  if (redis === undefined) {
+    redis = createRedis({
+      // A fresh signal per request, so one timed-out call doesn't poison the
+      // client for every call after it. The client reuses the signal across
+      // its retries, which makes this a deadline on the whole operation.
+      signal: () => AbortSignal.timeout(REDIS_TIMEOUT_MS),
+      retry: { retries: 1, backoff: () => 100 },
+    });
+  }
+  return redis;
+}
+
 async function readSnapshot(): Promise<EventsSnapshot | null> {
-  const redis = getRedis();
-  if (!redis) return null;
+  const client = cacheRedis();
+  if (!client) return null;
 
   try {
-    const snapshot = await redis.get<EventsSnapshot>(SNAPSHOT_KEY);
+    const snapshot = await client.get<EventsSnapshot>(SNAPSHOT_KEY);
     if (!snapshot || !Array.isArray(snapshot.events)) return null;
     return snapshot;
   } catch (error) {
@@ -131,13 +183,12 @@ async function readSnapshot(): Promise<EventsSnapshot | null> {
   }
 }
 
-async function writeSnapshot(events: MomenceEvent[], teachers: MomenceTeacher[]): Promise<void> {
-  const redis = getRedis();
-  if (!redis) return;
+async function writeSnapshot(snapshot: EventsSnapshot): Promise<void> {
+  const client = cacheRedis();
+  if (!client) return;
 
   try {
-    const snapshot: EventsSnapshot = { events, teachers, fetchedAt: new Date().toISOString() };
-    await redis.set(SNAPSHOT_KEY, snapshot, { ex: SNAPSHOT_TTL_SECONDS });
+    await client.set(SNAPSHOT_KEY, snapshot, { ex: SNAPSHOT_TTL_SECONDS });
   } catch (error) {
     console.warn('[Momence cache] Failed to save snapshot:', error);
   }
@@ -157,33 +208,91 @@ function toCalendar(snapshot: EventsSnapshot, stale: boolean): MomenceCalendar {
   };
 }
 
+// -- Momence -----------------------------------------------------------------
+
+/**
+ * Go to Momence, and record what came back for every other instance. Throws
+ * when Momence is down or answers with nothing usable.
+ */
+async function fetchCalendar(previous: EventsSnapshot | null): Promise<MomenceCalendar> {
+  // The teacher roster carries practitioner bios/headshots and is
+  // best-effort — it resolves to an empty list instead of throwing.
+  const [events, teachers] = await Promise.all([
+    fetchMomenceEventsOrThrow(),
+    fetchMomenceTeachers(),
+  ]);
+
+  // Pyre always has sessions on the calendar, so an empty list is a failed
+  // fetch wearing a success's clothes. Treat it as the outage it is rather
+  // than caching it over a good snapshot.
+  if (events.length === 0) {
+    throw new Error('Momence returned an empty calendar');
+  }
+
+  // The roster endpoint flakes independently of the calendar. A blip there
+  // shouldn't strip every practitioner bio from the site until the next
+  // successful fetch, so a good roster outlives a failed refresh of it.
+  const roster = teachers.length > 0 ? teachers : (previous?.teachers ?? []);
+
+  const snapshot: EventsSnapshot = {
+    events,
+    teachers: roster,
+    fetchedAt: new Date().toISOString(),
+  };
+
+  // Awaited so the shared snapshot is written even where nothing keeps the
+  // function alive after the response; bounded by REDIS_TIMEOUT_MS either way.
+  await writeSnapshot(snapshot);
+
+  return toCalendar(snapshot, false);
+}
+
+/**
+ * Refresh the snapshot without anyone waiting on it. On Vercel, `waitUntil`
+ * keeps the function alive until the fetch lands; elsewhere (dev, tests) the
+ * promise simply runs to completion in the background. One at a time per
+ * instance — a burst of requests during the same stale window shares it.
+ */
+function revalidateInBackground(previous: EventsSnapshot): void {
+  if (revalidating) return;
+
+  revalidating = fetchCalendar(previous)
+    .then((calendar) => {
+      // Later requests on this instance get the fresh copy without a Redis
+      // read; other instances pick it up from the snapshot just written.
+      memo = { at: Date.now(), calendar };
+    })
+    .catch((error) => {
+      // The stale snapshot keeps being served; the next request past the
+      // memo will try again.
+      console.error('[Momence cache] Background refresh failed:', error);
+    })
+    .finally(() => {
+      revalidating = null;
+    });
+
+  waitUntil(revalidating);
+}
+
 async function refresh(): Promise<MomenceCalendar | null> {
   // Borrow another instance's recent work before spending a Momence round trip.
   // Held onto either way: it's also the fallback if the fetch below fails.
   const snapshot = await readSnapshot();
-  if (snapshot && snapshotAgeMs(snapshot) < SNAPSHOT_FRESH_MS) {
+  const age = snapshot ? snapshotAgeMs(snapshot) : Number.POSITIVE_INFINITY;
+
+  if (snapshot && age < SNAPSHOT_FRESH_MS) {
+    return toCalendar(snapshot, false);
+  }
+
+  // Recent enough to show. Momence is consulted behind the response, never in
+  // front of it — this is the branch that keeps a slow Momence off the page.
+  if (snapshot && age < SNAPSHOT_SERVE_STALE_MS) {
+    revalidateInBackground(snapshot);
     return toCalendar(snapshot, false);
   }
 
   try {
-    // The teacher roster carries practitioner bios/headshots and is
-    // best-effort — it resolves to an empty list instead of throwing.
-    const [events, teachers] = await Promise.all([
-      fetchMomenceEventsOrThrow(),
-      fetchMomenceTeachers(),
-    ]);
-
-    // Pyre always has sessions on the calendar, so an empty list is a failed
-    // fetch wearing a success's clothes. Treat it as the outage it is rather
-    // than caching it over a good snapshot.
-    if (events.length === 0) {
-      throw new Error('Momence returned an empty calendar');
-    }
-
-    // Awaited (serverless may kill work after the response), but never fatal.
-    await writeSnapshot(events, teachers);
-
-    return { events, teachers, fetchedAt: new Date().toISOString(), stale: false };
+    return await fetchCalendar(snapshot);
   } catch (error) {
     console.error('[Momence cache] Fetch failed:', error);
 
