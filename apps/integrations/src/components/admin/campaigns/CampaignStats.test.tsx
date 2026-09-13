@@ -48,6 +48,26 @@ const LINK: LinkRow = {
   clicks: 6,
 };
 
+describe('CampaignStats event total', () => {
+  // Effects do not run under renderToStaticMarkup, so this is the panel before
+  // Momence answers: an event campaign promises the total, others say nothing.
+  it('tells an event campaign its event total is coming', () => {
+    const html = renderToStaticMarkup(
+      <CampaignStats
+        campaign={{ ...CAMPAIGN, destinationKind: 'event', destinationValue: '9001' }}
+        links={[LINK]}
+      />
+    );
+    expect(html).toContain('Reading this event&#x27;s bookings from Momence');
+    expect(html).toContain('booking total comes from Momence');
+  });
+
+  it('says nothing about an event for a campaign that opens something else', () => {
+    const html = renderToStaticMarkup(<CampaignStats campaign={CAMPAIGN} links={[LINK]} />);
+    expect(html).not.toContain('from Momence');
+  });
+});
+
 describe('CampaignStats goals', () => {
   it('reads each goal against its target', () => {
     const html = renderToStaticMarkup(<CampaignStats campaign={CAMPAIGN} links={[LINK]} />);
