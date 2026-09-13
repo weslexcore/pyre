@@ -7,10 +7,12 @@
 // flips instantly, the record catches up behind it, and a refused tap is
 // rolled back with an error.
 //
-// A run finishes on its own when the last item is checked (the server
-// completes it as the check lands); the finished run stays on screen, all
-// boxes ticked, until Start again clears it. Finish is only for ending a run
-// with items deliberately left unchecked.
+// Every item is resolved one of two ways — completed, or skipped (a check
+// item carrying skipped: true) — and a run finishes on its own when the last
+// item is resolved (the server completes it as the row lands); the finished
+// run stays on screen, every box ticked or struck, until Start again clears
+// it. There is no Finish: the record never carries an item nobody accounted
+// for. Discard is the only way out of a run short of resolving everything.
 //
 // Every closure the queue runs later reads the latest options and refs at call
 // time, never the render it was created in — an op must see the state the
@@ -36,8 +38,6 @@ export interface RunResponse extends RunResponseBody {
   people?: PeopleNames;
 }
 
-export type FinishAction = 'complete' | 'discard';
-
 export interface UseSopRunOptions {
   /** The document the run belongs to; null while the page has nothing loaded. */
   sop: Pick<SopRow, 'id' | 'content_md' | 'current_version'> | null;
@@ -58,17 +58,18 @@ export interface SopRunController {
   runData: RunState | null;
   /** Requests still in flight or waiting their turn. */
   pending: number;
-  /** Finish/Discard in flight — those still wait for the server. */
+  /** Discard in flight — that one still waits for the server. */
   runBusy: boolean;
   /** Names for the people the run responses name (starters, checkers). */
   people: PeopleNames;
   mergePeople: (people?: PeopleNames) => void;
-  /** Which finish action is awaiting confirmation in the dialog, if any. */
-  confirmAction: FinishAction | null;
+  /** Whether a discard is awaiting confirmation in the dialog. */
+  confirmDiscard: boolean;
   cancelConfirm: () => void;
   toggleCheck: (items: CheckItems, checked: boolean) => void;
-  requestFinish: (action: FinishAction) => void;
-  finishRun: (action: FinishAction) => Promise<void>;
+  /** Discard the run — straight through when nothing is resolved, else via the dialog. */
+  requestDiscard: () => void;
+  discardRun: () => Promise<void>;
   /** Clear a finished run off the screen; the next tap starts a new one. */
   startAgain: () => void;
   /** Replace the run outright (page reload, run deleted from the log). */
@@ -134,7 +135,7 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
   const pendingRef = useRef(0);
   const [runBusy, setRunBusy] = useState(false);
   const [people, setPeople] = useState<PeopleNames>({});
-  const [confirmAction, setConfirmAction] = useState<FinishAction | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   // The finished run already announced, so a second response doesn't repeat it.
   const announcedRef = useRef<string | null>(
     options.initialRun && !isLiveRun(options.initialRun) ? options.initialRun.run.id : null
@@ -256,8 +257,9 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
   );
 
   // `items` carries one entry per affected task — a tap on a parent brings
-  // its whole subtree along (ChecklistView computes the group). The box flips
-  // now; the request queues behind whatever is already in flight.
+  // its whole subtree along (ChecklistView computes the group), each marked
+  // skipped or not. The box flips now; the request queues behind whatever is
+  // already in flight. `checked: false` un-resolves one item, skipped or not.
   const toggleCheck = useCallback(
     (items: CheckItems, checked: boolean) => {
       const { sop, taskCount, viewerEmail, onError } = latest.current;
@@ -289,68 +291,45 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
       if (!current) return;
       const { next, removed } = applyUncheck(current, items[0].itemIndex);
       if (!removed) return;
-      // Unchecking the last item ends the run, as it does on the server.
+      // Un-resolving the last item ends the run, as it does on the server.
       commit(next.checks.length === 0 ? null : next);
       enqueue(() => sendUncheck(items[0].itemIndex, removed));
     },
     [commit, enqueue, sendCheck, sendUncheck]
   );
 
-  const finishRun = useCallback(
-    async (action: FinishAction) => {
-      const current = runRef.current;
-      if (!current || !isLiveRun(current) || !isPersisted(current.run)) return;
-      setConfirmAction(null);
-      setRunBusy(true);
-      latest.current.onError(null);
-      try {
-        const body = await patchRun(current.run.id, { action });
-        mergePeople(body.people);
-        if (action === 'complete' && body.run) {
-          // The finished run stays on screen, ticked, until Start again.
-          announcedRef.current = body.run.id;
-          commit({
-            run: body.run,
-            checks: body.checks ?? current.checks,
-            content: current.content,
-          });
-        } else {
-          commit(null);
-        }
-        lastRunRef.current = null;
-        latest.current.onNotice(
-          action === 'complete' ? COMPLETED_NOTICE : 'Checklist discarded — nothing was saved.'
-        );
-      } catch (e) {
-        latest.current.onError(e instanceof Error ? e.message : 'Failed to finish the run');
-      } finally {
-        setRunBusy(false);
-      }
-    },
-    [commit, mergePeople]
-  );
+  const discardRun = useCallback(async () => {
+    const current = runRef.current;
+    if (!current || !isLiveRun(current) || !isPersisted(current.run)) return;
+    setConfirmDiscard(false);
+    setRunBusy(true);
+    latest.current.onError(null);
+    try {
+      const body = await patchRun(current.run.id, { action: 'discard' });
+      mergePeople(body.people);
+      commit(null);
+      lastRunRef.current = null;
+      latest.current.onNotice('Checklist discarded — nothing was saved.');
+    } catch (e) {
+      latest.current.onError(e instanceof Error ? e.message : 'Failed to discard the run');
+    } finally {
+      setRunBusy(false);
+    }
+  }, [commit, mergePeople]);
 
-  // A finish that loses nothing (everything checked, or discarding an empty
-  // run) goes straight through; anything else confirms in the dialog first.
-  const requestFinish = useCallback(
-    (action: FinishAction) => {
-      const current = runRef.current;
-      if (!current || !isLiveRun(current) || pendingRef.current > 0) return;
-      const done = current.checks.length;
-      if (action === 'complete' && done >= current.run.task_count) {
-        void finishRun(action);
-        return;
-      }
-      if (action === 'discard' && done === 0) {
-        void finishRun(action);
-        return;
-      }
-      setConfirmAction(action);
-    },
-    [finishRun]
-  );
+  // Discarding a run with nothing resolved loses nothing and goes straight
+  // through; one with checks on it confirms in the dialog first.
+  const requestDiscard = useCallback(() => {
+    const current = runRef.current;
+    if (!current || !isLiveRun(current) || pendingRef.current > 0) return;
+    if (current.checks.length === 0) {
+      void discardRun();
+      return;
+    }
+    setConfirmDiscard(true);
+  }, [discardRun]);
 
-  const cancelConfirm = useCallback(() => setConfirmAction(null), []);
+  const cancelConfirm = useCallback(() => setConfirmDiscard(false), []);
 
   // The HTML this island hydrated from may be older than it looks (a
   // prefetched page, a bfcache restore): re-check the shared run once, and
@@ -389,11 +368,11 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
     runBusy,
     people,
     mergePeople,
-    confirmAction,
+    confirmDiscard,
     cancelConfirm,
     toggleCheck,
-    requestFinish,
-    finishRun,
+    requestDiscard,
+    discardRun,
     startAgain,
     resetRun,
   };

@@ -325,7 +325,8 @@ export interface SopRunRow {
   updated_at: string;
 }
 
-// One checked task item within a run; unchecking deletes the row.
+// One resolved task item within a run — completed, or explicitly skipped —
+// recording who resolved it and when. Un-resolving deletes the row.
 export interface SopRunCheckRow {
   id: string;
   run_id: string;
@@ -333,6 +334,8 @@ export interface SopRunCheckRow {
   item_text: string;
   checked_by: string;
   checked_at: string;
+  /** True when the item was skipped rather than completed. */
+  skipped: boolean;
 }
 
 // One shift-lead note about how a shift went (see the shift_notes migration).

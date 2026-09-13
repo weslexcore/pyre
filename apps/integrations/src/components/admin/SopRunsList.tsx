@@ -1,6 +1,7 @@
 // Shared checklist-run list: the admin runs board and the per-SOP Runs panel
 // both render runs through this — status, progress, who started/ended and
-// when, expandable into the per-item record of who checked what at what time.
+// when, expandable into the per-item record of who checked (or skipped) what
+// at what time.
 // `itemQuery` (from the board's item filter) auto-surfaces matching checks
 // under each run without expanding, so "who completed task X" reads at a
 // glance. Runs the viewer started themselves carry a "yours" tag and a gold
@@ -15,16 +16,21 @@ export interface RunCheck {
   item_text: string;
   checked_by: string;
   checked_at: string;
+  /** Resolved by skipping rather than completing. */
+  skipped: boolean;
 }
 
 export interface RunEntry extends SopRunRow {
   sops: { title: string; slug: string; category: string } | null;
+  /** Every resolved item — completed or skipped. */
   sop_run_checks: RunCheck[];
   /**
-   * The items a finished run never checked, from the document snapshot it
-   * pinned (see attachUncheckedItems). Absent while a run is in progress,
-   * when it completed every item, or when the snapshot could not be read —
-   * the record then falls back to counting what was skipped.
+   * The items a finished run never resolved, from the document snapshot it
+   * pinned (see attachUncheckedItems). Only runs ended short by the old
+   * Finish action have any — a run now finishes only once every item is
+   * completed or skipped. Absent while a run is in progress, when it resolved
+   * every item, or when the snapshot could not be read — the record then
+   * falls back to counting what was never checked.
    */
   unchecked?: UncheckedItem[];
 }
@@ -56,6 +62,17 @@ function formatDuration(startIso: string, endIso: string): string {
 }
 
 function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames }) {
+  if (check.skipped) {
+    return (
+      <li className="flex flex-wrap items-baseline gap-x-3 text-xs">
+        <span className="text-white/40">–</span>
+        <span className="text-white/50 italic">{check.item_text}</span>
+        <span className="ml-auto font-mono text-[10px] text-white/40">
+          skipped by {personName(check.checked_by, people)} · {formatWhen(check.checked_at)}
+        </span>
+      </li>
+    );
+  }
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 text-xs">
       <span className="text-[var(--pyre-sage)]">✓</span>
@@ -65,6 +82,13 @@ function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames })
       </span>
     </li>
   );
+}
+
+/** "3/5 · 1 skipped": completed over total, with the skips called out. */
+export function progressLabel(checks: Pick<RunCheck, 'skipped'>[], taskCount: number): string {
+  const skipped = checks.filter((c) => c.skipped).length;
+  const completed = checks.length - skipped;
+  return `${completed}/${taskCount}${skipped > 0 ? ` · ${skipped} skipped` : ''}`;
 }
 
 function UncheckedLine({ item }: { item: UncheckedItem }) {
@@ -78,9 +102,10 @@ function UncheckedLine({ item }: { item: UncheckedItem }) {
 }
 
 /**
- * The expanded record of one run: the SOP link, every check with who and
- * when, and — for a run that ended short — the items nobody checked, by name.
- * Exported for the static render test; the list opens it on tap.
+ * The expanded record of one run: the SOP link, every resolved item with who
+ * and when (skips say so), and — for a run that ended short, before skipping
+ * existed — the items nobody accounted for, by name. Exported for the static
+ * render test; the list opens it on tap.
  */
 export function RunRecord({
   run,
@@ -96,7 +121,7 @@ export function RunRecord({
   showSopTitle?: boolean;
   onDelete?: (run: RunEntry) => void;
 }) {
-  const skipped = run.task_count - checks.length;
+  const neverChecked = run.task_count - checks.length;
   return (
     <div className="border-t border-white/10 p-4">
       {showSopTitle && run.sops && (
@@ -116,10 +141,10 @@ export function RunRecord({
           ))}
         </ul>
       )}
-      {run.status !== 'in_progress' && skipped > 0 && (
+      {run.status !== 'in_progress' && neverChecked > 0 && (
         <div className="mt-3">
           <p className="font-mono text-[10px] text-white/40">
-            {skipped} item{skipped === 1 ? '' : 's'} never checked
+            {neverChecked} item{neverChecked === 1 ? '' : 's'} never checked
             {run.unchecked && run.unchecked.length > 0 ? ':' : '.'}
           </p>
           {run.unchecked && run.unchecked.length > 0 && (
@@ -196,6 +221,7 @@ export function RunsList({
           ? checks.filter((c) => c.item_text.toLowerCase().includes(query))
           : [];
         const isOpen = expanded === run.id;
+        // Every item accounted for (completed or skipped).
         const complete = checks.length >= run.task_count;
         const mine = sameActor(run.started_by, viewerEmail);
         return (
@@ -227,8 +253,8 @@ export function RunsList({
               <span
                 className={`font-mono text-xs ${complete ? 'text-[var(--pyre-sage)]' : 'text-white/60'}`}
               >
-                {checks.length}/{run.task_count}
-                {run.status === 'completed' && !complete && ' — items skipped'}
+                {progressLabel(checks, run.task_count)}
+                {run.status === 'completed' && !complete && ' — items never checked'}
               </span>
               <span className="ml-auto text-right font-mono text-[10px] text-white/40">
                 started by {actorLabel(run.started_by, viewerEmail, people)} ·{' '}

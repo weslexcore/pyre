@@ -5,7 +5,11 @@
 
 import type { SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
 
-export type CheckItems = { itemIndex: number; itemText: string }[];
+/**
+ * The items one tap resolves. `skipped` marks an item skipped rather than
+ * completed — either way it counts as dealt with, and the record says which.
+ */
+export type CheckItems = { itemIndex: number; itemText: string; skipped?: boolean }[];
 
 export interface RunState {
   run: SopRunRow;
@@ -52,9 +56,11 @@ function byIndex(a: SopRunCheckRow, b: SopRunCheckRow): number {
 }
 
 /**
- * Check `items` (a parent tap carries its subtree). Items already checked —
- * by a teammate, or by an earlier tap — are left alone; `added` lists the
- * indexes this tap actually introduced, for `revertCheck`.
+ * Resolve `items` (a parent tap carries its subtree), completing or skipping
+ * each as the item says. Items already resolved — by a teammate, or by an
+ * earlier tap — are left alone, so a skip never overwrites a check or the
+ * other way round; `added` lists the indexes this tap actually introduced,
+ * for `revertCheck`.
  */
 export function applyCheck(
   state: RunState,
@@ -76,6 +82,7 @@ export function applyCheck(
       item_text: item.itemText,
       checked_by: email,
       checked_at: nowIso,
+      skipped: item.skipped === true,
     });
   }
   if (rows.length === 0) return { next: state, added };

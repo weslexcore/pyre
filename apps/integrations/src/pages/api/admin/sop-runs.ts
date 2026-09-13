@@ -3,25 +3,29 @@
 // optionally recording a first check in the same request, since the UI starts
 // a run implicitly when the first box is tapped, or checking every item at
 // once (checkAll — a parent checklist ticking off the item that links here) —
-// PATCH checks/unchecks items,
-// completes the run, or discards it, GET fetches a single run (?id=), the
-// in-progress run for a document (?sopId=), every unfinished run the caller
-// may view (?view=active — the library's in-progress strip), or the run log
-// (?view=list — every run of the SOPs the caller may view), DELETE (admin only)
-// removes a run and its check records outright.
+// PATCH resolves/un-resolves items or discards the run, GET fetches a single
+// run (?id=), the in-progress run for a document (?sopId=), every unfinished
+// run the caller may view (?view=active — the library's in-progress strip),
+// or the run log (?view=list — every run of the SOPs the caller may view),
+// DELETE (admin only) removes a run and its check records outright.
 //
-// Runs end implicitly too: the check that ticks the last item completes the
-// run (nobody taps Finish after finishing — Finish is for leaving items
-// undone), and an uncheck that leaves zero items checked deletes the run
-// outright (same effect as discard), so a stray first tap that gets untapped
-// never litters the log.
+// Every item is resolved one of two ways: completed, or explicitly skipped
+// (a check item with skipped: true). Both write a sop_run_checks row naming
+// who and when; the row's `skipped` flag tells them apart, so the record
+// never leaves anyone wondering whether an item was passed over on purpose
+// or simply never looked at. There is no finishing a run by hand: it
+// completes itself the moment its last item is resolved (completeIfFull),
+// and an uncheck that leaves zero items resolved deletes the run outright
+// (same effect as discard), so a stray first tap that gets untapped never
+// litters the log.
 //
-// A run stays in progress until someone completes it — there is no stepping
-// out of one to come back later. Discard is the escape hatch for a checklist
-// started by mistake: it deletes the run and its checks instead of logging
-// them, so the record only ever holds work that actually happened. (Runs from
-// before discard replaced it may still carry the 'abandoned' status; the log
-// still renders those.)
+// A run stays in progress until every item is resolved — there is no
+// stepping out of one to come back later. Discard is the escape hatch for a
+// checklist started by mistake: it deletes the run and its checks instead of
+// logging them, so the record only ever holds work that actually happened.
+// (Runs from before this: 'abandoned' ones from before discard replaced it,
+// and completed ones ended short by the old Finish action, still render in
+// the log — their missing items read as never checked.)
 //
 // Permissions follow the document: anyone who may view an SOP may run it,
 // check items, and discard the open run (runs are shared per document, so
@@ -65,20 +69,35 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface CheckItem {
   itemIndex: number;
   itemText: string;
+  /** Resolved by skipping rather than completing. */
+  skipped: boolean;
 }
 
-/** Every task in `content` as a check item, for checkAll. */
+/** Every task in `content` as a completed check item, for checkAll. */
 function allItems(content: string): CheckItem[] {
   return parseChecklist(content).tasks.map((task) => ({
     itemIndex: task.index,
     itemText: task.text.slice(0, MAX_ITEM_TEXT),
+    skipped: false,
   }));
+}
+
+/** The row a check item writes, on the given run, by the given person. */
+function checkRow(runId: string, item: CheckItem, email: string) {
+  return {
+    run_id: runId,
+    item_index: item.itemIndex,
+    item_text: item.itemText,
+    checked_by: email,
+    skipped: item.skipped,
+  };
 }
 
 /**
  * A list of checks from a request body, deduped by index — or an error string.
  * Checking a parent task checks its whole subtree, so both the start request
- * and the check action carry lists rather than single items.
+ * and the check action carry lists rather than single items. An item with
+ * `skipped: true` is resolved as skipped; anything else completes it.
  */
 function parseCheckItems(value: unknown): { items: CheckItem[] } | { error: string } {
   if (!Array.isArray(value) || value.length === 0) {
@@ -95,7 +114,7 @@ function parseCheckItems(value: unknown): { items: CheckItem[] } | { error: stri
       typeof raw?.itemText === 'string' && raw.itemText.trim()
         ? raw.itemText.trim().slice(0, MAX_ITEM_TEXT)
         : `Item ${itemIndex + 1}`;
-    byIndex.set(itemIndex, { itemIndex, itemText });
+    byIndex.set(itemIndex, { itemIndex, itemText, skipped: raw?.skipped === true });
   }
   return { items: [...byIndex.values()] };
 }
@@ -147,7 +166,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     let query = db
       .from('sop_runs')
       .select(
-        '*, sops(title, slug, category), sop_run_checks(item_index, item_text, checked_by, checked_at)'
+        '*, sops(title, slug, category), sop_run_checks(item_index, item_text, checked_by, checked_at, skipped)'
       )
       .order('started_at', { ascending: false })
       .limit(LIST_LIMIT);
@@ -339,12 +358,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const joinable = (initialChecks ?? []).filter((item) => item.itemIndex < run.task_count);
     if (joinable.length > 0) {
       const { error: checkError } = await db.from('sop_run_checks').upsert(
-        joinable.map((item) => ({
-          run_id: run.id,
-          item_index: item.itemIndex,
-          item_text: item.itemText,
-          checked_by: gate.user.email ?? '',
-        })),
+        joinable.map((item) => checkRow(run.id, item, gate.user.email ?? '')),
         { onConflict: 'run_id,item_index', ignoreDuplicates: true }
       );
       if (checkError) return json({ error: checkError.message }, 500);
@@ -390,14 +404,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     // auto-discard and explicit Discard both clean that up.)
     const { data: checkRows, error: checkError } = await db
       .from('sop_run_checks')
-      .insert(
-        initialChecks.map((item) => ({
-          run_id: newRun.id,
-          item_index: item.itemIndex,
-          item_text: item.itemText,
-          checked_by: gate.user.email ?? '',
-        }))
-      )
+      .insert(initialChecks.map((item) => checkRow(newRun.id, item, gate.user.email ?? '')))
       .select('*');
     if (checkError) {
       await db.from('sop_runs').delete().eq('id', newRun.id);
@@ -442,9 +449,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const runId = typeof body.runId === 'string' ? body.runId : '';
   if (!UUID_RE.test(runId)) return json({ error: 'runId must be a UUID' }, 400);
 
+  // There is deliberately no 'complete': a run finishes itself when its last
+  // item is resolved, so the record never carries items nobody accounted for.
   const action = body.action;
-  if (typeof action !== 'string' || !['check', 'uncheck', 'complete', 'discard'].includes(action)) {
-    return json({ error: 'action must be check, uncheck, complete, or discard' }, 400);
+  if (typeof action !== 'string' || !['check', 'uncheck', 'discard'].includes(action)) {
+    return json({ error: 'action must be check, uncheck, or discard' }, 400);
   }
 
   const { data: runData, error: runError } = await db
@@ -466,12 +475,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const email = gate.user.email ?? '';
 
   if (action === 'check') {
-    // One or many items — tapping a parent task checks its whole subtree.
-    // A bare { itemIndex, itemText } is accepted as shorthand for one item.
+    // One or many items — tapping a parent task resolves its whole subtree.
+    // A bare { itemIndex, itemText, skipped } is accepted as shorthand for
+    // one item.
     const parsed = parseCheckItems(
       body.items !== undefined
         ? body.items
-        : [{ itemIndex: body.itemIndex, itemText: body.itemText }]
+        : [{ itemIndex: body.itemIndex, itemText: body.itemText, skipped: body.skipped }]
     );
     if ('error' in parsed) return json({ error: parsed.error }, 400);
     if (parsed.items.some((item) => item.itemIndex >= run.task_count)) {
@@ -479,14 +489,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     }
 
     // The (run_id, item_index) unique constraint makes a double-check from two
-    // devices a no-op instead of an error.
+    // devices a no-op instead of an error — and keeps the first resolution
+    // (a skip never silently overwrites a teammate's check, or vice versa;
+    // un-resolving first is the way to change one).
     const { error } = await db.from('sop_run_checks').upsert(
-      parsed.items.map((item) => ({
-        run_id: runId,
-        item_index: item.itemIndex,
-        item_text: item.itemText,
-        checked_by: email,
-      })),
+      parsed.items.map((item) => checkRow(runId, item, email)),
       { onConflict: 'run_id,item_index', ignoreDuplicates: true }
     );
     if (error) return json({ error: error.message }, 500);
@@ -502,8 +509,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('item_index', itemIndex);
     if (error) return json({ error: error.message }, 500);
 
-    // Runs start implicitly with the first check, so they end implicitly when
-    // the last one goes: nothing checked means nothing happened, and the run
+    // Un-resolving covers skipped items too: the row goes either way. Runs
+    // start implicitly with the first check, so they end implicitly when
+    // the last one goes: nothing resolved means nothing happened, and the run
     // vanishes like a discard. The remaining checks are the response anyway,
     // so their count doubles as the test. Race note: if a teammate's check
     // lands between the delete above and this read, the list is non-empty and
@@ -527,10 +535,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       checks: remainingChecks,
       people: await getPeopleNames(runActors(run, remainingChecks)),
     });
-  } else if (action === 'discard') {
-    // Started by mistake: erase the run and its checks (they cascade) so
-    // nothing lands in the log. Only reachable while in progress — the status
-    // guard above already rejected finished runs.
+  } else {
+    // discard — started by mistake: erase the run and its checks (they
+    // cascade) so nothing lands in the log. Only reachable while in progress
+    // — the status guard above already rejected finished runs.
     const { error } = await db
       .from('sop_runs')
       .delete()
@@ -538,38 +546,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('status', 'in_progress');
     if (error) return json({ error: error.message }, 500);
     return json({ run: null, checks: [], discarded: true });
-  } else {
-    // complete — the update returns the finished row, so no re-read; a
-    // null means a teammate finished it first.
-    const [{ data: finished, error }, { data: checks, error: checksError }] = await Promise.all([
-      db
-        .from('sop_runs')
-        .update({
-          status: 'completed',
-          ended_by: email,
-          ended_at: new Date().toISOString(),
-        })
-        .eq('id', runId)
-        .eq('status', 'in_progress')
-        .select('*')
-        .maybeSingle(),
-      loadRunChecks(db, runId),
-    ]);
-    if (error) return json({ error: error.message }, 500);
-    if (checksError) return json({ error: checksError.message }, 500);
-    if (!finished) return json({ error: 'This run is already finished' }, 409);
-    const finishedRun = finished as SopRunRow;
-    const finishedChecks = (checks ?? []) as SopRunCheckRow[];
-    return json({
-      run: finishedRun,
-      checks: finishedChecks,
-      people: await getPeopleNames(runActors(finishedRun, finishedChecks)),
-    });
   }
 
   // check: re-read the checks — the whole list, since a parent tap may have
   // added several and a teammate may have added more since the client last
-  // looked — and finish the run if that was the last of them.
+  // looked — and finish the run if that was the last of them (skipped items
+  // count: the run is done once every item is accounted for).
   const { data: checks, error: checksError } = await loadRunChecks(db, runId);
   if (checksError) return json({ error: checksError.message }, 500);
   const runChecks = (checks ?? []) as SopRunCheckRow[];

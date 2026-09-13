@@ -1,5 +1,5 @@
-// Styled replacement for window.confirm in the checklist flows (finish with
-// unchecked items, discard with checks). Follows the MeasurementInfo modal
+// Styled replacement for window.confirm in the checklist flows (discarding a
+// run that already has items resolved). Follows the MeasurementInfo modal
 // pattern: hand-rolled overlay, backdrop button for click-outside, Escape to
 // cancel, bottom sheet on mobile. Focus starts on Cancel so a stray double-tap
 // can't confirm a destructive action.

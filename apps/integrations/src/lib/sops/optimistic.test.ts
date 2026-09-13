@@ -23,6 +23,7 @@ function check(index: number, by = 'lead@pyresauna.com'): SopRunCheckRow {
     item_text: `Item ${index}`,
     checked_by: by,
     checked_at: NOW,
+    skipped: false,
   };
 }
 
@@ -71,6 +72,39 @@ describe('applyCheck', () => {
     expect(added).toEqual([]);
     expect(next).toBe(before);
   });
+
+  it('records a skip as a resolved row flagged skipped, completing the rest', () => {
+    const { next, added } = applyCheck(
+      state([]),
+      [
+        { itemIndex: 0, itemText: 'zero', skipped: true },
+        { itemIndex: 1, itemText: 'one' },
+      ],
+      'me@pyresauna.com',
+      NOW
+    );
+    expect(added).toEqual([0, 1]);
+    expect(next.checks.map((c) => [c.item_index, c.skipped])).toEqual([
+      [0, true],
+      [1, false],
+    ]);
+    expect(next.checks[0].checked_by).toBe('me@pyresauna.com');
+  });
+
+  it('never turns an item already resolved into a skip, or a skip into a check', () => {
+    const before = state([check(1), { ...check(2), skipped: true }]);
+    const { next, added } = applyCheck(
+      before,
+      [
+        { itemIndex: 1, itemText: 'one', skipped: true },
+        { itemIndex: 2, itemText: 'two' },
+      ],
+      'x',
+      NOW
+    );
+    expect(added).toEqual([]);
+    expect(next).toBe(before);
+  });
 });
 
 describe('applyUncheck / revertUncheck', () => {
@@ -79,6 +113,14 @@ describe('applyUncheck / revertUncheck', () => {
     const { next, removed } = applyUncheck(before, 1);
     expect(removed?.item_index).toBe(1);
     expect(next.checks.map((c) => c.item_index)).toEqual([2]);
+    expect(revertUncheck(next, removed as SopRunCheckRow)).toEqual(before);
+  });
+
+  it('undoes a skip the same way, and the revert brings the skip back', () => {
+    const before = state([check(1), { ...check(2), skipped: true }]);
+    const { next, removed } = applyUncheck(before, 2);
+    expect(removed?.skipped).toBe(true);
+    expect(next.checks.map((c) => c.item_index)).toEqual([1]);
     expect(revertUncheck(next, removed as SopRunCheckRow)).toEqual(before);
   });
 
