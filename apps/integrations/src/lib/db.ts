@@ -161,7 +161,7 @@ export interface DoseRecord {
 export interface WaterTestRow {
   id: string;
   tub: 'left' | 'right';
-  entry_type: 'test' | 'shock' | 'refill';
+  entry_type: 'test' | 'shock' | 'refill' | 'filter';
   ta_ppm: number | null;
   ph: number | null;
   /** Free chlorine (FC) — the active sanitizer; the 1–3 ppm target. */
@@ -170,6 +170,8 @@ export interface WaterTestRow {
   combined_chlorine_ppm: number | null;
   salt_ppm: number | null;
   test_method: 'strips' | 'digital_meter' | 'tf_pro_salt' | null;
+  /** What was done to the cartridge; set only on a 'filter' entry. */
+  filter_action: 'rinsed' | 'changed' | null;
   doses: DoseRecord[];
   notes: string | null;
   recorded_by: string;

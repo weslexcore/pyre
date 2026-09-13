@@ -14,6 +14,9 @@ import { type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
 import {
   ENTRY_TYPES,
   type EntryType,
+  FILTER_ACTIONS,
+  type FilterAction,
+  hasReadingPanel,
   TEST_METHODS,
   type TestMethod,
   TUBS,
@@ -87,6 +90,16 @@ function parseTestMethod(raw: unknown): TestMethod | null | Response {
     return json({ error: `testMethod must be one of: ${TEST_METHODS.join(', ')}` }, 400);
   }
   return raw as TestMethod;
+}
+
+// A filter entry says which job was done; every other entry type carries no
+// action at all (the table's check constraint enforces the same pairing).
+function parseFilterAction(raw: unknown, entryType: EntryType): FilterAction | null | Response {
+  if (entryType !== 'filter') return null;
+  if (typeof raw !== 'string' || !FILTER_ACTIONS.includes(raw as FilterAction)) {
+    return json({ error: `filterAction must be one of: ${FILTER_ACTIONS.join(', ')}` }, 400);
+  }
+  return raw as FilterAction;
 }
 
 function parseDoses(raw: unknown): DoseRecord[] | Response {
@@ -227,15 +240,20 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'A test entry needs at least one reading' }, 400);
   }
 
-  // Drain/refill entries record the water change only — tests are logged
-  // separately, so measurements never land on a refill row.
-  if (entryType === 'refill') {
+  // Maintenance entries (drain/refill, filter service) record the job only —
+  // tests are logged separately, so measurements never land on one of those
+  // rows.
+  const measurable = hasReadingPanel(entryType as EntryType);
+  if (!measurable) {
     for (const column of Object.keys(readings) as ReadingColumn[]) readings[column] = null;
   }
 
   const parsedMethod = parseTestMethod(body.testMethod);
   if (parsedMethod instanceof Response) return parsedMethod;
-  const testMethod = entryType === 'refill' ? null : parsedMethod;
+  const testMethod = measurable ? parsedMethod : null;
+
+  const filterAction = parseFilterAction(body.filterAction, entryType as EntryType);
+  if (filterAction instanceof Response) return filterAction;
 
   const doses = parseDoses(body.doses);
   if (doses instanceof Response) return doses;
@@ -249,6 +267,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       entry_type: entryType,
       ...readings,
       test_method: testMethod,
+      filter_action: filterAction,
       doses,
       notes: notes || null,
       // Always the authenticated session's email — never trusted from the body.
@@ -264,10 +283,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 /**
  * Correct an entry already in the log — the reading taken after the entry was
  * saved, the dose logged at the wrong weight, the note that needed a sentence
- * more. Readings, test method, doses and notes are editable; tub and entry
- * type are not, because changing those makes the row a different event and the
- * log is an audit record (log a new entry instead). Fields left out of the
- * body are kept as they are.
+ * more, the tub it was filed under. Readings, test method, tub, filter action,
+ * doses and notes are editable. Tub is editable because logging a test on the
+ * wrong side is the mistake staff actually make (the tubs are tested
+ * back-to-back), and the correction is the same event moved, not a different
+ * one. Entry type is still fixed: changing that would make the row a different
+ * event, and the log is an audit record (log a new entry instead). Fields left
+ * out of the body are kept as they are.
  */
 export const PATCH: APIRoute = async ({ cookies, request, url }) => {
   const gate = await requirePage(cookies, '/admin/water');
@@ -309,13 +331,25 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const entryType = existing.entry_type as EntryType;
+  const measurable = hasReadingPanel(entryType);
   const patch: Record<string, unknown> = {};
 
+  // The one field on an entry that is about filing rather than measurement:
+  // a panel run on the right tub and saved to the left is corrected by moving
+  // the row, not by re-logging it.
+  if ('tub' in body) {
+    if (typeof body.tub !== 'string' || !TUBS.includes(body.tub as Tub)) {
+      return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
+    }
+    patch.tub = body.tub;
+  }
+
   if ('readings' in body) {
-    // A refill row carries no measurements, so there is nothing to correct on
-    // one — reject rather than silently dropping what the caller sent.
-    if (entryType === 'refill') {
-      return json({ error: 'A drain/refill entry has no readings to edit' }, 400);
+    // A maintenance row carries no measurements, so there is nothing to
+    // correct on one — reject rather than silently dropping what the caller
+    // sent.
+    if (!measurable) {
+      return json({ error: `A ${entryType} entry has no readings to edit` }, 400);
     }
     const readings = parseReadings(body.readings);
     if (readings instanceof Response) return readings;
@@ -328,7 +362,16 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
   if ('testMethod' in body) {
     const testMethod = parseTestMethod(body.testMethod);
     if (testMethod instanceof Response) return testMethod;
-    patch.test_method = entryType === 'refill' ? null : testMethod;
+    patch.test_method = measurable ? testMethod : null;
+  }
+
+  if ('filterAction' in body) {
+    if (entryType !== 'filter') {
+      return json({ error: `A ${entryType} entry has no filter action to edit` }, 400);
+    }
+    const filterAction = parseFilterAction(body.filterAction, entryType);
+    if (filterAction instanceof Response) return filterAction;
+    patch.filter_action = filterAction;
   }
 
   if ('doses' in body) {

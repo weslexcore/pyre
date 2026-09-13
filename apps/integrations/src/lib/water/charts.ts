@@ -11,8 +11,29 @@ export const TUB_GALLONS = 120;
 export const TUBS = ['left', 'right'] as const;
 export type Tub = (typeof TUBS)[number];
 
-export const ENTRY_TYPES = ['test', 'shock', 'refill'] as const;
+export const ENTRY_TYPES = ['test', 'shock', 'refill', 'filter'] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
+
+// Entry types that record a maintenance visit rather than a reading panel:
+// the water wasn't tested, so no readings and no test method land on the row.
+export const MAINTENANCE_ENTRY_TYPES: readonly EntryType[] = ['refill', 'filter'];
+
+export const hasReadingPanel = (entryType: EntryType): boolean =>
+  !MAINTENANCE_ENTRY_TYPES.includes(entryType);
+
+// What was done to the filter cartridge: hosed off and put back, or swapped
+// for a new one. Only ever set on a 'filter' entry.
+export const FILTER_ACTIONS = ['rinsed', 'changed'] as const;
+export type FilterAction = (typeof FILTER_ACTIONS)[number];
+
+export const FILTER_ACTION_LABELS: Record<FilterAction, string> = {
+  rinsed: 'Rinsed',
+  changed: 'Changed',
+};
+
+// Rinsing is the routine job and a change is the exception, so the form opens
+// on it.
+export const DEFAULT_FILTER_ACTION: FilterAction = 'rinsed';
 
 export const TEST_METHODS = ['strips', 'digital_meter', 'tf_pro_salt'] as const;
 export type TestMethod = (typeof TEST_METHODS)[number];

@@ -24,13 +24,15 @@ function easternDateTime(iso: string): string {
 interface WaterTestRow {
   id: string;
   tub: 'left' | 'right';
-  entry_type: 'test' | 'shock' | 'refill';
+  entry_type: 'test' | 'shock' | 'refill' | 'filter';
   ta_ppm: number | null;
   ph: number | null;
   free_chlorine_ppm: number | null;
   combined_chlorine_ppm: number | null;
   salt_ppm: number | null;
   test_method: string | null;
+  /** 'rinsed' | 'changed' on a filter-service entry; null on every other. */
+  filter_action: string | null;
   doses: Array<{ chemical?: string; grams?: number; reason?: string; recommended_grams?: number }>;
   notes: string | null;
   recorded_by: string;
@@ -59,7 +61,7 @@ export async function getWaterLog(scope: KnowledgeScope, input: WaterLogInput) {
   let query = getDb()
     .from('water_tests')
     .select(
-      'id, tub, entry_type, ta_ppm, ph, free_chlorine_ppm, combined_chlorine_ppm, salt_ppm, test_method, doses, notes, recorded_by, created_at'
+      'id, tub, entry_type, ta_ppm, ph, free_chlorine_ppm, combined_chlorine_ppm, salt_ppm, test_method, filter_action, doses, notes, recorded_by, created_at'
     )
     .gte('created_at', since)
     .order('created_at', { ascending: false })
@@ -79,6 +81,8 @@ export async function getWaterLog(scope: KnowledgeScope, input: WaterLogInput) {
       recordedAt: easternDateTime(row.created_at),
       tub: row.tub,
       entryType: row.entry_type,
+      // Only ever set on a filter entry — what was done to the cartridge.
+      filterAction: row.filter_action,
       readings: {
         taPpm: row.ta_ppm,
         ph: row.ph,

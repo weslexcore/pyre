@@ -3,12 +3,13 @@
 // rows to hand over.
 
 import type { WaterTestRow } from '@/lib/db';
-import { TEST_METHOD_LABELS } from './charts';
+import { FILTER_ACTION_LABELS, TEST_METHOD_LABELS } from './charts';
 
 const COLUMNS: Array<[string, (row: WaterTestRow) => string | number | null]> = [
   ['Recorded at', (r) => r.created_at],
   ['Tub', (r) => r.tub],
   ['Entry type', (r) => r.entry_type],
+  ['Filter service', (r) => (r.filter_action ? FILTER_ACTION_LABELS[r.filter_action] : null)],
   ['TA (ppm)', (r) => r.ta_ppm],
   ['pH', (r) => r.ph],
   ['Free chlorine (ppm)', (r) => r.free_chlorine_ppm],

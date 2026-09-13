@@ -11,9 +11,16 @@
 // (dataviz palette validator — see the PR notes).
 import { useMemo, useRef, useState } from 'react';
 import type { WaterTestRow } from '@/lib/db';
-import { TARGETS, type Tub } from '@/lib/water/charts';
+import { type EntryType, TARGETS, type Tub } from '@/lib/water/charts';
 
 const SERIES_COLOR: Record<Tub, string> = { left: '#5590c8', right: '#b58d35' };
+// One letter per non-test entry, drawn above its dashed marker line: Shock,
+// Refill, Filter.
+const EVENT_GLYPH: Partial<Record<EntryType, string>> = {
+  shock: 'S',
+  refill: 'R',
+  filter: 'F',
+};
 const TUB_LABEL: Record<Tub, string> = { left: 'Left', right: 'Right' };
 const BAND_FILL = 'rgba(131, 151, 112, 0.14)'; // --pyre-sage wash
 const GRID = 'rgba(255, 255, 255, 0.08)';
@@ -180,7 +187,7 @@ export function WaterTrends({
               className="fill-white/60 font-mono"
               fontSize={10}
             >
-              {event.entry_type === 'shock' ? 'S' : 'R'}
+              {EVENT_GLYPH[event.entry_type] ?? '·'}
             </text>
           </g>
         ))}
