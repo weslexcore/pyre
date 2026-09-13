@@ -13,7 +13,10 @@
 // (a check item with skipped: true). Both write a sop_run_checks row naming
 // who and when; the row's `skipped` flag tells them apart, so the record
 // never leaves anyone wondering whether an item was passed over on purpose
-// or simply never looked at. There is no finishing a run by hand: it
+// or simply never looked at. Items the document marks required (`- [!]`)
+// may only be completed: a skip of one is refused here, against the version
+// the run pinned, so the UI hiding Skip on those rows is a convenience and
+// this is the rule. There is no finishing a run by hand: it
 // completes itself the moment its last item is resolved (completeIfFull),
 // and an uncheck that leaves zero items resolved deletes the run outright
 // (same effect as discard), so a stray first tap that gets untapped never
@@ -38,7 +41,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
-import { countTasks, parseChecklist } from '@/lib/sops/checklist';
+import { countTasks, forbiddenSkips, parseChecklist } from '@/lib/sops/checklist';
 import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
@@ -80,6 +83,22 @@ function allItems(content: string): CheckItem[] {
     itemText: task.text.slice(0, MAX_ITEM_TEXT),
     skipped: false,
   }));
+}
+
+/**
+ * The refusal for a skip of an item the document requires. Names the items so
+ * the banner says which ones — a client only sends this when its copy of the
+ * document is older than the run's, so the person needs to know what changed.
+ */
+function skipRefused(blocked: CheckItem[]): Response {
+  return json(
+    {
+      error: `These items must be checked off, not skipped: ${blocked
+        .map((item) => item.itemText)
+        .join(', ')}`,
+    },
+    400
+  );
 }
 
 /** The row a check item writes, on the given run, by the given person. */
@@ -345,17 +364,25 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   if (existing) {
     const run = existing as SopRunRow;
+    // The run's own snapshot, needed to expand checkAll and to know which
+    // items that snapshot marks required. Skipped nothing and checking
+    // nothing wholesale? Then it isn't read at all.
     let runContent: string | null = null;
-    if (checkAll) {
+    const skipping = initialChecks?.some((item) => item.skipped) ?? false;
+    if (checkAll || skipping) {
       const resolved = await resolveRunContent(db, sop, run);
       if (resolved.error) return json({ error: resolved.error }, 500);
       runContent = resolved.content;
-      initialChecks = allItems(runContent);
+      if (checkAll) initialChecks = allItems(runContent);
     }
     // The tap that meant "start" joins the run someone else already opened.
     // Indexes are validated against that run's (possibly older) snapshot — a
     // tap past its task list is dropped rather than misfiled.
     const joinable = (initialChecks ?? []).filter((item) => item.itemIndex < run.task_count);
+    if (runContent !== null) {
+      const blocked = forbiddenSkips(runContent, joinable);
+      if (blocked.length > 0) return skipRefused(blocked);
+    }
     if (joinable.length > 0) {
       const { error: checkError } = await db.from('sop_run_checks').upsert(
         joinable.map((item) => checkRow(run.id, item, gate.user.email ?? '')),
@@ -380,6 +407,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       resumed: true,
       people: await getPeopleNames(runActors(full.run, runChecks)),
     });
+  }
+
+  // A fresh run pins the current version, so the current text is the one its
+  // required items come from.
+  if (initialChecks) {
+    const blocked = forbiddenSkips(sop.content_md, initialChecks);
+    if (blocked.length > 0) return skipRefused(blocked);
   }
 
   const { data: created, error: createError } = await db
@@ -486,6 +520,17 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if ('error' in parsed) return json({ error: parsed.error }, 400);
     if (parsed.items.some((item) => item.itemIndex >= run.task_count)) {
       return json({ error: `itemIndex must be an integer in [0, ${run.task_count})` }, 400);
+    }
+
+    // Required items take completion only. Checked against the snapshot the
+    // run pinned — the same text the checklist on screen is rendering — and
+    // only when something is actually being skipped, so an ordinary check
+    // still costs no extra read.
+    if (parsed.items.some((item) => item.skipped)) {
+      const { content, error: contentError } = await resolveRunContent(db, sop, run as SopRunRow);
+      if (contentError) return json({ error: contentError }, 500);
+      const blocked = forbiddenSkips(content, parsed.items);
+      if (blocked.length > 0) return skipRefused(blocked);
     }
 
     // The (run_id, item_index) unique constraint makes a double-check from two

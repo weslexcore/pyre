@@ -81,7 +81,7 @@ const SNIPPET_AFTER = 90;
 /** Strip leading markdown list/heading/quote tokens so snippets read as prose. */
 function cleanLine(line: string): string {
   return line
-    .replace(/^[\s>]*(?:[-*+]\s+)?(?:\[[ xX]\]\s+)?/, '')
+    .replace(/^[\s>]*(?:[-*+]\s+)?(?:\[[ xX!]\]\s+)?/, '')
     .replace(/^#{1,6}\s+/, '')
     .trim();
 }

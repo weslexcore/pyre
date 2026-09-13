@@ -4,8 +4,9 @@
 // (scoping by participation again, or filtering after the row limit).
 //
 // The second block pins how items get resolved: a skip lands as a row
-// flagged skipped (never overwriting a check), the run finishes itself once
-// every item has a row, and there is no completing a run by hand.
+// flagged skipped (never overwriting a check), a required item (`- [!]`)
+// refuses to be skipped at all, the run finishes itself once every item has
+// a row, and there is no completing a run by hand.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requirePage = vi.fn();
@@ -367,8 +368,12 @@ describe('PATCH /api/admin/sop-runs', () => {
     getSopRole.mockResolvedValue('staff');
   });
 
-  /** An open three-item run with `checks` already resolved on it. */
-  function openRun(checks: Record<string, unknown>[]) {
+  /**
+   * An open three-item run with `checks` already resolved on it. `content`
+   * overrides the document the run pinned — pass one with a `- [!]` item to
+   * exercise the required-item guard.
+   */
+  function openRun(checks: Record<string, unknown>[], content = '- [ ] a\n- [ ] b\n- [ ] c\n') {
     return mutableDb({
       sop_runs: [
         {
@@ -380,7 +385,7 @@ describe('PATCH /api/admin/sop-runs', () => {
           started_by: 'bob@pyre.test',
           ended_by: null,
           ended_at: null,
-          sops: sop(OPEN_SOP, { current_version: 1, content_md: '- [ ] a\n- [ ] b\n- [ ] c\n' }),
+          sops: sop(OPEN_SOP, { current_version: 1, content_md: content }),
         },
       ],
       sop_run_checks: checks.map((c) => ({ run_id: RUN_ID, skipped: false, ...c })),
@@ -436,6 +441,46 @@ describe('PATCH /api/admin/sop-runs', () => {
     );
     expect(tables.sop_run_checks).toHaveLength(1);
     expect(tables.sop_run_checks[0]).toMatchObject({ checked_by: 'bob@pyre.test', skipped: false });
+  });
+
+  it('refuses to skip an item the document marks required, naming it', async () => {
+    const { db, tables } = openRun([], '- [ ] a\n- [!] b\n- [ ] c\n');
+    getDb.mockReturnValue(db);
+    const res = await PATCH(
+      patchRequest({
+        runId: RUN_ID,
+        action: 'check',
+        items: [{ itemIndex: 1, itemText: 'b', skipped: true }],
+        // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what PATCH reads
+      }) as any
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as PatchBody).error).toBe(
+      'These items must be checked off, not skipped: b'
+    );
+    // Nothing was written — not even the items that were fine to skip.
+    expect(tables.sop_run_checks).toHaveLength(0);
+  });
+
+  it('takes a required item as completed, and skips of its neighbours', async () => {
+    const { db, tables } = openRun([], '- [ ] a\n- [!] b\n- [ ] c\n');
+    getDb.mockReturnValue(db);
+    const res = await PATCH(
+      patchRequest({
+        runId: RUN_ID,
+        action: 'check',
+        items: [
+          { itemIndex: 0, itemText: 'a', skipped: true },
+          { itemIndex: 1, itemText: 'b' },
+        ],
+        // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what PATCH reads
+      }) as any
+    );
+    expect(res.status).toBe(200);
+    expect(tables.sop_run_checks.map((c) => [c.item_index, c.skipped])).toEqual([
+      [0, true],
+      [1, false],
+    ]);
   });
 
   it('finishes the run the moment its last open item is skipped', async () => {

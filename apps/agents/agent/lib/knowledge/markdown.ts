@@ -122,7 +122,7 @@ export function cleanSnippet(snippet: string, maxLength = 320): string {
   const text = snippet
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^[\s>]*(?:[-*+]\s+)?(?:\[[ xX]\]\s+)?/gm, '')
+    .replace(/^[\s>]*(?:[-*+]\s+)?(?:\[[ xX!]\]\s+)?/gm, '')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/[`*_~]/g, '')
     .replace(/\s+/g, ' ')

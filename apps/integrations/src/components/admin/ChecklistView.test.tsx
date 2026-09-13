@@ -1,7 +1,8 @@
 // Static-markup render of the live checklist: task rows as real checkboxes
-// bound to run checks, a Skip control beside each open item, quiet
-// attribution under resolved items (skips say so), and the sticky progress
-// header — with Discard but no Finish — that only exists while a run is open.
+// bound to run checks, a Skip control beside each open item — except the
+// required ones, which say Required instead — quiet attribution under
+// resolved items (skips say so), and the sticky progress header — with
+// Discard but no Finish — that only exists while a run is open.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
@@ -167,6 +168,65 @@ describe('ChecklistView', () => {
     expect(html).not.toContain('>Undo<');
     expect(html).toContain('3 of 3');
     expect(html).toContain('· 1 skipped');
+  });
+
+  it('leaves rows swipeable while a run can still take taps, and not once it is finished', () => {
+    const open = render({ run: RUN, checks: [] });
+    expect(open.match(/touch-pan-y/g)?.length).toBe(3);
+    const finished = render({
+      run: { ...RUN, status: 'completed', ended_at: '2026-09-01T14:20:00Z' },
+      checks: [
+        CHECK,
+        SKIP,
+        { ...CHECK, id: 'check-3', item_index: 2, item_text: 'Remove chimney' },
+      ],
+    });
+    expect(finished).not.toContain('touch-pan-y');
+  });
+
+  it('renders a row at rest with no swipe reveal and no transform', () => {
+    const html = render({ run: RUN, checks: [] });
+    expect(html).not.toContain('translateX');
+    expect(html).not.toContain('>Complete<');
+  });
+
+  it('offers no Skip on a required item, only the tag saying why', () => {
+    const html = render({
+      content: '- [ ] Uncover wood\n- [!] Ensure fire is out\n',
+      run: { ...RUN, task_count: 2 },
+      checks: [],
+    });
+    expect(html.match(/>Skip</g)?.length).toBe(1);
+    expect(html).toContain('>Required<');
+    // The box is still a plain, tappable checkbox — required means check it,
+    // not that it is already done.
+    expect(html.match(/type="checkbox"/g)?.length).toBe(2);
+    expect(html).not.toContain('checked=""');
+  });
+
+  it('tells the header how many required items are still holding the run open', () => {
+    const content = '- [!] Uncover wood\n- [!] Ensure fire is out\n- [ ] Remove chimney\n';
+    const two = render({ content, run: RUN, checks: [] });
+    expect(two).toContain('2 required items must be checked off');
+    const one = render({ content, run: RUN, checks: [CHECK] });
+    expect(one).toContain('1 required item must be checked off');
+    const none = render({
+      content: '- [ ] Uncover wood\n- [ ] Ensure fire is out\n- [ ] Remove chimney\n',
+      run: RUN,
+      checks: [],
+    });
+    expect(none).toContain('finishes on its own');
+    expect(none).not.toContain('must be checked off');
+  });
+
+  it('keeps Undo on a required item skipped before the document required it', () => {
+    const html = render({
+      content: '- [ ] Uncover wood\n- [!] Ensure fire is out\n',
+      run: { ...RUN, task_count: 2 },
+      checks: [SKIP],
+    });
+    expect(html.match(/>Undo</g)?.length).toBe(1);
+    expect(html).not.toContain('>Required<');
   });
 
   it('notes the pinned version when the document has moved on', () => {

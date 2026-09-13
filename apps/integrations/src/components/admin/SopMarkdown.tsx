@@ -22,6 +22,22 @@ import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
 
+/** A required task line (`- [!] text`) — see lib/sops/checklist. */
+const REQUIRED_TASK_RE = /^(\s*[-*+]\s+)\[!\]\s+/gm;
+
+/**
+ * GFM knows `[ ]` and `[x]`, not the library's `[!]` for an item that can't
+ * be skipped: left alone it would render as a literal "[!]" and lose the
+ * checkbox entirely. Rewrite it into an ordinary unchecked box that says so,
+ * which is what the edit preview and the peek modal want anyway — the live
+ * checklist never comes through here, since ChecklistView pulls task lines
+ * out of the document and renders its own rows.
+ */
+function renderable(content: string): string {
+  if (!content.includes('[!]')) return content;
+  return content.replace(REQUIRED_TASK_RE, '$1[ ] `Required` ');
+}
+
 /**
  * A stable id for a heading, so a document can link to its own sections
  * ([Safety](#safety)) — quick-reference summaries up top jump to the detail
@@ -192,7 +208,7 @@ export const SopMarkdown = memo(function SopMarkdown({
           em: ({ children }) => <em className="italic">{hl(children)}</em>,
         }}
       >
-        {content}
+        {renderable(content)}
       </ReactMarkdown>
     </div>
   );

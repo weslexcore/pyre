@@ -9,7 +9,10 @@
 // Every item is resolved one of two ways: tapping the box completes it, and
 // the Skip control beside it marks it skipped — done with, but deliberately
 // not done, so the record never leaves anyone wondering whether an item was
-// passed over on purpose or never looked at. Resolving the last item finishes
+// passed over on purpose or never looked at. An item the document marks
+// required (`- [!]`) is the exception: it has no Skip, only a Required tag
+// in its place, and a skipped parent leaves its required children open —
+// they have to be done, so the run stays unfinished until they are. Resolving the last item finishes
 // the run by itself (there is no Finish button, so a finished run never has
 // an unaccounted-for item); the finished run then shows ticked and locked,
 // with Start again in the header, until someone clears it. Checking or
@@ -30,8 +33,10 @@ import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/che
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems, RunState } from '@/lib/sops/optimistic';
+import type { SwipeAction } from '@/lib/sops/swipe';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SopMarkdown } from './SopMarkdown';
+import { useRowSwipe } from './useRowSwipe';
 
 // Indent per nesting depth (matches the parser's 2-spaces-per-level).
 const DEPTH_PAD = ['', 'pl-7', 'pl-14', 'pl-21'];
@@ -53,6 +58,11 @@ const discardButtonClass =
 // target (staff are on phones).
 const skipButtonClass =
   'shrink-0 rounded border border-transparent px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80 focus-visible:border-white/40 focus-visible:outline-none';
+
+// Sits where Skip sits on an item that can't be skipped, so the control
+// column always says what this item's options are.
+const requiredTagClass =
+  'mt-2 shrink-0 rounded border border-[var(--pyre-gold)]/40 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80';
 
 // Pinned locale + venue time zone: this renders on the server and again on
 // the phone, and the two have to agree or React throws the server tree away.
@@ -91,6 +101,70 @@ function SubProgress({ progress }: { progress: LinkedProgress }) {
   );
 }
 
+// What a swipe in progress promises, drawn in the track the row uncovers as
+// it moves. The mark matches the box the swipe will leave behind: a tick for
+// completed, a dash for skipped.
+const SWIPE_TONE: Record<SwipeAction, { tint: string; text: string; label: string }> = {
+  complete: {
+    tint: 'bg-[var(--pyre-gold)]/25',
+    text: 'text-[var(--pyre-gold)]',
+    label: 'Complete',
+  },
+  skip: { tint: 'bg-white/10', text: 'text-white/70', label: 'Skip' },
+  undo: { tint: 'bg-white/10', text: 'text-white/70', label: 'Undo' },
+};
+
+function SwipeReveal({
+  action,
+  armed,
+  rightward,
+}: {
+  /** Null when nothing is being dragged, or the direction does nothing here. */
+  action: SwipeAction | null;
+  /** Far enough that letting go commits: the track goes to full strength. */
+  armed: boolean;
+  /** The finger is heading right, so the label sits on the edge being uncovered. */
+  rightward: boolean;
+}) {
+  if (!action) return null;
+  const tone = SWIPE_TONE[action];
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-0 transition-opacity ${tone.tint} ${
+        armed ? 'opacity-100' : 'opacity-50'
+      }`}
+    >
+      <div
+        className={`absolute inset-y-0 flex items-center gap-1.5 px-3 font-mono text-[10px] uppercase tracking-wide ${tone.text} ${
+          rightward ? 'left-0' : 'right-0'
+        }`}
+      >
+        <svg
+          viewBox="0 0 12 12"
+          className="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={action === 'undo' ? 1.75 : 2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          role="presentation"
+        >
+          {action === 'complete' && <path d="M2 6.5 4.8 9.2 10 3.2" />}
+          {action === 'skip' && <path d="M2.5 6h7" />}
+          {action === 'undo' && (
+            <>
+              <path d="M4.5 3.5 2 6l2.5 2.5" />
+              <path d="M2 6h5a2.5 2.5 0 1 1 0 5H5" />
+            </>
+          )}
+        </svg>
+        {tone.label}
+      </div>
+    </div>
+  );
+}
+
 const TaskRow = memo(function TaskRow({
   task,
   checked,
@@ -122,88 +196,123 @@ const TaskRow = memo(function TaskRow({
   onSkip: (task: ChecklistTask, nextSkipped: boolean) => void;
 }) {
   const resolved = checked || skipped;
+  // Swiping the row does what the two controls below do, without having to
+  // aim: right completes the item, left skips it, and on a row already
+  // resolved the other direction un-resolves it. Required items take the
+  // complete swipe only, matching their missing Skip control.
+  const swipe = useRowSwipe({
+    enabled: !locked,
+    state: { checked, skipped, skippable: !task.required },
+    onAction: (action) => {
+      if (action === 'complete') onToggle(task, true);
+      else if (action === 'skip') onSkip(task, true);
+      else onToggle(task, false);
+    },
+  });
   return (
     <div
       className={`${DEPTH_PAD[task.depth] ?? ''} ${task.depth > 0 ? 'border-l border-white/10' : ''}`}
     >
       <div
-        className={`group -mx-2 flex items-start gap-1 rounded-lg px-2 transition-colors ${
-          locked ? '' : 'hover:bg-white/5'
+        className={`group relative -mx-2 overflow-hidden rounded-lg transition-colors ${
+          locked ? '' : 'touch-pan-y hover:bg-white/5'
         }`}
+        {...swipe.handlers}
       >
-        {/* The whole label is the tap target — staff are on phones with wet
+        <SwipeReveal action={swipe.action} armed={swipe.armed} rightward={swipe.dx > 0} />
+        {/* The row rides over the reveal; while it is moving it needs a back
+            of its own so the track never shows through the text. */}
+        <div
+          className={`flex items-start gap-1 px-2 ${
+            swipe.dragging
+              ? 'select-none bg-[var(--pyre-black)]'
+              : 'transition-transform duration-200 motion-reduce:transition-none'
+          }`}
+          style={swipe.dx === 0 ? undefined : { transform: `translateX(${swipe.dx}px)` }}
+        >
+          {/* The whole label is the tap target — staff are on phones with wet
             hands, so it spans the box, the text and the padding alike. The
             Skip control sits outside it so a tap there never reaches the box. */}
-        <label
-          className={`flex min-w-0 flex-1 items-start gap-3 py-2.5 ${
-            locked ? '' : 'cursor-pointer active:bg-white/10'
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="peer sr-only"
-            checked={resolved}
-            disabled={locked}
-            onChange={(e) => onToggle(task, e.target.checked)}
-          />
-          <span
-            aria-hidden="true"
-            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--pyre-gold)]/50 ${
-              checked
-                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]'
-                : skipped
-                  ? 'border-dashed border-white/40 bg-white/5'
-                  : 'border-white/30 group-hover:border-white/50'
+          <label
+            className={`flex min-w-0 flex-1 items-start gap-3 py-2.5 ${
+              locked ? '' : 'cursor-pointer active:bg-white/10'
             }`}
           >
-            <svg
-              viewBox="0 0 12 12"
-              className={`h-3.5 w-3.5 transition-opacity ${resolved ? 'opacity-100' : 'opacity-0'}`}
-              fill="none"
-              stroke={checked ? 'var(--pyre-black)' : 'rgba(255,255,255,0.6)'}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              role="presentation"
-            >
-              {/* A tick for completed, a dash for skipped. */}
-              {skipped ? <path d="M2.5 6h7" /> : <path d="M2 6.5 4.8 9.2 10 3.2" />}
-            </svg>
-          </span>
-          <div className="min-w-0 flex-1">
-            {/* line-through lives on its own wrapper so the attribution
-                line below doesn't get struck with the task text. */}
-            <div
-              className={`text-sm leading-snug [&_p]:my-0 ${
+            <input
+              type="checkbox"
+              className="peer sr-only"
+              checked={resolved}
+              disabled={locked}
+              onChange={(e) => onToggle(task, e.target.checked)}
+            />
+            <span
+              aria-hidden="true"
+              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--pyre-gold)]/50 ${
                 checked
-                  ? 'text-white/40 line-through'
+                  ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]'
                   : skipped
-                    ? 'text-white/40 italic'
-                    : 'text-white/85'
+                    ? 'border-dashed border-white/40 bg-white/5'
+                    : task.required
+                      ? 'border-[var(--pyre-gold)]/60 group-hover:border-[var(--pyre-gold)]'
+                      : 'border-white/30 group-hover:border-white/50'
               }`}
             >
-              <SopMarkdown content={task.text} highlight={highlight} onSopLink={onSopLink} />
+              <svg
+                viewBox="0 0 12 12"
+                className={`h-3.5 w-3.5 transition-opacity ${resolved ? 'opacity-100' : 'opacity-0'}`}
+                fill="none"
+                stroke={checked ? 'var(--pyre-black)' : 'rgba(255,255,255,0.6)'}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                role="presentation"
+              >
+                {/* A tick for completed, a dash for skipped. */}
+                {skipped ? <path d="M2.5 6h7" /> : <path d="M2 6.5 4.8 9.2 10 3.2" />}
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* line-through lives on its own wrapper so the attribution
+                line below doesn't get struck with the task text. */}
+              <div
+                className={`text-sm leading-snug [&_p]:my-0 ${
+                  checked
+                    ? 'text-white/40 line-through'
+                    : skipped
+                      ? 'text-white/40 italic'
+                      : 'text-white/85'
+                }`}
+              >
+                <SopMarkdown content={task.text} highlight={highlight} onSopLink={onSopLink} />
+              </div>
+              {linked.map((progress) => (
+                <SubProgress key={progress.slug} progress={progress} />
+              ))}
+              {resolvedLabel && (
+                <div className="mt-0.5 font-mono text-[10px] text-white/35">{resolvedLabel}</div>
+              )}
             </div>
-            {linked.map((progress) => (
-              <SubProgress key={progress.slug} progress={progress} />
-            ))}
-            {resolvedLabel && (
-              <div className="mt-0.5 font-mono text-[10px] text-white/35">{resolvedLabel}</div>
-            )}
-          </div>
-        </label>
-        {/* Skip is for an item that can't or shouldn't be done this time;
+          </label>
+          {/* Skip is for an item that can't or shouldn't be done this time;
             Undo puts a skipped item back. A completed item has no side
-            control — tapping its box un-resolves it. */}
-        {!locked && !checked && (
-          <button
-            type="button"
-            className={`${skipButtonClass} mt-2`}
-            onClick={() => onSkip(task, !skipped)}
-          >
-            {skipped ? 'Undo' : 'Skip'}
-          </button>
-        )}
+            control — tapping its box un-resolves it. A required item has no
+            Skip either: the only way past it is to do it. (Undo still shows
+            on one already skipped — the document may have been marked
+            required after the skip was recorded.) */}
+          {!locked &&
+            !checked &&
+            (task.required && !skipped ? (
+              <span className={requiredTagClass}>Required</span>
+            ) : (
+              <button
+                type="button"
+                className={`${skipButtonClass} mt-2`}
+                onClick={() => onSkip(task, !skipped)}
+              >
+                {skipped ? 'Undo' : 'Skip'}
+              </button>
+            ))}
+        </div>
       </div>
     </div>
   );
@@ -254,6 +363,17 @@ export function ChecklistView({
   const done = checks.length;
   const skippedCount = useMemo(() => checks.filter((c) => c.skipped).length, [checks]);
   const total = run?.task_count ?? parsed.tasks.length;
+  // Required items still waiting to be completed — the header names them as a
+  // count so nobody is left wondering why a checklist won't finish.
+  const requiredLeft = useMemo(
+    () =>
+      parsed.tasks.filter((task) => {
+        if (!task.required) return false;
+        const check = checkByIndex.get(task.index);
+        return !check || check.skipped;
+      }).length,
+    [parsed, checkByIndex]
+  );
   const finished = run !== null && run.status !== 'in_progress';
   const allDone = finished || (run !== null && total > 0 && done >= total);
 
@@ -275,11 +395,16 @@ export function ChecklistView({
 
   // Resolving cascades to the still-open subtree (a child already completed
   // or skipped keeps its own record); un-resolving touches only this item.
+  // A skip cascade steps over required items — skipping a section can't
+  // quietly skip the one thing in it that had to be done — so they stay open
+  // and the run waits for them.
   const resolve = useCallback((task: ChecklistTask, skipped: boolean) => {
     const { parsed: current, checkByIndex: resolved, onToggle: emit } = latest.current;
     const items = subtreeTasks(current.tasks, task.index)
+      .filter((t) => !(skipped && t.required))
       .filter((t) => t.index === task.index || !resolved.has(t.index))
       .map((t) => ({ itemIndex: t.index, itemText: t.text, skipped }));
+    if (items.length === 0) return;
     emit(items, true);
   }, []);
   const unresolve = useCallback((task: ChecklistTask) => {
@@ -359,6 +484,14 @@ export function ChecklistView({
           {!allDone && (
             <p className="font-mono text-[10px] text-white/40">
               Check off or skip every item — the checklist finishes on its own.
+              {requiredLeft > 0 &&
+                ` ${requiredLeft} required item${requiredLeft === 1 ? '' : 's'} must be checked off.`}
+              {/* The swipe is worth pointing at, but only where there is a
+                  finger to do it with. */}
+              <span className="touch-only">
+                {' '}
+                Or swipe an item right to check it off, left to skip.
+              </span>
             </p>
           )}
           {run.sop_version !== currentVersion && (

@@ -82,3 +82,11 @@
     animation: none;
   }
 }
+
+/* Hints for gestures that only exist under a finger — the swipe on a
+   checklist row — stay out of the way on anything with a pointer. */
+@media (hover: hover) {
+  .touch-only {
+    display: none;
+  }
+}

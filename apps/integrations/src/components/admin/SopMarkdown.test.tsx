@@ -26,6 +26,17 @@ describe('SopMarkdown', () => {
     expect(html).toContain('Ongoing:');
   });
 
+  it('renders a required item as a checkbox with the requirement spelled out', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown content={'- [ ] Uncover wood\n- [!] Ensure fire is out\n'} />
+    );
+    // GFM alone would print a literal "[!]" and lose the box entirely.
+    expect(html).not.toContain('[!]');
+    expect(html.match(/type="checkbox"/g)?.length).toBe(2);
+    expect(html).toContain('>Required</code>');
+    expect(html).toContain('Ensure fire is out');
+  });
+
   it('nests sub-task lists inside their parent task item', () => {
     const nested = `- [ ] Put away:
   - [ ] Lights

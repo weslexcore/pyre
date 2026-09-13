@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { countTasks, parseChecklist, subtreeTasks } from './checklist';
+import {
+  countTasks,
+  forbiddenSkips,
+  parseChecklist,
+  requiredIndexes,
+  subtreeTasks,
+} from './checklist';
 
 const DOC = `## Large Sauna
 
 - [ ] Uncover wood
-- [ ] **Ensure fire is out!**
+- [!] **Ensure fire is out!**
   - [ ] Remove chimney
   - [x] Cover chimney hole
 
@@ -26,6 +32,17 @@ describe('parseChecklist', () => {
       'Re-cover plunges',
     ]);
     expect(tasks.map((t) => t.index)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('reads `- [!]` as a required item, keeping the marker out of its text', () => {
+    const { tasks } = parseChecklist(DOC);
+    expect(tasks.map((t) => t.required)).toEqual([false, true, false, false, false]);
+    expect(tasks[1].text).toBe('**Ensure fire is out!**');
+  });
+
+  it('does not mistake a bang in the text for the required marker', () => {
+    const { tasks } = parseChecklist('- [ ] Ensure fire is out!\n');
+    expect(tasks[0].required).toBe(false);
   });
 
   it('records nesting depth from indentation', () => {
@@ -84,5 +101,28 @@ describe('subtreeTasks', () => {
 
   it('returns nothing for an unknown index', () => {
     expect(subtreeTasks(tasks, 99)).toEqual([]);
+  });
+});
+
+describe('requiredIndexes', () => {
+  it('names the items that cannot be skipped', () => {
+    expect([...requiredIndexes(DOC)]).toEqual([1]);
+    expect(requiredIndexes('- [ ] a\n- [x] b\n').size).toBe(0);
+  });
+});
+
+describe('forbiddenSkips', () => {
+  const skip = (itemIndex: number) => ({ itemIndex, skipped: true });
+
+  it('catches a skip of a required item', () => {
+    expect(forbiddenSkips(DOC, [skip(0), skip(1)])).toEqual([skip(1)]);
+  });
+
+  it('passes completions of required items through', () => {
+    expect(forbiddenSkips(DOC, [{ itemIndex: 1, skipped: false }, { itemIndex: 1 }])).toEqual([]);
+  });
+
+  it('costs nothing when nothing is being skipped', () => {
+    expect(forbiddenSkips(DOC, [{ itemIndex: 1 }])).toEqual([]);
   });
 });

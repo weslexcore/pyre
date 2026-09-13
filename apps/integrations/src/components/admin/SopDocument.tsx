@@ -708,7 +708,8 @@ export function SopDocument({
               Preview
             </button>
             <span className="ml-auto font-mono text-[10px] text-white/40">
-              Markdown — “- [ ]” for checklist items · type [name](/ to pick a page or SOP to link
+              Markdown — “- [ ]” for checklist items, “- [!]” for one that must be checked and can’t
+              be skipped · type [name](/ to pick a page or SOP to link
             </span>
           </div>
           {preview ? (
