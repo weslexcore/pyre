@@ -36,6 +36,35 @@ export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
     footnote:
       'Closing for the night right after shocking? The tub can stay closed and chlorine drift down overnight, but the cover still stays off (or propped open) for the first 20+ minutes, and the opening shift must test before the first guest.',
   },
+  filter: {
+    title: 'How to rinse or change the filter',
+    sections: [
+      {
+        heading: 'Rinse',
+        steps: [
+          'Close the tub to guests and power the system down at the GFCI before opening anything.',
+          'Open the filter housing and lift the cartridge straight out so debris stays in the pleats instead of dropping back into the tub.',
+          'Hose it from the top down, fanning each pleat open as you go. Water only — no pressure washer, no soap, no solvents.',
+          'Check the pleats while they are open: torn, flattened, or still grey after a full rinse means the cartridge is due to be changed, not rinsed again.',
+          'Seat the cartridge back in, check the gasket sits flat, and close the housing.',
+          'Restore power and run the pumps until the jets are strong and steady.',
+          'Log it here as a filter entry, and note anything unusual you pulled out.',
+        ],
+      },
+      {
+        heading: 'Change',
+        steps: [
+          'Same first two steps as a rinse: tub closed, power off, cartridge out.',
+          'Rinse the housing itself and clear the filter basket before the new cartridge goes in.',
+          'Drop in the new cartridge, check the gasket, and close the housing.',
+          'Restore power, run the pumps until fully primed, and confirm flow is back to normal.',
+          'Log it as a filter entry set to Changed, and flag it if that was the last spare.',
+        ],
+      },
+    ],
+    footnote:
+      'Rinse on the regular schedule and any time flow drops off. A cartridge that no longer comes clean, or that has torn or flattened pleats, gets changed rather than rinsed again.',
+  },
   refill: {
     title: 'How to drain + refill',
     sections: [

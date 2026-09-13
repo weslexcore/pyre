@@ -37,6 +37,14 @@ describe('GLOSSARY', () => {
     expect(GLOSSARY.salt.limit).toContain(String(HARD_LIMITS.salt));
   });
 
+  it('explains that the salt cell makes the chlorine out of the salt', () => {
+    const salt = `${GLOSSARY.salt.what} ${GLOSSARY.salt.why} ${GLOSSARY.salt.chemistry}`;
+    expect(salt).toContain('salt cell');
+    expect(salt).toContain('chlorine');
+    // The two modals have to agree: FC is generated, not only dosed.
+    expect(GLOSSARY.chlorine.chemistry).toContain('salt cell');
+  });
+
   it('tells the reader TA comes before pH on both entries', () => {
     expect(GLOSSARY.ta.chemistry).toContain('pH');
     expect(GLOSSARY.ph.chemistry).toContain('TA');

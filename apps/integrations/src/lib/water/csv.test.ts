@@ -15,6 +15,7 @@ const record = (over: Partial<WaterTestRow> = {}): WaterTestRow => ({
   combined_chlorine_ppm: 0.2,
   salt_ppm: 3200,
   test_method: 'tf_pro_salt',
+  filter_action: null,
   doses: [],
   notes: null,
   recorded_by: 'staff@pyresauna.com',
@@ -29,16 +30,34 @@ describe('waterTestsToCsv', () => {
   it('writes a header and one row per entry', () => {
     const [header, first] = rows(waterTestsToCsv([record()]));
     expect(header).toBe(
-      'Recorded at,Tub,Entry type,TA (ppm),pH,Free chlorine (ppm),Combined chlorine (ppm),Salt (ppm),Test method,Added to water,Notes,Recorded by'
+      'Recorded at,Tub,Entry type,Filter service,TA (ppm),pH,Free chlorine (ppm),Combined chlorine (ppm),Salt (ppm),Test method,Added to water,Notes,Recorded by'
     );
     expect(first).toBe(
-      '2026-08-09T14:12:00.000Z,left,test,90,7.4,2,0.2,3200,TF-Pro Salt,,,staff@pyresauna.com'
+      '2026-08-09T14:12:00.000Z,left,test,,90,7.4,2,0.2,3200,TF-Pro Salt,,,staff@pyresauna.com'
     );
   });
 
   it('leaves untested readings blank rather than zero', () => {
     const [, row] = rows(waterTestsToCsv([record({ ta_ppm: null, salt_ppm: null })]));
-    expect(row.split(',').slice(3, 8)).toEqual(['', '7.4', '2', '0.2', '']);
+    expect(row.split(',').slice(4, 9)).toEqual(['', '7.4', '2', '0.2', '']);
+  });
+
+  it('names the filter job on a filter-service entry', () => {
+    const [, row] = rows(
+      waterTestsToCsv([
+        record({
+          entry_type: 'filter',
+          filter_action: 'changed',
+          ta_ppm: null,
+          ph: null,
+          free_chlorine_ppm: null,
+          combined_chlorine_ppm: null,
+          salt_ppm: null,
+          test_method: null,
+        }),
+      ])
+    );
+    expect(row.split(',').slice(1, 4)).toEqual(['left', 'filter', 'Changed']);
   });
 
   it('flattens doses into one cell', () => {

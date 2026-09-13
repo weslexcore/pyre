@@ -8,8 +8,13 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import {
+  DEFAULT_FILTER_ACTION,
   DEFAULT_TEST_METHOD,
   type EntryType,
+  FILTER_ACTION_LABELS,
+  FILTER_ACTIONS,
+  type FilterAction,
+  hasReadingPanel,
   type Parameter,
   SHOCK_DOSES,
   TARGETS,
@@ -133,6 +138,7 @@ const ENTRY_TYPE_LABELS: Array<[EntryType, string]> = [
   ['test', 'Test'],
   ['shock', 'Shock'],
   ['refill', 'Drain / Refill'],
+  ['filter', 'Filter'],
 ];
 
 type TypeFilter = 'all' | EntryType;
@@ -310,8 +316,11 @@ function parseReading(raw: string): number | null | undefined {
 /**
  * In-place editor for an entry already in the log — the salt reading taken
  * after the entry was saved, the dose logged at the wrong weight, the note
- * that needed another sentence. Tub and entry type are not editable: changing
- * those would make the row a different event, and the log is an audit record.
+ * that needed another sentence, the tub it was filed under. Tub is editable
+ * because the tubs are tested back-to-back and a panel run on one side does
+ * get saved to the other; correcting it moves the same event rather than
+ * inventing a new one. Entry type is not: changing that would make the row a
+ * different event, and the log is an audit record.
  *
  * It carries the same live recommendations as the entry form, so a reading
  * added late is judged by the same rules — including TA gating pH — and any
@@ -333,10 +342,14 @@ function EditEntryPanel({
   onSaved: (record: WaterTestRow) => void;
   onSessionExpired: () => void;
 }) {
-  // Drain/refill rows carry no measurements by design, so there is nothing to
-  // correct on one but its doses and notes.
-  const hasReadings = record.entry_type !== 'refill';
+  // Maintenance rows (drain/refill, filter service) carry no measurements by
+  // design, so there is nothing to correct on one but its doses and notes.
+  const hasReadings = hasReadingPanel(record.entry_type);
 
+  const [tub, setTub] = useState<Tub>(record.tub);
+  const [filterAction, setFilterAction] = useState<FilterAction>(
+    record.filter_action ?? DEFAULT_FILTER_ACTION
+  );
   const [readingInputs, setReadingInputs] = useState<Record<ReadingKey, string>>(() => {
     const initial = {} as Record<ReadingKey, string>;
     for (const field of READING_FIELDS) {
@@ -389,7 +402,8 @@ function EditEntryPanel({
 
   const save = async () => {
     setError('');
-    const body: Record<string, unknown> = {};
+    const body: Record<string, unknown> = { tub };
+    if (record.entry_type === 'filter') body.filterAction = filterAction;
 
     if (hasReadings) {
       const readings: Record<string, number | null> = {};
@@ -454,6 +468,46 @@ function EditEntryPanel({
       <div className="mb-3 font-mono-bold text-xs uppercase tracking-wide text-white/40">
         Editing this entry
       </div>
+
+      {/* Logged against the wrong tub is the correction staff ask for most —
+       * the two are tested one after the other. */}
+      <div className="mb-3">
+        <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+          Tub
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {TUBS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTub(value)}
+              className={pillClass(tub === value)}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {record.entry_type === 'filter' && (
+        <div className="mb-3">
+          <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+            Filter
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {FILTER_ACTIONS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilterAction(value)}
+                className={pillClass(filterAction === value)}
+              >
+                {FILTER_ACTION_LABELS[value]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasReadings && (
         <div className="mb-3 grid grid-cols-2 gap-3">
@@ -635,6 +689,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     salt: '',
   });
   const [testMethod, setTestMethod] = useState<TestMethod>(DEFAULT_TEST_METHOD);
+  const [filterAction, setFilterAction] = useState<FilterAction>(DEFAULT_FILTER_ACTION);
   const [notes, setNotes] = useState('');
   const [phase, setPhase] = useState<'entering' | 'reviewing'>('entering');
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -805,12 +860,12 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const save = async () => {
     setFormError('');
-    // Drain/refill entries record the water change only — tests are logged
-    // separately. Ignore any reading inputs typed before switching type.
-    const readings =
-      entryType === 'refill'
-        ? ({ ta: null, ph: null, chlorine: null, cc: null, salt: null } as Readings)
-        : collectReadings();
+    // Maintenance entries (drain/refill, filter service) record the job only —
+    // tests are logged separately. Ignore any reading inputs typed before
+    // switching type.
+    const readings = hasReadingPanel(entryType)
+      ? collectReadings()
+      : ({ ta: null, ph: null, chlorine: null, cc: null, salt: null } as Readings);
     if (!readings) return;
 
     const doses: DoseRecord[] = [];
@@ -847,6 +902,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           readings,
           // Only meaningful when something was actually measured.
           testMethod: Object.values(readings).some((v) => v != null) ? testMethod : null,
+          filterAction: entryType === 'filter' ? filterAction : null,
           doses,
           notes: fullNotes,
         }),
@@ -875,6 +931,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       setNotes('');
       setRecommendations([]);
       setDoseDrafts([]);
+      setFilterAction(DEFAULT_FILTER_ACTION);
       setEntryType('test');
       setPhase('entering');
     } catch (err) {
@@ -996,7 +1053,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
             Entry type
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {ENTRY_TYPE_LABELS.map(([value, label]) => (
               <button
                 key={value}
@@ -1020,7 +1077,30 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           </p>
         )}
 
-        {entryType !== 'refill' && (
+        {entryType === 'filter' && (
+          <div className="mb-4">
+            <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
+              Filter
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {FILTER_ACTIONS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilterAction(value)}
+                  className={pillClass(filterAction === value)}
+                >
+                  {FILTER_ACTION_LABELS[value]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 font-mono text-xs text-white/30">
+              Just log the filter service — enter water tests separately as a Test entry.
+            </p>
+          </div>
+        )}
+
+        {hasReadingPanel(entryType) && (
           <div className="mb-4 grid grid-cols-2 gap-3">
             {READING_FIELDS.map((field) => {
               const parsed = parseReading(readingInputs[field.key]);
@@ -1380,6 +1460,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
               {record.entry_type !== 'test' && (
                 <span className="rounded bg-[var(--pyre-blue)]/20 px-2 py-0.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-blue)]">
                   {record.entry_type}
+                  {record.filter_action && ` ${FILTER_ACTION_LABELS[record.filter_action]}`}
                 </span>
               )}
               {!safety.safe && (
@@ -1399,8 +1480,21 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
                 onInfoChange={setInfoParam}
                 onCancel={() => setEditingId(null)}
                 onSaved={(updated) => {
-                  setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-                  setChartRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+                  // An entry moved to the other tub leaves the list entirely
+                  // when the log is filtered to one side — keeping it visible
+                  // would contradict the filter it no longer matches.
+                  const stillListed = filter === 'all' || filter === updated.tub;
+                  setRecords((prev) =>
+                    stillListed
+                      ? prev.map((r) => (r.id === updated.id ? updated : r))
+                      : prev.filter((r) => r.id !== updated.id)
+                  );
+                  setChartRecords((prev) =>
+                    stillListed
+                      ? prev.map((r) => (r.id === updated.id ? updated : r))
+                      : prev.filter((r) => r.id !== updated.id)
+                  );
+                  if (!stillListed) setTotal((prev) => Math.max(0, prev - 1));
                   setEditingId(null);
                 }}
                 onSessionExpired={() => setSessionExpired(true)}
