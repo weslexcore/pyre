@@ -8,7 +8,7 @@
 //
 // A peeked document that is itself a checklist is live here, exactly as on
 // its own page: the same ChecklistView bound to the document's shared run
-// (useSopRun), with the progress header, Finish and Discard. Each tap reports
+// (useSopRun), with the progress header and Discard. Each tap reports
 // the sub-checklist's progress back to the parent, which shows it under the
 // item that linked here. The fetch carries the parent run's start (`since`),
 // so a sub-checklist finished during this run of the parent opens showing
@@ -21,7 +21,7 @@ import type { CheckItems } from '@/lib/sops/optimistic';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { cascadeLinked } from './linkedCascade';
 import { SopMarkdown } from './SopMarkdown';
-import { type FinishAction, isLiveRun, useSopRun } from './useSopRun';
+import { isLiveRun, useSopRun } from './useSopRun';
 
 type Peeked = SopDocumentPayload | 'error';
 
@@ -50,7 +50,7 @@ export function PeekChecklist({
   /** Reports this checklist's progress for the bar under the item that links here. */
   onProgress?: (progress: LinkedProgress) => void;
   onSopLink: (slug: string) => void;
-  /** Whether the finish confirm dialog is open, so the modal's Escape defers to it. */
+  /** Whether the discard confirm dialog is open, so the modal's Escape defers to it. */
   onConfirmOpenChange?: (open: boolean) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +70,9 @@ export function PeekChecklist({
     onNotice: setNotice,
   });
 
-  // What the bar under the parent's item should say: the open run's count,
-  // "completed" for a finished run still on screen, nothing once cleared.
+  // What the bar under the parent's item should say: the open run's count
+  // of resolved items, "completed" for a finished run still on screen,
+  // nothing once cleared.
   useEffect(() => {
     const state = run.runData;
     latestProgress.current?.({
@@ -84,9 +85,9 @@ export function PeekChecklist({
   }, [run.runData, sop.slug, sop.id, taskCount]);
 
   useEffect(() => {
-    onConfirmOpenChange?.(run.confirmAction !== null);
+    onConfirmOpenChange?.(run.confirmDiscard);
     return () => onConfirmOpenChange?.(false);
-  }, [run.confirmAction, onConfirmOpenChange]);
+  }, [run.confirmDiscard, onConfirmOpenChange]);
 
   const people = useMemo(
     () => ({ ...payload.people, ...run.people }),
@@ -124,16 +125,14 @@ export function PeekChecklist({
         headerOffset="none"
         onSopLink={onSopLink}
         onToggle={onToggle}
-        onFinish={() => run.requestFinish('complete')}
-        onDiscard={() => run.requestFinish('discard')}
+        onDiscard={run.requestDiscard}
         onStartAgain={run.startAgain}
       />
-      {run.confirmAction && run.runData && (
+      {run.confirmDiscard && run.runData && (
         <ChecklistConfirmDialog
-          action={run.confirmAction}
           runData={run.runData}
           busy={run.runBusy}
-          onConfirm={() => void run.finishRun(run.confirmAction as FinishAction)}
+          onConfirm={() => void run.discardRun()}
           onCancel={run.cancelConfirm}
         />
       )}
@@ -166,7 +165,7 @@ export function SopPeekModal({
   const cache = useRef(new Map<string, Peeked>());
   const closeRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  // While the finish confirm dialog is up, Escape belongs to it.
+  // While the discard confirm dialog is up, Escape belongs to it.
   const confirmOpenRef = useRef(false);
   const titleId = useId();
 

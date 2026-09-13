@@ -1,19 +1,23 @@
 // Checking an item that links to another checklist checks every item of that
 // one too: the sub-checklist's bar under the item fills at once, and the
 // server hears about it through the runs API's checkAll (which starts the
-// sub-run if nobody has one open, and finishes it, as any full run is). The pure half — which linked checklists a
-// tap reaches — is separate so it can be tested without fetch.
+// sub-run if nobody has one open, and finishes it, as any full run is).
+// Skipping such an item cascades nothing — the linked checklist wasn't done
+// either, and its own record should say so. The pure half — which linked
+// checklists a tap reaches — is separate so it can be tested without fetch.
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { type RunResponse, readError } from './useSopRun';
 
 /**
- * The linked checklists a check of `items` should complete: every one an
- * item's text links to that isn't already full. Deduped by slug.
+ * The linked checklists a check of `items` should complete: every one a
+ * completed (not skipped) item's text links to that isn't already full.
+ * Deduped by slug.
  */
 export function linkedTargets(items: CheckItems, linked: LinkedProgressMap): LinkedProgress[] {
   const out: LinkedProgress[] = [];
   for (const item of items) {
+    if (item.skipped) continue;
     for (const slug of linkedSopSlugs(item.itemText)) {
       const progress = linked[slug];
       if (!progress || out.some((p) => p.slug === slug)) continue;

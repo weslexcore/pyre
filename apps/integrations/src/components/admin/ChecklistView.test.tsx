@@ -1,6 +1,7 @@
 // Static-markup render of the live checklist: task rows as real checkboxes
-// bound to run checks, quiet attribution under checked items, and the sticky
-// progress header that only exists while a run is open.
+// bound to run checks, a Skip control beside each open item, quiet
+// attribution under resolved items (skips say so), and the sticky progress
+// header — with Discard but no Finish — that only exists while a run is open.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
@@ -34,6 +35,17 @@ const CHECK: SopRunCheckRow = {
   item_text: 'Uncover wood',
   checked_by: 'marina@pyresauna.com',
   checked_at: '2026-09-01T14:05:00Z',
+  skipped: false,
+};
+
+const SKIP: SopRunCheckRow = {
+  ...CHECK,
+  id: 'check-2',
+  item_index: 1,
+  item_text: 'Ensure fire is out',
+  checked_by: 'bob@pyresauna.com',
+  checked_at: '2026-09-01T14:06:00Z',
+  skipped: true,
 };
 
 const noop = () => {};
@@ -48,7 +60,6 @@ function render(props: Partial<Parameters<typeof ChecklistView>[0]> = {}) {
       busy={false}
       onSopLink={noop}
       onToggle={noop}
-      onFinish={noop}
       onDiscard={noop}
       {...props}
     />
@@ -56,10 +67,11 @@ function render(props: Partial<Parameters<typeof ChecklistView>[0]> = {}) {
 }
 
 describe('ChecklistView', () => {
-  it('renders prose and one real checkbox per task, no header without a run', () => {
+  it('renders prose, one real checkbox and a Skip per task, no header without a run', () => {
     const html = render();
     expect(html).toContain('Large Sauna');
     expect(html.match(/type="checkbox"/g)?.length).toBe(3);
+    expect(html.match(/>Skip</g)?.length).toBe(3);
     expect(html).not.toContain('Checklist in progress');
     expect(html).not.toContain('>Finish<');
     expect(html).not.toContain('checked=""');
@@ -76,33 +88,61 @@ describe('ChecklistView', () => {
     // Attribution names the person, no sage check prefix any more.
     expect(html).toContain('Marina ·');
     expect(html).not.toContain('✓');
+    // A completed item has no side control — its box un-resolves it.
+    expect(html.match(/>Skip</g)?.length).toBe(2);
+    expect(html).not.toContain('>Undo<');
   });
 
-  it('shows the progress header with counts while a run is open', () => {
+  it('renders a skipped item as resolved-but-not-done, with Undo and who skipped it', () => {
+    const html = render({
+      run: RUN,
+      checks: [SKIP],
+      people: { 'bob@pyresauna.com': 'Bob' },
+    });
+    // The box reads as resolved, drawn dashed with a dash rather than a tick.
+    expect(html.match(/checked=""/g)?.length).toBe(1);
+    expect(html).toContain('border-dashed');
+    expect(html).toContain('M2.5 6h7');
+    expect(html).not.toContain('line-through');
+    expect(html).toContain('skipped by Bob ·');
+    expect(html.match(/>Undo</g)?.length).toBe(1);
+    expect(html.match(/>Skip</g)?.length).toBe(2);
+  });
+
+  it('shows the progress header with counts and Discard, never Finish, while a run is open', () => {
     const html = render({ run: RUN, checks: [CHECK] });
     expect(html).toContain('Checklist in progress');
     expect(html).toContain('1 of 3');
-    expect(html).toContain('>Finish<');
+    expect(html).not.toContain('>Finish<');
     expect(html).toContain('>Discard<');
     expect(html).toContain('width:33%');
+    expect(html).toContain('finishes on its own');
   });
 
-  it('switches to the done state when every item is checked', () => {
+  it('counts skips in the header alongside progress', () => {
+    const html = render({ run: RUN, checks: [CHECK, SKIP] });
+    expect(html).toContain('2 of 3');
+    expect(html).toContain('· 1 skipped');
+    expect(html).toContain('width:67%');
+  });
+
+  it('switches to the done state once every item is checked or skipped', () => {
     const checks = [
       CHECK,
-      { ...CHECK, id: 'check-2', item_index: 1, item_text: 'Ensure fire is out' },
+      SKIP,
       { ...CHECK, id: 'check-3', item_index: 2, item_text: 'Remove chimney' },
     ];
     const html = render({ run: RUN, checks });
     expect(html).toContain('All items done');
     expect(html).not.toContain('Checklist in progress');
+    expect(html).not.toContain('finishes on its own');
     expect(html).toContain('width:100%');
   });
 
   it('shows a finished run ticked and locked, with Start again', () => {
     const checks = [
       CHECK,
-      { ...CHECK, id: 'check-2', item_index: 1, item_text: 'Ensure fire is out' },
+      SKIP,
       { ...CHECK, id: 'check-3', item_index: 2, item_text: 'Remove chimney' },
     ];
     const html = render({
@@ -122,6 +162,11 @@ describe('ChecklistView', () => {
     expect(html).not.toContain('>Discard<');
     expect(html.match(/disabled=""/g)?.length).toBe(3);
     expect(html.match(/checked=""/g)?.length).toBe(3);
+    // Locked rows take no taps: no Skip or Undo either.
+    expect(html).not.toContain('>Skip<');
+    expect(html).not.toContain('>Undo<');
+    expect(html).toContain('3 of 3');
+    expect(html).toContain('· 1 skipped');
   });
 
   it('notes the pinned version when the document has moved on', () => {
@@ -201,29 +246,16 @@ describe('ChecklistView', () => {
 });
 
 describe('ChecklistConfirmDialog', () => {
-  it('counts what a finish would skip and what a discard would erase', () => {
-    const runData = { run: RUN, checks: [CHECK], content: CONTENT };
-    const finish = renderToStaticMarkup(
-      <ChecklistConfirmDialog
-        action="complete"
-        runData={runData}
-        busy={false}
-        onConfirm={noop}
-        onCancel={noop}
-      />
-    );
-    expect(finish).toContain('Finish checklist?');
-    expect(finish).toContain('2 items unchecked');
+  it('counts what a discard would erase, skips included', () => {
     const discard = renderToStaticMarkup(
       <ChecklistConfirmDialog
-        action="discard"
-        runData={runData}
+        runData={{ run: RUN, checks: [CHECK, SKIP], content: CONTENT }}
         busy={false}
         onConfirm={noop}
         onCancel={noop}
       />
     );
     expect(discard).toContain('Discard checklist?');
-    expect(discard).toContain('1 item already checked off');
+    expect(discard).toContain('2 items already checked off or skipped');
   });
 });

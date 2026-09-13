@@ -1,27 +1,35 @@
 // The live checklist for a task-bearing SOP. The document's prose renders as
 // usual; its task items render as large tappable rows bound to the shared run.
 // There is no separate "run mode" any more: with no run open the rows sit
-// unchecked and the first tap starts one (useSopRun owns that logic — this
+// unresolved and the first tap starts one (useSopRun owns that logic — this
 // component just reports toggles); once a run exists a sticky progress header
-// appears with Finish and Discard, and unchecking the last remaining item
-// silently discards the run again. Ticking the last item finishes the run by
-// itself; the finished run then shows ticked and locked, with Start again in
-// the header, until someone clears it. Checking a parent task checks everything
-// nested under it in one tap; unchecking stays one item at a time. Checked
-// items say who ticked them and when. An item that links to another checklist
-// carries a thin progress bar for that sub-checklist under its text, so the
-// parent shows where each subtask stands without opening it.
+// appears with Discard, and un-resolving the last remaining item silently
+// discards the run again.
+//
+// Every item is resolved one of two ways: tapping the box completes it, and
+// the Skip control beside it marks it skipped — done with, but deliberately
+// not done, so the record never leaves anyone wondering whether an item was
+// passed over on purpose or never looked at. Resolving the last item finishes
+// the run by itself (there is no Finish button, so a finished run never has
+// an unaccounted-for item); the finished run then shows ticked and locked,
+// with Start again in the header, until someone clears it. Checking or
+// skipping a parent task resolves everything still open under it in one tap;
+// un-resolving (tapping a resolved box, or Undo on a skipped row) stays one
+// item at a time. Resolved items say who did it and when. An item that links
+// to another checklist carries a thin progress bar for that sub-checklist
+// under its text, so the parent shows where each subtask stands without
+// opening it.
 //
 // Taps are never blocked: SopDocument applies them locally and queues the
-// server work, so `busy` only holds Finish and Discard while requests are
-// still in flight. Each task row is memoized — a tap re-renders the rows it
-// changed, not the whole document.
+// server work, so `busy` only holds Discard while requests are still in
+// flight. Each task row is memoized — a tap re-renders the rows it changed,
+// not the whole document.
 import { memo, useCallback, useMemo, useRef } from 'react';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/checklist';
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import type { RunState } from '@/lib/sops/optimistic';
+import type { CheckItems, RunState } from '@/lib/sops/optimistic';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SopMarkdown } from './SopMarkdown';
 
@@ -38,12 +46,13 @@ const NO_LINKED: LinkedProgress[] = [];
 const headerButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 
-// When everything is checked, Finish is the one thing left to do — solid gold.
-const finishDoneClass =
-  'px-4 py-1.5 rounded border border-[var(--pyre-gold)] bg-[var(--pyre-gold)] text-xs font-mono uppercase tracking-wide text-[var(--pyre-black)] hover:bg-[var(--pyre-creme)] hover:border-[var(--pyre-creme)] transition-colors disabled:opacity-40';
-
 const discardButtonClass =
   'rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-[var(--pyre-red)]/50 hover:text-[var(--pyre-red)] disabled:opacity-40';
+
+// The per-row Skip / Undo control: quiet next to the box, but a real tap
+// target (staff are on phones).
+const skipButtonClass =
+  'shrink-0 rounded border border-transparent px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40 transition-colors hover:border-white/20 hover:text-white/80 focus-visible:border-white/40 focus-visible:outline-none';
 
 // Pinned locale + venue time zone: this renders on the server and again on
 // the phone, and the two have to agree or React throws the server tree away.
@@ -85,82 +94,117 @@ function SubProgress({ progress }: { progress: LinkedProgress }) {
 const TaskRow = memo(function TaskRow({
   task,
   checked,
-  checkedLabel,
+  skipped,
+  resolvedLabel,
   linked,
   locked,
   highlight,
   onSopLink,
   onToggle,
+  onSkip,
 }: {
   task: ChecklistTask;
+  /** Completed. */
   checked: boolean;
+  /** Explicitly skipped — resolved, but not done. */
+  skipped: boolean;
   /** The run is finished: the box shows its state but takes no taps. */
   locked: boolean;
-  /** "who · when" for a checked item, precomputed so the row's props stay flat. */
-  checkedLabel: string | null;
+  /** "who · when" (or "skipped by who · when") for a resolved item, precomputed so the row's props stay flat. */
+  resolvedLabel: string | null;
   /** Progress of the sub-checklists this item links to (usually none or one). */
   linked: LinkedProgress[];
   highlight?: string;
   onSopLink: (slug: string) => void;
+  /** The box: complete the item (true) or un-resolve it (false). */
   onToggle: (task: ChecklistTask, nextChecked: boolean) => void;
+  /** The side control: skip the item (true) or undo a skip (false). */
+  onSkip: (task: ChecklistTask, nextSkipped: boolean) => void;
 }) {
+  const resolved = checked || skipped;
   return (
     <div
       className={`${DEPTH_PAD[task.depth] ?? ''} ${task.depth > 0 ? 'border-l border-white/10' : ''}`}
     >
-      {/* The whole row is the tap target — staff are on phones with
-          wet hands, so the label spans text and padding alike. */}
-      <label
-        className={`group -mx-2 flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors ${
-          locked ? '' : 'cursor-pointer hover:bg-white/5 active:bg-white/10'
+      <div
+        className={`group -mx-2 flex items-start gap-1 rounded-lg px-2 transition-colors ${
+          locked ? '' : 'hover:bg-white/5'
         }`}
       >
-        <input
-          type="checkbox"
-          className="peer sr-only"
-          checked={checked}
-          disabled={locked}
-          onChange={(e) => onToggle(task, e.target.checked)}
-        />
-        <span
-          aria-hidden="true"
-          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--pyre-gold)]/50 ${
-            checked
-              ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]'
-              : 'border-white/30 group-hover:border-white/50'
+        {/* The whole label is the tap target — staff are on phones with wet
+            hands, so it spans the box, the text and the padding alike. The
+            Skip control sits outside it so a tap there never reaches the box. */}
+        <label
+          className={`flex min-w-0 flex-1 items-start gap-3 py-2.5 ${
+            locked ? '' : 'cursor-pointer active:bg-white/10'
           }`}
         >
-          <svg
-            viewBox="0 0 12 12"
-            className={`h-3.5 w-3.5 transition-opacity ${checked ? 'opacity-100' : 'opacity-0'}`}
-            fill="none"
-            stroke="var(--pyre-black)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            role="presentation"
-          >
-            <path d="M2 6.5 4.8 9.2 10 3.2" />
-          </svg>
-        </span>
-        <div className="min-w-0 flex-1">
-          {/* line-through lives on its own wrapper so the attribution
-              line below doesn't get struck with the task text. */}
-          <div
-            className={`text-sm leading-snug [&_p]:my-0 ${
-              checked ? 'text-white/40 line-through' : 'text-white/85'
+          <input
+            type="checkbox"
+            className="peer sr-only"
+            checked={resolved}
+            disabled={locked}
+            onChange={(e) => onToggle(task, e.target.checked)}
+          />
+          <span
+            aria-hidden="true"
+            className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--pyre-gold)]/50 ${
+              checked
+                ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]'
+                : skipped
+                  ? 'border-dashed border-white/40 bg-white/5'
+                  : 'border-white/30 group-hover:border-white/50'
             }`}
           >
-            <SopMarkdown content={task.text} highlight={highlight} onSopLink={onSopLink} />
+            <svg
+              viewBox="0 0 12 12"
+              className={`h-3.5 w-3.5 transition-opacity ${resolved ? 'opacity-100' : 'opacity-0'}`}
+              fill="none"
+              stroke={checked ? 'var(--pyre-black)' : 'rgba(255,255,255,0.6)'}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              role="presentation"
+            >
+              {/* A tick for completed, a dash for skipped. */}
+              {skipped ? <path d="M2.5 6h7" /> : <path d="M2 6.5 4.8 9.2 10 3.2" />}
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            {/* line-through lives on its own wrapper so the attribution
+                line below doesn't get struck with the task text. */}
+            <div
+              className={`text-sm leading-snug [&_p]:my-0 ${
+                checked
+                  ? 'text-white/40 line-through'
+                  : skipped
+                    ? 'text-white/40 italic'
+                    : 'text-white/85'
+              }`}
+            >
+              <SopMarkdown content={task.text} highlight={highlight} onSopLink={onSopLink} />
+            </div>
+            {linked.map((progress) => (
+              <SubProgress key={progress.slug} progress={progress} />
+            ))}
+            {resolvedLabel && (
+              <div className="mt-0.5 font-mono text-[10px] text-white/35">{resolvedLabel}</div>
+            )}
           </div>
-          {linked.map((progress) => (
-            <SubProgress key={progress.slug} progress={progress} />
-          ))}
-          {checkedLabel && (
-            <div className="mt-0.5 font-mono text-[10px] text-white/35">{checkedLabel}</div>
-          )}
-        </div>
-      </label>
+        </label>
+        {/* Skip is for an item that can't or shouldn't be done this time;
+            Undo puts a skipped item back. A completed item has no side
+            control — tapping its box un-resolves it. */}
+        {!locked && !checked && (
+          <button
+            type="button"
+            className={`${skipButtonClass} mt-2`}
+            onClick={() => onSkip(task, !skipped)}
+          >
+            {skipped ? 'Undo' : 'Skip'}
+          </button>
+        )}
+      </div>
     </div>
   );
 });
@@ -177,7 +221,6 @@ export function ChecklistView({
   headerOffset = 'nav',
   onSopLink,
   onToggle,
-  onFinish,
   onDiscard,
   onStartAgain,
 }: {
@@ -185,20 +228,23 @@ export function ChecklistView({
   content: string;
   /** The open run, or a finished one still on screen (status !== in_progress). */
   run: SopRunRow | null;
+  /** Every resolved item — completed or skipped — of the run. */
   checks: SopRunCheckRow[];
   people?: PeopleNames;
   /** Progress of the checklists this document links to, by slug. */
   linked?: LinkedProgressMap;
   currentVersion: number;
-  /** Requests in flight — holds Finish and Discard, never the boxes. */
+  /** Requests in flight — holds Discard, never the boxes. */
   busy: boolean;
   highlight?: string;
   /** What the sticky progress header pins under: the page nav, or nothing (modal). */
   headerOffset?: keyof typeof STICKY_TOP;
   onSopLink: (slug: string) => void;
-  /** One entry per item the toggle covers — a parent tap carries its subtree. */
-  onToggle: (items: { itemIndex: number; itemText: string }[], checked: boolean) => void;
-  onFinish: () => void;
+  /**
+   * One entry per item the tap covers — a parent tap carries its subtree —
+   * each marked skipped or not. `checked: false` un-resolves the one item.
+   */
+  onToggle: (items: CheckItems, checked: boolean) => void;
   onDiscard: () => void;
   /** Clears a finished run off the screen so the next tap starts a new one. */
   onStartAgain?: () => void;
@@ -206,6 +252,7 @@ export function ChecklistView({
   const parsed = useMemo(() => parseChecklist(content), [content]);
   const checkByIndex = useMemo(() => new Map(checks.map((c) => [c.item_index, c])), [checks]);
   const done = checks.length;
+  const skippedCount = useMemo(() => checks.filter((c) => c.skipped).length, [checks]);
   const total = run?.task_count ?? parsed.tasks.length;
   const finished = run !== null && run.status !== 'in_progress';
   const allDone = finished || (run !== null && total > 0 && done >= total);
@@ -221,21 +268,38 @@ export function ChecklistView({
     return map;
   }, [parsed, linked]);
 
-  // One stable toggle handler for every row (so the memoized rows don't all
-  // re-render on each tap); it reads the latest tasks and checks from a ref.
+  // One stable handler pair for every row (so the memoized rows don't all
+  // re-render on each tap); they read the latest tasks and checks from a ref.
   const latest = useRef({ parsed, checkByIndex, onToggle });
   latest.current = { parsed, checkByIndex, onToggle };
-  const handleToggle = useCallback((task: ChecklistTask, nextChecked: boolean) => {
-    const { parsed: current, checkByIndex: checked, onToggle: emit } = latest.current;
-    // Checking cascades to the not-yet-checked subtree; unchecking touches
-    // only this item.
-    const items = nextChecked
-      ? subtreeTasks(current.tasks, task.index)
-          .filter((t) => t.index === task.index || !checked.has(t.index))
-          .map((t) => ({ itemIndex: t.index, itemText: t.text }))
-      : [{ itemIndex: task.index, itemText: task.text }];
-    emit(items, nextChecked);
+
+  // Resolving cascades to the still-open subtree (a child already completed
+  // or skipped keeps its own record); un-resolving touches only this item.
+  const resolve = useCallback((task: ChecklistTask, skipped: boolean) => {
+    const { parsed: current, checkByIndex: resolved, onToggle: emit } = latest.current;
+    const items = subtreeTasks(current.tasks, task.index)
+      .filter((t) => t.index === task.index || !resolved.has(t.index))
+      .map((t) => ({ itemIndex: t.index, itemText: t.text, skipped }));
+    emit(items, true);
   }, []);
+  const unresolve = useCallback((task: ChecklistTask) => {
+    latest.current.onToggle([{ itemIndex: task.index, itemText: task.text }], false);
+  }, []);
+
+  const handleToggle = useCallback(
+    (task: ChecklistTask, nextChecked: boolean) => {
+      if (nextChecked) resolve(task, false);
+      else unresolve(task);
+    },
+    [resolve, unresolve]
+  );
+  const handleSkip = useCallback(
+    (task: ChecklistTask, nextSkipped: boolean) => {
+      if (nextSkipped) resolve(task, true);
+      else unresolve(task);
+    },
+    [resolve, unresolve]
+  );
 
   return (
     <div className="space-y-4">
@@ -255,6 +319,7 @@ export function ChecklistView({
             </span>
             <span className="font-mono text-xs text-white/60">
               {done} of {total}
+              {skippedCount > 0 && ` · ${skippedCount} skipped`}
             </span>
             <span className="font-mono text-[10px] text-white/40">
               {finished && run.ended_by && run.ended_at
@@ -272,24 +337,14 @@ export function ChecklistView({
                   Start again
                 </button>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    className={allDone ? finishDoneClass : headerButtonClass}
-                    disabled={busy}
-                    onClick={onFinish}
-                  >
-                    Finish
-                  </button>
-                  <button
-                    type="button"
-                    className={discardButtonClass}
-                    disabled={busy}
-                    onClick={onDiscard}
-                  >
-                    Discard
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className={discardButtonClass}
+                  disabled={busy}
+                  onClick={onDiscard}
+                >
+                  Discard
+                </button>
               )}
             </span>
           </div>
@@ -301,6 +356,11 @@ export function ChecklistView({
               style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
             />
           </div>
+          {!allDone && (
+            <p className="font-mono text-[10px] text-white/40">
+              Check off or skip every item — the checklist finishes on its own.
+            </p>
+          )}
           {run.sop_version !== currentVersion && (
             <p className="font-mono text-[10px] text-white/40">
               Showing v{run.sop_version}, the version this run started with (the document has since
@@ -332,21 +392,24 @@ export function ChecklistView({
           }
           const { task } = segment;
           const check = checkByIndex.get(task.index);
+          const skipped = check?.skipped === true;
           return (
             <TaskRow
               key={`task-${segment.line}`}
               task={task}
-              checked={!!check}
+              checked={!!check && !skipped}
+              skipped={skipped}
               locked={finished}
               linked={linkedByTask.get(task.index) ?? NO_LINKED}
-              checkedLabel={
+              resolvedLabel={
                 check
-                  ? `${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
+                  ? `${skipped ? 'skipped by ' : ''}${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
                   : null
               }
               highlight={highlight}
               onSopLink={onSopLink}
               onToggle={handleToggle}
+              onSkip={handleSkip}
             />
           );
         })}
@@ -356,34 +419,28 @@ export function ChecklistView({
 }
 
 /**
- * The confirm step before a Finish that skips items or a Discard that erases
- * checks — the same words on the page and in the peek modal.
+ * The confirm step before a Discard that erases resolved items — the same
+ * words on the page and in the peek modal. (Discarding an empty run needs no
+ * confirmation; useSopRun sends that straight through.)
  */
 export function ChecklistConfirmDialog({
-  action,
   runData,
   busy,
   onConfirm,
   onCancel,
 }: {
-  action: 'complete' | 'discard';
   runData: RunState;
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const left = runData.run.task_count - runData.checks.length;
   const done = runData.checks.length;
   return (
     <ConfirmDialog
-      title={action === 'complete' ? 'Finish checklist?' : 'Discard checklist?'}
-      body={
-        action === 'complete'
-          ? `${left} item${left === 1 ? '' : 's'} unchecked — the record will show what was skipped.`
-          : `Nothing is saved — the ${done} item${done === 1 ? '' : 's'} already checked off will be erased.`
-      }
-      confirmLabel={action === 'complete' ? 'Finish' : 'Discard'}
-      danger={action === 'discard'}
+      title="Discard checklist?"
+      body={`Nothing is saved — the ${done} item${done === 1 ? '' : 's'} already checked off or skipped will be erased.`}
+      confirmLabel="Discard"
+      danger
       busy={busy}
       onConfirm={onConfirm}
       onCancel={onCancel}

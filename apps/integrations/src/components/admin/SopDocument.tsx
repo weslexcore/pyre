@@ -7,15 +7,16 @@
 // enforces the real guards — this island just mirrors them.
 //
 // Task-bearing documents render as a live checklist (ChecklistView): there is
-// no separate run mode — checking the first item starts the shared run,
-// unchecking the last one silently discards it, and links to other library
-// documents open in a peek modal (SopPeekModal) so a tutorial never navigates
-// away from a half-finished checklist.
+// no separate run mode — resolving the first item (checking or skipping it)
+// starts the shared run, un-resolving the last one silently discards it,
+// resolving the last one finishes it, and links to other library documents
+// open in a peek modal (SopPeekModal) so a tutorial never navigates away from
+// a half-finished checklist.
 //
 // The page arrives with the document and its open run already rendered
 // (`initial`, assembled server-side by lib/sops/document.ts), so nothing is
 // fetched on mount. The run itself — optimistic taps, the serialized queue,
-// Finish and Discard — lives in useSopRun, shared with the peek modal.
+// Discard — lives in useSopRun, shared with the peek modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { SopRow, SopVersionRow } from '@/lib/db';
@@ -34,7 +35,7 @@ import { SopLinkTextarea } from './SopLinkTextarea';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
-import { type FinishAction, readError, useSopRun } from './useSopRun';
+import { readError, useSopRun } from './useSopRun';
 
 type DocResponse = SopDocumentPayload;
 
@@ -116,9 +117,9 @@ export function SopDocument({
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Which finish action is awaiting confirmation, the run, its checks, and
-  // the optimistic queue all live in the hook; this island seeds it from the
-  // server-rendered payload and points its banners at the page's own.
+  // The run, its checks, the optimistic queue and the discard confirmation
+  // all live in the hook; this island seeds it from the server-rendered
+  // payload and points its banners at the page's own.
   // Library document opened in the peek modal from an in-content link.
   const [peekSlug, setPeekSlug] = useState<string | null>(null);
 
@@ -144,7 +145,8 @@ export function SopDocument({
   });
 
   // A tap checks the box, and — for an item that links to another checklist
-  // — every item of that one too, so its bar fills.
+  // — every item of that one too, so its bar fills (a skip cascades nothing:
+  // the linked checklist wasn't done either).
   const onToggle = (items: CheckItems, checked: boolean) => {
     run.toggleCheck(items, checked);
     if (checked) cascadeLinked(items, linked, updateLinked, setError);
@@ -671,8 +673,7 @@ export function SopDocument({
                 highlight={docTerm}
                 onSopLink={setPeekSlug}
                 onToggle={onToggle}
-                onFinish={() => run.requestFinish('complete')}
-                onDiscard={() => run.requestFinish('discard')}
+                onDiscard={run.requestDiscard}
                 onStartAgain={run.startAgain}
               />
             </div>
@@ -752,12 +753,11 @@ export function SopDocument({
         </div>
       )}
 
-      {run.confirmAction && run.runData && (
+      {run.confirmDiscard && run.runData && (
         <ChecklistConfirmDialog
-          action={run.confirmAction}
           runData={run.runData}
           busy={run.runBusy}
-          onConfirm={() => void run.finishRun(run.confirmAction as FinishAction)}
+          onConfirm={() => void run.discardRun()}
           onCancel={run.cancelConfirm}
         />
       )}

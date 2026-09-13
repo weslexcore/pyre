@@ -26,4 +26,12 @@ describe('linkedTargets', () => {
   it('is empty for items without library links', () => {
     expect(linkedTargets([{ itemIndex: 0, itemText: 'Wipe the glass' }], LINKED)).toEqual([]);
   });
+
+  it('cascades nothing for a skipped item — the linked checklist was not done either', () => {
+    const items = [
+      { itemIndex: 0, itemText: '[Hampers](/admin/sops/hampers)', skipped: true },
+      { itemIndex: 1, itemText: '[Plunges](/admin/sops/plunges)', skipped: false },
+    ];
+    expect(linkedTargets(items, LINKED).map((p) => p.slug)).toEqual(['plunges']);
+  });
 });

@@ -47,6 +47,7 @@ const CHECK: SopRunCheckRow = {
   item_text: 'Empty the bins',
   checked_by: 'marina@pyresauna.com',
   checked_at: '2026-09-01T14:05:00Z',
+  skipped: false,
 };
 
 function payload(overrides: Partial<SopDocumentPayload> = {}): SopDocumentPayload {
@@ -81,6 +82,9 @@ describe('PeekChecklist', () => {
     expect(html).toContain('1 of 3');
     expect(html).toContain('Marina ·');
     expect(html).toContain('sticky top-0');
+    // No Finish here either: the run ends when every item is resolved.
+    expect(html).not.toContain('>Finish<');
+    expect(html).toContain('>Discard<');
   });
 
   it('shows a sub-checklist finished during the parent run as completed', () => {

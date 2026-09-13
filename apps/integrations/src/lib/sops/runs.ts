@@ -94,7 +94,11 @@ export async function resolveRunContent(
   return { content: snapshot?.content_md ?? sop.content_md, error: null };
 }
 
-/** A task item a run ended without checking: its snapshot position and text. */
+/**
+ * A task item a run ended without resolving: its snapshot position and text.
+ * Only runs finished before skipping existed (by the old Finish action) have
+ * any — today a run cannot complete with an item unaccounted for.
+ */
 export interface UncheckedItem {
   item_index: number;
   item_text: string;
@@ -108,9 +112,9 @@ export interface RunWithUnchecked
 }
 
 /**
- * The task items of `content` that `checks` never covered, in document order.
- * Pure: the log's "what was skipped" list for one run, given the snapshot the
- * run pinned.
+ * The task items of `content` that `checks` never covered, in document order
+ * (a skipped item has a row, so it is covered). Pure: the log's "never
+ * checked" list for one run, given the snapshot the run pinned.
  */
 export function uncheckedItems(
   content: string,
@@ -266,8 +270,9 @@ export async function loadRunState(
 }
 
 /**
- * Finish a run the moment its last item is checked: nobody should have to
- * tap Finish after ticking everything (Finish is for leaving items undone).
+ * Finish a run the moment its last item is resolved — completed or skipped,
+ * every item has a row. This is the only way a run completes: there is no
+ * Finish button, so a completed run never has an item nobody accounted for.
  * Returns the run as it now stands — finished, or unchanged when items
  * remain or a teammate finished it first.
  */
