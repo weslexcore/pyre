@@ -12,8 +12,28 @@
 // happened. Media can also be added to or removed from an existing note.
 // Clicking a photo or video opens it in the ShiftNoteViewer lightbox, which
 // steps through that note's media without leaving the page.
+//
+// Each note also carries a triage status — open, to do, resolved — that only
+// admins flip, so a request or piece of feedback gets tracked to completion,
+// and a reply thread in which an admin responds in context and the author
+// replies back. Replies show to whoever sees the note; an admin can mark one
+// private, which keeps it among the admins (the server never sends those to
+// anyone else).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
+import type {
+  ShiftNoteAttachmentRow,
+  ShiftNoteReplyRow,
+  ShiftNoteRow,
+  ShiftNoteStatus,
+} from '@/lib/db';
+import {
+  canReply,
+  canSeeNote,
+  canSetStatus,
+  canTouchReply,
+  SHIFT_NOTE_STATUSES,
+  statusLabel,
+} from '@/lib/shift-notes/access';
 import {
   ACCEPT_ATTRIBUTE,
   checkFile,
@@ -21,7 +41,7 @@ import {
   formatBytes,
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
-import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
+import { NOTE_BODY_MAX, REPLY_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { highlightSegments, matchesTerm } from '@/lib/sops/search';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
@@ -39,6 +59,25 @@ const selectClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
 
 const textareaClass = `${inputClass} min-h-[100px] w-full`;
+
+const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
+
+/** Badge colours per status: quiet while open, gold while owed, sage once done. */
+const statusBadgeClass: Record<ShiftNoteStatus, string> = {
+  open: 'border-white/15 text-white/40',
+  todo: 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
+  resolved: 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]',
+};
+
+function StatusBadge({ status }: { status: ShiftNoteStatus }) {
+  return (
+    <span
+      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${statusBadgeClass[status]}`}
+    >
+      {statusLabel(status)}
+    </span>
+  );
+}
 
 interface Viewer {
   email: string;
@@ -145,6 +184,17 @@ function formatDay(date: string): string {
   });
 }
 
+/** "Aug 21, 9:42 PM" in shift wall-clock time, for replies and status changes. */
+function formatStamp(timestamp: string): string {
+  return new Date(timestamp).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/New_York',
+  });
+}
+
 /** "9:42 PM" in shift wall-clock time, for when the note was written. */
 function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleTimeString('en-US', {
@@ -157,6 +207,8 @@ function formatTime(timestamp: string): string {
 export function ShiftNotes() {
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
   const [attachments, setAttachments] = useState<Record<string, ShiftNoteAttachmentRow[]>>({});
+  // Each note's thread, in writing order (only the replies this viewer may see).
+  const [replies, setReplies] = useState<Record<string, ShiftNoteReplyRow[]>>({});
   const [names, setNames] = useState<PeopleNames>({});
   // Which note's media is open in the lightbox, and which item within it.
   const [lightbox, setLightbox] = useState<{ noteId: string; index: number } | null>(null);
@@ -196,8 +248,16 @@ export function ShiftNotes() {
   const [editDate, setEditDate] = useState('');
   const [editBody, setEditBody] = useState('');
 
+  // Reply composer per note (draft text and, for admins, the private flag),
+  // and the one reply being edited inline.
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyPrivate, setReplyPrivate] = useState<Record<string, boolean>>({});
+  const [replyEditId, setReplyEditId] = useState<string | null>(null);
+  const [replyEditBody, setReplyEditBody] = useState('');
+
   // Filters.
   const [personFilter, setPersonFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
   const [query, setQuery] = useState('');
 
   // Arriving from the global search: ?q= seeds the filter and #note-<id>
@@ -219,12 +279,14 @@ export function ShiftNotes() {
       const data = (await res.json()) as {
         notes: ShiftNoteRow[];
         attachments?: Record<string, ShiftNoteAttachmentRow[]>;
+        replies?: Record<string, ShiftNoteReplyRow[]>;
         people?: PeopleNames;
         viewer?: Viewer;
         scope?: Scope;
       };
       setNotes(data.notes);
       setAttachments(data.attachments ?? {});
+      setReplies(data.replies ?? {});
       setNames(data.people ?? {});
       if (data.viewer) setViewer(data.viewer);
       if (data.scope) setScope(data.scope);
@@ -522,6 +584,10 @@ export function ShiftNotes() {
         const { [note.id]: _gone, ...rest } = prev;
         return rest;
       });
+      setReplies((prev) => {
+        const { [note.id]: _gone, ...rest } = prev;
+        return rest;
+      });
       if (editId === note.id) setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete the note');
@@ -530,8 +596,132 @@ export function ShiftNotes() {
     }
   };
 
-  const canTouch = (note: ShiftNoteRow) =>
-    viewer.isAdmin || (!!viewer.email && note.author_email === viewer.email);
+  const canTouch = (note: ShiftNoteRow) => canSeeNote(note, viewer);
+
+  /** Admin triage: flip a note's status (re-checked server-side). */
+  const setStatus = async (note: ShiftNoteRow, status: ShiftNoteStatus) => {
+    if (status === note.status) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/shift-notes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: note.id, status }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { note: ShiftNoteRow; people: PeopleNames };
+      mergeNote(data.note, data.people);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update the status');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Put `reply` into its note's thread at its place in writing order. */
+  const mergeReply = (reply: ShiftNoteReplyRow, people: PeopleNames) => {
+    setNames((prev) => ({ ...prev, ...people }));
+    setReplies((prev) => ({
+      ...prev,
+      [reply.note_id]: [
+        ...(prev[reply.note_id] ?? []).filter((r) => r.id !== reply.id),
+        reply,
+      ].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    }));
+  };
+
+  const addReply = async (note: ShiftNoteRow) => {
+    const draft = (replyDrafts[note.id] ?? '').trim();
+    if (!draft) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/shift-note-replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          noteId: note.id,
+          body: draft,
+          isPrivate: viewer.isAdmin && !!replyPrivate[note.id],
+        }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
+      mergeReply(data.reply, data.people);
+      setReplyDrafts((prev) => ({ ...prev, [note.id]: '' }));
+      setReplyPrivate((prev) => ({ ...prev, [note.id]: false }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to add the reply');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveReplyEdit = async () => {
+    if (!replyEditId) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/shift-note-replies', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: replyEditId, body: replyEditBody }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
+      mergeReply(data.reply, data.people);
+      setReplyEditId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save the reply');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Admin-only: move a reply between the shared thread and the admins. */
+  const toggleReplyPrivate = async (reply: ShiftNoteReplyRow) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/shift-note-replies', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reply.id, isPrivate: !reply.is_private }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { reply: ShiftNoteReplyRow; people: PeopleNames };
+      mergeReply(data.reply, data.people);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update the reply');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteReply = async (reply: ShiftNoteReplyRow) => {
+    if (!window.confirm('Delete this reply? This cannot be undone.')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/shift-note-replies?id=${reply.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      setReplies((prev) => ({
+        ...prev,
+        [reply.note_id]: (prev[reply.note_id] ?? []).filter((r) => r.id !== reply.id),
+      }));
+      if (replyEditId === reply.id) setReplyEditId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete the reply');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // Author options for the filter, ordered by display name.
   const authorOptions = useMemo(() => {
@@ -548,11 +738,12 @@ export function ShiftNotes() {
       if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
         return false;
       }
+      if (statusFilter !== 'all' && note.status !== statusFilter) return false;
       // Same matcher as the highlight, so what filters is what marks.
       if (term && !matchesTerm(note.body, term)) return false;
       return true;
     });
-  }, [notes, personFilter, term, scope]);
+  }, [notes, personFilter, statusFilter, term, scope]);
 
   // The lightbox browses one note's photos and videos (PDFs open in a tab).
   const viewable = useCallback(
@@ -721,6 +912,21 @@ export function ShiftNotes() {
               </select>
             </label>
           )}
+          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
+            status
+            <select
+              className={selectClass}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | ShiftNoteStatus)}
+            >
+              <option value="all">Any status</option>
+              {SHIFT_NOTE_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
           <input
             type="search"
             className={`${inputClass} min-w-48 flex-1`}
@@ -770,8 +976,32 @@ export function ShiftNotes() {
                   {formatTime(note.created_at)}
                   {note.updated_by && ` · edited by ${personName(note.updated_by, names)}`}
                 </span>
+                <StatusBadge status={note.status} />
+                {note.status_by && note.status_at && (
+                  <span className="font-mono text-[10px] text-white/40">
+                    {note.status === 'resolved' ? 'resolved' : 'marked'} by{' '}
+                    {personName(note.status_by, names)} · {formatStamp(note.status_at)}
+                  </span>
+                )}
                 {canTouch(note) && editId !== note.id && (
-                  <span className="ml-auto flex gap-2">
+                  <span className="ml-auto flex flex-wrap gap-2">
+                    {canSetStatus(viewer) &&
+                      SHIFT_NOTE_STATUSES.map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          className={`${buttonClass} ${
+                            note.status === status
+                              ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]'
+                              : ''
+                          }`}
+                          aria-pressed={note.status === status}
+                          disabled={busy || note.status === status}
+                          onClick={() => void setStatus(note, status)}
+                        >
+                          {statusLabel(status)}
+                        </button>
+                      ))}
                     <button
                       type="button"
                       className={buttonClass}
@@ -946,6 +1176,142 @@ export function ShiftNotes() {
                     )}
                   </div>
                 )}
+              {((replies[note.id]?.length ?? 0) > 0 || canReply(note, viewer)) && (
+                <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                  {(replies[note.id] ?? []).map((reply) => (
+                    <div
+                      key={reply.id}
+                      className={`rounded border px-3 py-2 ${
+                        reply.is_private
+                          ? 'border-dashed border-white/20 bg-transparent'
+                          : 'border-white/10 bg-white/5'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="text-xs font-semibold">
+                          {personName(reply.author_email, names)}
+                        </span>
+                        <span className="font-mono text-[10px] text-white/40">
+                          {formatStamp(reply.created_at)}
+                          {reply.updated_by &&
+                            ` · edited by ${personName(reply.updated_by, names)}`}
+                        </span>
+                        {reply.is_private && (
+                          <span className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                            admins only
+                          </span>
+                        )}
+                        {canTouchReply(reply, viewer) && replyEditId !== reply.id && (
+                          <span className="ml-auto flex gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                            <button
+                              type="button"
+                              className="hover:text-white"
+                              disabled={busy}
+                              onClick={() => {
+                                setReplyEditId(reply.id);
+                                setReplyEditBody(reply.body);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            {viewer.isAdmin && (
+                              <button
+                                type="button"
+                                className="hover:text-white"
+                                disabled={busy}
+                                onClick={() => void toggleReplyPrivate(reply)}
+                              >
+                                {reply.is_private ? 'Share with author' : 'Make private'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="hover:text-[var(--pyre-red)]"
+                              disabled={busy}
+                              onClick={() => void deleteReply(reply)}
+                            >
+                              Delete
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                      {replyEditId === reply.id ? (
+                        <div className="mt-2 space-y-2">
+                          <textarea
+                            className={replyTextareaClass}
+                            maxLength={REPLY_BODY_MAX}
+                            value={replyEditBody}
+                            onChange={(e) => setReplyEditBody(e.target.value)}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className={primaryButtonClass}
+                              disabled={busy || !replyEditBody.trim()}
+                              onClick={() => void saveReplyEdit()}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className={buttonClass}
+                              disabled={busy}
+                              onClick={() => setReplyEditId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">
+                          {reply.body}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {canReply(note, viewer) && (
+                    <div className="space-y-2">
+                      <textarea
+                        className={replyTextareaClass}
+                        placeholder={
+                          viewer.isAdmin ? 'Reply to this note…' : 'Reply to the admins…'
+                        }
+                        maxLength={REPLY_BODY_MAX}
+                        value={replyDrafts[note.id] ?? ''}
+                        onChange={(e) =>
+                          setReplyDrafts((prev) => ({ ...prev, [note.id]: e.target.value }))
+                        }
+                        aria-label={`Reply to ${personName(note.author_email, names)}'s note`}
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          disabled={busy || !(replyDrafts[note.id] ?? '').trim()}
+                          onClick={() => void addReply(note)}
+                        >
+                          Reply
+                        </button>
+                        {viewer.isAdmin && (
+                          <label className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                            <input
+                              type="checkbox"
+                              checked={!!replyPrivate[note.id]}
+                              onChange={(e) =>
+                                setReplyPrivate((prev) => ({
+                                  ...prev,
+                                  [note.id]: e.target.checked,
+                                }))
+                              }
+                            />
+                            only admins can see this
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </section>
