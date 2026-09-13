@@ -346,6 +346,28 @@ export interface ShiftNoteRow {
   author_email: string;
   /** Session email of the last editor (author or admin); null until edited. */
   updated_by: string | null;
+  /** Triage state, admin-set: open (untriaged), todo (follow-up owned), resolved. */
+  status: ShiftNoteStatus;
+  /** Admin who last set the status, and when; null while never triaged. */
+  status_by: string | null;
+  status_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ShiftNoteStatus = 'open' | 'todo' | 'resolved';
+
+// One reply in a shift note's thread — an admin responding in context, or
+// the author replying back. Private replies are admin-only (see
+// lib/shift-notes/access).
+export interface ShiftNoteReplyRow {
+  id: string;
+  note_id: string;
+  body: string;
+  author_email: string;
+  is_private: boolean;
+  /** Session email of the last editor (reply author or admin); null until edited. */
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 }

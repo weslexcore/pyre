@@ -30,6 +30,17 @@ export function normalizeBody(value: unknown): string | null {
   return body;
 }
 
+/** Matches the shift_note_replies body check constraint. */
+export const REPLY_BODY_MAX = 4000;
+
+/** Trimmed reply body, or null when it's not a usable string. */
+export function normalizeReplyBody(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const body = value.trim();
+  if (!body || body.length > REPLY_BODY_MAX) return null;
+  return body;
+}
+
 /**
  * Today's date in the shift wall-clock timezone (America/New_York), as the
  * composer's default. en-CA formats as YYYY-MM-DD.

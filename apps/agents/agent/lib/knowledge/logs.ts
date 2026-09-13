@@ -103,6 +103,8 @@ interface ShiftNoteRow {
   note_date: string;
   body: string;
   author_email: string;
+  /** Admin triage: open (untriaged), todo (follow-up owned), resolved. */
+  status: 'open' | 'todo' | 'resolved';
   created_at: string;
 }
 
@@ -123,7 +125,7 @@ export async function getShiftNotes(scope: KnowledgeScope, input: ShiftNotesInpu
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
   let query = getDb()
     .from('shift_notes')
-    .select('id, note_date, body, author_email, created_at')
+    .select('id, note_date, body, author_email, status, created_at')
     .order('note_date', { ascending: false })
     .order('created_at', { ascending: true })
     .limit(limit);
@@ -144,6 +146,7 @@ export async function getShiftNotes(scope: KnowledgeScope, input: ShiftNotesInpu
       shiftDate: row.note_date,
       writtenAt: easternDateTime(row.created_at),
       author: row.author_email,
+      status: row.status,
       body: row.body,
     })),
   };

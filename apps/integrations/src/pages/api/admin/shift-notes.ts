@@ -7,22 +7,39 @@
 // (lib/shift-notes/access). Author identity always comes from the session,
 // never the request body.
 //
+// Each note carries a triage status (open / todo / resolved) that only admins
+// set, and a reply thread (shift-note-replies.ts) in which admins respond and
+// the author replies back; GET returns the replies the viewer may read (an
+// admin's private replies stay with the admins).
+//
 // Photos/video backing a note are handled by shift-note-media.ts; GET here
 // returns each note's attachment rows so the log renders in one request. The
 // composer uploads files eagerly (staged rows with a null note_id, see the
 // media route); POST claims them by id once the note exists, and GET sweeps
 // staged rows nobody claimed within a day.
 //
-//   GET                          → { notes, attachments, people, viewer, scope }
+//   GET                          → { notes, attachments, replies, people, viewer, scope }
 //   POST   { noteDate, body, attachmentIds? } → { note, attachments, people }
-//   PATCH  { id, noteDate?, body? } → { note, people }
+//   PATCH  { id, noteDate?, body?, status? } → { note, people }
 //   DELETE ?id=<uuid>            → { ok: true }
 
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
-import { canSeeNote, normalizeEmail } from '@/lib/shift-notes/access';
+import {
+  getDb,
+  type ShiftNoteAttachmentRow,
+  type ShiftNoteReplyRow,
+  type ShiftNoteRow,
+} from '@/lib/db';
+import {
+  canSeeNote,
+  canSeeReply,
+  canSetStatus,
+  isShiftNoteStatus,
+  normalizeEmail,
+  SHIFT_NOTE_STATUSES,
+} from '@/lib/shift-notes/access';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -85,9 +102,12 @@ async function sweepStagedAttachments(db: NonNullable<ReturnType<typeof getDb>>)
   }
 }
 
-/** The name directory for everyone a set of notes mentions. */
-function peopleFor(notes: ShiftNoteRow[]) {
-  return getPeopleNames(notes.flatMap((n) => [n.author_email, n.updated_by ?? '']));
+/** The name directory for everyone a set of notes (and their replies) mentions. */
+function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
+  return getPeopleNames([
+    ...notes.flatMap((n) => [n.author_email, n.updated_by ?? '', n.status_by ?? '']),
+    ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
+  ]);
 }
 
 /** The viewer this gate represents, in the shape the access rule reads. */
@@ -162,10 +182,34 @@ export const GET: APIRoute = async ({ cookies }) => {
     }
   }
 
+  // Each note's thread, keyed by note id, in writing order — minus the
+  // admin-private replies when the viewer isn't one.
+  const replies: Record<string, ShiftNoteReplyRow[]> = {};
+  const visibleReplies: ShiftNoteReplyRow[] = [];
+  if (notes.length > 0) {
+    const { data: rows, error: replyError } = await db
+      .from('shift_note_replies')
+      .select('*')
+      .in(
+        'note_id',
+        notes.map((n) => n.id)
+      )
+      .order('created_at', { ascending: true });
+    if (replyError) return json({ error: replyError.message }, 500);
+    for (const row of (rows ?? []) as ShiftNoteReplyRow[]) {
+      if (!canSeeReply(row, viewer)) continue;
+      visibleReplies.push(row);
+      const group = replies[row.note_id];
+      if (group) group.push(row);
+      else replies[row.note_id] = [row];
+    }
+  }
+
   return json({
     notes,
     attachments,
-    people: await peopleFor(notes),
+    replies,
+    people: await peopleFor(notes, visibleReplies),
     // So the island knows whether it is showing the whole log or just this
     // person's, and which notes to offer edit/delete on. Both are UX only —
     // every read and every mutation re-checks the same rule here.
@@ -281,7 +325,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = typeof body.id === 'string' ? body.id : '';
   if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  const patch: Partial<Pick<ShiftNoteRow, 'note_date' | 'body' | 'updated_by'>> = {};
+  const patch: Partial<
+    Pick<ShiftNoteRow, 'note_date' | 'body' | 'updated_by' | 'status' | 'status_by' | 'status_at'>
+  > = {};
   if (body.noteDate !== undefined) {
     if (!isNoteDate(body.noteDate)) {
       return json({ error: 'noteDate must be a YYYY-MM-DD date' }, 400);
@@ -293,13 +339,36 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (!noteBody) return json({ error: 'body must be non-empty text' }, 400);
     patch.body = noteBody;
   }
-  if (patch.note_date === undefined && patch.body === undefined) {
+  // A status flip is triage, not an edit: it records who triaged and when,
+  // and leaves the note's own edit attribution alone.
+  if (body.status !== undefined) {
+    if (!canSetStatus(viewerOf(gate))) {
+      return json({ error: "Only admins can change a note's status" }, 403);
+    }
+    if (!isShiftNoteStatus(body.status)) {
+      return json({ error: `status must be one of ${SHIFT_NOTE_STATUSES.join(', ')}` }, 400);
+    }
+    patch.status = body.status;
+  }
+  if (patch.note_date === undefined && patch.body === undefined && patch.status === undefined) {
     return json({ error: 'Nothing to update' }, 400);
   }
-  patch.updated_by = email;
+  if (patch.note_date !== undefined || patch.body !== undefined) patch.updated_by = email;
 
   const existing = await loadOwnNote(db, id, gate);
   if (existing instanceof Response) return existing;
+
+  if (patch.status !== undefined) {
+    if (patch.status === existing.status) {
+      delete patch.status;
+      if (patch.note_date === undefined && patch.body === undefined) {
+        return json({ note: existing, people: await peopleFor([existing]) });
+      }
+    } else {
+      patch.status_by = email;
+      patch.status_at = new Date().toISOString();
+    }
+  }
 
   const { data, error } = await db
     .from('shift_notes')

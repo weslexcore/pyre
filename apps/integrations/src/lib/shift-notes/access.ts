@@ -1,12 +1,22 @@
-// Who may see which shift notes. Everyone on the roster writes them, but the
-// log is not a shared feed: an admin reads every note, and everyone else reads
-// only the ones they wrote themselves. Reading and editing land on the same
-// rule — if you can see a note you may edit or delete it, and there is nothing
-// you can edit that you cannot see — so both the notes route and the media
-// route gate on this one predicate.
+// Who may see and do what on shift notes. Everyone on the roster writes them,
+// but the log is not a shared feed: an admin reads every note, and everyone
+// else reads only the ones they wrote themselves. Reading and editing a note
+// land on the same rule — if you can see a note you may edit or delete it,
+// and there is nothing you can edit that you cannot see — so the notes route
+// and the media route gate on this one predicate.
+//
+// On top of a note sit two things only the thread needs rules for:
+//
+//   * status — open / todo / resolved, set by admins only; the author sees it.
+//   * replies — anyone who can see the note may reply (an admin, or the
+//     author on their own note); a reply is visible to whoever sees the note,
+//     unless an admin marked it private, in which case only admins read it.
+//     Editing or deleting a reply is its author or an admin.
 //
 // Client-bundle-safe (no db/env imports): the island uses it to decide which
 // controls to draw, and every route re-checks it server-side.
+
+import type { ShiftNoteStatus } from '@/lib/db';
 
 export interface NoteViewer {
   /** Session email, already lowercased; '' when the session carries none. */
@@ -17,6 +27,12 @@ export interface NoteViewer {
 /** The author attribution of a note — the part of the row this rule reads. */
 export interface AuthoredNote {
   author_email: string;
+}
+
+/** The parts of a reply row the visibility and edit rules read. */
+export interface ReplyLike {
+  author_email: string;
+  is_private: boolean;
 }
 
 /** Normalize a session email the way author_email is stored. */
@@ -31,4 +47,45 @@ export function normalizeEmail(email: string | null | undefined): string {
 export function canSeeNote(note: AuthoredNote, viewer: NoteViewer): boolean {
   if (viewer.isAdmin) return true;
   return !!viewer.email && note.author_email === viewer.email;
+}
+
+/** Matches the shift_notes status check constraint. */
+export const SHIFT_NOTE_STATUSES: readonly ShiftNoteStatus[] = ['open', 'todo', 'resolved'];
+
+export function isShiftNoteStatus(value: unknown): value is ShiftNoteStatus {
+  return typeof value === 'string' && (SHIFT_NOTE_STATUSES as string[]).includes(value);
+}
+
+const STATUS_LABELS: Record<ShiftNoteStatus, string> = {
+  open: 'Open',
+  todo: 'To do',
+  resolved: 'Resolved',
+};
+
+export function statusLabel(status: ShiftNoteStatus): string {
+  return STATUS_LABELS[status];
+}
+
+/** Only admins triage a note. */
+export function canSetStatus(viewer: NoteViewer): boolean {
+  return viewer.isAdmin;
+}
+
+/** Replying is the same circle as seeing: the admins, and the author on their own note. */
+export function canReply(note: AuthoredNote, viewer: NoteViewer): boolean {
+  return canSeeNote(note, viewer);
+}
+
+/**
+ * Whether `viewer` may read this reply. The caller has already checked the
+ * note; this only hides admin-private replies from everyone else.
+ */
+export function canSeeReply(reply: ReplyLike, viewer: NoteViewer): boolean {
+  return viewer.isAdmin || !reply.is_private;
+}
+
+/** Editing or deleting a reply: its author, or an admin. */
+export function canTouchReply(reply: ReplyLike, viewer: NoteViewer): boolean {
+  if (viewer.isAdmin) return true;
+  return !!viewer.email && reply.author_email === viewer.email;
 }
