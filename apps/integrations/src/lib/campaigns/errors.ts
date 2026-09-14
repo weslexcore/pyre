@@ -8,6 +8,8 @@ export function campaignErrorMessage(code: unknown, fallback = 'Something went w
       return 'This placement already has a link. Add a variant to make another.';
     case 'alias_taken':
       return 'That short link is already taken.';
+    case 'invalid_alias':
+      return 'Short link names can only use letters, numbers, dashes, and underscores.';
     case 'storage_unavailable':
       return 'Link storage is unavailable right now.';
     case 'invalid_destination':

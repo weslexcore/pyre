@@ -1,0 +1,14 @@
+---
+// Short links that belong to no campaign. Shares the campaigns grant
+// (AdminLayout's prefix rule); the /api/admin/shortlinks routes re-check it
+// on every request — this page's gate is UX.
+import { ShortLinks } from '@/components/admin/campaigns/ShortLinks';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Short Links"
+  subtitle="A short pyresauna.com/s/ address for anything, with a name you choose"
+>
+  <ShortLinks client:load />
+</AdminLayout>

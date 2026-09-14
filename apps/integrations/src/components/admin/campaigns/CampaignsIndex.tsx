@@ -46,6 +46,9 @@ export function CampaignsIndex() {
         <a href="/admin/campaigns/performance" className={buttonClass}>
           Performance report
         </a>
+        <a href="/admin/campaigns/shortlinks" className={buttonClass}>
+          Short links
+        </a>
         <label className="ml-auto flex items-center gap-2 font-mono text-xs text-white/50">
           <input
             type="checkbox"
