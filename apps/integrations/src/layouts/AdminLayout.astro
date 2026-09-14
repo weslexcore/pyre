@@ -11,7 +11,9 @@ import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { canViewPath, searchablePages, toolsForAccess } from '@/components/admin/adminTools';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
+import { NotificationBell } from '@/components/admin/NotificationBell';
 import { getToolPins } from '@/lib/admin/toolPins';
+import { getUnreadCount } from '@/lib/notifications/unread';
 import '@/styles/admin.css';
 
 interface Props {
@@ -43,6 +45,9 @@ const searchPages = access ? searchablePages(tools, access.isAdmin) : [];
 // when it already made one (the /admin index memoizes into locals).
 const pinnedHrefs =
   Astro.locals.toolPins ?? (allowed && user?.email ? await getToolPins(user.email) : []);
+// The bell's badge, painted by the server so it is right on first paint; the
+// island keeps it fresh from there. Zero when storage is down — never blocks.
+const unreadCount = allowed && user?.email ? await getUnreadCount(user.email) : 0;
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
 ---
 
@@ -104,6 +109,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               </a>
               <div class="flex items-center gap-2">
                 <GlobalSearch client:load pages={searchPages} />
+                <NotificationBell client:load initialCount={unreadCount} />
                 <AdminNav
                   client:load
                   currentPath={Astro.url.pathname}

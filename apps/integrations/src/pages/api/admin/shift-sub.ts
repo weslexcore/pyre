@@ -22,6 +22,7 @@ import {
   type TimeOffRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { notifySubEvent } from '@/lib/notifications/schedule';
 import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
 import { getScheduleSettings } from '@/lib/schedule/settings';
 import {
@@ -262,6 +263,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   await db.from('sub_requests').update({ notified_count: availableNotified }).eq('id', sub.id);
 
+  // The same people, in the dashboard: everyone who could claim it, and the admins.
+  await notifySubEvent(db, {
+    event: 'requested',
+    subId: sub.id,
+    shift,
+    window: assignment,
+    requesterStaffId: self.id,
+    candidateStaffIds: available.map((person) => person.id),
+    actorEmail: actor.email,
+  });
+
   return json(
     {
       ok: true,
@@ -372,17 +384,34 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const { data: shift } = await db
     .from('shifts')
-    .select('label, shift_date')
+    .select('id, label, shift_date, starts_at, ends_at')
     .eq('id', sub.shift_id)
     .maybeSingle();
+  const actor = actorFromGate(gate);
   await logScheduleChange(db, {
-    actor: actorFromGate(gate),
+    actor,
     entityType: 'sub_request',
     entityId: sub.id,
     action: 'discard',
     summary: `Cancelled a sub request for ${shift ? describeShift(shift as { label: string; shift_date: string }) : 'a shift'}`,
     details: { before: sub, after: cancelled },
   });
+  if (shift) {
+    await notifySubEvent(db, {
+      event: 'cancelled',
+      subId: sub.id,
+      shift: shift as {
+        id: string;
+        label: string;
+        shift_date: string;
+        starts_at: string;
+        ends_at: string;
+      },
+      window: sub,
+      requesterStaffId: sub.requester_staff_id,
+      actorEmail: actor.email,
+    });
+  }
 
   return json({ ok: true });
 };

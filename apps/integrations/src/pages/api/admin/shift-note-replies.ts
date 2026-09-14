@@ -17,6 +17,7 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteReplyRow, type ShiftNoteRow } from '@/lib/db';
+import { notifyShiftNoteReply } from '@/lib/notifications/shift-notes';
 import {
   canReply,
   canSeeNote,
@@ -142,6 +143,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const reply = data as ShiftNoteReplyRow;
+  await notifyShiftNoteReply(db, note, reply);
   return json({ reply, people: await peopleFor(reply) }, 201);
 };
 

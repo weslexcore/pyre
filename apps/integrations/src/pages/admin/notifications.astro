@@ -1,0 +1,12 @@
+---
+// One person's inbox: every notification the dashboard has written for them
+// that they haven't dismissed. Open to anyone with dashboard access — the
+// island fetches from /api/admin/notifications, which scopes everything to
+// the session's own email.
+import { NotificationsInbox } from '@/components/admin/NotificationsInbox';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Notifications" subtitle="Messages, replies, SOP updates, and schedule changes for you">
+  <NotificationsInbox client:load />
+</AdminLayout>

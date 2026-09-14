@@ -32,6 +32,7 @@ import {
   type ShiftNoteReplyRow,
   type ShiftNoteRow,
 } from '@/lib/db';
+import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
   canSeeNote,
   canSeeReply,
@@ -379,6 +380,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const note = data as ShiftNoteRow;
+  // Triage is news to the author; an edit of their own text is not.
+  if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
   return json({ note, people: await peopleFor([note]) });
 };
 
