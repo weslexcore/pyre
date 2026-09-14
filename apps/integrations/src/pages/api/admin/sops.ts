@@ -15,6 +15,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
+import { notifySopSaved } from '@/lib/notifications/sops';
 import { countTasks } from '@/lib/sops/checklist';
 import { loadSop, loadSopDocument, redactGrantEmails } from '@/lib/sops/document';
 import {
@@ -375,6 +376,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (versionError) return json({ error: versionError.message }, 500);
 
   await ensureCategory(db, category);
+  await notifySopSaved(db, { sop, editorEmail: email, version: 1, created: true });
 
   return json({ sop }, 201);
 };
@@ -475,6 +477,14 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
   if (error) return json({ error: error.message }, 500);
+
+  await notifySopSaved(db, {
+    sop: data as SopRow,
+    editorEmail: email,
+    version: nextVersion,
+    created: false,
+    changeNote,
+  });
 
   return json({ sop: data as SopRow });
 };

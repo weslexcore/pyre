@@ -37,6 +37,36 @@ export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
 // only admins read everyone's notes, everyone else reads their own.
 export const SHIFT_NOTES_HREF = '/admin/shift-notes';
 
+// Pages every dashboard user gets, whatever their grants: the inbox the
+// header bell opens, and the messages the admins write to the team. Not
+// tools — they are never offered as checkboxes on /admin/users, never
+// pinnable, and never cards on the dashboard; the nav lists them at the top.
+export interface StaffPage {
+  href: string;
+  title: string;
+  keywords: string[];
+}
+
+export const MESSAGES_HREF = '/admin/messages';
+export const NOTIFICATIONS_HREF = '/admin/notifications';
+
+export const STAFF_PAGES: StaffPage[] = [
+  {
+    href: MESSAGES_HREF,
+    title: 'Messages',
+    keywords: ['announcements', 'from admin', 'team', 'thread', 'inbox'],
+  },
+  {
+    href: NOTIFICATIONS_HREF,
+    title: 'Notifications',
+    keywords: ['inbox', 'alerts', 'bell', 'unread'],
+  },
+];
+
+function isStaffPagePath(pathname: string): boolean {
+  return STAFF_PAGES.some((page) => pathname === page.href || pathname.startsWith(`${page.href}/`));
+}
+
 export const ADMIN_TOOLS: AdminTool[] = [
   {
     href: '/admin/schedule',
@@ -319,6 +349,7 @@ const LEGACY_PAGE_GRANTS: Record<string, string[]> = {
 /** Whether this user may view `href` — admin, a direct grant, a legacy grant
  * for a page this one replaced, or the manage capability that implies it. */
 export function canViewPage(access: PageAccess, href: string): boolean {
+  if (STAFF_PAGES.some((page) => page.href === href)) return true;
   if (access.isAdmin || access.pages.includes(href)) return true;
   if (LEGACY_PAGE_GRANTS[href]?.some((legacy) => access.pages.includes(legacy))) return true;
   const manageKey = MANAGE_IMPLIES_VIEW[href];
@@ -337,6 +368,7 @@ export function canViewPath(access: PageAccess, pathname: string): boolean {
   // The /admin directory itself is fine for anyone with access — it only
   // shows the cards they hold.
   if (pathname === '/admin' || pathname === '/admin/') return true;
+  if (isStaffPagePath(pathname)) return true;
   return ADMIN_TOOLS.some(
     (tool) =>
       canViewPage(access, tool.href) &&
@@ -462,6 +494,12 @@ export function searchablePages(tools: AdminTool[], isAdmin: boolean): SearchPag
   const byHref = new Map(tools.map((tool) => [tool.href, tool]));
   const pages: SearchPage[] = [
     { href: '/admin', title: 'Home', hint: 'Dashboard', keywords: ['dashboard', 'index', 'tools'] },
+    ...STAFF_PAGES.map((page) => ({
+      href: page.href,
+      title: page.title,
+      hint: 'Everyone',
+      keywords: page.keywords,
+    })),
     ...tools.map((tool) => ({
       href: tool.href,
       title: tool.title,

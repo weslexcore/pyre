@@ -27,6 +27,15 @@ export function isSopRole(value: unknown): value is SopRole {
   return typeof value === 'string' && (SOP_ROLES as readonly string[]).includes(value);
 }
 
+/**
+ * The SOP role a staff row resolves to: admin outranks shift lead outranks
+ * everyone else on the roster. The server-side lookup by session
+ * (role.ts) and every roster-wide fan-out agree on this one mapping.
+ */
+export function roleForStaffRow(row: { is_admin: boolean; is_shift_lead: boolean }): SopRole {
+  return row.is_admin ? 'admin' : row.is_shift_lead ? 'shift_lead' : 'staff';
+}
+
 /** Who is asking: their resolved role, and the email their grants are named by. */
 export interface SopViewer {
   role: SopRole;

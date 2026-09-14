@@ -11,6 +11,11 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 import {
+  notifyAssignmentChange,
+  notifyProposalApproved,
+  type ShiftForNotice,
+} from '@/lib/notifications/schedule';
+import {
   actorFromGate,
   describeShift,
   logScheduleChange,
@@ -65,6 +70,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (!proposal) return json({ error: 'Proposal not found' }, 404);
     if (proposal.status !== 'draft') return json({ error: 'Proposal is not open' }, 409);
 
+    // The draft crew, read before approval flips them live, so each person
+    // can be told what they now have that week.
+    const { data: draftAssignments } =
+      action === 'approve'
+        ? await db
+            .from('shift_assignments')
+            .select('staff_id, shift_id')
+            .eq('proposal_id', proposalId)
+            .eq('is_draft', true)
+        : { data: null };
+
     const ops =
       action === 'approve'
         ? [
@@ -107,6 +123,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       action: action === 'approve' ? 'approve' : 'discard',
       summary: `${action === 'approve' ? 'Approved' : 'Discarded'} draft schedule for week of ${proposal.week_start}`,
     });
+    if (action === 'approve') {
+      await notifyProposalApproved(db, {
+        proposalId,
+        weekStart: proposal.week_start as string,
+        assignments: (draftAssignments ?? []) as { staff_id: string; shift_id: string }[],
+        actorEmail: actorFromGate(gate).email,
+      });
+    }
 
     return json({ ok: true });
   }
@@ -124,7 +148,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const columns: string =
       kind === 'shift'
         ? 'id, proposal_id, is_draft, label, shift_date'
-        : 'id, proposal_id, is_draft, shift_id, staff_id';
+        : 'id, proposal_id, is_draft, shift_id, staff_id, starts_at, ends_at, role';
     const { data, error: fetchError } = await db
       .from(table)
       .select(columns)
@@ -137,6 +161,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       is_draft: boolean;
       shift_id?: string;
       staff_id?: string;
+      starts_at?: string;
+      ends_at?: string;
+      role?: string;
       label?: string;
       shift_date?: string;
     } | null;
@@ -168,6 +195,27 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       summary: `${accepted ? 'Accepted' : 'Rejected'} ${itemDescription}`,
       details: { proposalId: row.proposal_id },
     });
+
+    // An accepted assignment is live now (its shift too), so its person hears.
+    if (accepted && kind === 'assignment' && row.shift_id && row.staff_id) {
+      const { data: shiftRow } = await db
+        .from('shifts')
+        .select('id, label, shift_date, starts_at, ends_at')
+        .eq('id', row.shift_id)
+        .maybeSingle();
+      if (shiftRow) {
+        await notifyAssignmentChange(db, {
+          change: 'added',
+          shift: { ...(shiftRow as ShiftForNotice), is_draft: false },
+          staffId: row.staff_id,
+          assignment:
+            row.starts_at && row.ends_at
+              ? { starts_at: row.starts_at, ends_at: row.ends_at, role: row.role }
+              : null,
+          actorEmail: actorFromGate(gate).email,
+        });
+      }
+    }
 
     // Auto-resolve the proposal when nothing is left to review (the accept
     // path already did this inside acceptDraftRow).

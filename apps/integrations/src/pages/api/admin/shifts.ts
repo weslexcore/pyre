@@ -6,6 +6,7 @@
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftRow } from '@/lib/db';
+import { assigneesOf, notifyShiftChange } from '@/lib/notifications/schedule';
 import {
   actorFromGate,
   changedFields,
@@ -138,6 +139,20 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       summary: `Updated shift ${describeShift(shift)}: ${summarizeDiff(diff)}`,
       details: diff,
     });
+    // Tell the crew when the shift itself moved or was called off — not for
+    // a notes tweak, and not for a draft (accepting it is the news there).
+    const touchesCrew = ['shift_date', 'starts_at', 'ends_at', 'status', 'label'].some(
+      (key) => key in diff.after
+    );
+    if (touchesCrew && !existing.is_draft) {
+      await notifyShiftChange(db, {
+        change: diff.after.status === 'cancelled' ? 'cancelled' : 'updated',
+        shift,
+        staffIds: await assigneesOf(db, shift.id),
+        detail: summarizeDiff(diff),
+        actorEmail: actor.email,
+      });
+    }
   }
 
   // Editing an AI draft accepts it — the admin's adjusted version goes live
@@ -182,6 +197,9 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (fetchError) return json({ error: fetchError.message }, 500);
   if (!existing) return json({ error: 'Shift not found' }, 404);
 
+  // Who was on it, read before the delete cascades their assignments away.
+  const assignees = existing.is_draft ? [] : await assigneesOf(db, id);
+
   // Hard delete (assignments cascade) — for mistakes. Cancelling a real shift
   // that people were scheduled for should PATCH status instead, so the record
   // survives.
@@ -197,6 +215,12 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     action: 'delete',
     summary: `Deleted shift ${describeShift(shift)} (${timeWindow(shift)})`,
     details: { before: shift },
+  });
+  await notifyShiftChange(db, {
+    change: 'deleted',
+    shift,
+    staffIds: assignees,
+    actorEmail: actorFromGate(gate).email,
   });
 
   return json({ ok: true });
