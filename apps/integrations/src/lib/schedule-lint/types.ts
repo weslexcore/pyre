@@ -125,8 +125,14 @@ export interface DayWindow {
   close: string;
 }
 
-/** null = closed that day. */
-export type OpeningHours = Record<DayKey, DayWindow | null>;
+/**
+ * The blocks Pyre is open on one day, earliest first and non-overlapping. A
+ * split day (a morning block and an evening block, as Thursday runs) has two;
+ * an empty list is a closed day.
+ */
+export type DayWindows = DayWindow[];
+
+export type OpeningHours = Record<DayKey, DayWindows>;
 
 /**
  * One editable setting on a rule, as the admin form renders it:
@@ -136,7 +142,7 @@ export type OpeningHours = Record<DayKey, DayWindow | null>;
  *   type           — one session type
  *   types          — a set of session types (empty allowed)
  *   durations      — one or more lengths in minutes, each within [min, max]
- *   opening-hours  — a week of open/close windows
+ *   opening-hours  — a week of open/close blocks, a day at a time
  */
 export type ParamFieldType =
   | 'number'

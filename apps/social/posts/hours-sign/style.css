@@ -71,6 +71,11 @@
   white-space: nowrap;
 }
 
+/* Split days (a morning block and an evening block) stack their ranges. */
+.hours-sign__row dd span {
+  display: block;
+}
+
 .hours-sign__note {
   font-family: var(--font-mono);
   font-size: 44px;

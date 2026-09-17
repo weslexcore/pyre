@@ -84,21 +84,33 @@ describe('normalizeParams', () => {
 
   it('validates a week of opening hours', () => {
     const hours = def('opening-hours');
+    // A bare window object is what rows saved before split days hold.
     const ok = normalizeParams(hours, {
-      days: { wed: { open: '16:00', close: '20:00' }, sat: '' },
+      days: {
+        wed: { open: '16:00', close: '20:00' },
+        thu: [
+          { open: '16:00', close: '20:00' },
+          { open: '07:00', close: '10:00' },
+        ],
+        sat: '',
+      },
       types: [],
     });
     expect(ok).toMatchObject({
       ok: true,
       params: {
         days: {
-          sun: null,
-          mon: null,
-          tue: null,
-          wed: { open: '16:00', close: '20:00' },
-          thu: null,
-          fri: null,
-          sat: null,
+          sun: [],
+          mon: [],
+          tue: [],
+          wed: [{ open: '16:00', close: '20:00' }],
+          // Blocks come back earliest first, whatever order they were sent in.
+          thu: [
+            { open: '07:00', close: '10:00' },
+            { open: '16:00', close: '20:00' },
+          ],
+          fri: [],
+          sat: [],
         },
       },
     });
@@ -113,6 +125,19 @@ describe('normalizeParams', () => {
     ).toMatchObject({
       ok: false,
       error: 'Wed: closing time must be after opening time',
+    });
+    expect(
+      normalizeParams(hours, {
+        days: {
+          thu: [
+            { open: '07:00', close: '17:00' },
+            { open: '16:00', close: '20:00' },
+          ],
+        },
+      })
+    ).toMatchObject({
+      ok: false,
+      error: 'Thu: open blocks must not overlap',
     });
   });
 
@@ -183,17 +208,22 @@ describe('summarizeParams', () => {
     expect(
       summarizeParams(def('opening-hours'), {
         days: {
-          sun: null,
-          mon: null,
-          tue: null,
-          wed: { open: '16:00', close: '20:00' },
-          thu: null,
-          fri: null,
-          sat: { open: '10:00', close: '16:00' },
+          sun: [],
+          mon: [],
+          tue: [],
+          wed: [{ open: '16:00', close: '20:00' }],
+          thu: [
+            { open: '07:00', close: '10:00' },
+            { open: '16:00', close: '20:00' },
+          ],
+          fri: [],
+          sat: [{ open: '10:00', close: '16:00' }],
         },
         types: ['open hours'],
       })
-    ).toBe('Wed 4:00 PM–8:00 PM · Sat 10:00 AM–4:00 PM · Only check these types: open hours');
+    ).toBe(
+      'Wed 4:00 PM–8:00 PM · Thu 7:00 AM–10:00 AM, 4:00 PM–8:00 PM · Sat 10:00 AM–4:00 PM · Only check these types: open hours'
+    );
     expect(
       summarizeParams(def('duration-variants'), { type: 'social', durations: [60, 120, 180] })
     ).toContain('Lengths offered: 1 hour, 2 hours, 3 hours');
