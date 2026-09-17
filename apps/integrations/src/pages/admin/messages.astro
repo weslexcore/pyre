@@ -1,0 +1,11 @@
+---
+// Messages from the admins to the team. Open to anyone with dashboard
+// access; which messages they see is decided per message by its audience
+// (/api/admin/messages applies lib/messages/access on every request).
+import { MessagesIndex } from '@/components/admin/MessagesIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Messages" subtitle="Announcements and conversations from the admins">
+  <MessagesIndex client:load />
+</AdminLayout>

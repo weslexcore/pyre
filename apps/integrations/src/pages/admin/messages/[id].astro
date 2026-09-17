@@ -1,0 +1,49 @@
+---
+// One message and its thread. Loaded here so the island paints with the
+// conversation in place, and so opening the page marks the viewer's
+// notifications about it read. /api/admin/messages stays the security
+// boundary for every mutation; the middleware has already validated the
+// session and resolved dashboard access for this request.
+import { MessageThread } from '@/components/admin/MessageThread';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { getDb } from '@/lib/db';
+import { loadMessageForViewer, type MessageThreadPayload } from '@/lib/messages/store';
+import { markSourceRead } from '@/lib/notifications/notify';
+import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { getSopRole } from '@/lib/sops/role';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const id = Astro.params.id ?? '';
+const access = Astro.locals.adminAccess ?? null;
+const email = Astro.locals.adminUser?.email ?? null;
+
+let title = 'Message';
+let initial: MessageThreadPayload | null = null;
+let initialError: string | null = null;
+let viewer: SopViewer = { role: 'staff', email: normalizeEmail(email) };
+
+const db = getDb();
+if (!UUID_RE.test(id)) {
+  initialError = 'Message not found';
+  Astro.response.status = 404;
+} else if (db && access) {
+  viewer = { role: await getSopRole(email, access), email: normalizeEmail(email) };
+  const result = await loadMessageForViewer(db, viewer, id);
+  if (result.ok) {
+    initial = result.thread;
+    title = result.thread.message.title;
+    if (viewer.email) await markSourceRead(db, viewer.email, 'admin_message', id);
+  } else {
+    initialError = result.error;
+    Astro.response.status = result.status;
+  }
+} else if (!db) {
+  initialError = 'Storage unavailable';
+  Astro.response.status = 503;
+}
+---
+
+<AdminLayout title={title} subtitle="Message from the admins">
+  <MessageThread client:load initial={initial} initialError={initialError} viewer={viewer} />
+</AdminLayout>

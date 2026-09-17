@@ -18,10 +18,12 @@ import {
   planShiftSync,
   type SyncShiftInput,
   syncRange,
+  timeToMinutes,
   utcToEastern,
 } from '@pyre/schedule-core';
 import { getDb } from '@/lib/db';
 import { fetchAppointmentReservations, fetchHostSessions } from '@/lib/momence/host-api';
+import { assigneesOf, notifyShiftChange } from '@/lib/notifications/schedule';
 import { type ChangeActor, logScheduleChange, SYNC_ACTOR } from '@/lib/schedule/change-log';
 
 const DAY_MIN = 24 * 60;
@@ -123,7 +125,7 @@ export async function syncShifts(
   const { data: shiftRows, error: shiftsError } = await db
     .from('shifts')
     .select(
-      'id, shift_date, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes'
+      'id, shift_date, label, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes'
     )
     .eq('is_draft', false)
     .gte('shift_date', rangeStart)
@@ -197,6 +199,40 @@ export async function syncShifts(
       })
       .eq('id', update.shiftId);
     if (error) throw new Error(error.message);
+  }
+
+  // A shift whose times Momence moved has a crew that needs to know; the
+  // planner only cancels unstaffed shifts, and flags are for the admins.
+  // An update can also be titles-only (a session renamed, or one added to a
+  // day already at the right hours) — nothing has moved for the crew there,
+  // so the times have to have actually changed before anyone is told.
+  const shiftById = new Map((shiftRows ?? []).map((s) => [s.id as string, s]));
+  for (const update of plan.update) {
+    const row = shiftById.get(update.shiftId);
+    if (!row) continue;
+    // Compared in minutes, not as text: the column reads back as '09:00:00'
+    // and the planner writes '09:00', so a string check would never match.
+    if (
+      timeToMinutes(row.starts_at as string) === timeToMinutes(update.startsAt) &&
+      timeToMinutes(row.ends_at as string) === timeToMinutes(update.endsAt)
+    ) {
+      continue;
+    }
+    const staffIds = await assigneesOf(db, update.shiftId);
+    if (staffIds.length === 0) continue;
+    await notifyShiftChange(db, {
+      change: 'updated',
+      shift: {
+        id: row.id as string,
+        label: row.label as string,
+        shift_date: row.shift_date as string,
+        starts_at: update.startsAt,
+        ends_at: update.endsAt,
+      },
+      staffIds,
+      detail: `Momence moved it to ${update.startsAt.slice(0, 5)}–${update.endsAt.slice(0, 5)}`,
+      actorEmail: null,
+    });
   }
 
   for (const cancel of plan.cancel) {

@@ -5,7 +5,7 @@
 
 import type { DashboardAccess } from '@/lib/auth/access';
 import { listStaff } from '@/lib/auth/access';
-import type { SopRole } from './levels';
+import { roleForStaffRow, type SopRole } from './levels';
 
 export async function getSopRole(email: string | null, access: DashboardAccess): Promise<SopRole> {
   if (access.isAdmin) return 'admin';
@@ -15,5 +15,5 @@ export async function getSopRole(email: string | null, access: DashboardAccess):
 
   const rows = await listStaff();
   const row = rows?.find((r) => r.email === normalized);
-  return row?.is_shift_lead ? 'shift_lead' : 'staff';
+  return row ? roleForStaffRow(row) : 'staff';
 }

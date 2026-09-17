@@ -8,6 +8,7 @@ import { timeToMinutes, utcToEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, SubRequestRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { notifySubEvent } from '@/lib/notifications/schedule';
 import { type ChangeActor, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
 
 /** "Thursday, August 14" from YYYY-MM-DD (dates are already ET wall-clock). */
@@ -184,6 +185,17 @@ export async function claimSubRequest(
     action: 'create',
     summary: `Assigned ${claimerName} to ${shiftDesc} (sub for ${requesterName})`,
     details: { before: removed ?? null, after: assignment },
+  });
+
+  // Same news in the dashboard: the requester, and the admins.
+  await notifySubEvent(db, {
+    event: 'claimed',
+    subId: claimed.id,
+    shift,
+    window: sub,
+    requesterStaffId: sub.requester_staff_id,
+    claimerStaffId: claimerId,
+    actorEmail: actor.email,
   });
 
   // Close the loop for the admins — best-effort per recipient.
