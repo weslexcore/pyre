@@ -18,6 +18,7 @@ import {
   planShiftSync,
   type SyncShiftInput,
   syncRange,
+  timeToMinutes,
   utcToEastern,
 } from '@pyre/schedule-core';
 import { getDb } from '@/lib/db';
@@ -202,10 +203,21 @@ export async function syncShifts(
 
   // A shift whose times Momence moved has a crew that needs to know; the
   // planner only cancels unstaffed shifts, and flags are for the admins.
+  // An update can also be titles-only (a session renamed, or one added to a
+  // day already at the right hours) — nothing has moved for the crew there,
+  // so the times have to have actually changed before anyone is told.
   const shiftById = new Map((shiftRows ?? []).map((s) => [s.id as string, s]));
   for (const update of plan.update) {
     const row = shiftById.get(update.shiftId);
     if (!row) continue;
+    // Compared in minutes, not as text: the column reads back as '09:00:00'
+    // and the planner writes '09:00', so a string check would never match.
+    if (
+      timeToMinutes(row.starts_at as string) === timeToMinutes(update.startsAt) &&
+      timeToMinutes(row.ends_at as string) === timeToMinutes(update.endsAt)
+    ) {
+      continue;
+    }
     const staffIds = await assigneesOf(db, update.shiftId);
     if (staffIds.length === 0) continue;
     await notifyShiftChange(db, {
