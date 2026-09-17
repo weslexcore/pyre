@@ -221,7 +221,7 @@ describe('opening-hours', () => {
     const findings = run(openingHours, [
       event({ id: 1, dateTime: et('2026-09-16', '18:00') }), // Wed 6–7pm: fine
       event({ id: 2, dateTime: et('2026-09-14', '18:00') }), // Mon: closed
-      event({ id: 3, dateTime: et('2026-09-17', '15:00') }), // Thu 3pm: before 4pm open
+      event({ id: 3, dateTime: et('2026-09-17', '15:00') }), // Thu 3pm: in the split-day gap
       event({ id: 4, dateTime: et('2026-09-17', '19:30'), duration: 60 }), // Thu ends 8:30 > 8pm
       event({ id: 5, dateTime: et('2026-09-18', '20:00') }), // Fri 8–9pm: fine (closes 9)
       event({ id: 6, tags: ['Special Event'], dateTime: et('2026-09-14', '20:00') }), // never checked
@@ -229,10 +229,25 @@ describe('opening-hours', () => {
     ]);
     expect(findings.map((f) => [f.session?.id, f.message])).toEqual([
       [2, 'On a Monday, when Pyre is closed'],
-      [3, 'Starts before Thursday opening at 4:00 PM'],
+      [3, 'Starts between the 10:00 AM close and the 4:00 PM open on Thursday'],
       [4, 'Runs past Thursday close at 8:00 PM'],
     ]);
     expect(findings[0]).toMatchObject({ rule: 'opening-hours', severity: 'fix', key: 'hours:2' });
+  });
+
+  it('checks each block of a split day on its own', () => {
+    // Thursday opens 7–10am and again 4–8pm in the rule's default hours.
+    const findings = run(openingHours, [
+      event({ id: 1, dateTime: et('2026-09-17', '08:00') }), // inside the morning block
+      event({ id: 2, dateTime: et('2026-09-17', '06:00') }), // before the first open
+      event({ id: 3, dateTime: et('2026-09-17', '09:30') }), // ends 10:30, past the morning close
+      event({ id: 4, dateTime: et('2026-09-17', '21:00') }), // after the last close
+    ]);
+    expect(findings.map((f) => [f.session?.id, f.message])).toEqual([
+      [2, 'Starts before Thursday opening at 7:00 AM'],
+      [3, 'Runs past Thursday close at 10:00 AM'],
+      [4, 'Starts after Thursday close at 8:00 PM'],
+    ]);
   });
 
   it('checks only the chosen types, and a session over midnight is past close', () => {
@@ -296,7 +311,7 @@ describe('expected-capacity', () => {
 });
 
 describe('duration-variants', () => {
-  // Thursday Sep 17, open 16:00–20:00 in the rule's default hours.
+  // Thursday Sep 17, open 7:00–10:00 and 16:00–20:00 in the rule's default hours.
   const at = (time: string, over: Partial<MomenceEvent> = {}): MomenceEvent =>
     event({ dateTime: et('2026-09-17', time), ...over });
 
@@ -330,9 +345,13 @@ describe('duration-variants', () => {
   it('stays quiet when the missing length would not fit', () => {
     // 19:00 + 2h runs an hour past the 20:00 close.
     expect(run(durationVariants, [at('19:00')])).toEqual([]);
-    // Monday is closed, and 15:00 is before Thursday's open.
+    // Monday is closed, and 15:00 sits in Thursday's split-day gap.
     expect(run(durationVariants, [event({ dateTime: et('2026-09-21', '18:00') })])).toEqual([]);
     expect(run(durationVariants, [at('15:00')])).toEqual([]);
+    // 9:00 is inside the morning block, which closes at 10:00 — no room for 2h.
+    expect(run(durationVariants, [at('09:00')])).toEqual([]);
+    // 8:00 has the room, so the missing 2-hour twin is still asked for.
+    expect(run(durationVariants, [at('08:00')])).toHaveLength(1);
   });
 
   it('stays quiet when a special event is in the way', () => {

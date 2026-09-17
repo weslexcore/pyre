@@ -14,6 +14,7 @@ import {
   DAY_KEYS,
   type DayKey,
   type DayWindow,
+  type DayWindows,
   NOTE_MAX,
   type OpeningHours,
   type ParamField,
@@ -41,14 +42,33 @@ export type ParamsResult =
   | { ok: true; params: Record<string, unknown> }
   | { ok: false; error: string };
 
-function normalizeWindow(raw: unknown, day: string): DayWindow | null | string {
-  if (raw === null || raw === undefined || raw === '') return null;
-  if (typeof raw !== 'object') return `${day}: expected open and close times`;
+function normalizeWindow(raw: unknown, day: string): DayWindow | string {
+  if (typeof raw !== 'object' || raw === null) return `${day}: expected open and close times`;
   const { open, close } = raw as Record<string, unknown>;
   if (typeof open !== 'string' || !HHMM.test(open)) return `${day}: opening time must be HH:MM`;
   if (typeof close !== 'string' || !HHMM.test(close)) return `${day}: closing time must be HH:MM`;
   if (close <= open) return `${day}: closing time must be after opening time`;
   return { open, close };
+}
+
+/**
+ * One day's open blocks. A closed day is null/absent/empty; a single window
+ * object is still accepted so rows saved before split days keep validating.
+ */
+function normalizeDay(raw: unknown, day: string): DayWindows | string {
+  if (raw === null || raw === undefined || raw === '') return [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  const blocks: DayWindow[] = [];
+  for (const item of list) {
+    const window = normalizeWindow(item, day);
+    if (typeof window === 'string') return window;
+    blocks.push(window);
+  }
+  blocks.sort((a, b) => a.open.localeCompare(b.open));
+  for (let i = 1; i < blocks.length; i++) {
+    if (blocks[i].open < blocks[i - 1].close) return `${day}: open blocks must not overlap`;
+  }
+  return blocks;
 }
 
 function normalizeField(field: ParamField, raw: unknown): { value: unknown } | { error: string } {
@@ -123,9 +143,9 @@ function normalizeField(field: ParamField, raw: unknown): { value: unknown } | {
       const source = raw as Record<string, unknown>;
       const days = {} as OpeningHours;
       for (const day of DAY_KEYS) {
-        const window = normalizeWindow(source[day], DAY_SHORT[day]);
-        if (typeof window === 'string') return { error: window };
-        days[day] = window;
+        const blocks = normalizeDay(source[day], DAY_SHORT[day]);
+        if (typeof blocks === 'string') return { error: blocks };
+        days[day] = blocks;
       }
       return { value: days };
     }
@@ -252,11 +272,11 @@ export function summarizeParams(def: RuleDefinition, params: Record<string, unkn
       }
       case 'opening-hours': {
         const days = value as OpeningHours;
-        const open = DAY_KEYS.filter((d) => days?.[d]).map(
+        const open = DAY_KEYS.filter((d) => days?.[d]?.length).map(
           (d) =>
-            `${DAY_SHORT[d]} ${formatClockLabel((days[d] as DayWindow).open)}–${formatClockLabel(
-              (days[d] as DayWindow).close
-            )}`
+            `${DAY_SHORT[d]} ${days[d]
+              .map((w) => `${formatClockLabel(w.open)}–${formatClockLabel(w.close)}`)
+              .join(', ')}`
         );
         parts.push(open.length ? open.join(' · ') : 'Closed every day');
         break;

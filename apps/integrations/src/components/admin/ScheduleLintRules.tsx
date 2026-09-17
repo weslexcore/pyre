@@ -17,6 +17,7 @@ import {
   DAY_KEYS,
   type DayKey,
   type DayWindow,
+  type DayWindows,
   type Finding,
   NOTE_MAX,
   type OpeningHours,
@@ -205,43 +206,83 @@ function ParamInput({
     }
     case 'opening-hours': {
       const days = (value ?? {}) as Partial<OpeningHours>;
-      const setDay = (day: DayKey, next: DayWindow | null) => onChange({ ...days, [day]: next });
+      // A row saved before split days stored one window object per day.
+      const blocksOf = (day: DayKey): DayWindows => {
+        const raw = days[day] as DayWindows | DayWindow | null | undefined;
+        if (!raw) return [];
+        return Array.isArray(raw) ? raw : [raw];
+      };
+      const setDay = (day: DayKey, next: DayWindows) => onChange({ ...days, [day]: next });
+      const setBlock = (day: DayKey, index: number, next: DayWindow) =>
+        setDay(
+          day,
+          blocksOf(day).map((block, i) => (i === index ? next : block))
+        );
       return (
         <div id={id} className="space-y-1.5">
           {DAY_KEYS.map((day) => {
-            const window = days[day] ?? null;
+            const blocks = blocksOf(day);
             return (
-              <div key={day} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="w-24 text-white/70">{DAY_LABEL[day]}</span>
-                <label className="flex items-center gap-1.5 text-xs text-white/50">
+              <div key={day} className="flex flex-wrap items-start gap-2 text-sm">
+                <span className="w-24 pt-1 text-white/70">{DAY_LABEL[day]}</span>
+                <label className="flex items-center gap-1.5 pt-1 text-xs text-white/50">
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-[var(--pyre-red)]"
-                    checked={window !== null}
+                    checked={blocks.length > 0}
                     onChange={(e) =>
-                      setDay(day, e.target.checked ? { open: '16:00', close: '20:00' } : null)
+                      setDay(day, e.target.checked ? [{ open: '16:00', close: '20:00' }] : [])
                     }
                   />
                   Open
                 </label>
-                {window && (
-                  <>
-                    <input
-                      type="time"
-                      aria-label={`${DAY_LABEL[day]} opens`}
-                      className={`${inputClass} w-auto`}
-                      value={window.open}
-                      onChange={(e) => setDay(day, { ...window, open: e.target.value })}
-                    />
-                    <span className="text-white/40">to</span>
-                    <input
-                      type="time"
-                      aria-label={`${DAY_LABEL[day]} closes`}
-                      className={`${inputClass} w-auto`}
-                      value={window.close}
-                      onChange={(e) => setDay(day, { ...window, close: e.target.value })}
-                    />
-                  </>
+                {blocks.length > 0 && (
+                  <div className="space-y-1.5">
+                    {blocks.map((block, index) => (
+                      // Blocks are positional and unnamed; the index is the key.
+                      // biome-ignore lint/suspicious/noArrayIndexKey: no stable id
+                      <div key={index} className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="time"
+                          aria-label={`${DAY_LABEL[day]} opens${index > 0 ? ` (block ${index + 1})` : ''}`}
+                          className={`${inputClass} w-auto`}
+                          value={block.open}
+                          onChange={(e) => setBlock(day, index, { ...block, open: e.target.value })}
+                        />
+                        <span className="text-white/40">to</span>
+                        <input
+                          type="time"
+                          aria-label={`${DAY_LABEL[day]} closes${index > 0 ? ` (block ${index + 1})` : ''}`}
+                          className={`${inputClass} w-auto`}
+                          value={block.close}
+                          onChange={(e) =>
+                            setBlock(day, index, { ...block, close: e.target.value })
+                          }
+                        />
+                        {blocks.length > 1 && (
+                          <button
+                            type="button"
+                            className="text-xs text-white/50 underline underline-offset-2 hover:text-white"
+                            onClick={() =>
+                              setDay(
+                                day,
+                                blocks.filter((_, i) => i !== index)
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="text-xs text-white/50 underline underline-offset-2 hover:text-white"
+                      onClick={() => setDay(day, [...blocks, { open: '16:00', close: '20:00' }])}
+                    >
+                      Add a block
+                    </button>
+                  </div>
                 )}
               </div>
             );

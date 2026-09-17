@@ -338,10 +338,19 @@ export interface PolicyDocument {
 // Location content types
 // ------------------------------------------------------------
 
-export interface DayHours {
-  day: string;
+/** A single open-to-close block, 24h "HH:MM" wall clock in America/New_York. */
+export interface HoursWindow {
   open: string;
   close: string;
+}
+
+export interface DayHours {
+  /** Short display label, e.g. "THURS". */
+  day: string;
+  /** schema.org day name, e.g. "Thursday" — used by the LocalBusiness JSON-LD. */
+  dayOfWeek: string;
+  /** One window on most days; a split day (morning and evening) has two. */
+  windows: HoursWindow[];
 }
 
 export interface LocationContent {
