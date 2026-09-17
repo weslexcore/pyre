@@ -238,6 +238,7 @@ describe('planShiftSync', () => {
     sync_flag: null,
     is_draft: false,
     assignmentCount: 0,
+    notes: 'Social Sauna',
     ...over,
   });
 
@@ -260,8 +261,46 @@ describe('planShiftSync', () => {
         startsAt: '14:30',
         endsAt: '20:30',
         sessionRefs: [{ type: 'session', id: 1 }],
+        notes: 'Social Sauna',
       },
     ]);
+  });
+
+  it('refreshes notes when a session was renamed or added under a matching window', () => {
+    // A special event dropped into an evening of Open Hours: same window,
+    // same refs once matched, but the shift still reads the old title.
+    const plan = planShiftSync(
+      [window({ titles: ['Open Hours', 'Harvest Moon Sauna Party'] })],
+      [shift({ notes: 'Open Hours' })]
+    );
+    expect(plan.update).toEqual([
+      {
+        shiftId: 'shift-1',
+        startsAt: '15:00',
+        endsAt: '20:30',
+        sessionRefs: [{ type: 'session', id: 1 }],
+        notes: 'Open Hours, Harvest Moon Sauna Party',
+      },
+    ]);
+  });
+
+  it('leaves a shift alone when its notes only repeat a title', () => {
+    // Rows written before titles were deduped repeat each one; that is not
+    // drift, and must not churn an update on every hourly run.
+    const plan = planShiftSync(
+      [window({ titles: ['Open Hours'] })],
+      [shift({ notes: 'Open Hours, Open Hours, Open Hours' })]
+    );
+    expect(plan.update).toEqual([]);
+  });
+
+  it('never rewrites notes on a sync_locked shift', () => {
+    const plan = planShiftSync(
+      [window({ titles: ['Open Hours', 'Harvest Moon Sauna Party'] })],
+      [shift({ notes: 'Open Hours', sync_locked: true })]
+    );
+    expect(plan.update).toEqual([]);
+    expect(plan.flag).toEqual([]);
   });
 
   it('flags instead of updating when the shift is sync_locked', () => {

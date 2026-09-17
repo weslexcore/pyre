@@ -175,24 +175,49 @@ export function splitLongWindow(
   ];
 }
 
+/** The shifts.notes column's cap. */
+const NOTES_MAX_LENGTH = 200;
+
 /**
- * Notes on a Momence-sourced shift are the window's comma-joined session
- * titles, so the schedule should read "Open Hours, Yoga" however many slots of
- * each the day holds. Titles are deduped at derivation now, but rows written
- * before that still repeat — collapse them on the way to the screen. Manual
- * notes are free text and pass through untouched.
+ * Notes for a Momence-sourced shift: the window's distinct session titles,
+ * comma-joined, so the schedule reads "Open Hours, Yoga" however many slots
+ * of each the day holds. The one place that shape is defined — the sync
+ * writes it on create AND on update, so a special event added to a day the
+ * sync had already shifted still reaches the board.
+ */
+export function notesForTitles(titles: string[]): string | null {
+  const joined = [...new Set(titles.map((t) => t.trim()).filter(Boolean))].join(', ');
+  return joined ? joined.slice(0, NOTES_MAX_LENGTH) : null;
+}
+
+/** Drop repeated titles from a notes string — rows written before dedup repeat them. */
+function collapseNotes(notes: string): string {
+  const seen = new Set<string>();
+  for (const part of notes.split(',')) {
+    const title = part.trim();
+    if (title) seen.add(title);
+  }
+  return seen.size > 0 ? [...seen].join(', ') : notes;
+}
+
+/**
+ * Same session titles? Compared through collapseNotes on both sides so a
+ * legacy row repeating a title isn't rewritten on every sync run.
+ */
+export function sameShiftNotes(a: string | null, b: string | null): boolean {
+  return collapseNotes(a ?? '') === collapseNotes(b ?? '');
+}
+
+/**
+ * Notes as the screen should read them: collapsed for a Momence shift (see
+ * collapseNotes). Manual notes are free text and pass through untouched.
  */
 export function formatShiftNotes(shift: {
   source: 'momence' | 'manual';
   notes: string | null;
 }): string | null {
   if (!shift.notes || shift.source !== 'momence') return shift.notes;
-  const seen = new Set<string>();
-  for (const part of shift.notes.split(',')) {
-    const title = part.trim();
-    if (title) seen.add(title);
-  }
-  return seen.size > 0 ? [...seen].join(', ') : shift.notes;
+  return collapseNotes(shift.notes);
 }
 
 // --- Sync range: which instants to fetch, which shift dates to reconcile ---
@@ -249,12 +274,20 @@ export interface SyncShiftInput {
   sync_flag: 'sessions_cancelled' | 'times_changed' | null;
   is_draft: boolean;
   assignmentCount: number;
+  /** Current notes, so the planner can spot a session list that changed name. */
+  notes: string | null;
 }
 
 export interface SyncPlan {
   create: CoverageWindow[];
-  /** Unlocked momence shifts whose window moved — safe in-place updates. */
-  update: Array<{ shiftId: string; startsAt: string; endsAt: string; sessionRefs: CoverageWindow['sessionRefs'] }>;
+  /** Unlocked momence shifts whose window, sessions, or titles moved — safe in-place updates. */
+  update: Array<{
+    shiftId: string;
+    startsAt: string;
+    endsAt: string;
+    sessionRefs: CoverageWindow['sessionRefs'];
+    notes: string | null;
+  }>;
   /** Unassigned, unlocked momence shifts whose sessions all disappeared. */
   cancel: Array<{ shiftId: string; reason: string }>;
   /** Divergence on staffed/locked shifts — admin decides, nothing auto-changes. */
@@ -308,14 +341,19 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
 
     const startsAt = minutesToTime(window.startMin);
     const endsAt = minutesToTime(window.endMin);
+    const notes = notesForTitles(window.titles);
     const timesMatch =
       timeToMinutes(match.starts_at) === window.startMin &&
       timeToMinutes(match.ends_at) === window.endMin;
     const refsMatch =
       match.momence_session_ids.length === window.sessionRefs.length &&
       match.momence_session_ids.every((ref) => windowRefs.has(refKey(ref)));
+    // Titles drift on their own: a special event added to an evening the sync
+    // had already shifted keeps the window and (once matched) the refs, so
+    // without this the shift would read "Open Hours" all the way to the day.
+    const notesMatch = sameShiftNotes(match.notes, notes);
 
-    if (timesMatch && refsMatch) {
+    if (timesMatch && refsMatch && notesMatch) {
       if (match.sync_flag) plan.clearFlag.push(match.id);
       continue;
     }
@@ -325,7 +363,13 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
       }
       continue;
     }
-    plan.update.push({ shiftId: match.id, startsAt, endsAt, sessionRefs: window.sessionRefs });
+    plan.update.push({
+      shiftId: match.id,
+      startsAt,
+      endsAt,
+      sessionRefs: window.sessionRefs,
+      notes,
+    });
   }
 
   // Shifts whose sessions all disappeared (deleted or cancelled in Momence).

@@ -14,6 +14,7 @@ import {
   type CoverageEvent,
   deriveCoverageWindows,
   minutesToTime,
+  notesForTitles,
   planShiftSync,
   type SyncShiftInput,
   syncRange,
@@ -176,7 +177,7 @@ export async function syncShifts(
         staff_needed: w.staffNeeded,
         source: 'momence',
         momence_session_ids: w.sessionRefs,
-        notes: w.titles.join(', ').slice(0, 200) || null,
+        notes: notesForTitles(w.titles),
       }))
     );
     if (error) throw new Error(error.message);
@@ -189,6 +190,10 @@ export async function syncShifts(
         starts_at: update.startsAt,
         ends_at: update.endsAt,
         momence_session_ids: update.sessionRefs,
+        // Titles too: a session added to a day the sync already shifted
+        // (a special event dropped into an evening of Open Hours) has to
+        // reach the notes, or the board keeps reading "Open Hours".
+        notes: update.notes,
         sync_flag: null,
       })
       .eq('id', update.shiftId);

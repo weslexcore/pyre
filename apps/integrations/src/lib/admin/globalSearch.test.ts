@@ -28,6 +28,7 @@ describe('searchablePages', () => {
     expect(hrefs).toContain('/admin/ask/log');
     expect(hrefs).toContain('/admin/campaigns/new');
     expect(hrefs).toContain('/admin/campaigns/performance');
+    expect(hrefs).toContain('/admin/campaigns/shortlinks');
     expect(pages.find((page) => page.href === '/admin/schedule/hours')?.hint).toBe(
       'Staff Schedule'
     );

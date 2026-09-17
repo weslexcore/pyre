@@ -461,6 +461,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     keywords: ['report', 'clicks', 'bookings', 'posthog', 'attribution'],
   },
   {
+    href: '/admin/campaigns/shortlinks',
+    title: 'Short Links',
+    parent: '/admin/campaigns',
+    keywords: ['short link', 'shortlink', 'url', 'redirect', 'alias', 'qr', 'pyresauna.com/s'],
+  },
+  {
     href: '/admin/guests/sessions',
     title: "Who's Coming",
     parent: '/admin/guests',
