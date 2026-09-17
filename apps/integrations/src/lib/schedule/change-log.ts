@@ -16,7 +16,9 @@ export type ChangeEntityType =
   | 'proposal'
   | 'sync'
   | 'request'
-  | 'sub_request';
+  | 'sub_request'
+  /** The standing instructions the AI drafter carries into every run. */
+  | 'agent_instructions';
 
 export type ChangeAction =
   | 'create'

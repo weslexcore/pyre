@@ -5,6 +5,7 @@ export * from "./hours";
 export * from "./insights";
 export * from "./leads";
 export * from "./rest";
+export * from "./standing-instructions";
 export * from "./stipends";
 export * from "./types";
 export * from "./tz";

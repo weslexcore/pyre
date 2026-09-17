@@ -22,6 +22,7 @@ import {
   findRestViolations,
   firstTentativeDate,
   formatShiftNotes,
+  MAX_STANDING_INSTRUCTIONS_LENGTH,
   minutesToTime,
   mismatchedDutyPairs,
   missingShiftLead,
@@ -364,8 +365,16 @@ export function ScheduleBoard() {
   );
   // Manage-side people filter: whose shifts to show (empty = everyone).
   const [staffFilter, setStaffFilter] = useState<ReadonlySet<string>>(new Set());
-  // Admin-only panel with the employee-action toggles.
+  // Admin-only panel with the employee-action toggles and the drafting
+  // agent's standing instructions.
   const [showSettings, setShowSettings] = useState(false);
+  // The standing instructions the AI drafter carries into every run, fetched
+  // the first time the panel opens (they're admin-only, and most board loads
+  // never need them). `saved` is what the server has; `draft` is the
+  // textarea, so the Save button knows whether there is anything to save.
+  const [standingSaved, setStandingSaved] = useState<string | null>(null);
+  const [standingDraft, setStandingDraft] = useState('');
+  const [standingBusy, setStandingBusy] = useState(false);
 
   // What the API is asked for. The uncovered view starts its range on the
   // current week's Monday (not today) so this week's hours totals in the
@@ -430,6 +439,52 @@ export function ScheduleBoard() {
   const selfId = data?.selfStaffId ?? null;
   const settings = data?.settings ?? DEFAULT_SETTINGS;
   const pendingRequestCount = data?.pendingRequestCount ?? 0;
+
+  // Pull the standing instructions once, when an admin first opens the panel.
+  // A failure leaves them unloaded rather than erroring the board — the
+  // textarea stays disabled and the next open retries.
+  useEffect(() => {
+    if (!showSettings || !isAdmin || standingSaved !== null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/schedule-instructions');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { instructions: { content: string } };
+        if (cancelled) return;
+        setStandingSaved(body.instructions.content);
+        setStandingDraft(body.instructions.content);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load instructions');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSettings, isAdmin, standingSaved]);
+
+  // Saved on its own rather than through `run` — the standing instructions
+  // don't change anything on the board, so there's nothing to reload.
+  const saveStandingInstructions = async () => {
+    setStandingBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/schedule-instructions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: standingDraft }),
+      });
+      const body = (await res.json()) as { instructions?: { content: string }; error?: string };
+      if (!res.ok || !body.instructions) throw new Error(body.error ?? `HTTP ${res.status}`);
+      // The server sanitises, so echo its version back into the textarea.
+      setStandingSaved(body.instructions.content);
+      setStandingDraft(body.instructions.content);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save instructions');
+    } finally {
+      setStandingBusy(false);
+    }
+  };
   // Week and month lay days out as a calendar; the uncovered and requests
   // views are filtered work lists, so the calendar-only controls hide there.
   const calendarView = view === 'week' || view === 'month';
@@ -1137,6 +1192,59 @@ export function ScheduleBoard() {
             Employees can request a sub (logs time off, emails the admins, and emails everyone
             available a one-click link to take the shift)
           </label>
+
+          <div className="space-y-2 border-t border-white/10 pt-3">
+            <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+              Standing instructions for the AI drafter
+            </p>
+            <p className="font-mono text-xs text-white/50">
+              The requirements that hold every week — they go into every draft the agent makes,
+              including the Monday cron run. The note you type when you hit Draft is for that run
+              only, and wins where the two disagree. Availability and staffing limits still beat
+              both.
+            </p>
+            <textarea
+              id="standing-instructions"
+              rows={6}
+              maxLength={MAX_STANDING_INSTRUCTIONS_LENGTH}
+              disabled={standingSaved === null || standingBusy}
+              className={inputClass}
+              placeholder={
+                standingSaved === null
+                  ? 'Loading…'
+                  : 'e.g. Wes never works Sundays. Saturday evenings always need two full-shift people plus a setup. Trainees are never the only lead on a shift.'
+              }
+              value={standingDraft}
+              onChange={(e) => setStandingDraft(e.target.value)}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => void saveStandingInstructions()}
+                disabled={standingSaved === null || standingBusy || standingDraft === standingSaved}
+              >
+                {standingBusy ? 'Saving…' : 'Save instructions'}
+              </button>
+              {standingSaved !== null && standingDraft !== standingSaved && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  onClick={() => setStandingDraft(standingSaved)}
+                  disabled={standingBusy}
+                >
+                  Discard changes
+                </button>
+              )}
+              <span className="font-mono text-xs text-white/40">
+                {standingSaved !== null && standingDraft === standingSaved
+                  ? standingSaved
+                    ? 'Saved — every draft from here on uses these.'
+                    : 'None set — drafts use the agent’s built-in rules only.'
+                  : `${MAX_STANDING_INSTRUCTIONS_LENGTH - standingDraft.length} characters left`}
+              </span>
+            </div>
+          </div>
         </section>
       )}
 

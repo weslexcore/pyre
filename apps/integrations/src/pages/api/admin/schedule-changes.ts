@@ -27,6 +27,7 @@ const ENTITY_TYPES: ChangeEntityType[] = [
   'sync',
   'request',
   'sub_request',
+  'agent_instructions',
 ];
 
 export const GET: APIRoute = async ({ cookies, url }) => {
