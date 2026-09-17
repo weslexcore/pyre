@@ -237,3 +237,19 @@ export interface ScheduleDraftMessageRow {
 	proposal_id: string | null;
 	created_at: string;
 }
+
+/**
+ * The single row of `schedule_agent_instructions` — the admin's standing
+ * scheduling instructions, folded into the drafting agent's system prompt on
+ * every run (see src/standing-instructions.ts).
+ */
+export interface ScheduleAgentInstructionsRow {
+	/** Singleton guard: always true, so there is exactly one row. */
+	id: boolean;
+	/** The standing instructions; empty string when the admin has cleared them. */
+	content: string;
+	/** Dashboard email of the admin who last saved them; null for the seeded row. */
+	updated_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
