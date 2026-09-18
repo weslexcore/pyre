@@ -23,17 +23,24 @@
 // under its text, so the parent shows where each subtask stands without
 // opening it.
 //
+// The tap that resolves the last item pops confetti over the page (Confetti),
+// once per checklist reaching the end: it fires on the same count the header
+// reads from, so it lands with the tap rather than with the server's answer,
+// and one that was already finished when the screen opened is history, not
+// news.
+//
 // Taps are never blocked: SopDocument applies them locally and queues the
 // server work, so `busy` only holds Discard while requests are still in
 // flight. Each task row is memoized — a tap re-renders the rows it changed,
 // not the whole document.
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/checklist';
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems, RunState } from '@/lib/sops/optimistic';
 import type { SwipeAction } from '@/lib/sops/swipe';
+import { Confetti } from './Confetti';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SopMarkdown } from './SopMarkdown';
 import { useRowSwipe } from './useRowSwipe';
@@ -377,6 +384,22 @@ export function ChecklistView({
   const finished = run !== null && run.status !== 'in_progress';
   const allDone = finished || (run !== null && total > 0 && done >= total);
 
+  // One burst each time a checklist reaches the end. What is watched is that
+  // state, not the run's id — a first tap shows an optimistic run whose id
+  // arrives later, and swapping the id in is not a second completion.
+  // `celebrated` starts undefined and is seeded by the first effect, so a
+  // checklist already complete on the first render (a reopened page, a peek
+  // at a finished one) is remembered rather than announced. Start again puts
+  // it back to false, which is what lets the next run pop.
+  const [burst, setBurst] = useState(0);
+  const celebrated = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    const was = celebrated.current;
+    celebrated.current = allDone;
+    if (was === undefined || was === allDone) return;
+    if (allDone) setBurst((n) => n + 1);
+  }, [allDone]);
+
   // Sub-checklist progress per task index, for the items that link to one.
   const linkedByTask = useMemo(() => {
     const map = new Map<number, LinkedProgress[]>();
@@ -427,127 +450,132 @@ export function ChecklistView({
   );
 
   return (
-    <div className="space-y-4">
-      {run && (
-        <div
-          className={`sticky ${STICKY_TOP[headerOffset]} z-30 space-y-2 rounded-lg border bg-[var(--pyre-black)] p-4 ${
-            allDone ? 'border-[var(--pyre-sage)]/60' : 'border-[var(--pyre-gold)]/40'
-          }`}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`font-mono text-xs uppercase tracking-wide ${
-                allDone ? 'text-[var(--pyre-sage)]' : 'text-[var(--pyre-gold)]'
-              }`}
-            >
-              {finished ? 'Completed' : allDone ? 'All items done' : 'Checklist in progress'}
-            </span>
-            <span className="font-mono text-xs text-white/60">
-              {done} of {total}
-              {skippedCount > 0 && ` · ${skippedCount} skipped`}
-            </span>
-            <span className="font-mono text-[10px] text-white/40">
-              {finished && run.ended_by && run.ended_at
-                ? `finished by ${personName(run.ended_by, people)} at ${formatTime(run.ended_at)}`
-                : `started by ${personName(run.started_by, people)} at ${formatTime(run.started_at)}`}
-            </span>
-            <span className="ml-auto flex gap-2">
-              {finished ? (
-                <button
-                  type="button"
-                  className={headerButtonClass}
-                  disabled={busy}
-                  onClick={onStartAgain}
-                >
-                  Start again
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={discardButtonClass}
-                  disabled={busy}
-                  onClick={onDiscard}
-                >
-                  Discard
-                </button>
-              )}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded bg-white/10">
-            <div
-              className={`h-full transition-all ${
-                allDone ? 'bg-[var(--pyre-sage)]' : 'bg-[var(--pyre-gold)]'
-              }`}
-              style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
-            />
-          </div>
-          {!allDone && (
-            <p className="font-mono text-[10px] text-white/40">
-              Check off or skip every item — the checklist finishes on its own.
-              {requiredLeft > 0 &&
-                ` ${requiredLeft} required item${requiredLeft === 1 ? '' : 's'} must be checked off.`}
-              {/* The swipe is worth pointing at, but only where there is a
-                  finger to do it with. */}
-              <span className="touch-only">
-                {' '}
-                Or swipe an item right to check it off, left to skip.
-              </span>
-            </p>
-          )}
-          {run.sop_version !== currentVersion && (
-            <p className="font-mono text-[10px] text-white/40">
-              Showing v{run.sop_version}, the version this run started with (the document has since
-              changed).
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
-        {parsed.segments.map((segment) => {
-          if (segment.kind === 'markdown') {
-            // Each prose chunk renders as its own SopMarkdown, which zeroes a
-            // leading heading's top margin (first:mt-0) — so section headers
-            // between task groups need their breathing room restored here.
-            const startsWithHeading = /^#{1,6}\s/.test(segment.content.trimStart());
-            return (
-              <div
-                key={`md-${segment.line}`}
-                className={startsWithHeading ? 'pt-8 first:pt-0' : ''}
+    // The confetti layer sits outside the stack: it is fixed to the viewport,
+    // and a child of space-y-4 would take a gap from it and be pushed down.
+    <>
+      <Confetti burst={burst} />
+      <div className="space-y-4">
+        {run && (
+          <div
+            className={`sticky ${STICKY_TOP[headerOffset]} z-30 space-y-2 rounded-lg border bg-[var(--pyre-black)] p-4 ${
+              allDone ? 'border-[var(--pyre-sage)]/60' : 'border-[var(--pyre-gold)]/40'
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <span
+                className={`font-mono text-xs uppercase tracking-wide ${
+                  allDone ? 'text-[var(--pyre-sage)]' : 'text-[var(--pyre-gold)]'
+                }`}
               >
-                <SopMarkdown
-                  content={segment.content}
-                  highlight={highlight}
-                  onSopLink={onSopLink}
-                />
-              </div>
+                {finished ? 'Completed' : allDone ? 'All items done' : 'Checklist in progress'}
+              </span>
+              <span className="font-mono text-xs text-white/60">
+                {done} of {total}
+                {skippedCount > 0 && ` · ${skippedCount} skipped`}
+              </span>
+              <span className="font-mono text-[10px] text-white/40">
+                {finished && run.ended_by && run.ended_at
+                  ? `finished by ${personName(run.ended_by, people)} at ${formatTime(run.ended_at)}`
+                  : `started by ${personName(run.started_by, people)} at ${formatTime(run.started_at)}`}
+              </span>
+              <span className="ml-auto flex gap-2">
+                {finished ? (
+                  <button
+                    type="button"
+                    className={headerButtonClass}
+                    disabled={busy}
+                    onClick={onStartAgain}
+                  >
+                    Start again
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={discardButtonClass}
+                    disabled={busy}
+                    onClick={onDiscard}
+                  >
+                    Discard
+                  </button>
+                )}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded bg-white/10">
+              <div
+                className={`h-full transition-all ${
+                  allDone ? 'bg-[var(--pyre-sage)]' : 'bg-[var(--pyre-gold)]'
+                }`}
+                style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
+              />
+            </div>
+            {!allDone && (
+              <p className="font-mono text-[10px] text-white/40">
+                Check off or skip every item — the checklist finishes on its own.
+                {requiredLeft > 0 &&
+                  ` ${requiredLeft} required item${requiredLeft === 1 ? '' : 's'} must be checked off.`}
+                {/* The swipe is worth pointing at, but only where there is a
+                    finger to do it with. */}
+                <span className="touch-only">
+                  {' '}
+                  Or swipe an item right to check it off, left to skip.
+                </span>
+              </p>
+            )}
+            {run.sop_version !== currentVersion && (
+              <p className="font-mono text-[10px] text-white/40">
+                Showing v{run.sop_version}, the version this run started with (the document has
+                since changed).
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
+          {parsed.segments.map((segment) => {
+            if (segment.kind === 'markdown') {
+              // Each prose chunk renders as its own SopMarkdown, which zeroes a
+              // leading heading's top margin (first:mt-0) — so section headers
+              // between task groups need their breathing room restored here.
+              const startsWithHeading = /^#{1,6}\s/.test(segment.content.trimStart());
+              return (
+                <div
+                  key={`md-${segment.line}`}
+                  className={startsWithHeading ? 'pt-8 first:pt-0' : ''}
+                >
+                  <SopMarkdown
+                    content={segment.content}
+                    highlight={highlight}
+                    onSopLink={onSopLink}
+                  />
+                </div>
+              );
+            }
+            const { task } = segment;
+            const check = checkByIndex.get(task.index);
+            const skipped = check?.skipped === true;
+            return (
+              <TaskRow
+                key={`task-${segment.line}`}
+                task={task}
+                checked={!!check && !skipped}
+                skipped={skipped}
+                locked={finished}
+                linked={linkedByTask.get(task.index) ?? NO_LINKED}
+                resolvedLabel={
+                  check
+                    ? `${skipped ? 'skipped by ' : ''}${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
+                    : null
+                }
+                highlight={highlight}
+                onSopLink={onSopLink}
+                onToggle={handleToggle}
+                onSkip={handleSkip}
+              />
             );
-          }
-          const { task } = segment;
-          const check = checkByIndex.get(task.index);
-          const skipped = check?.skipped === true;
-          return (
-            <TaskRow
-              key={`task-${segment.line}`}
-              task={task}
-              checked={!!check && !skipped}
-              skipped={skipped}
-              locked={finished}
-              linked={linkedByTask.get(task.index) ?? NO_LINKED}
-              resolvedLabel={
-                check
-                  ? `${skipped ? 'skipped by ' : ''}${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
-                  : null
-              }
-              highlight={highlight}
-              onSopLink={onSopLink}
-              onToggle={handleToggle}
-              onSkip={handleSkip}
-            />
-          );
-        })}
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

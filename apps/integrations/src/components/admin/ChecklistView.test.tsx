@@ -295,6 +295,18 @@ describe('ChecklistView', () => {
     expect(html.match(/h-1\.5 w-32/g)?.length).toBe(3);
   });
 
+  it('keeps the confetti off the server render, finished run or not', () => {
+    // The canvas mounts on a run reaching the end, never on arrival at one
+    // that is already there — and never in markup React has to hydrate.
+    const open = render({ run: RUN, checks: [CHECK] });
+    const done = render({
+      run: { ...RUN, status: 'completed', ended_at: '2026-09-01T14:20:00Z' },
+      checks: [CHECK, SKIP],
+    });
+    expect(open).not.toContain('<canvas');
+    expect(done).not.toContain('<canvas');
+  });
+
   it('renders no bar when the linked document is unknown', () => {
     const html = render({
       content: '- [ ] [Clear towel hampers](/admin/sops/momence-dirty-towels)',
