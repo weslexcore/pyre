@@ -49,6 +49,7 @@ import type {
 import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
+import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, toolbarCaptionClass } from './scheduleUi';
 
@@ -661,6 +662,26 @@ export function ScheduleBoard() {
     return byWeek;
   }, [data]);
 
+  // The manage-side hours panel beside the week board: everyone's hours for
+  // the visible week, drafts kept apart from live. A separate rollup from
+  // weekHoursByWeek on purpose — the picker's "h wk" folds drafts in.
+  const weekHours = useMemo(
+    () =>
+      canManage && view === 'week'
+        ? weekHoursRows(data?.staff ?? [], data?.shifts ?? [], weekStart)
+        : null,
+    [canManage, view, data, weekStart]
+  );
+
+  const toggleStaffFilter = useCallback((staffId: string) => {
+    setStaffFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(staffId)) next.delete(staffId);
+      else next.add(staffId);
+      return next;
+    });
+  }, []);
+
   const run = useCallback(
     async (action: () => Promise<{ error?: string }>) => {
       setBusy(true);
@@ -853,6 +874,8 @@ export function ScheduleBoard() {
     setFormTarget(null);
   };
 
+  const weekLabel = `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`;
+
   if (loading && !data) {
     return <p className="font-mono text-sm text-white/40">Loading schedule…</p>;
   }
@@ -1028,9 +1051,7 @@ export function ScheduleBoard() {
             buttons — on a phone it no longer wraps mid-row. */}
         {calendarView && (
           <p className="pt-3 font-mono text-2xl font-bold text-white/80">
-            {view === 'week'
-              ? `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`
-              : monthLabel(monthStart)}
+            {view === 'week' ? weekLabel : monthLabel(monthStart)}
           </p>
         )}
 
@@ -1070,482 +1091,528 @@ export function ScheduleBoard() {
         )}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
+      {weekHours && (
+        <WeekHoursSheet
+          weekLabel={weekLabel}
+          rows={weekHours.rows}
+          totals={weekHours.totals}
+          selected={staffFilter}
+          onToggle={toggleStaffFilter}
+        />
       )}
 
-      {range.end >= firstTentative && (
-        <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
-          Set in stone through{' '}
-          <span className="font-bold text-[var(--pyre-creme)]">
-            {formatDay(addDays(firstTentative, -1))}
-          </span>{' '}
-          · <span className="font-bold text-[var(--pyre-red)]">{formatDay(firstTentative)}</span>{' '}
-          onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a
-          working plan to keep requesting shifts and logging time off into, but times and
-          assignments can still change until the week locks (every Monday locks the two weeks
-          ahead).
-        </p>
-      )}
-
-      {draftComposerOpen && !drafting && canManage && (view === 'week' || view === 'month') && (
-        <section className="space-y-2 rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/[0.06] p-3">
-          <label
-            className="block font-mono text-xs font-bold uppercase tracking-wide text-white/50"
-            htmlFor="draft-note"
-          >
-            Anything to keep in mind? (optional)
-          </label>
-          <textarea
-            id="draft-note"
-            // biome-ignore lint/a11y/noAutofocus: the composer only opens on an explicit click
-            autoFocus
-            rows={3}
-            maxLength={MAX_DRAFT_PROMPT_LENGTH}
-            className={inputClass}
-            placeholder="e.g. Asana and Cortney need training shifts with Wes, give Sarah and Omar each a shift to lead, and Liz needs 1 setup + 1 full shift."
-            value={draftNote}
-            onChange={(e) => setDraftNote(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setDraftComposerOpen(false);
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void draftSchedule();
-            }}
+      {/* With the hours panel up (manage side, week view) the board splits
+          into a sticky hours column and the day list on lg+; the panel is a
+          floating button + bottom sheet below that, so the list keeps the
+          full width of a phone. */}
+      <div
+        className={
+          weekHours
+            ? 'lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-6'
+            : undefined
+        }
+      >
+        {weekHours && (
+          <WeekHoursSidebar
+            weekLabel={weekLabel}
+            rows={weekHours.rows}
+            totals={weekHours.totals}
+            selected={staffFilter}
+            onToggle={toggleStaffFilter}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
-              onClick={() => void draftSchedule()}
-              disabled={busy || draftTargetWeeks.length === 0}
-            >
-              ✦ Draft{draftTargetWeeks.length > 1 ? ` ${draftTargetWeeks.length} weeks` : ''}
-            </button>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => setDraftComposerOpen(false)}
-            >
-              Cancel
-            </button>
-            <span className="font-mono text-xs text-white/40">
-              Guides the agent's judgment for{' '}
-              {draftTargetWeeks.length > 1
-                ? `all ${draftTargetWeeks.length} weeks in this run`
-                : `the week of ${formatDay(draftTargetWeeks[0] ?? weekStart)}`}
-              . Availability and staffing limits still win. ⌘⏎ to draft.
-            </span>
-            {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
-              <span className="font-mono text-xs text-white/40">
-                {MAX_DRAFT_PROMPT_LENGTH - draftNote.length} left
-              </span>
-            )}
-          </div>
-        </section>
-      )}
-
-      {drafting && (
-        <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
-          Syncing Momence and drafting{' '}
-          {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'}
-          {draftNote.trim() ? ' with your note' : ''} — proposals will appear here (usually under a
-          minute)…
-        </p>
-      )}
-
-      {isAdmin && showSettings && (
-        <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-            Employee actions
-          </p>
-          <label className="flex items-center gap-2 font-mono text-xs text-white/70">
-            <input
-              type="checkbox"
-              checked={settings.shiftRequestsEnabled}
-              disabled={busy}
-              onChange={(e) =>
-                void run(() =>
-                  api('POST', '/api/admin/schedule-settings', {
-                    key: 'shift_requests',
-                    enabled: e.target.checked,
-                  })
-                )
-              }
-            />
-            Employees can request open shifts (a manager approves before they're assigned)
-          </label>
-          <label className="flex items-center gap-2 font-mono text-xs text-white/70">
-            <input
-              type="checkbox"
-              checked={settings.subRequestsEnabled}
-              disabled={busy}
-              onChange={(e) =>
-                void run(() =>
-                  api('POST', '/api/admin/schedule-settings', {
-                    key: 'sub_requests',
-                    enabled: e.target.checked,
-                  })
-                )
-              }
-            />
-            Employees can request a sub (logs time off, emails the admins, and emails everyone
-            available a one-click link to take the shift)
-          </label>
-
-          <div className="space-y-2 border-t border-white/10 pt-3">
-            <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-              Standing instructions for the AI drafter
+        )}
+        <div className="min-w-0 space-y-6">
+          {error && (
+            <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
+              {error}
             </p>
-            <p className="font-mono text-xs text-white/50">
-              The requirements that hold every week — they go into every draft the agent makes,
-              including the Monday cron run. The note you type when you hit Draft is for that run
-              only, and wins where the two disagree. Availability and staffing limits still beat
-              both.
+          )}
+
+          {range.end >= firstTentative && (
+            <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+              Set in stone through{' '}
+              <span className="font-bold text-[var(--pyre-creme)]">
+                {formatDay(addDays(firstTentative, -1))}
+              </span>{' '}
+              ·{' '}
+              <span className="font-bold text-[var(--pyre-red)]">{formatDay(firstTentative)}</span>{' '}
+              onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a
+              working plan to keep requesting shifts and logging time off into, but times and
+              assignments can still change until the week locks (every Monday locks the two weeks
+              ahead).
             </p>
-            <textarea
-              id="standing-instructions"
-              rows={6}
-              maxLength={MAX_STANDING_INSTRUCTIONS_LENGTH}
-              disabled={standingSaved === null || standingBusy}
-              className={inputClass}
-              placeholder={
-                standingSaved === null
-                  ? 'Loading…'
-                  : 'e.g. Wes never works Sundays. Saturday evenings always need two full-shift people plus a setup. Trainees are never the only lead on a shift.'
-              }
-              value={standingDraft}
-              onChange={(e) => setStandingDraft(e.target.value)}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={buttonClass}
-                onClick={() => void saveStandingInstructions()}
-                disabled={standingSaved === null || standingBusy || standingDraft === standingSaved}
+          )}
+
+          {draftComposerOpen && !drafting && canManage && (view === 'week' || view === 'month') && (
+            <section className="space-y-2 rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/[0.06] p-3">
+              <label
+                className="block font-mono text-xs font-bold uppercase tracking-wide text-white/50"
+                htmlFor="draft-note"
               >
-                {standingBusy ? 'Saving…' : 'Save instructions'}
-              </button>
-              {standingSaved !== null && standingDraft !== standingSaved && (
+                Anything to keep in mind? (optional)
+              </label>
+              <textarea
+                id="draft-note"
+                // biome-ignore lint/a11y/noAutofocus: the composer only opens on an explicit click
+                autoFocus
+                rows={3}
+                maxLength={MAX_DRAFT_PROMPT_LENGTH}
+                className={inputClass}
+                placeholder="e.g. Asana and Cortney need training shifts with Wes, give Sarah and Omar each a shift to lead, and Liz needs 1 setup + 1 full shift."
+                value={draftNote}
+                onChange={(e) => setDraftNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setDraftComposerOpen(false);
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void draftSchedule();
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={`${buttonClass} border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]`}
+                  onClick={() => void draftSchedule()}
+                  disabled={busy || draftTargetWeeks.length === 0}
+                >
+                  ✦ Draft{draftTargetWeeks.length > 1 ? ` ${draftTargetWeeks.length} weeks` : ''}
+                </button>
                 <button
                   type="button"
                   className={buttonClass}
-                  onClick={() => setStandingDraft(standingSaved)}
-                  disabled={standingBusy}
+                  onClick={() => setDraftComposerOpen(false)}
                 >
-                  Discard changes
+                  Cancel
                 </button>
-              )}
-              <span className="font-mono text-xs text-white/40">
-                {standingSaved !== null && standingDraft === standingSaved
-                  ? standingSaved
-                    ? 'Saved — every draft from here on uses these.'
-                    : 'None set — drafts use the agent’s built-in rules only.'
-                  : `${MAX_STANDING_INSTRUCTIONS_LENGTH - standingDraft.length} characters left`}
-              </span>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {visibleProposals.map((p) => (
-        <ProposalBanner
-          key={p.id}
-          proposal={p}
-          messages={(data?.draftMessages ?? []).filter(
-            (m) => m.agent_session_id === p.agent_session_id
-          )}
-          busy={busy || drafting || refiningWeek !== null}
-          refining={refiningWeek === p.week_start}
-          onAction={proposalAction}
-          onRefine={(prompt) => refineDraft(p.week_start, prompt)}
-        />
-      ))}
-
-      {view === 'uncovered' && days.length === 0 && !loading && (
-        <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
-          Every shift through {range.end} is fully staffed.
-        </p>
-      )}
-
-      {view === 'requests' && days.length === 0 && !loading && (
-        <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
-          No outstanding shift or sub requests — all caught up.
-        </p>
-      )}
-
-      <div className="space-y-4">
-        {days.map((date) => {
-          const allShifts = shiftsByDate.get(date) ?? [];
-          let shifts = allShifts;
-          if (view === 'uncovered') shifts = allShifts.filter(isUncovered);
-          if (view === 'requests') {
-            shifts = allShifts.filter(
-              (s) =>
-                (requestsByShift.get(s.id) ?? []).length > 0 ||
-                (subsByShift.get(s.id) ?? []).length > 0
-            );
-          }
-          if (mineOnly && calendarView && selfId) {
-            shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
-          }
-          if (staffFilter.size > 0 && calendarView) {
-            shifts = shifts.filter((s) => s.assignments.some((a) => staffFilter.has(a.staff_id)));
-          }
-          // With a filter on, skip day sections nobody selected is part of —
-          // a filtered month would otherwise be a wall of "No shifts".
-          if (
-            (mineOnly || staffFilter.size > 0) &&
-            calendarView &&
-            shifts.length === 0 &&
-            formTarget !== `new:${date}`
-          ) {
-            return null;
-          }
-          const selfWorks = selfDates.has(date);
-          return (
-            <section
-              key={date}
-              className={`rounded-lg border p-3 ${
-                selfWorks
-                  ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/[0.06]'
-                  : 'border-white/10 bg-white/[0.03]'
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2
-                  className={`flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide ${
-                    selfWorks ? 'text-[var(--pyre-gold)]' : 'text-white/70'
-                  }`}
-                >
-                  {formatDay(date)}
-                  {selfWorks && (
-                    <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-gold)]">
-                      you're on
-                    </span>
-                  )}
-                  {date >= firstTentative && (
-                    <span
-                      className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
-                      title="This week hasn't locked yet — its schedule can still change"
-                    >
-                      ≈ tentative
-                    </span>
-                  )}
-                </h2>
-                {canManage && calendarView && (
-                  <button type="button" className={buttonClass} onClick={() => openNewShift(date)}>
-                    + Shift
-                  </button>
+                <span className="font-mono text-xs text-white/40">
+                  Guides the agent's judgment for{' '}
+                  {draftTargetWeeks.length > 1
+                    ? `all ${draftTargetWeeks.length} weeks in this run`
+                    : `the week of ${formatDay(draftTargetWeeks[0] ?? weekStart)}`}
+                  . Availability and staffing limits still win. ⌘⏎ to draft.
+                </span>
+                {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
+                  <span className="font-mono text-xs text-white/40">
+                    {MAX_DRAFT_PROMPT_LENGTH - draftNote.length} left
+                  </span>
                 )}
               </div>
+            </section>
+          )}
 
-              {formTarget === `new:${date}` && (
-                <ShiftForm
-                  form={form}
-                  setForm={setForm}
-                  onSubmit={submitShiftForm}
-                  onCancel={() => setFormTarget(null)}
-                  busy={busy}
+          {drafting && (
+            <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
+              Syncing Momence and drafting{' '}
+              {draftTargetWeeks.length > 1 ? `${draftTargetWeeks.length} weeks` : 'the week'}
+              {draftNote.trim() ? ' with your note' : ''} — proposals will appear here (usually
+              under a minute)…
+            </p>
+          )}
+
+          {isAdmin && showSettings && (
+            <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                Employee actions
+              </p>
+              <label className="flex items-center gap-2 font-mono text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={settings.shiftRequestsEnabled}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'shift_requests',
+                        enabled: e.target.checked,
+                      })
+                    )
+                  }
                 />
-              )}
+                Employees can request open shifts (a manager approves before they're assigned)
+              </label>
+              <label className="flex items-center gap-2 font-mono text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={settings.subRequestsEnabled}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'sub_requests',
+                        enabled: e.target.checked,
+                      })
+                    )
+                  }
+                />
+                Employees can request a sub (logs time off, emails the admins, and emails everyone
+                available a one-click link to take the shift)
+              </label>
 
-              {shifts.length === 0 && formTarget !== `new:${date}` && (
-                <p className="font-mono text-xs text-white/30">No shifts</p>
-              )}
-
-              <div className="space-y-2">
-                {shifts.map((shift) => {
-                  const tone = coverageTone(shift);
-                  const notes = formatShiftNotes(shift);
-                  const requests = requestsByShift.get(shift.id) ?? [];
-                  const subs = subsByShift.get(shift.id) ?? [];
-                  const noLead =
-                    shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
-                  const restBreaks = shift.assignments
-                    .filter((a) => restNotes.has(a.id))
-                    .map(
-                      (a) =>
-                        `${staffById.get(a.staff_id)?.display_name ?? '?'} ${restNotes.get(a.id)}`
-                    );
-                  const expanded = !collapsedIds.has(shift.id);
-                  const toggleExpanded = () => {
-                    const next = new Set(collapsedIds);
-                    if (expanded) next.add(shift.id);
-                    else next.delete(shift.id);
-                    setCollapsedIds(next);
-                  };
-                  return (
-                    <div
-                      key={shift.id}
-                      id={`shift-${shift.id}`}
-                      className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
-                        initialLink.shift === shift.id ? 'ring-2 ring-[var(--pyre-gold)]/60' : ''
-                      }`}
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                  Standing instructions for the AI drafter
+                </p>
+                <p className="font-mono text-xs text-white/50">
+                  The requirements that hold every week — they go into every draft the agent makes,
+                  including the Monday cron run. The note you type when you hit Draft is for that
+                  run only, and wins where the two disagree. Availability and staffing limits still
+                  beat both.
+                </p>
+                <textarea
+                  id="standing-instructions"
+                  rows={6}
+                  maxLength={MAX_STANDING_INSTRUCTIONS_LENGTH}
+                  disabled={standingSaved === null || standingBusy}
+                  className={inputClass}
+                  placeholder={
+                    standingSaved === null
+                      ? 'Loading…'
+                      : 'e.g. Wes never works Sundays. Saturday evenings always need two full-shift people plus a setup. Trainees are never the only lead on a shift.'
+                  }
+                  value={standingDraft}
+                  onChange={(e) => setStandingDraft(e.target.value)}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => void saveStandingInstructions()}
+                    disabled={
+                      standingSaved === null || standingBusy || standingDraft === standingSaved
+                    }
+                  >
+                    {standingBusy ? 'Saving…' : 'Save instructions'}
+                  </button>
+                  {standingSaved !== null && standingDraft !== standingSaved && (
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      onClick={() => setStandingDraft(standingSaved)}
+                      disabled={standingBusy}
                     >
-                      <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-                        <button
-                          type="button"
-                          className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
-                          onClick={toggleExpanded}
-                        >
-                          <span className="font-semibold">{shift.label}</span>
-                          <span className="font-mono text-sm text-white/60">
-                            {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
-                          </span>
-                          <span
-                            className={`rounded px-2 py-0.5 font-mono text-xs ${toneChip[tone]}`}
-                          >
-                            {shift.status === 'cancelled'
-                              ? 'cancelled'
-                              : `${shift.assignments.length}/${shift.staff_needed}`}
-                          </span>
-                          {shift.is_draft && (
-                            <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
-                              ✦ AI draft
-                            </span>
-                          )}
-                          {shift.sync_flag && (
-                            <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]">
-                              ⚠ {SYNC_FLAG_LABELS[shift.sync_flag]}
-                            </span>
-                          )}
-                          {noLead && (
-                            <span
-                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
-                              title="Nobody on this shift is a founder or shift lead"
-                            >
-                              ⚠ no shift lead
-                            </span>
-                          )}
-                          {restBreaks.length > 0 && (
-                            <span
-                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
-                              title={restBreaks.join('; ')}
-                            >
-                              ⚠ evening then opening
-                            </span>
-                          )}
-                          {requests.length > 0 && (
-                            <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
-                              {canManage
-                                ? `${requests.length} request${requests.length > 1 ? 's' : ''}`
-                                : 'requested'}
-                            </span>
-                          )}
-                          {subs.length > 0 && (
-                            <span
-                              className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
-                              title="Someone on this shift requested a sub — open the shift to take it"
-                            >
-                              sub needed
-                            </span>
-                          )}
-                          <span className="text-sm text-white/70">
-                            {selfFirst(shift.assignments, selfId).map((a, i) => (
-                              <Fragment key={a.id}>
-                                {i > 0 && ', '}
-                                <span className={a.staff_id === selfId ? selfNameClass : undefined}>
-                                  {staffById.get(a.staff_id)?.display_name ?? '?'}
-                                </span>
-                              </Fragment>
-                            ))}
-                          </span>
-                          {notes && (
-                            <span className="font-mono text-xs text-white/40">{notes}</span>
-                          )}
-                        </button>
-                        {shift.status !== 'cancelled' && signups?.[shift.id] !== undefined && (
-                          <span
-                            className="font-mono text-xs text-white/60"
-                            title="Guests booked in Momence for the sessions during this shift"
-                          >
-                            {formatSignups(signups[shift.id])}
-                          </span>
-                        )}
-                        {shift.is_draft && (
-                          <span className="flex gap-1">
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              title="Accept this shift"
-                              disabled={busy}
-                              onClick={() =>
-                                void proposalAction({
-                                  action: 'accept-item',
-                                  kind: 'shift',
-                                  id: shift.id,
-                                })
-                              }
-                            >
-                              ✓
-                            </button>
-                            <button
-                              type="button"
-                              className={`${buttonClass} text-[var(--pyre-red)]`}
-                              title="Reject this shift"
-                              disabled={busy}
-                              onClick={() =>
-                                void proposalAction({
-                                  action: 'reject-item',
-                                  kind: 'shift',
-                                  id: shift.id,
-                                })
-                              }
-                            >
-                              ✗
-                            </button>
-                          </span>
-                        )}
-                      </div>
-
-                      {expanded && (
-                        <ShiftDetail
-                          shift={shift}
-                          data={data as BoardData}
-                          staffById={staffById}
-                          weekHours={weekHoursByWeek[weekStartOf(shift.shift_date)] ?? {}}
-                          busy={busy}
-                          run={run}
-                          canManage={canManage}
-                          canViewSops={canViewSops}
-                          editMode={editShiftId === shift.id}
-                          onToggleEditMode={() =>
-                            setEditShiftId(editShiftId === shift.id ? null : shift.id)
-                          }
-                          selfId={selfId}
-                          requests={requests}
-                          subs={subs}
-                          settings={settings}
-                          onEdit={() => openEditShift(shift)}
-                          editingAssignment={editingAssignment}
-                          setEditingAssignment={setEditingAssignment}
-                          proposalAction={proposalAction}
-                          restNotes={restNotes}
-                          restCheck={restCheck}
-                        />
-                      )}
-
-                      {formTarget === `edit:${shift.id}` && (
-                        <div className="px-3 pb-3">
-                          <ShiftForm
-                            form={form}
-                            setForm={setForm}
-                            onSubmit={submitShiftForm}
-                            onCancel={() => setFormTarget(null)}
-                            busy={busy}
-                            shift={shift}
-                            run={run}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      Discard changes
+                    </button>
+                  )}
+                  <span className="font-mono text-xs text-white/40">
+                    {standingSaved !== null && standingDraft === standingSaved
+                      ? standingSaved
+                        ? 'Saved — every draft from here on uses these.'
+                        : 'None set — drafts use the agent’s built-in rules only.'
+                      : `${MAX_STANDING_INSTRUCTIONS_LENGTH - standingDraft.length} characters left`}
+                  </span>
+                </div>
               </div>
             </section>
-          );
-        })}
+          )}
+
+          {visibleProposals.map((p) => (
+            <ProposalBanner
+              key={p.id}
+              proposal={p}
+              messages={(data?.draftMessages ?? []).filter(
+                (m) => m.agent_session_id === p.agent_session_id
+              )}
+              busy={busy || drafting || refiningWeek !== null}
+              refining={refiningWeek === p.week_start}
+              onAction={proposalAction}
+              onRefine={(prompt) => refineDraft(p.week_start, prompt)}
+            />
+          ))}
+
+          {view === 'uncovered' && days.length === 0 && !loading && (
+            <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
+              Every shift through {range.end} is fully staffed.
+            </p>
+          )}
+
+          {view === 'requests' && days.length === 0 && !loading && (
+            <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
+              No outstanding shift or sub requests — all caught up.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            {days.map((date) => {
+              const allShifts = shiftsByDate.get(date) ?? [];
+              let shifts = allShifts;
+              if (view === 'uncovered') shifts = allShifts.filter(isUncovered);
+              if (view === 'requests') {
+                shifts = allShifts.filter(
+                  (s) =>
+                    (requestsByShift.get(s.id) ?? []).length > 0 ||
+                    (subsByShift.get(s.id) ?? []).length > 0
+                );
+              }
+              if (mineOnly && calendarView && selfId) {
+                shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
+              }
+              if (staffFilter.size > 0 && calendarView) {
+                shifts = shifts.filter((s) =>
+                  s.assignments.some((a) => staffFilter.has(a.staff_id))
+                );
+              }
+              // With a filter on, skip day sections nobody selected is part of —
+              // a filtered month would otherwise be a wall of "No shifts".
+              if (
+                (mineOnly || staffFilter.size > 0) &&
+                calendarView &&
+                shifts.length === 0 &&
+                formTarget !== `new:${date}`
+              ) {
+                return null;
+              }
+              const selfWorks = selfDates.has(date);
+              return (
+                <section
+                  key={date}
+                  className={`rounded-lg border p-3 ${
+                    selfWorks
+                      ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/[0.06]'
+                      : 'border-white/10 bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h2
+                      className={`flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide ${
+                        selfWorks ? 'text-[var(--pyre-gold)]' : 'text-white/70'
+                      }`}
+                    >
+                      {formatDay(date)}
+                      {selfWorks && (
+                        <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-gold)]">
+                          you're on
+                        </span>
+                      )}
+                      {date >= firstTentative && (
+                        <span
+                          className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
+                          title="This week hasn't locked yet — its schedule can still change"
+                        >
+                          ≈ tentative
+                        </span>
+                      )}
+                    </h2>
+                    {canManage && calendarView && (
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        onClick={() => openNewShift(date)}
+                      >
+                        + Shift
+                      </button>
+                    )}
+                  </div>
+
+                  {formTarget === `new:${date}` && (
+                    <ShiftForm
+                      form={form}
+                      setForm={setForm}
+                      onSubmit={submitShiftForm}
+                      onCancel={() => setFormTarget(null)}
+                      busy={busy}
+                    />
+                  )}
+
+                  {shifts.length === 0 && formTarget !== `new:${date}` && (
+                    <p className="font-mono text-xs text-white/30">No shifts</p>
+                  )}
+
+                  <div className="space-y-2">
+                    {shifts.map((shift) => {
+                      const tone = coverageTone(shift);
+                      const notes = formatShiftNotes(shift);
+                      const requests = requestsByShift.get(shift.id) ?? [];
+                      const subs = subsByShift.get(shift.id) ?? [];
+                      const noLead =
+                        shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
+                      const restBreaks = shift.assignments
+                        .filter((a) => restNotes.has(a.id))
+                        .map(
+                          (a) =>
+                            `${staffById.get(a.staff_id)?.display_name ?? '?'} ${restNotes.get(a.id)}`
+                        );
+                      const expanded = !collapsedIds.has(shift.id);
+                      const toggleExpanded = () => {
+                        const next = new Set(collapsedIds);
+                        if (expanded) next.add(shift.id);
+                        else next.delete(shift.id);
+                        setCollapsedIds(next);
+                      };
+                      return (
+                        <div
+                          key={shift.id}
+                          id={`shift-${shift.id}`}
+                          className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
+                            initialLink.shift === shift.id
+                              ? 'ring-2 ring-[var(--pyre-gold)]/60'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                            <button
+                              type="button"
+                              className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
+                              onClick={toggleExpanded}
+                            >
+                              <span className="font-semibold">{shift.label}</span>
+                              <span className="font-mono text-sm text-white/60">
+                                {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
+                              </span>
+                              <span
+                                className={`rounded px-2 py-0.5 font-mono text-xs ${toneChip[tone]}`}
+                              >
+                                {shift.status === 'cancelled'
+                                  ? 'cancelled'
+                                  : `${shift.assignments.length}/${shift.staff_needed}`}
+                              </span>
+                              {shift.is_draft && (
+                                <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
+                                  ✦ AI draft
+                                </span>
+                              )}
+                              {shift.sync_flag && (
+                                <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]">
+                                  ⚠ {SYNC_FLAG_LABELS[shift.sync_flag]}
+                                </span>
+                              )}
+                              {noLead && (
+                                <span
+                                  className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                                  title="Nobody on this shift is a founder or shift lead"
+                                >
+                                  ⚠ no shift lead
+                                </span>
+                              )}
+                              {restBreaks.length > 0 && (
+                                <span
+                                  className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                                  title={restBreaks.join('; ')}
+                                >
+                                  ⚠ evening then opening
+                                </span>
+                              )}
+                              {requests.length > 0 && (
+                                <span className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]">
+                                  {canManage
+                                    ? `${requests.length} request${requests.length > 1 ? 's' : ''}`
+                                    : 'requested'}
+                                </span>
+                              )}
+                              {subs.length > 0 && (
+                                <span
+                                  className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                                  title="Someone on this shift requested a sub — open the shift to take it"
+                                >
+                                  sub needed
+                                </span>
+                              )}
+                              <span className="text-sm text-white/70">
+                                {selfFirst(shift.assignments, selfId).map((a, i) => (
+                                  <Fragment key={a.id}>
+                                    {i > 0 && ', '}
+                                    <span
+                                      className={a.staff_id === selfId ? selfNameClass : undefined}
+                                    >
+                                      {staffById.get(a.staff_id)?.display_name ?? '?'}
+                                    </span>
+                                  </Fragment>
+                                ))}
+                              </span>
+                              {notes && (
+                                <span className="font-mono text-xs text-white/40">{notes}</span>
+                              )}
+                            </button>
+                            {shift.status !== 'cancelled' && signups?.[shift.id] !== undefined && (
+                              <span
+                                className="font-mono text-xs text-white/60"
+                                title="Guests booked in Momence for the sessions during this shift"
+                              >
+                                {formatSignups(signups[shift.id])}
+                              </span>
+                            )}
+                            {shift.is_draft && (
+                              <span className="flex gap-1">
+                                <button
+                                  type="button"
+                                  className={buttonClass}
+                                  title="Accept this shift"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void proposalAction({
+                                      action: 'accept-item',
+                                      kind: 'shift',
+                                      id: shift.id,
+                                    })
+                                  }
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`${buttonClass} text-[var(--pyre-red)]`}
+                                  title="Reject this shift"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void proposalAction({
+                                      action: 'reject-item',
+                                      kind: 'shift',
+                                      id: shift.id,
+                                    })
+                                  }
+                                >
+                                  ✗
+                                </button>
+                              </span>
+                            )}
+                          </div>
+
+                          {expanded && (
+                            <ShiftDetail
+                              shift={shift}
+                              data={data as BoardData}
+                              staffById={staffById}
+                              weekHours={weekHoursByWeek[weekStartOf(shift.shift_date)] ?? {}}
+                              busy={busy}
+                              run={run}
+                              canManage={canManage}
+                              canViewSops={canViewSops}
+                              editMode={editShiftId === shift.id}
+                              onToggleEditMode={() =>
+                                setEditShiftId(editShiftId === shift.id ? null : shift.id)
+                              }
+                              selfId={selfId}
+                              requests={requests}
+                              subs={subs}
+                              settings={settings}
+                              onEdit={() => openEditShift(shift)}
+                              editingAssignment={editingAssignment}
+                              setEditingAssignment={setEditingAssignment}
+                              proposalAction={proposalAction}
+                              restNotes={restNotes}
+                              restCheck={restCheck}
+                            />
+                          )}
+
+                          {formTarget === `edit:${shift.id}` && (
+                            <div className="px-3 pb-3">
+                              <ShiftForm
+                                form={form}
+                                setForm={setForm}
+                                onSubmit={submitShiftForm}
+                                onCancel={() => setFormTarget(null)}
+                                busy={busy}
+                                shift={shift}
+                                run={run}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
