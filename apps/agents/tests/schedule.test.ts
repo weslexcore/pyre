@@ -85,6 +85,7 @@ const shift = (overrides: Partial<ShiftRow>): ShiftRow => ({
   proposal_id: null,
   is_draft: false,
   sync_flag: null,
+  confirmed_at: null,
   created_at: '',
   updated_at: '',
   ...overrides,

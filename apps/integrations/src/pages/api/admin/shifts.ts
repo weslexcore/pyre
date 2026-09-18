@@ -101,6 +101,19 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const fields = parseShiftFields(body);
   if (typeof fields === 'string') return json({ error: fields }, 400);
+  // The shift's own fields, before the confirmation flag joins them: the
+  // Momence-ownership rule below keys off whether any of THESE changed.
+  const editsShift = Object.keys(fields).length > 0;
+
+  // `confirmed` marks a shift set in stone ahead of the two-week horizon
+  // (or hands it back to the date rule). Admin-only by construction: it is
+  // read here rather than in parseShiftFields, which the agent proposals
+  // route shares.
+  if (body.confirmed !== undefined) {
+    if (typeof body.confirmed !== 'boolean')
+      return json({ error: 'confirmed must be a boolean' }, 400);
+    fields.confirmed_at = body.confirmed ? new Date().toISOString() : null;
+  }
   if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
 
   const { data: existing, error: fetchError } = await db
@@ -111,6 +124,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (fetchError) return json({ error: fetchError.message }, 500);
   if (!existing) return json({ error: 'Shift not found' }, 404);
 
+  // Re-confirming keeps the original timestamp — the change log would
+  // otherwise record a no-op as a change.
+  if (fields.confirmed_at && existing.confirmed_at) fields.confirmed_at = existing.confirmed_at;
+
   // Cross-field time check when only one side changes.
   const starts = (fields.starts_at as string) ?? existing.starts_at;
   const ends = (fields.ends_at as string) ?? existing.ends_at;
@@ -119,7 +136,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   // Editing a Momence shift takes ownership of it: lock it against the sync
   // and treat any divergence flag as resolved by the admin's adjustment.
-  if (existing.source === 'momence') {
+  // Confirming alone is a promise about the shift, not an edit to it — the
+  // sync keeps maintaining the window.
+  if (existing.source === 'momence' && editsShift) {
     fields.sync_locked = true;
     fields.sync_flag = null;
   }
@@ -131,12 +150,19 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const actor = actorFromGate(gate);
   const diff = changedFields(existing as Record<string, unknown>, fields);
   if (diff) {
+    // A confirmation flip on its own reads better as what it means than as
+    // a timestamp diff.
+    const onlyConfirmation = Object.keys(diff.after).length === 1 && 'confirmed_at' in diff.after;
     await logScheduleChange(db, {
       actor,
       entityType: 'shift',
       entityId: shift.id,
       action: 'update',
-      summary: `Updated shift ${describeShift(shift)}: ${summarizeDiff(diff)}`,
+      summary: onlyConfirmation
+        ? diff.after.confirmed_at
+          ? `Confirmed shift ${describeShift(shift)} (no longer tentative)`
+          : `Returned shift ${describeShift(shift)} to tentative`
+        : `Updated shift ${describeShift(shift)}: ${summarizeDiff(diff)}`,
       details: diff,
     });
     // Tell the crew when the shift itself moved or was called off — not for

@@ -22,6 +22,7 @@ import {
   findRestViolations,
   firstTentativeDate,
   formatShiftNotes,
+  isTentativeShift,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
   minutesToTime,
   mismatchedDutyPairs,
@@ -855,6 +856,17 @@ export function ScheduleBoard() {
   const proposalAction = (body: Record<string, unknown>) =>
     run(() => api('POST', '/api/admin/schedule-proposals', body));
 
+  // Mark shifts set in stone ahead of the horizon (or hand them back to the
+  // date rule). One reload after the batch; the first failure stops it.
+  const setConfirmed = (shiftIds: string[], confirmed: boolean) =>
+    run(async () => {
+      for (const id of shiftIds) {
+        const result = await api('PATCH', '/api/admin/shifts', { id, confirmed });
+        if (result.error) return result;
+      }
+      return {};
+    });
+
   const submitShiftForm = async () => {
     if (!formTarget) return;
     const staffNeeded = Number.parseInt(form.staffNeeded, 10);
@@ -1140,6 +1152,8 @@ export function ScheduleBoard() {
               working plan to keep requesting shifts and logging time off into, but times and
               assignments can still change until the week locks (every Monday locks the two weeks
               ahead).
+              {canManage &&
+                ' To promise a shift sooner, open it and choose Confirm, or confirm a whole day from its heading.'}
             </p>
           )}
 
@@ -1360,6 +1374,19 @@ export function ScheduleBoard() {
                 return null;
               }
               const selfWorks = selfDates.has(date);
+              // Beyond the horizon a day is tentative until every shift on
+              // it has been confirmed by hand; a day with nothing on it yet
+              // stays tentative. Mixed days label each shift so the
+              // confirmed ones stand out from the heading's "≈ tentative".
+              const beyondHorizon = date >= firstTentative;
+              const today = todayLocal();
+              const tentativeShiftIds = beyondHorizon
+                ? shifts.filter((s) => isTentativeShift(s, today)).map((s) => s.id)
+                : [];
+              const dayConfirmed =
+                beyondHorizon && shifts.length > 0 && tentativeShiftIds.length === 0;
+              const dayMixed =
+                beyondHorizon && tentativeShiftIds.length > 0 && shifts.some((s) => s.confirmed_at);
               return (
                 <section
                   key={date}
@@ -1381,7 +1408,7 @@ export function ScheduleBoard() {
                           you're on
                         </span>
                       )}
-                      {date >= firstTentative && (
+                      {beyondHorizon && !dayConfirmed && (
                         <span
                           className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
                           title="This week hasn't locked yet — its schedule can still change"
@@ -1389,16 +1416,37 @@ export function ScheduleBoard() {
                           ≈ tentative
                         </span>
                       )}
+                      {dayConfirmed && (
+                        <span
+                          className="rounded bg-[var(--pyre-sage)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-sage)]"
+                          title="Every shift on this day was confirmed by hand ahead of the week locking"
+                        >
+                          ✓ confirmed
+                        </span>
+                      )}
                     </h2>
-                    {canManage && calendarView && (
-                      <button
-                        type="button"
-                        className={buttonClass}
-                        onClick={() => openNewShift(date)}
-                      >
-                        + Shift
-                      </button>
-                    )}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {canManage && calendarView && tentativeShiftIds.length > 0 && (
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          disabled={busy}
+                          title="Mark every shift on this day set in stone ahead of the week locking"
+                          onClick={() => void setConfirmed(tentativeShiftIds, true)}
+                        >
+                          Confirm day
+                        </button>
+                      )}
+                      {canManage && calendarView && (
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          onClick={() => openNewShift(date)}
+                        >
+                          + Shift
+                        </button>
+                      )}
+                    </span>
                   </div>
 
                   {formTarget === `new:${date}` && (
@@ -1471,6 +1519,22 @@ export function ScheduleBoard() {
                               {shift.sync_flag && (
                                 <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]">
                                   ⚠ {SYNC_FLAG_LABELS[shift.sync_flag]}
+                                </span>
+                              )}
+                              {beyondHorizon && shift.confirmed_at && !dayConfirmed && (
+                                <span
+                                  className="rounded bg-[var(--pyre-sage)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-sage)]"
+                                  title="Confirmed by hand ahead of the week locking"
+                                >
+                                  ✓ confirmed
+                                </span>
+                              )}
+                              {dayMixed && !shift.confirmed_at && (
+                                <span
+                                  className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-red)]"
+                                  title="Still tentative — can change until the week locks"
+                                >
+                                  ≈ tentative
                                 </span>
                               )}
                               {noLead && (
@@ -1726,6 +1790,29 @@ function ShiftForm({
             >
               {shift.status === 'cancelled' ? 'Reinstate' : 'Cancel shift'}
             </button>
+            {(shift.confirmed_at || shift.shift_date >= firstTentativeDate(todayLocal())) && (
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={busy}
+                title={
+                  shift.confirmed_at
+                    ? 'Hand this shift back to the date rule: tentative until its week locks'
+                    : 'Mark this shift set in stone now, ahead of its week locking'
+                }
+                onClick={() => {
+                  onCancel();
+                  void run(() =>
+                    api('PATCH', '/api/admin/shifts', {
+                      id: shift.id,
+                      confirmed: !shift.confirmed_at,
+                    })
+                  );
+                }}
+              >
+                {shift.confirmed_at ? 'Mark tentative' : 'Confirm'}
+              </button>
+            )}
             <button
               type="button"
               className={`${buttonClass} text-[var(--pyre-red)]`}

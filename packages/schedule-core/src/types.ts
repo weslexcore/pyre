@@ -76,6 +76,11 @@ export interface ShiftRow {
 	is_draft: boolean;
 	/** Momence divergence the sync couldn't silently fix — needs admin eyes. */
 	sync_flag: "sessions_cancelled" | "times_changed" | null;
+	/**
+	 * Admin marked this shift set in stone ahead of the two-week horizon.
+	 * Null follows the date rule (see horizon.ts isTentativeShift).
+	 */
+	confirmed_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
