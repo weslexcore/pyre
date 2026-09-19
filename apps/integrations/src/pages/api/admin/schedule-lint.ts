@@ -267,11 +267,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
       case 'send': {
         const started = Date.now();
-        const summary = await runScheduleLint({
-          dryRun: false,
-          force: true,
-          timeRemainingMs: () => TIME_BUDGET_MS - (Date.now() - started),
-        });
+        const summary = await runScheduleLint(
+          {
+            dryRun: false,
+            force: true,
+            timeRemainingMs: () => TIME_BUDGET_MS - (Date.now() - started),
+          },
+          // Somebody pressed the button: send even if the week has already
+          // reported every finding on the list. The send log still turns away
+          // an admin who has had this exact list.
+          { resend: true }
+        );
         console.info(`[schedule-lint] ${actor} ran the lint by hand: ${JSON.stringify(summary)}`);
         return json({ ok: true, summary });
       }

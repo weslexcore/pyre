@@ -279,9 +279,11 @@ describe('runScheduleLint', () => {
       const after = await runScheduleLint({ ...ctx, force: true });
       expect(after.findings).toBe(1);
       expect(after.resolved).toBe(1);
-      // A shorter list is a different list, so the admins hear about it.
+      // A shorter list is a different list — but the one finding left on it
+      // went out an hour ago, so there is nothing to email about.
       expect(after.digest).not.toBe(before.digest);
-      expect(sendTemplate).toHaveBeenCalled();
+      expect(after.skipped).toBe('nothing-new');
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('sends nothing when every finding is resolved', async () => {
@@ -311,6 +313,99 @@ describe('runScheduleLint', () => {
     it('does not write resolutions on a dry run', async () => {
       await runScheduleLint({ ...ctx, dryRun: true });
       expect(touchResolutions).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the quiet gate', () => {
+    // Fixed ids again: the Sound Bath is 1, the two Open Hours slots under it
+    // are 2 and 3, so the overlap rule raises overlap:1:2 and overlap:1:3.
+    const START: Record<number, string> = { 2: '19:00', 3: '20:00', 4: '20:30' };
+    const feed = (...ids: number[]): MomenceEvent[] => [
+      special({ id: 1 }),
+      ...ids.map((id) => event({ id, dateTime: et('2026-09-17', START[id]) })),
+      farOut(),
+    ];
+
+    it('stays quiet when a run only loses a finding', async () => {
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3));
+      const first = await runScheduleLint({ ...ctx, force: true });
+      expect(first).toMatchObject({ findings: 2, newFindings: 2, sent: 2 });
+
+      // The 7pm slot has finished and dropped out of the Momence feed. The
+      // list is shorter, and its digest different, but this is the clock
+      // moving, not the schedule changing.
+      sendTemplate.mockClear();
+      fetchMomenceEvents.mockResolvedValue(feed(3));
+      const second = await runScheduleLint({ ...ctx, force: true });
+      expect(second).toMatchObject({ findings: 1, newFindings: 0, skipped: 'nothing-new' });
+      expect(second.digest).not.toBe(first.digest);
+      expect(sendTemplate).not.toHaveBeenCalled();
+    });
+
+    it('emails the moment something new turns up', async () => {
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3));
+      await runScheduleLint({ ...ctx, force: true });
+
+      sendTemplate.mockClear();
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3, 4));
+      const summary = await runScheduleLint({ ...ctx, force: true });
+      // One new finding, and the email carries the whole open list with it.
+      expect(summary).toMatchObject({ findings: 3, newFindings: 1, sent: 2 });
+      expect(sendTemplate.mock.calls[0][0].props).toMatchObject({ cancelCount: 3 });
+    });
+
+    it('sends anyway when an admin asks for the report by hand', async () => {
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3));
+      await runScheduleLint({ ...ctx, force: true });
+
+      sendTemplate.mockClear();
+      const summary = await runScheduleLint({ ...ctx, force: true }, { resend: true });
+      expect(summary).toMatchObject({ newFindings: 0, sent: 2 });
+      expect(summary.skipped).toBeUndefined();
+    });
+
+    it('remembers nothing from a run whose send threw, so the next one retries', async () => {
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3));
+      sendTemplate.mockRejectedValueOnce(new Error('resend down'));
+      expect(await runScheduleLint({ ...ctx, force: true })).toMatchObject({
+        sent: 1,
+        failed: ['wes@pyre.test'],
+      });
+
+      const retry = await runScheduleLint({ ...ctx, force: true });
+      expect(retry).toMatchObject({ newFindings: 2, sent: 2 });
+    });
+
+    it('reports everything when Redis cannot say what went out', async () => {
+      redisAvailable = false;
+      fetchMomenceEvents.mockResolvedValue(feed(2, 3));
+      expect(await runScheduleLint({ ...ctx, force: true })).toMatchObject({
+        newFindings: 2,
+        sent: 2,
+      });
+    });
+
+    it('comes back with a still-open list when the week turns over', async () => {
+      // Far enough out that the same sessions are still ahead of us next week.
+      const october = [
+        special({ id: 1, dateTime: et('2026-10-01', '19:00') }),
+        event({ id: 2, dateTime: et('2026-10-01', '19:00') }),
+        farOut(),
+      ];
+      fetchMomenceEvents.mockResolvedValue(october);
+      expect((await runScheduleLint(ctx)).sent).toBe(2);
+
+      // Tuesday: the same finding, and the admins have already heard it.
+      sendTemplate.mockClear();
+      vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
+      expect((await runScheduleLint(ctx)).skipped).toBe('nothing-new');
+      expect(sendTemplate).not.toHaveBeenCalled();
+
+      // The following Monday it reads as news again — the weekly reminder.
+      vi.setSystemTime(new Date('2026-09-21T12:00:00Z'));
+      const monday = await runScheduleLint(ctx);
+      expect(monday).toMatchObject({ findings: 1, newFindings: 1, sent: 2 });
+      expect(sendKeys().at(-1)).toContain('schedule-lint:2026-09-21:');
     });
   });
 

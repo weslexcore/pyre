@@ -68,8 +68,9 @@ export const CRON_JOBS: CronJob[] = [
   {
     // The schedule lint: regular sessions under a special event, untagged
     // sessions, late drafts, duplicates, odd capacities, a schedule running
-    // out — emailed to the admins when the list changes. Daily at 6am ET as
-    // the backstop; a Momence session webhook schedules a run sooner.
+    // out — emailed to the admins when the list turns up something they have
+    // not been told about this week. Daily at 6am ET as the backstop; a
+    // Momence session webhook schedules a run sooner.
     name: 'schedule-lint',
     run: async (ctx) => {
       const summary = await (await import('@/lib/schedule-lint/job')).runScheduleLint(ctx);
