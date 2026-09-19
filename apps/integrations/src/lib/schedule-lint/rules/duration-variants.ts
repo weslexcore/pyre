@@ -4,11 +4,11 @@
 // two, and three. A start time that only sells the short one quietly loses
 // the longer booking.
 //
-// The gap is only reported when it could actually be filled: the missing
-// length has to finish before close on a day Pyre is open, and it must not
-// run into a special event. That is the "when our hours and other events
-// allow" half of the rule — otherwise every 8pm slot would be told to grow
-// a three-hour twin it has no room for.
+// The gap is only reported when it could actually be filled: the slot has to
+// still be ahead of us, the missing length has to finish before close on a day
+// Pyre is open, and it must not run into a special event. That is the "when our
+// hours and other events allow" half of the rule — otherwise every 8pm slot
+// would be told to grow a three-hour twin it has no room for.
 
 import { utcToEastern } from '@pyre/schedule-core';
 import { type NormalizedSession, sameLocation, toRef } from '../feed';
@@ -92,11 +92,18 @@ export const durationVariants: RuleDefinition<DurationVariantsParams> = {
       hint: 'A missing length is only reported when it finishes before close.',
     },
   ],
-  run(sessions: NormalizedSession[], _ctx, { type, durations, days }): RuleFinding[] {
+  run(sessions: NormalizedSession[], { now }, { type, durations, days }): RuleFinding[] {
     const specials = sessions.filter((s) => s.isPublished && s.isSpecialEvent);
+    const nowMs = now.getTime();
     const findings: RuleFinding[] = [];
 
     for (const slot of slotsOf(sessions, type)) {
+      // A slot that has already started is not a gap anyone can fill, and the
+      // feed has stopped carrying the variants of it that are over — so a
+      // running 4pm stack reads as "only the two-hour left" an hour in. Left
+      // in, every passing hour would raise a finding of its own and the
+      // admins would get an email about it: the noise this rule made all day.
+      if (slot.start <= nowMs) continue;
       const anchor = slot.sessions[0];
       const present = new Set(slot.sessions.map((s) => s.durationMinutes));
       const start = utcToEastern(new Date(slot.start).toISOString());

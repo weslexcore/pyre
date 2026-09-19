@@ -312,8 +312,13 @@ done-key instead of `force=1`; it is the backstop for anything the webhooks
 missed. Without `QSTASH_TOKEN`, step 2 becomes a Redis dirty flag that the next
 hourly tick honours.
 
-Two things keep this quiet and safe. The digest is a hash of the finding keys,
-so a re-run that finds the same problems is a no-op in the send log, a run that
-finds a changed list emails at once, and the week in the key brings anything
-still open back on Monday. And the email carries no action: every fix happens
-in Momence, so a mail scanner prefetching a link can never change the schedule.
+Two things keep this quiet and safe. What gets emailed is decided by finding
+keys, not by the run: the digest in the send key is a hash of them, so a re-run
+that finds the same problems is a no-op in the send log, and `schedule-lint:
+reported:{week}` in Redis holds the keys the week has already emailed, so a run
+only writes when it raises one that is not in there. A new problem is emailed
+the run it appears; the same trouble is emailed once a week; a list that has
+only *lost* a finding — a session that has finished and dropped out of the feed
+takes its finding with it — is silence, not news. And the email carries no
+action: every fix happens in Momence, so a mail scanner prefetching a link can
+never change the schedule.
