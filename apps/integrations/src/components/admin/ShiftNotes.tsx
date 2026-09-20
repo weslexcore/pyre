@@ -1,7 +1,8 @@
 // Shift notes (/admin/shift-notes). A composer on top — pick the shift date,
 // write what the next crew or the admins should know, attach photos or video
 // backing what you saw — and the log below, grouped by shift date, newest
-// first. Everyone on the roster writes notes; what the log holds depends on
+// first, with the most recent entry for a day at the top of that day.
+// Everyone on the roster writes notes; what the log holds depends on
 // who is reading it — an admin gets everyone's, everyone else only their own
 // — so a non-admin's view is entirely theirs to edit and needs no person
 // filter. The server decides all of that (the island only renders what came
@@ -315,7 +316,7 @@ export function ShiftNotes() {
     setNames((prev) => ({ ...prev, ...people }));
     setNotes((prev) =>
       [...prev.filter((n) => n.id !== note.id), note].sort(
-        (a, b) => b.note_date.localeCompare(a.note_date) || a.created_at.localeCompare(b.created_at)
+        (a, b) => b.note_date.localeCompare(a.note_date) || b.created_at.localeCompare(a.created_at)
       )
     );
   };
@@ -758,8 +759,8 @@ export function ShiftNotes() {
     []
   );
 
-  // note_date → that day's notes, in the server's order (dates desc,
-  // written-order within a day).
+  // note_date → that day's notes, in the server's order (dates desc, and
+  // newest-written first within a day).
   const byDay = useMemo(() => {
     const groups = new Map<string, ShiftNoteRow[]>();
     for (const note of visible) {

@@ -151,7 +151,7 @@ export const GET: APIRoute = async ({ cookies }) => {
     .from('shift_notes')
     .select('*')
     .order('note_date', { ascending: false })
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(LIST_LIMIT);
 
   // Admins read the whole log; everyone else reads what they wrote. A session
