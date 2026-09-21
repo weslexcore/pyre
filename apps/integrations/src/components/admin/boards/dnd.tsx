@@ -1,30 +1,36 @@
-// Drag-and-drop for a board: pick a card up, drop it on a column. Built on
-// @dnd-kit/core, which is here for one reason — touch. A mouse drag is a
+// Drag-and-drop for a board: pick a card up, drop it on a column or between
+// two cards. Built on @dnd-kit/core and its sortable preset, which are here
+// for one reason — touch. A mouse drag is a
 // mousedown and a few pixels of movement; a finger on a phone is also how
 // you scroll the page, so a touch drag has to wait for a press-and-hold
 // before it claims the gesture, and the page has to keep scrolling when the
 // card is carried past the edge of the screen. Both are dnd-kit's job.
 //
-// The column select on every row stays. It is the keyboard and screen-reader
-// path, and on a phone it is still the surest way to move one card three
-// columns down without a long drag.
+// Each column is a sortable list of its cards, so dragging within a column
+// shows the neighbours making room; dropping on another column's card takes
+// that card's place, dropping on the column itself goes last (lib/boards/
+// reorder.ts decides). The drawer's Column field stays as the keyboard path.
 
 import {
-  type DragEndEvent,
+  closestCorners,
   type DraggableAttributes,
   type DraggableSyntheticListeners,
   MouseSensor,
   TouchSensor,
-  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { ReactNode } from 'react';
 import type { BoardCardRow, BoardColumnRow } from '@/lib/db';
 
 export type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 export { DndContext, DragOverlay } from '@dnd-kit/core';
+
+/** Cards sit inside their column's box, so the nearest corners pick the card
+ * under the pointer and fall back to the column when there is none. */
+export const boardCollisions = closestCorners;
 
 /**
  * A mouse needs a few pixels of movement, so a click still opens the card. A
@@ -36,20 +42,6 @@ export function useBoardSensors() {
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } })
   );
-}
-
-/** The column a drop landed in, or null when it went nowhere new. */
-export function droppedColumn(
-  event: DragEndEvent,
-  cards: Pick<BoardCardRow, 'id' | 'column_id'>[],
-  columns: Pick<BoardColumnRow, 'id' | 'archived'>[]
-): { card: Pick<BoardCardRow, 'id' | 'column_id'>; columnId: string } | null {
-  const card = cards.find((row) => row.id === String(event.active.id));
-  const column = event.over ? columns.find((row) => row.id === String(event.over?.id)) : null;
-  if (!card || !column) return null;
-  // An archived column keeps showing while it holds cards, but takes no new ones.
-  if (column.archived || column.id === card.column_id) return null;
-  return { card, columnId: column.id };
 }
 
 /** A column as a drop target: lights up while a card is held over it. */
@@ -68,7 +60,9 @@ export function DroppableColumn({
     id: column.id,
     disabled: disabled || column.archived,
   });
-  const receiving = isOver && !column.archived;
+  // Held over the column or over any card in it.
+  const overCard = active && (active.data.current as { columnId?: string } | undefined)?.columnId;
+  const receiving = !column.archived && (isOver || overCard === column.id);
   return (
     <section
       ref={setNodeRef}
@@ -85,17 +79,27 @@ export function DroppableColumn({
   );
 }
 
+/** One column's cards as a sortable list, in the order shown. */
+export function SortableColumn({ cardIds, children }: { cardIds: string[]; children: ReactNode }) {
+  return (
+    <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+      {children}
+    </SortableContext>
+  );
+}
+
 /**
- * A card as something to pick up. Renders its child with the drag listeners
- * to spread onto the row, and fades the original while its ghost is being
- * carried in the DragOverlay.
+ * A card as something to pick up and a place another card can be dropped.
+ * Renders its child with the drag listeners to spread onto the row, shifts
+ * to make room while a neighbour is carried past, and fades the original
+ * while its own ghost is in the DragOverlay.
  */
 export function DraggableCard({
   card,
   disabled = false,
   children,
 }: {
-  card: Pick<BoardCardRow, 'id'>;
+  card: Pick<BoardCardRow, 'id' | 'column_id'>;
   disabled?: boolean;
   children: (drag: {
     listeners: DraggableSyntheticListeners;
@@ -103,12 +107,22 @@ export function DraggableCard({
     dragging: boolean;
   }) => ReactNode;
 }) {
-  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+  const { setNodeRef, listeners, attributes, isDragging, transform, transition } = useSortable({
     id: card.id,
     disabled,
+    data: { columnId: card.column_id },
   });
   return (
-    <div ref={setNodeRef} className={isDragging ? 'opacity-30' : undefined}>
+    <div
+      ref={setNodeRef}
+      className={isDragging ? 'opacity-30' : undefined}
+      style={{
+        transform: transform
+          ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
+          : undefined,
+        transition,
+      }}
+    >
       {children({ listeners, attributes, dragging: isDragging })}
     </div>
   );

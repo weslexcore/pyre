@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
+import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type {
   BoardCardRow,
@@ -39,13 +40,14 @@ import { CardDrawer } from './CardDrawer';
 import { CardRow } from './CardRow';
 import { AddColumn, ColumnHeader } from './ColumnHeader';
 import {
+  boardCollisions,
   DndContext,
   type DragEndEvent,
   DraggableCard,
   DragOverlay,
   type DragStartEvent,
   DroppableColumn,
-  droppedColumn,
+  SortableColumn,
   useBoardSensors,
 } from './dnd';
 import { QuickAdd } from './QuickAdd';
@@ -142,24 +144,43 @@ export function BoardView({ slug }: { slug: string }) {
     await mutate(() => send('/api/admin/board-cards', 'POST', { board: slug, title, columnId }));
   };
 
-  // The move shows at once — the card is already in the other column when
-  // the finger lifts — and the reload behind it settles the completion stamp
-  // and the sort order. A refused move reloads too, which puts it back.
-  const moveCard = async (card: Pick<BoardCardRow, 'id'>, columnId: string) => {
+  // A drop is a column and the order it should hold afterwards. The order
+  // shows at once; the column move (if any) goes through the card PATCH so
+  // completion stamps and notices happen in one place, then the column is
+  // renumbered. A refused drop reloads, which puts everything back.
+  const dropCard = async (plan: NonNullable<ReturnType<typeof planDrop>>) => {
+    const orders = sortOrdersFor(plan.orderedIds);
     setBundle((current) =>
       current
         ? {
             ...current,
-            cards: current.cards.map((row) =>
-              row.id === card.id ? { ...row, column_id: columnId } : row
-            ),
+            cards: current.cards.map((row) => {
+              const order = orders.get(row.id);
+              if (order === undefined) return row;
+              return { ...row, column_id: plan.columnId, sort_order: order };
+            }),
           }
         : current
     );
+    setBusy(true);
+    setError(null);
     try {
-      await mutate(() => send('/api/admin/board-cards', 'PATCH', { id: card.id, columnId }));
-    } catch {
+      if (plan.moved) {
+        await send('/api/admin/board-cards', 'PATCH', {
+          id: plan.card.id,
+          columnId: plan.columnId,
+        });
+      }
+      await send('/api/admin/board-cards/reorder', 'POST', {
+        board: slug,
+        columnId: plan.columnId,
+        cardIds: plan.orderedIds,
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not move this card');
       await load();
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -167,8 +188,12 @@ export function BoardView({ slug }: { slug: string }) {
   const onDragEnd = (event: DragEndEvent) => {
     setDraggingId(null);
     if (!bundle) return;
-    const drop = droppedColumn(event, bundle.cards, bundle.columns);
-    if (drop) void moveCard(drop.card, drop.columnId);
+    const plan = planDrop(
+      { activeId: String(event.active.id), overId: event.over ? String(event.over.id) : null },
+      bundle.cards,
+      bundle.columns
+    );
+    if (plan) void dropCard(plan);
   };
 
   if (loading && !bundle) return <p className="font-mono text-xs text-white/40">Loading…</p>;
@@ -278,6 +303,7 @@ export function BoardView({ slug }: { slug: string }) {
 
       <DndContext
         sensors={sensors}
+        collisionDetection={boardCollisions}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragCancel={() => setDraggingId(null)}
@@ -298,21 +324,23 @@ export function BoardView({ slug }: { slug: string }) {
                     {draggingCard && !column.archived ? 'Drop it here.' : 'Nothing here.'}
                   </p>
                 )}
-                {columnCards.map((card) => (
-                  <DraggableCard key={card.id} card={card} disabled={busy}>
-                    {({ listeners, attributes }) => (
-                      <CardRow
-                        card={card}
-                        columns={columns}
-                        people={people}
-                        today={today}
-                        fields={fields}
-                        dragProps={{ ...listeners, ...attributes }}
-                        onOpen={(next) => setOpenCardId(next.id)}
-                      />
-                    )}
-                  </DraggableCard>
-                ))}
+                <SortableColumn cardIds={columnCards.map((card) => card.id)}>
+                  {columnCards.map((card) => (
+                    <DraggableCard key={card.id} card={card} disabled={busy}>
+                      {({ listeners, attributes }) => (
+                        <CardRow
+                          card={card}
+                          columns={columns}
+                          people={people}
+                          today={today}
+                          fields={fields}
+                          dragProps={{ ...listeners, ...attributes }}
+                          onOpen={(next) => setOpenCardId(next.id)}
+                        />
+                      )}
+                    </DraggableCard>
+                  ))}
+                </SortableColumn>
               </div>
             </DroppableColumn>
           ))}
