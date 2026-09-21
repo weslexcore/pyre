@@ -1,25 +1,17 @@
-// One card, as a row. The same component on a board column, on a goal page,
-// and in All Tasks — a task and a lead look alike because they are the same
-// row, and a founder scanning All Tasks should not have to learn two layouts.
+// One card, as a row. The same component on a board column and in All
+// Tasks — a task and a lead look alike because they are the same row, and a
+// founder scanning All Tasks should not have to learn two layouts.
 //
-// The row is a button that opens the drawer; the column select beside it is
-// the only control that acts in place, because moving a card is the thing
-// people do twenty times a day and opening a drawer to do it would be a
-// tax. No drag-and-drop: there is no such library in this app, and a select
-// works on a phone, which is where half of this gets used.
+// The row is a button that opens the drawer, where everything about the
+// card lives, the column included. On a board the row can also be picked up
+// and dropped on another column (dnd.tsx hands in the listeners), which is
+// how a card moves twenty times a day without a control crowding every row.
 
+import type { HTMLAttributes } from 'react';
 import { formatProperty } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import {
-  ColumnDot,
-  cardAnchorId,
-  DueChip,
-  QuietChip,
-  rowClass,
-  selectClass,
-  WaitingBadge,
-} from '../goalsUi';
+import { ColumnDot, cardAnchorId, DueChip, QuietChip, rowClass, WaitingBadge } from '../goalsUi';
 
 export interface CardRowProps {
   card: BoardCardRow;
@@ -34,8 +26,10 @@ export interface CardRowProps {
   /** The board this card is on, when the view spans boards. */
   boardName?: string;
   onOpen: (card: BoardCardRow) => void;
-  onMove: (card: BoardCardRow, columnId: string) => void;
-  busy?: boolean;
+  /** Drag listeners and ARIA attributes from dnd.tsx, spread onto the row. */
+  dragProps?: HTMLAttributes<HTMLButtonElement>;
+  /** True for the ghost being carried, which needs no controls. */
+  ghost?: boolean;
 }
 
 export function CardRow({
@@ -47,19 +41,23 @@ export function CardRow({
   goalTitle,
   boardName,
   onOpen,
-  onMove,
-  busy = false,
+  dragProps,
+  ghost = false,
 }: CardRowProps) {
   const column = columns.find((c) => c.id === card.column_id);
   const finished = card.completed_at !== null;
-  // An archived column still shows for the card sitting in it, so nothing is
-  // stranded somewhere the select cannot name.
-  const options = columns.filter((c) => !c.archived || c.id === card.column_id);
   const shown = fields.filter((field) => field.show_on_card && card.properties[field.key] != null);
 
   return (
-    <div className="flex items-stretch gap-2" id={cardAnchorId(card)}>
-      <button type="button" className={`${rowClass} flex-1`} onClick={() => onOpen(card)}>
+    <div id={ghost ? undefined : cardAnchorId(card)}>
+      <button
+        type="button"
+        className={`${rowClass} ${dragProps ? 'cursor-grab touch-manipulation active:cursor-grabbing' : ''} ${
+          ghost ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-black)] shadow-xl' : ''
+        }`}
+        onClick={() => onOpen(card)}
+        {...dragProps}
+      >
         <span className="mt-1.5">{column && <ColumnDot kind={column.kind} />}</span>
         <span className="min-w-0 flex-1">
           <span
@@ -85,23 +83,6 @@ export function CardRow({
           </span>
         </span>
       </button>
-
-      <label className="sr-only" htmlFor={`move-${card.id}`}>
-        Move {card.title}
-      </label>
-      <select
-        id={`move-${card.id}`}
-        className={`${selectClass} w-[7.5rem] shrink-0`}
-        value={card.column_id}
-        disabled={busy}
-        onChange={(e) => onMove(card, e.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

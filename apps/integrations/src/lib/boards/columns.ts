@@ -71,6 +71,28 @@ export function renameColumn(
   );
 }
 
+/**
+ * The same list without one column. The route decides what that means:
+ * an empty column is deleted, one still holding cards is retired instead,
+ * so nothing is ever stranded (applyColumns in api/admin/boards.ts).
+ */
+export function removeColumn(
+  columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[],
+  key: string
+): ColumnPayload[] {
+  return columnsPayload(columns).filter((column) => column.key !== key);
+}
+
+/** Whether taking `key` away would leave the board nowhere to put a card. */
+export function isLastOpenColumn(
+  columns: Pick<BoardColumnRow, 'key' | 'kind' | 'archived'>[],
+  key: string
+): boolean {
+  return !columns.some(
+    (column) => column.key !== key && column.kind === 'open' && !column.archived
+  );
+}
+
 /** The same list with a new column after the last one. */
 export function appendColumn(
   columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[],

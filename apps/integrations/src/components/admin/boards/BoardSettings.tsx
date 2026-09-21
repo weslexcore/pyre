@@ -3,11 +3,11 @@
 // that take a board off the index: archiving it and deleting it.
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
-// key, so renaming a column keeps its cards, and dropping one archives it if
-// anything is sitting in it rather than taking the cards with it. That is
-// why there is no Delete button on a column: "remove" means "stop offering
-// it", and the server decides whether the row can actually go. A new
-// column's key is minted from its first label and kept through edits.
+// key, so renaming a column keeps its cards, and removing one deletes it if
+// it is empty and retires it if anything is sitting in it, rather than
+// taking the cards with it. "Remove" here means "take it off the list", and
+// the server decides whether the row can actually go. A new column's key is
+// minted from its first label and kept through edits.
 //
 // The goal is not here: it is edited where it is shown, at the top of the
 // board (BoardGoal).
@@ -18,7 +18,7 @@
 // listing them is honest and an editor would be speculative.
 
 import { useState } from 'react';
-import { columnKeyOf } from '@/lib/boards/columns';
+import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
 import type { ColumnKind } from '@/lib/boards/types';
 import {
   BOARD_LIMITS,
@@ -87,6 +87,9 @@ export function BoardSettings({
     setDrafts((current) =>
       current.map((draft, i) => (i === index ? { ...draft, ...patch } : draft))
     );
+
+  const removeDraft = (index: number) =>
+    setDrafts((current) => current.filter((_, i) => i !== index));
 
   const addColumn = () =>
     setDrafts((current) => [
@@ -216,7 +219,7 @@ export function BoardSettings({
         <SectionTitle note="renaming keeps the cards">Columns</SectionTitle>
         <div className="space-y-2">
           {drafts.map((draft, index) => (
-            <div key={draft.key} className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <div key={draft.key} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
               <input
                 className={inputClass}
                 type="text"
@@ -245,12 +248,24 @@ export function BoardSettings({
                 />
                 retire
               </label>
+              <button
+                type="button"
+                className="px-1 font-mono text-xs text-white/40 underline hover:text-[var(--pyre-red)] disabled:opacity-30"
+                disabled={isLastOpenColumn(drafts, draft.key)}
+                aria-label={`Remove ${draft.label}`}
+                onClick={() => removeDraft(index)}
+              >
+                remove
+              </button>
             </div>
           ))}
         </div>
         <button type="button" className={`${buttonClass} mt-2`} onClick={addColumn}>
           Add column
         </button>
+        <p className="mt-2 text-xs text-white/35">
+          A removed column is deleted if it is empty and retired if it still holds cards.
+        </p>
       </div>
 
       {fields.length > 0 && (

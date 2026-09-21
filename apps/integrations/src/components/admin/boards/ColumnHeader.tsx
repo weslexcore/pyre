@@ -3,12 +3,17 @@
 // columns.ts) — so a rename from the header and a rename from Board settings
 // land on the server identically, and a column keeps its cards either way.
 //
+// An empty column can also be deleted from its header. Only an empty one:
+// the server retires a column that still holds cards rather than deleting
+// it, so the header offers Delete only when it would actually delete.
+//
 // Only a manager sees the controls. A single-board grantee works the cards;
 // they do not reshape the board.
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardColumnRow } from '@/lib/db';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { buttonClass, inputBaseClass, SectionTitle } from '../goalsUi';
 
 export function ColumnHeader({
@@ -17,16 +22,20 @@ export function ColumnHeader({
   canManage = false,
   busy = false,
   onRename,
+  onDelete,
 }: {
   column: BoardColumnRow;
   count: number;
   canManage?: boolean;
   busy?: boolean;
   onRename: (label: string) => Promise<void>;
+  /** Offered only when the column is empty and not the last open one. */
+  onDelete?: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(column.label);
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,26 +94,53 @@ export function ColumnHeader({
   }
 
   return (
-    <SectionTitle
-      note={
-        <span className="flex items-center gap-2">
-          <span>{count}</span>
-          {canManage && (
-            <button
-              type="button"
-              className="underline hover:text-white/70"
-              disabled={busy}
-              onClick={start}
-            >
-              Rename
-            </button>
-          )}
-        </span>
-      }
-    >
-      {column.label}
-      {column.archived && <span className="ml-2 text-white/25">(retired)</span>}
-    </SectionTitle>
+    <>
+      <SectionTitle
+        note={
+          <span className="flex items-center gap-2">
+            <span>{count}</span>
+            {canManage && (
+              <button
+                type="button"
+                className="underline hover:text-white/70"
+                disabled={busy}
+                onClick={start}
+              >
+                Rename
+              </button>
+            )}
+            {canManage && onDelete && (
+              <button
+                type="button"
+                className="underline hover:text-[var(--pyre-red)]"
+                disabled={busy}
+                onClick={() => setConfirming(true)}
+              >
+                Delete
+              </button>
+            )}
+          </span>
+        }
+      >
+        {column.label}
+        {column.archived && <span className="ml-2 text-white/25">(retired)</span>}
+      </SectionTitle>
+
+      {confirming && onDelete && (
+        <ConfirmDialog
+          title={`Delete the "${column.label}" column?`}
+          body="It is empty, so nothing goes with it. Cards can no longer be moved here."
+          confirmLabel="Delete column"
+          danger
+          busy={busy}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            void onDelete();
+          }}
+        />
+      )}
+    </>
   );
 }
 

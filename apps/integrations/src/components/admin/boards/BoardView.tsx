@@ -9,10 +9,15 @@
 // measures the KPIs here and nothing else, and `canManage` (the whole
 // /admin/boards grant) is what unlocks renaming columns, the goal's
 // definition, and the settings panel.
+//
+// A card moves by being dragged onto a column (dnd.tsx), or from the Column
+// field in its drawer. Either way the move is applied to the page at once
+// and confirmed by the reload behind it; a refused move snaps back with the
+// API's message.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
-import { appendColumn, renameColumn } from '@/lib/boards/columns';
+import { appendColumn, isLastOpenColumn, removeColumn, renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type {
@@ -33,6 +38,16 @@ import { BoardSettings } from './BoardSettings';
 import { CardDrawer } from './CardDrawer';
 import { CardRow } from './CardRow';
 import { AddColumn, ColumnHeader } from './ColumnHeader';
+import {
+  DndContext,
+  type DragEndEvent,
+  DraggableCard,
+  DragOverlay,
+  type DragStartEvent,
+  DroppableColumn,
+  droppedColumn,
+  useBoardSensors,
+} from './dnd';
 import { QuickAdd } from './QuickAdd';
 
 interface BundleResponse {
@@ -63,6 +78,8 @@ export function BoardView({ slug }: { slug: string }) {
   // reopening a goal and completing it again pops again — the Confetti
   // component's contract.
   const [burst, setBurst] = useState(0);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const sensors = useBoardSensors();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,8 +142,33 @@ export function BoardView({ slug }: { slug: string }) {
     await mutate(() => send('/api/admin/board-cards', 'POST', { board: slug, title, columnId }));
   };
 
-  const moveCard = async (card: BoardCardRow, columnId: string) => {
-    await mutate(() => send('/api/admin/board-cards', 'PATCH', { id: card.id, columnId }));
+  // The move shows at once — the card is already in the other column when
+  // the finger lifts — and the reload behind it settles the completion stamp
+  // and the sort order. A refused move reloads too, which puts it back.
+  const moveCard = async (card: Pick<BoardCardRow, 'id'>, columnId: string) => {
+    setBundle((current) =>
+      current
+        ? {
+            ...current,
+            cards: current.cards.map((row) =>
+              row.id === card.id ? { ...row, column_id: columnId } : row
+            ),
+          }
+        : current
+    );
+    try {
+      await mutate(() => send('/api/admin/board-cards', 'PATCH', { id: card.id, columnId }));
+    } catch {
+      await load();
+    }
+  };
+
+  const onDragStart = (event: DragStartEvent) => setDraggingId(String(event.active.id));
+  const onDragEnd = (event: DragEndEvent) => {
+    setDraggingId(null);
+    if (!bundle) return;
+    const drop = droppedColumn(event, bundle.cards, bundle.columns);
+    if (drop) void moveCard(drop.card, drop.columnId);
   };
 
   if (loading && !bundle) return <p className="font-mono text-xs text-white/40">Loading…</p>;
@@ -154,6 +196,8 @@ export function BoardView({ slug }: { slug: string }) {
 
   const saveColumns = (next: ReturnType<typeof renameColumn>) =>
     mutate(() => send('/api/admin/boards', 'PATCH', { slug, columns: next }));
+
+  const draggingCard = bundle.cards.find((card) => card.id === draggingId) ?? null;
 
   return (
     <div className="space-y-4">
@@ -232,40 +276,73 @@ export function BoardView({ slug }: { slug: string }) {
         <QuickAdd noun={noun} busy={busy} onAdd={(title) => addCard(title, quickAddColumn.id)} />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {grouped.map(({ column, cards: columnCards }) => (
-          <section key={column.id} className={cardClass}>
-            <ColumnHeader
-              column={column}
-              count={columnCards.length}
-              canManage={canManage}
-              busy={busy}
-              onRename={(label) => saveColumns(renameColumn(columns, column.key, label))}
+      <DndContext
+        sensors={sensors}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDraggingId(null)}
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {grouped.map(({ column, cards: columnCards }) => (
+            <DroppableColumn key={column.id} column={column} className={cardClass} disabled={busy}>
+              <ColumnHeader
+                column={column}
+                count={columnCards.length}
+                canManage={canManage}
+                busy={busy}
+                onRename={(label) => saveColumns(renameColumn(columns, column.key, label))}
+                onDelete={
+                  // Empty on the whole board, not just under the owner filter,
+                  // and not the last place a card could go.
+                  bundle.cards.every((card) => card.column_id !== column.id) &&
+                  !isLastOpenColumn(columns, column.key)
+                    ? () => saveColumns(removeColumn(columns, column.key))
+                    : undefined
+                }
+              />
+              <div className="min-h-16 space-y-2">
+                {columnCards.length === 0 && (
+                  <p className="font-mono text-xs text-white/30">
+                    {draggingCard && !column.archived ? 'Drop it here.' : 'Nothing here.'}
+                  </p>
+                )}
+                {columnCards.map((card) => (
+                  <DraggableCard key={card.id} card={card} disabled={busy}>
+                    {({ listeners, attributes }) => (
+                      <CardRow
+                        card={card}
+                        columns={columns}
+                        people={people}
+                        today={today}
+                        fields={fields}
+                        dragProps={{ ...listeners, ...attributes }}
+                        onOpen={(next) => setOpenCardId(next.id)}
+                      />
+                    )}
+                  </DraggableCard>
+                ))}
+              </div>
+            </DroppableColumn>
+          ))}
+          {canManage && (
+            <AddColumn busy={busy} onAdd={(label) => saveColumns(appendColumn(columns, label))} />
+          )}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {draggingCard && (
+            <CardRow
+              card={draggingCard}
+              columns={columns}
+              people={people}
+              today={today}
+              fields={fields}
+              ghost
+              onOpen={() => undefined}
             />
-            <div className="space-y-2">
-              {columnCards.length === 0 && (
-                <p className="font-mono text-xs text-white/30">Nothing here.</p>
-              )}
-              {columnCards.map((card) => (
-                <CardRow
-                  key={card.id}
-                  card={card}
-                  columns={columns}
-                  people={people}
-                  today={today}
-                  fields={fields}
-                  busy={busy}
-                  onOpen={(next) => setOpenCardId(next.id)}
-                  onMove={(next, columnId) => void moveCard(next, columnId)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
-        {canManage && (
-          <AddColumn busy={busy} onAdd={(label) => saveColumns(appendColumn(columns, label))} />
-        )}
-      </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {goal && (
         <section className={cardClass}>

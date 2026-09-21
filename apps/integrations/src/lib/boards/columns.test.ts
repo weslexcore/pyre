@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { appendColumn, columnKeyOf, columnsPayload, renameColumn } from './columns';
+import {
+  appendColumn,
+  columnKeyOf,
+  columnsPayload,
+  isLastOpenColumn,
+  removeColumn,
+  renameColumn,
+} from './columns';
 
 const column = (key: string, sort: number, over: Record<string, unknown> = {}) => ({
   key,
@@ -71,5 +78,23 @@ describe('appendColumn', () => {
   it('never reuses a key already on the board, retired or not', () => {
     const next = appendColumn([column('new', 10, { archived: true })], 'New', 'done');
     expect(next[1]).toMatchObject({ key: 'new_2', kind: 'done', sortOrder: 20 });
+  });
+});
+
+describe('removeColumn / isLastOpenColumn', () => {
+  it('drops one column and keeps the rest in order', () => {
+    const next = removeColumn([column('new', 10), column('old', 20), column('done', 30)], 'old');
+    expect(next.map((c) => c.key)).toEqual(['new', 'done']);
+  });
+
+  it('knows when a column is the last place a card could go', () => {
+    const done = column('done', 20, { kind: 'done' });
+    expect(isLastOpenColumn([column('new', 10), done], 'new')).toBe(true);
+    expect(isLastOpenColumn([column('new', 10), column('doing', 15), done], 'new')).toBe(false);
+    // A retired open column does not count as somewhere to put a card.
+    expect(isLastOpenColumn([column('new', 10), column('old', 5, { archived: true })], 'new')).toBe(
+      true
+    );
+    expect(isLastOpenColumn([column('new', 10), done], 'done')).toBe(false);
   });
 });

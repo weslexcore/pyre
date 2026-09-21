@@ -142,11 +142,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
         people={people}
         today={today}
         boardName={showBoard && boards.length > 1 ? boardNames.get(card.board_id) : undefined}
-        busy={busy}
         onOpen={(next) => setOpenCardId(next.id)}
-        onMove={(next, columnId) =>
-          void mutate(() => send('/api/admin/board-cards', 'PATCH', { id: next.id, columnId }))
-        }
       />
     ));
 
