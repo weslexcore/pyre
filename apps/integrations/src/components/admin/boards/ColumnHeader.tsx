@@ -4,7 +4,7 @@
 // land on the server identically, and a column keeps its cards either way.
 //
 // An empty column can also be deleted from its header. Only an empty one:
-// the server retires a column that still holds cards rather than deleting
+// the server archives a column that still holds cards rather than deleting
 // it, so the header offers Delete only when it would actually delete.
 //
 // Only a manager sees the controls. A single-board grantee works the cards;
@@ -123,7 +123,7 @@ export function ColumnHeader({
         }
       >
         {column.label}
-        {column.archived && <span className="ml-2 text-white/25">(retired)</span>}
+        {column.archived && <span className="ml-2 text-white/25">(archived)</span>}
       </SectionTitle>
 
       {confirming && onDelete && (

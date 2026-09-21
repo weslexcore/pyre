@@ -2,11 +2,7 @@
 // desk, holding everything a row cannot: the notes, the board's own fields,
 // and the thread. No goal picker: a card is filed under its board's goal.
 //
-// Saving is explicit rather than per-keystroke — this is the panel where
-// somebody writes a paragraph, and autosaving a half-written sentence into
-// an audit trail everyone reads would be worse than a Save button. The
-// column select and the delete are the exceptions: both are single decisions
-// with nothing to lose.
+// Edits save automatically; text is debounced and writes are serialized.
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { BOARD_LIMITS } from '@/lib/boards/types';
@@ -20,12 +16,12 @@ import {
   dangerButtonClass,
   inputClass,
   labelClass,
-  primaryButtonClass,
   selectClass,
   textareaClass,
 } from '../goalsUi';
 import { FieldRow } from '../guestUi';
 import { SopMarkdown } from '../SopMarkdown';
+import { useCardAutosave } from './useCardAutosave';
 
 export interface CardDrawerProps {
   card: BoardCardRow;
@@ -64,56 +60,28 @@ export function CardDrawer({
   const [properties, setProperties] = useState<Record<string, BoardFieldValue>>(card.properties);
   const [preview, setPreview] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Re-seed when the drawer is pointed at a different card without closing.
-  useEffect(() => {
-    setTitle(card.title);
-    setNotes(card.notes_md);
-    setColumnId(card.column_id);
-    setOwnerEmail(card.owner_email ?? '');
-    setDueDate(card.due_date ?? '');
-    setWaitingOn(card.waiting_on ?? '');
-    setArea(card.area ?? '');
-    setProperties(card.properties);
-    setError(null);
-  }, [card]);
+  const autosave = useCardAutosave(onSave);
+  const saving = autosave.status === 'saving' || autosave.status === 'pending';
+  const error = !title.trim() ? 'A card needs a title.' : autosave.error;
+  const close = async () => {
+    if (!title.trim()) return;
+    if (await autosave.flush()) onClose();
+  };
+  const closeAction = useRef(close);
+  closeAction.current = close;
 
   useEffect(() => {
     closeRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') void closeAction.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, []);
 
   const liveColumns = columns.filter((c) => !c.archived || c.id === card.column_id);
   const liveFields = fields.filter((f) => !f.archived || properties[f.key] != null);
   const finished = card.completed_at !== null;
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await onSave({
-        title,
-        notesMd: notes,
-        columnId,
-        ownerEmail: ownerEmail || null,
-        dueDate: dueDate || null,
-        waitingOn: waitingOn || null,
-        area: area || null,
-        properties,
-      });
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-end overflow-y-auto sm:items-stretch">
@@ -121,7 +89,7 @@ export function CardDrawer({
         type="button"
         tabIndex={-1}
         aria-label="Close"
-        onClick={onClose}
+        onClick={() => void close()}
         className="absolute inset-0 h-full w-full cursor-default bg-black/70"
       />
       <div
@@ -134,7 +102,7 @@ export function CardDrawer({
           <h2 id={titleId} className="font-mono text-xs uppercase tracking-wide text-white/50">
             {finished ? 'Finished card' : 'Card'}
           </h2>
-          <button ref={closeRef} type="button" className={buttonClass} onClick={onClose}>
+          <button ref={closeRef} type="button" className={buttonClass} onClick={() => void close()}>
             Close
           </button>
         </div>
@@ -150,7 +118,10 @@ export function CardDrawer({
               type="text"
               maxLength={BOARD_LIMITS.title}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (e.target.value.trim()) autosave.schedule({ title: e.target.value }, 600);
+              }}
             />
           </div>
 
@@ -163,7 +134,10 @@ export function CardDrawer({
                 id={`card-column-${card.id}`}
                 className={selectClass}
                 value={columnId}
-                onChange={(e) => setColumnId(e.target.value)}
+                onChange={(e) => {
+                  setColumnId(e.target.value);
+                  autosave.schedule({ columnId: e.target.value }, 0);
+                }}
               >
                 {liveColumns.map((column) => (
                   <option key={column.id} value={column.id}>
@@ -181,7 +155,10 @@ export function CardDrawer({
                 id={`card-owner-${card.id}`}
                 className={selectClass}
                 value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
+                onChange={(e) => {
+                  setOwnerEmail(e.target.value);
+                  autosave.schedule({ ownerEmail: e.target.value || null }, 0);
+                }}
               >
                 <option value="">Unassigned</option>
                 {owners.map((owner) => (
@@ -201,7 +178,10 @@ export function CardDrawer({
                 className={inputClass}
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  autosave.schedule({ dueDate: e.target.value || null }, 0);
+                }}
               />
             </div>
 
@@ -213,7 +193,10 @@ export function CardDrawer({
                 id={`card-area-${card.id}`}
                 className={selectClass}
                 value={area}
-                onChange={(e) => setArea(e.target.value)}
+                onChange={(e) => {
+                  setArea(e.target.value);
+                  autosave.schedule({ area: e.target.value || null }, 0);
+                }}
               >
                 <option value="">None</option>
                 {AREAS.map((option) => (
@@ -236,7 +219,10 @@ export function CardDrawer({
               maxLength={BOARD_LIMITS.waitingOn}
               placeholder="Sarah's availability, the insurer, a quote…"
               value={waitingOn}
-              onChange={(e) => setWaitingOn(e.target.value)}
+              onChange={(e) => {
+                setWaitingOn(e.target.value);
+                autosave.schedule({ waitingOn: e.target.value || null }, 600);
+              }}
             />
             <p className="mt-1 text-xs text-white/35">
               The card stays where it is; the badge says why it is stuck.
@@ -251,14 +237,13 @@ export function CardDrawer({
                   idPrefix={`card-${card.id}`}
                   field={field}
                   value={properties[field.key]}
-                  onChange={(next) =>
-                    setProperties((current) => {
-                      const updated = { ...current };
-                      if (next === null) delete updated[field.key];
-                      else updated[field.key] = next;
-                      return updated;
-                    })
-                  }
+                  onChange={(next) => {
+                    const updated = { ...properties };
+                    if (next === null) delete updated[field.key];
+                    else updated[field.key] = next;
+                    setProperties(updated);
+                    autosave.schedule({ properties: updated });
+                  }}
                 />
               ))}
             </div>
@@ -285,7 +270,10 @@ export function CardDrawer({
                 maxLength={BOARD_LIMITS.notes}
                 placeholder="Markdown is fine here."
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  autosave.schedule({ notesMd: e.target.value }, 600);
+                }}
               />
             )}
           </div>
@@ -301,18 +289,15 @@ export function CardDrawer({
             >
               Delete
             </button>
-            <div className="flex gap-2">
-              <button type="button" className={buttonClass} onClick={onClose}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={primaryButtonClass}
-                disabled={busy || saving || !title.trim()}
-                onClick={() => void save()}
-              >
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+            <div className="flex items-center gap-2">
+              <span role="status" className="text-xs text-white/50">
+                {error ? 'Changes not saved' : saving ? 'Saving…' : 'All changes saved'}
+              </span>
+              {autosave.error && (
+                <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+                  Retry
+                </button>
+              )}
             </div>
           </div>
 

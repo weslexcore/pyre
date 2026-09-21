@@ -4,7 +4,7 @@
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
 // key, so renaming a column keeps its cards, and removing one deletes it if
-// it is empty and retires it if anything is sitting in it, rather than
+// it is empty and archives it if anything is sitting in it, rather than
 // taking the cards with it. "Remove" here means "take it off the list", and
 // the server decides whether the row can actually go. A new column's key is
 // minted from its first label and kept through edits.
@@ -41,6 +41,8 @@ import {
   selectClass,
   send,
 } from '../goalsUi';
+
+import { ColumnOrder } from './ColumnOrder';
 
 interface ColumnDraft {
   key: string;
@@ -217,11 +219,11 @@ export function BoardSettings({
 
       <div className="mt-5 border-t border-white/10 pt-4">
         <SectionTitle note="renaming keeps the cards">Columns</SectionTitle>
-        <div className="space-y-2">
-          {drafts.map((draft, index) => (
-            <div key={draft.key} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+        <ColumnOrder items={drafts} disabled={busy || saving} onChange={setDrafts}>
+          {(draft, index) => (
+            <div key={draft.key} className="flex items-center gap-2">
               <input
-                className={inputClass}
+                className={`${inputClass} min-w-0 flex-1`}
                 type="text"
                 maxLength={BOARD_LIMITS.columnLabel}
                 value={draft.label}
@@ -229,7 +231,7 @@ export function BoardSettings({
                 onChange={(e) => setDraft(index, { label: e.target.value })}
               />
               <select
-                className={`${selectClass} sm:w-36`}
+                className={`${selectClass} w-auto shrink-0`}
                 value={draft.kind}
                 aria-label={`Kind for ${draft.key}`}
                 onChange={(e) => setDraft(index, { kind: e.target.value as ColumnKind })}
@@ -240,17 +242,17 @@ export function BoardSettings({
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-2 px-1 text-xs text-white/50">
+              <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                 <input
                   type="checkbox"
                   checked={draft.archived}
                   onChange={(e) => setDraft(index, { archived: e.target.checked })}
                 />
-                retire
+                archive
               </label>
               <button
                 type="button"
-                className="px-1 font-mono text-xs text-white/40 underline hover:text-[var(--pyre-red)] disabled:opacity-30"
+                className="shrink-0 px-1 font-mono text-xs text-white/40 underline hover:text-[var(--pyre-red)] disabled:opacity-30"
                 disabled={isLastOpenColumn(drafts, draft.key)}
                 aria-label={`Remove ${draft.label}`}
                 onClick={() => removeDraft(index)}
@@ -258,13 +260,13 @@ export function BoardSettings({
                 remove
               </button>
             </div>
-          ))}
-        </div>
+          )}
+        </ColumnOrder>
         <button type="button" className={`${buttonClass} mt-2`} onClick={addColumn}>
           Add column
         </button>
         <p className="mt-2 text-xs text-white/35">
-          A removed column is deleted if it is empty and retired if it still holds cards.
+          A removed column is deleted if it is empty and archived if it still holds cards.
         </p>
       </div>
 

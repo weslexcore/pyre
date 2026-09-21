@@ -47,7 +47,7 @@ export function droppedColumn(
   const card = cards.find((row) => row.id === String(event.active.id));
   const column = event.over ? columns.find((row) => row.id === String(event.over?.id)) : null;
   if (!card || !column) return null;
-  // A retired column keeps showing while it holds cards, but takes no new ones.
+  // An archived column keeps showing while it holds cards, but takes no new ones.
   if (column.archived || column.id === card.column_id) return null;
   return { card, columnId: column.id };
 }

@@ -73,7 +73,7 @@ export function renameColumn(
 
 /**
  * The same list without one column. The route decides what that means:
- * an empty column is deleted, one still holding cards is retired instead,
+ * an empty column is deleted, one still holding cards is archived instead,
  * so nothing is ever stranded (applyColumns in api/admin/boards.ts).
  */
 export function removeColumn(
