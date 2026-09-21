@@ -9,13 +9,22 @@ import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
   ADMIN_TOOLS,
+  BOARDS_HREF,
   GUESTS_MANAGE,
   INCIDENTS_MANAGE,
   LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
+  isBoardGrantKey,
 } from './adminTools';
+
+/** One board a 'board:<slug>' checkbox can grant, as the API lists them. */
+interface BoardOption {
+  slug: string;
+  name: string;
+  grantKey: string;
+}
 
 interface EnvUser {
   email: string;
@@ -26,6 +35,7 @@ interface EnvUser {
 interface UsersResponse {
   staff: StaffRow[];
   stipends?: StaffStipendRow[];
+  boards?: BoardOption[];
   envUsers: EnvUser[];
   envActive: boolean;
   self: string;
@@ -338,10 +348,13 @@ function PersonStipends({
 
 function PagePicker({
   pages,
+  boards,
   disabled,
   onChange,
 }: {
   pages: string[];
+  /** The live boards, from the users API. */
+  boards: BoardOption[];
   disabled: boolean;
   onChange: (next: string[]) => void;
 }) {
@@ -351,6 +364,10 @@ function PagePicker({
     // can't leave a dangling privilege behind.
     const capability = MANAGE_CAPABILITIES[key];
     if (capability && !granted) next = next.filter((p) => p !== capability.key);
+    // The Boards page is every board; ticking it makes the per-board grants
+    // redundant, so they come off rather than lingering as dead keys nobody
+    // would think to untick later.
+    if (key === BOARDS_HREF && granted) next = next.filter((p) => !isBoardGrantKey(p));
     onChange([...new Set(next)]);
   };
 
@@ -358,6 +375,13 @@ function PagePicker({
     <div className="flex flex-wrap gap-x-4 gap-y-1.5">
       {ADMIN_TOOLS.map((tool) => {
         const capability = MANAGE_CAPABILITIES[tool.href];
+        // One checkbox per board under Boards, so a community manager can be
+        // given the rental pipeline and nothing else. Hidden once the whole
+        // page is granted — that already covers every board.
+        const perBoard =
+          tool.href === BOARDS_HREF && boards.length > 0 && !pages.includes(BOARDS_HREF)
+            ? boards
+            : [];
         return (
           <span key={tool.href} className="flex items-center gap-2">
             <label className={checkClass}>
@@ -383,6 +407,21 @@ function PagePicker({
                 manage
               </label>
             )}
+            {perBoard.map((board) => (
+              <label
+                key={board.grantKey}
+                className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
+                title={`Opens only the ${board.name} board`}
+              >
+                <input
+                  type="checkbox"
+                  checked={pages.includes(board.grantKey)}
+                  disabled={disabled}
+                  onChange={(e) => toggle(board.grantKey, e.target.checked)}
+                />
+                {board.slug}
+              </label>
+            ))}
           </span>
         );
       })}
@@ -394,6 +433,7 @@ export function UsersManager() {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [stipends, setStipends] = useState<StaffStipendRow[]>([]);
   const [envUsers, setEnvUsers] = useState<EnvUser[]>([]);
+  const [boards, setBoards] = useState<BoardOption[]>([]);
   const [envActive, setEnvActive] = useState(false);
   const [self, setSelf] = useState('');
   const [source, setSource] = useState<'db' | 'env'>('db');
@@ -428,6 +468,7 @@ export function UsersManager() {
       const body = (await res.json()) as UsersResponse;
       setStaff(body.staff);
       setStipends(body.stipends ?? []);
+      setBoards(body.boards ?? []);
       setDrafts(
         Object.fromEntries(
           body.staff.map((s) => [
@@ -767,6 +808,7 @@ export function UsersManager() {
               ) : (
                 <PagePicker
                   pages={person.pages}
+                  boards={boards}
                   disabled={busy}
                   onChange={(next) => void patch(person.id, { pages: next })}
                 />
@@ -900,7 +942,9 @@ export function UsersManager() {
             available to schedule
           </label>
         </div>
-        {!newIsAdmin && <PagePicker pages={newPages} disabled={busy} onChange={setNewPages} />}
+        {!newIsAdmin && (
+          <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
+        )}
         <p className="font-mono text-xs text-white/40">
           Leave the email blank for someone who is only scheduled — it can be filled in later, and
           dashboard access needs it.

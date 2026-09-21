@@ -1,0 +1,220 @@
+// Boards (/admin/boards): the column layouts cards live in. The seeded
+// `goals` board is the founders' task list; `rentals` is the first lead
+// pipeline, and the shape every future one takes.
+//
+// Two levels of access, and the difference is the point of the tool. Anyone
+// holding `board:<slug>` can open that board and work its cards
+// (board-cards.ts). Reshaping the tool — creating a board, renaming one,
+// editing its columns — needs the whole `/admin/boards` page, so the
+// community manager running the rental pipeline can move a lead to Quoted
+// without being able to add a column, a board, or a way into the founders'
+// goals.
+//
+// Columns are never deleted out from under their cards. A column dropped
+// from the list is archived if anything is sitting in it and removed only if
+// nothing is — an archived column keeps rendering while it still holds work
+// (lib/boards/cards.ts), so nothing is ever stranded somewhere invisible.
+//
+//   GET                  → { boards }        (the ones this user may open)
+//   GET ?slug=<slug>     → { board, columns, fields, cards, goals }
+//   POST   { slug, name, description?, cardNoun?, includeInAllTasks?,
+//            columns: [{ key, label, kind, sortOrder? }] } → { board, columns } 201
+//   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
+//            archived?, sortOrder?, columns? } → { board, columns }
+
+import { BOARDS_HREF } from '@/components/admin/adminTools';
+import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
+import {
+  type APIRoute,
+  type Db,
+  beginMutation,
+  beginRead,
+  json,
+  storeError,
+} from '@/lib/boards/route';
+import { loadBoardBundle, loadBoards, loadColumns } from '@/lib/boards/store';
+import { isBoardSlug } from '@/lib/boards/types';
+import { type ColumnInput, parseBoardCreate, parseBoardPatch } from '@/lib/boards/validate';
+import type { BoardRow } from '@/lib/db';
+
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const ready = await beginRead(cookies, BOARDS_HREF);
+  if (ready instanceof Response) return ready;
+  const { db, gate } = ready;
+
+  const slug = url.searchParams.get('slug');
+  try {
+    if (slug) {
+      if (!isBoardSlug(slug)) return json({ error: 'slug is not a board slug' }, 400);
+      // Not-found and not-yours look the same: a 403 would confirm the board
+      // exists to somebody who was never meant to know the list.
+      if (!canViewBoard(gate.access, slug)) return json({ error: 'Board not found' }, 404);
+      const bundle = await loadBoardBundle(db, slug);
+      if (!bundle) return json({ error: 'Board not found' }, 404);
+      return json({ ...bundle, canManage: canManageBoards(gate.access) });
+    }
+
+    const boards = visibleBoards(gate.access, await loadBoards(db));
+    return json({ boards, canManage: canManageBoards(gate.access) });
+  } catch (e) {
+    return storeError('boards', e);
+  }
+};
+
+export const POST: APIRoute = async ({ cookies, request }) => {
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
+  if (ready instanceof Response) return ready;
+  const { db, email, body, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
+
+  const parsed = parseBoardCreate(body);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const { columns, ...board } = parsed.value;
+
+  const { data: existing } = await db
+    .from('boards')
+    .select('slug')
+    .eq('slug', board.slug)
+    .maybeSingle();
+  if (existing) return json({ error: `A board already uses the slug "${board.slug}"` }, 409);
+
+  const { data, error } = await db
+    .from('boards')
+    .insert({ ...board, sort_order: await nextBoardOrder(db), created_by: email })
+    .select('*')
+    .single();
+  if (error) return json({ error: error.message }, 500);
+
+  const created = data as BoardRow;
+  const { error: columnError } = await db
+    .from('board_columns')
+    .insert(columns.map((column) => ({ ...column, board_id: created.id })));
+  if (columnError) {
+    // A board with no columns is unusable and un-fixable from the UI, so it
+    // does not get to exist: undo the insert rather than leave a husk.
+    await db.from('boards').delete().eq('id', created.id);
+    return json({ error: columnError.message }, 500);
+  }
+
+  return json({ board: created, columns: await loadColumns(db, created.id) }, 201);
+};
+
+export const PATCH: APIRoute = async ({ cookies, request }) => {
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
+  if (ready instanceof Response) return ready;
+  const { db, email, body, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
+
+  const slug = typeof body.slug === 'string' ? body.slug : '';
+  if (!isBoardSlug(slug)) return json({ error: 'slug is not a board slug' }, 400);
+
+  const parsed = parseBoardPatch(body);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const { columns, ...patch } = parsed.value;
+
+  const { data: existing, error: loadError } = await db
+    .from('boards')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (loadError) return json({ error: loadError.message }, 500);
+  const board = (existing as BoardRow) ?? null;
+  if (!board) return json({ error: 'Board not found' }, 404);
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await db
+      .from('boards')
+      .update({ ...patch, updated_by: email })
+      .eq('id', board.id);
+    if (error) return json({ error: error.message }, 500);
+  }
+
+  if (columns) {
+    const applied = await applyColumns(db, board.id, columns);
+    if (applied) return applied;
+  }
+
+  const { data: after, error: afterError } = await db
+    .from('boards')
+    .select('*')
+    .eq('id', board.id)
+    .single();
+  if (afterError) return json({ error: afterError.message }, 500);
+
+  return json({ board: after as BoardRow, columns: await loadColumns(db, board.id) });
+};
+
+/**
+ * Reconcile a board's columns against the list that was sent. Keys are the
+ * identity — a column keeps its id (and its cards) through a rename — and
+ * the three cases are: still listed (update), gone but holding cards
+ * (archive), gone and empty (delete).
+ */
+async function applyColumns(
+  db: Db,
+  boardId: string,
+  next: ColumnInput[]
+): Promise<Response | null> {
+  const existing = await loadColumns(db, boardId);
+  const byKey = new Map(existing.map((column) => [column.key, column]));
+  const wanted = new Set(next.map((column) => column.key));
+
+  for (const column of next) {
+    const current = byKey.get(column.key);
+    if (current) {
+      const { error } = await db
+        .from('board_columns')
+        .update({
+          label: column.label,
+          kind: column.kind,
+          sort_order: column.sort_order,
+          archived: column.archived,
+        })
+        .eq('id', current.id);
+      if (error) return json({ error: error.message }, 500);
+    } else {
+      const { error } = await db
+        .from('board_columns')
+        .insert({ ...column, board_id: boardId });
+      if (error) return json({ error: error.message }, 500);
+    }
+  }
+
+  const dropped = existing.filter((column) => !wanted.has(column.key));
+  if (dropped.length === 0) return null;
+
+  const { data: held, error: heldError } = await db
+    .from('board_cards')
+    .select('column_id')
+    .in(
+      'column_id',
+      dropped.map((column) => column.id)
+    );
+  if (heldError) return json({ error: heldError.message }, 500);
+  const occupied = new Set(((held ?? []) as { column_id: string }[]).map((row) => row.column_id));
+
+  const toArchive = dropped.filter((column) => occupied.has(column.id)).map((c) => c.id);
+  const toDelete = dropped.filter((column) => !occupied.has(column.id)).map((c) => c.id);
+
+  if (toArchive.length > 0) {
+    const { error } = await db
+      .from('board_columns')
+      .update({ archived: true })
+      .in('id', toArchive);
+    if (error) return json({ error: error.message }, 500);
+  }
+  if (toDelete.length > 0) {
+    const { error } = await db.from('board_columns').delete().in('id', toDelete);
+    if (error) return json({ error: error.message }, 500);
+  }
+  return null;
+}
+
+async function nextBoardOrder(db: Db): Promise<number> {
+  const { data } = await db
+    .from('boards')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1);
+  return (((data ?? []) as { sort_order: number }[])[0]?.sort_order ?? 0) + 10;
+}

@@ -703,6 +703,165 @@ export interface BusinessCostRow {
   updated_at: string;
 }
 
+// Goals, KPIs, and the boards their tasks live on (/admin/goals,
+// /admin/boards). Hand-written mirrors of the goals_boards migration; the
+// pure logic that reads them lives in lib/goals/* and lib/boards/*.
+
+export type GoalStatus = 'planned' | 'active' | 'completed' | 'dropped';
+
+/**
+ * A goal: what we are trying to achieve, judged by its KPIs and advanced by
+ * the cards filed under it. `parent_id` nests one level and no further (the
+ * route enforces it). `completed_at` is only ever set by a person deciding
+ * the goal was met — never by a task counter.
+ */
+export interface GoalRow {
+  id: string;
+  parent_id: string | null;
+  title: string;
+  description_md: string;
+  status: GoalStatus;
+  owner_email: string | null;
+  area: string | null;
+  /** First time it went active; never overwritten. */
+  started_at: string | null;
+  /** YYYY-MM-DD. */
+  target_date: string | null;
+  sort_order: number;
+  completed_at: string | null;
+  completed_by: string | null;
+  /** What was true when it was called met. */
+  completion_note: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KpiDirection = 'at_least' | 'at_most';
+
+/** One number a goal is judged on. `current_value` is null until measured. */
+export interface GoalKpiRow {
+  id: string;
+  goal_id: string;
+  name: string;
+  unit: string | null;
+  direction: KpiDirection;
+  start_value: number | null;
+  target_value: number;
+  current_value: number | null;
+  /** Always 'manual' today; reserved for live sources (momence:*, posthog:*). */
+  source: 'manual';
+  measured_at: string | null;
+  measured_by: string | null;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A column layout with a name: the task board, or a lead pipeline. */
+export interface BoardRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  /** What one card is called here — 'task', 'lead'. */
+  card_noun: string;
+  include_in_all_tasks: boolean;
+  sort_order: number;
+  archived: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BoardColumnKind = 'open' | 'done' | 'dropped';
+
+export interface BoardColumnRow {
+  id: string;
+  board_id: string;
+  key: string;
+  label: string;
+  kind: BoardColumnKind;
+  sort_order: number;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BoardFieldKind = 'text' | 'number' | 'yes_no' | 'choice' | 'multi_choice' | 'date';
+
+/** A per-board question. `board_cards.properties` is keyed by `key`. */
+export interface BoardFieldRow {
+  id: string;
+  board_id: string;
+  key: string;
+  label: string;
+  kind: BoardFieldKind;
+  options: string[];
+  hint: string | null;
+  show_on_card: boolean;
+  sort_order: number;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A stored answer to one board field. */
+export type BoardFieldValue = string | number | boolean | string[];
+
+/** One task or lead. */
+export interface BoardCardRow {
+  id: string;
+  board_id: string;
+  column_id: string;
+  goal_id: string | null;
+  title: string;
+  notes_md: string;
+  owner_email: string | null;
+  /** YYYY-MM-DD. */
+  due_date: string | null;
+  /** Why it is stuck, while it stays in progress. */
+  waiting_on: string | null;
+  area: string | null;
+  sort_order: number;
+  properties: Record<string, BoardFieldValue>;
+  source: 'manual' | 'intake';
+  external_ref: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BoardEventAction =
+  | 'created'
+  | 'updated'
+  | 'status_changed'
+  | 'assigned'
+  | 'due_changed'
+  | 'moved'
+  | 'kpi_updated'
+  | 'completed'
+  | 'comment';
+
+/** One line of the trail. Exactly one of goal_id / card_id is set. */
+export interface BoardEventRow {
+  id: string;
+  goal_id: string | null;
+  card_id: string | null;
+  action: BoardEventAction;
+  actor: string;
+  detail: Record<string, unknown>;
+  note: string | null;
+  created_at: string;
+}
+
 let client: SupabaseClient | null | undefined;
 
 export function getDb(): SupabaseClient | null {

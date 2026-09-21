@@ -3,6 +3,12 @@
 // admins see everything, other users see the pages granted to them in
 // the staff table (managed from /admin/users).
 
+import { BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
+import { ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
+
+export { BOARDS_HREF, GOALS_HREF, ALL_TASKS_HREF };
+export { BOARD_GRANT_PREFIX, boardGrantKey, isBoardGrantKey } from '@/lib/boards/types';
+
 export type AdminToolSection = 'operations' | 'community' | 'marketing' | 'monitoring' | 'admin';
 
 export interface AdminTool {
@@ -137,6 +143,44 @@ export const ADMIN_TOOLS: AdminTool[] = [
     description:
       'How your shift went — details worth handing off, feedback, and photos or video backing what you saw. Admins read every note; everyone else reads their own.',
     section: 'operations',
+  },
+  {
+    href: GOALS_HREF,
+    title: 'Goals',
+    navLabel: 'Goals',
+    description:
+      'What we are trying to achieve, the KPIs that say whether we got there, and every task that rolls up to one. Plus All Tasks: what is in flight, what is late, and who is on what.',
+    section: 'admin',
+    keywords: [
+      'trello',
+      'okr',
+      'kpi',
+      'roadmap',
+      'priorities',
+      'tasks',
+      'all tasks',
+      'todo',
+      'objectives',
+      'targets',
+    ],
+  },
+  {
+    href: BOARDS_HREF,
+    title: 'Boards',
+    navLabel: 'Boards',
+    description:
+      'Cards in columns: the founders\u2019 task board, and the lead pipelines beside it \u2014 private rentals and group bookings from first enquiry to booked. Each board can be granted on its own.',
+    section: 'operations',
+    keywords: [
+      'kanban',
+      'pipeline',
+      'leads',
+      'rentals',
+      'group bookings',
+      'enquiries',
+      'cards',
+      'columns',
+    ],
   },
   {
     href: '/admin/email-templates',
@@ -320,6 +364,11 @@ const LEGACY_PAGE_GRANTS: Record<string, string[]> = {
  * for a page this one replaced, or the manage capability that implies it. */
 export function canViewPage(access: PageAccess, href: string): boolean {
   if (access.isAdmin || access.pages.includes(href)) return true;
+  // A single-board grant ('board:rentals') opens the Boards tool, and with it
+  // /admin/boards/* — which is safe because each board page checks its own
+  // slug against the grant (lib/boards/access). Without this the community
+  // manager would hold a board they could not navigate to.
+  if (href === BOARDS_HREF && access.pages.some(isBoardGrantKey)) return true;
   if (LEGACY_PAGE_GRANTS[href]?.some((legacy) => access.pages.includes(legacy))) return true;
   const manageKey = MANAGE_IMPLIES_VIEW[href];
   return manageKey !== undefined && access.pages.includes(manageKey);
@@ -448,6 +497,24 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     // Needs guests:manage rather than admin; the page itself checks, and the
     // search only knows the admin flag, so it stays out of non-admin results.
     adminOnly: true,
+  },
+  {
+    href: ALL_TASKS_HREF,
+    title: 'All tasks',
+    parent: GOALS_HREF,
+    keywords: ['in flight', 'overdue', 'todo', 'due this week', 'my tasks', 'who is on what'],
+  },
+  {
+    href: '/admin/goals/new',
+    title: 'New goal',
+    parent: GOALS_HREF,
+    keywords: ['create', 'add a goal', 'kpi', 'target'],
+  },
+  {
+    href: '/admin/boards/goals',
+    title: 'Task board',
+    parent: BOARDS_HREF,
+    keywords: ['kanban', 'to do', 'in progress', 'done', 'cards'],
   },
   {
     href: '/admin/ask/log',

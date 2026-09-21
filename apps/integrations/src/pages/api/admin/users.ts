@@ -18,6 +18,7 @@ import {
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
 } from '@/components/admin/adminTools';
+import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
@@ -71,13 +72,30 @@ function parseTargetHours(value: unknown): number | null | Response {
   return Math.round(hours * 10) / 10;
 }
 
-function parsePages(value: unknown): string[] | Response {
+/**
+ * The boards a 'board:<slug>' grant may name: the live ones. Checking against
+ * the table rather than a constant is the point — boards are created from
+ * /admin/boards, so the set of grantable keys grows without a deploy — and it
+ * keeps a typo'd slug from being saved as a grant that opens nothing.
+ */
+async function liveBoardSlugs(db: NonNullable<ReturnType<typeof getDb>>): Promise<Set<string>> {
+  const { data, error } = await db.from('boards').select('slug').eq('archived', false);
+  if (error) {
+    console.error('[users] board slug lookup failed:', error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map((row) => (row as { slug: string }).slug));
+}
+
+function parsePages(value: unknown, boardSlugs: Set<string>): string[] | Response {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((p) => typeof p !== 'string')) {
     return json({ error: 'pages must be an array of page hrefs' }, 400);
   }
   const pages = [...new Set(value as string[])];
-  const unknown = pages.filter((p) => !GRANTABLE_PAGES.has(p));
+  const unknown = pages.filter(
+    (p) => !GRANTABLE_PAGES.has(p) && !(isBoardGrantKey(p) && boardSlugs.has(boardSlugFromGrant(p)))
+  );
   if (unknown.length > 0) {
     return json({ error: `Unknown pages: ${unknown.join(', ')}` }, 400);
   }
@@ -148,10 +166,24 @@ export const GET: APIRoute = async ({ cookies }) => {
   // admin row) — envActive tells the UI which wording to use.
   const envUsers = getEnvAllowlist().filter((e) => !staff.some((s) => s.email === e.email));
 
+  // The boards the per-board checkboxes offer, so /admin/users doesn't have
+  // to fetch them from the boards API to render one column of a form.
+  const boardsRes = await db
+    .from('boards')
+    .select('slug, name, archived')
+    .eq('archived', false)
+    .order('sort_order', { ascending: true });
+  if (boardsRes.error) return json({ error: boardsRes.error.message }, 500);
+
   return json({
     // Someone's calendar feed token is a credential, not roster data — an
     // admin managing people has no reason to hold it.
     staff: staff.map(redactCalendarToken),
+    boards: ((boardsRes.data ?? []) as { slug: string; name: string }[]).map((board) => ({
+      slug: board.slug,
+      name: board.name,
+      grantKey: boardGrantKey(board.slug),
+    })),
     stipends: (stipendsRes.data ?? []) as StaffStipendRow[],
     envUsers,
     envActive: !staff.some((s) => s.is_admin),
@@ -183,7 +215,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const email = rawEmail || null;
 
   const isAdmin = body.isAdmin === true;
-  const pages = parsePages(body.pages);
+  const pages = parsePages(body.pages, await liveBoardSlugs(db));
   if (pages instanceof Response) return pages;
   if (!email && (isAdmin || pages.length > 0)) {
     return json({ error: 'Dashboard access needs a Momence login email' }, 400);
@@ -289,7 +321,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   if (body.pages !== undefined) {
-    const pages = parsePages(body.pages);
+    const pages = parsePages(body.pages, await liveBoardSlugs(db));
     if (pages instanceof Response) return pages;
     fields.pages = pages;
   }
