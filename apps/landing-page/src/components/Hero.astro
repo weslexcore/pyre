@@ -1,5 +1,5 @@
 ---
-import location from '../lib/location';
+import location, { formatWindow } from '../lib/location';
 import HeroVideo from './HeroVideo.astro';
 import InstagramIcon from './icons/InstagramIcon.astro';
 ---
@@ -65,7 +65,11 @@ import InstagramIcon from './icons/InstagramIcon.astro';
         {location.hours.map((h) => (
           <div class="flex justify-between gap-4">
             <span class="font-mono-bold opacity-80">{h.day}</span>
-            <span>{h.open} - {h.close}</span>
+            <span class="text-right">
+              {h.windows.map((w) => (
+                <span class="block whitespace-nowrap">{formatWindow(w)}</span>
+              ))}
+            </span>
           </div>
         ))}
       </div>

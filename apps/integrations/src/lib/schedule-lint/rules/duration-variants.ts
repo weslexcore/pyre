@@ -14,7 +14,7 @@ import { utcToEastern } from '@pyre/schedule-core';
 import { type NormalizedSession, sameLocation, toRef } from '../feed';
 import { formatDurationLabel, typeLabel } from '../labels';
 import type { OpeningHours } from '../types';
-import { dayKeyOf, toMinutes } from './opening-hours';
+import { blockAt, dayKeyOf, toMinutes } from './opening-hours';
 import type { RuleDefinition, RuleFinding } from './rule';
 import { overlaps } from './special-event-overlap';
 
@@ -63,13 +63,16 @@ export const durationVariants: RuleDefinition<DurationVariantsParams> = {
     type: 'open hours',
     durations: [60, 120],
     days: {
-      sun: { open: '13:00', close: '16:00' },
-      mon: null,
-      tue: null,
-      wed: { open: '16:00', close: '20:00' },
-      thu: { open: '16:00', close: '20:00' },
-      fri: { open: '16:00', close: '21:00' },
-      sat: { open: '10:00', close: '16:00' },
+      sun: [{ open: '13:00', close: '20:00' }],
+      mon: [],
+      tue: [],
+      wed: [{ open: '16:00', close: '20:00' }],
+      thu: [
+        { open: '07:00', close: '10:00' },
+        { open: '16:00', close: '20:00' },
+      ],
+      fri: [{ open: '16:00', close: '21:00' }],
+      sat: [{ open: '09:00', close: '20:00' }],
     },
   },
   fields: [
@@ -97,11 +100,13 @@ export const durationVariants: RuleDefinition<DurationVariantsParams> = {
       const anchor = slot.sessions[0];
       const present = new Set(slot.sessions.map((s) => s.durationMinutes));
       const start = utcToEastern(new Date(slot.start).toISOString());
-      const window = days[dayKeyOf(start.date)];
-      // A slot on a closed day, or before opening, is the opening-hours
-      // rule's finding to make; asking it for more lengths would pile on.
-      if (!window || start.minutes < toMinutes(window.open)) continue;
-      const close = toMinutes(window.close);
+      // A slot on a closed day, or outside the day's open blocks, is the
+      // opening-hours rule's finding to make; asking it for more lengths
+      // would pile on. A missing length has to fit the block it starts in —
+      // on a split day the morning block closes long before the evening one.
+      const block = blockAt(days[dayKeyOf(start.date)], start.minutes);
+      if (!block) continue;
+      const close = toMinutes(block.close);
 
       for (const minutes of durations) {
         if (present.has(minutes)) continue;

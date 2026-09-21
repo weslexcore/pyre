@@ -8,7 +8,7 @@ import SignupForm from '../components/SignupForm.astro';
 import Layout from '../layouts/main.astro';
 import { SPECIAL_EVENT_TAG } from '../lib/events-config';
 import hi from '../lib/hi';
-import location from '../lib/location';
+import location, { formatWindow } from '../lib/location';
 ---
 
 <Layout
@@ -51,7 +51,7 @@ import location from '../lib/location';
           {location.hours.map((h) => (
             <span class="whitespace-nowrap font-mono-bold text-xs tracking-wide">
               <span class="text-[var(--pyre-gold)]">{h.day}</span>
-              {` ${h.open}–${h.close}`}
+              {` ${h.windows.map((w) => formatWindow(w, '–')).join(', ')}`}
             </span>
           ))}
         </div>

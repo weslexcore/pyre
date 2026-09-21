@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
-import { ADMIN_TOOL_SECTIONS, type AdminTool } from './adminTools';
+import { ADMIN_TOOL_SECTIONS, type AdminTool, STAFF_PAGES } from './adminTools';
 
 interface AdminNavProps {
   currentPath: string;
@@ -70,7 +70,15 @@ export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNa
   });
 
   const groups: NavGroup[] = [
-    { label: null, items: [{ href: '/admin', label: 'Home' }] },
+    // Home, then the two pages everyone holds (messages from the admins and
+    // the inbox behind the bell), ahead of the per-user tool sections.
+    {
+      label: null,
+      items: [
+        { href: '/admin', label: 'Home' },
+        ...STAFF_PAGES.map((page) => ({ href: page.href, label: page.title })),
+      ],
+    },
     // Pinned tools first, in the user's order; they stay in their sections
     // below too, mirroring the dashboard.
     ...(pinnedItems.length > 0 ? [{ label: 'Pinned', items: pinnedItems }] : []),

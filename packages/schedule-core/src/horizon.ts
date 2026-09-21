@@ -32,3 +32,16 @@ export function lastConfirmedDate(today: string): string {
 export function isTentativeDate(date: string, today: string): boolean {
   return date >= firstTentativeDate(today);
 }
+
+/**
+ * True when a shift is still tentative: its week hasn't locked AND no admin
+ * has confirmed it by hand. A confirmed shift is set in stone however far
+ * out it sits; inside the locked window the date rule alone settles it, so
+ * clearing a confirmation there changes nothing.
+ */
+export function isTentativeShift(
+  shift: { shift_date: string; confirmed_at: string | null },
+  today: string
+): boolean {
+  return !shift.confirmed_at && isTentativeDate(shift.shift_date, today);
+}

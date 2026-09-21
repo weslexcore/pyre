@@ -4,7 +4,7 @@
 // lib/auth/access); the rendering half lives in names.ts.
 
 import { listStaff } from '@/lib/auth/access';
-import type { SopRole } from './levels';
+import { roleForStaffRow, type SopRole } from './levels';
 import type { PeopleNames } from './names';
 
 /**
@@ -57,7 +57,7 @@ export async function listGrantablePeople(): Promise<GrantablePerson[]> {
     .filter((row) => row.active && (row.email ?? '').trim())
     .map((row) => {
       const email = (row.email ?? '').trim().toLowerCase();
-      const role: SopRole = row.is_admin ? 'admin' : row.is_shift_lead ? 'shift_lead' : 'staff';
+      const role: SopRole = roleForStaffRow(row);
       return {
         email,
         name: (row.display_name ?? '').trim() || email,

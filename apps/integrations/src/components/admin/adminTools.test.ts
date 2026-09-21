@@ -7,6 +7,8 @@ import {
   canViewPage,
   canViewPath,
   GOALS_HREF,
+  searchablePages,
+  STAFF_PAGES,
   toolsForAccess,
 } from './adminTools';
 
@@ -61,5 +63,35 @@ describe('board grants', () => {
     const hrefs = ADMIN_TOOLS.map((t) => t.href);
     expect(hrefs).toContain(GOALS_HREF);
     expect(hrefs).toContain(BOARDS_HREF);
+  });
+});
+
+describe('staff pages', () => {
+  const rosterOnly = { isAdmin: false, pages: [] as string[] };
+
+  it('lets anyone with dashboard access open messages and notifications', () => {
+    expect(canViewPage(rosterOnly, '/admin/messages')).toBe(true);
+    expect(canViewPage(rosterOnly, '/admin/notifications')).toBe(true);
+    expect(canViewPath(rosterOnly, '/admin/messages')).toBe(true);
+    expect(canViewPath(rosterOnly, '/admin/messages/8f5c1f2e-1111-4222-8333-444455556666')).toBe(
+      true
+    );
+    expect(canViewPath(rosterOnly, '/admin/notifications')).toBe(true);
+  });
+
+  it('does not widen access to sibling pages', () => {
+    expect(canViewPath(rosterOnly, '/admin/messagesx')).toBe(false);
+    expect(canViewPath(rosterOnly, '/admin/water')).toBe(false);
+  });
+
+  it('never offers them as grantable tools or dashboard cards', () => {
+    expect(ADMIN_TOOLS.some((t) => STAFF_PAGES.some((p) => p.href === t.href))).toBe(false);
+    expect(toolsForAccess(rosterOnly)).toEqual([]);
+  });
+
+  it('lists them in the global search for everyone', () => {
+    const hrefs = searchablePages(toolsForAccess(rosterOnly), false).map((p) => p.href);
+    expect(hrefs).toContain('/admin/messages');
+    expect(hrefs).toContain('/admin/notifications');
   });
 });

@@ -6,20 +6,25 @@
 import { utcToEastern } from '@pyre/schedule-core';
 import { defineDynamic, defineInstructions } from 'eve/instructions';
 import { knowledgeInstructionsFor } from '../lib/prompts/knowledge';
-import { SCHEDULER_INSTRUCTIONS } from '../lib/prompts/scheduler';
+import { schedulerInstructionsWith } from '../lib/prompts/scheduler';
+import { loadStandingInstructions } from '../lib/prompts/standing';
 import { resolveRole } from '../lib/role';
 
-function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
+async function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
   const { role } = resolveRole(auth);
   // The knowledge prompt carries today's date (Eastern) for schedule
   // questions; it is re-resolved each turn, so a conversation that crosses
   // midnight picks up the new day.
-  return defineInstructions({
-    markdown:
-      role === 'knowledge'
-        ? knowledgeInstructionsFor(utcToEastern(new Date().toISOString()).date)
-        : SCHEDULER_INSTRUCTIONS,
-  });
+  if (role === 'knowledge') {
+    return defineInstructions({
+      markdown: knowledgeInstructionsFor(utcToEastern(new Date().toISOString()).date),
+    });
+  }
+  // The scheduler's prompt carries the admin's standing instructions, read
+  // fresh (behind a short cache) so an edit on the board reaches the next
+  // draft — cron runs included — without a redeploy.
+  const standing = await loadStandingInstructions();
+  return defineInstructions({ markdown: schedulerInstructionsWith(standing) });
 }
 
 export default defineDynamic({

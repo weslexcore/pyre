@@ -123,6 +123,20 @@ admin board ── proposal banner, dashed "AI draft" cards, approve ───�
   the run ("give Sarah a shift to lead"), which rides in as an `<admin-note>`
   block on the session's opening message. It steers judgment only — the hard
   rules in `agent/instructions.md` and the server-side validation still bind.
+- **Standing instructions.** The requirements that hold every week ("Wes
+  never works Sundays") are kept once by an admin, in the ⚙ Settings panel on
+  `/admin/schedule`, and stored as the singleton
+  `schedule_agent_instructions` row (migration
+  `20260917120000_schedule_agent_instructions`, written via `POST
+  /api/admin/schedule-instructions`, admin-only). This app reads that row
+  when a scheduler session starts (`agent/lib/prompts/standing.ts`, ~30s
+  cache) and `schedulerInstructionsWith` appends it to the system prompt as a
+  `<standing-instructions>` block — so it reaches board drafts, refinement
+  turns, and the weekly cron run alike, with no redeploy. Precedence, spelled
+  out in the prompt: hard rules > a run's `<admin-note>` > standing
+  instructions > the judgment guidelines. Both sides sanitise the text
+  (`sanitizeStandingInstructions` in `@pyre/schedule-core`), and an
+  unreachable row reads as "none set" rather than failing the draft.
 - Re-drafting a week supersedes its open draft; accepted rows are never
   touched.
 

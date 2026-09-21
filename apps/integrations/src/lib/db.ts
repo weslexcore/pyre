@@ -393,6 +393,75 @@ export interface ShiftNoteAttachmentRow {
   created_at: string;
 }
 
+// An admin-authored markdown message to staff (see the staff notifications
+// migration). Audience semantics — roles as a set plus named people, admins
+// always included — live in lib/messages/access.ts.
+export interface AdminMessageRow {
+  id: string;
+  title: string;
+  body_md: string;
+  /** Session email of the admin who wrote it. */
+  author_email: string;
+  audience_roles: ('staff' | 'shift_lead' | 'admin')[];
+  audience_emails: string[];
+  /** Pinned messages sort first on /admin/messages. */
+  pinned: boolean;
+  /** Set when archived: hidden from staff, read-only. */
+  archived_at: string | null;
+  /** Session email of the last admin to edit it; null until edited. */
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// One reply in a message's thread — anyone who can see the message may
+// answer; editing and deleting is author-or-admin.
+export interface AdminMessageReplyRow {
+  id: string;
+  message_id: string;
+  body_md: string;
+  author_email: string;
+  /** Session email of the last editor (reply author or admin); null until edited. */
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NotificationKind =
+  | 'admin_message'
+  | 'message_reply'
+  | 'sop_updated'
+  | 'schedule_change'
+  | 'shift_note_reply'
+  | 'sub_request';
+
+// One row in one person's inbox (see the staff notifications migration).
+// Written by the API routes that record the event; read/dismissed/expires
+// drive the bell badge and the /admin/notifications list
+// (lib/notifications/types.ts).
+export interface StaffNotificationRow {
+  id: string;
+  /** Whose inbox (lowercased staff email). */
+  recipient_email: string;
+  kind: NotificationKind;
+  title: string;
+  /** Short plain-text detail; may be empty. */
+  body: string;
+  /** Where the row opens; null when the recipient can't open that page. */
+  href: string | null;
+  /** What produced it, e.g. 'shift' + shift id, 'admin_message' + message id. */
+  source_type: string;
+  source_id: string;
+  /** Who caused it (session email); null for the Momence sync. */
+  actor_email: string | null;
+  read_at: string | null;
+  /** Cleared from the inbox; implies read. */
+  dismissed_at: string | null;
+  /** Timely kinds fall away after this; null keeps the row until dismissed. */
+  expires_at: string | null;
+  created_at: string;
+}
+
 // A bathhouse incident report (see the incidents migration). The taxonomy —
 // categories, severities, areas, contributing factors — lives in
 // lib/incidents/types.ts, which the table's check constraints mirror.

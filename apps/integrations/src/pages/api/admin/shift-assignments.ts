@@ -9,6 +9,7 @@ import type { AssignmentDuty, AssignmentRole } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
+import { notifyAssignmentChange, type ShiftForNotice } from '@/lib/notifications/schedule';
 import {
   actorFromGate,
   changedFields,
@@ -42,16 +43,21 @@ async function gateMutation(
 
 /** "'Morning' on 2026-08-14", looked up for log summaries; tolerant of a
  * just-deleted or missing shift so logging can't fail the mutation. */
-async function shiftDescription(
+/** The shift an assignment hangs off, as the change log and the notice describe it. */
+async function loadShiftLite(
   db: NonNullable<ReturnType<typeof getDb>>,
   shiftId: string
-): Promise<string> {
+): Promise<ShiftForNotice | null> {
   const { data } = await db
     .from('shifts')
-    .select('label, shift_date')
+    .select('id, label, shift_date, starts_at, ends_at, is_draft')
     .eq('id', shiftId)
     .maybeSingle();
-  return data ? describeShift(data as { label: string; shift_date: string }) : 'a shift';
+  return (data as ShiftForNotice | null) ?? null;
+}
+
+function shiftDescription(shift: ShiftForNotice | null): string {
+  return shift ? describeShift(shift) : 'a shift';
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
@@ -86,7 +92,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data: shift, error: shiftError } = await db
     .from('shifts')
-    .select('id, shift_date, label, starts_at, ends_at, status')
+    .select('id, shift_date, label, starts_at, ends_at, status, is_draft')
     .eq('id', shiftId)
     .maybeSingle();
   if (shiftError) return json({ error: shiftError.message }, 500);
@@ -126,6 +132,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     action: 'create',
     summary: `Assigned ${await staffNameOf(db, staffId)} to ${describeShift(shift)} (${timeWindow(assignment)})`,
     details: { after: assignment },
+  });
+  await notifyAssignmentChange(db, {
+    change: 'added',
+    shift: shift as ShiftForNotice,
+    staffId,
+    assignment,
+    actorEmail: actorFromGate(gate).email,
   });
 
   return json({ assignment }, 201);
@@ -172,6 +185,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   let assignment = data as ShiftAssignmentRow;
   const actor = actorFromGate(gate);
+  const shift = await loadShiftLite(db, assignment.shift_id);
   const diff = changedFields(existing as Record<string, unknown>, fields);
   if (diff) {
     await logScheduleChange(db, {
@@ -179,9 +193,20 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       entityType: 'assignment',
       entityId: assignment.id,
       action: 'update',
-      summary: `Updated ${await staffNameOf(db, assignment.staff_id)}'s assignment on ${await shiftDescription(db, assignment.shift_id)}: ${summarizeDiff(diff)}`,
+      summary: `Updated ${await staffNameOf(db, assignment.staff_id)}'s assignment on ${shiftDescription(shift)}: ${summarizeDiff(diff)}`,
       details: diff,
     });
+    // A draft being edited is accepted below, and that notice says "added".
+    if (shift && !existing.is_draft) {
+      await notifyAssignmentChange(db, {
+        change: 'updated',
+        shift,
+        staffId: assignment.staff_id,
+        assignment,
+        detail: summarizeDiff(diff),
+        actorEmail: actor.email,
+      });
+    }
   }
 
   // Editing an AI draft accepts it — the admin adjusted the recommendation,
@@ -201,9 +226,19 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       entityType: 'assignment',
       entityId: assignment.id,
       action: 'accept_item',
-      summary: `Accepted draft assignment for ${await staffNameOf(db, assignment.staff_id)} on ${await shiftDescription(db, assignment.shift_id)} (edited)`,
+      summary: `Accepted draft assignment for ${await staffNameOf(db, assignment.staff_id)} on ${shiftDescription(shift)} (edited)`,
       details: { proposalId: assignment.proposal_id },
     });
+    // acceptDraftRow took the parent shift live too, whatever it read as above.
+    if (shift) {
+      await notifyAssignmentChange(db, {
+        change: 'added',
+        shift: { ...shift, is_draft: false },
+        staffId: assignment.staff_id,
+        assignment,
+        actorEmail: actor.email,
+      });
+    }
   }
 
   return json({ assignment });
@@ -240,7 +275,8 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .eq('is_draft', false);
     if (error) return json({ error: error.message }, 500);
 
-    const shiftDesc = await shiftDescription(db, shiftId);
+    const shift = await loadShiftLite(db, shiftId);
+    const shiftDesc = shiftDescription(shift);
     const actor = actorFromGate(gate);
     for (const assignment of assignments) {
       await logScheduleChange(db, {
@@ -251,6 +287,15 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
         summary: `Removed ${await staffNameOf(db, assignment.staff_id)} from ${shiftDesc} (cleared shift)`,
         details: { before: assignment },
       });
+      if (shift) {
+        await notifyAssignmentChange(db, {
+          change: 'removed',
+          shift,
+          staffId: assignment.staff_id,
+          assignment,
+          actorEmail: actor.email,
+        });
+      }
     }
 
     return json({ ok: true, cleared: assignments.length });
@@ -273,14 +318,25 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!count) return json({ error: 'Assignment not found' }, 404);
 
   const assignment = existing as ShiftAssignmentRow;
+  const shift = await loadShiftLite(db, assignment.shift_id);
+  const actor = actorFromGate(gate);
   await logScheduleChange(db, {
-    actor: actorFromGate(gate),
+    actor,
     entityType: 'assignment',
     entityId: assignment.id,
     action: 'delete',
-    summary: `Removed ${await staffNameOf(db, assignment.staff_id)} from ${await shiftDescription(db, assignment.shift_id)}`,
+    summary: `Removed ${await staffNameOf(db, assignment.staff_id)} from ${shiftDescription(shift)}`,
     details: { before: assignment },
   });
+  if (shift && !assignment.is_draft) {
+    await notifyAssignmentChange(db, {
+      change: 'removed',
+      shift,
+      staffId: assignment.staff_id,
+      assignment,
+      actorEmail: actor.email,
+    });
+  }
 
   return json({ ok: true });
 };

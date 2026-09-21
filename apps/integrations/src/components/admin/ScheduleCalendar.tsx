@@ -10,6 +10,7 @@ import {
   busyIntervalsFor,
   firstTentativeDate,
   formatShiftNotes,
+  isTentativeShift,
   minutesToTime,
   missingShiftLead,
   timeToMinutes,
@@ -330,7 +331,8 @@ export function ScheduleCalendar() {
           </span>{' '}
           onward is <span className="font-bold text-[var(--pyre-red)]">tentative</span> — dashed
           shifts are a working plan and can still change until the week locks, but keep requesting
-          shifts and logging time off out there.
+          shifts and logging time off out there. A solid block out there was confirmed by hand on
+          the Week board.
         </p>
       )}
 
@@ -386,14 +388,15 @@ export function ScheduleCalendar() {
                             : 'text-white/40'
                       }`}
                     >
-                      {date >= firstTentative && (
-                        <span
-                          className="mr-0.5 text-[var(--pyre-red)]"
-                          title="This week hasn't locked yet — tentative"
-                        >
-                          ≈
-                        </span>
-                      )}
+                      {date >= firstTentative &&
+                        (shifts.length === 0 || shifts.some((s) => isTentativeShift(s, today))) && (
+                          <span
+                            className="mr-0.5 text-[var(--pyre-red)]"
+                            title="This week hasn't locked yet — tentative"
+                          >
+                            ≈
+                          </span>
+                        )}
                       {Number(date.slice(8))}
                     </div>
 
@@ -407,7 +410,7 @@ export function ScheduleCalendar() {
                         const noLead =
                           shift.status === 'active' &&
                           missingShiftLead(shift.assignments, staffById);
-                        const tentative = date >= firstTentative;
+                        const tentative = isTentativeShift(shift, today);
                         return (
                           <a
                             key={shift.id}
@@ -484,7 +487,7 @@ export function ScheduleCalendar() {
         </span>
         <span className="text-[var(--pyre-red)]">
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-[var(--pyre-red)]/70 align-middle" />
-          dashed = tentative (not locked yet)
+          dashed = tentative (not locked or confirmed yet)
         </span>
         <span className="text-[var(--pyre-gold)]">⚠ = no founder/shift lead on</span>
         {selfId && (

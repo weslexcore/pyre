@@ -37,7 +37,7 @@ describe('searchablePages', () => {
   it('drops sub-pages whose tool the user does not hold, and admin-only ones', () => {
     const water = ADMIN_TOOLS.filter((tool) => tool.href === '/admin/water');
     const hrefs = searchablePages(water, false).map((page) => page.href);
-    expect(hrefs).toEqual(['/admin', '/admin/water']);
+    expect(hrefs).toEqual(['/admin', '/admin/messages', '/admin/notifications', '/admin/water']);
 
     const schedule = ADMIN_TOOLS.filter((tool) => tool.href === '/admin/schedule');
     const staffHrefs = searchablePages(schedule, false).map((page) => page.href);

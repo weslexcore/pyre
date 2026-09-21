@@ -76,6 +76,11 @@ export interface ShiftRow {
 	is_draft: boolean;
 	/** Momence divergence the sync couldn't silently fix — needs admin eyes. */
 	sync_flag: "sessions_cancelled" | "times_changed" | null;
+	/**
+	 * Admin marked this shift set in stone ahead of the two-week horizon.
+	 * Null follows the date rule (see horizon.ts isTentativeShift).
+	 */
+	confirmed_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -236,4 +241,20 @@ export interface ScheduleDraftMessageRow {
 	/** For agent rows: the proposal that turn produced. */
 	proposal_id: string | null;
 	created_at: string;
+}
+
+/**
+ * The single row of `schedule_agent_instructions` — the admin's standing
+ * scheduling instructions, folded into the drafting agent's system prompt on
+ * every run (see src/standing-instructions.ts).
+ */
+export interface ScheduleAgentInstructionsRow {
+	/** Singleton guard: always true, so there is exactly one row. */
+	id: boolean;
+	/** The standing instructions; empty string when the admin has cleared them. */
+	content: string;
+	/** Dashboard email of the admin who last saved them; null for the seeded row. */
+	updated_by: string | null;
+	created_at: string;
+	updated_at: string;
 }

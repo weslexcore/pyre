@@ -7,6 +7,7 @@ import {
   CONFIRMED_HORIZON_DAYS,
   firstTentativeDate,
   isTentativeDate,
+  isTentativeShift,
   lastConfirmedDate,
 } from '../src/horizon';
 import { addDays, weekStartOf } from '../src/hours';
@@ -46,6 +47,20 @@ describe('confirmed horizon', () => {
   it('treats past dates as history, not tentative', () => {
     expect(isTentativeDate('2026-08-09', today)).toBe(false);
     expect(isTentativeDate('2025-01-01', today)).toBe(false);
+  });
+
+  it('lets an admin confirm a shift ahead of the horizon', () => {
+    const beyond = { shift_date: '2026-09-10', confirmed_at: null };
+    expect(isTentativeShift(beyond, today)).toBe(true);
+    expect(isTentativeShift({ ...beyond, confirmed_at: '2026-08-13T15:00:00Z' }, today)).toBe(
+      false
+    );
+  });
+
+  it('never makes a locked-window shift tentative', () => {
+    // Clearing a confirmation inside the horizon changes nothing.
+    expect(isTentativeShift({ shift_date: '2026-08-20', confirmed_at: null }, today)).toBe(false);
+    expect(isTentativeShift({ shift_date: '2026-08-01', confirmed_at: null }, today)).toBe(false);
   });
 
   it('crosses month and year boundaries', () => {

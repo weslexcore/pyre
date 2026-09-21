@@ -8,7 +8,9 @@
 //
 // The window stops at the confirmed horizon: past the Monday-after-next the
 // schedule is still a working plan, and shifts that may still move don't
-// belong in someone's personal calendar. That plus Google's own polling
+// belong in someone's personal calendar. A shift an admin confirmed by hand
+// (shifts.confirmed_at) is the exception — it is set in stone however far
+// out it sits, so it rides along. That plus Google's own polling
 // cadence (hours, and it ignores REFRESH-INTERVAL) makes this a background
 // convenience — the board's Add-to-calendar button and the shift emails stay
 // the fast path for anything time-sensitive.
@@ -86,7 +88,8 @@ export const GET: APIRoute = async ({ request, url }) => {
       .select('*')
       .eq('is_draft', false)
       .gte('shift_date', start)
-      .lte('shift_date', end)
+      // Inside the locked window, or confirmed by hand beyond it.
+      .or(`shift_date.lte.${end},confirmed_at.not.is.null`)
       .order('shift_date')
       .order('starts_at'),
     db.from('staff').select('*'),

@@ -1,7 +1,7 @@
 ---
 import pyreLogoRaw from '../assets/logos/pyre_logo.svg?raw';
 import footerConfig from '../lib/footer';
-import location from '../lib/location';
+import location, { formatWindow } from '../lib/location';
 import { withBase } from '../lib/paths';
 import { footerGrainGradient } from '../lib/shader-configs';
 import InstagramIcon from './icons/InstagramIcon.astro';
@@ -76,7 +76,11 @@ const pyreLogo = pyreLogoRaw.replace('<svg', '<svg class="h-full w-auto"');
           {location.hours.map((h) => (
             <div class="flex justify-between max-w-[200px]">
               <span class="opacity-70">{h.day}</span>
-              <span>{h.open} - {h.close}</span>
+              <span class="text-right">
+                {h.windows.map((w) => (
+                  <span class="block whitespace-nowrap">{formatWindow(w)}</span>
+                ))}
+              </span>
             </div>
           ))}
           <p class="text-xs opacity-60 mt-2">Last entry is 1 hour before closing</p>
