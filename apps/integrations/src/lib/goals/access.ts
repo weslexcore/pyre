@@ -3,8 +3,8 @@
 // a goal met. Pure and client-safe — the route applies these and the dialog
 // previews them, from the same code.
 
-import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { isFinishedKind } from '@/lib/boards/types';
+import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from './kpis';
 import type { GoalStatusValue } from './types';
 

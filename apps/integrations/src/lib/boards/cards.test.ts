@@ -5,9 +5,23 @@ import { cardsByColumn, columnPatch, defaultColumn, isFinished, nextSortOrder } 
 const NOW = '2026-09-21T12:00:00Z';
 const ME = 'wes@pyresauna.com';
 
-const col = (id: string, kind: BoardColumnRow['kind'], sort = 0, archived = false): BoardColumnRow =>
-  ({ id, board_id: 'b', key: id, label: id, kind, sort_order: sort, archived,
-     created_at: '', updated_at: '' }) as BoardColumnRow;
+const col = (
+  id: string,
+  kind: BoardColumnRow['kind'],
+  sort = 0,
+  archived = false
+): BoardColumnRow =>
+  ({
+    id,
+    board_id: 'b',
+    key: id,
+    label: id,
+    kind,
+    sort_order: sort,
+    archived,
+    created_at: '',
+    updated_at: '',
+  }) as BoardColumnRow;
 
 const TODO = col('todo', 'open', 10);
 const DOING = col('doing', 'open', 20);
@@ -64,7 +78,11 @@ describe('columnPatch', () => {
 
   it('keeps the original credit when a card moves between finished columns', () => {
     const earlier = '2026-05-01T09:00:00Z';
-    const done = card({ column_id: 'done', completed_at: earlier, completed_by: 'maya@pyresauna.com' });
+    const done = card({
+      column_id: 'done',
+      completed_at: earlier,
+      completed_by: 'maya@pyresauna.com',
+    });
     expect(columnPatch(done, LOST, ME, NOW)).toMatchObject({
       completed_at: earlier,
       completed_by: 'maya@pyresauna.com',

@@ -36,10 +36,7 @@ export async function logBoardEvent(db: SupabaseClient, event: BoardEventInput):
 }
 
 /** Several lines in one round trip — a patch that changed three things. */
-export async function logBoardEvents(
-  db: SupabaseClient,
-  events: BoardEventInput[]
-): Promise<void> {
+export async function logBoardEvents(db: SupabaseClient, events: BoardEventInput[]): Promise<void> {
   if (events.length === 0) return;
   const { error } = await db.from('board_events').insert(
     events.map((event) => ({

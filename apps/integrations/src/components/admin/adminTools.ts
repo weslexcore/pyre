@@ -6,8 +6,8 @@
 import { BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
 import { ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
 
-export { BOARDS_HREF, GOALS_HREF, ALL_TASKS_HREF };
 export { BOARD_GRANT_PREFIX, boardGrantKey, isBoardGrantKey } from '@/lib/boards/types';
+export { ALL_TASKS_HREF, BOARDS_HREF, GOALS_HREF };
 
 export type AdminToolSection = 'operations' | 'community' | 'marketing' | 'monitoring' | 'admin';
 

@@ -16,9 +16,9 @@ import { GOALS_HREF } from '@/components/admin/adminTools';
 import { logBoardEvent } from '@/lib/boards/events';
 import {
   type APIRoute,
-  type Db,
   beginDelete,
   beginMutation,
+  type Db,
   isUuidParam,
   json,
 } from '@/lib/boards/route';

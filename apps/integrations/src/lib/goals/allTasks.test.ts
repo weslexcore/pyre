@@ -6,22 +6,46 @@ import { buildAllTasks, weekLabel } from './allTasks';
 const TODAY = '2026-09-21';
 
 const column = (id: string, kind: BoardColumnRow['kind']): BoardColumnRow =>
-  ({ id, board_id: 'tasks', key: id, label: id, kind, sort_order: 0, archived: false,
-     created_at: '', updated_at: '' }) as BoardColumnRow;
+  ({
+    id,
+    board_id: 'tasks',
+    key: id,
+    label: id,
+    kind,
+    sort_order: 0,
+    archived: false,
+    created_at: '',
+    updated_at: '',
+  }) as BoardColumnRow;
 
 const COLUMNS = [column('todo', 'open'), column('done', 'done'), column('lost', 'dropped')];
 
 const board = (id: string, slug: string, include: boolean, sort = 0): BoardRow =>
-  ({ id, slug, name: slug, description: '', card_noun: 'task', include_in_all_tasks: include,
-     sort_order: sort, archived: false, created_by: null, updated_by: null,
-     created_at: '', updated_at: '' }) as BoardRow;
+  ({
+    id,
+    slug,
+    name: slug,
+    description: '',
+    card_noun: 'task',
+    include_in_all_tasks: include,
+    sort_order: sort,
+    archived: false,
+    created_by: null,
+    updated_by: null,
+    created_at: '',
+    updated_at: '',
+  }) as BoardRow;
 
 const BOARDS = [board('tasks', 'goals', true, 10), board('leads', 'rentals', false, 20)];
 
 let seq = 0;
+const nextId = () => {
+  seq += 1;
+  return `card-${seq}`;
+};
 const card = (over: Partial<BoardCardRow> = {}): BoardCardRow =>
   ({
-    id: `card-${(seq += 1)}`,
+    id: nextId(),
     board_id: 'tasks',
     column_id: 'todo',
     goal_id: null,
@@ -45,10 +69,25 @@ const card = (over: Partial<BoardCardRow> = {}): BoardCardRow =>
   }) as BoardCardRow;
 
 const goal = (id: string, title: string, sort = 0): GoalRow =>
-  ({ id, parent_id: null, title, description_md: '', status: 'active', owner_email: null,
-     area: null, started_at: null, target_date: null, sort_order: sort, completed_at: null,
-     completed_by: null, completion_note: null, created_by: null, updated_by: null,
-     created_at: '2026-01-01T00:00:00Z', updated_at: '' }) as GoalRow;
+  ({
+    id,
+    parent_id: null,
+    title,
+    description_md: '',
+    status: 'active',
+    owner_email: null,
+    area: null,
+    started_at: null,
+    target_date: null,
+    sort_order: sort,
+    completed_at: null,
+    completed_by: null,
+    completion_note: null,
+    created_by: null,
+    updated_by: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '',
+  }) as GoalRow;
 
 const options = { today: TODAY, viewerEmail: 'wes@pyresauna.com', groupBy: 'goal' as const };
 

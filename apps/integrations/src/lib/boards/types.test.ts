@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COLUMN_KINDS,
-  COLUMN_KIND_HINTS,
-  COLUMN_KIND_LABELS,
-  FIELD_KINDS,
-  FIELD_KIND_LABELS,
   boardGrantKey,
   boardSlugFromGrant,
+  COLUMN_KIND_HINTS,
+  COLUMN_KIND_LABELS,
+  COLUMN_KINDS,
+  FIELD_KIND_LABELS,
+  FIELD_KINDS,
   isBoardGrantKey,
   isBoardSlug,
   isColumnKind,

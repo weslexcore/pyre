@@ -4,9 +4,9 @@ import {
   ADMIN_TOOLS,
   ALL_TASKS_HREF,
   BOARDS_HREF,
-  GOALS_HREF,
   canViewPage,
   canViewPath,
+  GOALS_HREF,
   toolsForAccess,
 } from './adminTools';
 

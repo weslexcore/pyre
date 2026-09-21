@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { daysLeft, formatDaysLeft, goalRollup, isCardOpen, paceState, taskProgress } from './progress';
+import {
+  daysLeft,
+  formatDaysLeft,
+  goalRollup,
+  isCardOpen,
+  paceState,
+  taskProgress,
+} from './progress';
 
 const columns = new Map([
   ['todo', { kind: 'open' as const }],
@@ -45,7 +52,11 @@ describe('daysLeft', () => {
 });
 
 describe('paceState', () => {
-  const running = { status: 'active' as const, started_at: '2026-09-01T00:00:00Z', target_date: '2026-10-01' };
+  const running = {
+    status: 'active' as const,
+    started_at: '2026-09-01T00:00:00Z',
+    target_date: '2026-10-01',
+  };
 
   it('says nothing without a target date', () => {
     expect(paceState({ ...running, target_date: null }, 50, TODAY)).toBe('none');
@@ -94,9 +105,27 @@ describe('goalRollup', () => {
   ];
 
   const kpis = [
-    { goal_id: 'parent', direction: 'at_least' as const, start_value: 0, target_value: 4, current_value: 4 },
-    { goal_id: 'child', direction: 'at_least' as const, start_value: 0, target_value: 10, current_value: 5 },
-    { goal_id: 'other', direction: 'at_least' as const, start_value: 0, target_value: 4, current_value: 0 },
+    {
+      goal_id: 'parent',
+      direction: 'at_least' as const,
+      start_value: 0,
+      target_value: 4,
+      current_value: 4,
+    },
+    {
+      goal_id: 'child',
+      direction: 'at_least' as const,
+      start_value: 0,
+      target_value: 10,
+      current_value: 5,
+    },
+    {
+      goal_id: 'other',
+      direction: 'at_least' as const,
+      start_value: 0,
+      target_value: 4,
+      current_value: 0,
+    },
   ];
 
   it("counts its children's tasks and KPIs as its own", () => {

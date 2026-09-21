@@ -12,14 +12,14 @@
 //   GET ?since=<iso>     → { events, people }   (the recent-activity read)
 //   POST { cardId? | goalId?, note } → { event } 201
 
-import { BOARDS_HREF, GOALS_HREF, canViewPage } from '@/components/admin/adminTools';
+import { BOARDS_HREF, canViewPage, GOALS_HREF } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
 import {
   type APIRoute,
-  type Db,
   beginMutation,
   beginRead,
+  type Db,
   isUuidParam,
   json,
 } from '@/lib/boards/route';

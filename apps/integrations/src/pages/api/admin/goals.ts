@@ -21,14 +21,14 @@
 //   DELETE ?id=<uuid>   → { ok: true }
 
 import { GOALS_HREF } from '@/components/admin/adminTools';
-import { type BoardEventInput, logBoardEvent, logBoardEvents } from '@/lib/boards/events';
 import { eventsForGoalPatch } from '@/lib/boards/diff';
+import { type BoardEventInput, logBoardEvent, logBoardEvents } from '@/lib/boards/events';
 import {
   type APIRoute,
-  type Db,
   beginDelete,
   beginMutation,
   beginRead,
+  type Db,
   isUuidParam,
   json,
   storeError,
@@ -168,10 +168,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (cardError) return json({ error: cardError.message }, 500);
 
   if ((childCount ?? 0) > 0) {
-    return json(
-      { error: 'This goal has sub-goals. Re-file them first, or mark it dropped.' },
-      409
-    );
+    return json({ error: 'This goal has sub-goals. Re-file them first, or mark it dropped.' }, 409);
   }
   if ((cardCount ?? 0) > 0) {
     return json(

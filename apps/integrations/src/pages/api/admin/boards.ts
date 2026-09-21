@@ -24,11 +24,12 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
+import { boardViewerExtras } from '@/lib/boards/people';
 import {
   type APIRoute,
-  type Db,
   beginMutation,
   beginRead,
+  type Db,
   json,
   storeError,
 } from '@/lib/boards/route';
@@ -51,7 +52,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       if (!canViewBoard(gate.access, slug)) return json({ error: 'Board not found' }, 404);
       const bundle = await loadBoardBundle(db, slug);
       if (!bundle) return json({ error: 'Board not found' }, 404);
-      return json({ ...bundle, canManage: canManageBoards(gate.access) });
+      return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, gate.access)) });
     }
 
     const boards = visibleBoards(gate.access, await loadBoards(db));
@@ -173,9 +174,7 @@ async function applyColumns(
         .eq('id', current.id);
       if (error) return json({ error: error.message }, 500);
     } else {
-      const { error } = await db
-        .from('board_columns')
-        .insert({ ...column, board_id: boardId });
+      const { error } = await db.from('board_columns').insert({ ...column, board_id: boardId });
       if (error) return json({ error: error.message }, 500);
     }
   }
@@ -197,10 +196,7 @@ async function applyColumns(
   const toDelete = dropped.filter((column) => !occupied.has(column.id)).map((c) => c.id);
 
   if (toArchive.length > 0) {
-    const { error } = await db
-      .from('board_columns')
-      .update({ archived: true })
-      .in('id', toArchive);
+    const { error } = await db.from('board_columns').update({ archived: true }).in('id', toArchive);
     if (error) return json({ error: error.message }, 500);
   }
   if (toDelete.length > 0) {

@@ -62,10 +62,7 @@ export function kpiProgress(kpi: KpiInput): KpiProgress {
  * A KPI measured six weeks ago is not news, and the page says so rather than
  * letting a stale number pass for today's.
  */
-export function kpiFreshness(
-  kpi: Pick<GoalKpiRow, 'measured_at'>,
-  nowIso: string
-): number | null {
+export function kpiFreshness(kpi: Pick<GoalKpiRow, 'measured_at'>, nowIso: string): number | null {
   if (!kpi.measured_at) return null;
   const measured = Date.parse(kpi.measured_at);
   const now = Date.parse(nowIso);
@@ -112,5 +109,9 @@ export function formatKpiValue(value: number | null, unit: string | null): strin
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const rounded = Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
   if (!unit) return rounded;
-  return unit === '%' || unit === '$' ? (unit === '$' ? `$${rounded}` : `${rounded}%`) : `${rounded} ${unit}`;
+  return unit === '%' || unit === '$'
+    ? unit === '$'
+      ? `$${rounded}`
+      : `${rounded}%`
+    : `${rounded} ${unit}`;
 }

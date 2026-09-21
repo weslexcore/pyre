@@ -8,17 +8,12 @@
 // of finished ones.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  BoardCardRow,
-  BoardColumnRow,
-  BoardRow,
-  GoalKpiRow,
-  GoalRow,
-} from '@/lib/db';
+import { type Assignable, listAssignable } from '@/lib/boards/people';
 import { loadAllColumns, loadBoards } from '@/lib/boards/store';
-import { type PeopleNames } from '@/lib/sops/names';
-import { getPeopleNames } from '@/lib/sops/people';
+import type { BoardCardRow, BoardColumnRow, BoardRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { todayEastern } from '@/lib/shift-notes/validate';
+import type { PeopleNames } from '@/lib/sops/names';
+import { getPeopleNames } from '@/lib/sops/people';
 
 /** A goals page is a page, not a database; past this it needs paging. */
 const GOAL_LIMIT = 500;
@@ -30,13 +25,18 @@ async function peopleFor(
   cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by'>[]
 ): Promise<PeopleNames> {
   return getPeopleNames([
-    ...goals.flatMap((goal) => [goal.owner_email ?? '', goal.created_by ?? '', goal.completed_by ?? '']),
+    ...goals.flatMap((goal) => [
+      goal.owner_email ?? '',
+      goal.created_by ?? '',
+      goal.completed_by ?? '',
+    ]),
     ...cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? '']),
   ]);
 }
 
 export interface GoalsIndexData {
   goals: GoalRow[];
+  owners: Assignable[];
   kpis: GoalKpiRow[];
   cards: BoardCardRow[];
   columns: BoardColumnRow[];
@@ -73,6 +73,7 @@ export async function loadGoalsIndex(db: SupabaseClient): Promise<GoalsIndexData
 
   return {
     goals,
+    owners: await listAssignable(),
     kpis: (kpisResult.data ?? []) as GoalKpiRow[],
     cards,
     columns,
@@ -93,6 +94,7 @@ export interface GoalPageData {
   boards: BoardRow[];
   /** Every top-level goal, for the parent picker and the card goal picker. */
   goals: GoalRow[];
+  owners: Assignable[];
   people: PeopleNames;
   today: string;
 }
@@ -125,11 +127,7 @@ export async function loadGoalPage(db: SupabaseClient, id: string): Promise<Goal
   const family = [goal.id, ...children.map((child) => child.id)];
 
   const [kpisResult, cardsResult] = await Promise.all([
-    db
-      .from('goal_kpis')
-      .select('*')
-      .in('goal_id', family)
-      .order('sort_order', { ascending: true }),
+    db.from('goal_kpis').select('*').in('goal_id', family).order('sort_order', { ascending: true }),
     db
       .from('board_cards')
       .select('*')
@@ -152,6 +150,7 @@ export async function loadGoalPage(db: SupabaseClient, id: string): Promise<Goal
     columns,
     boards,
     goals,
+    owners: await listAssignable(),
     people: await peopleFor([goal, ...children, ...(parent ? [parent] : [])], cards),
     today: todayEastern(),
   };
@@ -160,6 +159,7 @@ export async function loadGoalPage(db: SupabaseClient, id: string): Promise<Goal
 export interface AllTasksData {
   cards: BoardCardRow[];
   goals: GoalRow[];
+  owners: Assignable[];
   boards: BoardRow[];
   columns: BoardColumnRow[];
   people: PeopleNames;
@@ -171,10 +171,7 @@ export interface AllTasksData {
  * always returned, however old, because an eight-week-old open task is
  * exactly the thing this page exists to surface.
  */
-export async function loadAllTasks(
-  db: SupabaseClient,
-  sinceYmd: string
-): Promise<AllTasksData> {
+export async function loadAllTasks(db: SupabaseClient, sinceYmd: string): Promise<AllTasksData> {
   const [boards, columns, goalsResult] = await Promise.all([
     loadBoards(db),
     loadAllColumns(db),
@@ -192,6 +189,7 @@ export async function loadAllTasks(
     return {
       cards: [],
       goals: (goalsResult.data ?? []) as GoalRow[],
+      owners: await listAssignable(),
       boards,
       columns,
       people: {},
@@ -215,6 +213,7 @@ export async function loadAllTasks(
   return {
     cards,
     goals,
+    owners: await listAssignable(),
     boards,
     columns,
     people: await peopleFor(goals, cards),

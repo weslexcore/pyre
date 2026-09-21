@@ -1,0 +1,12 @@
+---
+// The boards this person may open. Someone holding a single board grant
+// (board:<slug>) sees exactly that board here and no New board form; the
+// list is filtered server-side, so the page never tells them what else
+// exists.
+import { BoardsIndex } from '@/components/admin/boards/BoardsIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Boards" subtitle="Cards in columns — the task board, and the pipelines beside it">
+  <BoardsIndex client:load />
+</AdminLayout>

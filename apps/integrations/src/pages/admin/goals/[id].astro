@@ -1,0 +1,20 @@
+---
+// One goal: its KPIs, its sub-goals, its tasks, and its history. The island
+// loads everything from /api/admin/goals?id=…, which 404s on an id that
+// names nothing — so a bad link lands on the page's own message rather than
+// a blank shell.
+import { GoalPage } from '@/components/admin/goals/GoalPage';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const { id } = Astro.params;
+---
+
+<AdminLayout title="Goal" subtitle="KPIs, sub-goals, the work under it, and what has happened">
+  {
+    id ? (
+      <GoalPage goalId={id} client:load />
+    ) : (
+      <p class="text-sm text-white/60">That link is missing a goal.</p>
+    )
+  }
+</AdminLayout>

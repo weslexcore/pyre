@@ -18,9 +18,9 @@ import {
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
 } from '@/components/admin/adminTools';
-import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 

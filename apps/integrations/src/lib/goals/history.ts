@@ -35,7 +35,11 @@ function changeOf(detail: Record<string, unknown>, field: string): Change | null
 }
 
 function str(value: unknown): string {
-  return typeof value === 'string' ? value : value === null || value === undefined ? '' : String(value);
+  return typeof value === 'string'
+    ? value
+    : value === null || value === undefined
+      ? ''
+      : String(value);
 }
 
 function numberish(value: unknown): string {

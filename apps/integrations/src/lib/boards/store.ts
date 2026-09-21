@@ -7,13 +7,7 @@
 // page is four too many.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  BoardCardRow,
-  BoardColumnRow,
-  BoardFieldRow,
-  BoardRow,
-  GoalRow,
-} from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { BOARD_LIMITS } from './types';
 
 /** Every board, archived last, in display order. */
@@ -28,19 +22,13 @@ export async function loadBoards(db: SupabaseClient): Promise<BoardRow[]> {
   return (data ?? []) as BoardRow[];
 }
 
-export async function loadBoardBySlug(
-  db: SupabaseClient,
-  slug: string
-): Promise<BoardRow | null> {
+export async function loadBoardBySlug(db: SupabaseClient, slug: string): Promise<BoardRow | null> {
   const { data, error } = await db.from('boards').select('*').eq('slug', slug).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as BoardRow) ?? null;
 }
 
-export async function loadColumns(
-  db: SupabaseClient,
-  boardId: string
-): Promise<BoardColumnRow[]> {
+export async function loadColumns(db: SupabaseClient, boardId: string): Promise<BoardColumnRow[]> {
   const { data, error } = await db
     .from('board_columns')
     .select('*')
@@ -51,10 +39,7 @@ export async function loadColumns(
 }
 
 /** One column, used to check a move lands somewhere on the right board. */
-export async function loadColumn(
-  db: SupabaseClient,
-  id: string
-): Promise<BoardColumnRow | null> {
+export async function loadColumn(db: SupabaseClient, id: string): Promise<BoardColumnRow | null> {
   const { data, error } = await db.from('board_columns').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   return (data as BoardColumnRow) ?? null;

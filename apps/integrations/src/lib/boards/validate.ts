@@ -8,10 +8,10 @@
 // itself — the body it accepts still comes through parseCardCreate.
 
 import type { BoardFieldKind, BoardFieldRow, BoardFieldValue } from '@/lib/db';
-import { isYmd, isUuid, numberOf, type ParseResult } from '@/lib/goals/validate';
 import { GOAL_LIMITS, isArea } from '@/lib/goals/types';
-import { BOARD_LIMITS, KEY_RE, SLUG_RE, isColumnKind } from './types';
+import { isUuid, isYmd, numberOf, type ParseResult } from '@/lib/goals/validate';
 import type { ColumnKind } from './types';
+import { BOARD_LIMITS, isColumnKind, KEY_RE, SLUG_RE } from './types';
 
 export type { ParseResult };
 
@@ -116,7 +116,9 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
 
   const slug = typeof body.slug === 'string' ? body.slug.trim().toLowerCase() : '';
   if (!SLUG_RE.test(slug)) {
-    return fail('slug must start with a letter and hold only lowercase letters, digits, and dashes');
+    return fail(
+      'slug must start with a letter and hold only lowercase letters, digits, and dashes'
+    );
   }
 
   let description = '';
@@ -390,7 +392,10 @@ export function parseCardPatch(body: Record<string, unknown>): ParseResult<CardP
 }
 
 /** One answer, coerced to the shape its field's kind stores. */
-function normalizeAnswer(field: Pick<BoardFieldRow, 'kind' | 'options'>, raw: unknown): BoardFieldValue | null {
+function normalizeAnswer(
+  field: Pick<BoardFieldRow, 'kind' | 'options'>,
+  raw: unknown
+): BoardFieldValue | null {
   const kind: BoardFieldKind = field.kind;
   switch (kind) {
     case 'yes_no':

@@ -62,6 +62,21 @@ export function AnswerPill({ label, value }: { label: string; value: string }) {
 }
 
 /**
+ * A field this control can render, structurally rather than by table: a guest
+ * profile field and a board field ask the same questions in the same shapes,
+ * so the control is shared and the row types stay where they belong. `kind`
+ * is widened to the union of both — `date` only ever arrives from a board.
+ */
+export interface FieldDefinition {
+  key: string;
+  label: string;
+  kind: GuestProfileFieldRow['kind'] | 'date';
+  options: string[];
+  hint?: string | null;
+  archived?: boolean;
+}
+
+/**
  * The control for one field, by kind. Value `undefined` means unanswered;
  * `onChange(null)` clears. Pick-one chips toggle off when tapped again so
  * an answer can be withdrawn without a separate clear button.
@@ -70,12 +85,15 @@ export function FieldInput({
   field,
   value,
   onChange,
+  idPrefix = 'guest-field',
 }: {
-  field: GuestProfileFieldRow;
+  field: FieldDefinition;
   value: GuestFieldValue | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
+  /** Namespaces the input id so two forms on one page don't collide. */
+  idPrefix?: string;
 }) {
-  const id = `guest-field-${field.key}`;
+  const id = `${idPrefix}-${field.key}`;
 
   switch (field.kind) {
     case 'choice':
@@ -132,6 +150,16 @@ export function FieldInput({
           onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
         />
       );
+    case 'date':
+      return (
+        <input
+          id={id}
+          className={inputClass}
+          type="date"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+        />
+      );
     default:
       return (
         <input
@@ -151,22 +179,24 @@ export function FieldRow({
   field,
   value,
   onChange,
+  idPrefix = 'guest-field',
 }: {
-  field: GuestProfileFieldRow;
+  field: FieldDefinition;
   value: GuestFieldValue | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
+  idPrefix?: string;
 }) {
   // YesNo carries its own label and hint.
   if (field.kind === 'yes_no')
-    return <FieldInput field={field} value={value} onChange={onChange} />;
+    return <FieldInput field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
   return (
     <div>
-      <label className={labelClass} htmlFor={`guest-field-${field.key}`}>
+      <label className={labelClass} htmlFor={`${idPrefix}-${field.key}`}>
         {field.label}
         {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
       </label>
       {field.hint && <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>}
-      <FieldInput field={field} value={value} onChange={onChange} />
+      <FieldInput field={field} value={value} onChange={onChange} idPrefix={idPrefix} />
     </div>
   );
 }

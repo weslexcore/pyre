@@ -7,9 +7,9 @@
 // tasks and nowhere near met, which is exactly the case the Trello board
 // could not show, so nothing here ever averages the two into one bar.
 
+import { isFinishedKind } from '@/lib/boards/types';
 import { daysBetween, elapsedFraction } from '@/lib/campaigns/goals';
 import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
-import { isFinishedKind } from '@/lib/boards/types';
 import { goalKpiSummary, type KpiSummary } from './kpis';
 
 export interface TaskProgress {
@@ -132,7 +132,10 @@ export function goalRollup(
   goal: Pick<GoalRow, 'id' | 'status' | 'started_at' | 'target_date'>,
   children: Pick<GoalRow, 'id'>[],
   cards: Pick<BoardCardRow, 'column_id' | 'goal_id'>[],
-  kpis: Pick<GoalKpiRow, 'goal_id' | 'direction' | 'start_value' | 'target_value' | 'current_value'>[],
+  kpis: Pick<
+    GoalKpiRow,
+    'goal_id' | 'direction' | 'start_value' | 'target_value' | 'current_value'
+  >[],
   columnsById: Map<string, Pick<BoardColumnRow, 'kind'>>,
   today: string
 ): GoalRollup {

@@ -95,10 +95,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
     externalRef = body.externalRef.trim();
     if (!externalRef || externalRef.length > BOARD_LIMITS.externalRef) {
-      return json(
-        { error: `externalRef must be 1–${BOARD_LIMITS.externalRef} characters` },
-        400
-      );
+      return json({ error: `externalRef must be 1–${BOARD_LIMITS.externalRef} characters` }, 400);
     }
   }
 

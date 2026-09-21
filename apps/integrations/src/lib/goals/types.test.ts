@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   AREAS,
-  GOAL_STATUSES,
   GOAL_STATUS_HINTS,
   GOAL_STATUS_LABELS,
+  GOAL_STATUSES,
   GROUP_BY,
-  KPI_DIRECTIONS,
-  KPI_DIRECTION_HINTS,
-  KPI_DIRECTION_LABELS,
   isArea,
   isClosedStatus,
   isGoalStatus,
   isGroupBy,
   isKpiDirection,
+  KPI_DIRECTION_HINTS,
+  KPI_DIRECTION_LABELS,
+  KPI_DIRECTIONS,
 } from './types';
 
 describe('guards', () => {

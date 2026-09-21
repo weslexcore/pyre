@@ -58,10 +58,9 @@ export function isFinished(
  * hold cards — an emptied-out column stops cluttering the board, and one that
  * doesn't stays visible until its cards are moved somewhere current.
  */
-export function cardsByColumn<C extends Pick<BoardCardRow, 'column_id' | 'sort_order' | 'created_at'>>(
-  columns: BoardColumnRow[],
-  cards: C[]
-): { column: BoardColumnRow; cards: C[] }[] {
+export function cardsByColumn<
+  C extends Pick<BoardCardRow, 'column_id' | 'sort_order' | 'created_at'>,
+>(columns: BoardColumnRow[], cards: C[]): { column: BoardColumnRow; cards: C[] }[] {
   const grouped = new Map<string, C[]>();
   for (const card of cards) {
     const group = grouped.get(card.column_id);

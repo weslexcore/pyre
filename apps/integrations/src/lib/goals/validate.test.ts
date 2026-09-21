@@ -150,7 +150,9 @@ describe('parseKpiCreate', () => {
   });
 
   it('accepts zero as a target', () => {
-    expect(value(parseKpiCreate({ ...base, direction: 'at_most', targetValue: 0 })).target_value).toBe(0);
+    expect(
+      value(parseKpiCreate({ ...base, direction: 'at_most', targetValue: 0 })).target_value
+    ).toBe(0);
   });
 });
 

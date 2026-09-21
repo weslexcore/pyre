@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatKpiValue, goalKpiSummary, kpiFreshness, kpiProgress } from './kpis';
 import type { KpiInput } from './kpis';
+import { formatKpiValue, goalKpiSummary, kpiFreshness, kpiProgress } from './kpis';
 
 const kpi = (over: Partial<KpiInput> = {}): KpiInput => ({
   direction: 'at_least',

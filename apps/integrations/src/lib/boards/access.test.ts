@@ -49,10 +49,9 @@ describe('hasAnyBoardGrant / grantedBoardSlugs', () => {
   it('finds the single-board grants', () => {
     expect(hasAnyBoardGrant(oneBoard)).toBe(true);
     expect(hasAnyBoardGrant(wholeTool)).toBe(false);
-    expect(grantedBoardSlugs({ isAdmin: false, pages: ['board:a', 'board:b', '/admin/goals'] })).toEqual([
-      'a',
-      'b',
-    ]);
+    expect(
+      grantedBoardSlugs({ isAdmin: false, pages: ['board:a', 'board:b', '/admin/goals'] })
+    ).toEqual(['a', 'b']);
   });
 });
 

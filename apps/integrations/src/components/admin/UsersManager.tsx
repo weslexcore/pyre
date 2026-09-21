@@ -12,11 +12,11 @@ import {
   BOARDS_HREF,
   GUESTS_MANAGE,
   INCIDENTS_MANAGE,
+  isBoardGrantKey,
   LOST_FOUND_MANAGE,
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
-  isBoardGrantKey,
 } from './adminTools';
 
 /** One board a 'board:<slug>' checkbox can grant, as the API lists them. */

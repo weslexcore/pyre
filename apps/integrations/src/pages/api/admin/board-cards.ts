@@ -21,16 +21,17 @@
 //   DELETE ?id=<uuid>  → { ok: true }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
-import { canManageBoards, canViewBoard } from '@/lib/boards/access';
+import { canViewBoard } from '@/lib/boards/access';
 import { columnPatch, defaultColumn, nextSortOrder } from '@/lib/boards/cards';
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvent, logBoardEvents } from '@/lib/boards/events';
+import { boardViewerExtras } from '@/lib/boards/people';
 import {
   type APIRoute,
-  type Db,
   beginDelete,
   beginMutation,
   beginRead,
+  type Db,
   isUuidParam,
   json,
   storeError,
@@ -51,7 +52,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   try {
     const bundle = await loadBoardBundle(ready.db, slug);
     if (!bundle) return json({ error: 'Board not found' }, 404);
-    return json({ ...bundle, canManage: canManageBoards(ready.gate.access) });
+    return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, ready.gate.access)) });
   } catch (e) {
     return storeError('board-cards', e);
   }

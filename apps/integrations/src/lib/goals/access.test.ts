@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canAdoptParent, canBeParent, completionPreview, goalStatusPatch, parentOptions } from './access';
+import {
+  canAdoptParent,
+  canBeParent,
+  completionPreview,
+  goalStatusPatch,
+  parentOptions,
+} from './access';
 
 const NOW = '2026-09-21T12:00:00Z';
 const goal = (over: Record<string, unknown> = {}) => ({
@@ -26,11 +32,18 @@ describe('goalStatusPatch', () => {
     const running = goal({ status: 'active', started_at: earlier });
     expect(goalStatusPatch(running, 'planned', 'wes@pyresauna.com', NOW).started_at).toBe(earlier);
     expect(goalStatusPatch(running, 'active', 'wes@pyresauna.com', NOW).started_at).toBe(earlier);
-    expect(goalStatusPatch(running, 'completed', 'wes@pyresauna.com', NOW).started_at).toBe(earlier);
+    expect(goalStatusPatch(running, 'completed', 'wes@pyresauna.com', NOW).started_at).toBe(
+      earlier
+    );
   });
 
   it('attributes a completion', () => {
-    const patch = goalStatusPatch(goal({ status: 'active' }), 'completed', 'julien@pyresauna.com', NOW);
+    const patch = goalStatusPatch(
+      goal({ status: 'active' }),
+      'completed',
+      'julien@pyresauna.com',
+      NOW
+    );
     expect(patch.completed_at).toBe(NOW);
     expect(patch.completed_by).toBe('julien@pyresauna.com');
   });

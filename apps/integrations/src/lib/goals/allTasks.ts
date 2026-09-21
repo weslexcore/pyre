@@ -13,8 +13,8 @@
 // Pure and client-safe: the route hands over the rows, the island builds this.
 
 import { addDays, weekStartOf } from '@pyre/schedule-core';
-import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
 import { isFinishedKind } from '@/lib/boards/types';
+import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { GroupBy } from './types';
 
@@ -71,10 +71,7 @@ function byDueThenOrder(a: BoardCardRow, b: BoardCardRow): number {
 // Spelled out rather than formatted, because Intl's short month drifts
 // between runtimes ("Sep" in one, "Sept" in the next) and a heading should
 // not depend on which Node built the page.
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "Week of 15 Sep" — how the done pile is headed. */
 export function weekLabel(weekStart: string): string {

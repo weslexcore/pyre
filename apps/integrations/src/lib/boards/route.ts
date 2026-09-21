@@ -6,8 +6,7 @@
 // goal is what cards are filed under — so their six routes share this rather
 // than each carrying its own copy.
 
-import type { APIRoute } from 'astro';
-import type { AstroCookies } from 'astro';
+import type { APIRoute, AstroCookies } from 'astro';
 import { type AdminGate, assertSameOrigin, requireAnyPage, requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 

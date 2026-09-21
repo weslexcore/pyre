@@ -32,7 +32,9 @@ describe('diffFields', () => {
 
   it('compares arrays and objects by value', () => {
     const before = { properties: { tags: ['a', 'b'], n: 1 } };
-    expect(diffFields(before, { properties: { tags: ['a', 'b'], n: 1 } }, ['properties'])).toEqual({});
+    expect(diffFields(before, { properties: { tags: ['a', 'b'], n: 1 } }, ['properties'])).toEqual(
+      {}
+    );
     expect(
       diffFields(before, { properties: { tags: ['a'], n: 1 } }, ['properties']).properties
     ).toBeTruthy();

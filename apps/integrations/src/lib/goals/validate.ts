@@ -13,8 +13,8 @@
 // rather than spread from the body.
 
 import { isNoteDate } from '@/lib/shift-notes/validate';
-import { GOAL_LIMITS, isArea, isGoalStatus, isKpiDirection } from './types';
 import type { GoalStatusValue, KpiDirectionValue } from './types';
+import { GOAL_LIMITS, isArea, isGoalStatus, isKpiDirection } from './types';
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 

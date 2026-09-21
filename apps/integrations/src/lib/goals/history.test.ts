@@ -7,13 +7,11 @@ const columns = new Map([
 ]);
 const people = { 'maya@pyresauna.com': 'Maya Ortiz' };
 
-const describe_ = (action: string, detail: Record<string, unknown> = {}, note: string | null = null) =>
-  describeEvent(
-    { action: action as never, detail, note },
-    'Train the staff',
-    columns,
-    people
-  );
+const describe_ = (
+  action: string,
+  detail: Record<string, unknown> = {},
+  note: string | null = null
+) => describeEvent({ action: action as never, detail, note }, 'Train the staff', columns, people);
 
 describe('describeEvent', () => {
   it('describes a creation by name', () => {
