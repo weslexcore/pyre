@@ -44,6 +44,7 @@ import { BOARD_LIMITS, isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { notifyIntakeCard } from '@/lib/notifications/goals';
 
 /** The actor on every row and every event this route writes. */
 const INTAKE_ACTOR = 'intake';
@@ -178,6 +179,11 @@ export const POST: APIRoute = async ({ request }) => {
     actor: INTAKE_ACTOR,
     detail: externalRef ? { external_ref: externalRef } : {},
   });
+
+  // Everyone holding this board hears. The point of routing an enquiry here
+  // rather than into one person's inbox is that it stops depending on that
+  // person reading their mail — but somebody still has to be told it arrived.
+  await notifyIntakeCard(db, card, board);
 
   return json({ card, created: true }, 201);
 };

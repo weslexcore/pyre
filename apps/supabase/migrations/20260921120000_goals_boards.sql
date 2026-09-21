@@ -471,3 +471,24 @@ comment on table public.board_cards is
   'One task or lead. Lives in a column, optionally filed under a goal, optionally owned and dated. `waiting_on` keeps blocked work visible without a fourth column; `external_ref` makes intake deliveries idempotent.';
 comment on table public.board_events is
   'The audit trail and comment thread for goals and cards: who moved, assigned, measured, completed, or said what. Insert-only, like incident_events.';
+
+-- Goals and boards join the inbox: a task assigned to you, a card you own
+-- finishing, a goal you drove being called met, a comment on something you
+-- are on, and a lead arriving from the web all belong beside the shift-note
+-- replies and schedule changes people already read there. One kind covers
+-- them; the notification's own title says which it is.
+alter table public.staff_notifications
+  drop constraint staff_notifications_kind_check;
+
+alter table public.staff_notifications
+  add constraint staff_notifications_kind_check check (
+    kind in (
+      'admin_message',
+      'message_reply',
+      'sop_updated',
+      'schedule_change',
+      'shift_note_reply',
+      'sub_request',
+      'goal_activity'
+    )
+  );

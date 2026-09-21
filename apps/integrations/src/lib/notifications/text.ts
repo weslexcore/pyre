@@ -181,3 +181,79 @@ export function shiftNoteStatusText(input: {
     body: `by ${input.adminName}`,
   };
 }
+
+/** "Call the caterer" — a title short enough to sit inside a sentence. */
+function shortTitle(title: string, max = 60): string {
+  const trimmed = title.trim();
+  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+export function cardAssignedText(input: {
+  cardTitle: string;
+  assignerName: string;
+  noun: string;
+  goalTitle?: string | null;
+  dueDate?: string | null;
+}): { title: string; body: string } {
+  const where = input.goalTitle ? `under ${shortTitle(input.goalTitle)}` : '';
+  const due = input.dueDate ? `due ${shortDate(input.dueDate)}` : '';
+  return {
+    title: `${input.assignerName} put a ${input.noun} on you: ${shortTitle(input.cardTitle)}`,
+    body: [where, due].filter(Boolean).join(' · '),
+  };
+}
+
+export function cardCompletedText(input: {
+  cardTitle: string;
+  finisherName: string;
+  columnLabel: string;
+  noun: string;
+}): { title: string; body: string } {
+  return {
+    title: `${input.finisherName} moved your ${input.noun} to ${input.columnLabel}`,
+    body: shortTitle(input.cardTitle, 120),
+  };
+}
+
+export function goalCompletedText(input: {
+  goalTitle: string;
+  finisherName: string;
+  kpisMet: number;
+  kpisTotal: number;
+  openCards: number;
+  note?: string | null;
+}): { title: string; body: string } {
+  const parts: string[] = [];
+  if (input.kpisTotal > 0) parts.push(`${input.kpisMet} of ${input.kpisTotal} KPIs met`);
+  if (input.openCards > 0) {
+    parts.push(`${input.openCards} task${input.openCards === 1 ? '' : 's'} still open`);
+  }
+  const note = (input.note ?? '').trim();
+  return {
+    title: `${input.finisherName} marked "${shortTitle(input.goalTitle)}" completed`,
+    // The note is what the person actually decided on, so it wins the line;
+    // the counts are the fallback when they left it blank.
+    body: note || parts.join(', '),
+  };
+}
+
+export function boardCommentText(input: {
+  subjectTitle: string;
+  commenterName: string;
+  excerpt: string;
+}): { title: string; body: string } {
+  return {
+    title: `${input.commenterName} commented on ${shortTitle(input.subjectTitle)}`,
+    body: input.excerpt,
+  };
+}
+
+export function intakeCardText(input: { cardTitle: string; boardName: string; noun: string }): {
+  title: string;
+  body: string;
+} {
+  return {
+    title: `New ${input.noun}: ${shortTitle(input.cardTitle)}`,
+    body: `Came in from the web, on ${input.boardName}`,
+  };
+}

@@ -12,14 +12,17 @@
 // Trello could never answer.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { BoardCardRow } from '@/lib/db';
-import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
+import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
+import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
-import { AREAS, GOALS_HREF, GROUP_BY } from '@/lib/goals/types';
 import type { GroupBy } from '@/lib/goals/types';
+import { AREAS, GOALS_HREF, GROUP_BY } from '@/lib/goals/types';
+import { CardDrawer } from '../boards/CardDrawer';
+import { CardRow } from '../boards/CardRow';
+import { QuickAdd } from '../boards/QuickAdd';
 import {
   buttonClass,
   cardClass,
@@ -29,9 +32,6 @@ import {
   send,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
-import { CardDrawer } from '../boards/CardDrawer';
-import { CardRow } from '../boards/CardRow';
-import { QuickAdd } from '../boards/QuickAdd';
 
 type TasksData = AllTasksData & { owners?: Assignable[] };
 
@@ -246,7 +246,10 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
                 {group.label}
               </a>
             ) : group.boardSlug ? (
-              <a className="underline hover:text-white/80" href={`/admin/boards/${group.boardSlug}`}>
+              <a
+                className="underline hover:text-white/80"
+                href={`/admin/boards/${group.boardSlug}`}
+              >
                 {group.label}
               </a>
             ) : (

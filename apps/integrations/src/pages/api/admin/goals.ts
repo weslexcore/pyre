@@ -37,6 +37,8 @@ import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db
 import { canBeParent, completionPreview, goalStatusPatch } from '@/lib/goals/access';
 import { loadGoalPage, loadGoalsIndex } from '@/lib/goals/store';
 import { parseGoalCreate, parseGoalPatch } from '@/lib/goals/validate';
+import { notifyGoalCompleted } from '@/lib/notifications/goals';
+import { deleteBySource } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const ready = await beginRead(cookies, GOALS_HREF);
@@ -145,6 +147,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
   await logBoardEvents(db, events);
 
+  // The moment the tool exists for: the person driving the goal hears that
+  // somebody else called it met, with the note they wrote.
+  if (completing && preview) {
+    await notifyGoalCompleted(db, goal, preview, email);
+  }
+
   return json({ goal });
 };
 
@@ -179,6 +187,9 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const { error } = await db.from('goals').delete().eq('id', id);
   if (error) return json({ error: error.message }, 500);
+
+  // Nothing left for a bell row to open.
+  await deleteBySource(db, 'goal', id);
 
   console.info(`[goals] ${email} deleted goal ${id}`);
   return json({ ok: true });

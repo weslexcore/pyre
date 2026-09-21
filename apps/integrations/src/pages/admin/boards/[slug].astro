@@ -5,9 +5,9 @@
 // this is the half that keeps the page from rendering a shell for a board
 // the viewer was never given.
 import { BoardView } from '@/components/admin/boards/BoardView';
+import AdminLayout from '@/layouts/AdminLayout.astro';
 import { canViewBoard } from '@/lib/boards/access';
 import { isBoardSlug } from '@/lib/boards/types';
-import AdminLayout from '@/layouts/AdminLayout.astro';
 
 const { slug } = Astro.params;
 const access = Astro.locals.adminAccess ?? null;

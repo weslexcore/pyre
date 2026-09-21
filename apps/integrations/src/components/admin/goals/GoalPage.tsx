@@ -22,6 +22,7 @@ import { GOALS_HREF } from '@/lib/goals/types';
 import { personName } from '@/lib/sops/names';
 import { CardDrawer } from '../boards/CardDrawer';
 import { QuickAdd } from '../boards/QuickAdd';
+import { Confetti } from '../Confetti';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
   buttonClass,
@@ -56,6 +57,10 @@ export function GoalPage({ goalId }: { goalId: string }) {
   const [kpiFormFor, setKpiFormFor] = useState<GoalKpiRow | 'new' | null>(null);
   const [removingKpi, setRemovingKpi] = useState<GoalKpiRow | null>(null);
   const [completing, setCompleting] = useState(false);
+  // Bumped when a goal is called met. A counter rather than a boolean so
+  // reopening a goal and completing it again pops again — the Confetti
+  // component's contract.
+  const [burst, setBurst] = useState(0);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -134,6 +139,7 @@ export function GoalPage({ goalId }: { goalId: string }) {
 
   return (
     <div className="space-y-6">
+      <Confetti burst={burst} />
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       {parent && (
@@ -387,13 +393,17 @@ export function GoalPage({ goalId }: { goalId: string }) {
           onCancel={() => setCompleting(false)}
           onConfirm={(note) => {
             setCompleting(false);
-            void mutate(() =>
-              send('/api/admin/goals', 'PATCH', {
+            void mutate(async () => {
+              const saved = await send('/api/admin/goals', 'PATCH', {
                 id: goal.id,
                 status: 'completed',
                 completionNote: note || null,
-              })
-            );
+              });
+              // Only once it has actually landed — a goal that failed to save
+              // does not get a celebration.
+              setBurst((n) => n + 1);
+              return saved;
+            });
           }}
         />
       )}

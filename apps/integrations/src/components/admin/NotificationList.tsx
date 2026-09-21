@@ -16,6 +16,7 @@ const KIND_STYLE: Record<StaffNotificationRow['kind'], string> = {
   schedule_change: 'border-[var(--pyre-red)]/50 text-[var(--pyre-red)]',
   shift_note_reply: 'border-white/20 text-white/60',
   sub_request: 'border-[var(--pyre-red)]/30 text-[var(--pyre-red)]/80',
+  goal_activity: 'border-[var(--pyre-gold)]/40 text-[var(--pyre-gold)]/90',
 };
 
 export function NotificationList({

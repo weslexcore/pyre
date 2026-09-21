@@ -39,7 +39,9 @@ import {
 import { loadBoardBundle, loadCard, loadColumn, loadColumns } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
-import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
+import type { BoardCardRow, BoardFieldRow, BoardRow } from '@/lib/db';
+import { notifyCardAssigned, notifyCardCompleted } from '@/lib/notifications/goals';
+import { deleteBySource } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const ready = await beginRead(cookies, BOARDS_HREF);
@@ -117,6 +119,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const card = data as BoardCardRow;
   await logBoardEvent(db, { cardId: card.id, action: 'created', actor: email });
+
+  if (card.owner_email) {
+    const full = await loadBoard(db, card.board_id);
+    if (full) {
+      await notifyCardAssigned(db, card, full, await goalTitle(db, card.goal_id), email);
+    }
+  }
+
   return json({ card }, 201);
 };
 
@@ -186,6 +196,23 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }));
   await logBoardEvents(db, events);
 
+  const assigned = card.owner_email !== null && card.owner_email !== before.owner_email;
+  const justFinished = card.completed_at !== null && before.completed_at === null;
+  if (assigned || justFinished) {
+    const board = await loadBoard(db, card.board_id);
+    if (board) {
+      if (assigned) {
+        await notifyCardAssigned(db, card, board, await goalTitle(db, card.goal_id), email);
+      }
+      // Only the owner hears, and only when somebody else finished it —
+      // notifyCardCompleted drops the case where they did it themselves.
+      if (justFinished) {
+        const column = await loadColumn(db, card.column_id);
+        if (column) await notifyCardCompleted(db, card, board, column, email);
+      }
+    }
+  }
+
   return json({ card });
 };
 
@@ -207,6 +234,9 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   // left to describe.
   const { error } = await db.from('board_cards').delete().eq('id', id);
   if (error) return json({ error: error.message }, 500);
+
+  // A bell row pointing at a card that no longer exists is a dead end.
+  await deleteBySource(db, 'board_card', id);
 
   console.info(`[boards] ${email} deleted card ${id}`);
   return json({ ok: true });
@@ -238,4 +268,16 @@ async function refuseMissingGoal(db: Db, goalId: string): Promise<Response | nul
   const { data, error } = await db.from('goals').select('id').eq('id', goalId).maybeSingle();
   if (error) return json({ error: error.message }, 500);
   return data ? null : json({ error: 'That goal does not exist' }, 400);
+}
+
+async function loadBoard(db: Db, boardId: string): Promise<BoardRow | null> {
+  const { data } = await db.from('boards').select('*').eq('id', boardId).maybeSingle();
+  return (data as BoardRow) ?? null;
+}
+
+/** The goal a card is filed under, by title — for the notification's detail line. */
+async function goalTitle(db: Db, goalId: string | null): Promise<string | null> {
+  if (!goalId) return null;
+  const { data } = await db.from('goals').select('title').eq('id', goalId).maybeSingle();
+  return (data as { title: string } | null)?.title ?? null;
 }

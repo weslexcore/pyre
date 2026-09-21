@@ -433,7 +433,8 @@ export type NotificationKind =
   | 'sop_updated'
   | 'schedule_change'
   | 'shift_note_reply'
-  | 'sub_request';
+  | 'sub_request'
+  | 'goal_activity';
 
 // One row in one person's inbox (see the staff notifications migration).
 // Written by the API routes that record the event; read/dismissed/expires

@@ -7,8 +7,8 @@ import {
   canViewPage,
   canViewPath,
   GOALS_HREF,
-  searchablePages,
   STAFF_PAGES,
+  searchablePages,
   toolsForAccess,
 } from './adminTools';
 

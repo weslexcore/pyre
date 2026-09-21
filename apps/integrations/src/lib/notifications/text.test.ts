@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   assignmentChangeText,
+  boardCommentText,
+  cardAssignedText,
+  cardCompletedText,
+  goalCompletedText,
+  intakeCardText,
   proposalApprovedText,
   shiftChangeText,
   shiftNoteReplyText,
@@ -155,5 +160,113 @@ describe('misc', () => {
 
   it('formats compact windows', () => {
     expect(shortWindow({ starts_at: '00:00:00', ends_at: '12:15:00' })).toBe('12a–12:15p');
+  });
+});
+
+describe('goals and boards text', () => {
+  it('names the assigner, the noun, and where the card sits', () => {
+    expect(
+      cardAssignedText({
+        cardTitle: 'Call the caterer',
+        assignerName: 'Wes',
+        noun: 'task',
+        goalTitle: 'Staff run the space without us',
+        dueDate: '2026-10-01',
+      })
+    ).toEqual({
+      title: 'Wes put a task on you: Call the caterer',
+      body: 'under Staff run the space without us · due Thu, Oct 1',
+    });
+  });
+
+  it('leaves the detail line empty when there is no goal and no date', () => {
+    expect(
+      cardAssignedText({ cardTitle: 'Call the caterer', assignerName: 'Wes', noun: 'lead' }).body
+    ).toBe('');
+  });
+
+  it('truncates a long title rather than filling the row with it', () => {
+    const long = 'x'.repeat(200);
+    const { title } = cardAssignedText({ cardTitle: long, assignerName: 'Wes', noun: 'task' });
+    expect(title.length).toBeLessThan(100);
+    expect(title.endsWith('…')).toBe(true);
+  });
+
+  it('says which column a finished card landed in', () => {
+    expect(
+      cardCompletedText({
+        cardTitle: 'Call the caterer',
+        finisherName: 'Julien',
+        columnLabel: 'Done',
+        noun: 'task',
+      })
+    ).toEqual({ title: 'Julien moved your task to Done', body: 'Call the caterer' });
+  });
+
+  it("prefers the founder's own note to the counts on a completed goal", () => {
+    expect(
+      goalCompletedText({
+        goalTitle: 'Staff run the space',
+        finisherName: 'Wes',
+        kpisMet: 1,
+        kpisTotal: 2,
+        openCards: 3,
+        note: 'Four weeks with nobody on site.',
+      })
+    ).toEqual({
+      title: 'Wes marked "Staff run the space" completed',
+      body: 'Four weeks with nobody on site.',
+    });
+  });
+
+  it('falls back to the counts when no note was written', () => {
+    expect(
+      goalCompletedText({
+        goalTitle: 'Staff run the space',
+        finisherName: 'Wes',
+        kpisMet: 1,
+        kpisTotal: 2,
+        openCards: 1,
+        note: '   ',
+      }).body
+    ).toBe('1 of 2 KPIs met, 1 task still open');
+  });
+
+  it('says nothing extra when a goal was met clean', () => {
+    expect(
+      goalCompletedText({
+        goalTitle: 'Staff run the space',
+        finisherName: 'Wes',
+        kpisMet: 2,
+        kpisTotal: 2,
+        openCards: 0,
+      }).body
+    ).toBe('2 of 2 KPIs met');
+  });
+
+  it('marks an intake lead as having come from the web', () => {
+    expect(
+      intakeCardText({
+        cardTitle: 'Group of 12, Oct 3',
+        boardName: 'Rental & group leads',
+        noun: 'lead',
+      })
+    ).toEqual({
+      title: 'New lead: Group of 12, Oct 3',
+      body: 'Came in from the web, on Rental & group leads',
+    });
+  });
+
+  it('carries a comment excerpt under the commenter', () => {
+    expect(
+      boardCommentText({
+        subjectTitle: 'Call the caterer',
+        commenterName: 'Maya',
+        excerpt: 'They want a deposit first.',
+      })
+    ).toEqual({
+      title: 'Maya commented on Call the caterer',
+      body: 'They want a deposit first.',
+    });
   });
 });

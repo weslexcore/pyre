@@ -10,7 +10,9 @@
 // way but links to the board only when they hold the schedule page.
 
 import { canViewPage } from '@/components/admin/adminTools';
+import { canViewBoard } from '@/lib/boards/access';
 import type { StaffRow } from '@/lib/db';
+import { GOALS_HREF } from '@/lib/goals/types';
 import { canViewSop, roleForStaffRow, type SopAccessFields } from '@/lib/sops/levels';
 
 export type RosterRow = Pick<
@@ -45,6 +47,23 @@ export function sopUpdateRecipients(rows: RosterRow[], sop: SopAccessFields): st
         canViewSop({ role: roleForStaffRow(row), email: emailOf(row) }, sop)
     )
     .map(emailOf);
+}
+
+/**
+ * Everyone who could open one board: the whole /admin/boards page, or a
+ * `board:<slug>` grant for this board in particular. This is who a lead
+ * arriving from the web wakes up — the community manager working the rental
+ * pipeline, not the whole roster.
+ */
+export function boardRecipients(rows: RosterRow[], slug: string): string[] {
+  return dashboardRecipients(rows)
+    .filter((row) => canViewBoard({ isAdmin: row.is_admin, pages: row.pages ?? [] }, slug))
+    .map(emailOf);
+}
+
+/** Whether this person can open the goals page (for a notice's link). */
+export function canOpenGoals(row: RosterRow): boolean {
+  return canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, GOALS_HREF);
 }
 
 /** Whether this person can open the schedule board (for the notice's link). */

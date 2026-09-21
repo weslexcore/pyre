@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adminEmails,
+  boardRecipients,
   canOpenSchedule,
   dashboardRecipients,
   nameFor,
@@ -77,5 +78,38 @@ describe('canOpenSchedule / nameFor', () => {
     expect(nameFor(roster, 'LEAD@pyre.test')).toBe('lead');
     expect(nameFor(roster, 'stranger@elsewhere.test')).toBe('stranger');
     expect(nameFor(roster, null)).toBe('Someone');
+  });
+});
+
+describe('boardRecipients', () => {
+  const boardRoster: RosterRow[] = [
+    person({ id: 'boss', is_admin: true }),
+    person({ id: 'cofounder', pages: ['/admin/boards'] }),
+    person({ id: 'community', pages: ['board:rentals'] }),
+    person({ id: 'attendant', pages: ['/admin/shift-notes'] }),
+    person({ id: 'former', pages: ['/admin/boards'], active: false }),
+  ];
+
+  it('reaches admins, the page grant, and that board\u2019s own grant', () => {
+    expect(boardRecipients(boardRoster, 'rentals').sort()).toEqual([
+      'boss@pyre.test',
+      'cofounder@pyre.test',
+      'community@pyre.test',
+    ]);
+  });
+
+  it('does not wake a single-board grantee about another board', () => {
+    // The whole point of board:rentals: the founders' task board stays out
+    // of this person's inbox as well as out of their nav.
+    expect(boardRecipients(boardRoster, 'goals').sort()).toEqual([
+      'boss@pyre.test',
+      'cofounder@pyre.test',
+    ]);
+  });
+
+  it('skips people with no board access and people off the roster', () => {
+    const reached = boardRecipients(boardRoster, 'rentals');
+    expect(reached).not.toContain('attendant@pyre.test');
+    expect(reached).not.toContain('former@pyre.test');
   });
 });

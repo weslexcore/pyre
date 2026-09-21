@@ -7,12 +7,12 @@
 // midterm goals add up to.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { GoalRow } from '@/lib/db';
 import type { Assignable } from '@/lib/boards/people';
+import type { GoalRow } from '@/lib/db';
 import { formatDaysLeft, goalRollup } from '@/lib/goals/progress';
 import type { GoalsIndexData } from '@/lib/goals/store';
-import { AREAS, GOAL_STATUSES, GOAL_STATUS_LABELS, GOALS_HREF } from '@/lib/goals/types';
 import type { GoalStatusValue } from '@/lib/goals/types';
+import { AREAS, GOAL_STATUS_LABELS, GOAL_STATUSES, GOALS_HREF } from '@/lib/goals/types';
 import { personName } from '@/lib/sops/names';
 import {
   buttonClass,
@@ -276,9 +276,7 @@ function GoalCard({
               <KpiMeter key={kpi.id} kpi={kpi} nowIso={nowIso} compact />
             ))}
             {kpis.length > 3 && (
-              <p className="font-mono text-[10px] text-white/30">
-                +{kpis.length - 3} more KPIs
-              </p>
+              <p className="font-mono text-[10px] text-white/30">+{kpis.length - 3} more KPIs</p>
             )}
           </div>
         )}

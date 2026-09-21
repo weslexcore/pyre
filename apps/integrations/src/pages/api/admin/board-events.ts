@@ -25,7 +25,9 @@ import {
 } from '@/lib/boards/route';
 import { loadCard } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
-import type { BoardEventRow } from '@/lib/db';
+import type { BoardEventRow, BoardRow, GoalRow } from '@/lib/db';
+import { notifyCardComment, notifyGoalComment } from '@/lib/notifications/goals';
+import { markSourceRead } from '@/lib/notifications/notify';
 import { getPeopleNames } from '@/lib/sops/people';
 
 /** How far back the recent-activity read may reach in one request. */
@@ -64,6 +66,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     events = await loadEventsSince(db, new Date(Math.max(parsed, floor)).toISOString());
   } else {
     return json({ error: 'Pass cardId, goalId, or since' }, 400);
+  }
+
+  // Opening the thing a notification points at is reading it, so the bell
+  // clears without anyone having to visit the inbox as well.
+  const viewer = (gate.user.email ?? '').trim().toLowerCase();
+  if (viewer) {
+    if (cardId) await markSourceRead(db, viewer, 'board_card', cardId);
+    else if (goalId) await markSourceRead(db, viewer, 'goal', goalId);
   }
 
   return json({ events, people: await getPeopleNames(events.map((event) => event.actor)) });
@@ -116,6 +126,25 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
   if (error) return json({ error: error.message }, 500);
+
+  // The person on the receiving end hears — the card's owner, or whoever is
+  // driving the goal. A board is not a broadcast.
+  if (cardId) {
+    const card = await loadCard(db, cardId);
+    if (card) {
+      const { data: boardRow } = await db
+        .from('boards')
+        .select('*')
+        .eq('id', card.board_id)
+        .maybeSingle();
+      const board = (boardRow as BoardRow) ?? null;
+      if (board) await notifyCardComment(db, card, board, note, email);
+    }
+  } else if (goalId) {
+    const { data: goalRow } = await db.from('goals').select('*').eq('id', goalId).maybeSingle();
+    const goal = (goalRow as GoalRow) ?? null;
+    if (goal) await notifyGoalComment(db, goal, note, email);
+  }
 
   return json({ event: data as BoardEventRow }, 201);
 };
