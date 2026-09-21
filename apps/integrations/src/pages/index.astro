@@ -2,6 +2,7 @@
 // Admin sign-in for the Pyre integrations service. All /admin pages redirect
 // unauthenticated visitors here; after Momence OAuth the callback returns the
 // user to returnUrl. Signed-in admins skip straight to the dashboard.
+import Favicon from '@/components/Favicon.astro';
 import { getAccess } from '@/lib/auth/access';
 import { validateSession } from '@/lib/auth/session';
 import '@/styles/admin.css';
@@ -30,6 +31,7 @@ if (user?.email && (await getAccess(user.email))) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Pyre Admin</title>
+    <Favicon />
   </head>
   <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
     <main class="mx-auto max-w-md px-4 py-16 text-center">

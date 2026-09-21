@@ -1,0 +1,14 @@
+---
+// Tab icon for every page: the Pyre wave mark in brand gold.
+// The SVG uses currentColor, so it is recolored here and inlined as a data
+// URI (no extra request). The PNGs in public/ are rendered from the same SVG
+// for browsers that ignore SVG favicons (Safari) and for iOS home screens.
+import pyreLogo from '@/assets/pyre_logo.svg?raw';
+
+const gold = '#dbb155'; // --pyre-gold in styles/admin.css
+const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, gold))}`;
+---
+
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+<link rel="icon" type="image/svg+xml" href={svgHref} />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

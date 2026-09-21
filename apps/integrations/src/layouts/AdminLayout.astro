@@ -12,6 +12,7 @@ import { AdminNav } from '@/components/admin/AdminNav';
 import { canViewPath, searchablePages, toolsForAccess } from '@/components/admin/adminTools';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
+import Favicon from '@/components/Favicon.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { getUnreadCount } from '@/lib/notifications/unread';
 import '@/styles/admin.css';
@@ -58,6 +59,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
     <title>{title} — Pyre Admin</title>
+    <Favicon />
     {/* Client-side nav between admin pages: the router swaps the document
         instead of reloading it, which keeps the loaded JS realm alive so the
         lib/client/cachedJson cache survives and pages repaint instantly. */}
