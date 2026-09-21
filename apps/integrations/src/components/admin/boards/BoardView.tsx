@@ -288,8 +288,10 @@ export function BoardView({ slug }: { slug: string }) {
               <ColumnHeader
                 column={column}
                 count={columnCards.length}
+                noun={noun}
                 canManage={canManage}
                 busy={busy}
+                onAdd={column.archived ? undefined : (title) => addCard(title, column.id)}
                 onRename={(label) => saveColumns(renameColumn(columns, column.key, label))}
                 onDelete={
                   // Empty on the whole board, not just under the owner filter,

@@ -1,5 +1,7 @@
-// A column's heading on the board, and the tile that adds one. Both are the
-// same PATCH — the whole column list with one thing changed (lib/boards/
+// A column's heading on the board — with a plus that opens a quick-add
+// straight into that column, so a lead can be written down as Quoted rather
+// than as New and then moved — and the tile that adds a column. The column
+// edits are the same PATCH — the whole column list with one thing changed (lib/boards/
 // columns.ts) — so a rename from the header and a rename from Board settings
 // land on the server identically, and a column keeps its cards either way.
 //
@@ -15,24 +17,32 @@ import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardColumnRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { buttonClass, inputBaseClass, SectionTitle } from '../goalsUi';
+import { QuickAdd } from './QuickAdd';
 
 export function ColumnHeader({
   column,
   count,
+  noun = 'card',
   canManage = false,
   busy = false,
+  onAdd,
   onRename,
   onDelete,
 }: {
   column: BoardColumnRow;
   count: number;
+  /** What this board calls a card — for the plus button's label. */
+  noun?: string;
   canManage?: boolean;
   busy?: boolean;
+  /** Quick-add into this column; absent on an archived column. */
+  onAdd?: (title: string) => Promise<void>;
   onRename: (label: string) => Promise<void>;
   /** Offered only when the column is empty and not the last open one. */
   onDelete?: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState(column.label);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -99,6 +109,18 @@ export function ColumnHeader({
         note={
           <span className="flex items-center gap-2">
             <span>{count}</span>
+            {onAdd && (
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded border border-white/15 text-sm leading-none text-white/60 hover:border-white/40 hover:text-white disabled:opacity-40"
+                disabled={busy}
+                aria-label={`Add a ${noun} to ${column.label}`}
+                aria-expanded={adding}
+                onClick={() => setAdding((open) => !open)}
+              >
+                +
+              </button>
+            )}
             {canManage && (
               <button
                 type="button"
@@ -125,6 +147,19 @@ export function ColumnHeader({
         {column.label}
         {column.archived && <span className="ml-2 text-white/25">(archived)</span>}
       </SectionTitle>
+
+      {adding && onAdd && (
+        <div className="mb-3">
+          <QuickAdd
+            noun={noun}
+            placeholder={`Add a ${noun} to ${column.label}…`}
+            busy={busy}
+            focusOnMount
+            onAdd={onAdd}
+            onCancel={() => setAdding(false)}
+          />
+        </div>
+      )}
 
       {confirming && onDelete && (
         <ConfirmDialog
