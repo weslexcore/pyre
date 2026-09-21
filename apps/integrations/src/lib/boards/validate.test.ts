@@ -119,6 +119,48 @@ describe('parseBoardPatch', () => {
     expect(value(parseBoardPatch({ columns })).columns).toHaveLength(2);
   });
 
+  it('replaces the whole field list when one is sent', () => {
+    const fields = value(
+      parseBoardPatch({
+        fields: [
+          { key: 'party_size', label: 'Party size', kind: 'number', showOnCard: true },
+          {
+            key: 'occasion',
+            label: 'Occasion',
+            kind: 'choice',
+            options: 'Birthday, Team, , birthday',
+          },
+        ],
+      })
+    ).fields;
+    expect(fields).toHaveLength(2);
+    expect(fields?.[0]).toMatchObject({
+      key: 'party_size',
+      show_on_card: true,
+      sort_order: 10,
+      options: [],
+    });
+    expect(fields?.[1]).toMatchObject({
+      options: ['Birthday', 'Team'],
+      sort_order: 20,
+      hint: null,
+    });
+  });
+
+  it('insists a pick field has something to pick between', () => {
+    const one = [{ key: 'occasion', label: 'Occasion', kind: 'choice', options: ['Only'] }];
+    expect(error(parseBoardPatch({ fields: one }))).toMatch(/two options/);
+    const dupes = [
+      { key: 'note', label: 'A', kind: 'text' },
+      { key: 'note', label: 'B', kind: 'text' },
+    ];
+    expect(error(parseBoardPatch({ fields: dupes }))).toMatch(/Duplicate/);
+    expect(
+      error(parseBoardPatch({ fields: [{ key: 'note', label: 'A', kind: 'rating' }] }))
+    ).toMatch(/kind/);
+    expect(value(parseBoardPatch({ fields: [] })).fields).toEqual([]);
+  });
+
   it('attaches or detaches a goal', () => {
     expect(value(parseBoardPatch({ goalId: UUID })).goal_id).toBe(UUID);
     expect(value(parseBoardPatch({ goalId: null })).goal_id).toBeNull();

@@ -14,6 +14,9 @@
 // from the list is archived if anything is sitting in it and removed only if
 // nothing is — an archived column keeps rendering while it still holds work
 // (lib/boards/cards.ts), so nothing is ever stranded somewhere invisible.
+// Fields follow the same rule against the answers on the cards, with one
+// more: a field's kind is permanent, because the answers already stored are
+// shaped by it. Change of mind means archive it and add a new one.
 //
 // A board's goal travels with its cards: every card on the board is filed
 // under the board's goal, and pointing the board at a different goal
@@ -31,7 +34,8 @@
 //            goalId? | goal?, columns: [{ key, label, kind, sortOrder? }] }
 //                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            archived?, sortOrder?, goalId?, columns? } → { board, columns }
+//            archived?, sortOrder?, goalId?, columns?, fields? }
+//                        → { board, columns, fields }
 //   DELETE ?slug=<slug>  → { ok: true, cards }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
@@ -57,8 +61,13 @@ import {
   unattachedGoals,
 } from '@/lib/boards/store';
 import { GOALS_BOARD_SLUG, isBoardSlug } from '@/lib/boards/types';
-import { type ColumnInput, parseBoardCreate, parseBoardPatch } from '@/lib/boards/validate';
-import type { BoardRow, GoalRow } from '@/lib/db';
+import {
+  type ColumnInput,
+  type FieldInput,
+  parseBoardCreate,
+  parseBoardPatch,
+} from '@/lib/boards/validate';
+import type { BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { deleteBySourceIds } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -171,7 +180,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const parsed = parseBoardPatch(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const { columns, goal_id: goalId, ...patch } = parsed.value;
+  const { columns, fields, goal_id: goalId, ...patch } = parsed.value;
 
   const { data: existing, error: loadError } = await db
     .from('boards')
@@ -206,6 +215,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (applied) return applied;
   }
 
+  if (fields) {
+    const applied = await applyFields(db, board.id, fields);
+    if (applied) return applied;
+  }
+
   const { data: after, error: afterError } = await db
     .from('boards')
     .select('*')
@@ -213,7 +227,11 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (afterError) return json({ error: afterError.message }, 500);
 
-  return json({ board: after as BoardRow, columns: await loadColumns(db, board.id) });
+  return json({
+    board: after as BoardRow,
+    columns: await loadColumns(db, board.id),
+    fields: await loadFields(db, board.id),
+  });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -316,6 +334,80 @@ async function applyColumns(
   }
   if (toDelete.length > 0) {
     const { error } = await db.from('board_columns').delete().in('id', toDelete);
+    if (error) return json({ error: error.message }, 500);
+  }
+  return null;
+}
+
+async function loadFields(db: Db, boardId: string): Promise<BoardFieldRow[]> {
+  const { data, error } = await db
+    .from('board_fields')
+    .select('*')
+    .eq('board_id', boardId)
+    .order('sort_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BoardFieldRow[];
+}
+
+/**
+ * Reconcile a board's fields against the list that was sent, the way
+ * applyColumns does: still listed (update — but never the kind), new
+ * (insert), gone but answered on some card (archive), gone and unanswered
+ * (delete). An archived field keeps showing in a drawer while the card has
+ * an answer under it (CardDrawer), so nothing typed is ever hidden.
+ */
+async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise<Response | null> {
+  const existing = await loadFields(db, boardId);
+  const byKey = new Map(existing.map((field) => [field.key, field]));
+  const wanted = new Set(next.map((field) => field.key));
+
+  for (const field of next) {
+    const current = byKey.get(field.key);
+    if (current && current.kind !== field.kind) {
+      return json(
+        {
+          error: `"${current.label}" is a ${current.kind} field and the answers on the cards are shaped by that. Archive it and add a new one instead.`,
+        },
+        400
+      );
+    }
+  }
+
+  for (const field of next) {
+    const current = byKey.get(field.key);
+    if (current) {
+      const { error } = await db
+        .from('board_fields')
+        .update({
+          label: field.label,
+          options: field.options,
+          hint: field.hint,
+          show_on_card: field.show_on_card,
+          sort_order: field.sort_order,
+          archived: field.archived,
+        })
+        .eq('id', current.id);
+      if (error) return json({ error: error.message }, 500);
+    } else {
+      const { error } = await db.from('board_fields').insert({ ...field, board_id: boardId });
+      if (error) return json({ error: error.message }, 500);
+    }
+  }
+
+  const dropped = existing.filter((field) => !wanted.has(field.key));
+  for (const field of dropped) {
+    // Keys match ^[a-z][a-z0-9_]+$, so the JSON path is safe to build.
+    const { count, error: countError } = await db
+      .from('board_cards')
+      .select('id', { count: 'exact', head: true })
+      .eq('board_id', boardId)
+      .not(`properties->${field.key}`, 'is', null);
+    if (countError) return json({ error: countError.message }, 500);
+
+    const { error } =
+      (count ?? 0) > 0
+        ? await db.from('board_fields').update({ archived: true }).eq('id', field.id)
+        : await db.from('board_fields').delete().eq('id', field.id);
     if (error) return json({ error: error.message }, 500);
   }
   return null;

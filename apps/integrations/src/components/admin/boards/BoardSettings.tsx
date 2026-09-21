@@ -12,21 +12,25 @@
 // The goal is not here: it is edited where it is shown, at the top of the
 // board (BoardGoal).
 //
-// Fields are shown read-only. A per-board field editor is real work (see
-// GuestFieldsManager for the shape it would take) and the seeded rental
-// board already has the fields it needs; until somebody wants a seventh one,
-// listing them is honest and an editor would be speculative.
+// Fields — the questions a card on this board answers — are edited the same
+// way, as a list saved whole. A field's kind is permanent once saved: the
+// answers on the cards are shaped by it, so the kind select locks after the
+// first save and a change of mind means archive it and add a new one. A
+// removed field is deleted if no card has answered it and archived if one
+// has, so nothing typed is ever lost.
 
 import { useState } from 'react';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
-import type { ColumnKind } from '@/lib/boards/types';
+import type { ColumnKind, FieldKind } from '@/lib/boards/types';
 import {
   BOARD_LIMITS,
   BOARDS_HREF,
   COLUMN_KIND_LABELS,
   COLUMN_KINDS,
   FIELD_KIND_LABELS,
+  FIELD_KINDS,
   GOALS_BOARD_SLUG,
+  kindHasOptions,
 } from '@/lib/boards/types';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -49,6 +53,19 @@ interface ColumnDraft {
   label: string;
   kind: ColumnKind;
   archived: boolean;
+}
+
+interface FieldDraft {
+  key: string;
+  label: string;
+  kind: FieldKind;
+  /** One option per line or comma; parsed by the route. */
+  options: string;
+  hint: string;
+  showOnCard: boolean;
+  archived: boolean;
+  /** Not saved yet, so its kind may still change. */
+  isNew: boolean;
 }
 
 export function BoardSettings({
@@ -81,9 +98,60 @@ export function BoardSettings({
         archived: column.archived,
       }))
   );
+  const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>(() =>
+    [...fields]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((field) => ({
+        key: field.key,
+        label: field.label,
+        kind: field.kind,
+        options: field.options.join(', '),
+        hint: field.hint ?? '',
+        showOnCard: field.show_on_card,
+        archived: field.archived,
+        isNew: false,
+      }))
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
+
+  const setFieldDraft = (index: number, patch: Partial<FieldDraft>) =>
+    setFieldDrafts((current) =>
+      current.map((draft, i) => (i === index ? { ...draft, ...patch } : draft))
+    );
+
+  const removeFieldDraft = (index: number) =>
+    setFieldDrafts((current) => current.filter((_, i) => i !== index));
+
+  const addField = () =>
+    setFieldDrafts((current) => [
+      ...current,
+      {
+        key: columnKeyOf(
+          'New field',
+          current.map((draft) => draft.key)
+        ),
+        label: 'New field',
+        kind: 'text',
+        options: '',
+        hint: '',
+        showOnCard: false,
+        archived: false,
+        isNew: true,
+      },
+    ]);
+
+  /** A new field's key follows its label until the first save fixes it. */
+  const relabelField = (index: number, label: string) =>
+    setFieldDrafts((current) =>
+      current.map((draft, i) => {
+        if (i !== index) return draft;
+        if (!draft.isNew) return { ...draft, label };
+        const taken = current.filter((_, j) => j !== i).map((other) => other.key);
+        return { ...draft, label, key: label.trim() ? columnKeyOf(label, taken) : draft.key };
+      })
+    );
 
   const setDraft = (index: number, patch: Partial<ColumnDraft>) =>
     setDrafts((current) =>
@@ -118,6 +186,10 @@ export function BoardSettings({
         cardNoun,
         includeInAllTasks,
         columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
+        fields: fieldDrafts.map(({ isNew: _isNew, ...draft }, index) => ({
+          ...draft,
+          sortOrder: (index + 1) * 10,
+        })),
       });
       onSaved();
     } catch (e) {
@@ -270,22 +342,97 @@ export function BoardSettings({
         </p>
       </div>
 
-      {fields.length > 0 && (
-        <div className="mt-5 border-t border-white/10 pt-4">
-          <SectionTitle note="set when the board was made">Fields</SectionTitle>
-          <ul className="space-y-1 text-sm text-white/60">
-            {fields.map((field) => (
-              <li key={field.key} className="flex items-baseline justify-between gap-3">
-                <span>{field.label}</span>
-                <span className="font-mono text-[11px] text-white/35">
-                  {FIELD_KIND_LABELS[field.kind]}
-                  {field.show_on_card && ' · on the card'}
-                </span>
-              </li>
-            ))}
-          </ul>
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <SectionTitle note="what a card asks">Fields</SectionTitle>
+        {fieldDrafts.length === 0 && (
+          <p className="mb-2 text-xs text-white/35">
+            No fields yet. A task board rarely needs any; a pipeline wants the contact, the date,
+            the party size.
+          </p>
+        )}
+        <div className="space-y-3">
+          {fieldDrafts.map((draft, index) => (
+            <div key={draft.key} className="space-y-2 rounded border border-white/10 p-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <input
+                  className={`${inputBaseClass} min-w-0 flex-1`}
+                  type="text"
+                  maxLength={BOARD_LIMITS.fieldLabel}
+                  value={draft.label}
+                  aria-label={`Label for ${draft.key}`}
+                  onChange={(e) => relabelField(index, e.target.value)}
+                />
+                <select
+                  className={`${inputBaseClass} w-28 shrink-0 [&>option]:bg-[var(--pyre-black)] disabled:opacity-60`}
+                  value={draft.kind}
+                  disabled={!draft.isNew}
+                  title={draft.isNew ? undefined : 'A saved field keeps its kind'}
+                  aria-label={`Kind for ${draft.key}`}
+                  onChange={(e) => setFieldDraft(index, { kind: e.target.value as FieldKind })}
+                >
+                  {FIELD_KINDS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {FIELD_KIND_LABELS[kind]}
+                    </option>
+                  ))}
+                </select>
+                <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                  <input
+                    type="checkbox"
+                    checked={draft.showOnCard}
+                    onChange={(e) => setFieldDraft(index, { showOnCard: e.target.checked })}
+                  />
+                  on card
+                </label>
+                <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                  <input
+                    type="checkbox"
+                    checked={draft.archived}
+                    onChange={(e) => setFieldDraft(index, { archived: e.target.checked })}
+                  />
+                  archive
+                </label>
+                <button
+                  type="button"
+                  className="shrink-0 px-1 font-mono text-xs text-white/40 underline hover:text-[var(--pyre-red)]"
+                  aria-label={`Remove ${draft.label}`}
+                  onClick={() => removeFieldDraft(index)}
+                >
+                  remove
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {kindHasOptions(draft.kind) && (
+                  <input
+                    className={inputClass}
+                    type="text"
+                    placeholder="Options, comma-separated"
+                    value={draft.options}
+                    aria-label={`Options for ${draft.label}`}
+                    onChange={(e) => setFieldDraft(index, { options: e.target.value })}
+                  />
+                )}
+                <input
+                  className={inputClass}
+                  type="text"
+                  maxLength={BOARD_LIMITS.fieldHint}
+                  placeholder="Hint shown under the field (optional)"
+                  value={draft.hint}
+                  aria-label={`Hint for ${draft.label}`}
+                  onChange={(e) => setFieldDraft(index, { hint: e.target.value })}
+                />
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+        <button type="button" className={`${buttonClass} mt-2`} onClick={addField}>
+          Add field
+        </button>
+        <p className="mt-2 text-xs text-white/35">
+          A field's kind is fixed once saved; archive it and add a new one to change it. A removed
+          field is deleted if no card has answered it and archived if one has.
+        </p>
+      </div>
 
       {error && <p className="mt-3 text-sm text-[var(--pyre-red)]">{error}</p>}
 

@@ -17,8 +17,8 @@ import {
   type ParseResult,
   parseGoalCreate,
 } from '@/lib/goals/validate';
-import type { ColumnKind } from './types';
-import { BOARD_LIMITS, isColumnKind, KEY_RE, SLUG_RE } from './types';
+import type { ColumnKind, FieldKind } from './types';
+import { BOARD_LIMITS, isColumnKind, isFieldKind, KEY_RE, kindHasOptions, SLUG_RE } from './types';
 
 export type { ParseResult };
 
@@ -113,6 +113,98 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
  * could never shadow them.
  */
 export const RESERVED_BOARD_SLUGS = ['tasks', 'new'] as const;
+
+export interface FieldInput {
+  key: string;
+  label: string;
+  kind: FieldKind;
+  options: string[];
+  hint: string | null;
+  show_on_card: boolean;
+  sort_order: number;
+  archived: boolean;
+}
+
+/** Trimmed, de-duplicated (case-insensitively), capped option list. */
+function normalizeOptions(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/\r?\n|,/)
+      : [];
+  const seen = new Set<string>();
+  const options: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string') continue;
+    const option = entry.trim().slice(0, BOARD_LIMITS.option);
+    if (!option) continue;
+    const fold = option.toLowerCase();
+    if (seen.has(fold)) continue;
+    seen.add(fold);
+    options.push(option);
+    if (options.length >= BOARD_LIMITS.optionsPerField) break;
+  }
+  return options;
+}
+
+/**
+ * A board's field list, the way the columns come: whole, keyed, and
+ * reconciled by the route. A pick-one or pick-any field needs at least two
+ * options or there is nothing to pick between. Kinds are not checked against
+ * what is stored — the route refuses a kind change on an existing key,
+ * because the answers already on the cards are shaped by it.
+ */
+function parseFields(value: unknown): ParseResult<FieldInput[]> {
+  if (!Array.isArray(value)) return fail('fields must be an array');
+  if (value.length > BOARD_LIMITS.fieldsPerBoard) {
+    return fail(`A board can have ${BOARD_LIMITS.fieldsPerBoard} fields at most`);
+  }
+
+  const fields: FieldInput[] = [];
+  const seen = new Set<string>();
+  for (const [index, raw] of value.entries()) {
+    if (!raw || typeof raw !== 'object') return fail('Each field must be an object');
+    const field = raw as Record<string, unknown>;
+
+    const key = typeof field.key === 'string' ? field.key.trim() : '';
+    if (!KEY_RE.test(key)) {
+      return fail(`Field key "${key}" must be lowercase letters, digits, and underscores`);
+    }
+    if (seen.has(key)) return fail(`Duplicate field key "${key}"`);
+    seen.add(key);
+
+    const label = text(field.label, BOARD_LIMITS.fieldLabel);
+    if (!label) return fail(`Field "${key}" needs a label`);
+    if (!isFieldKind(field.kind)) return fail(`Field "${key}" has a kind nobody has`);
+
+    const options = kindHasOptions(field.kind) ? normalizeOptions(field.options) : [];
+    if (kindHasOptions(field.kind) && options.length < 2) {
+      return fail(`Field "${label}" needs at least two options to choose from`);
+    }
+
+    const hint = optionalText(field.hint, BOARD_LIMITS.fieldHint);
+    if (hint === undefined && field.hint !== undefined) {
+      return fail(`Field "${label}" has a hint over ${BOARD_LIMITS.fieldHint} characters`);
+    }
+
+    const order = field.sortOrder === undefined ? (index + 1) * 10 : numberOf(field.sortOrder);
+    if (order === undefined || !Number.isInteger(order)) {
+      return fail(`Field "${key}" has a bad sort order`);
+    }
+
+    fields.push({
+      key,
+      label,
+      kind: field.kind,
+      options,
+      hint: hint ?? null,
+      show_on_card: field.showOnCard === true,
+      sort_order: order,
+      archived: field.archived === true,
+    });
+  }
+  return { ok: true, value: fields };
+}
 
 export interface BoardCreate {
   slug: string;
@@ -210,6 +302,8 @@ export interface BoardPatch {
   goal_id?: string | null;
   /** Absent leaves the columns alone; present replaces the whole list. */
   columns?: ColumnInput[];
+  /** Absent leaves the fields alone; present replaces the whole list. */
+  fields?: FieldInput[];
 }
 
 export function parseBoardPatch(body: Record<string, unknown>): ParseResult<BoardPatch> {
@@ -266,6 +360,12 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
     const columns = parseColumns(body.columns);
     if (!columns.ok) return columns;
     patch.columns = columns.value;
+  }
+
+  if (body.fields !== undefined) {
+    const fields = parseFields(body.fields);
+    if (!fields.ok) return fields;
+    patch.fields = fields.value;
   }
 
   if (Object.keys(patch).length === 0) return fail('Nothing to change');
