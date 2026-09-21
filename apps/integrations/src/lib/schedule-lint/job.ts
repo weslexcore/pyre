@@ -1,10 +1,18 @@
 // The schedule lint as a cron job.
 //
 // Reads the Momence events feed, runs every rule in ./rules, and emails the
-// admins what it found. Nothing is written to Momence and nothing is stored:
-// the send log's key — this week, the report digest, the recipient — is what
-// makes the same list go out once, a changed list go out again, and anything
-// still open get a Monday reminder.
+// admins what it found. Nothing is written to Momence: the send log's key —
+// this week, the report digest, the recipient — is what makes the same list go
+// out once and anything still open get a Monday reminder.
+//
+// Quiet. Runs are frequent (a Momence session webhook schedules one), and the
+// feed keeps moving under them: sessions drop out of it as they finish, so the
+// list of findings can differ from the last one without anything having gone
+// wrong. A changed list is therefore not enough to email about — a run only
+// writes when it raises a finding key the week has not already reported, which
+// is remembered in Redis under ./REPORTED_PREFIX and forgotten when the week
+// turns over. So: something new, an email the same run; the same trouble, one
+// email a week; a list that only lost items, silence.
 //
 // Cadence. The tick is hourly; this job runs when one of three things holds:
 //   daily  — first tick at/after SYNC_HOUR_ET with no done-key for today, the
@@ -33,6 +41,11 @@ const DONE_PREFIX = 'schedule-lint:done:';
 /** A day plus slack for a run that had to resume. */
 const DONE_TTL_SECONDS = 36 * 60 * 60;
 
+/** The finding keys already emailed this week, by ET week start. */
+const REPORTED_PREFIX = 'schedule-lint:reported:';
+/** A week plus slack; a week that has rolled over is meant to be forgotten. */
+const REPORTED_TTL_SECONDS = 9 * 24 * 60 * 60;
+
 /** Stop starting new sends with less than this left in the tick's budget. */
 const TIME_FLOOR_MS = 5_000;
 
@@ -45,6 +58,8 @@ export interface ScheduleLintSummary {
   byRule?: Record<string, number>;
   bySeverity?: Record<Severity, number>;
   digest?: string;
+  /** Of `findings`, the ones this week has not emailed about yet. */
+  newFindings?: number;
   /** Findings raised but left out because an admin marked them resolved. */
   resolved?: number;
   /** Resolutions dropped because nothing has raised their finding lately. */
@@ -103,7 +118,20 @@ export async function listAdminEmails(): Promise<string[]> {
   return rows.filter((r) => r.is_admin && r.email).map((r) => r.email as string);
 }
 
-export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLintSummary> {
+export interface ScheduleLintOptions {
+  /**
+   * Email the findings even when the week has already reported every one of
+   * them — the admin page's "Email admins now", where a person is asking for
+   * the report rather than waiting to be told. The send log still turns away
+   * an admin who has had this exact list this week.
+   */
+  resend?: boolean;
+}
+
+export async function runScheduleLint(
+  ctx: CronJobContext,
+  { resend = false }: ScheduleLintOptions = {}
+): Promise<ScheduleLintSummary> {
   const now = new Date();
   const eastern = utcToEastern(now.toISOString());
   const today = eastern.date;
@@ -173,13 +201,30 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
     await redis.del(DIRTY_KEY);
   };
 
+  // What of this list is news. Without Redis nothing is remembered, so every
+  // finding reads as new — the same way round as the resolutions above: an
+  // outage makes the lint louder, never quieter.
+  const weekStart = weekStartOf(today);
+  const reportedKey = `${REPORTED_PREFIX}${weekStart}`;
+  const reported = new Set(redis ? ((await redis.get<string[]>(reportedKey)) ?? []) : []);
+  const fresh = report.findings.filter((f) => !reported.has(f.key));
+  summary.newFindings = fresh.length;
+
   if (ctx.dryRun) {
-    return { ...summary, wouldSend: report.findings.length > 0 ? await listAdminEmails() : [] };
+    return { ...summary, wouldSend: fresh.length > 0 ? await listAdminEmails() : [] };
   }
 
   if (report.findings.length === 0) {
     await finish();
     return summary;
+  }
+
+  // Nothing here the admins have not already been told about this week. The
+  // list may well have changed — a session that ended has taken its finding
+  // with it — but that is the clock talking, not the schedule.
+  if (fresh.length === 0 && !resend) {
+    await finish();
+    return { ...summary, skipped: 'nothing-new' };
   }
 
   const admins = await listAdminEmails();
@@ -189,9 +234,8 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
   }
 
   const props = buildEmailProps(report);
-  // This week + this exact list + this admin. Hourly re-runs are no-ops, a
-  // changed list goes out at once, and an ignored one comes back on Monday.
-  const weekStart = weekStartOf(today);
+  // This week + this exact list + this admin. Repeat runs are no-ops, and a
+  // list still open when the week turns over comes back as a Monday reminder.
   for (const email of admins) {
     if (ctx.timeRemainingMs() < TIME_FLOOR_MS) {
       summary.outOfTime = true;
@@ -218,6 +262,14 @@ export async function runScheduleLint(ctx: CronJobContext): Promise<ScheduleLint
     // where this one stopped; the dirty flag makes sure there is a next tick.
     if (redis) await redis.set(DIRTY_KEY, { reason: 'resume', at: now.toISOString() });
   } else {
+    // Remember the list, so the rest of the week is quiet unless something
+    // new turns up. Only after a clean pass: an admin the send threw for has
+    // not been told, and the next run has to be free to try again.
+    if (redis && summary.failed.length === 0) {
+      await redis.set(reportedKey, [...reported, ...fresh.map((f) => f.key)], {
+        ex: REPORTED_TTL_SECONDS,
+      });
+    }
     await finish();
   }
 

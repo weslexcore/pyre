@@ -155,7 +155,12 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
   const label = count > 0 ? `Notifications, ${count} unread` : 'Notifications';
 
   return (
-    <div ref={rootRef} className="relative">
+    // Static on mobile so the panel below anchors to the header's relative
+    // container (the row AdminLayout marks) and spans its full width; relative
+    // from md+ so it hangs under the bell instead. Anchoring it to this
+    // wrapper at every breakpoint would pin the mobile panel to the 40px
+    // button, which is far too narrow to read.
+    <div ref={rootRef} className="md:relative">
       <button
         type="button"
         aria-label={label}
@@ -178,7 +183,7 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
       {open && (
         <div
           id="notification-panel"
-          className="absolute inset-x-0 top-full z-50 mt-2 flex max-h-[calc(100dvh-5rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-0 md:w-80 md:rounded-md md:border md:border-white/10"
+          className="absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-0 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-80 md:rounded-md md:border md:border-white/10"
         >
           <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
             <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">

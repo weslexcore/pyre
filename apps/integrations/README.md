@@ -246,8 +246,14 @@ next email; **Email admins now** runs the real job.
 Findings go to the admins as one `schedule-lint` email, grouped by severity,
 every title linking to the session in Momence. The send key is
 `schedule-lint:{week}:{digest}:{email}`, where the digest hashes the finding
-keys — so the same list is emailed once, a changed list goes out again, and
-anything still open comes back on Monday. Nothing is stored beyond that key.
+keys, so the same list is emailed once. On top of that, a run only emails when
+it raises a finding key the week has not already reported — the keys that went
+out are kept in Redis under `schedule-lint:reported:{week}`. Runs are frequent
+and the feed moves under them (a session that finishes drops out of it, taking
+its finding with it), so a changed list is not by itself worth an email: a new
+problem goes out the run it appears, anything still open comes back when the
+week turns over, and a list that only got shorter says nothing. **Email admins
+now** on the admin page overrides that and sends the current list.
 
 It runs three ways:
 

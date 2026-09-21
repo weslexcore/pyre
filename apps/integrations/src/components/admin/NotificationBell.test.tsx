@@ -21,4 +21,13 @@ describe('NotificationBell', () => {
   it('caps a runaway count', () => {
     expect(renderToStaticMarkup(<NotificationBell initialCount={250} />)).toContain('99+');
   });
+
+  // The popover is `absolute inset-x-0` on mobile so it spans the header's
+  // relative row. A `relative` wrapper here would make the 40px button the
+  // containing block instead and squeeze the panel down to the bell's width.
+  it('leaves the popover wrapper static below md so the panel spans the header', () => {
+    const html = renderToStaticMarkup(<NotificationBell initialCount={1} />);
+    const wrapper = /<div class="([^"]*)"><button/.exec(html)?.[1];
+    expect(wrapper).toBe('md:relative');
+  });
 });

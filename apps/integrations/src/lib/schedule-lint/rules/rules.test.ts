@@ -366,6 +366,25 @@ describe('duration-variants', () => {
     expect(run(durationVariants, [at('18:00'), { ...special, published: false }])).toHaveLength(1);
   });
 
+  it('ignores a slot that has already started', () => {
+    // 8:00 EDT on the day itself: the hour is running, its 60-minute half is
+    // over and gone from the feed, and what is left reads as a slot missing
+    // its shorter option. Nobody can add one now, and left in, every passing
+    // hour would raise a finding of its own — the lint's hourly email.
+    const during = new Date('2026-09-17T12:30:00Z');
+    const events = [
+      event({ id: 1, dateTime: et('2026-09-17', '08:00'), duration: 120 }),
+      event({ id: 2, dateTime: et('2026-09-17', '17:00') }),
+    ];
+    const findings = durationVariants.run(
+      normalizeFeed(events, { now: during }),
+      { now: during, horizon: horizonOf({ now: during }) },
+      durationVariants.defaults
+    );
+    // Only the 5pm slot, which is still ahead of us, is asked for its twin.
+    expect(findings.map((f) => f.session?.id)).toEqual([2]);
+  });
+
   it('ignores drafts, special events, and other types when reading a slot', () => {
     const findings = run(durationVariants, [
       at('18:00', { id: 1 }),
