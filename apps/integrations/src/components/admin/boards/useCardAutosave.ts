@@ -13,6 +13,10 @@ export class CardSaveQueue {
     Object.assign(this.pending, patch);
   }
 
+  discard(key: string) {
+    delete this.pending[key];
+  }
+
   get dirty() {
     return this.running !== null || Object.keys(this.pending).length > 0;
   }
@@ -84,5 +88,13 @@ export function useCardAutosave(onSave: (patch: Patch) => Promise<void>) {
     };
   }, [queue]);
 
-  return { schedule, flush, status, error };
+  const discard = (key: string) => {
+    queue.discard(key);
+    if (!queue.dirty) {
+      setStatus('saved');
+      setError(null);
+    }
+  };
+
+  return { schedule, flush, discard, status, error };
 }

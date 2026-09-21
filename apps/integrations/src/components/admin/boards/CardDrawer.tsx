@@ -5,7 +5,7 @@
 // Edits save automatically; text is debounced and writes are serialized.
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { BOARD_LIMITS } from '@/lib/boards/types';
+import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { AREAS } from '@/lib/goals/types';
 import type { PeopleNames } from '@/lib/sops/names';
@@ -121,6 +121,7 @@ export function CardDrawer({
               onChange={(e) => {
                 setTitle(e.target.value);
                 if (e.target.value.trim()) autosave.schedule({ title: e.target.value }, 600);
+                else autosave.discard('title');
               }}
             />
           </div>
@@ -136,7 +137,13 @@ export function CardDrawer({
                 value={columnId}
                 onChange={(e) => {
                   setColumnId(e.target.value);
-                  autosave.schedule({ columnId: e.target.value }, 0);
+                  const destination = columns.find((column) => column.id === e.target.value);
+                  if (destination && isFinishedKind(destination.kind)) {
+                    setWaitingOn('');
+                    autosave.schedule({ columnId: e.target.value, waitingOn: null }, 0);
+                  } else {
+                    autosave.schedule({ columnId: e.target.value }, 0);
+                  }
                 }}
               >
                 {liveColumns.map((column) => (

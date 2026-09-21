@@ -6,6 +6,7 @@ import {
   searchablePages,
   USERS_TOOL,
 } from '@/components/admin/adminTools';
+import type { BoardRow } from '@/lib/db';
 import {
   askHref,
   buildItems,
@@ -191,5 +192,95 @@ describe('hrefs', () => {
 
   it('encodes the note term', () => {
     expect(noteHref('abc', 'pH & chlorine')).toBe('/admin/shift-notes?q=pH+%26+chlorine#note-abc');
+  });
+});
+
+describe('quick task creation', () => {
+  const taskBoard = {
+    slug: 'goals',
+    name: 'Task board',
+    description: '',
+    archived: false,
+    include_in_all_tasks: true,
+  } as BoardRow;
+  const boards: SearchPage = { href: '/admin/boards', title: 'Boards', hint: '', keywords: [] };
+
+  it('offers creation before search results and carries the trimmed title', () => {
+    const items = buildItems([boards], null, '  Order towels  ', [taskBoard]);
+    expect(items[0]).toMatchObject({ group: 'create', title: 'Create task: “Order towels”' });
+    expect(buildItems([boards], null, '', [taskBoard])[0].title).toBe('Create task');
+  });
+
+  it('hides creation for pipeline-only access, archived tasks, or unverified access', () => {
+    for (const visible of [
+      [],
+      [{ ...taskBoard, include_in_all_tasks: false }],
+      [{ ...taskBoard, archived: true }],
+    ]) {
+      expect(buildItems([boards], null, '', visible).some((item) => item.group === 'create')).toBe(
+        false
+      );
+    }
+  });
+
+  it('does not offer creation without board access', () => {
+    expect(buildItems([], null, 'Order towels')).toEqual([]);
+  });
+});
+
+describe('board search', () => {
+  const boards = [
+    {
+      id: '1',
+      slug: 'rentals',
+      name: 'Private Events',
+      description: 'Venue bookings',
+      archived: false,
+      include_in_all_tasks: false,
+    },
+    {
+      id: '2',
+      slug: 'old-events',
+      name: 'Past Events',
+      description: '',
+      archived: true,
+      include_in_all_tasks: false,
+    },
+  ] as BoardRow[];
+
+  it('matches names, slugs, and descriptions without requiring a content-search response', () => {
+    for (const query of ['private', 'RENTALS', 'venue']) {
+      expect(buildItems([], null, query, boards)).toMatchObject([
+        { group: 'boards', title: 'Private Events', href: '/admin/boards/rentals' },
+      ]);
+    }
+  });
+
+  it('lists accessible pipelines without granting task creation and labels archived boards', () => {
+    const items = buildItems([], null, '', boards);
+    expect(items.map((item) => item.group)).toEqual(['boards', 'boards']);
+    expect(items[1].hint).toBe('Archived board');
+    expect(buildItems([], null, 'unrelated', boards)).toEqual([]);
+    expect(buildItems([], null, 'events', [])).toEqual([]);
+  });
+
+  it('avoids duplicate page links and puts boards before content results', () => {
+    const pages: SearchPage[] = [
+      { href: '/admin/boards/rentals', title: 'Private Events', hint: '', keywords: [] },
+    ];
+    const items = buildItems(
+      pages,
+      {
+        q: 'events',
+        sops: [],
+        notes: [
+          { id: 'n', note_date: '2026-09-21', author_email: 'a', author: 'A', snippet: 'events' },
+        ],
+      },
+      'events',
+      boards
+    );
+    expect(items.map((item) => item.group)).toEqual(['boards', 'boards', 'notes']);
+    expect(items.filter((item) => item.href === '/admin/boards/rentals')).toHaveLength(1);
   });
 });

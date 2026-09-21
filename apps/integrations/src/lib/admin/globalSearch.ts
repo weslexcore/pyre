@@ -7,6 +7,7 @@
 // individual tools use. Client-bundle-safe.
 
 import type { SearchPage } from '@/components/admin/adminTools';
+import type { BoardRow } from '@/lib/db';
 import { MIN_QUERY_LENGTH, matchesTerm, queryLength } from '@/lib/sops/search';
 
 export { MIN_QUERY_LENGTH, queryLength };
@@ -40,14 +41,16 @@ export interface SearchResponse {
   notes: NoteHit[];
 }
 
-export type SearchGroup = 'pages' | 'sops' | 'entries' | 'notes' | 'ask';
+export type SearchGroup = 'pages' | 'boards' | 'sops' | 'entries' | 'notes' | 'ask' | 'create';
 
 export const GROUP_LABELS: Record<SearchGroup, string> = {
   pages: 'Pages',
+  boards: 'Boards',
   sops: 'SOPs',
   entries: 'In SOPs',
   notes: 'Shift notes',
   ask: 'Ask',
+  create: 'Create',
 };
 
 /** The Ask page's href; holding it is what puts the "Ask a question" row in the palette. */
@@ -140,20 +143,50 @@ export function askItem(pages: SearchPage[], term: string): SearchItem | null {
 export function buildItems(
   pages: SearchPage[],
   server: SearchResponse | null,
-  query: string
+  query: string,
+  boards: BoardRow[] = []
 ): SearchItem[] {
   const term = query.trim();
   // Nothing typed yet: the palette doubles as a jump list of every page.
   const matched = term ? matchPages(pages, term) : pages;
   const ask = askItem(pages, term);
   const items: SearchItem[] = ask ? [ask] : [];
+  if (boards.some(isTaskCreationBoard)) {
+    items.unshift({
+      key: 'create-task',
+      group: 'create',
+      href: '/admin/boards/tasks',
+      title: term ? `Create task: “${term}”` : 'Create task',
+      hint: 'Choose a board and save',
+    });
+  }
+  const boardPages: SearchPage[] = boards.map((board) => ({
+    href: `/admin/boards/${board.slug}`,
+    title: board.name,
+    description: board.description,
+    keywords: [board.slug],
+    hint: board.archived ? 'Archived board' : 'Board',
+  }));
+  const matchedBoards = term ? matchPages(boardPages, term) : boardPages;
+  const boardHrefs = new Set(matchedBoards.map((board) => board.href));
   for (const page of matched) {
+    if (boardHrefs.has(page.href)) continue;
     items.push({
       key: `page:${page.href}`,
       group: 'pages',
       href: page.href,
       title: page.title,
       hint: page.hint,
+    });
+  }
+  for (const board of matchedBoards) {
+    items.push({
+      key: `board:${board.href}`,
+      group: 'boards',
+      href: board.href,
+      title: board.title,
+      hint: board.hint,
+      snippet: board.description || undefined,
     });
   }
   if (!server || !term) return items;
@@ -193,4 +226,11 @@ export function buildItems(
     });
   }
   return items;
+}
+
+/** Task capture is available only on active boards that contribute to All Tasks. */
+export function isTaskCreationBoard(
+  board: Pick<BoardRow, 'archived' | 'include_in_all_tasks'>
+): boolean {
+  return !board.archived && board.include_in_all_tasks;
 }

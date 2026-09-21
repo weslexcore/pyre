@@ -179,7 +179,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     title: 'Goals & Boards',
     navLabel: 'Goals & Boards',
     description:
-      'What we are trying to achieve and the work that gets us there, board by board. Each board carries the goal it serves and the KPIs that say whether we got there \u2014 the founders\u2019 task board, and the lead pipelines beside it. Plus All Tasks: what is in flight, what is late, and who is on what. Each board can be granted on its own.',
+      'What we are trying to achieve and the work that gets us there.',
     section: 'operations',
     keywords: [
       'trello',

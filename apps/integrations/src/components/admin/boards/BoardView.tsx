@@ -51,6 +51,7 @@ import {
   useBoardSensors,
 } from './dnd';
 import { QuickAdd } from './QuickAdd';
+import { useOptimisticCardSave } from './useOptimisticCardSave';
 
 interface BundleResponse {
   board: BoardRow;
@@ -110,6 +111,8 @@ export function BoardView({ slug }: { slug: string }) {
     const id = hash.slice('#card-'.length);
     if (bundle.cards.some((card) => card.id === id)) setOpenCardId(id);
   }, [bundle]);
+
+  const saveCard = useOptimisticCardSave(bundle, setBundle);
 
   const today = bundle?.today ?? todayEastern();
   const cards = useMemo(() => {
@@ -378,6 +381,7 @@ export function BoardView({ slug }: { slug: string }) {
 
       {openCard && (
         <CardDrawer
+          key={openCard.id}
           card={openCard}
           columns={columns}
           fields={fields}
@@ -385,9 +389,7 @@ export function BoardView({ slug }: { slug: string }) {
           owners={ownerOptions}
           busy={busy}
           onClose={() => setOpenCardId(null)}
-          onSave={(patch) =>
-            mutate(() => send('/api/admin/board-cards', 'PATCH', { id: openCard.id, ...patch }))
-          }
+          onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
             await mutate(() => send(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
             setOpenCardId(null);

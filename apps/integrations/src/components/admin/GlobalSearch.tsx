@@ -4,7 +4,7 @@
 // locally from the list AdminLayout hands over (already filtered to what this
 // user may open); the rest comes from /api/admin/search, which applies each
 // tool's own access rules. Results are one keyboard-navigable list — arrows
-// move, Enter opens, Escape closes — and every row is a real link, so the
+// move, Enter activates, Escape closes. Navigation rows are real links, so the
 // ClientRouter handles the navigation exactly as it does for the menu.
 //
 // Opening an SOP entry lands on that very match (?q= highlights, &m= picks
@@ -18,17 +18,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildItems,
   GROUP_LABELS,
+  isTaskCreationBoard,
   MIN_QUERY_LENGTH,
   queryLength,
   type SearchGroup,
   type SearchItem,
   type SearchResponse,
 } from '@/lib/admin/globalSearch';
+import { BOARDS_HREF } from '@/lib/boards/types';
+import type { BoardRow } from '@/lib/db';
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
+import { SearchTaskCreate } from './SearchTaskCreate';
 
-// The Ask row is rendered on its own above these, without a heading.
-const GROUP_ORDER: SearchGroup[] = ['pages', 'sops', 'entries', 'notes'];
+// Quick actions are rendered above these, without a heading.
+const GROUP_ORDER: SearchGroup[] = ['pages', 'boards', 'sops', 'entries', 'notes'];
 
 // One brand color per group heading (text, underline, and dot), so where one
 // group ends and the next begins reads at a glance even in a long list; the
@@ -39,6 +43,10 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   pages: {
     heading: 'text-[var(--pyre-red)] border-[var(--pyre-red)]/40',
     badge: 'bg-[var(--pyre-red)]',
+  },
+  boards: {
+    heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
+    badge: 'bg-[var(--pyre-sage)]',
   },
   sops: {
     heading: 'text-[var(--pyre-gold)] border-[var(--pyre-gold)]/40',
@@ -54,6 +62,7 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   },
   // Never a heading: the Ask row is drawn on its own, in gold, at the top.
   ask: { heading: '', badge: '' },
+  create: { heading: '', badge: '' },
 };
 
 /** The "Ask a question" row: gold, headingless, first in the list. */
@@ -123,16 +132,33 @@ export function SearchResults({
   selected,
   onSelect,
   onOpen,
+  onCreate,
 }: {
+  onCreate?: () => void;
   items: SearchItem[];
   term: string;
   selected: number;
   onSelect: (index: number) => void;
   onOpen: () => void;
 }) {
+  const createIndex = items.findIndex((item) => item.group === 'create');
   const askIndex = items.findIndex((item) => item.group === 'ask');
   return (
     <>
+      {createIndex !== -1 && (
+        <button
+          type="button"
+          id={optionId(createIndex)}
+          data-index={createIndex}
+          role="option"
+          aria-selected={selected === createIndex}
+          onMouseEnter={() => onSelect(createIndex)}
+          onClick={onCreate}
+          className={`mb-2 block w-full rounded border border-[var(--pyre-sage)]/40 px-3 py-2.5 text-left text-sm font-semibold text-[var(--pyre-sage)] ${selected === createIndex ? 'bg-[var(--pyre-sage)]/20' : 'hover:bg-white/5'}`}
+        >
+          + {items[createIndex].title}
+        </button>
+      )}
       {askIndex !== -1 && (
         <AskRow
           item={items[askIndex]}
@@ -215,6 +241,8 @@ export function SearchResults({
 export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [boards, setBoards] = useState<BoardRow[]>([]);
   const [server, setServer] = useState<SearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +260,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        setCreating(false);
         setOpen((v) => !v);
       }
     };
@@ -244,7 +273,10 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
     inputRef.current?.focus();
     inputRef.current?.select();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setCreating(false);
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -254,7 +286,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   // response lands, so the list doesn't blink between keystrokes; an aborted
   // request never writes.
   useEffect(() => {
-    if (!open || !contentSearch) {
+    if (!open || creating || !contentSearch) {
       setServer(null);
       setSearching(false);
       setError(null);
@@ -283,9 +315,31 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, contentSearch, term]);
+  }, [open, creating, contentSearch, term]);
 
-  const items = useMemo(() => buildItems(pages, server, query), [pages, server, query]);
+  // Load searchable boards through the API's per-board permission filter.
+  // Only active task boards enable creation; pipelines are searchable too.
+  useEffect(() => {
+    setBoards([]);
+    if (!open || !pages.some((page) => page.href === BOARDS_HREF)) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/boards', { signal: controller.signal });
+        if (!res.ok) return;
+        const data = (await res.json()) as { boards: BoardRow[] };
+        if (!controller.signal.aborted) setBoards(data.boards);
+      } catch {
+        // No verified task access: keep the action hidden.
+      }
+    })();
+    return () => controller.abort();
+  }, [open, pages]);
+
+  const items = useMemo(
+    () => buildItems(pages, server, query, boards),
+    [pages, server, query, boards]
+  );
 
   // A new query starts the cursor back at the top.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset is keyed on the query on purpose
@@ -300,7 +354,10 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       ?.scrollIntoView({ block: 'nearest' });
   }, [cursor]);
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    setCreating(false);
+  };
 
   const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
@@ -313,13 +370,13 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       event.preventDefault();
       // Clicking the real link hands the navigation to the ClientRouter
       // (and its prefetch), the same as a pointer would.
-      listRef.current?.querySelector<HTMLAnchorElement>(`[data-index="${cursor}"]`)?.click();
+      listRef.current?.querySelector<HTMLElement>(`[data-index="${cursor}"]`)?.click();
     }
   };
 
   // What to say under the input when there are no rows to show (the Ask row
   // doesn't count — it is the offer that stands when nothing matched).
-  const matched = items.filter((item) => item.group !== 'ask').length;
+  const matched = items.filter((item) => item.group !== 'ask' && item.group !== 'create').length;
   const status = !contentSearch
     ? term
       ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches SOPs and shift notes too.`
@@ -361,64 +418,78 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
             aria-label="Search"
             className="relative flex h-full w-full max-w-xl flex-col bg-[var(--pyre-black)] shadow-xl sm:h-auto sm:max-h-[70vh] sm:rounded-lg sm:border sm:border-white/15"
           >
-            <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
-              <span className="shrink-0 text-white/40">
-                <SearchIcon />
-              </span>
-              <input
-                ref={inputRef}
-                type="text"
-                role="combobox"
-                aria-expanded="true"
-                aria-controls={LIST_ID}
-                aria-activedescendant={items.length > 0 ? optionId(cursor) : undefined}
-                aria-autocomplete="list"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="Search pages, SOPs, and shift notes…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={onInputKeyDown}
-                className="min-w-0 flex-1 bg-transparent py-2 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none sm:text-sm"
+            {creating ? (
+              <SearchTaskCreate
+                boards={boards.filter(isTaskCreationBoard)}
+                initialTitle={term}
+                onBack={() => {
+                  setCreating(false);
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                }}
               />
-              {searching && contentSearch && (
-                <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/40 sm:inline">
-                  searching
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={close}
-                className="shrink-0 rounded border border-white/20 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
-              >
-                <span className="sm:hidden">Close</span>
-                <span className="hidden sm:inline">esc</span>
-              </button>
-            </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+                  <span className="shrink-0 text-white/40">
+                    <SearchIcon />
+                  </span>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    role="combobox"
+                    aria-expanded="true"
+                    aria-controls={LIST_ID}
+                    aria-activedescendant={items.length > 0 ? optionId(cursor) : undefined}
+                    aria-autocomplete="list"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="Search pages, boards, SOPs, and shift notes…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={onInputKeyDown}
+                    className="min-w-0 flex-1 bg-transparent py-2 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none sm:text-sm"
+                  />
+                  {searching && contentSearch && (
+                    <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/40 sm:inline">
+                      searching
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="shrink-0 rounded border border-white/20 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+                  >
+                    <span className="sm:hidden">Close</span>
+                    <span className="hidden sm:inline">esc</span>
+                  </button>
+                </div>
 
-            <div
-              ref={listRef}
-              id={LIST_ID}
-              role="listbox"
-              aria-label="Search results"
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
-            >
-              {status && <p className="px-2 py-3 text-sm text-white/60">{status}</p>}
-              <SearchResults
-                items={items}
-                term={term}
-                selected={cursor}
-                onSelect={setSelected}
-                onOpen={close}
-              />
-            </div>
+                <div
+                  ref={listRef}
+                  id={LIST_ID}
+                  role="listbox"
+                  aria-label="Search results"
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
+                >
+                  {status && <p className="px-2 py-3 text-sm text-white/60">{status}</p>}
+                  <SearchResults
+                    items={items}
+                    term={term}
+                    selected={cursor}
+                    onSelect={setSelected}
+                    onOpen={close}
+                    onCreate={() => setCreating(true)}
+                  />
+                </div>
 
-            <div className="hidden shrink-0 gap-4 border-t border-white/10 px-4 py-2 font-mono text-[10px] uppercase tracking-wide text-white/40 sm:flex">
-              <span>↑ ↓ move</span>
-              <span>↵ open</span>
-              <span>esc close</span>
-            </div>
+                <div className="hidden shrink-0 gap-4 border-t border-white/10 px-4 py-2 font-mono text-[10px] uppercase tracking-wide text-white/40 sm:flex">
+                  <span>↑ ↓ move</span>
+                  <span>↵ open</span>
+                  <span>esc close</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

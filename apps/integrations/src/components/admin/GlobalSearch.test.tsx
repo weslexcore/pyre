@@ -101,3 +101,52 @@ describe('GlobalSearch', () => {
     expect(html).not.toContain('role="dialog"');
   });
 });
+
+it('renders task creation as a keyboard-indexed action before other results', () => {
+  const html = renderToStaticMarkup(
+    <SearchResults
+      items={[
+        {
+          key: 'create-task',
+          group: 'create',
+          href: '/admin/boards/tasks',
+          title: 'Create task',
+          hint: '',
+        },
+        ...ITEMS,
+      ]}
+      term=""
+      selected={0}
+      onSelect={() => {}}
+      onOpen={() => {}}
+      onCreate={() => {}}
+    />
+  );
+  expect(html).toMatch(/<button[^>]*data-index="0"[^>]*aria-selected="true"/);
+  expect(html.indexOf('Create task')).toBeLessThan(html.indexOf('Pages'));
+});
+
+it('renders searchable boards with direct links, highlighting, and keyboard selection', () => {
+  const html = renderToStaticMarkup(
+    <SearchResults
+      items={[
+        {
+          key: 'board:rentals',
+          group: 'boards',
+          href: '/admin/boards/rentals',
+          title: 'Private Events',
+          hint: 'Board',
+          snippet: 'Venue bookings',
+        },
+      ]}
+      term="private"
+      selected={0}
+      onSelect={() => {}}
+      onOpen={() => {}}
+    />
+  );
+  expect(html).toContain('aria-label="Boards"');
+  expect(html).toContain('href="/admin/boards/rentals"');
+  expect(html).toContain('>Private</mark> Events');
+  expect(html).toMatch(/data-index="0"[^>]*aria-selected="true"/);
+});

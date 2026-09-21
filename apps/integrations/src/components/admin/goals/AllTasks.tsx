@@ -23,6 +23,7 @@ import { AREAS, GROUP_BY } from '@/lib/goals/types';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
+import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
 import {
   buttonClass,
   cardClass,
@@ -83,6 +84,8 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     const id = hash.slice('#card-'.length);
     if (data.cards.some((card) => card.id === id)) setOpenCardId(id);
   }, [data]);
+
+  const saveCard = useOptimisticCardSave(data, setData);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -306,6 +309,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
       {openCard && (
         <CardDrawer
+          key={openCard.id}
           card={openCard}
           columns={columns.filter((column) => column.board_id === openCard.board_id)}
           fields={[]}
@@ -313,9 +317,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           owners={owners}
           busy={busy}
           onClose={() => setOpenCardId(null)}
-          onSave={(patch) =>
-            mutate(() => send('/api/admin/board-cards', 'PATCH', { id: openCard.id, ...patch }))
-          }
+          onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
             await mutate(() => send(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
             setOpenCardId(null);
