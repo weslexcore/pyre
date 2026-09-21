@@ -12,12 +12,12 @@
 //
 // A card moves by being dragged onto a column (dnd.tsx), or from the Column
 // field in its drawer. Either way the move is applied to the page at once
-// and confirmed by the reload behind it; a refused move snaps back with the
+// and confirmed by the server response; a refused move snaps back with the
 // API's message.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
-import { appendColumn, isLastOpenColumn, removeColumn, renameColumn } from '@/lib/boards/columns';
+import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type {
@@ -289,18 +289,8 @@ export function BoardView({ slug }: { slug: string }) {
                 column={column}
                 count={columnCards.length}
                 noun={noun}
-                canManage={canManage}
                 busy={busy}
                 onAdd={column.archived ? undefined : (title) => addCard(title, column.id)}
-                onRename={(label) => saveColumns(renameColumn(columns, column.key, label))}
-                onDelete={
-                  // Empty on the whole board, not just under the owner filter,
-                  // and not the last place a card could go.
-                  bundle.cards.every((card) => card.column_id !== column.id) &&
-                  !isLastOpenColumn(columns, column.key)
-                    ? () => saveColumns(removeColumn(columns, column.key))
-                    : undefined
-                }
               />
               <div className="min-h-16 space-y-2">
                 {columnCards.length === 0 && (

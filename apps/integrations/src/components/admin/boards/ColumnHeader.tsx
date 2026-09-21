@@ -15,7 +15,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardColumnRow } from '@/lib/db';
-import { ConfirmDialog } from '../ConfirmDialog';
 import { buttonClass, inputBaseClass, SectionTitle } from '../goalsUi';
 import { QuickAdd } from './QuickAdd';
 
@@ -23,85 +22,18 @@ export function ColumnHeader({
   column,
   count,
   noun = 'card',
-  canManage = false,
   busy = false,
   onAdd,
-  onRename,
-  onDelete,
 }: {
   column: BoardColumnRow;
   count: number;
   /** What this board calls a card — for the plus button's label. */
   noun?: string;
-  canManage?: boolean;
   busy?: boolean;
   /** Quick-add into this column; absent on an archived column. */
   onAdd?: (title: string) => Promise<void>;
-  onRename: (label: string) => Promise<void>;
-  /** Offered only when the column is empty and not the last open one. */
-  onDelete?: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [label, setLabel] = useState(column.label);
-  const [saving, setSaving] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) inputRef.current?.select();
-  }, [editing]);
-
-  const start = () => {
-    setLabel(column.label);
-    setEditing(true);
-  };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = label.trim();
-    if (!trimmed || saving) return;
-    if (trimmed === column.label) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      await onRename(trimmed);
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (editing) {
-    return (
-      <form onSubmit={submit} className="mb-3 flex items-center gap-2">
-        <label className="sr-only" htmlFor={`rename-${column.id}`}>
-          New name for {column.label}
-        </label>
-        <input
-          ref={inputRef}
-          id={`rename-${column.id}`}
-          className={`${inputBaseClass} min-w-0 flex-1 py-1.5`}
-          type="text"
-          maxLength={BOARD_LIMITS.columnLabel}
-          value={label}
-          disabled={busy || saving}
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setEditing(false);
-          }}
-        />
-        <button type="submit" className={buttonClass} disabled={busy || saving || !label.trim()}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-        <button type="button" className={buttonClass} onClick={() => setEditing(false)}>
-          Cancel
-        </button>
-      </form>
-    );
-  }
 
   return (
     <>
@@ -119,26 +51,6 @@ export function ColumnHeader({
                 onClick={() => setAdding((open) => !open)}
               >
                 +
-              </button>
-            )}
-            {canManage && (
-              <button
-                type="button"
-                className="underline hover:text-white/70"
-                disabled={busy}
-                onClick={start}
-              >
-                Rename
-              </button>
-            )}
-            {canManage && onDelete && (
-              <button
-                type="button"
-                className="underline hover:text-[var(--pyre-red)]"
-                disabled={busy}
-                onClick={() => setConfirming(true)}
-              >
-                Delete
               </button>
             )}
           </span>
@@ -159,21 +71,6 @@ export function ColumnHeader({
             onCancel={() => setAdding(false)}
           />
         </div>
-      )}
-
-      {confirming && onDelete && (
-        <ConfirmDialog
-          title={`Delete the "${column.label}" column?`}
-          body="It is empty, so nothing goes with it. Cards can no longer be moved here."
-          confirmLabel="Delete column"
-          danger
-          busy={busy}
-          onCancel={() => setConfirming(false)}
-          onConfirm={() => {
-            setConfirming(false);
-            void onDelete();
-          }}
-        />
       )}
     </>
   );
