@@ -1,16 +1,18 @@
-// /admin/boards: the boards this person may open, each with the goal it
-// serves — its status, its pace, how many KPIs are met, how much of the work
-// is still open — and the form for a new one.
+// /admin/boards: the boards this person may open, under their sections,
+// each with the goal it serves — its status, its pace, how many KPIs are
+// met, how much of the work is still open — and the form for a new one.
+// Arranging the sections is BoardSections' job.
 //
 // A single-board grantee sees exactly one card here and no New board form —
 // the list itself is filtered server-side, so the page never even tells them
 // what else exists.
 
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
+import { boardsInOrder, sectionsInOrder } from '@/lib/boards/sections';
 import type { BoardTally } from '@/lib/boards/store';
 import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
-import type { BoardRow, GoalKpiRow, GoalRow } from '@/lib/db';
+import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
 import { ALL_TASKS_HREF } from '@/lib/goals/types';
@@ -31,9 +33,11 @@ import {
   todayEastern,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
+import { BoardSections } from './BoardSections';
 
 interface BoardsResponse {
   boards: BoardRow[];
+  sections: BoardSectionRow[];
   goals: GoalRow[];
   kpis: GoalKpiRow[];
   tallies: BoardTally[];
@@ -65,6 +69,7 @@ export function BoardsIndex() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [cardNoun, setCardNoun] = useState('task');
   const [includeInAllTasks, setIncludeInAllTasks] = useState(true);
+  const [sectionId, setSectionId] = useState('');
   const [goalChoice, setGoalChoice] = useState<string>(NEW_GOAL);
   const [goalTitle, setGoalTitle] = useState('');
   const [goalTarget, setGoalTarget] = useState('');
@@ -112,6 +117,7 @@ export function BoardsIndex() {
         slug: slug || slugOf(name),
         cardNoun,
         includeInAllTasks,
+        sectionId: sectionId || null,
         ...goal,
         columns: STARTER_COLUMNS,
       });
@@ -139,7 +145,7 @@ export function BoardsIndex() {
     return <p className="text-sm text-[var(--pyre-red)]">{error ?? 'Boards are not available.'}</p>;
   }
 
-  const { boards, goals, kpis, tallies, canManage = false } = data;
+  const { boards, sections, goals, kpis, tallies, canManage = false } = data;
   const owners = data.owners ?? [];
   const unattached = data.unattachedGoals ?? [];
   const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
@@ -147,10 +153,13 @@ export function BoardsIndex() {
   const today = todayEastern();
   const nowIso = new Date().toISOString();
 
-  const active = boards.filter((board) => !board.archived);
+  const active = boardsInOrder(
+    boards.filter((board) => !board.archived),
+    sections
+  );
   const archived = boards.filter((board) => board.archived);
 
-  const cardFor = (board: BoardRow) => (
+  const cardFor = (board: BoardRow, handle: ReactNode = null) => (
     <BoardCard
       key={board.id}
       board={board}
@@ -159,6 +168,7 @@ export function BoardsIndex() {
       tally={talliesByBoard.get(board.id) ?? { board_id: board.id, open: 0, total: 0 }}
       today={today}
       nowIso={nowIso}
+      handle={handle}
     />
   );
 
@@ -230,6 +240,24 @@ export function BoardsIndex() {
                 value={cardNoun}
                 onChange={(e) => setCardNoun(e.target.value)}
               />
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="new-board-section">
+                Section
+              </label>
+              <select
+                id="new-board-section"
+                className={selectClass}
+                value={sectionId}
+                onChange={(e) => setSectionId(e.target.value)}
+              >
+                <option value="">Other boards</option>
+                {sectionsInOrder(sections).map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className={labelClass} htmlFor="new-board-goal">
@@ -331,7 +359,17 @@ export function BoardsIndex() {
         </form>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">{active.map(cardFor)}</div>
+      {(active.length > 0 || sections.length > 0) && (
+        <BoardSections
+          sections={sections}
+          boards={active}
+          canManage={canManage}
+          busy={busy}
+          renderBoard={cardFor}
+          onChanged={load}
+          onError={setError}
+        />
+      )}
 
       {!loading && boards.length === 0 && (
         <p className="text-sm text-white/50">
@@ -358,6 +396,7 @@ function BoardCard({
   tally,
   today,
   nowIso,
+  handle = null,
 }: {
   board: BoardRow;
   goal: GoalRow | null;
@@ -365,6 +404,8 @@ function BoardCard({
   tally: BoardTally;
   today: string;
   nowIso: string;
+  /** The drag grip, placed beside the name; null for a viewer who cannot arrange. */
+  handle?: ReactNode;
 }) {
   const kpiSummary = goalKpiSummary(kpis);
   const done = tally.total - tally.open;
@@ -377,51 +418,51 @@ function BoardCard({
   const left = goal ? daysLeft(goal.target_date, today) : null;
 
   return (
-    <a
-      href={`/admin/boards/${board.slug}`}
-      className={`${cardClass} block transition-colors hover:border-white/25`}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-primary-semibold text-[var(--pyre-creme)]">{board.name}</h2>
-        {board.archived && <QuietChip>archived</QuietChip>}
-      </div>
-      {board.description && <p className="mt-1 text-sm text-white/55">{board.description}</p>}
+    <div className={`${cardClass} relative transition-colors hover:border-white/25`}>
+      {handle && <div className="absolute top-2 right-2">{handle}</div>}
+      <a href={`/admin/boards/${board.slug}`} className="block">
+        <div className={`flex items-baseline justify-between gap-2 ${handle ? 'pr-8' : ''}`}>
+          <h2 className="font-primary-semibold text-[var(--pyre-creme)]">{board.name}</h2>
+          {board.archived && <QuietChip>archived</QuietChip>}
+        </div>
+        {board.description && <p className="mt-1 text-sm text-white/55">{board.description}</p>}
 
-      {goal ? (
-        <div className="mt-3 border-t border-white/10 pt-3">
-          <p className="text-sm text-[var(--pyre-creme)]">{goal.title}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <GoalStatusBadge status={goal.status} />
-            {pace && <PaceChip pace={pace} />}
-            {goal.target_date && (
-              <QuietChip>
-                {formatYmd(goal.target_date)} · {formatDaysLeft(left)}
-              </QuietChip>
+        {goal ? (
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <p className="text-sm text-[var(--pyre-creme)]">{goal.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <GoalStatusBadge status={goal.status} />
+              {pace && <PaceChip pace={pace} />}
+              {goal.target_date && (
+                <QuietChip>
+                  {formatYmd(goal.target_date)} · {formatDaysLeft(left)}
+                </QuietChip>
+              )}
+            </div>
+            {kpis.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {kpis.slice(0, 3).map((kpi) => (
+                  <KpiMeter key={kpi.id} kpi={kpi} nowIso={nowIso} compact />
+                ))}
+                <p className="font-mono text-[10px] text-white/30">
+                  {kpiSummary.met} of {kpiSummary.total} KPIs met
+                  {kpis.length > 3 && ` · +${kpis.length - 3} more`}
+                </p>
+              </div>
             )}
           </div>
-          {kpis.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {kpis.slice(0, 3).map((kpi) => (
-                <KpiMeter key={kpi.id} kpi={kpi} nowIso={nowIso} compact />
-              ))}
-              <p className="font-mono text-[10px] text-white/30">
-                {kpiSummary.met} of {kpiSummary.total} KPIs met
-                {kpis.length > 3 && ` · +${kpis.length - 3} more`}
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="mt-3 border-t border-white/10 pt-3 font-mono text-xs text-white/35">
-          No goal yet
-        </p>
-      )}
+        ) : (
+          <p className="mt-3 border-t border-white/10 pt-3 font-mono text-xs text-white/35">
+            No goal yet
+          </p>
+        )}
 
-      <p className="mt-3 font-mono text-[11px] text-white/35">
-        {tally.open} open {tally.open === 1 ? board.card_noun : `${board.card_noun}s`}
-        {tally.total > tally.open && ` · ${done} done`}
-        {board.include_in_all_tasks ? ' · on All Tasks' : ' · its own queue'}
-      </p>
-    </a>
+        <p className="mt-3 font-mono text-[11px] text-white/35">
+          {tally.open} open {tally.open === 1 ? board.card_noun : `${board.card_noun}s`}
+          {tally.total > tally.open && ` · ${done} done`}
+          {board.include_in_all_tasks ? ' · on All Tasks' : ' · its own queue'}
+        </p>
+      </a>
+    </div>
   );
 }

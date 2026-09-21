@@ -27,14 +27,14 @@
 // cascade) and leaves the goal standing. The seeded Tasks board cannot go:
 // All Tasks quick-adds into it.
 //
-//   GET                  → { boards, goals, kpis, tallies, canManage,
+//   GET                  → { boards, sections, goals, kpis, tallies, canManage,
 //                            owners?, unattachedGoals? }
 //   GET ?slug=<slug>     → { board, columns, fields, cards, goal, kpis, … }
 //   POST   { slug, name, description?, cardNoun?, includeInAllTasks?,
-//            goalId? | goal?, columns: [{ key, label, kind, sortOrder? }] }
+//            goalId? | goal?, sectionId?, columns: [{ key, label, kind, sortOrder? }] }
 //                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            archived?, sortOrder?, goalId?, columns?, fields? }
+//            archived?, sortOrder?, goalId?, sectionId?, columns?, fields? }
 //                        → { board, columns, fields }
 //   DELETE ?slug=<slug>  → { ok: true, cards }
 
@@ -58,6 +58,7 @@ import {
   loadBoards,
   loadBoardsIndex,
   loadColumns,
+  loadSection,
   unattachedGoals,
 } from '@/lib/boards/store';
 import { GOALS_BOARD_SLUG, isBoardSlug } from '@/lib/boards/types';
@@ -119,6 +120,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   if (board.goal_id && !(await goalExists(db, board.goal_id))) {
     return json({ error: 'That goal does not exist' }, 400);
+  }
+  if (board.section_id && !(await loadSection(db, board.section_id))) {
+    return json({ error: 'That section does not exist' }, 400);
   }
 
   // A goal written down with the board. Created first so the board can point
@@ -190,6 +194,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (loadError) return json({ error: loadError.message }, 500);
   const board = (existing as BoardRow) ?? null;
   if (!board) return json({ error: 'Board not found' }, 404);
+
+  if (patch.section_id && !(await loadSection(db, patch.section_id))) {
+    return json({ error: 'That section does not exist' }, 400);
+  }
 
   if (Object.keys(patch).length > 0) {
     const { error } = await db

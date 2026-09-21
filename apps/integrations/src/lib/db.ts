@@ -845,10 +845,21 @@ export interface BoardRow {
   include_in_all_tasks: boolean;
   /** The goal this board serves, judged by its KPIs; null for a plain list. */
   goal_id: string | null;
+  /** The index heading this board sits under; null for the unnamed group last. */
+  section_id: string | null;
   sort_order: number;
   archived: boolean;
   created_by: string | null;
   updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A heading on the boards index, with its position. */
+export interface BoardSectionRow {
+  id: string;
+  name: string;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }

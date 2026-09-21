@@ -121,6 +121,10 @@ export const BOARD_LIMITS = {
   optionsPerField: 40,
   /** A card drawer is a form, not a database; past this it needs a rethink. */
   fieldsPerBoard: 30,
+  sectionName: 60,
+  /** Sanity bounds far above any plausible index. */
+  sectionsPerIndex: 100,
+  boardsPerSection: 200,
   title: 300,
   notes: 20000,
   waitingOn: 120,

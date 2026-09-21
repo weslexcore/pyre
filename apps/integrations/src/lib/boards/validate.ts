@@ -216,6 +216,8 @@ export interface BoardCreate {
   goal_id: string | null;
   /** A goal to create alongside the board and point it at. */
   goal: GoalCreate | null;
+  /** The index heading to file it under; null for the unnamed group. */
+  section_id: string | null;
   columns: ColumnInput[];
 }
 
@@ -274,6 +276,12 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
   const goal = parseBoardGoal(body);
   if (!goal.ok) return goal;
 
+  let sectionId: string | null = null;
+  if (body.sectionId !== undefined && body.sectionId !== null && body.sectionId !== '') {
+    if (!isUuid(body.sectionId)) return fail('sectionId must be a UUID');
+    sectionId = body.sectionId;
+  }
+
   const columns = parseColumns(body.columns);
   if (!columns.ok) return columns;
 
@@ -286,6 +294,7 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
       card_noun: noun,
       include_in_all_tasks: body.includeInAllTasks !== false,
       ...goal.value,
+      section_id: sectionId,
       columns: columns.value,
     },
   };
@@ -300,6 +309,8 @@ export interface BoardPatch {
   sort_order?: number;
   /** Absent leaves the goal alone; null detaches it. */
   goal_id?: string | null;
+  /** Absent leaves the section alone; null moves it to the unnamed group. */
+  section_id?: string | null;
   /** Absent leaves the columns alone; present replaces the whole list. */
   columns?: ColumnInput[];
   /** Absent leaves the fields alone; present replaces the whole list. */
@@ -354,6 +365,12 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
     if (body.goalId === null || body.goalId === '') patch.goal_id = null;
     else if (!isUuid(body.goalId)) return fail('goalId must be a UUID or null');
     else patch.goal_id = body.goalId;
+  }
+
+  if (body.sectionId !== undefined) {
+    if (body.sectionId === null || body.sectionId === '') patch.section_id = null;
+    else if (!isUuid(body.sectionId)) return fail('sectionId must be a UUID or null');
+    else patch.section_id = body.sectionId;
   }
 
   if (body.columns !== undefined) {

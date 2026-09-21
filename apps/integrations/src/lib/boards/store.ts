@@ -15,6 +15,7 @@ import type {
   BoardColumnRow,
   BoardFieldRow,
   BoardRow,
+  BoardSectionRow,
   GoalKpiRow,
   GoalRow,
 } from '@/lib/db';
@@ -31,6 +32,23 @@ export async function loadBoards(db: SupabaseClient): Promise<BoardRow[]> {
     .order('name', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as BoardRow[];
+}
+
+/** Every index heading, in position order. */
+export async function loadSections(db: SupabaseClient): Promise<BoardSectionRow[]> {
+  const { data, error } = await db
+    .from('board_sections')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BoardSectionRow[];
+}
+
+export async function loadSection(db: SupabaseClient, id: string): Promise<BoardSectionRow | null> {
+  const { data, error } = await db.from('board_sections').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as BoardSectionRow) ?? null;
 }
 
 export async function loadBoardBySlug(db: SupabaseClient, slug: string): Promise<BoardRow | null> {
@@ -143,6 +161,8 @@ export interface BoardTally {
 
 export interface BoardsIndexData {
   boards: BoardRow[];
+  /** Every heading, in order — empty ones too, for whoever may arrange them. */
+  sections: BoardSectionRow[];
   /** The goals the listed boards serve. */
   goals: GoalRow[];
   /** Those goals' KPIs. */
@@ -159,7 +179,8 @@ export async function loadBoardsIndex(
   db: SupabaseClient,
   boards: BoardRow[]
 ): Promise<BoardsIndexData> {
-  if (boards.length === 0) return { boards, goals: [], kpis: [], tallies: [] };
+  const sections = await loadSections(db);
+  if (boards.length === 0) return { boards, sections, goals: [], kpis: [], tallies: [] };
 
   const goalIds = [...new Set(boards.flatMap((board) => (board.goal_id ? [board.goal_id] : [])))];
   const [goalsResult, kpisResult, cardsResult] = await Promise.all([
@@ -196,6 +217,7 @@ export async function loadBoardsIndex(
 
   return {
     boards,
+    sections,
     goals: (goalsResult.data ?? []) as GoalRow[],
     kpis: (kpisResult.data ?? []) as GoalKpiRow[],
     tallies: [...tallies.entries()].map(([board_id, tally]) => ({ board_id, ...tally })),
