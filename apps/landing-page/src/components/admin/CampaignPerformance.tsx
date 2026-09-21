@@ -107,7 +107,7 @@ export function CampaignPerformance() {
 
   const posthogIssue = data
     ? !data.posthog.configured
-      ? 'PostHog querying is not configured (set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID) — showing link clicks only.'
+      ? 'PostHog querying is not configured — showing link clicks only. This report runs on the pyre-landing-page Vercel project: set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID there for the Production environment, then redeploy (env changes only reach new deployments).'
       : data.posthog.error
         ? `PostHog query failed: ${data.posthog.error}`
         : data.posthog.missingEvents.length > 0

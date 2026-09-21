@@ -219,7 +219,7 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
 
   const posthogIssue = data
     ? !data.posthog.configured
-      ? 'PostHog querying is not configured. Showing link clicks only.'
+      ? 'PostHog querying is not configured. Showing link clicks only. Set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID on the pyre-integrations Vercel project (Production) and redeploy.'
       : data.posthog.error
         ? data.stale
           ? `PostHog query failed. Showing the last successful report from ${new Date(data.generatedAt).toLocaleString()}.`

@@ -4,8 +4,11 @@
 
 const DEFAULT_HOST = 'https://us.posthog.com';
 
-// process.env fallback: import.meta.env is inlined at build time, so values added
-// to Vercel after the build only exist at runtime.
+// import.meta.env is inlined by Astro at build time, so a key that is missing at
+// build time compiles to undefined and falls through to process.env. That fallback
+// only helps locally (e.g. `vercel dev`, tests): on Vercel the runtime env is also
+// snapshotted per deployment, so a variable added or edited in the dashboard
+// after the last build is invisible until the project is redeployed.
 function getApiKey(): string | undefined {
   return import.meta.env.POSTHOG_PERSONAL_API_KEY ?? process.env.POSTHOG_PERSONAL_API_KEY;
 }
