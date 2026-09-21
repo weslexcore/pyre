@@ -34,11 +34,11 @@ import {
   buttonClass,
   cardClass,
   dangerButtonClass,
+  inputBaseClass,
   inputClass,
   labelClass,
   primaryButtonClass,
   SectionTitle,
-  selectClass,
   send,
 } from '../goalsUi';
 
@@ -221,9 +221,9 @@ export function BoardSettings({
         <SectionTitle note="renaming keeps the cards">Columns</SectionTitle>
         <ColumnOrder items={drafts} disabled={busy || saving} onChange={setDrafts}>
           {(draft, index) => (
-            <div key={draft.key} className="flex items-center gap-2">
+            <div key={draft.key} className="flex min-w-0 items-center gap-2">
               <input
-                className={`${inputClass} min-w-0 flex-1`}
+                className={`${inputBaseClass} min-w-0 flex-1`}
                 type="text"
                 maxLength={BOARD_LIMITS.columnLabel}
                 value={draft.label}
@@ -231,7 +231,7 @@ export function BoardSettings({
                 onChange={(e) => setDraft(index, { label: e.target.value })}
               />
               <select
-                className={`${selectClass} w-auto shrink-0`}
+                className={`${inputBaseClass} w-28 shrink-0 [&>option]:bg-[var(--pyre-black)]`}
                 value={draft.kind}
                 aria-label={`Kind for ${draft.key}`}
                 onChange={(e) => setDraft(index, { kind: e.target.value as ColumnKind })}
