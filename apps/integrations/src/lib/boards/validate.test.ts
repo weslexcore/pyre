@@ -72,6 +72,35 @@ describe('parseBoardCreate', () => {
     );
   });
 
+  it('takes a goal to serve, by id or as a goal to create, never both', () => {
+    expect(
+      value(parseBoardCreate({ name: 'X', slug: 'x-board', columns, goalId: UUID }))
+    ).toMatchObject({ goal_id: UUID, goal: null });
+    const created = value(
+      parseBoardCreate({
+        name: 'X',
+        slug: 'x-board',
+        columns,
+        goal: { title: 'Ten rentals by December', targetDate: '2026-12-31' },
+      })
+    );
+    expect(created.goal_id).toBeNull();
+    expect(created.goal).toMatchObject({ title: 'Ten rentals by December', status: 'planned' });
+    expect(
+      error(parseBoardCreate({ name: 'X', slug: 'x-board', columns, goalId: UUID, goal: {} }))
+    ).toMatch(/not both/);
+    expect(error(parseBoardCreate({ name: 'X', slug: 'x-board', columns, goal: {} }))).toMatch(
+      /goal: title/
+    );
+    expect(
+      value(parseBoardCreate({ name: 'X', slug: 'x-board', columns, goalId: '' }))
+    ).toMatchObject({ goal_id: null, goal: null });
+  });
+
+  it("keeps the tool's own pages out of the slug space", () => {
+    expect(error(parseBoardCreate({ name: 'X', slug: 'tasks', columns }))).toMatch(/page/);
+  });
+
   it('takes include_in_all_tasks false explicitly', () => {
     const board = value(
       parseBoardCreate({ name: 'X', slug: 'x-board', columns, includeInAllTasks: false })
@@ -88,6 +117,14 @@ describe('parseBoardPatch', () => {
 
   it('replaces the whole column list when one is sent', () => {
     expect(value(parseBoardPatch({ columns })).columns).toHaveLength(2);
+  });
+
+  it('attaches or detaches a goal', () => {
+    expect(value(parseBoardPatch({ goalId: UUID })).goal_id).toBe(UUID);
+    expect(value(parseBoardPatch({ goalId: null })).goal_id).toBeNull();
+    expect(value(parseBoardPatch({ goalId: '' })).goal_id).toBeNull();
+    expect('goal_id' in value(parseBoardPatch({ name: 'a' }))).toBe(false);
+    expect(error(parseBoardPatch({ goalId: 'nope' }))).toMatch(/goalId/);
   });
 
   it('still refuses a column list with no open column', () => {
@@ -109,7 +146,6 @@ describe('parseCardCreate', () => {
     expect(value(parseCardCreate({ title: '  Call the caterer  ' }))).toMatchObject({
       title: 'Call the caterer',
       column_id: null,
-      goal_id: null,
       owner_email: null,
       due_date: null,
     });
@@ -121,7 +157,6 @@ describe('parseCardCreate', () => {
         parseCardCreate({
           title: 'Call the caterer',
           columnId: UUID,
-          goalId: UUID,
           ownerEmail: ' Maya@PyreSauna.com ',
           dueDate: '2026-10-01',
           waitingOn: 'their callback',
@@ -130,7 +165,6 @@ describe('parseCardCreate', () => {
       )
     ).toMatchObject({
       column_id: UUID,
-      goal_id: UUID,
       owner_email: 'maya@pyresauna.com',
       due_date: '2026-10-01',
       waiting_on: 'their callback',
@@ -142,12 +176,17 @@ describe('parseCardCreate', () => {
     expect(error(parseCardCreate({ title: '   ' }))).toMatch(/title/);
     expect(error(parseCardCreate({ title: 'a', dueDate: '2026-02-30' }))).toMatch(/dueDate/);
   });
+
+  it("never takes a goal: a card is filed under its board's goal", () => {
+    expect('goal_id' in value(parseCardCreate({ title: 'a', goalId: UUID }))).toBe(false);
+    expect('goal_id' in value(parseCardPatch({ title: 'a', goalId: UUID }))).toBe(false);
+  });
 });
 
 describe('parseCardPatch', () => {
   it('tells null apart from absent', () => {
-    expect('goal_id' in value(parseCardPatch({ title: 'a' }))).toBe(false);
-    expect(value(parseCardPatch({ goalId: null })).goal_id).toBeNull();
+    expect('due_date' in value(parseCardPatch({ title: 'a' }))).toBe(false);
+    expect(value(parseCardPatch({ dueDate: null })).due_date).toBeNull();
     expect(value(parseCardPatch({ dueDate: '' })).due_date).toBeNull();
     expect(value(parseCardPatch({ waitingOn: null })).waiting_on).toBeNull();
   });

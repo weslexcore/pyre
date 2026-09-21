@@ -4,17 +4,37 @@
 // slug is checked here as well. The API checks it again on every request;
 // this is the half that keeps the page from rendering a shell for a board
 // the viewer was never given.
+//
+// The board's name is looked up here so the page heading and the tab read
+// it, rather than the word "Board"; the island loads the rest.
 import { BoardView } from '@/components/admin/boards/BoardView';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { canViewBoard } from '@/lib/boards/access';
+import { loadBoardBySlug } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
+import { getDb } from '@/lib/db';
 
 const { slug } = Astro.params;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!slug && isBoardSlug(slug) && !!access && canViewBoard(access, slug);
+
+let title = 'Board';
+let subtitle = 'Move a card by changing its column; open one for everything else';
+if (allowed && slug) {
+  try {
+    const db = getDb();
+    const board = db ? await loadBoardBySlug(db, slug) : null;
+    if (board) {
+      title = board.name;
+      if (board.description) subtitle = board.description;
+    }
+  } catch (error) {
+    console.warn('[boards] title lookup failed:', error);
+  }
+}
 ---
 
-<AdminLayout title="Board" subtitle="Move a card by changing its column; open one for everything else">
+<AdminLayout title={title} subtitle={subtitle}>
   {
     allowed && slug ? (
       <BoardView slug={slug} client:load />

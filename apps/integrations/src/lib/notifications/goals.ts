@@ -8,7 +8,8 @@
 //     finishes it; they never hear about their own doing.
 //   * a goal's owner hears when it is marked completed by someone else. The
 //     founders are the audience for that one, and it is the moment the whole
-//     tool exists for, so it carries the note they wrote.
+//     tool exists for, so it carries the note they wrote. The link opens the
+//     board that serves the goal, since that is where a goal lives now.
 //   * a comment reaches the people already on the thing — the card's owner,
 //     the goal's owner — and nobody else. A board is not a broadcast.
 //   * a lead from the web reaches whoever holds that board (boardRecipients),
@@ -22,11 +23,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import { canViewBoard } from '@/lib/boards/access';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
-import { ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
+import { ALL_TASKS_HREF } from '@/lib/goals/types';
 import { createNotifications } from './notify';
 import {
   boardRecipients,
-  canOpenGoals,
+  canOpenBoards,
   nameFor,
   type RosterRow,
   rosterByEmail,
@@ -53,8 +54,8 @@ function normalize(email: string | null | undefined): string {
 
 /**
  * Where a card opens for this person. Its own board when they hold it,
- * All Tasks when they only hold the goals page, and nowhere when neither —
- * the row still appears, it just isn't a link.
+ * All Tasks when they hold the tool but somehow not the board, and nowhere
+ * when neither — the row still appears, it just isn't a link.
  */
 function cardHrefFor(rows: RosterRow[], boardSlug: string, cardId: string) {
   const byEmail = rosterByEmail(rows);
@@ -63,16 +64,22 @@ function cardHrefFor(rows: RosterRow[], boardSlug: string, cardId: string) {
     if (!row) return null;
     const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
     if (canViewBoard(access, boardSlug)) return `/admin/boards/${boardSlug}#card-${cardId}`;
-    if (canOpenGoals(row)) return `${ALL_TASKS_HREF}#card-${cardId}`;
+    if (canOpenBoards(row)) return `${ALL_TASKS_HREF}#card-${cardId}`;
     return null;
   };
 }
 
-function goalHrefFor(rows: RosterRow[], goalId: string) {
+/**
+ * Where a goal opens: the board that serves it, for whoever holds that
+ * board. A goal no board serves has no page, so no link.
+ */
+function goalHrefFor(rows: RosterRow[], board: Pick<BoardRow, 'slug'> | null) {
   const byEmail = rosterByEmail(rows);
   return (recipient: string): string | null => {
     const row = byEmail.get(recipient);
-    return row && canOpenGoals(row) ? `${GOALS_HREF}/${goalId}` : null;
+    if (!row || !board) return null;
+    const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
+    return canViewBoard(access, board.slug) ? `/admin/boards/${board.slug}` : null;
   };
 }
 
@@ -143,6 +150,7 @@ export async function notifyCardCompleted(
 export async function notifyGoalCompleted(
   db: SupabaseClient,
   goal: Pick<GoalRow, 'id' | 'title' | 'owner_email' | 'completion_note'>,
+  board: Pick<BoardRow, 'slug'> | null,
   preview: { kpisMet: number; kpisTotal: number; openCards: number },
   actorEmail: string
 ): Promise<void> {
@@ -160,7 +168,7 @@ export async function notifyGoalCompleted(
       openCards: preview.openCards,
       note: goal.completion_note,
     }),
-    href: goalHrefFor(rows, goal.id),
+    href: goalHrefFor(rows, board),
     source: { type: 'goal', id: goal.id },
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),
@@ -197,6 +205,7 @@ export async function notifyCardComment(
 export async function notifyGoalComment(
   db: SupabaseClient,
   goal: Pick<GoalRow, 'id' | 'title' | 'owner_email'>,
+  board: Pick<BoardRow, 'slug'> | null,
   note: string,
   actorEmail: string
 ): Promise<void> {
@@ -211,7 +220,7 @@ export async function notifyGoalComment(
       commenterName: nameFor(rows, actorEmail),
       excerpt: excerpt(note, 160),
     }),
-    href: goalHrefFor(rows, goal.id),
+    href: goalHrefFor(rows, board),
     source: { type: 'goal', id: goal.id },
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),

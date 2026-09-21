@@ -19,8 +19,8 @@ import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { attendeesForSession, sessionsInWindow } from '@/lib/lost-found/attendees';
-import { type NotifyRecipient, notifyAboutItem } from '@/lib/lost-found/notify';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
+import { type NotifyRecipient, notifyAboutItem } from '@/lib/lost-found/notify';
 import { CLOSED_STATUSES } from '@/lib/lost-found/types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };

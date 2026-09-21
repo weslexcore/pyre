@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  canAdoptParent,
-  canBeParent,
-  completionPreview,
-  goalStatusPatch,
-  parentOptions,
-} from './access';
+import { completionPreview, goalStatusPatch } from './access';
 
 const NOW = '2026-09-21T12:00:00Z';
 const goal = (over: Record<string, unknown> = {}) => ({
@@ -73,36 +67,6 @@ describe('goalStatusPatch', () => {
   it('leaves a dropped goal without a completion stamp', () => {
     const patch = goalStatusPatch(goal({ status: 'active' }), 'dropped', 'wes@pyresauna.com', NOW);
     expect(patch).toMatchObject({ status: 'dropped', completed_at: null, completed_by: null });
-  });
-});
-
-describe('canBeParent', () => {
-  const top = { id: 'a', parent_id: null };
-  const child = { id: 'b', parent_id: 'a' };
-
-  it('allows a top-level goal', () => {
-    expect(canBeParent(top, 'c')).toBe(true);
-  });
-
-  it('refuses a goal that already has a parent — no grandparents', () => {
-    expect(canBeParent(child, 'c')).toBe(false);
-  });
-
-  it('refuses a goal parenting itself', () => {
-    expect(canBeParent(top, 'a')).toBe(false);
-  });
-
-  it('offers only the eligible goals to the picker', () => {
-    expect(parentOptions([top, child], 'c').map((g) => g.id)).toEqual(['a']);
-    expect(parentOptions([top, child], 'a')).toEqual([]);
-  });
-});
-
-describe('canAdoptParent', () => {
-  it('refuses a goal that already has children', () => {
-    const goals = [{ parent_id: null }, { parent_id: 'a' }];
-    expect(canAdoptParent({ id: 'a' }, goals)).toBe(false);
-    expect(canAdoptParent({ id: 'z' }, goals)).toBe(true);
   });
 });
 

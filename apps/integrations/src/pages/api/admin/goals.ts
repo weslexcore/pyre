@@ -1,6 +1,8 @@
-// Goals (/admin/goals). A goal is the unit of work: what we are trying to
-// achieve, the KPIs that say whether we got there (goal-kpis.ts), and every
-// card filed under it (board-cards.ts).
+// Goals: what a board is for. A goal is written down with its board (or
+// attached to one afterwards, api/admin/boards.ts), judged by its KPIs
+// (goal-kpis.ts), and advanced by the cards on the board that serves it
+// (board-cards.ts). There is no goals page any more; a goal is read as part
+// of its board's bundle (lib/boards/store).
 //
 // The one rule worth stating out loud: **nothing here closes a goal on its
 // own.** A PATCH to status 'completed' is a person pressing a button, and the
@@ -9,66 +11,52 @@
 // twelve tasks done and a KPI short stays open until somebody decides
 // otherwise, which is the judgement the Trello board had nowhere to put.
 //
-// Goals nest one level and no further; the app enforces that, because the
-// on-delete-restrict foreign key can only stop a parent from vanishing.
+// Writing a goal is reshaping the tool, so every verb here needs the whole
+// /admin/boards grant (canManageBoards). Measuring a KPI does not; see
+// goal-kpis.ts.
 //
-//   GET                 → { goals, kpis, cards, columns, boards, people, today }
-//   GET ?id=<uuid>      → { goal, parent, children, kpis, cards, columns,
-//                           boards, goals, people, today }
-//   POST   { title, parentId?, descriptionMd?, status?, ownerEmail?, area?,
-//            targetDate? } → { goal } 201
+//   POST   { title, descriptionMd?, status?, ownerEmail?, area?, targetDate?,
+//            boardSlug? } → { goal } 201   (boardSlug points that board at it)
 //   PATCH  { id, ...any of the above, sortOrder?, completionNote? } → { goal }
 //   DELETE ?id=<uuid>   → { ok: true }
 
-import { GOALS_HREF } from '@/components/admin/adminTools';
+import { BOARDS_HREF } from '@/components/admin/adminTools';
+import { canManageBoards } from '@/lib/boards/access';
 import { eventsForGoalPatch } from '@/lib/boards/diff';
 import { type BoardEventInput, logBoardEvent, logBoardEvents } from '@/lib/boards/events';
 import {
   type APIRoute,
   beginDelete,
   beginMutation,
-  beginRead,
   type Db,
   isUuidParam,
   json,
   storeError,
 } from '@/lib/boards/route';
+import { attachGoalToBoard, boardsForGoal, loadBoardBySlug, loadGoal } from '@/lib/boards/store';
+import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
-import { canBeParent, completionPreview, goalStatusPatch } from '@/lib/goals/access';
-import { loadGoalPage, loadGoalsIndex } from '@/lib/goals/store';
+import { completionPreview, goalStatusPatch } from '@/lib/goals/access';
 import { parseGoalCreate, parseGoalPatch } from '@/lib/goals/validate';
 import { notifyGoalCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
 
-export const GET: APIRoute = async ({ cookies, url }) => {
-  const ready = await beginRead(cookies, GOALS_HREF);
-  if (ready instanceof Response) return ready;
-
-  const id = url.searchParams.get('id');
-  try {
-    if (id) {
-      if (!isUuidParam(id)) return json({ error: 'id must be a UUID' }, 400);
-      const page = await loadGoalPage(ready.db, id);
-      if (!page) return json({ error: 'Goal not found' }, 404);
-      return json(page);
-    }
-    return json(await loadGoalsIndex(ready.db));
-  } catch (e) {
-    return storeError('goals', e);
-  }
-};
-
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const ready = await beginMutation(cookies, request, GOALS_HREF);
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email, body } = ready;
+  const { db, email, body, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
 
   const parsed = parseGoalCreate(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
 
-  if (parsed.value.parent_id) {
-    const refused = await refuseBadParent(db, parsed.value.parent_id, null);
-    if (refused) return refused;
+  // The board this goal is being written for, checked before anything is
+  // written so a typo in the slug does not leave a goal serving nothing.
+  let board = null;
+  if (body.boardSlug !== undefined && body.boardSlug !== null && body.boardSlug !== '') {
+    if (!isBoardSlug(body.boardSlug)) return json({ error: 'boardSlug is not a board slug' }, 400);
+    board = await loadBoardBySlug(db, body.boardSlug);
+    if (!board) return json({ error: 'Board not found' }, 404);
   }
 
   // A goal created straight into 'active' has started today; one created
@@ -87,13 +75,23 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const goal = data as GoalRow;
   await logBoardEvent(db, { goalId: goal.id, action: 'created', actor: email });
+
+  if (board) {
+    try {
+      await attachGoalToBoard(db, board, goal.id, email);
+    } catch (e) {
+      return storeError('goals', e);
+    }
+  }
+
   return json({ goal }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const ready = await beginMutation(cookies, request, GOALS_HREF);
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email, body } = ready;
+  const { db, email, body, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
 
   if (!isUuidParam(body.id)) return json({ error: 'id must be a UUID' }, 400);
   const id = body.id;
@@ -104,11 +102,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const before = await loadGoal(db, id);
   if (!before) return json({ error: 'Goal not found' }, 404);
-
-  if (patch.parent_id) {
-    const refused = await refuseBadParent(db, patch.parent_id, id);
-    if (refused) return refused;
-  }
 
   const now = new Date().toISOString();
   // A status change is never just a column: it carries started_at the first
@@ -148,41 +141,43 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   await logBoardEvents(db, events);
 
   // The moment the tool exists for: the person driving the goal hears that
-  // somebody else called it met, with the note they wrote.
+  // somebody else called it met, with the note they wrote. The link opens
+  // the board that serves the goal.
   if (completing && preview) {
-    await notifyGoalCompleted(db, goal, preview, email);
+    const [board] = await boardsForGoal(db, goal.id);
+    await notifyGoalCompleted(db, goal, board ?? null, preview, email);
   }
 
   return json({ goal });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const ready = await beginDelete(cookies, request, GOALS_HREF);
+  const ready = await beginDelete(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email } = ready;
+  const { db, email, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
 
   const id = url.searchParams.get('id');
   if (!isUuidParam(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  // Deleting a goal that carries work would either orphan the cards or take
-  // them with it, and neither is what anybody means by "remove this from the
-  // list". 'dropped' is: it keeps the goal, its tasks, and the reasoning.
-  const [{ count: childCount, error: childError }, { count: cardCount, error: cardError }] =
-    await Promise.all([
-      db.from('goals').select('id', { count: 'exact', head: true }).eq('parent_id', id),
-      db.from('board_cards').select('id', { count: 'exact', head: true }).eq('goal_id', id),
-    ]);
-  if (childError) return json({ error: childError.message }, 500);
+  // Deleting a goal that a board serves or that carries work would either
+  // orphan the cards or take the board's purpose away under it, and neither
+  // is what anybody means by "remove this". 'dropped' is: it keeps the goal,
+  // its tasks, and the reasoning. Detaching it from the board is the other.
+  const [boards, { count: cardCount, error: cardError }] = await Promise.all([
+    boardsForGoal(db, id),
+    db.from('board_cards').select('id', { count: 'exact', head: true }).eq('goal_id', id),
+  ]);
   if (cardError) return json({ error: cardError.message }, 500);
 
-  if ((childCount ?? 0) > 0) {
-    return json({ error: 'This goal has sub-goals. Re-file them first, or mark it dropped.' }, 409);
-  }
-  if ((cardCount ?? 0) > 0) {
+  if (boards.length > 0) {
     return json(
-      { error: 'This goal has tasks filed under it. Re-file them first, or mark it dropped.' },
+      { error: `The board "${boards[0].name}" serves this goal. Detach it there first.` },
       409
     );
+  }
+  if ((cardCount ?? 0) > 0) {
+    return json({ error: 'This goal has tasks filed under it. Mark it dropped instead.' }, 409);
   }
 
   const { error } = await db.from('goals').delete().eq('id', id);
@@ -195,42 +190,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   return json({ ok: true });
 };
 
-async function loadGoal(db: Db, id: string): Promise<GoalRow | null> {
-  const { data } = await db.from('goals').select('*').eq('id', id).maybeSingle();
-  return (data as GoalRow) ?? null;
-}
-
-/**
- * The 400 for a parent that would make a grandparent, name a goal that isn't
- * there, or point a goal at itself. Null when the parent is fine.
- */
-async function refuseBadParent(db: Db, parentId: string, childId: string | null) {
-  const parent = await loadGoal(db, parentId);
-  if (!parent) return json({ error: 'That parent goal does not exist' }, 400);
-  if (!canBeParent(parent, childId)) {
-    return json({ error: 'Goals nest one level: that goal already has a parent' }, 400);
-  }
-  if (childId) {
-    const { count, error } = await db
-      .from('goals')
-      .select('id', { count: 'exact', head: true })
-      .eq('parent_id', childId);
-    if (error) return json({ error: error.message }, 500);
-    if ((count ?? 0) > 0) {
-      return json({ error: 'Goals nest one level: this goal already has sub-goals' }, 400);
-    }
-  }
-  return null;
-}
-
 /** The KPI and open-task counts a completion is recorded against. */
 async function previewFor(db: Db, goal: GoalRow) {
-  const { data: childRows } = await db.from('goals').select('id').eq('parent_id', goal.id);
-  const family = [goal.id, ...((childRows ?? []) as { id: string }[]).map((row) => row.id)];
-
   const [kpisResult, cardsResult, columnsResult] = await Promise.all([
-    db.from('goal_kpis').select('*').in('goal_id', family),
-    db.from('board_cards').select('*').in('goal_id', family),
+    db.from('goal_kpis').select('*').eq('goal_id', goal.id),
+    db.from('board_cards').select('*').eq('goal_id', goal.id),
     db.from('board_columns').select('*'),
   ]);
 

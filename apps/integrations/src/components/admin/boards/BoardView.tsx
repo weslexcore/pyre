@@ -1,23 +1,38 @@
-// One board (/admin/boards/<slug>): its columns side by side on a desk,
-// stacked on a phone, with a quick-add under the first open one.
+// One board (/admin/boards/<slug>): the goal it serves on top, its columns
+// side by side on a desk and stacked on a phone below, with a quick-add
+// between them.
 //
 // This is the same island whether the board is the founders' task list or
-// the rental pipeline — the columns, the fields, and the noun come from the
-// board row, so a new pipeline needs no code. What a viewer may do is the
-// server's answer: holding `board:rentals` works the cards here and nothing
-// else, and `canManage` (the whole /admin/boards grant) is what unlocks the
-// settings panel.
+// the rental pipeline — the columns, the fields, the noun, and the goal come
+// from the board row, so a new pipeline needs no code. What a viewer may do
+// is the server's answer: holding `board:rentals` works the cards and
+// measures the KPIs here and nothing else, and `canManage` (the whole
+// /admin/boards grant) is what unlocks renaming columns, the goal's
+// definition, and the settings panel.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
+import { appendColumn, renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
-import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
+import { BOARDS_HREF } from '@/lib/boards/types';
+import type {
+  BoardCardRow,
+  BoardColumnRow,
+  BoardFieldRow,
+  BoardRow,
+  GoalKpiRow,
+  GoalRow,
+} from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { buttonClass, cardClass, SectionTitle, selectClass, send, todayEastern } from '../goalsUi';
+import { Confetti } from '../Confetti';
+import { ActivityFeed } from '../goals/ActivityFeed';
+import { buttonClass, cardClass, QuietChip, selectClass, send, todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
+import { BoardGoal } from './BoardGoal';
 import { BoardSettings } from './BoardSettings';
 import { CardDrawer } from './CardDrawer';
 import { CardRow } from './CardRow';
+import { AddColumn, ColumnHeader } from './ColumnHeader';
 import { QuickAdd } from './QuickAdd';
 
 interface BundleResponse {
@@ -25,10 +40,13 @@ interface BundleResponse {
   columns: BoardColumnRow[];
   fields: BoardFieldRow[];
   cards: BoardCardRow[];
-  goals: GoalRow[];
+  goal: GoalRow | null;
+  kpis: GoalKpiRow[];
+  unattachedGoals?: GoalRow[];
   people?: PeopleNames;
   owners?: Assignable[];
   canManage?: boolean;
+  canWorkGoal?: boolean;
   today?: string;
   error?: string;
 }
@@ -41,6 +59,10 @@ export function BoardView({ slug }: { slug: string }) {
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  // Bumped when the goal is called met. A counter rather than a boolean so
+  // reopening a goal and completing it again pops again — the Confetti
+  // component's contract.
+  const [burst, setBurst] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,17 +136,41 @@ export function BoardView({ slug }: { slug: string }) {
     );
   }
 
-  const { board, columns, fields, goals, people = {}, owners = [], canManage = false } = bundle;
+  const {
+    board,
+    columns,
+    fields,
+    goal,
+    kpis,
+    unattachedGoals = [],
+    people = {},
+    owners = [],
+    canManage = false,
+    canWorkGoal = false,
+  } = bundle;
   const noun = board.card_noun;
   const quickAddColumn = defaultColumn(columns);
   const ownerOptions = owners.length > 0 ? owners : namesAsOwners(people);
 
+  const saveColumns = (next: ReturnType<typeof renameColumn>) =>
+    mutate(() => send('/api/admin/boards', 'PATCH', { slug, columns: next }));
+
   return (
     <div className="space-y-4">
+      <Confetti burst={burst} />
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            className="font-mono text-xs text-white/40 underline hover:text-white/70"
+            href={BOARDS_HREF}
+          >
+            ← All boards
+          </a>
+          {board.archived && <QuietChip>archived</QuietChip>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <label className="sr-only" htmlFor="board-owner-filter">
             Filter by owner
           </label>
@@ -142,16 +188,16 @@ export function BoardView({ slug }: { slug: string }) {
               </option>
             ))}
           </select>
+          {canManage && (
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              {settingsOpen ? 'Close settings' : 'Board settings'}
+            </button>
+          )}
         </div>
-        {canManage && (
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            {settingsOpen ? 'Close settings' : 'Board settings'}
-          </button>
-        )}
       </div>
 
       {settingsOpen && canManage && (
@@ -159,10 +205,28 @@ export function BoardView({ slug }: { slug: string }) {
           board={board}
           columns={columns}
           fields={fields}
+          cardCount={bundle.cards.length}
           busy={busy}
           onSaved={() => void load()}
         />
       )}
+
+      <BoardGoal
+        board={board}
+        goal={goal}
+        kpis={kpis}
+        cards={bundle.cards}
+        columns={columns}
+        people={people}
+        owners={ownerOptions}
+        unattachedGoals={unattachedGoals}
+        today={today}
+        canManage={canManage}
+        canWorkGoal={canWorkGoal}
+        busy={busy}
+        mutate={mutate}
+        onCompleted={() => setBurst((n) => n + 1)}
+      />
 
       {quickAddColumn && (
         <QuickAdd noun={noun} busy={busy} onAdd={(title) => addCard(title, quickAddColumn.id)} />
@@ -171,10 +235,13 @@ export function BoardView({ slug }: { slug: string }) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {grouped.map(({ column, cards: columnCards }) => (
           <section key={column.id} className={cardClass}>
-            <SectionTitle note={String(columnCards.length)}>
-              {column.label}
-              {column.archived && <span className="ml-2 text-white/25">(retired)</span>}
-            </SectionTitle>
+            <ColumnHeader
+              column={column}
+              count={columnCards.length}
+              canManage={canManage}
+              busy={busy}
+              onRename={(label) => saveColumns(renameColumn(columns, column.key, label))}
+            />
             <div className="space-y-2">
               {columnCards.length === 0 && (
                 <p className="font-mono text-xs text-white/30">Nothing here.</p>
@@ -187,7 +254,6 @@ export function BoardView({ slug }: { slug: string }) {
                   people={people}
                   today={today}
                   fields={fields}
-                  goalTitle={goals.find((goal) => goal.id === card.goal_id)?.title}
                   busy={busy}
                   onOpen={(next) => setOpenCardId(next.id)}
                   onMove={(next, columnId) => void moveCard(next, columnId)}
@@ -196,14 +262,28 @@ export function BoardView({ slug }: { slug: string }) {
             </div>
           </section>
         ))}
+        {canManage && (
+          <AddColumn busy={busy} onAdd={(label) => saveColumns(appendColumn(columns, label))} />
+        )}
       </div>
+
+      {goal && (
+        <section className={cardClass}>
+          <ActivityFeed
+            goalId={goal.id}
+            subjectTitle={goal.title}
+            columns={columns}
+            people={people}
+            heading="Goal activity"
+          />
+        </section>
+      )}
 
       {openCard && (
         <CardDrawer
           card={openCard}
           columns={columns}
           fields={fields}
-          goals={goals}
           people={people}
           owners={ownerOptions}
           busy={busy}

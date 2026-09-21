@@ -1,42 +1,65 @@
-// Boards (/admin/boards): the column layouts cards live in. The seeded
-// `goals` board is the founders' task list; `rentals` is the first lead
-// pipeline, and the shape every future one takes.
+// Boards (/admin/boards): the column layouts cards live in, each carrying the
+// goal it serves. The seeded `goals` board is the founders' task list;
+// `rentals` is the first lead pipeline, and the shape every future one takes.
 //
 // Two levels of access, and the difference is the point of the tool. Anyone
 // holding `board:<slug>` can open that board and work its cards
-// (board-cards.ts). Reshaping the tool — creating a board, renaming one,
-// editing its columns — needs the whole `/admin/boards` page, so the
-// community manager running the rental pipeline can move a lead to Quoted
-// without being able to add a column, a board, or a way into the founders'
-// goals.
+// (board-cards.ts) and measure its goal's KPIs (goal-kpis.ts). Reshaping the
+// tool — creating a board, renaming one, editing its columns, setting or
+// editing its goal, deleting it — needs the whole `/admin/boards` page, so
+// the community manager running the rental pipeline can move a lead to
+// Quoted without being able to add a column, a board, or a goal.
 //
 // Columns are never deleted out from under their cards. A column dropped
 // from the list is archived if anything is sitting in it and removed only if
 // nothing is — an archived column keeps rendering while it still holds work
 // (lib/boards/cards.ts), so nothing is ever stranded somewhere invisible.
 //
-//   GET                  → { boards }        (the ones this user may open)
-//   GET ?slug=<slug>     → { board, columns, fields, cards, goals }
+// A board's goal travels with its cards: every card on the board is filed
+// under the board's goal, and pointing the board at a different goal
+// re-files them (lib/boards/store attachGoalToBoard).
+//
+// Deleting a board is the one erasing action here. It takes the board's
+// columns, fields, cards, and their trails with it (the foreign keys
+// cascade) and leaves the goal standing. The seeded Tasks board cannot go:
+// All Tasks quick-adds into it.
+//
+//   GET                  → { boards, goals, kpis, tallies, canManage,
+//                            owners?, unattachedGoals? }
+//   GET ?slug=<slug>     → { board, columns, fields, cards, goal, kpis, … }
 //   POST   { slug, name, description?, cardNoun?, includeInAllTasks?,
-//            columns: [{ key, label, kind, sortOrder? }] } → { board, columns } 201
+//            goalId? | goal?, columns: [{ key, label, kind, sortOrder? }] }
+//                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            archived?, sortOrder?, columns? } → { board, columns }
+//            archived?, sortOrder?, goalId?, columns? } → { board, columns }
+//   DELETE ?slug=<slug>  → { ok: true, cards }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
-import { boardViewerExtras } from '@/lib/boards/people';
+import { logBoardEvent } from '@/lib/boards/events';
+import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
 import {
   type APIRoute,
+  beginDelete,
   beginMutation,
   beginRead,
   type Db,
   json,
   storeError,
 } from '@/lib/boards/route';
-import { loadBoardBundle, loadBoards, loadColumns } from '@/lib/boards/store';
-import { isBoardSlug } from '@/lib/boards/types';
+import {
+  attachGoalToBoard,
+  goalExists,
+  loadBoardBundle,
+  loadBoards,
+  loadBoardsIndex,
+  loadColumns,
+  unattachedGoals,
+} from '@/lib/boards/store';
+import { GOALS_BOARD_SLUG, isBoardSlug } from '@/lib/boards/types';
 import { type ColumnInput, parseBoardCreate, parseBoardPatch } from '@/lib/boards/validate';
-import type { BoardRow } from '@/lib/db';
+import type { BoardRow, GoalRow } from '@/lib/db';
+import { deleteBySourceIds } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const ready = await beginRead(cookies, BOARDS_HREF);
@@ -52,11 +75,17 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       if (!canViewBoard(gate.access, slug)) return json({ error: 'Board not found' }, 404);
       const bundle = await loadBoardBundle(db, slug);
       if (!bundle) return json({ error: 'Board not found' }, 404);
-      return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, gate.access)) });
+      return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, gate.access, slug)) });
     }
 
     const boards = visibleBoards(gate.access, await loadBoards(db));
-    return json({ boards, canManage: canManageBoards(gate.access) });
+    const index = await loadBoardsIndex(db, boards);
+    const canManage = canManageBoards(gate.access);
+    if (!canManage) return json({ ...index, canManage });
+
+    // The New board form needs the roster and the goals nobody has claimed.
+    const [owners, unattached] = await Promise.all([listAssignable(), unattachedGoals(db)]);
+    return json({ ...index, canManage, owners, unattachedGoals: unattached });
   } catch (e) {
     return storeError('boards', e);
   }
@@ -70,7 +99,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const parsed = parseBoardCreate(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const { columns, ...board } = parsed.value;
+  const { columns, goal: newGoal, ...board } = parsed.value;
 
   const { data: existing } = await db
     .from('boards')
@@ -79,12 +108,38 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .maybeSingle();
   if (existing) return json({ error: `A board already uses the slug "${board.slug}"` }, 409);
 
+  if (board.goal_id && !(await goalExists(db, board.goal_id))) {
+    return json({ error: 'That goal does not exist' }, 400);
+  }
+
+  // A goal written down with the board. Created first so the board can point
+  // at it; undone if the board then fails, so no goal is left serving nothing.
+  let createdGoal: GoalRow | null = null;
+  if (newGoal) {
+    const now = new Date().toISOString();
+    const { data, error } = await db
+      .from('goals')
+      .insert({
+        ...newGoal,
+        started_at: newGoal.status === 'active' ? now : null,
+        created_by: email,
+      })
+      .select('*')
+      .single();
+    if (error) return json({ error: error.message }, 500);
+    createdGoal = data as GoalRow;
+    board.goal_id = createdGoal.id;
+  }
+
   const { data, error } = await db
     .from('boards')
     .insert({ ...board, sort_order: await nextBoardOrder(db), created_by: email })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) {
+    if (createdGoal) await db.from('goals').delete().eq('id', createdGoal.id);
+    return json({ error: error.message }, 500);
+  }
 
   const created = data as BoardRow;
   const { error: columnError } = await db
@@ -92,9 +147,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert(columns.map((column) => ({ ...column, board_id: created.id })));
   if (columnError) {
     // A board with no columns is unusable and un-fixable from the UI, so it
-    // does not get to exist: undo the insert rather than leave a husk.
+    // does not get to exist: undo the inserts rather than leave a husk.
     await db.from('boards').delete().eq('id', created.id);
+    if (createdGoal) await db.from('goals').delete().eq('id', createdGoal.id);
     return json({ error: columnError.message }, 500);
+  }
+
+  if (createdGoal) {
+    await logBoardEvent(db, { goalId: createdGoal.id, action: 'created', actor: email });
   }
 
   return json({ board: created, columns: await loadColumns(db, created.id) }, 201);
@@ -111,7 +171,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const parsed = parseBoardPatch(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
-  const { columns, ...patch } = parsed.value;
+  const { columns, goal_id: goalId, ...patch } = parsed.value;
 
   const { data: existing, error: loadError } = await db
     .from('boards')
@@ -130,6 +190,17 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (error) return json({ error: error.message }, 500);
   }
 
+  if (goalId !== undefined && goalId !== board.goal_id) {
+    if (goalId && !(await goalExists(db, goalId))) {
+      return json({ error: 'That goal does not exist' }, 400);
+    }
+    try {
+      await attachGoalToBoard(db, board, goalId, email);
+    } catch (e) {
+      return storeError('boards', e);
+    }
+  }
+
   if (columns) {
     const applied = await applyColumns(db, board.id, columns);
     if (applied) return applied;
@@ -143,6 +214,50 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (afterError) return json({ error: afterError.message }, 500);
 
   return json({ board: after as BoardRow, columns: await loadColumns(db, board.id) });
+};
+
+export const DELETE: APIRoute = async ({ cookies, request, url }) => {
+  const ready = await beginDelete(cookies, request, BOARDS_HREF);
+  if (ready instanceof Response) return ready;
+  const { db, email, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
+
+  const slug = url.searchParams.get('slug');
+  if (!isBoardSlug(slug)) return json({ error: 'slug is not a board slug' }, 400);
+  if (slug === GOALS_BOARD_SLUG) {
+    return json(
+      { error: 'The Tasks board is where All Tasks files quick-adds and cannot be deleted' },
+      409
+    );
+  }
+
+  const { data: row, error: loadError } = await db
+    .from('boards')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (loadError) return json({ error: loadError.message }, 500);
+  const board = (row as BoardRow) ?? null;
+  if (!board) return json({ error: 'Board not found' }, 404);
+
+  const { data: cardRows, error: cardsError } = await db
+    .from('board_cards')
+    .select('id')
+    .eq('board_id', board.id);
+  if (cardsError) return json({ error: cardsError.message }, 500);
+  const cardIds = ((cardRows ?? []) as { id: string }[]).map((card) => card.id);
+
+  // Columns, fields, cards, and the cards' trails cascade with the board.
+  // The goal does not: boards.goal_id is the only thing pointing at it, and
+  // it goes back to being a goal nobody serves yet.
+  const { error } = await db.from('boards').delete().eq('id', board.id);
+  if (error) return json({ error: error.message }, 500);
+
+  // A bell row pointing at a card that no longer exists is a dead end.
+  await deleteBySourceIds(db, 'board_card', cardIds);
+
+  console.info(`[boards] ${email} deleted board ${slug} (${cardIds.length} cards)`);
+  return json({ ok: true, cards: cardIds.length });
 };
 
 /**

@@ -19,10 +19,10 @@ import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { logLostFoundEvent } from '@/lib/lost-found/log';
 import {
+  LOST_FOUND_BUCKET as BUCKET,
   buildItemStoragePath,
   formatBytes,
   kindForMime,
-  LOST_FOUND_BUCKET as BUCKET,
   MAX_ATTACHMENTS_PER_ITEM,
   MAX_FILE_BYTES,
 } from '@/lib/lost-found/media';

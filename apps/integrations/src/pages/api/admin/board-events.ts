@@ -12,8 +12,8 @@
 //   GET ?since=<iso>     → { events, people }   (the recent-activity read)
 //   POST { cardId? | goalId?, note } → { event } 201
 
-import { BOARDS_HREF, canViewPage, GOALS_HREF } from '@/components/admin/adminTools';
-import { canViewBoard } from '@/lib/boards/access';
+import { BOARDS_HREF } from '@/components/admin/adminTools';
+import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
 import {
   type APIRoute,
@@ -23,7 +23,7 @@ import {
   isUuidParam,
   json,
 } from '@/lib/boards/route';
-import { loadCard } from '@/lib/boards/store';
+import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardEventRow, BoardRow, GoalRow } from '@/lib/db';
 import { notifyCardComment, notifyGoalComment } from '@/lib/notifications/goals';
@@ -34,9 +34,9 @@ import { getPeopleNames } from '@/lib/sops/people';
 const MAX_SINCE_DAYS = 90;
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  // Either page may read a trail: a goal page shows its own events, and a
-  // board page shows a card's. The subject checks below do the narrowing.
-  const ready = await beginRead(cookies, [GOALS_HREF, BOARDS_HREF]);
+  // A board page shows its goal's trail and its cards'. The subject checks
+  // below do the narrowing to the boards this viewer actually holds.
+  const ready = await beginRead(cookies, BOARDS_HREF);
   if (ready instanceof Response) return ready;
   const { db, gate } = ready;
 
@@ -52,14 +52,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     events = await loadEventsFor(db, { cardId });
   } else if (goalId) {
     if (!isUuidParam(goalId)) return json({ error: 'goalId must be a UUID' }, 400);
-    // A goal's trail belongs to the goals page. Holding one board is not a
-    // way to read what the founders have been deciding.
-    if (!canViewPage(gate.access, GOALS_HREF)) return json({ error: 'Goal not found' }, 404);
+    // A goal's trail is readable from the board that serves it. Holding one
+    // board reaches exactly that board's goal and no other.
+    if (!(await canReachGoal(db, gate.access, goalId))) {
+      return json({ error: 'Goal not found' }, 404);
+    }
     events = await loadEventsFor(db, { goalId });
   } else if (since) {
-    // The firehose read spans every board and every goal, so it is the goals
-    // page's alone.
-    if (!canViewPage(gate.access, GOALS_HREF)) return json({ error: 'Forbidden' }, 403);
+    // The firehose read spans every board and every goal, so it is the whole
+    // tool's alone.
+    if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
     const parsed = Date.parse(since);
     if (Number.isNaN(parsed)) return json({ error: 'since must be an ISO timestamp' }, 400);
     const floor = Date.now() - MAX_SINCE_DAYS * 86_400_000;
@@ -80,9 +82,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  // Either page gets you in the door; which subject you may comment on is
-  // decided below — a card by the board it sits on, a goal by the goals page.
-  const ready = await beginMutation(cookies, request, [GOALS_HREF, BOARDS_HREF]);
+  // Which subject you may comment on is decided below — a card by the board
+  // it sits on, a goal by the boards that serve it.
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
   const { db, email, body, gate } = ready;
 
@@ -104,8 +106,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (refused) return refused;
   } else if (goalId) {
     if (!isUuidParam(goalId)) return json({ error: 'goalId must be a UUID' }, 400);
-    // A goal's thread is the goals page's, not any board holder's.
-    if (!canViewPage(gate.access, GOALS_HREF)) return json({ error: 'Goal not found' }, 404);
+    if (!(await canReachGoal(db, gate.access, goalId))) {
+      return json({ error: 'Goal not found' }, 404);
+    }
     const { data } = await db.from('goals').select('id').eq('id', goalId).maybeSingle();
     if (!data) return json({ error: 'Goal not found' }, 404);
   }
@@ -143,7 +146,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   } else if (goalId) {
     const { data: goalRow } = await db.from('goals').select('*').eq('id', goalId).maybeSingle();
     const goal = (goalRow as GoalRow) ?? null;
-    if (goal) await notifyGoalComment(db, goal, note, email);
+    if (goal) {
+      const [board] = await boardsForGoal(db, goal.id);
+      await notifyGoalComment(db, goal, board ?? null, note, email);
+    }
   }
 
   return json({ event: data as BoardEventRow }, 201);

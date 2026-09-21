@@ -175,12 +175,12 @@ export const ADMIN_TOOLS: AdminTool[] = [
     section: 'operations',
   },
   {
-    href: GOALS_HREF,
-    title: 'Goals',
-    navLabel: 'Goals',
+    href: BOARDS_HREF,
+    title: 'Goals & Boards',
+    navLabel: 'Goals & Boards',
     description:
-      'What we are trying to achieve, the KPIs that say whether we got there, and every task that rolls up to one. Plus All Tasks: what is in flight, what is late, and who is on what.',
-    section: 'admin',
+      'What we are trying to achieve and the work that gets us there, board by board. Each board carries the goal it serves and the KPIs that say whether we got there \u2014 the founders\u2019 task board, and the lead pipelines beside it. Plus All Tasks: what is in flight, what is late, and who is on what. Each board can be granted on its own.',
+    section: 'operations',
     keywords: [
       'trello',
       'okr',
@@ -192,16 +192,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
       'todo',
       'objectives',
       'targets',
-    ],
-  },
-  {
-    href: BOARDS_HREF,
-    title: 'Boards',
-    navLabel: 'Boards',
-    description:
-      'Cards in columns: the founders\u2019 task board, and the lead pipelines beside it \u2014 private rentals and group bookings from first enquiry to booked. Each board can be granted on its own.',
-    section: 'operations',
-    keywords: [
+      'goals',
       'kanban',
       'pipeline',
       'leads',
@@ -388,6 +379,9 @@ const MANAGE_IMPLIES_VIEW: Record<string, string> = {
 // stops being offered without anyone losing access.
 const LEGACY_PAGE_GRANTS: Record<string, string[]> = {
   '/admin/campaigns': ['/admin/utm-assist'],
+  // Goals and Boards were two pages; a row granted the Goals page holds the
+  // merged tool (lib/boards/access honours the same grant for management).
+  [BOARDS_HREF]: [GOALS_HREF],
 };
 
 /** Whether this user may view `href` — admin, a direct grant, a legacy grant
@@ -533,20 +527,14 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
   {
     href: ALL_TASKS_HREF,
     title: 'All tasks',
-    parent: GOALS_HREF,
+    parent: BOARDS_HREF,
     keywords: ['in flight', 'overdue', 'todo', 'due this week', 'my tasks', 'who is on what'],
-  },
-  {
-    href: '/admin/goals/new',
-    title: 'New goal',
-    parent: GOALS_HREF,
-    keywords: ['create', 'add a goal', 'kpi', 'target'],
   },
   {
     href: '/admin/boards/goals',
     title: 'Task board',
     parent: BOARDS_HREF,
-    keywords: ['kanban', 'to do', 'in progress', 'done', 'cards'],
+    keywords: ['kanban', 'to do', 'in progress', 'done', 'cards', 'goals'],
   },
   {
     href: '/admin/ask/log',

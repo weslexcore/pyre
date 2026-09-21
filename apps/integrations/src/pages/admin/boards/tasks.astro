@@ -1,0 +1,30 @@
+---
+// All Tasks: the cross-board page. `tasks` is a more specific route than
+// [slug], so this wins over the board page for /admin/boards/tasks — and
+// parseBoardCreate refuses the slug, so no board can ever be shadowed.
+//
+// The page spans every board, so a single-board grantee — who AdminLayout's
+// prefix rule lets through to /admin/boards/* — is turned away here as the
+// API would turn them away anyway.
+//
+// The viewer's email is handed in from the session so the by-person grouping
+// can put them first — it is ordering only; the API decides what they may
+// see.
+import { AllTasks } from '@/components/admin/goals/AllTasks';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { canManageBoards } from '@/lib/boards/access';
+
+const viewerEmail = (Astro.locals.adminUser?.email ?? '').toLowerCase();
+const access = Astro.locals.adminAccess ?? null;
+const allowed = !!access && canManageBoards(access);
+---
+
+<AdminLayout title="All tasks" subtitle="Everything in flight, what is late, and who is on what">
+  {
+    allowed ? (
+      <AllTasks viewerEmail={viewerEmail} client:load />
+    ) : (
+      <p class="text-sm text-white/60">All Tasks spans every board and is not part of a single-board grant.</p>
+    )
+  }
+</AdminLayout>

@@ -2,9 +2,8 @@
 // helper, the UUID check, and the gate-then-CSRF-then-content-type sequence
 // from shift-notes.ts. Server-only.
 //
-// Goals and boards are one tool split across two pages — a task is a card, a
-// goal is what cards are filed under — so their six routes share this rather
-// than each carrying its own copy.
+// Goals and boards are one tool — a task is a card, a goal is what a board
+// is for — so their routes share this rather than each carrying its own copy.
 
 import type { APIRoute, AstroCookies } from 'astro';
 import { type AdminGate, assertSameOrigin, requireAnyPage, requirePage } from '@/lib/auth/admin';
@@ -25,9 +24,8 @@ export function isUuidParam(value: unknown): value is string {
 export type Db = NonNullable<ReturnType<typeof getDb>>;
 
 /**
- * Gate on one page, or on any of several. board-events serves both /admin/goals
- * and /admin/boards — a goal's thread belongs to the goals page and a card's
- * to the board it is on — so it passes both and narrows per subject.
+ * Gate on one page, or on any of several. Every goals/boards route gates on
+ * /admin/boards today; the list form stays for a route that spans tools.
  */
 function gateOn(cookies: AstroCookies, page: string | string[]) {
   return Array.isArray(page) ? requireAnyPage(cookies, page) : requirePage(cookies, page);

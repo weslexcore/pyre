@@ -1,5 +1,6 @@
-// All Tasks (/admin/goals/tasks): the cross-goal page. Everything in flight,
-// wherever it is filed, with the late and the imminent pulled to the top.
+// All Tasks (/admin/boards/tasks): the cross-board page. Everything in
+// flight, wherever it is filed, with the late and the imminent pulled to the
+// top.
 //
 // This is the view that replaces Trello's Backlog and Focus lists, and the
 // failure mode it has to avoid is being them: a wall of seventy cards that
@@ -14,16 +15,15 @@
 
 import { addDays, weekStartOf } from '@pyre/schedule-core';
 import { isFinishedKind } from '@/lib/boards/types';
-import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { GroupBy } from './types';
 
 export interface TaskGroup {
-  /** Goal id, owner email, or board id — stable, for React keys and links. */
+  /** Owner email or board id — stable, for React keys and links. */
   key: string;
   label: string;
-  /** The goal this group is, when grouping by goal — for the link through. */
-  goalId?: string;
+  /** The board this group is, when grouping by board — for the link through. */
   boardSlug?: string;
   cards: BoardCardRow[];
 }
@@ -42,7 +42,7 @@ export interface AllTasks {
   /** Open, due today through Sunday of this week. */
   dueThisWeek: BoardCardRow[];
   groups: TaskGroup[];
-  /** Open cards filed under no goal — the one-off chores. */
+  /** Open cards on a board with no goal — the one-off chores. */
   unfiled: BoardCardRow[];
   /** Finished cards, newest week first. */
   recentlyDone: DoneWeek[];
@@ -82,7 +82,6 @@ export function weekLabel(weekStart: string): string {
 
 export function buildAllTasks(
   cards: BoardCardRow[],
-  goals: GoalRow[],
   boards: BoardRow[],
   columns: BoardColumnRow[],
   people: PeopleNames,
@@ -117,45 +116,11 @@ export function buildAllTasks(
   // The unfiled chores are their own section whatever the grouping, so the
   // "quick thing with no goal behind it" always has one obvious home.
   const unfiled = open.filter((card) => card.goal_id === null);
-  const filed = open.filter((card) => card.goal_id !== null);
 
   const groups =
-    groupBy === 'owner'
-      ? groupByOwner(open, people, viewerEmail)
-      : groupBy === 'board'
-        ? groupByBoard(open, boardsById)
-        : groupByGoal(filed, goals);
+    groupBy === 'owner' ? groupByOwner(open, people, viewerEmail) : groupByBoard(open, boardsById);
 
   return { overdue, dueThisWeek, groups, unfiled, recentlyDone: groupDone(done) };
-}
-
-/** Goals in index order, each with the cards filed under it. Empty goals are left out. */
-function groupByGoal(cards: BoardCardRow[], goals: GoalRow[]): TaskGroup[] {
-  const byGoal = new Map<string, BoardCardRow[]>();
-  for (const card of cards) {
-    if (!card.goal_id) continue;
-    const group = byGoal.get(card.goal_id);
-    if (group) group.push(card);
-    else byGoal.set(card.goal_id, [card]);
-  }
-
-  const ordered = [...goals].sort(
-    (a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)
-  );
-
-  const groups: TaskGroup[] = [];
-  for (const goal of ordered) {
-    const group = byGoal.get(goal.id);
-    if (!group) continue;
-    groups.push({ key: goal.id, label: goal.title, goalId: goal.id, cards: group });
-    byGoal.delete(goal.id);
-  }
-  // A card filed under a goal that isn't in the pool (dropped from the page's
-  // filter, say) still has to appear somewhere.
-  for (const [goalId, group] of byGoal) {
-    groups.push({ key: goalId, label: 'Another goal', goalId, cards: group });
-  }
-  return groups;
 }
 
 /**

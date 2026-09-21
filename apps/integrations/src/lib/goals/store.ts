@@ -1,164 +1,31 @@
-// The reads behind /admin/goals. Server-only: takes a service-role client,
-// so nothing here may be imported from an island.
+// The read behind All Tasks. Server-only: takes a service-role client, so
+// nothing here may be imported from an island.
 //
-// Three shapes, one per page. The index needs every goal plus enough of the
-// cards and KPIs to draw a rollup on each card. A goal page needs one goal,
-// its parent, its children, and everything hanging off all of them. All Tasks
-// needs the open cards from the boards that opted in, plus the last few weeks
-// of finished ones.
+// Goals themselves are read through their boards (lib/boards/store), since
+// the merge; what is left here is the one page that spans every board.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type Assignable, listAssignable } from '@/lib/boards/people';
 import { loadAllColumns, loadBoards } from '@/lib/boards/store';
-import type { BoardCardRow, BoardColumnRow, BoardRow, GoalKpiRow, GoalRow } from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardRow } from '@/lib/db';
 import { todayEastern } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 
-/** A goals page is a page, not a database; past this it needs paging. */
-const GOAL_LIMIT = 500;
+/** A page, not a database; past this it needs paging. */
 const CARD_LIMIT = 2000;
 
-/** Every email a set of goals and cards mentions, by name. */
+/** Every email a set of cards mentions, by name. */
 async function peopleFor(
-  goals: Pick<GoalRow, 'owner_email' | 'created_by' | 'completed_by'>[],
   cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by'>[]
 ): Promise<PeopleNames> {
-  return getPeopleNames([
-    ...goals.flatMap((goal) => [
-      goal.owner_email ?? '',
-      goal.created_by ?? '',
-      goal.completed_by ?? '',
-    ]),
-    ...cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? '']),
-  ]);
-}
-
-export interface GoalsIndexData {
-  goals: GoalRow[];
-  owners: Assignable[];
-  kpis: GoalKpiRow[];
-  cards: BoardCardRow[];
-  columns: BoardColumnRow[];
-  boards: BoardRow[];
-  people: PeopleNames;
-  today: string;
-}
-
-/**
- * The index. Every goal, every KPI, and every card that is filed under one —
- * the cards are what the progress bars count, and loading them per goal would
- * be one query per card on the page.
- */
-export async function loadGoalsIndex(db: SupabaseClient): Promise<GoalsIndexData> {
-  const [goalsResult, kpisResult, cardsResult, columns, boards] = await Promise.all([
-    db
-      .from('goals')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(GOAL_LIMIT),
-    db.from('goal_kpis').select('*').order('sort_order', { ascending: true }),
-    db.from('board_cards').select('*').not('goal_id', 'is', null).limit(CARD_LIMIT),
-    loadAllColumns(db),
-    loadBoards(db),
-  ]);
-
-  if (goalsResult.error) throw new Error(goalsResult.error.message);
-  if (kpisResult.error) throw new Error(kpisResult.error.message);
-  if (cardsResult.error) throw new Error(cardsResult.error.message);
-
-  const goals = (goalsResult.data ?? []) as GoalRow[];
-  const cards = (cardsResult.data ?? []) as BoardCardRow[];
-
-  return {
-    goals,
-    owners: await listAssignable(),
-    kpis: (kpisResult.data ?? []) as GoalKpiRow[],
-    cards,
-    columns,
-    boards,
-    people: await peopleFor(goals, cards),
-    today: todayEastern(),
-  };
-}
-
-export interface GoalPageData {
-  goal: GoalRow;
-  parent: GoalRow | null;
-  children: GoalRow[];
-  kpis: GoalKpiRow[];
-  /** This goal's cards and its children's — what the rollup counts. */
-  cards: BoardCardRow[];
-  columns: BoardColumnRow[];
-  boards: BoardRow[];
-  /** Every top-level goal, for the parent picker and the card goal picker. */
-  goals: GoalRow[];
-  owners: Assignable[];
-  people: PeopleNames;
-  today: string;
-}
-
-/** One goal page, or null when the id names nothing. */
-export async function loadGoalPage(db: SupabaseClient, id: string): Promise<GoalPageData | null> {
-  const { data, error } = await db.from('goals').select('*').eq('id', id).maybeSingle();
-  if (error) throw new Error(error.message);
-  const goal = (data as GoalRow) ?? null;
-  if (!goal) return null;
-
-  const [allGoalsResult, columns, boards] = await Promise.all([
-    db
-      .from('goals')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(GOAL_LIMIT),
-    loadAllColumns(db),
-    loadBoards(db),
-  ]);
-  if (allGoalsResult.error) throw new Error(allGoalsResult.error.message);
-
-  const goals = (allGoalsResult.data ?? []) as GoalRow[];
-  const children = goals.filter((row) => row.parent_id === goal.id);
-  const parent = goal.parent_id ? (goals.find((row) => row.id === goal.parent_id) ?? null) : null;
-
-  // The goal and everything under it: a parent's page shows its children's
-  // KPIs and tasks, because that is what "rolls up" means.
-  const family = [goal.id, ...children.map((child) => child.id)];
-
-  const [kpisResult, cardsResult] = await Promise.all([
-    db.from('goal_kpis').select('*').in('goal_id', family).order('sort_order', { ascending: true }),
-    db
-      .from('board_cards')
-      .select('*')
-      .in('goal_id', family)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(CARD_LIMIT),
-  ]);
-  if (kpisResult.error) throw new Error(kpisResult.error.message);
-  if (cardsResult.error) throw new Error(cardsResult.error.message);
-
-  const cards = (cardsResult.data ?? []) as BoardCardRow[];
-
-  return {
-    goal,
-    parent,
-    children,
-    kpis: (kpisResult.data ?? []) as GoalKpiRow[],
-    cards,
-    columns,
-    boards,
-    goals,
-    owners: await listAssignable(),
-    people: await peopleFor([goal, ...children, ...(parent ? [parent] : [])], cards),
-    today: todayEastern(),
-  };
+  return getPeopleNames(
+    cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? ''])
+  );
 }
 
 export interface AllTasksData {
   cards: BoardCardRow[];
-  goals: GoalRow[];
   owners: Assignable[];
   boards: BoardRow[];
   columns: BoardColumnRow[];
@@ -172,23 +39,12 @@ export interface AllTasksData {
  * exactly the thing this page exists to surface.
  */
 export async function loadAllTasks(db: SupabaseClient, sinceYmd: string): Promise<AllTasksData> {
-  const [boards, columns, goalsResult] = await Promise.all([
-    loadBoards(db),
-    loadAllColumns(db),
-    db
-      .from('goals')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(GOAL_LIMIT),
-  ]);
-  if (goalsResult.error) throw new Error(goalsResult.error.message);
+  const [boards, columns] = await Promise.all([loadBoards(db), loadAllColumns(db)]);
 
   const boardIds = boards.filter((board) => board.include_in_all_tasks).map((board) => board.id);
   if (boardIds.length === 0) {
     return {
       cards: [],
-      goals: (goalsResult.data ?? []) as GoalRow[],
       owners: await listAssignable(),
       boards,
       columns,
@@ -208,15 +64,13 @@ export async function loadAllTasks(db: SupabaseClient, sinceYmd: string): Promis
   if (error) throw new Error(error.message);
 
   const cards = (data ?? []) as BoardCardRow[];
-  const goals = (goalsResult.data ?? []) as GoalRow[];
 
   return {
     cards,
-    goals,
     owners: await listAssignable(),
     boards,
     columns,
-    people: await peopleFor(goals, cards),
+    people: await peopleFor(cards),
     today: todayEastern(),
   };
 }

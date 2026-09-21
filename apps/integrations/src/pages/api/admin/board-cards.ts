@@ -1,11 +1,14 @@
 // Cards: one task or one lead. The same row either way — a task on the
-// founders' board is a card filed under a goal, a lead on the rental board
-// is a card with a contact email in its properties — which is why there is
-// one route here and not two.
+// founders' board is a card filed under the board's goal, a lead on the
+// rental board is a card with a contact email in its properties — which is
+// why there is one route here and not two.
 //
-// Three things this route insists on, because none of them can be left to
+// Four things this route insists on, because none of them can be left to
 // the caller:
 //
+//   * a card's goal is its board's goal. The body never names one; a new
+//     card takes the board's, and changing the board's goal re-files every
+//     card on it (api/admin/boards.ts);
 //   * the column a card moves to belongs to the card's own board;
 //   * entering a done/dropped column stamps completion and clears the
 //     waiting-on badge (lib/boards/cards.ts), and leaving one un-stamps it;
@@ -14,14 +17,14 @@
 //
 // Access is per board: `board:<slug>` opens exactly that board's cards.
 //
-//   GET ?board=<slug>  → { board, columns, fields, cards, goals }
-//   POST   { board, title, columnId?, goalId?, ownerEmail?, dueDate?,
+//   GET ?board=<slug>  → { board, columns, fields, cards, goal, kpis, … }
+//   POST   { board, title, columnId?, ownerEmail?, dueDate?,
 //            waitingOn?, area?, notesMd?, properties? } → { card } 201
 //   PATCH  { id, ...any of the above } → { card }
 //   DELETE ?id=<uuid>  → { ok: true }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
-import { canViewBoard } from '@/lib/boards/access';
+import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { columnPatch, defaultColumn, nextSortOrder } from '@/lib/boards/cards';
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvent, logBoardEvents } from '@/lib/boards/events';
@@ -36,7 +39,13 @@ import {
   json,
   storeError,
 } from '@/lib/boards/route';
-import { loadBoardBundle, loadCard, loadColumn, loadColumns } from '@/lib/boards/store';
+import {
+  loadBoardBundle,
+  loadCard,
+  loadColumn,
+  loadColumns,
+  unattachedGoals,
+} from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardFieldRow, BoardRow } from '@/lib/db';
@@ -54,7 +63,13 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   try {
     const bundle = await loadBoardBundle(ready.db, slug);
     if (!bundle) return json({ error: 'Board not found' }, 404);
-    return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, ready.gate.access)) });
+    // A manager on a board with no goal is offered the goals nobody serves.
+    const extras = await boardViewerExtras(bundle.cards, ready.gate.access, slug);
+    const offered =
+      !bundle.goal && canManageBoards(ready.gate.access)
+        ? { unattachedGoals: await unattachedGoals(ready.db) }
+        : {};
+    return json({ ...bundle, ...extras, ...offered });
   } catch (e) {
     return storeError('board-cards', e);
   }
@@ -74,11 +89,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data: boardRow, error: boardError } = await db
     .from('boards')
-    .select('id')
+    .select('id, goal_id')
     .eq('slug', slug)
     .maybeSingle();
   if (boardError) return json({ error: boardError.message }, 500);
-  const board = (boardRow as { id: string }) ?? null;
+  const board = (boardRow as Pick<BoardRow, 'id' | 'goal_id'>) ?? null;
   if (!board) return json({ error: 'Board not found' }, 404);
 
   const columns = await loadColumns(db, board.id);
@@ -88,11 +103,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     ? columns.find((c) => c.id === parsed.value.column_id)
     : defaultColumn(columns);
   if (!column) return json({ error: 'That column is not on this board' }, 400);
-
-  if (parsed.value.goal_id) {
-    const refused = await refuseMissingGoal(db, parsed.value.goal_id);
-    if (refused) return refused;
-  }
 
   const fields = await loadFields(db, board.id);
   const { data: siblings } = await db
@@ -106,6 +116,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       ...parsed.value,
       board_id: board.id,
       column_id: column.id,
+      // Filed under the board's goal, whatever the board's goal is today.
+      goal_id: board.goal_id,
       properties: normalizeProperties(fields, body.properties),
       sort_order: nextSortOrder(
         (siblings ?? []) as Pick<BoardCardRow, 'column_id' | 'sort_order'>[],
@@ -156,11 +168,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       return json({ error: 'That column is not on this board' }, 400);
     }
     completion = columnPatch(before, column, email, new Date().toISOString());
-  }
-
-  if (patch.goal_id) {
-    const refused = await refuseMissingGoal(db, patch.goal_id);
-    if (refused) return refused;
   }
 
   const properties =
@@ -261,13 +268,6 @@ async function refuseUnlessOnAViewableBoard(
   const slug = (data as { slug: string } | null)?.slug;
   if (!slug || !canViewBoard(access, slug)) return json({ error: 'Card not found' }, 404);
   return null;
-}
-
-/** A card can only be filed under a goal that exists. */
-async function refuseMissingGoal(db: Db, goalId: string): Promise<Response | null> {
-  const { data, error } = await db.from('goals').select('id').eq('id', goalId).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
-  return data ? null : json({ error: 'That goal does not exist' }, 400);
 }
 
 async function loadBoard(db: Db, boardId: string): Promise<BoardRow | null> {

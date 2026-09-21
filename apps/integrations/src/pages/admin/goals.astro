@@ -1,14 +1,6 @@
 ---
-// The goals index. Anyone granted /admin/goals lands here; the
-// /api/admin/goals route re-checks the session on every request, so this
-// page's gate is UX.
-import { GoalsIndex } from '@/components/admin/goals/GoalsIndex';
-import AdminLayout from '@/layouts/AdminLayout.astro';
+// The Goals page is gone: goals live on the boards that serve them. Anyone
+// arriving here — from an old link, a bookmark, or a grant issued before the
+// merge — lands on the boards index.
+return Astro.redirect('/admin/boards', 301);
 ---
-
-<AdminLayout
-  title="Goals"
-  subtitle="What we are trying to achieve, the numbers that say whether we got there, and the work that adds up to it"
->
-  <GoalsIndex client:load />
-</AdminLayout>

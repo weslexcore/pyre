@@ -155,9 +155,9 @@ export const POST: APIRoute = async ({ request }) => {
     .insert({
       board_id: board.id,
       column_id: column.id,
-      // A lead is not filed under a goal, and an unauthenticated caller does
-      // not get to say otherwise.
-      goal_id: null,
+      // Filed under the board's goal, like every card on it. The caller has
+      // no say: a lead counts toward whatever the rental board is for.
+      goal_id: board.goal_id,
       title: parsed.value.title,
       notes_md: parsed.value.notes_md,
       due_date: parsed.value.due_date,

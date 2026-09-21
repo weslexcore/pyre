@@ -11,8 +11,8 @@
 
 import { canViewPage } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
+import { BOARDS_HREF } from '@/lib/boards/types';
 import type { StaffRow } from '@/lib/db';
-import { GOALS_HREF } from '@/lib/goals/types';
 import { canViewSop, roleForStaffRow, type SopAccessFields } from '@/lib/sops/levels';
 
 export type RosterRow = Pick<
@@ -61,9 +61,9 @@ export function boardRecipients(rows: RosterRow[], slug: string): string[] {
     .map(emailOf);
 }
 
-/** Whether this person can open the goals page (for a notice's link). */
-export function canOpenGoals(row: RosterRow): boolean {
-  return canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, GOALS_HREF);
+/** Whether this person can open the boards tool at all (for a notice's link). */
+export function canOpenBoards(row: RosterRow): boolean {
+  return canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, BOARDS_HREF);
 }
 
 /** Whether this person can open the schedule board (for the notice's link). */

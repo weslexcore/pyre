@@ -41,28 +41,29 @@ describe('board grants', () => {
     expect(toolsForAccess(oneBoard).map((t) => t.href)).toEqual([BOARDS_HREF]);
   });
 
-  it('leaves the founders’ goals alone', () => {
-    // canViewPath lets /admin/boards/goals through — the board page itself
-    // checks the slug against the grant — but the Goals tool stays shut.
-    expect(canViewPage(oneBoard, GOALS_HREF)).toBe(false);
-    expect(canViewPath(oneBoard, GOALS_HREF)).toBe(false);
-    expect(canViewPath(oneBoard, ALL_TASKS_HREF)).toBe(false);
+  it('leaves the founders’ boards alone', () => {
+    // canViewPath lets /admin/boards/* through — the board page itself
+    // checks the slug against the grant — but the boards themselves stay
+    // shut, and All Tasks (which spans every board) is refused by its page.
     expect(canViewBoard(oneBoard, 'goals')).toBe(false);
     expect(canViewBoard(oneBoard, 'rentals')).toBe(true);
+    expect(canViewPage(oneBoard, GOALS_HREF)).toBe(false);
   });
 
-  it('does not let a goals grant wander onto the boards', () => {
+  it('carries a grant for the old Goals page onto the merged tool', () => {
     const goalsOnly = { isAdmin: false, pages: [GOALS_HREF] };
-    expect(toolsForAccess(goalsOnly).map((t) => t.href)).toEqual([GOALS_HREF]);
+    expect(toolsForAccess(goalsOnly).map((t) => t.href)).toEqual([BOARDS_HREF]);
+    expect(canViewPage(goalsOnly, BOARDS_HREF)).toBe(true);
     expect(canViewPath(goalsOnly, ALL_TASKS_HREF)).toBe(true);
-    expect(canViewPath(goalsOnly, '/admin/goals/3f1b8a2c')).toBe(true);
-    expect(canViewPage(goalsOnly, BOARDS_HREF)).toBe(false);
+    expect(canViewPath(goalsOnly, '/admin/boards/rentals')).toBe(true);
+    expect(canViewBoard(goalsOnly, 'rentals')).toBe(true);
   });
 
-  it('offers both tools as grantable pages', () => {
+  it('offers one tool, not two', () => {
     const hrefs = ADMIN_TOOLS.map((t) => t.href);
-    expect(hrefs).toContain(GOALS_HREF);
     expect(hrefs).toContain(BOARDS_HREF);
+    expect(hrefs).not.toContain(GOALS_HREF);
+    expect(ALL_TASKS_HREF.startsWith(`${BOARDS_HREF}/`)).toBe(true);
   });
 });
 

@@ -1,6 +1,5 @@
 ---
-// "New goal" from the global search. The form lives on the index — writing a
-// goal down next to the ones already there is the right context for it — so
-// this route exists only to open it.
-return Astro.redirect('/admin/goals?new=1');
+// "New goal" used to open a form on the goals index. A goal is written down
+// with its board now, so the boards index is where that starts.
+return Astro.redirect('/admin/boards', 301);
 ---

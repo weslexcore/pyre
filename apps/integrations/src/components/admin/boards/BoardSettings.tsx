@@ -1,11 +1,16 @@
 // The board's own shape: its name, what it calls a card, whether its cards
-// belong on All Tasks, and its columns.
+// belong on All Tasks, and its columns — and, at the bottom, the two things
+// that take a board off the index: archiving it and deleting it.
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
 // key, so renaming a column keeps its cards, and dropping one archives it if
 // anything is sitting in it rather than taking the cards with it. That is
-// why there is no Delete button here: "remove" means "stop offering it", and
-// the server decides whether the row can actually go.
+// why there is no Delete button on a column: "remove" means "stop offering
+// it", and the server decides whether the row can actually go. A new
+// column's key is minted from its first label and kept through edits.
+//
+// The goal is not here: it is edited where it is shown, at the top of the
+// board (BoardGoal).
 //
 // Fields are shown read-only. A per-board field editor is real work (see
 // GuestFieldsManager for the shape it would take) and the seeded rental
@@ -13,17 +18,22 @@
 // listing them is honest and an editor would be speculative.
 
 import { useState } from 'react';
+import { columnKeyOf } from '@/lib/boards/columns';
 import type { ColumnKind } from '@/lib/boards/types';
 import {
   BOARD_LIMITS,
+  BOARDS_HREF,
   COLUMN_KIND_LABELS,
   COLUMN_KINDS,
   FIELD_KIND_LABELS,
+  GOALS_BOARD_SLUG,
 } from '@/lib/boards/types';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
+import { ConfirmDialog } from '../ConfirmDialog';
 import {
   buttonClass,
   cardClass,
+  dangerButtonClass,
   inputClass,
   labelClass,
   primaryButtonClass,
@@ -43,12 +53,15 @@ export function BoardSettings({
   board,
   columns,
   fields,
+  cardCount,
   busy = false,
   onSaved,
 }: {
   board: BoardRow;
   columns: BoardColumnRow[];
   fields: BoardFieldRow[];
+  /** How many cards a delete would take with it. */
+  cardCount: number;
   busy?: boolean;
   onSaved: () => void;
 }) {
@@ -56,7 +69,6 @@ export function BoardSettings({
   const [description, setDescription] = useState(board.description);
   const [cardNoun, setCardNoun] = useState(board.card_noun);
   const [includeInAllTasks, setIncludeInAllTasks] = useState(board.include_in_all_tasks);
-  const [archived, setArchived] = useState(board.archived);
   const [drafts, setDrafts] = useState<ColumnDraft[]>(() =>
     [...columns]
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -69,6 +81,7 @@ export function BoardSettings({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
 
   const setDraft = (index: number, patch: Partial<ColumnDraft>) =>
     setDrafts((current) =>
@@ -78,7 +91,15 @@ export function BoardSettings({
   const addColumn = () =>
     setDrafts((current) => [
       ...current,
-      { key: `column_${current.length + 1}`, label: 'New column', kind: 'open', archived: false },
+      {
+        key: columnKeyOf(
+          'New column',
+          current.map((draft) => draft.key)
+        ),
+        label: 'New column',
+        kind: 'open',
+        archived: false,
+      },
     ]);
 
   const save = async () => {
@@ -91,7 +112,6 @@ export function BoardSettings({
         description,
         cardNoun,
         includeInAllTasks,
-        archived,
         columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
       });
       onSaved();
@@ -101,6 +121,34 @@ export function BoardSettings({
       setSaving(false);
     }
   };
+
+  const toggleArchived = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await send('/api/admin/boards', 'PATCH', { slug: board.slug, archived: !board.archived });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change that');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await send(`/api/admin/boards?slug=${encodeURIComponent(board.slug)}`, 'DELETE');
+      window.location.assign(BOARDS_HREF);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the board');
+      setSaving(false);
+    }
+  };
+
+  const isTasksBoard = board.slug === GOALS_BOARD_SLUG;
+  const nounPlural = `${cardNoun}s`;
 
   return (
     <section className={cardClass}>
@@ -162,14 +210,6 @@ export function BoardSettings({
           On for work we owe; off for a pipeline, where forty open leads would drown the twelve
           things that need doing this week.
         </p>
-        <label className="flex items-center gap-2 text-sm text-white/70">
-          <input
-            type="checkbox"
-            checked={archived}
-            onChange={(e) => setArchived(e.target.checked)}
-          />
-          Archive this board
-        </label>
       </div>
 
       <div className="mt-5 border-t border-white/10 pt-4">
@@ -242,6 +282,68 @@ export function BoardSettings({
           {saving ? 'Saving…' : 'Save board'}
         </button>
       </div>
+
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <SectionTitle note="off the index">Archive or delete</SectionTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={busy || saving}
+            onClick={() => setConfirming('archive')}
+          >
+            {board.archived ? 'Unarchive board' : 'Archive board'}
+          </button>
+          {!isTasksBoard && (
+            <button
+              type="button"
+              className={dangerButtonClass}
+              disabled={busy || saving}
+              onClick={() => setConfirming('delete')}
+            >
+              Delete board
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-white/35">
+          {isTasksBoard
+            ? 'Archiving hides the board under the index and keeps everything. The Tasks board cannot be deleted: All Tasks files its quick-adds here.'
+            : `Archiving hides the board under the index and keeps everything. Deleting erases the board, its ${nounPlural}, and their history; the goal stays.`}
+        </p>
+      </div>
+
+      {confirming === 'archive' && (
+        <ConfirmDialog
+          title={board.archived ? `Unarchive "${board.name}"?` : `Archive "${board.name}"?`}
+          body={
+            board.archived
+              ? 'The board comes back to the top of the index.'
+              : `The board moves under Archived on the index. Its ${nounPlural} and its goal stay exactly as they are.`
+          }
+          confirmLabel={board.archived ? 'Unarchive' : 'Archive'}
+          busy={busy || saving}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            void toggleArchived();
+          }}
+        />
+      )}
+
+      {confirming === 'delete' && (
+        <ConfirmDialog
+          title={`Delete "${board.name}"?`}
+          body={`Deletes the board and its ${cardCount} ${cardCount === 1 ? cardNoun : nounPlural}, their notes and history. This cannot be undone. The goal stays and can be picked up by another board.`}
+          confirmLabel="Delete board"
+          danger
+          busy={busy || saving}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            void remove();
+          }}
+        />
+      )}
     </section>
   );
 }

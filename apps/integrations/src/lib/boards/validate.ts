@@ -9,7 +9,14 @@
 
 import type { BoardFieldKind, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { GOAL_LIMITS, isArea } from '@/lib/goals/types';
-import { isUuid, isYmd, numberOf, type ParseResult } from '@/lib/goals/validate';
+import {
+  type GoalCreate,
+  isUuid,
+  isYmd,
+  numberOf,
+  type ParseResult,
+  parseGoalCreate,
+} from '@/lib/goals/validate';
 import type { ColumnKind } from './types';
 import { BOARD_LIMITS, isColumnKind, KEY_RE, SLUG_RE } from './types';
 
@@ -101,13 +108,49 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
   return { ok: true, value: columns };
 }
 
+/**
+ * Slugs that are pages under /admin/boards rather than boards, so a board
+ * could never shadow them.
+ */
+export const RESERVED_BOARD_SLUGS = ['tasks', 'new'] as const;
+
 export interface BoardCreate {
   slug: string;
   name: string;
   description: string;
   card_noun: string;
   include_in_all_tasks: boolean;
+  /** An existing goal to serve, when `goal` is not given. */
+  goal_id: string | null;
+  /** A goal to create alongside the board and point it at. */
+  goal: GoalCreate | null;
   columns: ColumnInput[];
+}
+
+/**
+ * A goal for a new board: either `goalId` naming one that exists, or `goal`
+ * describing one to create. Both is a contradiction; neither is a plain list.
+ */
+function parseBoardGoal(
+  body: Record<string, unknown>
+): ParseResult<Pick<BoardCreate, 'goal_id' | 'goal'>> {
+  const hasId = body.goalId !== undefined && body.goalId !== null && body.goalId !== '';
+  const hasGoal = body.goal !== undefined && body.goal !== null;
+  if (hasId && hasGoal) return fail('Send goalId or goal, not both');
+
+  if (hasId) {
+    if (!isUuid(body.goalId)) return fail('goalId must be a UUID');
+    return { ok: true, value: { goal_id: body.goalId, goal: null } };
+  }
+  if (hasGoal) {
+    if (typeof body.goal !== 'object' || Array.isArray(body.goal)) {
+      return fail('goal must be an object');
+    }
+    const goal = parseGoalCreate(body.goal as Record<string, unknown>);
+    if (!goal.ok) return fail(`goal: ${goal.error}`);
+    return { ok: true, value: { goal_id: null, goal: goal.value } };
+  }
+  return { ok: true, value: { goal_id: null, goal: null } };
 }
 
 export function parseBoardCreate(body: Record<string, unknown>): ParseResult<BoardCreate> {
@@ -119,6 +162,9 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
     return fail(
       'slug must start with a letter and hold only lowercase letters, digits, and dashes'
     );
+  }
+  if ((RESERVED_BOARD_SLUGS as readonly string[]).includes(slug)) {
+    return fail(`"${slug}" is a page of the tool, not a board`);
   }
 
   let description = '';
@@ -133,6 +179,9 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
   const noun = body.cardNoun === undefined ? 'task' : text(body.cardNoun, BOARD_LIMITS.cardNoun);
   if (!noun) return fail(`cardNoun must be 1–${BOARD_LIMITS.cardNoun} characters`);
 
+  const goal = parseBoardGoal(body);
+  if (!goal.ok) return goal;
+
   const columns = parseColumns(body.columns);
   if (!columns.ok) return columns;
 
@@ -144,6 +193,7 @@ export function parseBoardCreate(body: Record<string, unknown>): ParseResult<Boa
       description,
       card_noun: noun,
       include_in_all_tasks: body.includeInAllTasks !== false,
+      ...goal.value,
       columns: columns.value,
     },
   };
@@ -156,6 +206,8 @@ export interface BoardPatch {
   include_in_all_tasks?: boolean;
   archived?: boolean;
   sort_order?: number;
+  /** Absent leaves the goal alone; null detaches it. */
+  goal_id?: string | null;
   /** Absent leaves the columns alone; present replaces the whole list. */
   columns?: ColumnInput[];
 }
@@ -204,6 +256,12 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
     patch.sort_order = order;
   }
 
+  if (body.goalId !== undefined) {
+    if (body.goalId === null || body.goalId === '') patch.goal_id = null;
+    else if (!isUuid(body.goalId)) return fail('goalId must be a UUID or null');
+    else patch.goal_id = body.goalId;
+  }
+
   if (body.columns !== undefined) {
     const columns = parseColumns(body.columns);
     if (!columns.ok) return columns;
@@ -217,7 +275,6 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
 export interface CardCreate {
   board_id?: string;
   column_id: string | null;
-  goal_id: string | null;
   title: string;
   notes_md: string;
   owner_email: string | null;
@@ -228,9 +285,10 @@ export interface CardCreate {
 }
 
 /**
- * A new card. `columnId` is optional — a quick-add from a goal page or the
- * unfiled section doesn't pick one, and the route drops it in the board's
- * first open column. `properties` is normalized against the board's fields by
+ * A new card. `columnId` is optional — a quick-add from All Tasks doesn't
+ * pick one, and the route drops it in the board's first open column. The
+ * goal is never in the body: a card is filed under its board's goal, and the
+ * route sets that. `properties` is normalized against the board's fields by
  * the caller (see normalizeProperties) once it knows which board this is.
  */
 export function parseCardCreate(body: Record<string, unknown>): ParseResult<CardCreate> {
@@ -241,12 +299,6 @@ export function parseCardCreate(body: Record<string, unknown>): ParseResult<Card
   if (body.columnId !== undefined && body.columnId !== null && body.columnId !== '') {
     if (!isUuid(body.columnId)) return fail('columnId must be a UUID');
     columnId = body.columnId;
-  }
-
-  let goalId: string | null = null;
-  if (body.goalId !== undefined && body.goalId !== null && body.goalId !== '') {
-    if (!isUuid(body.goalId)) return fail('goalId must be a UUID');
-    goalId = body.goalId;
   }
 
   let notes = '';
@@ -290,7 +342,6 @@ export function parseCardCreate(body: Record<string, unknown>): ParseResult<Card
     ok: true,
     value: {
       column_id: columnId,
-      goal_id: goalId,
       title,
       notes_md: notes,
       owner_email: owner ?? null,
@@ -304,7 +355,6 @@ export function parseCardCreate(body: Record<string, unknown>): ParseResult<Card
 
 export interface CardPatch {
   column_id?: string;
-  goal_id?: string | null;
   title?: string;
   notes_md?: string;
   owner_email?: string | null;
@@ -327,12 +377,6 @@ export function parseCardPatch(body: Record<string, unknown>): ParseResult<CardP
   if (body.columnId !== undefined) {
     if (!isUuid(body.columnId)) return fail('columnId must be a UUID');
     patch.column_id = body.columnId;
-  }
-
-  if (body.goalId !== undefined) {
-    if (body.goalId === null || body.goalId === '') patch.goal_id = null;
-    else if (!isUuid(body.goalId)) return fail('goalId must be a UUID or null');
-    else patch.goal_id = body.goalId;
   }
 
   if (body.notesMd !== undefined) {

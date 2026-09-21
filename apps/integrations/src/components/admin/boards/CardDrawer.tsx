@@ -1,6 +1,6 @@
 // One card, opened. A bottom sheet on a phone and a right-hand panel on a
-// desk, holding everything a row cannot: the notes, the goal it is filed
-// under, the board's own fields, and the thread.
+// desk, holding everything a row cannot: the notes, the board's own fields,
+// and the thread. No goal picker: a card is filed under its board's goal.
 //
 // Saving is explicit rather than per-keystroke — this is the panel where
 // somebody writes a paragraph, and autosaving a half-written sentence into
@@ -10,13 +10,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { BOARD_LIMITS } from '@/lib/boards/types';
-import type {
-  BoardCardRow,
-  BoardColumnRow,
-  BoardFieldRow,
-  BoardFieldValue,
-  GoalRow,
-} from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { AREAS } from '@/lib/goals/types';
 import type { PeopleNames } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -37,8 +31,6 @@ export interface CardDrawerProps {
   card: BoardCardRow;
   columns: BoardColumnRow[];
   fields: BoardFieldRow[];
-  /** Goals the card may be filed under; empty hides the picker entirely. */
-  goals: GoalRow[];
   people: PeopleNames;
   /** Everyone who can own a card, by email. */
   owners: { email: string; name: string }[];
@@ -52,7 +44,6 @@ export function CardDrawer({
   card,
   columns,
   fields,
-  goals,
   people,
   owners,
   busy = false,
@@ -69,7 +60,6 @@ export function CardDrawer({
   const [ownerEmail, setOwnerEmail] = useState(card.owner_email ?? '');
   const [dueDate, setDueDate] = useState(card.due_date ?? '');
   const [waitingOn, setWaitingOn] = useState(card.waiting_on ?? '');
-  const [goalId, setGoalId] = useState(card.goal_id ?? '');
   const [area, setArea] = useState(card.area ?? '');
   const [properties, setProperties] = useState<Record<string, BoardFieldValue>>(card.properties);
   const [preview, setPreview] = useState(false);
@@ -85,7 +75,6 @@ export function CardDrawer({
     setOwnerEmail(card.owner_email ?? '');
     setDueDate(card.due_date ?? '');
     setWaitingOn(card.waiting_on ?? '');
-    setGoalId(card.goal_id ?? '');
     setArea(card.area ?? '');
     setProperties(card.properties);
     setError(null);
@@ -115,7 +104,6 @@ export function CardDrawer({
         ownerEmail: ownerEmail || null,
         dueDate: dueDate || null,
         waitingOn: waitingOn || null,
-        goalId: goalId || null,
         area: area || null,
         properties,
       });
@@ -254,27 +242,6 @@ export function CardDrawer({
               The card stays where it is; the badge says why it is stuck.
             </p>
           </div>
-
-          {goals.length > 0 && (
-            <div>
-              <label className={labelClass} htmlFor={`card-goal-${card.id}`}>
-                Goal
-              </label>
-              <select
-                id={`card-goal-${card.id}`}
-                className={selectClass}
-                value={goalId}
-                onChange={(e) => setGoalId(e.target.value)}
-              >
-                <option value="">Not filed under a goal</option>
-                {goals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {liveFields.length > 0 && (
             <div className="space-y-3 border-t border-white/10 pt-4">

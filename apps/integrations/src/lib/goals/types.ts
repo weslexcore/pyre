@@ -1,13 +1,17 @@
 // Client-safe vocabulary for goals: the statuses, the KPI directions, the
 // areas carried over from the Trello labels, and the limits the forms and
 // the routes agree on. Pure and import-free (bar types), because adminTools
-// reads GOALS_HREF from here and every island reads the rest.
+// reads the hrefs from here and every island reads the rest.
 
-/** The tool href /admin/goals is granted under. */
+/**
+ * The href the old Goals page was granted under. The page is gone — goals
+ * live on their boards now — but a staff row still holding this grant opens
+ * the merged tool (adminTools LEGACY_PAGE_GRANTS) and /admin/goals/* redirects.
+ */
 export const GOALS_HREF = '/admin/goals';
 
-/** The cross-goal page: everything in flight, wherever it is filed. */
-export const ALL_TASKS_HREF = '/admin/goals/tasks';
+/** The cross-board page: everything in flight, wherever it is filed. */
+export const ALL_TASKS_HREF = '/admin/boards/tasks';
 
 export const GOAL_STATUSES = ['planned', 'active', 'completed', 'dropped'] as const;
 export type GoalStatusValue = (typeof GOAL_STATUSES)[number];
@@ -87,8 +91,11 @@ export const GOAL_LIMITS = {
   kpiValue: 1_000_000_000,
 } as const;
 
-/** How a goal groups on the index and in All Tasks. */
-export const GROUP_BY = ['goal', 'owner', 'board'] as const;
+/**
+ * How All Tasks groups its open cards. A card's goal is its board's goal, so
+ * grouping by goal would be grouping by board under another name.
+ */
+export const GROUP_BY = ['board', 'owner'] as const;
 export type GroupBy = (typeof GROUP_BY)[number];
 
 export function isGroupBy(value: unknown): value is GroupBy {

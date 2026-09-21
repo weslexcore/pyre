@@ -2,12 +2,23 @@
 // so nothing here may be imported from an island.
 //
 // A board page is one bundle — the board, its columns, its fields, its cards,
-// and the goals those cards are filed under — because every one of them is
-// needed to render a single column view, and five round trips to draw one
-// page is four too many.
+// the goal it serves and that goal's KPIs — because every one of them is
+// needed to render a single column view, and six round trips to draw one
+// page is five too many. The index is one bundle too: the boards, their
+// goals, those goals' KPIs, and a per-board card tally, which is what a
+// board card on the landing page draws its meters from.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
+import type { PageAccess } from '@/components/admin/adminTools';
+import type {
+  BoardCardRow,
+  BoardColumnRow,
+  BoardFieldRow,
+  BoardRow,
+  GoalKpiRow,
+  GoalRow,
+} from '@/lib/db';
+import { canManageBoards, canViewBoard } from './access';
 import { BOARD_LIMITS } from './types';
 
 /** Every board, archived last, in display order. */
@@ -51,13 +62,37 @@ export async function loadCard(db: SupabaseClient, id: string): Promise<BoardCar
   return (data as BoardCardRow) ?? null;
 }
 
+export async function loadGoal(db: SupabaseClient, id: string): Promise<GoalRow | null> {
+  const { data, error } = await db.from('goals').select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as GoalRow) ?? null;
+}
+
+export async function goalExists(db: SupabaseClient, id: string): Promise<boolean> {
+  const { data, error } = await db.from('goals').select('id').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data !== null;
+}
+
+/** The KPIs on one goal, in writing order. */
+export async function loadKpis(db: SupabaseClient, goalId: string): Promise<GoalKpiRow[]> {
+  const { data, error } = await db
+    .from('goal_kpis')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('sort_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GoalKpiRow[];
+}
+
 export interface BoardBundle {
   board: BoardRow;
   columns: BoardColumnRow[];
   fields: BoardFieldRow[];
   cards: BoardCardRow[];
-  /** Open goals, so a card's goal picker has something to offer. */
-  goals: GoalRow[];
+  /** The goal this board serves, with its KPIs — null for a plain list. */
+  goal: GoalRow | null;
+  kpis: GoalKpiRow[];
 }
 
 /** Everything one board page renders, or null when the slug names nothing. */
@@ -68,7 +103,7 @@ export async function loadBoardBundle(
   const board = await loadBoardBySlug(db, slug);
   if (!board) return null;
 
-  const [columns, fieldsResult, cardsResult, goalsResult] = await Promise.all([
+  const [columns, fieldsResult, cardsResult, goal, kpis] = await Promise.all([
     loadColumns(db, board.id),
     db
       .from('board_fields')
@@ -82,24 +117,163 @@ export async function loadBoardBundle(
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true })
       .limit(BOARD_LIMITS.cardsPerBoard),
-    db
-      .from('goals')
-      .select('*')
-      .in('status', ['planned', 'active'])
-      .order('sort_order', { ascending: true }),
+    board.goal_id ? loadGoal(db, board.goal_id) : Promise.resolve(null),
+    board.goal_id ? loadKpis(db, board.goal_id) : Promise.resolve([] as GoalKpiRow[]),
   ]);
 
   if (fieldsResult.error) throw new Error(fieldsResult.error.message);
   if (cardsResult.error) throw new Error(cardsResult.error.message);
-  if (goalsResult.error) throw new Error(goalsResult.error.message);
 
   return {
     board,
     columns,
     fields: (fieldsResult.data ?? []) as BoardFieldRow[],
     cards: (cardsResult.data ?? []) as BoardCardRow[],
-    goals: (goalsResult.data ?? []) as GoalRow[],
+    goal,
+    kpis,
   };
+}
+
+/** How many cards a board holds and how many are still open. */
+export interface BoardTally {
+  board_id: string;
+  open: number;
+  total: number;
+}
+
+export interface BoardsIndexData {
+  boards: BoardRow[];
+  /** The goals the listed boards serve. */
+  goals: GoalRow[];
+  /** Those goals' KPIs. */
+  kpis: GoalKpiRow[];
+  tallies: BoardTally[];
+}
+
+/**
+ * The landing page, for a set of boards the caller has already filtered to
+ * what this viewer may see — so the goals and tallies that come back never
+ * describe a board the viewer was not given.
+ */
+export async function loadBoardsIndex(
+  db: SupabaseClient,
+  boards: BoardRow[]
+): Promise<BoardsIndexData> {
+  if (boards.length === 0) return { boards, goals: [], kpis: [], tallies: [] };
+
+  const goalIds = [...new Set(boards.flatMap((board) => (board.goal_id ? [board.goal_id] : [])))];
+  const [goalsResult, kpisResult, cardsResult] = await Promise.all([
+    goalIds.length > 0
+      ? db.from('goals').select('*').in('id', goalIds)
+      : Promise.resolve({ data: [] as GoalRow[], error: null }),
+    goalIds.length > 0
+      ? db
+          .from('goal_kpis')
+          .select('*')
+          .in('goal_id', goalIds)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [] as GoalKpiRow[], error: null }),
+    db
+      .from('board_cards')
+      .select('board_id, completed_at')
+      .in(
+        'board_id',
+        boards.map((board) => board.id)
+      )
+      .limit(BOARD_LIMITS.cardsPerBoard * boards.length),
+  ]);
+  if (goalsResult.error) throw new Error(goalsResult.error.message);
+  if (kpisResult.error) throw new Error(kpisResult.error.message);
+  if (cardsResult.error) throw new Error(cardsResult.error.message);
+
+  const tallies = new Map(boards.map((board) => [board.id, { open: 0, total: 0 }]));
+  for (const row of (cardsResult.data ?? []) as Pick<BoardCardRow, 'board_id' | 'completed_at'>[]) {
+    const tally = tallies.get(row.board_id);
+    if (!tally) continue;
+    tally.total += 1;
+    if (row.completed_at === null) tally.open += 1;
+  }
+
+  return {
+    boards,
+    goals: (goalsResult.data ?? []) as GoalRow[],
+    kpis: (kpisResult.data ?? []) as GoalKpiRow[],
+    tallies: [...tallies.entries()].map(([board_id, tally]) => ({ board_id, ...tally })),
+  };
+}
+
+/** The boards serving one goal — normally one, occasionally none. */
+export async function boardsForGoal(db: SupabaseClient, goalId: string): Promise<BoardRow[]> {
+  const { data, error } = await db
+    .from('boards')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('archived', { ascending: true })
+    .order('sort_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BoardRow[];
+}
+
+/**
+ * Open goals no board serves yet — what the "use an existing goal" picker
+ * offers, so two boards do not end up sharing one by accident.
+ */
+export async function unattachedGoals(db: SupabaseClient): Promise<GoalRow[]> {
+  const [goalsResult, boardsResult] = await Promise.all([
+    db
+      .from('goals')
+      .select('*')
+      .in('status', ['planned', 'active'])
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true }),
+    db.from('boards').select('goal_id').not('goal_id', 'is', null),
+  ]);
+  if (goalsResult.error) throw new Error(goalsResult.error.message);
+  if (boardsResult.error) throw new Error(boardsResult.error.message);
+  const taken = new Set(
+    ((boardsResult.data ?? []) as { goal_id: string }[]).map((row) => row.goal_id)
+  );
+  return ((goalsResult.data ?? []) as GoalRow[]).filter((goal) => !taken.has(goal.id));
+}
+
+/**
+ * Point a board at a goal (or at none) and re-file its cards to match. The
+ * cards follow the board because a card's goal *is* its board's goal — a
+ * board whose goal changed with forty cards still counting toward the old
+ * one would make the old goal's task bar a lie.
+ */
+export async function attachGoalToBoard(
+  db: SupabaseClient,
+  board: Pick<BoardRow, 'id'>,
+  goalId: string | null,
+  email: string
+): Promise<void> {
+  const { error } = await db
+    .from('boards')
+    .update({ goal_id: goalId, updated_by: email })
+    .eq('id', board.id);
+  if (error) throw new Error(error.message);
+
+  const { error: cardsError } = await db
+    .from('board_cards')
+    .update({ goal_id: goalId })
+    .eq('board_id', board.id);
+  if (cardsError) throw new Error(cardsError.message);
+}
+
+/**
+ * Whether this viewer may read or work a goal: the whole tool, or any board
+ * they hold that serves it. A single-board grantee reaches exactly the goal
+ * on their board, and a goal no board serves is the tool's alone.
+ */
+export async function canReachGoal(
+  db: SupabaseClient,
+  access: PageAccess,
+  goalId: string
+): Promise<boolean> {
+  if (canManageBoards(access)) return true;
+  const boards = await boardsForGoal(db, goalId);
+  return boards.some((board) => canViewBoard(access, board.slug));
 }
 
 /** Every column on every board, for pages that span boards (All Tasks). */

@@ -5,19 +5,25 @@
 // Three ways in, in order of reach:
 //
 //   * admin                 — every board.
-//   * '/admin/boards'       — every board (the page grant).
+//   * '/admin/boards'       — every board (the page grant). '/admin/goals',
+//                             the grant the old Goals page was issued under,
+//                             means the same thing: the two pages are one
+//                             tool now, and nobody loses access in the merge.
 //   * 'board:<slug>'        — that board, and the /admin/boards index
 //                             filtered down to it. Nothing else.
 //
-// A board grant is deliberately not a goals grant: /admin/goals is its own
-// page with its own checkbox, and holding board:rentals gets you nowhere
-// near it.
+// A board's goal travels with the board: holding board:rentals shows the
+// rental goal and its KPI meters, and lets the holder type in a measurement,
+// because the person working the pipeline is the person who knows the number.
+// Defining KPIs, editing the goal, and calling it met stay with the tool.
 
 import type { PageAccess } from '@/components/admin/adminTools';
+import { GOALS_HREF } from '@/lib/goals/types';
 import { BOARDS_HREF, boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from './types';
 
 /**
- * Holding every board: admin, or the page grant itself.
+ * Holding every board: admin, the page grant itself, or the legacy goals
+ * grant it absorbed.
  *
  * Deliberately not adminTools.canViewPage, which answers a different
  * question. canViewPage(BOARDS_HREF) is true for a single-board grantee too,
@@ -26,14 +32,15 @@ import { BOARDS_HREF, boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from 
  * per-board grant exists to prevent.
  */
 function holdsEveryBoard(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(BOARDS_HREF);
+  return access.isAdmin || access.pages.includes(BOARDS_HREF) || access.pages.includes(GOALS_HREF);
 }
 
 /**
- * Whether this user may create a board, rename one, or edit its columns.
- * A single-board grant is a grant to work *in* a board, not to reshape the
- * tool — the community manager moves leads between columns; they do not add
- * a column, and they certainly do not add a board.
+ * Whether this user may create a board, rename one, edit its columns, set
+ * or edit its goal, define its KPIs, or delete it. A single-board grant is a
+ * grant to work *in* a board, not to reshape the tool — the community
+ * manager moves leads between columns; they do not add a column, and they
+ * certainly do not add a board.
  */
 export function canManageBoards(access: PageAccess): boolean {
   return holdsEveryBoard(access);
@@ -43,6 +50,15 @@ export function canManageBoards(access: PageAccess): boolean {
 export function canViewBoard(access: PageAccess, slug: string): boolean {
   if (holdsEveryBoard(access)) return true;
   return access.pages.includes(boardGrantKey(slug));
+}
+
+/**
+ * Whether this user may work the goal on the board at `slug`: read its
+ * trail, comment on it, and type in a KPI measurement. The same people who
+ * can open the board — the number belongs to whoever is doing the work.
+ */
+export function canWorkGoal(access: PageAccess, slug: string): boolean {
+  return canViewBoard(access, slug);
 }
 
 /** Whether this user holds at least one single-board grant. */

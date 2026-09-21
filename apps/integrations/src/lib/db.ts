@@ -773,8 +773,8 @@ export interface BusinessCostRow {
   updated_at: string;
 }
 
-// Goals, KPIs, and the boards their tasks live on (/admin/goals,
-// /admin/boards). Hand-written mirrors of the goals_boards migration; the
+// Goals, KPIs, and the boards that serve them (/admin/boards and the pages
+// under it). Hand-written mirrors of the goals_boards migration; the
 // pure logic that reads them lives in lib/goals/* and lib/boards/*.
 
 export type GoalStatus = 'planned' | 'active' | 'completed' | 'dropped';
@@ -831,7 +831,10 @@ export interface GoalKpiRow {
   updated_at: string;
 }
 
-/** A column layout with a name: the task board, or a lead pipeline. */
+/**
+ * A column layout with a name — the task board, or a lead pipeline — and
+ * the goal it serves. Every card on the board is filed under `goal_id`.
+ */
 export interface BoardRow {
   id: string;
   slug: string;
@@ -840,6 +843,8 @@ export interface BoardRow {
   /** What one card is called here — 'task', 'lead'. */
   card_noun: string;
   include_in_all_tasks: boolean;
+  /** The goal this board serves, judged by its KPIs; null for a plain list. */
+  goal_id: string | null;
   sort_order: number;
   archived: boolean;
   created_by: string | null;

@@ -4,15 +4,22 @@
 // Every one of them is hand-measured today, which is the thing that makes
 // them go stale — so a change to `currentValue` is not an ordinary column
 // write. It stamps `measured_at`/`measured_by` and writes a `kpi_updated`
-// line to the trail, and the goal page shows "measured N days ago" beside
+// line to the trail, and the board page shows "measured N days ago" beside
 // the meter. A number with no date on it looks like news forever.
+//
+// Two levels of access. Defining a KPI — its name, direction, target — and
+// removing one is reshaping the goal, which needs the whole tool
+// (canManageBoards). Typing in the measurement is working the goal, which
+// anyone who can open a board serving it may do: the community manager on
+// the rental pipeline is the one who knows how many rentals were booked.
 //
 //   POST   { goalId, name, unit?, direction, startValue?, targetValue } → { kpi } 201
 //   PATCH  { id, name?, unit?, direction?, startValue?, targetValue?,
 //            currentValue?, sortOrder? } → { kpi }
 //   DELETE ?id=<uuid> → { ok: true }
 
-import { GOALS_HREF } from '@/components/admin/adminTools';
+import { BOARDS_HREF } from '@/components/admin/adminTools';
+import { canManageBoards } from '@/lib/boards/access';
 import { logBoardEvent } from '@/lib/boards/events';
 import {
   type APIRoute,
@@ -22,13 +29,15 @@ import {
   isUuidParam,
   json,
 } from '@/lib/boards/route';
+import { canReachGoal } from '@/lib/boards/store';
 import type { GoalKpiRow } from '@/lib/db';
-import { parseKpiCreate, parseKpiPatch } from '@/lib/goals/validate';
+import { parseKpiCreate, parseKpiMeasure, parseKpiPatch } from '@/lib/goals/validate';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const ready = await beginMutation(cookies, request, GOALS_HREF);
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email, body } = ready;
+  const { db, email, body, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
 
   const parsed = parseKpiCreate(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
@@ -63,9 +72,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const ready = await beginMutation(cookies, request, GOALS_HREF);
+  const ready = await beginMutation(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email, body } = ready;
+  const { db, email, body, gate } = ready;
 
   if (!isUuidParam(body.id)) return json({ error: 'id must be a UUID' }, 400);
   const id = body.id;
@@ -82,6 +91,19 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (beforeError) return json({ error: beforeError.message }, 500);
   const before = (beforeRow as GoalKpiRow) ?? null;
   if (!before) return json({ error: 'KPI not found' }, 404);
+
+  // Somebody holding one board may type in the number and nothing else —
+  // the body must be exactly the measurement, and the goal must be on a
+  // board they hold. Not-yours reads as not-found, as everywhere in the tool.
+  if (!canManageBoards(gate.access)) {
+    const onlyMeasure =
+      parseKpiMeasure(body).ok &&
+      Object.keys(body).every((key) => key === 'id' || key === 'currentValue');
+    if (!onlyMeasure) return json({ error: 'Forbidden' }, 403);
+    if (!(await canReachGoal(db, gate.access, before.goal_id))) {
+      return json({ error: 'KPI not found' }, 404);
+    }
+  }
 
   // A measurement carries a date and a name, or it is just a number in a box.
   const measured = 'current_value' in patch && patch.current_value !== before.current_value;
@@ -118,9 +140,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const ready = await beginDelete(cookies, request, GOALS_HREF);
+  const ready = await beginDelete(cookies, request, BOARDS_HREF);
   if (ready instanceof Response) return ready;
-  const { db, email } = ready;
+  const { db, email, gate } = ready;
+  if (!canManageBoards(gate.access)) return json({ error: 'Forbidden' }, 403);
 
   const id = url.searchParams.get('id');
   if (!isUuidParam(id)) return json({ error: 'id must be a UUID' }, 400);

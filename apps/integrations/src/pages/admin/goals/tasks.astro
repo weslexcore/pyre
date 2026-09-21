@@ -1,19 +1,4 @@
 ---
-// All Tasks: the cross-goal page. `tasks` is a more specific route than
-// [id], so this wins over the goal page for /admin/goals/tasks.
-//
-// The viewer's email is handed in from the session so the by-person grouping
-// can put them first — it is ordering only; the API decides what they may
-// see.
-import { AllTasks } from '@/components/admin/goals/AllTasks';
-import AdminLayout from '@/layouts/AdminLayout.astro';
-
-const viewerEmail = (Astro.locals.adminUser?.email ?? '').toLowerCase();
+// All Tasks moved under the boards tool with the rest of the goals pages.
+return Astro.redirect('/admin/boards/tasks', 301);
 ---
-
-<AdminLayout
-  title="All tasks"
-  subtitle="Everything in flight, what is late, and who is on what"
->
-  <AllTasks viewerEmail={viewerEmail} client:load />
-</AdminLayout>

@@ -215,6 +215,27 @@ export async function deleteBySource(
   }
 }
 
+/** Every row about any of several sources — a board's cards when it goes. */
+export async function deleteBySourceIds(
+  db: SupabaseClient,
+  sourceType: string,
+  sourceIds: string[]
+): Promise<void> {
+  for (let i = 0; i < sourceIds.length; i += 500) {
+    const chunk = sourceIds.slice(i, i + 500);
+    try {
+      const { error } = await db
+        .from('staff_notifications')
+        .delete()
+        .eq('source_type', sourceType)
+        .in('source_id', chunk);
+      if (error) console.warn('[notifications] source delete failed:', error.message);
+    } catch (error) {
+      console.warn('[notifications] source delete failed:', error);
+    }
+  }
+}
+
 const DISMISSED_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 const EXPIRED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 

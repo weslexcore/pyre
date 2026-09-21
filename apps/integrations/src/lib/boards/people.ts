@@ -18,7 +18,7 @@ import { listStaff } from '@/lib/auth/access';
 import type { BoardCardRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
-import { canManageBoards } from './access';
+import { canManageBoards, canWorkGoal } from './access';
 
 /** Somebody a goal or a card can be assigned to. */
 export interface Assignable {
@@ -41,7 +41,10 @@ export async function listAssignable(): Promise<Assignable[]> {
 export interface ViewerExtras {
   people: PeopleNames;
   owners: Assignable[];
+  /** Reshape the board, edit its goal, define its KPIs, call it met. */
   canManage: boolean;
+  /** Measure the goal's KPIs and comment on its trail. */
+  canWorkGoal: boolean;
   today: string;
 }
 
@@ -62,12 +65,19 @@ export function todayEastern(): string {
  */
 export async function boardViewerExtras(
   cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by'>[],
-  access: PageAccess
+  access: PageAccess,
+  slug: string
 ): Promise<ViewerExtras> {
   const canManage = canManageBoards(access);
   const people = await getPeopleNames(
     cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? ''])
   );
   const owners = canManage ? await listAssignable() : [];
-  return { people, owners, canManage, today: todayEastern() };
+  return {
+    people,
+    owners,
+    canManage,
+    canWorkGoal: canWorkGoal(access, slug),
+    today: todayEastern(),
+  };
 }

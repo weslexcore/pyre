@@ -1,20 +1,22 @@
 ---
-// One goal: its KPIs, its sub-goals, its tasks, and its history. The island
-// loads everything from /api/admin/goals?id=…, which 404s on an id that
-// names nothing — so a bad link lands on the page's own message rather than
-// a blank shell.
-import { GoalPage } from '@/components/admin/goals/GoalPage';
-import AdminLayout from '@/layouts/AdminLayout.astro';
+// A goal's old page. Goals are read from the board that serves them now, so
+// this sends the visitor there — inbox rows written before the merge still
+// point here, and a bell that opens nothing is worse than a redirect.
+// Whether they may open that board is the board page's decision.
+import { boardsForGoal } from '@/lib/boards/store';
+import { getDb } from '@/lib/db';
+import { isUuid } from '@/lib/goals/validate';
 
 const { id } = Astro.params;
----
-
-<AdminLayout title="Goal" subtitle="KPIs, sub-goals, the work under it, and what has happened">
-  {
-    id ? (
-      <GoalPage goalId={id} client:load />
-    ) : (
-      <p class="text-sm text-white/60">That link is missing a goal.</p>
-    )
+let target = '/admin/boards';
+if (id && isUuid(id)) {
+  try {
+    const db = getDb();
+    const boards = db ? await boardsForGoal(db, id) : [];
+    if (boards[0]) target = `/admin/boards/${boards[0].slug}`;
+  } catch (error) {
+    console.warn('[goals] redirect lookup failed:', error);
   }
-</AdminLayout>
+}
+return Astro.redirect(target, 302);
+---

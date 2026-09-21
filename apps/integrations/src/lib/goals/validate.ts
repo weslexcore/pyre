@@ -7,10 +7,13 @@
 // deliberately absent from every shape here. A request body must never be
 // able to reach them.
 //
-// Patch shapes distinguish "absent" from "null": leaving `parentId` out of a
-// PATCH leaves the parent alone, while sending `parentId: null` un-files the
-// goal. Same for every nullable field, which is why they are read one by one
+// Patch shapes distinguish "absent" from "null": leaving `targetDate` out of
+// a PATCH leaves the date alone, while sending `targetDate: null` clears it.
+// Same for every nullable field, which is why they are read one by one
 // rather than spread from the body.
+//
+// `parent_id` is not here. Sub-goals had a UI when goals were their own
+// page; a goal is reached from its board now, and boards do not nest.
 
 import { isNoteDate } from '@/lib/shift-notes/validate';
 import type { GoalStatusValue, KpiDirectionValue } from './types';
@@ -77,7 +80,6 @@ function inKpiRange(value: number): boolean {
 
 export interface GoalCreate {
   title: string;
-  parent_id: string | null;
   description_md: string;
   status: GoalStatusValue;
   owner_email: string | null;
@@ -89,12 +91,6 @@ export function parseGoalCreate(body: Record<string, unknown>): ParseResult<Goal
   const title = text(body.title, GOAL_LIMITS.title);
   if (!title) {
     return fail(`title must be 1–${GOAL_LIMITS.title} characters`);
-  }
-
-  let parentId: string | null = null;
-  if (body.parentId !== undefined && body.parentId !== null && body.parentId !== '') {
-    if (!isUuid(body.parentId)) return fail('parentId must be a UUID');
-    parentId = body.parentId;
   }
 
   let description = '';
@@ -137,7 +133,6 @@ export function parseGoalCreate(body: Record<string, unknown>): ParseResult<Goal
     ok: true,
     value: {
       title,
-      parent_id: parentId,
       description_md: description,
       status,
       owner_email: owner ?? null,
@@ -149,7 +144,6 @@ export function parseGoalCreate(body: Record<string, unknown>): ParseResult<Goal
 
 export interface GoalPatch {
   title?: string;
-  parent_id?: string | null;
   description_md?: string;
   status?: GoalStatusValue;
   owner_email?: string | null;
@@ -166,12 +160,6 @@ export function parseGoalPatch(body: Record<string, unknown>): ParseResult<GoalP
     const title = text(body.title, GOAL_LIMITS.title);
     if (!title) return fail(`title must be 1–${GOAL_LIMITS.title} characters`);
     patch.title = title;
-  }
-
-  if (body.parentId !== undefined) {
-    if (body.parentId === null || body.parentId === '') patch.parent_id = null;
-    else if (!isUuid(body.parentId)) return fail('parentId must be a UUID or null');
-    else patch.parent_id = body.parentId;
   }
 
   if (body.descriptionMd !== undefined) {

@@ -1,7 +1,7 @@
 // The rules a goal changes by: what a status flip does to the timestamps,
-// which goals may parent which, and what a founder is shown before they call
-// a goal met. Pure and client-safe — the route applies these and the dialog
-// previews them, from the same code.
+// and what a founder is shown before they call a goal met. Pure and
+// client-safe — the route applies these and the dialog previews them, from
+// the same code.
 
 import { isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
@@ -45,44 +45,10 @@ export function goalStatusPatch(
   };
 }
 
-/**
- * Whether `candidate` may be named as `childId`'s parent. Goals nest exactly
- * one level: a parent with a parent of its own would make a grandparent, and
- * three levels of goal is the org chart nobody asked for. A goal can't parent
- * itself either.
- */
-export function canBeParent(
-  candidate: Pick<GoalRow, 'id' | 'parent_id'>,
-  childId: string | null
-): boolean {
-  if (candidate.parent_id !== null) return false;
-  return childId === null || candidate.id !== childId;
-}
-
-/**
- * Whether `goal` may be given a parent — only if nothing is already filed
- * under it. The other half of the one-level rule: adopting a parent for a
- * goal that already has children would push those children to depth two.
- */
-export function canAdoptParent(
-  goal: Pick<GoalRow, 'id'>,
-  goals: Pick<GoalRow, 'parent_id'>[]
-): boolean {
-  return !goals.some((other) => other.parent_id === goal.id);
-}
-
-/** The goals the parent picker may offer for `childId` (null for a new goal). */
-export function parentOptions<T extends Pick<GoalRow, 'id' | 'parent_id'>>(
-  goals: T[],
-  childId: string | null
-): T[] {
-  return goals.filter((goal) => canBeParent(goal, childId));
-}
-
 export interface CompletionPreview {
   kpisMet: number;
   kpisTotal: number;
-  /** Cards still sitting in an open column, this goal's and its children's. */
+  /** Cards still sitting in an open column under this goal. */
   openCards: number;
   /** True when there is nothing outstanding — never a reason to auto-close. */
   clean: boolean;

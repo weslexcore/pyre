@@ -1,12 +1,15 @@
 ---
-// The boards this person may open. Someone holding a single board grant
-// (board:<slug>) sees exactly that board here and no New board form; the
-// list is filtered server-side, so the page never tells them what else
-// exists.
+// The boards this person may open, each with the goal it serves. Someone
+// holding a single board grant (board:<slug>) sees exactly that board here
+// and no New board form; the list is filtered server-side, so the page never
+// tells them what else exists.
 import { BoardsIndex } from '@/components/admin/boards/BoardsIndex';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---
 
-<AdminLayout title="Boards" subtitle="Cards in columns — the task board, and the pipelines beside it">
+<AdminLayout
+  title="Goals & Boards"
+  subtitle="What we are trying to achieve, board by board — the goal each one serves, and the work under it"
+>
   <BoardsIndex client:load />
 </AdminLayout>

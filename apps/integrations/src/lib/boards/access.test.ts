@@ -4,6 +4,7 @@ import {
   canManageBoards,
   canViewBoard,
   canViewBoardsTool,
+  canWorkGoal,
   grantedBoardSlugs,
   hasAnyBoardGrant,
   visibleBoards,
@@ -14,6 +15,7 @@ const boards = [{ slug: 'goals' }, { slug: 'rentals' }, { slug: 'merch' }];
 const admin = { isAdmin: true, pages: [] };
 const wholeTool = { isAdmin: false, pages: ['/admin/boards'] };
 const oneBoard = { isAdmin: false, pages: ['board:rentals'] };
+const legacyGoals = { isAdmin: false, pages: ['/admin/goals'] };
 const none = { isAdmin: false, pages: ['/admin/shift-notes'] };
 
 describe('canViewBoard', () => {
@@ -82,5 +84,22 @@ describe('canManageBoards', () => {
     // Working a pipeline is not reshaping the tool.
     expect(canManageBoards(oneBoard)).toBe(false);
     expect(canManageBoards(none)).toBe(false);
+  });
+
+  it('honours the grant the old Goals page was issued under', () => {
+    // The two pages are one tool now; a row granted /admin/goals before the
+    // merge keeps the whole of it.
+    expect(canManageBoards(legacyGoals)).toBe(true);
+    expect(canViewBoard(legacyGoals, 'rentals')).toBe(true);
+    expect(visibleBoards(legacyGoals, boards)).toHaveLength(3);
+  });
+});
+
+describe('canWorkGoal', () => {
+  it('follows the board: whoever can open it can measure its KPIs', () => {
+    expect(canWorkGoal(oneBoard, 'rentals')).toBe(true);
+    expect(canWorkGoal(oneBoard, 'goals')).toBe(false);
+    expect(canWorkGoal(wholeTool, 'goals')).toBe(true);
+    expect(canWorkGoal(none, 'rentals')).toBe(false);
   });
 });

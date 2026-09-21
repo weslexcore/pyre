@@ -24,7 +24,6 @@ describe('parseGoalCreate', () => {
   it('trims and defaults the rest', () => {
     expect(value(parseGoalCreate({ title: '  Train the staff  ' }))).toEqual({
       title: 'Train the staff',
-      parent_id: null,
       description_md: '',
       status: 'planned',
       owner_email: null,
@@ -37,7 +36,6 @@ describe('parseGoalCreate', () => {
     const goal = value(
       parseGoalCreate({
         title: 'Tighter rental definitions',
-        parentId: UUID,
         descriptionMd: '  what good looks like  ',
         status: 'active',
         ownerEmail: '  Julien@PyreSauna.com ',
@@ -46,7 +44,6 @@ describe('parseGoalCreate', () => {
       })
     );
     expect(goal).toMatchObject({
-      parent_id: UUID,
       description_md: 'what good looks like',
       status: 'active',
       owner_email: 'julien@pyresauna.com',
@@ -73,9 +70,8 @@ describe('parseGoalCreate', () => {
     expect(error(parseGoalCreate({ title: 'a', area: 'Wizardry' }))).toMatch(/area/);
   });
 
-  it('treats an empty parentId as no parent', () => {
-    expect(value(parseGoalCreate({ title: 'a', parentId: '' })).parent_id).toBeNull();
-    expect(error(parseGoalCreate({ title: 'a', parentId: 'nope' }))).toMatch(/parentId/);
+  it('ignores a parent: goals no longer nest', () => {
+    expect('parent_id' in value(parseGoalCreate({ title: 'a', parentId: UUID }))).toBe(false);
   });
 });
 
@@ -85,11 +81,11 @@ describe('parseGoalPatch', () => {
   });
 
   it('tells null apart from absent', () => {
-    // Absent leaves the parent alone; null un-files the goal.
-    expect('parent_id' in value(parseGoalPatch({ title: 'a' }))).toBe(false);
-    expect(value(parseGoalPatch({ parentId: null })).parent_id).toBeNull();
-    expect(value(parseGoalPatch({ parentId: '' })).parent_id).toBeNull();
-    expect(value(parseGoalPatch({ parentId: UUID })).parent_id).toBe(UUID);
+    // Absent leaves the date alone; null clears it.
+    expect('target_date' in value(parseGoalPatch({ title: 'a' }))).toBe(false);
+    expect(value(parseGoalPatch({ targetDate: null })).target_date).toBeNull();
+    expect(value(parseGoalPatch({ targetDate: '' })).target_date).toBeNull();
+    expect(value(parseGoalPatch({ targetDate: '2026-12-31' })).target_date).toBe('2026-12-31');
   });
 
   it('clears a date, an owner, an area, and a note with null or blank', () => {

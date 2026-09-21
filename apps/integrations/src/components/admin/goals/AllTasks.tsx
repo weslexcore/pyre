@@ -1,11 +1,11 @@
-// /admin/goals/tasks: everything in flight, wherever it is filed.
+// /admin/boards/tasks: everything in flight, wherever it is filed.
 //
 // This is the Monday-morning page, and the two strips at the top are the
 // only things on it that are genuinely urgent: what is late, and what is due
-// before Sunday. Below that the work groups by goal — so a task always reads
-// in the context of what it is for — with owner and board as the other two
-// lenses, and the unfiled chores in a section of their own so a quick thing
-// with no goal behind it still has an obvious home.
+// before Sunday. Below that the work groups by board — so a task always
+// reads in the context of the goal its board is for — with owner as the
+// other lens, and the unfiled chores (cards on a board with no goal) in a
+// section of their own so a quick thing still has an obvious home.
 //
 // Finished work is out of the way under "Recently done", by the week it
 // landed in, which is the other question the founders ask each other and
@@ -14,12 +14,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
-import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
+import { BOARDS_HREF, GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
 import type { GroupBy } from '@/lib/goals/types';
-import { AREAS, GOALS_HREF, GROUP_BY } from '@/lib/goals/types';
+import { AREAS, GROUP_BY } from '@/lib/goals/types';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
@@ -36,9 +36,8 @@ import { readError } from '../incidentUi';
 type TasksData = AllTasksData & { owners?: Assignable[] };
 
 const GROUP_LABELS: Record<GroupBy, string> = {
-  goal: 'By goal',
-  owner: 'By person',
   board: 'By board',
+  owner: 'By person',
 };
 
 /** How far back Recently done reaches by default — four weeks. */
@@ -53,7 +52,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [groupBy, setGroupBy] = useState<GroupBy>('goal');
+  const [groupBy, setGroupBy] = useState<GroupBy>('board');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [areaFilter, setAreaFilter] = useState('all');
   const [waitingOnly, setWaitingOnly] = useState(false);
@@ -100,7 +99,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   const built = useMemo(() => {
     if (!data) return null;
-    return buildAllTasks(filtered, data.goals, data.boards, data.columns, data.people, {
+    return buildAllTasks(filtered, data.boards, data.columns, data.people, {
       today: data.today,
       viewerEmail,
       groupBy,
@@ -126,16 +125,15 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     return <p className="text-sm text-[var(--pyre-red)]">{error ?? 'Tasks are not available.'}</p>;
   }
 
-  const { goals, boards, columns, people, today } = data;
+  const { boards, columns, people, today } = data;
   const owners = data.owners ?? [];
   const openCard = data.cards.find((card) => card.id === openCardId) ?? null;
-  const goalTitles = new Map(goals.map((goal) => [goal.id, goal.title]));
   const boardNames = new Map(boards.map((board) => [board.id, board.name]));
 
   const tasksBoard = boards.find((board) => board.slug === GOALS_BOARD_SLUG) ?? boards[0];
   const tasksColumns = columns.filter((column) => column.board_id === tasksBoard?.id);
 
-  const rowsFor = (cards: BoardCardRow[], showGoal = true) =>
+  const rowsFor = (cards: BoardCardRow[], showBoard = true) =>
     cards.map((card) => (
       <CardRow
         key={card.id}
@@ -143,8 +141,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
         columns={columns.filter((column) => column.board_id === card.board_id)}
         people={people}
         today={today}
-        goalTitle={showGoal && card.goal_id ? goalTitles.get(card.goal_id) : undefined}
-        boardName={boards.length > 1 ? boardNames.get(card.board_id) : undefined}
+        boardName={showBoard && boards.length > 1 ? boardNames.get(card.board_id) : undefined}
         busy={busy}
         onOpen={(next) => setOpenCardId(next.id)}
         onMove={(next, columnId) =>
@@ -219,8 +216,8 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
         </label>
 
         <span className="flex-1" />
-        <a className={buttonClass} href={GOALS_HREF}>
-          Goals
+        <a className={buttonClass} href={BOARDS_HREF}>
+          All boards
         </a>
       </div>
 
@@ -241,11 +238,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
       {built.groups.map((group) => (
         <section key={group.key} className={cardClass}>
           <SectionTitle note={String(group.cards.length)}>
-            {group.goalId ? (
-              <a className="underline hover:text-white/80" href={`${GOALS_HREF}/${group.goalId}`}>
-                {group.label}
-              </a>
-            ) : group.boardSlug ? (
+            {group.boardSlug ? (
               <a
                 className="underline hover:text-white/80"
                 href={`/admin/boards/${group.boardSlug}`}
@@ -256,14 +249,14 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
               group.label
             )}
           </SectionTitle>
-          <div className="space-y-2">{rowsFor(group.cards, groupBy !== 'goal')}</div>
+          <div className="space-y-2">{rowsFor(group.cards, groupBy !== 'board')}</div>
         </section>
       ))}
 
       <section className={cardClass}>
         <SectionTitle note={String(built.unfiled.length)}>Unfiled</SectionTitle>
         <p className="mb-3 text-xs text-white/35">
-          One-off chores with no goal behind them. Not every task needs one.
+          One-off chores on a board with no goal behind it. Not every task needs one.
         </p>
         {tasksBoard && defaultColumn(tasksColumns) && (
           <div className="mb-3">
@@ -320,7 +313,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           card={openCard}
           columns={columns.filter((column) => column.board_id === openCard.board_id)}
           fields={[]}
-          goals={goals}
           people={people}
           owners={owners}
           busy={busy}
