@@ -6,14 +6,16 @@
 // Comments share the event store with changes. The card UI separates
 // discussion from the audit trail using the event action.
 //
-//   GET ?cardId=<uuid>   → { events, people }
-//   GET ?goalId=<uuid>   → { events, people }
+//   GET ?cardId=<uuid>   → { events, people, mentionPeople }
+//   GET ?goalId=<uuid>   → { events, people, mentionPeople }
 //   GET ?since=<iso>     → { events, people }   (the recent-activity read)
 //   POST { cardId? | goalId?, note } → { event } 201
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
+import { listStaff } from '@/lib/auth/access';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
+import { mentionPeople } from '@/lib/boards/mentions';
 import {
   type APIRoute,
   beginMutation,
@@ -77,7 +79,25 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     else if (goalId) await markSourceRead(db, viewer, 'goal', goalId);
   }
 
-  return json({ events, people: await getPeopleNames(events.map((event) => event.actor)) });
+  let slugs: string[] = [];
+  if (cardId) {
+    const card = await loadCard(db, cardId);
+    if (card) {
+      const { data: board } = await db
+        .from('boards')
+        .select('slug')
+        .eq('id', card.board_id)
+        .maybeSingle();
+      if (board) slugs = [board.slug];
+    }
+  } else if (goalId) {
+    slugs = (await boardsForGoal(db, goalId)).map((board) => board.slug);
+  }
+  return json({
+    events,
+    people: await getPeopleNames(events.map((event) => event.actor)),
+    mentionPeople: cardId || goalId ? mentionPeople((await listStaff()) ?? [], slugs) : [],
+  });
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -129,8 +149,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return json({ error: error.message }, 500);
 
-  // The person on the receiving end hears — the card's owner, or whoever is
-  // driving the goal. A board is not a broadcast.
+  // Notify the owner and explicitly mentioned users who can read the subject.
   if (cardId) {
     const card = await loadCard(db, cardId);
     if (card) {
@@ -146,8 +165,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const { data: goalRow } = await db.from('goals').select('*').eq('id', goalId).maybeSingle();
     const goal = (goalRow as GoalRow) ?? null;
     if (goal) {
-      const [board] = await boardsForGoal(db, goal.id);
-      await notifyGoalComment(db, goal, board ?? null, note, email);
+      const boards = await boardsForGoal(db, goal.id);
+      await notifyGoalComment(db, goal, boards[0] ?? null, note, email, boards);
     }
   }
 

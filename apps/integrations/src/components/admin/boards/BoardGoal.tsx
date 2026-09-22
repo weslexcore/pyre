@@ -98,7 +98,7 @@ export function BoardGoal({
     if (!canManage) return null;
     return (
       <section className={raisedCardClass}>
-        <SectionTitle>Goal</SectionTitle>
+        {/* <SectionTitle>Goal</SectionTitle> */}
         {settingGoal ? (
           <GoalForm
             owners={owners}
@@ -114,10 +114,10 @@ export function BoardGoal({
           />
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-white/50">
+            {/* <p className="text-sm text-white/50">
               No goal yet. A board with a goal shows what it is for and the numbers that say whether
               it is working; a board without one is just a list.
-            </p>
+            </p> */}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -231,7 +231,7 @@ export function BoardGoal({
             )}
           </div>
 
-          <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="mt-3 grid gap-4 ">
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/35">
                 {board.card_noun}s done

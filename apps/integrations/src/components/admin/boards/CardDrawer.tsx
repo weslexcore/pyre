@@ -116,7 +116,7 @@ export function CardDrawer({
             </label>
             <input
               id={`card-title-${card.id}`}
-              className={inputClass}
+              className={`${inputClass} ${finished ? 'text-white/40 line-through' : ''}`}
               type="text"
               maxLength={BOARD_LIMITS.title}
               value={title}

@@ -2,16 +2,18 @@
 // Goals retain their combined feed. Posting a comment uses the existing API.
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import { BOARD_LIMITS } from '@/lib/boards/types';
+import type { MentionPerson } from '@/lib/boards/mentions';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { buttonClass, SectionTitle, send, textareaClass } from '../goalsUi';
+import { buttonClass, SectionTitle, send } from '../goalsUi';
 import { readError } from '../incidentUi';
+import { MentionInput } from './MentionInput';
 
 interface EventsResponse {
   events: BoardEventRow[];
   people?: PeopleNames;
+  mentionPeople?: MentionPerson[];
 }
 
 export function ActivityFeed({
@@ -33,6 +35,7 @@ export function ActivityFeed({
   const [events, setEvents] = useState<BoardEventRow[]>([]);
   const [names, setNames] = useState<PeopleNames>(people);
   const [note, setNote] = useState('');
+  const [mentionPeople, setMentionPeople] = useState<MentionPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,7 @@ export function ActivityFeed({
       if (!res.ok) throw new Error(await readError(res));
       const body = (await res.json()) as EventsResponse;
       setEvents(body.events);
+      setMentionPeople(body.mentionPeople ?? []);
       setNames({ ...people, ...(body.people ?? {}) });
       setError(null);
     } catch (e) {
@@ -98,14 +102,12 @@ export function ActivityFeed({
         <label className="sr-only" htmlFor={`comment-${cardId ?? goalId}`}>
           Add a comment
         </label>
-        <textarea
+        <MentionInput
           id={`comment-${cardId ?? goalId}`}
-          className={`${textareaClass} min-h-[70px]`}
-          maxLength={BOARD_LIMITS.comment}
-          placeholder="Add a comment…"
           value={note}
+          onChange={setNote}
+          people={mentionPeople}
           disabled={busy}
-          onChange={(e) => setNote(e.target.value)}
         />
         <div className="mt-2 flex justify-end">
           <button type="submit" className={buttonClass} disabled={busy || !note.trim()}>

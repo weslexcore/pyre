@@ -24,7 +24,12 @@ export const inputBaseClass =
 
 export const inputClass = `w-full ${inputBaseClass}`;
 
-export const selectClass = `${inputClass} [&>option]:bg-[var(--pyre-black)]`;
+// Same box as inputBaseClass so a select sits flush beside a text field;
+// `select-chevron` (admin.css) resets Safari's native button chrome.
+export const selectBaseClass =
+  'select-chevron pl-3 pr-9 py-2.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
+
+export const selectClass = `w-full ${selectBaseClass}`;
 
 export const textareaClass = `${inputClass} min-h-[110px]`;
 

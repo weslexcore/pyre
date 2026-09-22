@@ -43,6 +43,7 @@ import {
   labelClass,
   primaryButtonClass,
   SectionTitle,
+  selectBaseClass,
   send,
 } from '../goalsUi';
 
@@ -313,7 +314,7 @@ export function BoardSettings({
                 onChange={(e) => setDraft(index, { label: e.target.value })}
               />
               <select
-                className={`${inputBaseClass} w-28 shrink-0 [&>option]:bg-[var(--pyre-black)]`}
+                className={`${selectBaseClass} w-32 shrink-0`}
                 value={draft.kind}
                 aria-label={`Kind for ${draft.key}`}
                 onChange={(e) => setDraft(index, { kind: e.target.value as ColumnKind })}
@@ -356,8 +357,7 @@ export function BoardSettings({
         <SectionTitle note="what a card asks">Fields</SectionTitle>
         {fieldDrafts.length === 0 && (
           <p className="mb-2 text-xs text-white/35">
-            No fields yet. A task board rarely needs any; a pipeline wants the contact, the date,
-            the party size.
+            No fields yet.
           </p>
         )}
         <div className="space-y-3">
@@ -373,7 +373,7 @@ export function BoardSettings({
                   onChange={(e) => relabelField(index, e.target.value)}
                 />
                 <select
-                  className={`${inputBaseClass} w-28 shrink-0 [&>option]:bg-[var(--pyre-black)] disabled:opacity-60`}
+                  className={`${selectBaseClass} w-32 shrink-0 disabled:opacity-60`}
                   value={draft.kind}
                   disabled={!draft.isNew}
                   title={draft.isNew ? undefined : 'A saved field keeps its kind'}

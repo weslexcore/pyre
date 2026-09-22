@@ -22,6 +22,17 @@
   .font-primary-semibold {
     font-weight: 600;
   }
+  /* Native <select> chrome. Safari paints its own grey button over a select
+   * unless appearance is reset, so the shared select class strips it and
+   * draws this chevron instead; the right padding leaves room for it. */
+  .select-chevron {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='0.5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem 1rem;
+  }
 }
 
 /* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every

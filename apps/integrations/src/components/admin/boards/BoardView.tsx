@@ -16,7 +16,7 @@
 // API's message.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
+import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
@@ -33,7 +33,7 @@ import type {
 import type { PeopleNames } from '@/lib/sops/names';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import { cardClass, inputBaseClass, QuietChip, send, todayEastern } from '../goalsUi';
+import { cardClass, inputBaseClass, QuietChip, selectBaseClass, send, todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { BoardGoal } from './BoardGoal';
 import { BoardSettings } from './BoardSettings';
@@ -159,31 +159,49 @@ export function BoardView({ slug }: { slug: string }) {
   };
 
   // A drop is a column and the order it should hold afterwards. The order
-  // shows at once; the column move (if any) goes through the card PATCH so
-  // completion stamps and notices happen in one place, then the column is
-  // renumbered. A refused drop reloads, which puts everything back.
+  // shows at once, and so does the completion stamp a finished column
+  // implies, so a card dragged into Done reads as done without a reload.
+  // The column move (if any) goes through the card PATCH so the stamp and
+  // notices are recorded in one place, and the row the server returns
+  // replaces the guess; then the column is renumbered. A refused drop
+  // reloads, which puts everything back.
   const dropCard = async (plan: NonNullable<ReturnType<typeof planDrop>>) => {
     const orders = sortOrdersFor(plan.orderedIds);
-    setBundle((current) =>
-      current
-        ? {
-            ...current,
-            cards: current.cards.map((row) => {
-              const order = orders.get(row.id);
-              if (order === undefined) return row;
-              return { ...row, column_id: plan.columnId, sort_order: order };
-            }),
-          }
-        : current
-    );
+    const nowIso = new Date().toISOString();
+    setBundle((current) => {
+      if (!current) return current;
+      const destination = current.columns.find((column) => column.id === plan.columnId);
+      return {
+        ...current,
+        cards: current.cards.map((row) => {
+          const order = orders.get(row.id);
+          if (order === undefined) return row;
+          const stamp =
+            plan.moved && row.id === plan.card.id && destination
+              ? columnPatch(row, destination, '', nowIso)
+              : null;
+          return { ...row, ...stamp, column_id: plan.columnId, sort_order: order };
+        }),
+      };
+    });
     setBusy(true);
     setError(null);
     try {
       if (plan.moved) {
-        await send('/api/admin/board-cards', 'PATCH', {
+        const result = await send<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
           id: plan.card.id,
           columnId: plan.columnId,
         });
+        setBundle((current) =>
+          current
+            ? {
+                ...current,
+                cards: current.cards.map((row) =>
+                  row.id === result.card.id ? { ...result.card, sort_order: row.sort_order } : row
+                ),
+              }
+            : current
+        );
       }
       await send('/api/admin/board-cards/reorder', 'POST', {
         board: slug,
@@ -264,10 +282,19 @@ export function BoardView({ slug }: { slug: string }) {
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">
               <SearchIcon />
             </span>
+            {/* A plain text input, like the global search: WebKit gives
+                type="search" its own chrome and does not honour the left
+                padding until the field is first painted with focus, which
+                left the icon sitting on top of the placeholder. */}
             <input
               id="board-search"
-              type="search"
-              className={`${inputBaseClass} h-10 w-40 min-w-0 pl-9 sm:w-56`}
+              type="text"
+              inputMode="search"
+              enterKeyHint="search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className={`${inputBaseClass} h-10 w-40 min-w-0 appearance-none pl-9 sm:w-56`}
               placeholder="Search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -278,7 +305,7 @@ export function BoardView({ slug }: { slug: string }) {
           </label>
           <select
             id="board-owner-filter"
-            className={`${inputBaseClass} h-10 w-auto max-w-40 shrink-0 [&>option]:bg-[var(--pyre-black)]`}
+            className={`${selectBaseClass} h-10 w-auto max-w-40 shrink-0`}
             value={ownerFilter}
             onChange={(e) => setOwnerFilter(e.target.value)}
           >

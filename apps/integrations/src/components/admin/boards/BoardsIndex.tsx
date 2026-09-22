@@ -470,11 +470,7 @@ function BoardCard({
               </div>
             )}
           </div>
-        ) : (
-          <p className="mt-3 border-t border-white/10 pt-3 font-mono text-xs text-white/35">
-            No goal yet
-          </p>
-        )}
+        ) : null}
 
         <p className="mt-3 font-mono text-[11px] text-white/35">
           {tally.open} open {tally.open === 1 ? board.card_noun : `${board.card_noun}s`}
