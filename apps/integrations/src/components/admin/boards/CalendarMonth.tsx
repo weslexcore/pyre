@@ -173,8 +173,13 @@ export function CalendarMonth({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        {/* Square pills change which month you are looking at; the round gold
-            chips below narrow what is on it. */}
+        {/* The month you are looking at, then the pills that change it, then
+            the round gold chips that narrow what is on it. */}
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 className="font-mono text-xl font-bold text-white/80">{formatMonth(monthStart)}</h2>
+          {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
+        </div>
+
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -197,10 +202,6 @@ export function CalendarMonth({
           >
             Next ›
           </button>
-          <span className="font-mono text-xl font-bold text-white/80">
-            {formatMonth(monthStart)}
-          </span>
-          {refreshing && <span className="font-mono text-xs text-white/40">Loading…</span>}
         </div>
 
         {(chips || !monthIsPast) && (
