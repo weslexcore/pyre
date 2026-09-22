@@ -19,7 +19,7 @@
 // removed field is deleted if no card has answered it and archived if one
 // has, so nothing typed is ever lost.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
 import type { ColumnKind, FieldKind } from '@/lib/boards/types';
 import {
@@ -56,6 +56,12 @@ interface ColumnDraft {
 }
 
 interface FieldDraft {
+  /**
+   * Identifies the row while it is being edited. The key of a new field
+   * follows its label, so it cannot be the React key: the row would remount
+   * on every keystroke and the input would lose focus.
+   */
+  id: string;
   key: string;
   label: string;
   kind: FieldKind;
@@ -102,6 +108,7 @@ export function BoardSettings({
     [...fields]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((field) => ({
+        id: field.key,
         key: field.key,
         label: field.label,
         kind: field.kind,
@@ -116,6 +123,8 @@ export function BoardSettings({
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
 
+  const nextFieldId = useRef(0);
+
   const setFieldDraft = (index: number, patch: Partial<FieldDraft>) =>
     setFieldDrafts((current) =>
       current.map((draft, i) => (i === index ? { ...draft, ...patch } : draft))
@@ -128,6 +137,7 @@ export function BoardSettings({
     setFieldDrafts((current) => [
       ...current,
       {
+        id: `new-${nextFieldId.current++}`,
         key: columnKeyOf(
           'New field',
           current.map((draft) => draft.key)
@@ -186,7 +196,7 @@ export function BoardSettings({
         cardNoun,
         includeInAllTasks,
         columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
-        fields: fieldDrafts.map(({ isNew: _isNew, ...draft }, index) => ({
+        fields: fieldDrafts.map(({ id: _id, isNew: _isNew, ...draft }, index) => ({
           ...draft,
           sortOrder: (index + 1) * 10,
         })),
@@ -352,7 +362,7 @@ export function BoardSettings({
         )}
         <div className="space-y-3">
           {fieldDrafts.map((draft, index) => (
-            <div key={draft.key} className="space-y-2 rounded border border-white/10 p-3">
+            <div key={draft.id} className="space-y-2 rounded border border-white/10 p-3">
               <div className="flex min-w-0 items-center gap-2">
                 <input
                   className={`${inputBaseClass} min-w-0 flex-1`}
