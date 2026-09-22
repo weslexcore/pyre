@@ -552,6 +552,15 @@ export function parseCardPatch(body: Record<string, unknown>): ParseResult<CardP
   return { ok: true, value: patch };
 }
 
+/** Venue-local wall-clock time, 24h `HH:MM`. */
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function timeOf(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  return TIME_RE.test(value) ? value : null;
+}
+
 /** One answer, coerced to the shape its field's kind stores. */
 function normalizeAnswer(
   field: Pick<BoardFieldRow, 'kind' | 'options'>,
@@ -567,6 +576,18 @@ function normalizeAnswer(
     case 'number': {
       const parsed = numberOf(raw);
       return parsed === undefined ? null : parsed;
+    }
+    case 'time':
+      return timeOf(raw);
+    case 'time_range': {
+      // Both ends or nothing: a window with one edge is not a window, and
+      // storing half would leave the card showing a time that means nothing.
+      // The order is not checked — a party that runs past midnight ends
+      // "before" it starts.
+      if (!Array.isArray(raw) || raw.length !== 2) return null;
+      const start = timeOf(raw[0]);
+      const end = timeOf(raw[1]);
+      return start && end ? [start, end] : null;
     }
     case 'date':
       return typeof raw === 'string' && isYmd(raw.trim()) ? raw.trim() : null;
@@ -622,12 +643,28 @@ export function normalizeProperties(
   return next;
 }
 
+/** '18:30' as '6:30 PM'; '' for anything that is not a stored time. */
+function formatTime(value: unknown): string {
+  if (typeof value !== 'string' || !TIME_RE.test(value)) return '';
+  const [hour, minute] = value.split(':');
+  const hours = Number(hour);
+  return `${hours % 12 || 12}:${minute} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
 /** A stored answer as the words a card shows. */
 export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknown): string {
   if (value === null || value === undefined) return '';
   switch (field.kind) {
     case 'yes_no':
       return value === true ? 'Yes' : value === false ? 'No' : '';
+    case 'time':
+      return formatTime(value);
+    case 'time_range': {
+      if (!Array.isArray(value) || value.length !== 2) return '';
+      const start = formatTime(value[0]);
+      const end = formatTime(value[1]);
+      return start && end ? `${start} – ${end}` : '';
+    }
     case 'multi_choice':
       return Array.isArray(value) ? value.map(String).join(', ') : String(value);
     case 'number':

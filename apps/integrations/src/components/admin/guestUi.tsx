@@ -2,7 +2,7 @@
 // roster, and the fields page all render the same badges, the same answer
 // controls, and talk to the API the same way.
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import type { GuestFieldValue, GuestProfileFieldRow } from '@/lib/db';
 import { type MembershipStanding, STANDING_LABELS } from '@/lib/guests/insights';
 import { Chip, inputClass, labelClass, readError, YesNo } from './incidentUi';
@@ -65,12 +65,13 @@ export function AnswerPill({ label, value }: { label: string; value: string }) {
  * A field this control can render, structurally rather than by table: a guest
  * profile field and a board field ask the same questions in the same shapes,
  * so the control is shared and the row types stay where they belong. `kind`
- * is widened to the union of both — `date` only ever arrives from a board.
+ * is widened to the union of both — `date`, `time`, and `time_range` only
+ * arrive from boards.
  */
 export interface FieldDefinition {
   key: string;
   label: string;
-  kind: GuestProfileFieldRow['kind'] | 'date';
+  kind: GuestProfileFieldRow['kind'] | 'date' | 'time' | 'time_range';
   options: string[];
   hint?: string | null;
   archived?: boolean;
@@ -151,15 +152,18 @@ export function FieldInput({
         />
       );
     case 'date':
+    case 'time':
       return (
         <input
           id={id}
           className={inputClass}
-          type="date"
+          type={field.kind}
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
         />
       );
+    case 'time_range':
+      return <TimeRangeInput id={id} value={value} onChange={onChange} />;
     default:
       return (
         <input
@@ -172,6 +176,51 @@ export function FieldInput({
         />
       );
   }
+}
+
+/**
+ * Two clocks for one answer. The halves live here while they are being
+ * typed; the field only hears about a complete pair (or null once either
+ * side is cleared), so nothing half-entered is ever sent to be saved.
+ */
+function TimeRangeInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: GuestFieldValue | null | undefined;
+  onChange: (next: GuestFieldValue | null) => void;
+}) {
+  const stored = Array.isArray(value) && value.length === 2 ? value : null;
+  const [start, setStart] = useState(stored?.[0] ?? '');
+  const [end, setEnd] = useState(stored?.[1] ?? '');
+  const update = (nextStart: string, nextEnd: string) => {
+    setStart(nextStart);
+    setEnd(nextEnd);
+    onChange(nextStart && nextEnd ? [nextStart, nextEnd] : null);
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        id={id}
+        className={inputClass}
+        type="time"
+        aria-label="Start"
+        value={start}
+        onChange={(e) => update(e.target.value, end)}
+      />
+      <span className="font-mono text-xs text-white/40">to</span>
+      <input
+        id={`${id}-end`}
+        className={inputClass}
+        type="time"
+        aria-label="End"
+        value={end}
+        onChange={(e) => update(start, e.target.value)}
+      />
+    </div>
+  );
 }
 
 /** Label + hint + control, laid out the same on every form. */

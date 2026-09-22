@@ -28,12 +28,12 @@ import { KpiForm } from '../goals/KpiForm';
 import { KpiRow } from '../goals/KpiRow';
 import {
   buttonClass,
-  cardClass,
   formatYmd,
   GoalStatusBadge,
   PaceChip,
   primaryButtonClass,
   QuietChip,
+  raisedCardClass,
   SectionTitle,
   selectClass,
   send,
@@ -97,7 +97,7 @@ export function BoardGoal({
   if (!goal || !rollup) {
     if (!canManage) return null;
     return (
-      <section className={cardClass}>
+      <section className={raisedCardClass}>
         <SectionTitle>Goal</SectionTitle>
         {settingGoal ? (
           <GoalForm
@@ -185,7 +185,7 @@ export function BoardGoal({
           }}
         />
       ) : (
-        <section className={cardClass}>
+        <section className={raisedCardClass}>
           <SectionTitle
             note={
               rollup.kpis.total > 0

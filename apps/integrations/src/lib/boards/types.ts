@@ -36,7 +36,16 @@ export function isFinishedKind(kind: ColumnKind): boolean {
   return kind === 'done' || kind === 'dropped';
 }
 
-export const FIELD_KINDS = ['text', 'number', 'yes_no', 'choice', 'multi_choice', 'date'] as const;
+export const FIELD_KINDS = [
+  'text',
+  'number',
+  'yes_no',
+  'choice',
+  'multi_choice',
+  'date',
+  'time',
+  'time_range',
+] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 
 export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
@@ -46,6 +55,8 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   choice: 'Pick one',
   multi_choice: 'Pick any',
   date: 'Date',
+  time: 'Time',
+  time_range: 'Time range',
 };
 
 export function isFieldKind(value: unknown): value is FieldKind {

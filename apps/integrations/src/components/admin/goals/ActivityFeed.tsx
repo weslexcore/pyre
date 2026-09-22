@@ -1,10 +1,5 @@
-// The trail and the thread, in one column. Mechanical events — moved,
-// assigned, measured, completed — and the comments people write sit in the
-// same list in the order they happened, because "Julien moved this to
-// Quoted" and "Julien said the deposit cleared" are the same story and
-// splitting them into two panels makes neither readable.
-//
-// Reads from /api/admin/board-events; posting a comment is the one write.
+// Card discussion and change history are separate views of the same event log.
+// Goals retain their combined feed. Posting a comment uses the existing API.
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { BOARD_LIMITS } from '@/lib/boards/types';
@@ -65,8 +60,8 @@ export function ActivityFeed({
     void load();
   }, [load]);
 
-  const columnsById = new Map(columns.map((column) => [column.id, column]));
-  const nowIso = new Date().toISOString();
+  const comments = events.filter((entry) => entry.action === 'comment');
+  const activity = events.filter((entry) => entry.action !== 'comment');
 
   const comment = async (event: FormEvent) => {
     event.preventDefault();
@@ -87,8 +82,16 @@ export function ActivityFeed({
 
   return (
     <section>
-      <SectionTitle note={events.length > 0 ? `${events.length} entries` : undefined}>
-        {heading}
+      <SectionTitle
+        note={
+          cardId
+            ? String(comments.length)
+            : events.length > 0
+              ? `${events.length} entries`
+              : undefined
+        }
+      >
+        {cardId ? 'Comments' : heading}
       </SectionTitle>
 
       <form onSubmit={comment} className="mb-3">
@@ -99,7 +102,7 @@ export function ActivityFeed({
           id={`comment-${cardId ?? goalId}`}
           className={`${textareaClass} min-h-[70px]`}
           maxLength={BOARD_LIMITS.comment}
-          placeholder="Add a note for whoever reads this next…"
+          placeholder="Add a comment…"
           value={note}
           disabled={busy}
           onChange={(e) => setNote(e.target.value)}
@@ -112,31 +115,106 @@ export function ActivityFeed({
       </form>
 
       {error && <p className="mb-2 text-sm text-[var(--pyre-red)]">{error}</p>}
-      {loading && events.length === 0 && (
-        <p className="font-mono text-xs text-white/35">Loading…</p>
+      <EventEntries
+        events={events}
+        mode={cardId ? 'comments' : 'all'}
+        loading={loading}
+        subjectTitle={subjectTitle}
+        columns={columns}
+        people={names}
+      />
+      {cardId && (
+        <details className="mt-5 border-t border-white/10 pt-4">
+          <summary className="cursor-pointer font-mono text-xs uppercase tracking-wide text-white/50">
+            Activity · {activity.length}
+          </summary>
+          <div className="mt-3">
+            <EventEntries
+              events={events}
+              mode="activity"
+              loading={loading}
+              subjectTitle={subjectTitle}
+              columns={columns}
+              people={names}
+            />
+          </div>
+        </details>
       )}
-      {!loading && events.length === 0 && (
-        <p className="font-mono text-xs text-white/35">Nothing has happened here yet.</p>
-      )}
-
-      <ol className="space-y-2">
-        {[...events].reverse().map((entry) => (
-          <li key={entry.id} className="flex gap-2 text-sm">
-            <span className="shrink-0 font-mono text-[11px] text-white/30">
-              {timeAgo(entry.created_at, nowIso)}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, names)}</span>{' '}
-              <span className={entry.action === 'comment' ? 'text-white/80' : 'text-white/45'}>
-                {describeEvent(entry, subjectTitle, columnsById, names)}
-              </span>
-              {entry.action !== 'comment' && entry.note && (
-                <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
-              )}
-            </span>
-          </li>
-        ))}
-      </ol>
     </section>
+  );
+}
+
+/** Filter by action, so a note attached to a change stays in the audit trail. */
+export function EventEntries({
+  events,
+  mode,
+  loading,
+  subjectTitle,
+  columns,
+  people,
+}: {
+  events: BoardEventRow[];
+  mode: 'comments' | 'activity' | 'all';
+  loading: boolean;
+  subjectTitle: string;
+  columns: BoardColumnRow[];
+  people: PeopleNames;
+}) {
+  const visible = events.filter(
+    (entry) =>
+      mode === 'all' ||
+      (mode === 'comments' ? entry.action === 'comment' : entry.action !== 'comment')
+  );
+  const columnsById = new Map(columns.map((column) => [column.id, column]));
+  const nowIso = new Date().toISOString();
+  if (visible.length === 0) {
+    return (
+      <p className="font-mono text-xs text-white/35">
+        {loading
+          ? 'Loading…'
+          : mode === 'comments'
+            ? 'No comments yet.'
+            : mode === 'activity'
+              ? 'No changes yet.'
+              : 'Nothing has happened here yet.'}
+      </p>
+    );
+  }
+  return (
+    <ol
+      className="space-y-2"
+      aria-label={
+        mode === 'comments'
+          ? 'Comments'
+          : mode === 'activity'
+            ? 'Activity'
+            : 'Activity and comments'
+      }
+    >
+      {[...visible].reverse().map((entry) => (
+        <li key={entry.id} className="flex gap-2 text-sm">
+          <time
+            dateTime={entry.created_at}
+            title={new Date(entry.created_at).toLocaleString()}
+            className="shrink-0 font-mono text-[11px] text-white/30"
+          >
+            {timeAgo(entry.created_at, nowIso)}
+          </time>
+          <span className="min-w-0 flex-1 break-words">
+            <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
+            <span
+              className={
+                entry.action === 'comment' ? 'whitespace-pre-wrap text-white/80' : 'text-white/45'
+              }
+            >
+              {describeEvent(entry, subjectTitle, columnsById, people)}
+            </span>
+            {entry.action !== 'comment' && entry.note && (
+              <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }

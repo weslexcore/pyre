@@ -7,7 +7,13 @@
 // `send` helper so every mutation reports the API's own message.
 
 import type { ReactNode } from 'react';
-import type { BoardCardRow, BoardColumnKind, GoalKpiRow, GoalStatus } from '@/lib/db';
+import type {
+  BoardCardRow,
+  BoardColumnKind,
+  BoardColumnRow,
+  GoalKpiRow,
+  GoalStatus,
+} from '@/lib/db';
 import { formatKpiValue, kpiFreshness, kpiProgress } from '@/lib/goals/kpis';
 import { PACE_LABELS, type PaceState, type TaskProgress } from '@/lib/goals/progress';
 import { GOAL_STATUS_LABELS } from '@/lib/goals/types';
@@ -34,6 +40,12 @@ export const dangerButtonClass =
   'px-3 py-2 rounded border border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-red)] hover:border-[var(--pyre-red)] transition-colors disabled:opacity-40';
 
 export const cardClass = 'rounded border border-white/10 bg-white/[0.03] p-4';
+
+// A card sitting above the others — the goal at the top of a board, which
+// the columns beneath serve. A brighter surface, a firmer edge, and a
+// shadow to lift it; the columns keep the flat card.
+export const raisedCardClass =
+  'rounded-lg border border-white/20 bg-white/[0.07] p-5 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.04)]';
 
 // Every row a finger has to land on. 40px is the floor; the paddings above
 // are picked to clear it with a line of text inside.
@@ -99,10 +111,39 @@ const COLUMN_KIND_DOT: Record<BoardColumnKind, string> = {
   dropped: 'bg-white/15',
 };
 
-export function ColumnDot({ kind }: { kind: BoardColumnKind }) {
-  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${COLUMN_KIND_DOT[kind]}`} />;
+// Backlog and active columns both have kind "open". Recognize their workflow
+// names without changing completion semantics. A recognized label wins over
+// the stable key, so renaming "To do" to "Active" changes the indicator too.
+const OPEN_COLUMN_ACTIVE: Record<string, boolean> = {
+  backlog: false,
+  todo: false,
+  to_do: false,
+  new: false,
+  active: true,
+  in_progress: true,
+  in_flight: true,
+  doing: true,
+};
+
+export function ColumnDot({ column }: { column: Pick<BoardColumnRow, 'key' | 'label' | 'kind'> }) {
+  const labelKey = column.label
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  const active = OPEN_COLUMN_ACTIVE[labelKey] ?? OPEN_COLUMN_ACTIVE[column.key] ?? false;
+  const color =
+    column.kind === 'open' && active ? 'bg-[var(--pyre-gold)]' : COLUMN_KIND_DOT[column.kind];
+  return (
+    <span
+      role="img"
+      aria-label={column.label}
+      title={column.label}
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${color}`}
+    />
+  );
 }
 
+/** The card's workflow status, kept beside its title for quick scanning. */
 /**
  * A due date as the tools colour it: red once it is past, gold today and
  * tomorrow, quiet after that. Finished cards never shout — a task that

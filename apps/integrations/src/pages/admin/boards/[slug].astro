@@ -18,15 +18,15 @@ const { slug } = Astro.params;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!slug && isBoardSlug(slug) && !!access && canViewBoard(access, slug);
 
-let title = 'Board';
-let subtitle = 'Move a card by changing its column; open one for everything else';
+let title = '';
+let subtitle = '';
 if (allowed && slug) {
   try {
     const db = getDb();
     const board = db ? await loadBoardBySlug(db, slug) : null;
     if (board) {
-      title = board.name;
-      if (board.description) subtitle = board.description;
+      // title = board.name;
+      // if (board.description) subtitle = board.description;
     }
   } catch (error) {
     console.warn('[boards] title lookup failed:', error);

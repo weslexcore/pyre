@@ -3,9 +3,8 @@
 // this route is how a page reads them back, and the one place a person can
 // add a line of their own.
 //
-// A comment is an event with a note on it rather than a table of its own,
-// because "Julien moved this to Quoted" and "Julien said the deposit cleared"
-// belong in the same column of the same feed, in the order they happened.
+// Comments share the event store with changes. The card UI separates
+// discussion from the audit trail using the event action.
 //
 //   GET ?cardId=<uuid>   → { events, people }
 //   GET ?goalId=<uuid>   → { events, people }

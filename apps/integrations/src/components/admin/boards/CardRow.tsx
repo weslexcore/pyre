@@ -46,7 +46,10 @@ export function CardRow({
 }: CardRowProps) {
   const column = columns.find((c) => c.id === card.column_id);
   const finished = card.completed_at !== null;
-  const shown = fields.filter((field) => field.show_on_card && card.properties[field.key] != null);
+  const shown = fields
+    .filter((field) => field.show_on_card && card.properties[field.key] != null)
+    .map((field) => ({ field, text: formatProperty(field, card.properties[field.key]) }))
+    .filter(({ text }) => text !== '');
 
   return (
     <div id={ghost ? undefined : cardAnchorId(card)}>
@@ -58,7 +61,7 @@ export function CardRow({
         onClick={() => onOpen(card)}
         {...dragProps}
       >
-        <span className="mt-1.5">{column && <ColumnDot kind={column.kind} />}</span>
+        <span className="mt-0.5">{column && <ColumnDot column={column} />}</span>
         <span className="min-w-0 flex-1">
           <span
             className={`block truncate text-sm ${
@@ -75,9 +78,9 @@ export function CardRow({
             {boardName && <QuietChip>{boardName}</QuietChip>}
             {card.area && <QuietChip>{card.area}</QuietChip>}
             {card.source === 'intake' && <QuietChip>from the web</QuietChip>}
-            {shown.map((field) => (
+            {shown.map(({ field, text }) => (
               <QuietChip key={field.key}>
-                {field.label}: {formatProperty(field, card.properties[field.key])}
+                {field.label}: {text}
               </QuietChip>
             ))}
           </span>

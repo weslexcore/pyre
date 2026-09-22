@@ -878,7 +878,16 @@ export interface BoardColumnRow {
   updated_at: string;
 }
 
-export type BoardFieldKind = 'text' | 'number' | 'yes_no' | 'choice' | 'multi_choice' | 'date';
+export type BoardFieldKind =
+  | 'text'
+  | 'number'
+  | 'yes_no'
+  | 'choice'
+  | 'multi_choice'
+  | 'date'
+  | 'time'
+  /** A start and an end, stored as a two-element ['HH:MM', 'HH:MM'] array. */
+  | 'time_range';
 
 /** A per-board question. `board_cards.properties` is keyed by `key`. */
 export interface BoardFieldRow {

@@ -57,7 +57,9 @@ export function CardDrawer({
   const [dueDate, setDueDate] = useState(card.due_date ?? '');
   const [waitingOn, setWaitingOn] = useState(card.waiting_on ?? '');
   const [area, setArea] = useState(card.area ?? '');
-  const [properties, setProperties] = useState<Record<string, BoardFieldValue>>(card.properties);
+  const [properties, setProperties] = useState<Record<string, BoardFieldValue | null>>(
+    card.properties
+  );
   const [preview, setPreview] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const autosave = useCardAutosave(onSave);
@@ -246,8 +248,8 @@ export function CardDrawer({
                   value={properties[field.key]}
                   onChange={(next) => {
                     const updated = { ...properties };
-                    if (next === null) delete updated[field.key];
-                    else updated[field.key] = next;
+                    // Explicit null clears a saved answer; omitted keys are preserved by PATCH.
+                    updated[field.key] = next;
                     setProperties(updated);
                     autosave.schedule({ properties: updated });
                   }}

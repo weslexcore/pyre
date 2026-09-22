@@ -248,6 +248,8 @@ const FIELDS = [
   field({ key: 'contact_name', kind: 'text' }),
   field({ key: 'party_size', kind: 'number' }),
   field({ key: 'requested_date', kind: 'date' }),
+  field({ key: 'requested_time', kind: 'time' }),
+  field({ key: 'requested_window', kind: 'time_range' }),
   field({ key: 'deposit_paid', kind: 'yes_no' }),
   field({ key: 'occasion', kind: 'choice', options: ['Birthday', 'Offsite'] }),
   field({ key: 'extras', kind: 'multi_choice', options: ['Tea', 'Towels'] }),
@@ -317,5 +319,100 @@ describe('formatProperty', () => {
     expect(formatProperty({ kind: 'number' }, 8)).toBe('8');
     expect(formatProperty({ kind: 'text' }, 'Dana')).toBe('Dana');
     expect(formatProperty({ kind: 'text' }, null)).toBe('');
+  });
+});
+
+describe('rental requested time', () => {
+  it('accepts time field definitions', () => {
+    expect(
+      value(
+        parseBoardPatch({
+          fields: [
+            { key: 'requested_time', label: 'Requested time', kind: 'time', showOnCard: true },
+          ],
+        })
+      ).fields?.[0].kind
+    ).toBe('time');
+  });
+
+  it.each(['00:00', '12:00', '18:30', '23:59'])(
+    'saves %s without altering the requested date',
+    (time) => {
+      expect(
+        normalizeProperties(FIELDS, { requested_time: time }, { requested_date: '2026-10-03' })
+      ).toEqual({ requested_date: '2026-10-03', requested_time: time });
+    }
+  );
+
+  it.each(['24:00', '12:60', '9:30', 'noon', '2026-10-03T18:30', 123])(
+    'rejects invalid time %s',
+    (time) => {
+      expect(normalizeProperties(FIELDS, { requested_time: time })).toEqual({});
+    }
+  );
+
+  it('clears the time while preserving the date', () => {
+    expect(
+      normalizeProperties(
+        FIELDS,
+        { requested_time: null },
+        { requested_date: '2026-10-03', requested_time: '18:30' }
+      )
+    ).toEqual({ requested_date: '2026-10-03' });
+  });
+
+  it.each([
+    ['00:00', '12:00 AM'],
+    ['12:00', '12:00 PM'],
+    ['18:30', '6:30 PM'],
+  ])('formats %s for card display', (time, expected) => {
+    expect(formatProperty({ kind: 'time' }, time)).toBe(expected);
+  });
+});
+
+describe('time range fields', () => {
+  it('accepts time_range field definitions', () => {
+    expect(
+      value(
+        parseBoardPatch({
+          fields: [{ key: 'requested_window', label: 'Requested window', kind: 'time_range' }],
+        })
+      ).fields?.[0].kind
+    ).toBe('time_range');
+  });
+
+  it('stores a complete pair, trimmed', () => {
+    expect(normalizeProperties(FIELDS, { requested_window: [' 18:30', '21:00 '] })).toEqual({
+      requested_window: ['18:30', '21:00'],
+    });
+  });
+
+  it('keeps a window that runs past midnight', () => {
+    expect(normalizeProperties(FIELDS, { requested_window: ['21:00', '01:00'] })).toEqual({
+      requested_window: ['21:00', '01:00'],
+    });
+  });
+
+  it.each([
+    ['one end only', ['18:30']],
+    ['a blank end', ['18:30', '']],
+    ['three parts', ['18:30', '19:00', '21:00']],
+    ['a bad time', ['18:30', '25:00']],
+    ['a string', '18:30-21:00'],
+    ['an object', { start: '18:30', end: '21:00' }],
+  ])('drops %s', (_, raw) => {
+    expect(
+      normalizeProperties(
+        FIELDS,
+        { requested_window: raw },
+        { requested_window: ['09:00', '10:00'] }
+      )
+    ).toEqual({});
+  });
+
+  it('formats a window for the card and nothing for a broken one', () => {
+    expect(formatProperty({ kind: 'time_range' }, ['18:30', '21:00'])).toBe('6:30 PM – 9:00 PM');
+    expect(formatProperty({ kind: 'time_range' }, ['18:30'])).toBe('');
+    expect(formatProperty({ kind: 'time_range' }, '18:30')).toBe('');
   });
 });

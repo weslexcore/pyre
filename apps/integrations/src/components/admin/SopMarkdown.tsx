@@ -14,13 +14,56 @@
 // search: every text node is a direct string child of one of the overridden
 // elements below, so marking string children in each override covers the
 // whole document.
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { sopSlugFromHref } from '@/lib/sops/links';
 import { highlightSegments, MIN_QUERY_LENGTH } from '@/lib/sops/search';
 
 const MARK_CLASS = 'rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]';
+
+function CopyableCodeBlock({ children }: { children?: ReactNode }) {
+  const codeRef = useRef<HTMLPreElement>(null);
+  const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+
+  useEffect(() => {
+    if (status === 'idle') return;
+    const timeout = setTimeout(() => setStatus('idle'), 2500);
+    return () => clearTimeout(timeout);
+  }, [status]);
+
+  async function copy() {
+    if (!codeRef.current) return;
+    try {
+      // textContent preserves whitespace and excludes any search-highlight markup.
+      await navigator.clipboard.writeText(codeRef.current.textContent ?? '');
+      setStatus('copied');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div className="my-3 overflow-hidden rounded border border-white/10 bg-white/5">
+      <div className="flex items-center justify-end gap-2 border-b border-white/10 px-3 py-1.5">
+        <span role="status" className="text-xs text-white/60">
+          {status === 'copied' ? 'Copied!' : status === 'error' ? 'Unable to copy. Try again.' : ''}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label="Copy code block"
+          className="cursor-pointer rounded px-2 py-1 text-xs text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[var(--pyre-gold)]"
+        >
+          Copy
+        </button>
+      </div>
+      <pre ref={codeRef} className="overflow-x-auto p-3">
+        {children}
+      </pre>
+    </div>
+  );
+}
 
 /** A required task line (`- [!] text`) — see lib/sops/checklist. */
 const REQUIRED_TASK_RE = /^(\s*[-*+]\s+)\[!\]\s+/gm;
@@ -155,11 +198,7 @@ export const SopMarkdown = memo(function SopMarkdown({
               {hl(children)}
             </code>
           ),
-          pre: ({ children }) => (
-            <pre className="my-3 overflow-x-auto rounded border border-white/10 bg-white/5 p-3">
-              {children}
-            </pre>
-          ),
+          pre: CopyableCodeBlock,
           a: ({ children, href }) => {
             const slug = sopSlugFromHref(href);
             if (slug && onSopLink) {

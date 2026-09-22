@@ -20,6 +20,7 @@ import { cardsByColumn, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
+import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type {
   BoardCardRow,
@@ -32,7 +33,7 @@ import type {
 import type { PeopleNames } from '@/lib/sops/names';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import { buttonClass, cardClass, QuietChip, selectClass, send, todayEastern } from '../goalsUi';
+import { cardClass, inputBaseClass, QuietChip, send, todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { BoardGoal } from './BoardGoal';
 import { BoardSettings } from './BoardSettings';
@@ -77,6 +78,7 @@ export function BoardView({ slug }: { slug: string }) {
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [query, setQuery] = useState('');
   // Bumped when the goal is called met. A counter rather than a boolean so
   // reopening a goal and completing it again pops again — the Confetti
   // component's contract.
@@ -115,12 +117,21 @@ export function BoardView({ slug }: { slug: string }) {
   const saveCard = useOptimisticCardSave(bundle, setBundle);
 
   const today = bundle?.today ?? todayEastern();
+  // The search box and the owner filter narrow what the columns show; the
+  // cards themselves stay in the bundle, so a drop still knows every card
+  // in the column it lands in.
   const cards = useMemo(() => {
     if (!bundle) return [];
-    if (ownerFilter === 'all') return bundle.cards;
-    if (ownerFilter === 'none') return bundle.cards.filter((c) => c.owner_email === null);
-    return bundle.cards.filter((c) => c.owner_email === ownerFilter);
-  }, [bundle, ownerFilter]);
+    const terms = searchTerms(query);
+    const people = bundle.people ?? {};
+    return bundle.cards.filter((card) => {
+      if (ownerFilter === 'none' && card.owner_email !== null) return false;
+      if (ownerFilter !== 'all' && ownerFilter !== 'none' && card.owner_email !== ownerFilter) {
+        return false;
+      }
+      return cardMatches(card, terms, bundle.fields, people);
+    });
+  }, [bundle, ownerFilter, query]);
 
   const grouped = useMemo(
     () => (bundle ? cardsByColumn(bundle.columns, cards) : []),
@@ -242,13 +253,32 @@ export function BoardView({ slug }: { slug: string }) {
           </a>
           {board.archived && <QuietChip>archived</QuietChip>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* One row, never wrapped: the shared select class is full-width by
+            default, so the controls here are sized from the base class and
+            the group as a whole drops under the link on a phone instead. */}
+        <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="board-search">
+            Search
+          </label>
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">
+              <SearchIcon />
+            </span>
+            <input
+              id="board-search"
+              type="search"
+              className={`${inputBaseClass} h-10 w-40 min-w-0 pl-9 sm:w-56`}
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
           <label className="sr-only" htmlFor="board-owner-filter">
             Filter by owner
           </label>
           <select
             id="board-owner-filter"
-            className={`${selectClass} w-auto`}
+            className={`${inputBaseClass} h-10 w-auto max-w-40 shrink-0 [&>option]:bg-[var(--pyre-black)]`}
             value={ownerFilter}
             onChange={(e) => setOwnerFilter(e.target.value)}
           >
@@ -263,24 +293,34 @@ export function BoardView({ slug }: { slug: string }) {
           {canManage && (
             <button
               type="button"
-              className={buttonClass}
+              aria-label={settingsOpen ? 'Close board settings' : 'Board settings'}
+              aria-expanded={settingsOpen}
+              aria-controls="board-settings"
+              title="Board settings"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                settingsOpen
+                  ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]'
+                  : 'border-white/20 text-[var(--pyre-creme)] hover:border-white/40 hover:bg-white/10'
+              }`}
               onClick={() => setSettingsOpen((open) => !open)}
             >
-              {settingsOpen ? 'Close settings' : 'Board settings'}
+              <GearIcon />
             </button>
           )}
         </div>
       </div>
 
       {settingsOpen && canManage && (
-        <BoardSettings
-          board={board}
-          columns={columns}
-          fields={fields}
-          cardCount={bundle.cards.length}
-          busy={busy}
-          onSaved={() => void load()}
-        />
+        <div id="board-settings">
+          <BoardSettings
+            board={board}
+            columns={columns}
+            fields={fields}
+            cardCount={bundle.cards.length}
+            busy={busy}
+            onSaved={() => void load()}
+          />
+        </div>
       )}
 
       <BoardGoal
@@ -397,6 +437,29 @@ export function BoardView({ slug }: { slug: string }) {
         />
       )}
     </div>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 12l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M10.3 3.5h3.4l.5 2.3a6.9 6.9 0 0 1 1.7 1l2.2-.8 1.7 3-1.8 1.5a7 7 0 0 1 0 2l1.8 1.5-1.7 3-2.2-.8a6.9 6.9 0 0 1-1.7 1l-.5 2.3h-3.4l-.5-2.3a6.9 6.9 0 0 1-1.7-1l-2.2.8-1.7-3 1.8-1.5a7 7 0 0 1 0-2L4.2 9l1.7-3 2.2.8a6.9 6.9 0 0 1 1.7-1l.5-2.3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
   );
 }
 
