@@ -60,6 +60,16 @@
   }
 }
 
+/* No pinch-zoom. The admin is a phone-first tool with nothing that needs
+ * magnifying, and a stray pinch leaves the board zoomed in and scrolling
+ * sideways. The viewport meta (maximum-scale=1, user-scalable=no) covers
+ * Android and standalone iOS; Safari in the iOS browser ignores that meta,
+ * so the root also drops the pinch gesture at the touch-action level and
+ * keeps only scrolling. Fields still scroll and swipe as before. */
+html {
+  touch-action: pan-x pan-y;
+}
+
 /* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every
  * same-origin navigation runs through the View Transition API in browsers
  * that have it. The root snapshot crossfades with the browser's default
