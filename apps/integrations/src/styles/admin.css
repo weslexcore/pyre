@@ -35,6 +35,31 @@
   }
 }
 
+/* Date and time fields. iOS draws these with its own picker chrome and an
+ * intrinsic width that ignore width: 100%, so a Due field could run past the
+ * card drawer and give the sheet a sideways scroll. Stripping the chrome lets
+ * them size like any other field; the value keeps a line's height so an
+ * empty one does not collapse. In the base layer, so a utility width on a
+ * particular field (the All tasks "since" picker) still wins. */
+@layer base {
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    text-align: left;
+    min-height: 1.25rem;
+  }
+}
+
 /* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every
  * same-origin navigation runs through the View Transition API in browsers
  * that have it. The root snapshot crossfades with the browser's default
