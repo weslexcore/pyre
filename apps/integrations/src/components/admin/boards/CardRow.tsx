@@ -91,7 +91,8 @@ export function CardRow({
             {SOURCE_CHIPS[card.source] && <QuietChip>{SOURCE_CHIPS[card.source]}</QuietChip>}
             {shown.map(({ field, text }) => (
               <QuietChip key={field.key} className={chipClip}>
-                {field.label}: {text}
+                {field.show_label_on_card !== false && `${field.label}: `}
+                {text}
               </QuietChip>
             ))}
           </span>

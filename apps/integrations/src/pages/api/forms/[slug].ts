@@ -16,7 +16,7 @@
 // moves, completes, assigns, or reads one back.
 //
 //   POST { answers: { <question id>: <answer> }, startedAt?, website? }
-//     → 201 { ok: true, confirmation }
+//     → 201 { ok: true, confirmation, confetti }
 //     → 400 (a required answer missing, or too fast), 404, 410 (closed),
 //       429 (too many from one address)
 
@@ -150,9 +150,9 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
       actor,
       detail: { form: true, access: form.access },
     });
-    await notifyIntakeCard(db, card, board, 'the form');
+    await notifyIntakeCard(db, card, board, 'the form', form.notify);
 
-    return json({ ok: true, confirmation: form.confirmation }, 201);
+    return json({ ok: true, confirmation: form.confirmation, confetti: form.confetti }, 201);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('[forms] submission failed:', message);

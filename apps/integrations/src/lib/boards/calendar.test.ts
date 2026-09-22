@@ -562,3 +562,37 @@ describe('month arithmetic', () => {
     expect(formatMonth('2026-09-01')).toBe('September 2026');
   });
 });
+
+describe('multiple date options on the calendar', () => {
+  const multiple = input({
+    cards: [
+      card('options', {
+        properties: {
+          requested_date: ['2026-10-03', '2026-11-10', '2026-10-03'],
+          requested_time: '18:30',
+        },
+      }),
+    ],
+  });
+  it('draws each distinct date with the shared time and a unique identity', () => {
+    const entries = buildCalendar(multiple);
+    expect(entries.map((entry) => entry.date)).toEqual(['2026-10-03', '2026-11-10']);
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(2);
+    expect(entries.every((entry) => entry.time === '18:30')).toBe(true);
+  });
+  it('moves one option without losing options outside the visible month', () => {
+    const [entry] = buildCalendar(multiple, { start: '2026-10-01', end: '2026-10-31' });
+    expect(movePatch(entry, '2026-10-04')).toEqual({
+      id: 'options',
+      patch: {
+        properties: { requested_date: ['2026-10-04', '2026-11-10'] },
+      },
+    });
+    expect(movePatch(entry, '2026-11-10')).toEqual({
+      id: 'options',
+      patch: {
+        properties: { requested_date: ['2026-11-10'] },
+      },
+    });
+  });
+});

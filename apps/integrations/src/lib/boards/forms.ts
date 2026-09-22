@@ -25,7 +25,7 @@ import type {
 } from '@/lib/db';
 import { isYmd, type ParseResult } from '@/lib/goals/validate';
 import { BOARD_LIMITS, KEY_RE } from './types';
-import { formatProperty, normalizeAnswer, normalizeProperties } from './validate';
+import { formatProperty, KIND_PROBLEMS, normalizeAnswer, normalizeProperties } from './validate';
 
 export const FORM_LIMITS = {
   title: 120,
@@ -37,6 +37,10 @@ export const FORM_LIMITS = {
   questionHint: 200,
   /** Fields per board plus the three builtins, with room to spare. */
   questions: 40,
+  /** People one form may wake; past this it is everybody, so say so instead. */
+  notify: 20,
+  doneLabel: 40,
+  doneHref: 300,
 } as const;
 
 /** What may sit behind a form: an image, and not a large one. */
@@ -116,6 +120,39 @@ export function formTitle(form: Pick<FormConfig, 'title'>, boardName: string): s
   return form.title.trim() || boardName;
 }
 
+/**
+ * Where a form sends somebody when there is nowhere of its own to send
+ * them: the front door of the website, which is also where the logo above
+ * every form points.
+ */
+export const FORM_DONE_HREF = 'https://pyresauna.com';
+export const FORM_DONE_LABEL = 'Back to pyresauna.com';
+
+/**
+ * Whether a link is one a form may point its button at: an https address,
+ * or a path on this site. Everything else — a javascript: or data: URL
+ * above all — is refused, because the manager writing it and the stranger
+ * clicking it are not the same person.
+ */
+export function isSafeHref(href: string): boolean {
+  const value = href.trim();
+  if (!value) return false;
+  // A path, but not '//host', which is an address in disguise.
+  if (value.startsWith('/')) return !value.startsWith('//');
+  return /^https:\/\/[^\s/?#]+/i.test(value);
+}
+
+/** The button under the thank-you: where it goes and what it says. */
+export function formDoneLink(config: Pick<FormConfig, 'doneHref' | 'doneLabel'>): {
+  href: string;
+  label: string;
+} {
+  const href = isSafeHref(config.doneHref) ? config.doneHref.trim() : FORM_DONE_HREF;
+  const label = config.doneLabel.trim();
+  if (label) return { href, label };
+  return { href, label: href === FORM_DONE_HREF ? FORM_DONE_LABEL : 'Continue' };
+}
+
 /** Where the form is filled in. */
 export function formHref(slug: string): string {
   return `/forms/${slug}`;
@@ -143,6 +180,17 @@ export interface FormConfig {
   intro: string;
   confirmation: string;
   submitLabel: string;
+  /**
+   * Who a submission wakes, by roster address. Empty means everyone who can
+   * view the board, which is what a form does until somebody narrows it.
+   */
+  notify: string[];
+  /** Whether the thank-you celebrates with confetti. */
+  confetti: boolean;
+  /** Where the button under the thank-you goes; blank is the home page. */
+  doneHref: string;
+  /** What that button says; blank names where it goes. */
+  doneLabel: string;
   questions: BoardFormQuestion[];
 }
 
@@ -176,6 +224,10 @@ export function defaultFormConfig(
     intro: '',
     confirmation: '',
     submitLabel: 'Send',
+    notify: [],
+    confetti: false,
+    doneHref: '',
+    doneLabel: '',
     questions: [
       TITLE_QUESTION,
       ...fields
@@ -204,6 +256,10 @@ export function formConfigOf(row: BoardFormRow): FormConfig {
     intro: row.intro,
     confirmation: row.confirmation,
     submitLabel: row.submit_label,
+    notify: Array.isArray(row.notify_emails) ? row.notify_emails : [],
+    confetti: row.confetti === true,
+    doneHref: row.done_href ?? '',
+    doneLabel: row.done_label ?? '',
     questions: Array.isArray(row.questions) ? row.questions : [],
   };
 }
@@ -225,6 +281,28 @@ function boundedText(value: unknown, max: number): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > max ? undefined : trimmed;
+}
+
+/**
+ * The addresses a form wakes, lowercased and deduplicated in the order they
+ * were given. Only the shape is checked here; whether an address belongs to
+ * somebody who can open the board is a question about the board, answered
+ * by formNotifyError when the form is saved.
+ */
+function parseNotify(value: unknown): ParseResult<string[]> {
+  if (!Array.isArray(value)) return fail('notify must be a list of addresses');
+  const emails: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') return fail('notify must be a list of addresses');
+    const email = item.trim().toLowerCase();
+    if (!email) continue;
+    if (email.length > 320 || !email.includes('@')) return fail(`"${item}" is not an address`);
+    if (!emails.includes(email)) emails.push(email);
+  }
+  if (emails.length > FORM_LIMITS.notify) {
+    return fail(`A form can notify at most ${FORM_LIMITS.notify} people`);
+  }
+  return { ok: true, value: emails };
 }
 
 function parseQuestions(value: unknown): ParseResult<BoardFormQuestion[]> {
@@ -266,6 +344,9 @@ function parseQuestions(value: unknown): ParseResult<BoardFormQuestion[]> {
     if (raw.multiple !== undefined && typeof raw.multiple !== 'boolean') {
       return fail('multiple must be true or false');
     }
+    if (raw.future !== undefined && typeof raw.future !== 'boolean') {
+      return fail('future must be true or false');
+    }
 
     const question: BoardFormQuestion = {
       kind: raw.kind,
@@ -273,8 +354,10 @@ function parseQuestions(value: unknown): ParseResult<BoardFormQuestion[]> {
       label,
       hint,
       required: raw.required === true,
-      // Only a field can take several answers; a builtin never carries the flag.
+      // Only a field can take several answers, or insist on a date still to
+      // come; a builtin never carries either flag.
       ...(raw.kind === 'field' && raw.multiple === true ? { multiple: true } : {}),
+      ...(raw.kind === 'field' && raw.future === true ? { future: true } : {}),
     };
     const id = questionId(question);
     if (seen.has(id)) return fail(`"${key}" is asked twice`);
@@ -338,6 +421,32 @@ export function parseFormPatch(body: Record<string, unknown>): ParseResult<FormP
     const label = boundedText(body.submitLabel, FORM_LIMITS.submitLabel);
     if (!label) return fail(`submitLabel must be 1–${FORM_LIMITS.submitLabel} characters`);
     patch.submitLabel = label;
+  }
+  if (body.notify !== undefined) {
+    const notify = parseNotify(body.notify);
+    if (!notify.ok) return notify;
+    patch.notify = notify.value;
+  }
+  if (body.confetti !== undefined) {
+    if (typeof body.confetti !== 'boolean') return fail('confetti must be true or false');
+    patch.confetti = body.confetti;
+  }
+  if (body.doneHref !== undefined) {
+    const href = boundedText(body.doneHref, FORM_LIMITS.doneHref);
+    if (href === undefined) {
+      return fail(`doneHref must be ${FORM_LIMITS.doneHref} characters or fewer`);
+    }
+    if (href && !isSafeHref(href)) {
+      return fail('The button link must be an https address or a path on this site');
+    }
+    patch.doneHref = href;
+  }
+  if (body.doneLabel !== undefined) {
+    const label = boundedText(body.doneLabel, FORM_LIMITS.doneLabel);
+    if (label === undefined) {
+      return fail(`doneLabel must be ${FORM_LIMITS.doneLabel} characters or fewer`);
+    }
+    patch.doneLabel = label;
   }
   if (body.questions !== undefined) {
     const questions = parseQuestions(body.questions);
@@ -409,6 +518,34 @@ export function formFieldError(
   return null;
 }
 
+/**
+ * Whether the form names somebody who cannot open the board, or null when
+ * everyone it names can. A form decides who hears about a card on a board;
+ * it may not decide who hears about a board they were never given.
+ */
+export function formNotifyError(
+  config: Pick<FormConfig, 'notify'>,
+  candidates: { email: string }[]
+): string | null {
+  const allowed = new Set(candidates.map((person) => person.email.trim().toLowerCase()));
+  for (const email of config.notify) {
+    if (!allowed.has(email)) return `"${email}" cannot open this board`;
+  }
+  return null;
+}
+
+/**
+ * Who a submission wakes: the people the form names, if it names any, and
+ * otherwise everyone holding the board. Either way it is intersected with
+ * the board's holders as they stand now, so a form that named somebody who
+ * has since lost the board quietly stops waking them.
+ */
+export function notifyRecipients(notify: string[], holders: string[]): string[] {
+  if (notify.length === 0) return holders;
+  const named = new Set(notify.map((email) => email.trim().toLowerCase()));
+  return holders.filter((email) => named.has(email.trim().toLowerCase()));
+}
+
 /** A question with its pointer followed: the label to show and the kind to ask in. */
 export interface ResolvedQuestion {
   id: string;
@@ -419,6 +556,8 @@ export interface ResolvedQuestion {
   required: boolean;
   /** A date question that takes more than one date; every other question is one answer. */
   multiple: boolean;
+  /** A date question that refuses a date already gone. */
+  future: boolean;
   /** The field's shape, for a field question; null for a builtin. */
   field: Pick<BoardFieldRow, 'kind' | 'options'> | null;
 }
@@ -455,6 +594,7 @@ export function formQuestions(
         hint: question.hint,
         required: question.key === 'title' || question.required,
         multiple: false,
+        future: false,
         field: null,
       });
       continue;
@@ -471,6 +611,7 @@ export function formQuestions(
       hint: question.hint ?? field.hint,
       required: question.required,
       multiple: field.kind === 'date' && question.multiple === true,
+      future: field.kind === 'date' && question.future === true,
       field: { kind: field.kind, options: field.options },
     });
   }
@@ -486,6 +627,7 @@ export function formQuestions(
       hint: null,
       required: true,
       multiple: false,
+      future: false,
       field: null,
     });
   }
@@ -526,6 +668,71 @@ export function answerOf(question: ResolvedQuestion, raw: unknown): BoardFieldVa
 
 export function isAnswered(question: ResolvedQuestion, raw: unknown): boolean {
   return answerOf(question, raw) !== null;
+}
+
+/**
+ * Today on the bathhouse's own clock, as YYYY-MM-DD. A form is filled in
+ * from wherever somebody happens to be, and "already gone" has to mean the
+ * same thing to the sender and to the board, so both read it in New York —
+ * the same wall clock a card's due date is read against.
+ */
+export function todayEastern(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/** The dates in an answer, however many the question takes. */
+function datesIn(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string');
+  return typeof raw === 'string' ? [raw] : [];
+}
+
+/** Nothing was typed here, whatever shape the control hands back. */
+export function isBlankAnswer(raw: unknown): boolean {
+  if (raw === null || raw === undefined) return true;
+  if (typeof raw === 'string') return raw.trim() === '';
+  if (Array.isArray(raw)) return raw.length === 0;
+  return false;
+}
+
+/**
+ * What to say about an answer, or null when there is nothing to say. Two
+ * different silences: a required question nobody filled in, and a question
+ * somebody did fill in with something its kind cannot hold. The second only
+ * speaks for the kinds whose whole point is the check — an address that is
+ * not an address is a typo worth catching, while a pick-one whose option
+ * the board has since dropped is our mess, not the sender's, and is quietly
+ * left behind the way it always was.
+ */
+export function answerProblem(
+  question: ResolvedQuestion,
+  raw: unknown,
+  today = todayEastern()
+): string | null {
+  const answer = answerOf(question, raw);
+  if (answer !== null) {
+    // A date the question insists is still to come. Checked on the answer
+    // rather than on what was typed, so it reads whatever the control sent:
+    // one date or several, and today counts as still to come.
+    if (question.future) {
+      const past = datesIn(answer).filter((date) => date < today);
+      if (past.length > 0) {
+        return past.length === 1 && datesIn(answer).length === 1
+          ? 'That date has already passed.'
+          : 'Those dates have to be today or later.';
+      }
+    }
+    return null;
+  }
+  if (!isBlankAnswer(raw) && question.field) {
+    const problem = KIND_PROBLEMS[question.field.kind];
+    if (problem) return problem;
+  }
+  return question.required ? 'This one is needed.' : null;
 }
 
 /**
@@ -583,11 +790,17 @@ export function parseSubmission(
   let dueDate: string | null = null;
 
   for (const question of questions) {
-    const value = answerOf(question, answers[question.id]);
-    if (value === null) {
-      if (question.required) return fail(`"${question.label}" is required`);
-      continue;
+    const raw = answers[question.id];
+    // Whatever the client should already have said: a missing required
+    // answer, an address that is not one, a date that has gone. This is the
+    // door closing on anything that went around the form.
+    const problem = answerProblem(question, raw);
+    if (problem) {
+      if (question.required && isBlankAnswer(raw)) return fail(`"${question.label}" is required`);
+      return fail(`"${question.label}": ${problem}`);
     }
+    const value = answerOf(question, raw);
+    if (value === null) continue;
     if (question.kind === 'field') fieldAnswers[question.key] = value;
     else if (question.key === 'title') title = String(value);
     else if (question.key === 'notes') notes = String(value);

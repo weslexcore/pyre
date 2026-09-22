@@ -19,6 +19,8 @@ import {
   FORM_ACCESS,
   FORM_ACCESS_LABELS,
   FORM_BACKGROUND_ACCEPT,
+  FORM_DONE_HREF,
+  FORM_DONE_LABEL,
   FORM_LAYOUT_LABELS,
   FORM_LAYOUTS,
   FORM_LIMITS,
@@ -34,6 +36,7 @@ import {
   TITLE_MODE_LABELS,
   TITLE_MODES,
 } from '@/lib/boards/forms';
+import type { Assignable } from '@/lib/boards/people';
 import { FIELD_KIND_LABELS } from '@/lib/boards/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type {
@@ -65,6 +68,8 @@ interface FormResponse {
   form: FormConfig;
   exists: boolean;
   background: FormBackground | null;
+  /** Everyone who can open this board: who the form may pick to notify. */
+  recipients: Assignable[];
   fields: BoardFieldRow[];
 }
 
@@ -84,12 +89,19 @@ interface QuestionItem {
 }
 
 function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
-  const { board, fields } = initial;
+  const { board, fields, recipients } = initial;
   const noun = board.card_noun;
   const liveFields = useMemo(() => fields.filter((field) => !field.archived), [fields]);
   const fieldByKey = useMemo(() => new Map(fields.map((field) => [field.key, field])), [fields]);
 
-  const [config, setConfig] = useState<FormConfig>(initial.form);
+  // A name that has since lost the board is dropped on the way in, so the
+  // list shown is the list that would be woken; the next save writes it.
+  const [config, setConfig] = useState<FormConfig>(() => ({
+    ...initial.form,
+    notify: initial.form.notify.filter((email) =>
+      initial.recipients.some((person) => person.email === email)
+    ),
+  }));
   const [origin, setOrigin] = useState('');
   const [copied, setCopied] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
@@ -175,6 +187,15 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
     label: sourceLabel(question, fieldByKey),
     question,
   }));
+
+  const notified = new Set(config.notify);
+  const atNotifyLimit = config.notify.length >= FORM_LIMITS.notify;
+  const toggleNotify = (email: string) =>
+    update({
+      notify: notified.has(email)
+        ? config.notify.filter((item) => item !== email)
+        : [...config.notify, email],
+    });
 
   const setQuestion = (index: number, patch: Partial<BoardFormQuestion>) =>
     update({
@@ -321,6 +342,56 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
         </section>
 
         <section className={cardClass}>
+          <SectionTitle
+            note={
+              config.notify.length === 0
+                ? 'everyone on the board'
+                : `${config.notify.length} chosen`
+            }
+          >
+            Who hears about a submission
+          </SectionTitle>
+          {recipients.length === 0 ? (
+            <p className="text-xs text-white/35">
+              Nobody holds this board yet, so nothing is sent. Grant someone the board from the
+              staff page and they will appear here.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recipients.map((person) => (
+                <label key={person.email} className="flex items-center gap-2 text-sm text-white/80">
+                  <input
+                    type="checkbox"
+                    checked={notified.has(person.email)}
+                    disabled={atNotifyLimit && !notified.has(person.email)}
+                    onChange={() => toggleNotify(person.email)}
+                  />
+                  <span className="min-w-0 truncate">
+                    {person.name}
+                    <span className="ml-2 font-mono text-xs text-white/35">{person.email}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-xs text-white/35">
+            {config.notify.length === 0
+              ? `Nobody picked: everyone who can open this board is told when a ${noun} comes in.`
+              : `Only the people ticked are told when a ${noun} comes in.`}{' '}
+            The {noun} lands on the board either way.
+          </p>
+          {config.notify.length > 0 && (
+            <button
+              type="button"
+              className={`${buttonClass} mt-2`}
+              onClick={() => update({ notify: [] })}
+            >
+              Tell everyone instead
+            </button>
+          )}
+        </section>
+
+        <section className={cardClass}>
           <SectionTitle>How it is asked</SectionTitle>
           <div className="space-y-2">
             {FORM_LAYOUTS.map((layout) => (
@@ -447,6 +518,19 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                         several dates
                       </label>
                     )}
+                    {field?.kind === 'date' && (
+                      <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                        <input
+                          type="checkbox"
+                          checked={question.future === true}
+                          aria-label={`Refuse a date already gone for ${item.label}`}
+                          onChange={(e) =>
+                            setQuestion(index, { future: e.target.checked || undefined })
+                          }
+                        />
+                        no past dates
+                      </label>
+                    )}
                     {!isTitle && (
                       <button
                         type="button"
@@ -504,6 +588,10 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
           <p className="mt-2 text-xs text-white/35">
             A question asks one of the board's fields, or the {noun}'s own notes or due date. Leave
             the label blank to use the field's. Add fields to the board from its settings.
+          </p>
+          <p className="mt-1 text-xs text-white/35">
+            "No past dates" greys out the past in the picker and refuses a date that has gone. Today
+            counts as still to come, so a request for tonight still sends.
           </p>
         </section>
 
@@ -586,7 +674,54 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                 onChange={(e) => update({ confirmation: e.target.value })}
               />
               <p className="mt-1 text-xs text-white/35">Markdown here too.</p>
+              <label className="mt-3 flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={config.confetti}
+                  onChange={(e) => update({ confetti: e.target.checked })}
+                />
+                Pop confetti when it is sent
+              </label>
+              <p className="mt-1 text-xs text-white/35">
+                A couple of seconds of it over the thank-you. Nothing moves for anyone who has asked
+                their device for less motion.
+              </p>
             </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass} htmlFor="form-done-label">
+                  Button under the thank-you
+                </label>
+                <input
+                  id="form-done-label"
+                  className={inputClass}
+                  type="text"
+                  maxLength={FORM_LIMITS.doneLabel}
+                  placeholder={FORM_DONE_LABEL}
+                  value={config.doneLabel}
+                  onChange={(e) => update({ doneLabel: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="form-done-href">
+                  Where it goes
+                </label>
+                <input
+                  id="form-done-href"
+                  className={inputClass}
+                  type="text"
+                  inputMode="url"
+                  maxLength={FORM_LIMITS.doneHref}
+                  placeholder={FORM_DONE_HREF}
+                  value={config.doneHref}
+                  onChange={(e) => update({ doneHref: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="-mt-1 text-xs text-white/35">
+              An https address, or a path on this site like /admin/boards. Leave both blank and the
+              button reads "{FORM_DONE_LABEL}" and goes to the home page.
+            </p>
             <div>
               <label className={labelClass} htmlFor="form-submit-label">
                 Send button
@@ -662,6 +797,9 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
               submitLabel: config.submitLabel || 'Send',
               intro: config.intro,
               confirmation: config.confirmation,
+              confetti: config.confetti,
+              doneHref: config.doneHref,
+              doneLabel: config.doneLabel,
             }}
             questions={formQuestions(config, fields)}
             noun={noun}
@@ -688,6 +826,15 @@ function sampleAnswers(fields: BoardFieldRow[]): Record<string, BoardFieldValue>
     switch (field.kind) {
       case 'number':
         answers[field.key] = 12;
+        break;
+      case 'long_text':
+        answers[field.key] = 'A few lines about what they are after.';
+        break;
+      case 'email':
+        answers[field.key] = 'dana@example.com';
+        break;
+      case 'phone':
+        answers[field.key] = '+12125551234';
         break;
       case 'yes_no':
         answers[field.key] = true;

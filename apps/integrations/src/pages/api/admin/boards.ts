@@ -14,9 +14,12 @@
 // from the list is archived if anything is sitting in it and removed only if
 // nothing is — an archived column keeps rendering while it still holds work
 // (lib/boards/cards.ts), so nothing is ever stranded somewhere invisible.
-// Fields follow the same rule against the answers on the cards, with one
-// more: a field's kind is permanent, because the answers already stored are
-// shaped by it. Change of mind means archive it and add a new one.
+// Fields follow the same rule against the answers on the cards. A field's
+// kind can be changed after the fact, and the answers already stored are
+// read through the new kind and written back — what does not survive the
+// change is cleared, the way an answer to a pick-one whose option is gone
+// is cleared. A files field is the exception: its answers name rows holding
+// real bytes, so it stays what it is.
 //
 // A board's goal travels with its cards: every card on the board is filed
 // under the board's goal, and pointing the board at a different goal
@@ -68,14 +71,15 @@ import {
   loadSection,
   unattachedGoals,
 } from '@/lib/boards/store';
-import { GOALS_BOARD_SLUG, isBoardSlug, kindIsTime } from '@/lib/boards/types';
+import { FIELD_KIND_LABELS, GOALS_BOARD_SLUG, isBoardSlug, kindIsTime } from '@/lib/boards/types';
 import {
   type ColumnInput,
   type FieldInput,
+  normalizeAnswer,
   parseBoardCreate,
   parseBoardPatch,
 } from '@/lib/boards/validate';
-import type { BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
+import type { BoardCardRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { deleteBySourceIds } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -367,27 +371,69 @@ async function loadFields(db: Db, boardId: string): Promise<BoardFieldRow[]> {
 }
 
 /**
+ * Re-read every answer stored under one field through its new kind, and
+ * write back what survives. A phone number typed into a text field is a
+ * phone number; the word "maybe" is not a date, and it is cleared rather
+ * than left behind as a value the field can no longer mean.
+ *
+ * Small on purpose: a board is a few hundred cards at the outside, and this
+ * only runs on the save that changes a kind.
+ */
+async function convertAnswers(
+  db: Db,
+  boardId: string,
+  field: FieldInput
+): Promise<Response | null> {
+  const { data, error } = await db
+    .from('board_cards')
+    .select('id, properties')
+    .eq('board_id', boardId)
+    .not(`properties->${field.key}`, 'is', null);
+  if (error) return json({ error: error.message }, 500);
+
+  for (const card of (data ?? []) as Pick<BoardCardRow, 'id' | 'properties'>[]) {
+    const properties = { ...card.properties };
+    const converted = normalizeAnswer(field, properties[field.key]);
+    if (converted === null) delete properties[field.key];
+    else properties[field.key] = converted;
+    const { error: writeError } = await db
+      .from('board_cards')
+      .update({ properties })
+      .eq('id', card.id);
+    if (writeError) return json({ error: writeError.message }, 500);
+  }
+  return null;
+}
+
+/**
  * Reconcile a board's fields against the list that was sent, the way
- * applyColumns does: still listed (update — but never the kind), new
- * (insert), gone but answered on some card (archive), gone and unanswered
- * (delete). An archived field keeps showing in a drawer while the card has
- * an answer under it (CardDrawer), so nothing typed is ever hidden.
+ * applyColumns does: still listed (update), new (insert), gone but answered
+ * on some card (archive), gone and unanswered (delete). An archived field
+ * keeps showing in a drawer while the card has an answer under it
+ * (CardDrawer), so nothing typed is ever hidden.
+ *
+ * A field's kind can change, and the answers already on the cards are put
+ * through the new kind when it does (convertAnswers). Files are the one
+ * exception in both directions: those answers name rows in
+ * board_attachments holding real bytes, and a kind change would strand them.
  */
 async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise<Response | null> {
   const existing = await loadFields(db, boardId);
   const byKey = new Map(existing.map((field) => [field.key, field]));
   const wanted = new Set(next.map((field) => field.key));
 
+  const recast: FieldInput[] = [];
   for (const field of next) {
     const current = byKey.get(field.key);
-    if (current && current.kind !== field.kind) {
-      return json(
-        {
-          error: `"${current.label}" is a ${current.kind} field and the answers on the cards are shaped by that. Archive it and add a new one instead.`,
-        },
-        400
-      );
+    if (!current || current.kind === field.kind) continue;
+    if (current.kind === 'files' || field.kind === 'files') {
+      const reason =
+        current.kind === 'files'
+          ? `"${current.label}" holds files, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
+          : `"${current.label}" already has answers, so it cannot become a files field`;
+      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
     }
+    recast.push(field);
   }
 
   for (const field of next) {
@@ -396,6 +442,7 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
       const { error } = await db
         .from('board_fields')
         .update({
+          kind: field.kind,
           label: field.label,
           options: field.options,
           hint: field.hint,
@@ -412,6 +459,14 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
       const { error } = await db.from('board_fields').insert({ ...field, board_id: boardId });
       if (error) return json({ error: error.message }, 500);
     }
+  }
+
+  // After the rows, so an answer is never read through a kind the field
+  // does not have yet; a failure here leaves the field changed and the
+  // answers as they were, which the next save puts right.
+  for (const field of recast) {
+    const failed = await convertAnswers(db, boardId, field);
+    if (failed) return failed;
   }
 
   const dropped = existing.filter((field) => !wanted.has(field.key));

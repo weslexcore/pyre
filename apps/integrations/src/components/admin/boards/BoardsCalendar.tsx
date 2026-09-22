@@ -30,7 +30,7 @@ import { BOARDS_HREF } from '@/lib/boards/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { toolbarButtonClass, todayEastern } from '../goalsUi';
+import { todayEastern, toolbarButtonClass } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';

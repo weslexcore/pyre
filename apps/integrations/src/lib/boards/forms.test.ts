@@ -3,21 +3,30 @@ import type { BoardFieldRow, BoardFormRow } from '@/lib/db';
 import type { ParseResult } from '@/lib/goals/validate';
 import {
   answerOf,
+  answerProblem,
   defaultFormConfig,
+  FORM_DONE_HREF,
+  FORM_DONE_LABEL,
   type FormConfig,
   finalizeForm,
   formConfigOf,
+  formDoneLink,
   formFieldError,
   formHref,
+  formNotifyError,
   formQuestions,
   formTitle,
   isAnswered,
+  isBlankAnswer,
+  notifyRecipients,
   parseFormPatch,
   parseSubmission,
   questionId,
+  type ResolvedQuestion,
   renderTitle,
   templateKeys,
 } from './forms';
+import { KIND_PROBLEMS } from './validate';
 
 function value<T>(result: ParseResult<T>): T {
   if (!result.ok) throw new Error(`expected ok, got: ${result.error}`);
@@ -78,6 +87,10 @@ const base: FormConfig = {
   intro: '',
   confirmation: '',
   submitLabel: 'Send',
+  notify: [],
+  confetti: false,
+  doneHref: '',
+  doneLabel: '',
   questions: [
     { kind: 'builtin', key: 'title', label: null, hint: null, required: true },
     { kind: 'field', key: 'contact_name', label: null, hint: null, required: true },
@@ -111,6 +124,10 @@ describe('defaultFormConfig', () => {
     expect(config.questions[0]).toMatchObject({ kind: 'builtin', key: 'title', required: true });
     expect(config.questions.map((q) => q.key)).not.toContain('retired');
     expect(config.questions.slice(1).every((q) => !q.required)).toBe(true);
+    expect(config.notify).toEqual([]);
+    expect(config.confetti).toBe(false);
+    expect(config.doneHref).toBe('');
+    expect(config.doneLabel).toBe('');
   });
 
   it('reads a row back into camelCase', () => {
@@ -127,6 +144,10 @@ describe('defaultFormConfig', () => {
       confirmation: 'Thanks',
       submit_label: 'Go',
       background_path: null,
+      notify_emails: ['DANA@pyresauna.com'.toLowerCase()],
+      confetti: true,
+      done_href: '/admin/boards',
+      done_label: 'Open the board',
       questions: base.questions,
       created_by: null,
       updated_by: null,
@@ -139,6 +160,10 @@ describe('defaultFormConfig', () => {
       titleMode: 'template',
       titleTemplate: 'Hi {contact_name}',
       submitLabel: 'Go',
+      notify: ['dana@pyresauna.com'],
+      confetti: true,
+      doneHref: '/admin/boards',
+      doneLabel: 'Open the board',
     });
   });
 });
@@ -516,5 +541,295 @@ describe('several dates on a question', () => {
       [dateField]
     );
     expect(answerOf(several, ['2026-10-03', '2026-10-04'])).toEqual(['2026-10-03', '2026-10-04']);
+  });
+});
+
+describe('who a submission wakes', () => {
+  const dana = { email: 'dana@pyresauna.com' };
+  const sam = { email: 'sam@pyresauna.com' };
+
+  it('takes a list of addresses, lowercased and deduplicated', () => {
+    const patch = value(
+      parseFormPatch({ notify: ['Dana@pyresauna.com', 'dana@pyresauna.com', ' '] })
+    );
+    expect(patch.notify).toEqual(['dana@pyresauna.com']);
+  });
+
+  it('refuses anything that is not a list of addresses', () => {
+    expect(error(parseFormPatch({ notify: 'dana@pyresauna.com' }))).toMatch(/list/);
+    expect(error(parseFormPatch({ notify: ['dana'] }))).toMatch(/not an address/);
+    expect(
+      error(parseFormPatch({ notify: Array.from({ length: 21 }, (_, i) => `p${i}@pyre.com`) }))
+    ).toMatch(/at most 20/);
+  });
+
+  it('refuses a name that cannot open the board', () => {
+    expect(formNotifyError({ notify: ['dana@pyresauna.com'] }, [dana, sam])).toBeNull();
+    expect(formNotifyError({ notify: [] }, [])).toBeNull();
+    expect(formNotifyError({ notify: ['nobody@pyresauna.com'] }, [dana])).toMatch(
+      /cannot open this board/
+    );
+  });
+
+  it('wakes everyone holding the board until the form names somebody', () => {
+    const holders = ['dana@pyresauna.com', 'sam@pyresauna.com'];
+    expect(notifyRecipients([], holders)).toEqual(holders);
+    expect(notifyRecipients(['sam@pyresauna.com'], holders)).toEqual(['sam@pyresauna.com']);
+  });
+
+  it('drops a name that has since lost the board', () => {
+    expect(notifyRecipients(['gone@pyresauna.com'], ['dana@pyresauna.com'])).toEqual([]);
+  });
+});
+
+describe('confetti', () => {
+  it('is a flag on the form and nothing else', () => {
+    expect(value(parseFormPatch({ confetti: true })).confetti).toBe(true);
+    expect(value(parseFormPatch({ confetti: false })).confetti).toBe(false);
+    expect(error(parseFormPatch({ confetti: 'yes' }))).toMatch(/true or false/);
+  });
+});
+
+describe('the button under the thank-you', () => {
+  it('sends people home when the form has not said otherwise', () => {
+    expect(formDoneLink({ doneHref: '', doneLabel: '' })).toEqual({
+      href: FORM_DONE_HREF,
+      label: FORM_DONE_LABEL,
+    });
+  });
+
+  it('takes the link and the label the form was given', () => {
+    expect(formDoneLink({ doneHref: '/admin/boards', doneLabel: 'Open the board' })).toEqual({
+      href: '/admin/boards',
+      label: 'Open the board',
+    });
+  });
+
+  it('labels a link of its own when nobody wrote a label', () => {
+    expect(formDoneLink({ doneHref: 'https://pyresauna.com/rentals', doneLabel: '' })).toEqual({
+      href: 'https://pyresauna.com/rentals',
+      label: 'Continue',
+    });
+  });
+
+  it('falls back home rather than following something unsafe', () => {
+    for (const href of ['javascript:alert(1)', 'data:text/html,hi', '//evil.example', 'nope']) {
+      expect(formDoneLink({ doneHref: href, doneLabel: 'Go' }).href).toBe(FORM_DONE_HREF);
+    }
+  });
+
+  it('refuses to save a link that is neither https nor a path', () => {
+    expect(value(parseFormPatch({ doneHref: '/thanks' })).doneHref).toBe('/thanks');
+    expect(value(parseFormPatch({ doneHref: 'https://pyresauna.com' })).doneHref).toBe(
+      'https://pyresauna.com'
+    );
+    // Blank is allowed: it is how a form goes back to the default.
+    expect(value(parseFormPatch({ doneHref: '  ' })).doneHref).toBe('');
+    expect(error(parseFormPatch({ doneHref: 'javascript:alert(1)' }))).toMatch(/https/);
+    expect(error(parseFormPatch({ doneHref: 'http://pyresauna.com' }))).toMatch(/https/);
+  });
+});
+
+describe('an answer that does not hold', () => {
+  const emailQuestion = {
+    id: 'contact_email',
+    kind: 'field' as const,
+    key: 'contact_email',
+    label: 'Email',
+    hint: null,
+    required: false,
+    multiple: false,
+    future: false,
+    field: { kind: 'email' as const, options: [] },
+  };
+  const phoneQuestion = {
+    ...emailQuestion,
+    id: 'phone',
+    key: 'phone',
+    label: 'Phone',
+    field: { kind: 'phone' as const, options: [] },
+  };
+
+  it('says so rather than dropping it, even when nobody had to answer', () => {
+    expect(answerProblem(emailQuestion, 'dana@')).toMatch(/email address/);
+    expect(answerProblem(phoneQuestion, '555')).toMatch(/phone number/);
+  });
+
+  it('has nothing to say about a blank optional question, or a good answer', () => {
+    expect(answerProblem(emailQuestion, '')).toBeNull();
+    expect(answerProblem(emailQuestion, null)).toBeNull();
+    expect(answerProblem(emailQuestion, 'dana@pyresauna.com')).toBeNull();
+  });
+
+  it('asks for a required answer in the usual words', () => {
+    expect(answerProblem({ ...emailQuestion, required: true }, '')).toBe('This one is needed.');
+  });
+
+  it('turns a bad address away at the door as well', () => {
+    const form: FormConfig = {
+      ...base,
+      titleMode: 'template',
+      titleTemplate: 'Rental',
+      questions: [
+        { kind: 'field', key: 'contact_email', label: null, hint: null, required: false },
+      ],
+    };
+    const emailField = field({ key: 'contact_email', label: 'Email', kind: 'email' });
+    const bad = parseSubmission(
+      form,
+      [emailField],
+      { answers: { contact_email: 'dana@' } },
+      'New lead'
+    );
+    expect(error(bad)).toMatch(/email address/);
+    const good = parseSubmission(
+      form,
+      [emailField],
+      { answers: { contact_email: ' Dana@PyreSauna.com ' } },
+      'New lead'
+    );
+    expect(value(good).properties.contact_email).toBe('dana@pyresauna.com');
+  });
+});
+
+describe('a date that has to be still to come', () => {
+  const requested = field({ key: 'requested_date', label: 'Date', kind: 'date' });
+  const dateQuestion = (extra: Partial<ResolvedQuestion> = {}): ResolvedQuestion => ({
+    id: 'requested_date',
+    kind: 'field',
+    key: 'requested_date',
+    label: 'Date',
+    hint: null,
+    required: false,
+    multiple: false,
+    future: true,
+    field: { kind: 'date', options: [] },
+    ...extra,
+  });
+
+  it('is carried on the question, and only for a date field', () => {
+    const questions = value(
+      parseFormPatch({
+        questions: [
+          { kind: 'field', key: 'requested_date', future: true },
+          { kind: 'field', key: 'contact_name', future: true },
+          { kind: 'builtin', key: 'notes', future: true },
+        ],
+      })
+    ).questions;
+    expect(questions?.[0]).toMatchObject({ future: true });
+    // The flag is kept on any field question but only ever means something
+    // on a date, which formQuestions is where it is settled.
+    expect(questions?.[2].future).toBeUndefined();
+    const resolved = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [
+          {
+            kind: 'field',
+            key: 'requested_date',
+            label: null,
+            hint: null,
+            required: false,
+            future: true,
+          },
+          {
+            kind: 'field',
+            key: 'contact_name',
+            label: null,
+            hint: null,
+            required: false,
+            future: true,
+          },
+        ],
+      },
+      [requested, contactName]
+    );
+    expect(resolved[0].future).toBe(true);
+    expect(resolved[1].future).toBe(false);
+  });
+
+  it('refuses a flag that is neither true nor false', () => {
+    const bad = parseFormPatch({
+      questions: [{ kind: 'field', key: 'requested_date', future: 'yes' }],
+    });
+    expect(error(bad)).toMatch(/future must be true or false/);
+  });
+
+  it('turns away a date that has gone, and takes today', () => {
+    const question = dateQuestion();
+    expect(answerProblem(question, '2026-09-21', '2026-09-22')).toBe(
+      'That date has already passed.'
+    );
+    expect(answerProblem(question, '2026-09-22', '2026-09-22')).toBeNull();
+    expect(answerProblem(question, '2026-09-23', '2026-09-22')).toBeNull();
+    // Nothing at all is still nothing to say about an optional question.
+    expect(answerProblem(question, null, '2026-09-22')).toBeNull();
+  });
+
+  it('turns away a list with anything gone in it', () => {
+    const question = dateQuestion({ multiple: true });
+    expect(answerProblem(question, ['2026-09-23', '2026-09-20'], '2026-09-22')).toMatch(
+      /today or later/
+    );
+    expect(answerProblem(question, ['2026-09-23', '2026-09-24'], '2026-09-22')).toBeNull();
+  });
+
+  it('says nothing about a date question that was not asked to care', () => {
+    expect(answerProblem(dateQuestion({ future: false }), '2020-01-01', '2026-09-22')).toBeNull();
+  });
+
+  it('closes the door on a past date at the route as well', () => {
+    const form: FormConfig = {
+      ...base,
+      titleMode: 'template',
+      titleTemplate: 'Rental',
+      questions: [
+        {
+          kind: 'field',
+          key: 'requested_date',
+          label: null,
+          hint: null,
+          required: false,
+          future: true,
+        },
+      ],
+    };
+    const gone = parseSubmission(
+      form,
+      [requested],
+      { answers: { requested_date: '2020-01-01' } },
+      'New lead'
+    );
+    expect(error(gone)).toMatch(/already passed/);
+  });
+});
+
+describe('what the form says while it is being filled in', () => {
+  it('knows a blank answer from an answered one, whatever the control sent', () => {
+    expect(isBlankAnswer(null)).toBe(true);
+    expect(isBlankAnswer(undefined)).toBe(true);
+    expect(isBlankAnswer('   ')).toBe(true);
+    expect(isBlankAnswer([])).toBe(true);
+    expect(isBlankAnswer('dana@')).toBe(false);
+    expect(isBlankAnswer(['2026-10-03'])).toBe(false);
+    // A no is an answer, and so is zero.
+    expect(isBlankAnswer(false)).toBe(false);
+    expect(isBlankAnswer(0)).toBe(false);
+  });
+
+  it('says the same words the card drawer says', () => {
+    const question: ResolvedQuestion = {
+      id: 'contact_email',
+      kind: 'field',
+      key: 'contact_email',
+      label: 'Email',
+      hint: null,
+      required: false,
+      multiple: false,
+      future: false,
+      field: { kind: 'email', options: [] },
+    };
+    expect(answerProblem(question, 'dana@')).toBe(KIND_PROBLEMS.email);
   });
 });

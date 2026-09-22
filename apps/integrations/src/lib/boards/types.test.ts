@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  answerLimit,
+  BOARD_LIMITS,
   boardGrantKey,
   boardSlugFromGrant,
   COLUMN_KIND_HINTS,
@@ -62,13 +64,21 @@ describe('kind guards', () => {
     for (const kind of COLUMN_KINDS) expect(isColumnKind(kind)).toBe(true);
     expect(isColumnKind('waiting')).toBe(false);
     for (const kind of FIELD_KINDS) expect(isFieldKind(kind)).toBe(true);
-    expect(isFieldKind('email')).toBe(false);
+    expect(isFieldKind('address')).toBe(false);
   });
 
   it('counts both done and dropped as finished', () => {
     expect(isFinishedKind('done')).toBe(true);
     expect(isFinishedKind('dropped')).toBe(true);
     expect(isFinishedKind('open')).toBe(false);
+  });
+
+  it('gives a long text room and holds every other answer to a line', () => {
+    expect(answerLimit('long_text')).toBe(BOARD_LIMITS.longAnswer);
+    expect(answerLimit('long_text')).toBeGreaterThan(answerLimit('text'));
+    for (const kind of ['text', 'email', 'phone', 'choice'] as const) {
+      expect(answerLimit(kind)).toBe(BOARD_LIMITS.textAnswer);
+    }
   });
 
   it('knows which field kinds need options', () => {

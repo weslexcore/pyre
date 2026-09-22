@@ -21,6 +21,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import { canViewBoard } from '@/lib/boards/access';
+import { notifyRecipients } from '@/lib/boards/forms';
 import { mentionedEmails, mentionPeople } from '@/lib/boards/mentions';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
 import { ALL_TASKS_HREF } from '@/lib/goals/types';
@@ -239,15 +240,22 @@ export async function notifyGoalComment(
  * A lead arrived from the web. This is the one notice nobody caused, so it
  * has no actor to exclude — everyone who holds the board hears, which is the
  * point of routing enquiries here instead of into somebody's inbox.
+ *
+ * A form may narrow that to the people it names (notifyRecipients); the
+ * names are still read against the board's holders as they stand now, so
+ * nobody hears about a board they no longer hold.
  */
 export async function notifyIntakeCard(
   db: SupabaseClient,
   card: Pick<BoardCardRow, 'id' | 'title'>,
   board: Pick<BoardRow, 'slug' | 'name' | 'card_noun'>,
-  via?: string
+  via?: string,
+  notify: string[] = []
 ): Promise<void> {
   const rows = (await listStaff()) ?? [];
-  await createNotifications(db, boardRecipients(rows, board.slug), {
+  const recipients = notifyRecipients(notify, boardRecipients(rows, board.slug));
+  if (recipients.length === 0) return;
+  await createNotifications(db, recipients, {
     kind: KIND,
     ...intakeCardText({
       cardTitle: card.title,

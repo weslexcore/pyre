@@ -49,7 +49,12 @@ async function resolve(): Promise<State | Response> {
 
   const db = getDb();
   if (!db) {
-    return { kind: 'closed', status: 503, title: 'Unavailable', message: 'Please try again shortly.' };
+    return {
+      kind: 'closed',
+      status: 503,
+      title: 'Unavailable',
+      message: 'Please try again shortly.',
+    };
   }
 
   const board = await loadBoardBySlug(db, slug);
@@ -116,6 +121,9 @@ if (state.kind === 'closed') Astro.response.status = state.status;
               submitLabel: state.config.submitLabel,
               intro: state.config.intro,
               confirmation: state.config.confirmation,
+              confetti: state.config.confetti,
+              doneHref: state.config.doneHref,
+              doneLabel: state.config.doneLabel,
             }}
             questions={state.questions}
             noun={state.noun}

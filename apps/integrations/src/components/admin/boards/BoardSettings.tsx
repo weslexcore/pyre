@@ -14,9 +14,10 @@
 //
 // Fields — the questions a card on this board answers — are edited the same
 // way, as a list saved whole, and reordered the same way, by dragging the
-// handles (ColumnOrder). Choose a field's kind before adding it: the
-// answers on the cards are shaped by it, so the first automatic save fixes
-// the kind and a change of mind means archive it and add a new one. A
+// handles (ColumnOrder). A field's kind can be changed after the fact: the
+// save puts every answer already on the cards through the new kind and
+// clears what will not go — a "maybe" in a field that has become a date.
+// Files are the exception, since those answers name real uploads. A
 // removed field is deleted if no card has answered it and archived if one
 // has, so nothing typed is ever lost.
 
@@ -420,8 +421,14 @@ export function BoardSettings({
                 <select
                   className={`${selectBaseClass} w-32 shrink-0 disabled:opacity-60`}
                   value={draft.kind}
-                  disabled
-                  title="Choose the type before adding a field"
+                  // Files are the one kind that cannot be traded for another:
+                  // the answers name uploads, and nothing else can hold them.
+                  disabled={draft.kind === 'files'}
+                  title={
+                    draft.kind === 'files'
+                      ? 'A files field keeps its type'
+                      : 'Answers already on the cards are re-read as this type; what does not fit is cleared'
+                  }
                   aria-label={`Kind for ${draft.key}`}
                   onChange={(e) => setFieldDraft(index, { kind: e.target.value as FieldKind })}
                 >

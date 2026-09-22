@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardFieldRow } from '@/lib/db';
 import {
+  emailOf,
+  formatPhone,
   formatProperty,
+  normalizeAnswer,
   normalizeProperties,
   parseBoardCreate,
   parseBoardPatch,
   parseCardCreate,
   parseCardPatch,
+  phoneOf,
 } from './validate';
 
 const UUID = '3f1b8a2c-7d4e-4a1b-9c2d-5e6f7a8b9c0d';
@@ -110,6 +114,30 @@ describe('parseBoardCreate', () => {
 });
 
 describe('parseBoardPatch', () => {
+  it('defaults card labels on and preserves an explicit label preference independently of visibility', () => {
+    for (const showOnCard of [true, false]) {
+      for (const showLabelOnCard of [undefined, true, false]) {
+        const fields = value(
+          parseBoardPatch({
+            fields: [
+              {
+                key: 'party_size',
+                label: 'Party size',
+                kind: 'number',
+                showOnCard,
+                showLabelOnCard,
+              },
+            ],
+          })
+        ).fields;
+        expect(fields?.[0]).toMatchObject({
+          show_on_card: showOnCard,
+          show_label_on_card: showLabelOnCard !== false,
+        });
+      }
+    }
+  });
+
   it('touches only what was sent', () => {
     expect(value(parseBoardPatch({ name: 'Renamed' }))).toEqual({ name: 'Renamed' });
     expect(error(parseBoardPatch({}))).toMatch(/Nothing to change/);
@@ -321,6 +349,9 @@ describe('formatProperty', () => {
     expect(formatProperty({ kind: 'multi_choice' }, ['Tea', 'Towels'])).toBe('Tea, Towels');
     expect(formatProperty({ kind: 'number' }, 8)).toBe('8');
     expect(formatProperty({ kind: 'text' }, 'Dana')).toBe('Dana');
+    expect(formatProperty({ kind: 'date' }, '2026-10-03')).toBe('10.03.26');
+    // A value that is not a stored date is left as it is rather than blanked.
+    expect(formatProperty({ kind: 'date' }, 'next Tuesday')).toBe('next Tuesday');
     expect(formatProperty({ kind: 'text' }, null)).toBe('');
   });
 });
@@ -541,6 +572,41 @@ describe('due dates on the calendar', () => {
   });
 });
 
+describe('multiple requested dates', () => {
+  const fields = [field({ key: 'requested_date', kind: 'date' })];
+  it('normalizes date options and preserves other properties', () => {
+    expect(
+      normalizeProperties(
+        fields,
+        {
+          requested_date: [' 2026-10-03 ', '2026-10-10', '2026-10-03', '2026-02-31', 42],
+        },
+        { contact: 'Sam' }
+      )
+    ).toEqual({
+      contact: 'Sam',
+      requested_date: ['2026-10-03', '2026-10-10'],
+    });
+  });
+  it('clears an empty list and still accepts a single date', () => {
+    expect(
+      normalizeProperties(
+        fields,
+        { requested_date: [] },
+        {
+          requested_date: ['2026-10-03'],
+        }
+      )
+    ).toEqual({});
+    expect(normalizeProperties(fields, { requested_date: '2026-10-03' })).toEqual({
+      requested_date: '2026-10-03',
+    });
+  });
+  it('displays every option on cards', () => {
+    expect(formatProperty(fields[0], ['2026-10-03', '2026-10-10'])).toBe('10.03.26, 10.10.26');
+  });
+});
+
 describe('files answers', () => {
   const files = { kind: 'files', options: [] } as Pick<BoardFieldRow, 'kind' | 'options'>;
   const other = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
@@ -559,5 +625,87 @@ describe('files answers', () => {
     expect(formatProperty(files, [UUID])).toBe('1 file');
     expect(formatProperty(files, [])).toBe('');
     expect(formatProperty(files, 'nope')).toBe('');
+  });
+});
+
+describe('email and phone answers', () => {
+  const email: Pick<BoardFieldRow, 'kind' | 'options'> = { kind: 'email', options: [] };
+  const phone: Pick<BoardFieldRow, 'kind' | 'options'> = { kind: 'phone', options: [] };
+
+  it('keeps an address, lowercased, and refuses what is not one', () => {
+    expect(emailOf('  Dana@PyreSauna.com ')).toBe('dana@pyresauna.com');
+    expect(emailOf('dana+rentals@pyre.co.uk')).toBe('dana+rentals@pyre.co.uk');
+    for (const bad of ['dana', 'dana@', '@pyresauna.com', 'dana@pyresauna', 'a b@c.com', 12]) {
+      expect(emailOf(bad)).toBeNull();
+    }
+  });
+
+  it('reads a phone number however it was typed', () => {
+    expect(phoneOf('(212) 555-1234')).toBe('+12125551234');
+    expect(phoneOf('212.555.1234')).toBe('+12125551234');
+    expect(phoneOf('1 212 555 1234')).toBe('+12125551234');
+    expect(phoneOf('+44 20 7946 0958')).toBe('+442079460958');
+  });
+
+  it('refuses a number that is too short, too long, or not a number', () => {
+    for (const bad of ['555-1234', '212555123456', '+1234', 'call me', '', 2125551234]) {
+      expect(phoneOf(bad)).toBeNull();
+    }
+  });
+
+  it('writes every way of typing one number the same way', () => {
+    const typed = [
+      '2125551234',
+      '212-555-1234',
+      '212.555.1234',
+      '(212) 555 1234',
+      ' +1 (212) 555-1234 ',
+      '1-212-555-1234',
+    ];
+    const written = new Set(typed.map((raw) => formatPhone(phoneOf(raw) ?? '')));
+    expect([...written]).toEqual(['(212) 555-1234']);
+    // And what is stored is the one number, whichever way it arrived.
+    expect(new Set(typed.map((raw) => phoneOf(raw))).size).toBe(1);
+  });
+
+  it('shows a North American number the way it is read aloud', () => {
+    expect(formatPhone('+12125551234')).toBe('(212) 555-1234');
+    // Anything else is shown as it is stored rather than guessed at.
+    expect(formatPhone('+442079460958')).toBe('+442079460958');
+    expect(formatProperty(phone, '+12125551234')).toBe('(212) 555-1234');
+    expect(formatProperty(email, 'dana@pyresauna.com')).toBe('dana@pyresauna.com');
+  });
+
+  it('shapes an answer by its field, the way every other kind does', () => {
+    expect(normalizeAnswer(email, ' DANA@pyresauna.com ')).toBe('dana@pyresauna.com');
+    expect(normalizeAnswer(email, 'nope')).toBeNull();
+    expect(normalizeAnswer(phone, '212-555-1234')).toBe('+12125551234');
+    expect(normalizeAnswer(phone, 'nope')).toBeNull();
+  });
+});
+
+describe('long text answers', () => {
+  const long: Pick<BoardFieldRow, 'kind' | 'options'> = { kind: 'long_text', options: [] };
+
+  it('keeps the paragraphs, and trims only the edges', () => {
+    expect(normalizeAnswer(long, '  First thought.\n\nSecond thought.  ')).toBe(
+      'First thought.\n\nSecond thought.'
+    );
+    expect(normalizeAnswer(long, '   ')).toBeNull();
+    expect(normalizeAnswer(long, 42)).toBeNull();
+  });
+
+  it('holds far more than a line, and still has a limit', () => {
+    const answer = normalizeAnswer(long, 'a'.repeat(9000));
+    expect(typeof answer === 'string' && answer.length).toBe(4000);
+    // The same text in a short text field is still held to a line.
+    const short = normalizeAnswer({ kind: 'text', options: [] }, 'a'.repeat(9000));
+    expect(typeof short === 'string' && short.length).toBe(500);
+  });
+
+  it('reads as one line on a card, with the breaks closed up', () => {
+    expect(formatProperty(long, 'First thought.\n\nSecond thought.')).toBe(
+      'First thought. Second thought.'
+    );
   });
 });

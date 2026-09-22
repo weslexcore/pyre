@@ -15,10 +15,10 @@
 
 import type { PageAccess } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
-import type { BoardCardRow } from '@/lib/db';
+import type { BoardCardRow, StaffRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
-import { canManageBoards, canWorkGoal } from './access';
+import { canManageBoards, canViewBoard, canWorkGoal } from './access';
 
 /** Somebody a goal or a card can be assigned to. */
 export interface Assignable {
@@ -29,7 +29,25 @@ export interface Assignable {
 /** Active roster members with an email, by name. */
 export async function listAssignable(): Promise<Assignable[]> {
   const rows = await listStaff();
-  return (rows ?? [])
+  return byName(rows ?? []);
+}
+
+/**
+ * Who can open one board, by name. This is the audience a form may pick
+ * from when it names the people a submission wakes: a form decides who
+ * hears about a card, never who may see the board.
+ */
+export async function listBoardWatchers(slug: string): Promise<Assignable[]> {
+  const rows = await listStaff();
+  return byName(
+    (rows ?? []).filter((row) =>
+      canViewBoard({ isAdmin: row.is_admin, pages: row.pages ?? [] }, slug)
+    )
+  );
+}
+
+function byName(rows: StaffRow[]): Assignable[] {
+  return rows
     .filter((row) => row.active && (row.email ?? '').trim())
     .map((row) => {
       const email = (row.email ?? '').trim().toLowerCase();

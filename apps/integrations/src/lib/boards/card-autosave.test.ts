@@ -59,6 +59,40 @@ describe('card autosave', () => {
   });
 });
 
+describe('board settings autosave queue', () => {
+  it('saves the latest column list after an in-flight save without dropping other settings', async () => {
+    const request = deferred();
+    const save = vi
+      .fn()
+      .mockImplementationOnce(() => request.promise)
+      .mockResolvedValue(undefined);
+    const queue = new CardSaveQueue(save);
+    queue.add({ columns: [{ key: 'open', label: 'Open' }] });
+    const closing = queue.flush();
+    queue.add({ columns: [{ key: 'open', label: 'Incoming' }], dueOnCalendar: true });
+    queue.add({ columns: [{ key: 'open', label: 'Inbox' }], name: 'Leads' });
+    expect(save).toHaveBeenCalledTimes(1);
+    request.resolve();
+    await closing;
+    expect(save).toHaveBeenLastCalledWith({
+      columns: [{ key: 'open', label: 'Inbox' }],
+      dueOnCalendar: true,
+      name: 'Leads',
+    });
+    expect(queue.dirty).toBe(false);
+  });
+
+  it('retains a failed field removal so retry does not restore the removed field', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValue(undefined);
+    const queue = new CardSaveQueue(save);
+    queue.add({ fields: [] });
+    await expect(queue.flush()).rejects.toThrow('Offline');
+    queue.add({ description: 'Updated' });
+    await queue.flush();
+    expect(save).toHaveBeenLastCalledWith({ fields: [], description: 'Updated' });
+  });
+});
+
 const card = {
   id: 'card',
   title: 'Before',

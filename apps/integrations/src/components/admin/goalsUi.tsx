@@ -7,6 +7,7 @@
 // `send` helper so every mutation reports the API's own message.
 
 import type { ReactNode } from 'react';
+import { formatYmd } from '@/lib/boards/validate';
 import type {
   BoardCardRow,
   BoardColumnKind,
@@ -287,14 +288,13 @@ export function SectionTitle({ children, note }: { children: ReactNode; note?: R
   );
 }
 
-/** "Tue, 21 Sep" for a YYYY-MM-DD, spelled rather than formatted (see allTasks). */
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-export function formatYmd(ymd: string): string {
-  const [year, month, day] = ymd.split('-').map(Number);
-  if (!year || !month || !day || month < 1 || month > 12) return ymd;
-  return `${day} ${MONTHS[month - 1]}`;
-}
+/**
+ * "10.03.26" for a YYYY-MM-DD. The boards tool writes a calendar day one
+ * way everywhere — a due badge, a goal's target, a calendar heading, and a
+ * date answer on a card — so it is the lib's formatter, re-exported here
+ * for the islands that already reach for it.
+ */
+export { formatYmd };
 
 /** JSON mutation against the goals/boards routes; throws with the API's message. */
 export async function send<T>(

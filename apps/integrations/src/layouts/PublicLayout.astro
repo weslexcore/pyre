@@ -4,6 +4,7 @@
 // view transitions, or the assumption of a session. Kept out of search:
 // a form is shared by its link.
 import Favicon from '@/components/Favicon.astro';
+import { FormHeader } from '@/components/forms/FormHeader';
 import '@/styles/admin.css';
 
 interface Props {
@@ -46,6 +47,7 @@ const backgroundStyle = backgroundUrl
           : 'mx-auto max-w-lg px-4 py-10'
       }
     >
+      <FormHeader />
       <slot />
     </main>
   </body>

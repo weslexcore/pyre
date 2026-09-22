@@ -2,9 +2,12 @@
 // roster, and the fields page all render the same badges, the same answer
 // controls, and talk to the API the same way.
 
-import { type ReactNode, useState } from 'react';
-import type { GuestFieldValue, GuestProfileFieldRow } from '@/lib/db';
+import { type ReactNode, useEffect, useState } from 'react';
+import { answerLimit } from '@/lib/boards/types';
+import { formatPhone, KIND_PROBLEMS, normalizeAnswer, phoneOf } from '@/lib/boards/validate';
+import type { BoardFieldKind, GuestFieldValue, GuestProfileFieldRow } from '@/lib/db';
 import { type MembershipStanding, STANDING_LABELS } from '@/lib/guests/insights';
+import { textareaClass } from './goalsUi';
 import { Chip, inputClass, labelClass, readError, YesNo } from './incidentUi';
 
 const badgeBase =
@@ -73,7 +76,15 @@ export function AnswerPill({ label, value }: { label: string; value: string }) {
 export interface FieldDefinition {
   key: string;
   label: string;
-  kind: GuestProfileFieldRow['kind'] | 'date' | 'time' | 'time_range' | 'files';
+  kind:
+    | GuestProfileFieldRow['kind']
+    | 'long_text'
+    | 'email'
+    | 'phone'
+    | 'date'
+    | 'time'
+    | 'time_range'
+    | 'files';
   options: string[];
   hint?: string | null;
   archived?: boolean;
@@ -90,6 +101,7 @@ export function FieldInput({
   onChange,
   idPrefix = 'guest-field',
   multiple,
+  min,
 }: {
   field: FieldDefinition;
   value: GuestFieldValue | null | undefined;
@@ -98,6 +110,12 @@ export function FieldInput({
   idPrefix?: string;
   /** A date field takes several dates unless told to take one (a form question can say so). */
   multiple?: boolean;
+  /**
+   * For a date field: the earliest date the picker offers. A form question
+   * that insists on a date still to come passes today, so the past is greyed
+   * out rather than merely refused after the fact.
+   */
+  min?: string;
 }) {
   const id = `${idPrefix}-${field.key}`;
 
@@ -145,6 +163,33 @@ export function FieldInput({
           onChange={(next) => onChange(next)}
         />
       );
+    case 'long_text':
+      // The card's notes control, borrowed: the same box, wrapping at the
+      // edge, and draggable taller by whoever is filling it in.
+      return (
+        <textarea
+          id={id}
+          className={`${textareaClass} resize-y`}
+          maxLength={answerLimit('long_text')}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+        />
+      );
+    case 'email':
+      return (
+        <input
+          id={id}
+          className={inputClass}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          maxLength={254}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+        />
+      );
+    case 'phone':
+      return <PhoneInput id={id} value={value} onChange={onChange} />;
     case 'number':
       return (
         <input
@@ -159,26 +204,23 @@ export function FieldInput({
     case 'date':
       if (multiple === false) {
         // One date: the stored answer may still be a list from the drawer, so show its first.
-        const single = Array.isArray(value) ? (value[0] ?? '') : typeof value === 'string' ? value : '';
+        const single = Array.isArray(value)
+          ? (value[0] ?? '')
+          : typeof value === 'string'
+            ? value
+            : '';
         return (
           <input
             id={id}
             className={inputClass}
             type="date"
+            min={min}
             value={single}
             onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
           />
         );
       }
-      return (
-        <input
-          id={id}
-          className={inputClass}
-          type="date"
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
-        />
-      );
+      return <DatesInput id={id} label={field.label} value={value} onChange={onChange} min={min} />;
     case 'time':
       return (
         <input
@@ -205,6 +247,145 @@ export function FieldInput({
         />
       );
   }
+}
+
+/**
+ * A phone number, written the one way. Whatever anybody types — brackets,
+ * dots, dashes, spaces, a country code or not — is read into the canonical
+ * +<country><digits> that is stored, and what is shown is that number in
+ * the house format. So a number typed as 212.555.1234 on one card and as
+ * (212) 555 1234 on another reads identically in the drawer, on the card,
+ * and on a form.
+ *
+ * While the field has focus it holds exactly what is being typed, because
+ * reformatting under somebody's cursor moves it; the tidying happens on the
+ * way out. Something that is not a number yet is still passed up as typed,
+ * so FieldRow can say so rather than the answer vanishing.
+ */
+function PhoneInput({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: GuestFieldValue | null | undefined;
+  onChange: (next: GuestFieldValue | null) => void;
+}) {
+  const stored = typeof value === 'string' ? value : '';
+  // Non-null only while the field is being typed into.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  return (
+    <input
+      id={id}
+      className={inputClass}
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      maxLength={40}
+      value={draft ?? formatPhone(stored)}
+      onFocus={() => setDraft(formatPhone(stored))}
+      onChange={(e) => {
+        const typed = e.target.value;
+        setDraft(typed);
+        if (!typed.trim()) {
+          onChange(null);
+          return;
+        }
+        // The canonical number once it is one, and the raw text until then.
+        onChange(phoneOf(typed) ?? typed);
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+}
+
+/**
+ * One picker per date, with room for one more. The slots are the control's
+ * own, not derived from the saved answer: a date input reports '' the
+ * moment one of its segments is deleted, and a row that vanished on that
+ * would take the half-typed date with it. So a slot stays while it is
+ * being typed in, the answer hears only the finished dates, and a change
+ * made elsewhere (a calendar drag) is followed only when what is stored
+ * no longer matches what the slots say.
+ */
+function DatesInput({
+  id,
+  label,
+  value,
+  onChange,
+  min,
+}: {
+  id: string;
+  label: string;
+  value: GuestFieldValue | null | undefined;
+  onChange: (next: GuestFieldValue | null) => void;
+  /** The earliest date the picker offers; undefined offers any. */
+  min?: string;
+}) {
+  const stored = Array.isArray(value) ? value : typeof value === 'string' && value ? [value] : [];
+  const storedKey = stored.join('|');
+  const [slots, setSlots] = useState<string[]>(() => (stored.length > 0 ? stored : ['']));
+  useEffect(() => {
+    setSlots((current) => {
+      if (current.filter(Boolean).join('|') === storedKey) return current;
+      return storedKey ? storedKey.split('|') : [''];
+    });
+  }, [storedKey]);
+
+  const emit = (next: string[]) => {
+    const unique = [...new Set(next.filter(Boolean))];
+    onChange(unique.length === 0 ? null : unique.length === 1 ? unique[0] : unique);
+  };
+  const update = (index: number, date: string) => {
+    const next = slots.map((slot, i) => (i === index ? date : slot));
+    setSlots(next);
+    emit(next);
+  };
+  const remove = (index: number) => {
+    const rest = slots.filter((_, i) => i !== index);
+    const next = rest.length > 0 ? rest : [''];
+    setSlots(next);
+    emit(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      {slots.map((date, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: Controlled picker slots retain focus while their date changes.
+        <div key={index} className="flex items-center gap-2">
+          <input
+            id={index === 0 ? id : `${id}-${index}`}
+            aria-label={`${label}, date ${index + 1}`}
+            className={inputClass}
+            type="date"
+            min={min}
+            value={date}
+            onChange={(event) => update(index, event.target.value)}
+          />
+          {(slots.length > 1 || date) && (
+            <button
+              type="button"
+              className="text-xs text-white/60 hover:text-white"
+              aria-label={`Remove ${label} date ${index + 1}`}
+              onClick={() => remove(index)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+      {slots.every(Boolean) && (
+        <button
+          type="button"
+          className="text-xs text-white/60 hover:text-white"
+          onClick={() => setSlots((current) => [...current, ''])}
+        >
+          Add another date
+        </button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -252,7 +433,16 @@ function TimeRangeInput({
   );
 }
 
-/** Label + hint + control, laid out the same on every form. */
+/**
+ * Label + hint + control, laid out the same on every form, and on the way
+ * out it says whether what was typed can be what the field is. That matters
+ * most where nothing else would say so: a card drawer saves as you type,
+ * and an address that is not an address is dropped by the route without a
+ * word (lib/boards/validate normalizeProperties). Now the row says it.
+ *
+ * Only on leaving the field, and only about something actually typed —
+ * while somebody is still mid-address they are not yet wrong.
+ */
 export function FieldRow({
   field,
   value,
@@ -264,17 +454,45 @@ export function FieldRow({
   onChange: (next: GuestFieldValue | null) => void;
   idPrefix?: string;
 }) {
-  // YesNo carries its own label and hint.
+  const [problem, setProblem] = useState<string | null>(null);
+
+  // YesNo carries its own label and hint, and no yes/no can be mistyped.
   if (field.kind === 'yes_no')
     return <FieldInput field={field} value={value} onChange={onChange} idPrefix={idPrefix} />;
+
+  const check = () => {
+    const message = KIND_PROBLEMS[field.kind as BoardFieldKind];
+    if (!message) return;
+    if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) {
+      setProblem(null);
+      return;
+    }
+    const kind = field.kind as BoardFieldKind;
+    setProblem(normalizeAnswer({ kind, options: field.options }, value) === null ? message : null);
+  };
+
   return (
-    <div>
+    // biome-ignore lint/a11y/noStaticElementInteractions: Focus leaving the field, not a mouse affordance: onBlur adds nothing a keyboard cannot reach.
+    <div onBlur={check}>
       <label className={labelClass} htmlFor={`${idPrefix}-${field.key}`}>
         {field.label}
         {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
       </label>
       {field.hint && <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>}
-      <FieldInput field={field} value={value} onChange={onChange} idPrefix={idPrefix} />
+      <FieldInput
+        field={field}
+        value={value}
+        idPrefix={idPrefix}
+        onChange={(next) => {
+          setProblem(null);
+          onChange(next);
+        }}
+      />
+      {problem && (
+        <p role="alert" className="mt-1 text-sm text-[var(--pyre-red)]">
+          {problem}
+        </p>
+      )}
     </div>
   );
 }

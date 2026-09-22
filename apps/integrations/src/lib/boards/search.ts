@@ -36,6 +36,17 @@ export function cardSearchText(
     const value = card.properties[field.key];
     if (value == null) continue;
     parts.push(field.label, formatProperty(field, value));
+    // Two kinds are shown in one shape and stored in another — a date as
+    // 10.03.26, a phone as (212) 555-1234 — and both are worth finding by
+    // either, so the stored form goes in as well. A phone also goes in as
+    // bare digits, which is how somebody with the number in front of them
+    // is likely to type it.
+    if (field.kind === 'date') {
+      for (const item of Array.isArray(value) ? value : [value]) parts.push(String(item));
+    }
+    if (field.kind === 'phone' && typeof value === 'string') {
+      parts.push(value, value.replace(/\D/g, ''));
+    }
   }
   return fold(parts.join('\n'));
 }

@@ -12,6 +12,7 @@ const questions: ResolvedQuestion[] = [
     hint: null,
     required: true,
     multiple: false,
+    future: false,
     field: null,
   },
   {
@@ -22,6 +23,7 @@ const questions: ResolvedQuestion[] = [
     hint: 'First is fine',
     required: false,
     multiple: false,
+    future: false,
     field: { kind: 'text', options: [] },
   },
   {
@@ -32,6 +34,7 @@ const questions: ResolvedQuestion[] = [
     hint: null,
     required: true,
     multiple: false,
+    future: false,
     field: { kind: 'yes_no', options: [] },
   },
 ];
@@ -40,7 +43,15 @@ function render(layout: 'single' | 'stepped', asked: ResolvedQuestion[] = questi
   return renderToStaticMarkup(
     <BoardForm
       slug="rentals"
-      config={{ layout, submitLabel: 'Send it', intro, confirmation: '' }}
+      config={{
+        layout,
+        submitLabel: 'Send it',
+        intro,
+        confirmation: '',
+        confetti: false,
+        doneHref: '',
+        doneLabel: '',
+      }}
       questions={asked}
       noun="lead"
     />
@@ -63,7 +74,7 @@ describe('BoardForm', () => {
     const html = render('stepped');
     expect(html).not.toContain('for="form-title"');
     expect(html).not.toContain('Your name');
-    expect(html).toContain('3 questions, one at a time.');
+    expect(html).toContain('3 questions.');
     expect(html).toContain('>Next<');
     expect(html).not.toContain('1 of 3');
     expect(html).not.toContain('>Back<');
@@ -94,6 +105,7 @@ describe('BoardForm', () => {
       hint: null,
       required: true,
       multiple: false,
+      future: false,
       field: { kind: 'files', options: [] },
     };
     const html = render('single', [files]);
@@ -109,5 +121,18 @@ describe('BoardForm', () => {
     expect(html.match(/\(required\)/g)).toHaveLength(1);
     expect(html.match(/Catering\?/g)).toHaveLength(1);
     expect(html).toContain('>Required<');
+  });
+
+  it('animates a step only when the questions are asked one at a time', () => {
+    const stepped = render('stepped');
+    // The cover is the first step, so the wrapper is already there and the
+    // first question arrives the same way every later one does.
+    expect(stepped).toContain('form-step');
+    expect(stepped).toContain('data-direction="forward"');
+    expect(render('single')).not.toContain('form-step');
+  });
+
+  it('pops nothing until a form says to, and never on the way in', () => {
+    expect(render('single')).not.toContain('canvas');
   });
 });

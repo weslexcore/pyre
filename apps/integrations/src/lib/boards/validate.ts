@@ -20,6 +20,7 @@ import {
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import type { ColumnKind, FieldKind } from './types';
 import {
+  answerLimit,
   BOARD_LIMITS,
   isColumnKind,
   isFieldKind,
@@ -165,8 +166,8 @@ function normalizeOptions(value: unknown): string[] {
  * A board's field list, the way the columns come: whole, keyed, and
  * reconciled by the route. A pick-one or pick-any field needs at least two
  * options or there is nothing to pick between. Kinds are not checked against
- * what is stored — the route refuses a kind change on an existing key,
- * because the answers already on the cards are shaped by it.
+ * what is stored — a field may change kind, and the route is what puts the
+ * answers already on the cards through the new one.
  */
 function parseFields(value: unknown): ParseResult<FieldInput[]> {
   if (!Array.isArray(value)) return fail('fields must be an array');
@@ -622,6 +623,57 @@ function timeOf(raw: unknown): string | null {
   return TIME_RE.test(value) ? value : null;
 }
 
+/**
+ * An address, lowercased, or null. Deliberately not the full RFC: one @,
+ * something either side, a dot in the domain, no spaces. That is the check
+ * worth making at the door — whether the address exists is answered by
+ * sending to it, not by a regular expression.
+ */
+export function emailOf(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim().toLowerCase();
+  if (value.length > 254) return null;
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(value) ? value : null;
+}
+
+/**
+ * A phone number as +<country><digits>, or null. What people type is full
+ * of brackets, dots, spaces and dashes, so only the digits are read: ten of
+ * them is a North American number, eleven starting with 1 is the same
+ * number said longer, and anything written with a leading + is taken as
+ * already saying its own country.
+ */
+export function phoneOf(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (!value) return null;
+  const digits = value.replace(/\D/g, '');
+  if (value.startsWith('+')) {
+    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : null;
+  }
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return null;
+}
+
+/** '+12125551234' as '(212) 555-1234'; anything else as it is stored. */
+export function formatPhone(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const match = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(value);
+  return match ? `(${match[1]}) ${match[2]}-${match[3]}` : value;
+}
+
+/**
+ * What to say when something was typed into a field that cannot hold it.
+ * Only the kinds that are a rule about their text: a pick-one whose option
+ * the board has since dropped is our mess, not the typist's, and is quietly
+ * left behind. Shared so the form and the card drawer say the same thing.
+ */
+export const KIND_PROBLEMS: Partial<Record<BoardFieldKind, string>> = {
+  email: 'That does not look like an email address.',
+  phone: 'That does not look like a phone number.',
+};
+
 /** One answer, coerced to the shape its field's kind stores. */
 export function normalizeAnswer(
   field: Pick<BoardFieldRow, 'kind' | 'options'>,
@@ -629,6 +681,10 @@ export function normalizeAnswer(
 ): BoardFieldValue | null {
   const kind: BoardFieldKind = field.kind;
   switch (kind) {
+    case 'email':
+      return emailOf(raw);
+    case 'phone':
+      return phoneOf(raw);
     case 'yes_no':
       if (typeof raw === 'boolean') return raw;
       if (raw === 'true') return true;
@@ -650,8 +706,20 @@ export function normalizeAnswer(
       const end = timeOf(raw[1]);
       return start && end ? [start, end] : null;
     }
-    case 'date':
-      return typeof raw === 'string' && isYmd(raw.trim()) ? raw.trim() : null;
+    case 'date': {
+      if (!Array.isArray(raw)) {
+        return typeof raw === 'string' && isYmd(raw.trim()) ? raw.trim() : null;
+      }
+      const dates = [
+        ...new Set(
+          raw
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(isYmd)
+        ),
+      ];
+      return dates.length > 0 ? dates : null;
+    }
     case 'choice': {
       if (typeof raw !== 'string') return null;
       const value = raw.trim();
@@ -675,8 +743,11 @@ export function normalizeAnswer(
       return normalizeFileIds(raw);
     default: {
       if (typeof raw !== 'string') return null;
+      // A long text keeps its line breaks — they are how a paragraph is a
+      // paragraph — while the trailing whitespace of an unfinished thought
+      // goes, the way it does for every other typed answer.
       const value = raw.trim();
-      return value ? value.slice(0, BOARD_LIMITS.textAnswer) : null;
+      return value ? value.slice(0, answerLimit(kind)) : null;
     }
   }
 }
@@ -717,12 +788,36 @@ function formatTime(value: unknown): string {
   return `${hours % 12 || 12}:${minute} ${hours < 12 ? 'AM' : 'PM'}`;
 }
 
+/**
+ * '2026-10-03' as '10.03.26' — the house format for a calendar day, month
+ * first and padded, short enough to sit in a card row's property line and
+ * the same width whatever the date. Anything that is not a stored date
+ * comes back as it went in, so a value from before the field was a date
+ * still reads as itself.
+ */
+export function formatYmd(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  return `${month}.${day}.${year.slice(2)}`;
+}
+
 /** A stored answer as the words a card shows. */
 export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknown): string {
   if (value === null || value === undefined) return '';
   switch (field.kind) {
     case 'yes_no':
       return value === true ? 'Yes' : value === false ? 'No' : '';
+    case 'date':
+      // One date, or the several a form may collect.
+      return Array.isArray(value) ? value.map(formatYmd).join(', ') : formatYmd(value);
+    case 'phone':
+      return formatPhone(value);
+    case 'long_text':
+      // A card row is one line: the paragraphs are read in the drawer, and
+      // what the row shows is the same words with the breaks closed up.
+      return typeof value === 'string' ? value.replace(/\s+/g, ' ') : '';
     case 'time':
       return formatTime(value);
     case 'time_range': {

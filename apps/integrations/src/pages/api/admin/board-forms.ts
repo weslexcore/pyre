@@ -7,12 +7,15 @@
 // board's fields plus the form — rather than the card bundle. That is why
 // this is its own route and not another key on /api/admin/boards.
 //
-//   GET   ?slug=<slug>            → { board, form, exists, fields }
-//   PATCH { slug, ...FormPatch }  → { board, form, exists: true, fields }
+//   GET   ?slug=<slug>            → { board, form, exists, background, recipients, fields }
+//   PATCH { slug, ...FormPatch }  → the same, with exists: true
 //
 // A PATCH is merged onto the saved form (or the default, for a board with
 // none), then the whole is checked: finalizeForm for the rules that span
-// settings, formFieldError for pointers at fields the board does not have.
+// settings, and formFieldError for pointers at fields the board does not
+// have. A notify list, when the request carries one, is checked against
+// `recipients` — everyone who can open the board, which is also what the
+// builder offers to pick from.
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
@@ -24,8 +27,10 @@ import {
   finalizeForm,
   formConfigOf,
   formFieldError,
+  formNotifyError,
   parseFormPatch,
 } from '@/lib/boards/forms';
+import { type Assignable, listBoardWatchers } from '@/lib/boards/people';
 import {
   type APIRoute,
   beginMutation,
@@ -45,6 +50,8 @@ interface FormResponse {
   exists: boolean;
   /** The image behind the form, with its public URL; null for none. */
   background: FormBackground | null;
+  /** Who can open this board, and so who the form may notify. */
+  recipients: Assignable[];
   fields: BoardFieldRow[];
 }
 
@@ -52,7 +59,8 @@ function respond(
   db: Db,
   board: BoardRow,
   row: BoardFormRow | null,
-  fields: BoardFieldRow[]
+  fields: BoardFieldRow[],
+  recipients: Assignable[]
 ): FormResponse {
   return {
     board: {
@@ -64,6 +72,7 @@ function respond(
     form: row ? formConfigOf(row) : defaultFormConfig(fields, board.name),
     exists: row !== null,
     background: backgroundOf(db, row?.background_path ?? null),
+    recipients,
     fields,
   };
 }
@@ -71,8 +80,12 @@ function respond(
 async function loadAll(db: Db, slug: string) {
   const board = await loadBoardBySlug(db, slug);
   if (!board) return null;
-  const [row, fields] = await Promise.all([loadForm(db, board.id), loadFields(db, board.id)]);
-  return { board, row, fields };
+  const [row, fields, recipients] = await Promise.all([
+    loadForm(db, board.id),
+    loadFields(db, board.id),
+    listBoardWatchers(slug),
+  ]);
+  return { board, row, fields, recipients };
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -86,7 +99,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   try {
     const loaded = await loadAll(ready.db, slug);
     if (!loaded) return json({ error: 'Board not found' }, 404);
-    return json(respond(ready.db, loaded.board, loaded.row, loaded.fields));
+    return json(respond(ready.db, loaded.board, loaded.row, loaded.fields, loaded.recipients));
   } catch (e) {
     return storeError('board-forms', e);
   }
@@ -107,7 +120,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   try {
     const loaded = await loadAll(db, slug);
     if (!loaded) return json({ error: 'Board not found' }, 404);
-    const { board, row, fields } = loaded;
+    const { board, row, fields, recipients } = loaded;
 
     const merged = finalizeForm({
       ...(row ? formConfigOf(row) : defaultFormConfig(fields, board.name)),
@@ -116,6 +129,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (!merged.ok) return json({ error: merged.error }, 400);
     const stale = formFieldError(merged.value, fields);
     if (stale) return json({ error: stale }, 400);
+    // Only what this request asks for: a saved name that has since lost the
+    // board must not block an unrelated edit. Such a name is dropped when
+    // the builder next saves the list, and ignored when the form sends.
+    const notify = parsed.value.notify;
+    if (notify) {
+      const unreachable = formNotifyError({ notify }, recipients);
+      if (unreachable) return json({ error: unreachable }, 400);
+    }
 
     const config = merged.value;
     const { data, error } = await db
@@ -132,6 +153,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
           intro: config.intro,
           confirmation: config.confirmation,
           submit_label: config.submitLabel,
+          notify_emails: config.notify,
+          confetti: config.confetti,
+          done_href: config.doneHref,
+          done_label: config.doneLabel,
           questions: config.questions,
           updated_by: email,
           ...(row ? {} : { created_by: email }),
@@ -142,7 +167,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .single();
     if (error) return json({ error: error.message }, 500);
 
-    return json(respond(db, board, data as BoardFormRow, fields));
+    return json(respond(db, board, data as BoardFormRow, fields, recipients));
   } catch (e) {
     return storeError('board-forms', e);
   }

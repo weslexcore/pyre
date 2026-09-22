@@ -311,7 +311,7 @@ export function BoardGoal({
           {goal.status === 'completed' && (
             <p className="mt-4 border-t border-white/10 pt-3 text-sm text-white/60">
               Completed{goal.completed_by ? ` by ${personName(goal.completed_by, people)}` : ''}
-              {goal.completed_at ? ` on ${goal.completed_at.slice(0, 10)}` : ''}.
+              {goal.completed_at ? ` on ${formatYmd(goal.completed_at.slice(0, 10))}` : ''}.
               {goal.completion_note && (
                 <span className="mt-1 block whitespace-pre-wrap text-white/50">
                   {goal.completion_note}

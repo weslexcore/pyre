@@ -5,7 +5,10 @@
 //
 // One question at a time opens on a cover: the intro, if there is one, and
 // a Next. Nobody is asked anything until they have chosen to start, and the
-// first question is not mistaken for the whole form.
+// first question is not mistaken for the whole form. Each step is keyed by
+// its index, so arriving at one remounts it and the .form-step animation in
+// styles/admin.css plays — in from the right going forward, from the left
+// going back, and not at all under a reduced-motion preference.
 //
 // A field question is asked with the same control the card drawer uses
 // (FieldInput), so an answer given here looks the same on the card as one
@@ -29,9 +32,17 @@ import { FieldInput } from '@/components/admin/guestUi';
 import { readError } from '@/components/admin/incidentUi';
 import { SopMarkdown } from '@/components/admin/SopMarkdown';
 import { fileIdsOf, formMediaHref } from '@/lib/boards/files';
-import { answerOf, type FormConfig, type ResolvedQuestion } from '@/lib/boards/forms';
+import {
+  answerProblem,
+  type FormConfig,
+  formDoneLink,
+  isBlankAnswer,
+  type ResolvedQuestion,
+  todayEastern,
+} from '@/lib/boards/forms';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardFieldValue } from '@/lib/db';
+import { Confetti } from './Confetti';
 
 /** Mirrors HONEYPOT_FIELD in lib/boards/form-guard.ts, which is server-only. */
 const HONEYPOT_FIELD = 'website';
@@ -41,7 +52,10 @@ type Answers = Record<string, BoardFieldValue | null | undefined>;
 export interface BoardFormProps {
   slug: string;
   /** intro and confirmation are Markdown, rendered with the same component as card notes. */
-  config: Pick<FormConfig, 'layout' | 'submitLabel' | 'intro' | 'confirmation'>;
+  config: Pick<
+    FormConfig,
+    'layout' | 'submitLabel' | 'intro' | 'confirmation' | 'confetti' | 'doneHref' | 'doneLabel'
+  >;
   questions: ResolvedQuestion[];
   /** What the board calls a card — 'task', 'lead' — for the default thank-you. */
   noun: string;
@@ -59,6 +73,11 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  /** Whether the thank-you pops. The server's answer wins, so a form switched
+   *  off while somebody was filling it in does not celebrate. */
+  const [celebrate, setCelebrate] = useState(config.confetti);
+  // Which way the last step moved, so its animation comes from that side.
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [website, setWebsite] = useState('');
   // Set on the client after mount, so the server and the browser paint the
   // same markup and the clock still says when a person opened the page.
@@ -87,15 +106,36 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
     }
   };
 
-  /** The questions still missing a required answer, by id. */
+  /**
+   * What is still wrong, by question id: an answer that is needed and
+   * missing, or one that was given in a shape its question cannot hold —
+   * an address that is not an address (lib/boards/forms answerProblem).
+   */
   const missing = (subset: ResolvedQuestion[], current: Answers = answers) =>
     Object.fromEntries(
       subset
-        .filter(
-          (question) => question.required && answerOf(question, current[question.id]) === null
-        )
-        .map((question) => [question.id, 'This one is needed.'])
+        .map((question) => [question.id, answerProblem(question, current[question.id])] as const)
+        .filter((entry): entry is readonly [string, string] => entry[1] !== null)
     );
+
+  /**
+   * Leaving a question: say straight away if what was typed cannot be what
+   * the question asked for — an address that is not one, a date that has
+   * gone. A question nobody has answered yet says nothing, because tabbing
+   * past something optional is not a mistake and being told it is needed
+   * before you have reached the end is nagging. Send has the last word.
+   */
+  const check = (question: ResolvedQuestion) => {
+    const raw = answers[question.id];
+    if (isBlankAnswer(raw)) return;
+    const problem = answerProblem(question, raw);
+    setProblems((current) => {
+      if (problem) return { ...current, [question.id]: problem };
+      if (!current[question.id]) return current;
+      const { [question.id]: _, ...rest } = current;
+      return rest;
+    });
+  };
 
   const next = () => {
     const current = questions[step];
@@ -104,14 +144,19 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
       setProblems((existing) => ({ ...existing, ...gaps }));
       return;
     }
+    setDirection('forward');
     setStep((s) => Math.min(s + 1, total - 1));
   };
 
-  const back = () => setStep((s) => Math.max(s - 1, 0));
+  const back = () => {
+    setDirection('back');
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   /** Leave an optional question unanswered and move on; on the last, send. */
   const skip = (question: ResolvedQuestion) => {
     setAnswer(question, null);
+    setDirection('forward');
     if (step < total - 1) setStep((s) => s + 1);
     else void submitAnswers({ ...answers, [question.id]: null });
   };
@@ -119,6 +164,7 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (stepped && !started) {
+      setDirection('forward');
       setStarted(true);
       return;
     }
@@ -133,15 +179,21 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
     const gaps = missing(questions, current);
     if (Object.keys(gaps).length > 0) {
       setProblems(gaps);
-      setError('A few answers are still needed.');
+      setError('A few answers still need a look.');
       if (stepped) {
         const first = questions.findIndex((question) => gaps[question.id]);
-        if (first >= 0) setStep(first);
+        if (first >= 0) {
+          setDirection(first < step ? 'back' : 'forward');
+          setStep(first);
+        }
       }
       return;
     }
     setError(null);
     if (preview) {
+      // The builder's preview never posts, so it reads the settings as they
+      // stand rather than as they stood when it mounted.
+      setCelebrate(config.confetti);
       setDone(config.confirmation);
       return;
     }
@@ -153,7 +205,8 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
         body: JSON.stringify({ answers: current, startedAt, [HONEYPOT_FIELD]: website }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const result = (await res.json()) as { confirmation?: string };
+      const result = (await res.json()) as { confirmation?: string; confetti?: boolean };
+      setCelebrate(result.confetti ?? config.confetti);
       setDone(result.confirmation ?? config.confirmation);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send this. Please try again.');
@@ -163,9 +216,24 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
   };
 
   if (done !== null) {
+    // A form is a dead end without this: the thank-you always ends in a way
+    // out, the form's own or the front door.
+    const onward = formDoneLink(config);
     return (
       <div role="status">
+        {celebrate && <Confetti />}
         <SopMarkdown content={done || `Thanks, your ${noun} was sent.`} />
+        <div className="mt-6 flex">
+          {preview ? (
+            // The builder's preview shows the button without offering to
+            // leave the builder by it.
+            <span className={primaryButtonClass}>{onward.label}</span>
+          ) : (
+            <a className={primaryButtonClass} href={onward.href}>
+              {onward.label}
+            </a>
+          )}
+        </div>
       </div>
     );
   }
@@ -188,23 +256,35 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
           <SopMarkdown content={config.intro} />
         </div>
       )}
-      {cover && (
+      {/* {cover && (
         <p className="text-sm text-white/60">
-          {total === 1 ? 'One question.' : `${total} questions, one at a time.`}
+          {total === 1 ? 'One question.' : `${total} questions.`}
         </p>
-      )}
-      <div ref={container} className="space-y-5">
-        {shown.map((question) => (
-          <QuestionRow
-            key={question.id}
-            slug={slug}
-            question={question}
-            value={answers[question.id]}
-            problem={problems[question.id]}
-            preview={preview}
-            onChange={(value) => setAnswer(question, value)}
-          />
-        ))}
+      )} */}
+      <div ref={container}>
+        {/* Keyed by the step so each question arrives as a new element and
+            animates in — the cover counts as its own, so the first question
+            enters like the rest. The one page is one element that never
+            changes. The gap between questions lives here, on whichever of
+            the two is holding them. */}
+        <div
+          key={stepped ? (started ? `q${step}` : 'cover') : 'all'}
+          className={stepped ? 'form-step space-y-5' : 'space-y-5'}
+          data-direction={stepped ? direction : undefined}
+        >
+          {shown.map((question) => (
+            <QuestionRow
+              key={question.id}
+              slug={slug}
+              question={question}
+              value={answers[question.id]}
+              problem={problems[question.id]}
+              preview={preview}
+              onChange={(value) => setAnswer(question, value)}
+              onLeave={() => check(question)}
+            />
+          ))}
+        </div>
       </div>
 
       <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
@@ -273,6 +353,7 @@ function QuestionRow({
   problem,
   preview,
   onChange,
+  onLeave,
 }: {
   slug: string;
   question: ResolvedQuestion;
@@ -280,6 +361,8 @@ function QuestionRow({
   problem?: string;
   preview: boolean;
   onChange: (value: BoardFieldValue | null) => void;
+  /** Focus has left this question: check what was typed. */
+  onLeave: () => void;
 }) {
   const id = `form-${question.key}`;
   const note = problem && (
@@ -340,8 +423,12 @@ function QuestionRow({
     );
   }
 
+  // onBlur on the wrapper rather than on each control: React's version of it
+  // bubbles, so one handler covers the picker, the textarea, and the several
+  // inputs a date or a time range is made of.
   return (
-    <div>
+    // biome-ignore lint/a11y/noStaticElementInteractions: Focus leaving the field, not a mouse affordance: onBlur adds nothing a keyboard cannot reach.
+    <div onBlur={onLeave}>
       <label className={labelClass} htmlFor={id}>
         {question.label}
         {question.required && (
@@ -361,6 +448,9 @@ function QuestionRow({
           }}
           value={value}
           multiple={question.multiple}
+          // A question that insists on a date still to come greys out the
+          // past in the picker; answerProblem is what actually refuses it.
+          min={question.future ? todayEastern() : undefined}
           onChange={onChange}
         />
       ) : question.key === 'notes' ? (

@@ -882,6 +882,12 @@ export interface BoardColumnRow {
 
 export type BoardFieldKind =
   | 'text'
+  /** Text with room to breathe: paragraphs, wrapped, in a box that can be dragged taller. */
+  | 'long_text'
+  /** A line of text that has to be an address, stored lowercased. */
+  | 'email'
+  /** A phone number, stored as +<country><number> with nothing else in it. */
+  | 'phone'
   | 'number'
   | 'yes_no'
   | 'choice'
@@ -985,6 +991,8 @@ export interface BoardFormQuestion {
   required: boolean;
   /** For a date field: the form takes more than one date. Absent or false is one. */
   multiple?: boolean;
+  /** For a date field: a date already gone is refused. Absent or false takes any. */
+  future?: boolean;
 }
 
 /** The one form a board puts in front of people. Mirrors the board_forms migration. */
@@ -1004,6 +1012,14 @@ export interface BoardFormRow {
   submit_label: string;
   /** Object key in the board-form-media bucket of the image behind the form; null for none. */
   background_path: string | null;
+  /** Roster addresses a submission wakes; empty means everyone who can view the board. */
+  notify_emails: string[];
+  /** Whether the thank-you celebrates with confetti. */
+  confetti: boolean;
+  /** Where the button under the thank-you goes; blank means the home page. */
+  done_href: string;
+  /** What that button says; blank means a label naming where it goes. */
+  done_label: string;
   questions: BoardFormQuestion[];
   created_by: string | null;
   updated_by: string | null;

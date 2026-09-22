@@ -45,6 +45,9 @@ export function isFinishedKind(kind: ColumnKind): boolean {
 
 export const FIELD_KINDS = [
   'text',
+  'long_text',
+  'email',
+  'phone',
   'number',
   'yes_no',
   'choice',
@@ -58,6 +61,9 @@ export type FieldKind = (typeof FIELD_KINDS)[number];
 
 export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   text: 'Short text',
+  long_text: 'Long text',
+  email: 'Email',
+  phone: 'Phone',
   number: 'Number',
   yes_no: 'Yes / no',
   choice: 'Pick one',
@@ -70,6 +76,16 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
 
 export function isFieldKind(value: unknown): value is FieldKind {
   return typeof value === 'string' && (FIELD_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * How long an answer of this kind may be. A long text is a paragraph or
+ * several — the reason somebody asked for it — while every other typed
+ * answer is a line, and a line that runs to 500 characters is already
+ * somebody using the wrong field.
+ */
+export function answerLimit(kind: FieldKind): number {
+  return kind === 'long_text' ? BOARD_LIMITS.longAnswer : BOARD_LIMITS.textAnswer;
 }
 
 /** Kinds whose answers come from `options`. */
@@ -169,6 +185,8 @@ export const BOARD_LIMITS = {
   externalRef: 200,
   comment: 4000,
   textAnswer: 500,
+  /** A long text answer: paragraphs, but still an answer and not a document. */
+  longAnswer: 4000,
   /** A files field holds a handful of documents, not a folder. */
   filesPerField: 10,
   /** A board is a page, not a database: past this it needs paging. */

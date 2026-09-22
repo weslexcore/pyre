@@ -45,6 +45,8 @@ export interface CalendarEntry {
   cardId?: string;
   /** The date field this entry came from — what a drag to another day writes. */
   fieldKey?: string;
+  /** All options, including ones outside the visible month, for moving one date. */
+  fieldDates?: string[];
   goalId?: string;
   boardId?: string;
   boardSlug?: string;
@@ -142,7 +144,10 @@ export function movePatch(
     // properties is merged server-side against the card's current answers
     // (normalizeProperties), so naming one key leaves the rest alone — the
     // requested time survives its date moving.
-    return { id: entry.cardId, patch: { properties: { [entry.fieldKey]: date } } };
+    const answer = entry.fieldDates
+      ? [...new Set(entry.fieldDates.map((option) => (option === entry.date ? date : option)))]
+      : date;
+    return { id: entry.cardId, patch: { properties: { [entry.fieldKey]: answer } } };
   }
   return null;
 }
@@ -250,17 +255,26 @@ export function buildCalendar(
 
     const companions = timeFields.get(board.id) ?? new Map<string, BoardFieldRow>();
     for (const field of dateFields.get(board.id) ?? []) {
-      const date = dateOf(card.properties[field.key]);
-      if (date === null) continue;
-      entries.push({
-        id: `field:${card.id}:${field.key}`,
-        date,
-        ...timingFor(field, card, companions),
-        kind: 'field',
-        detail: field.label,
-        fieldKey: field.key,
-        ...shared,
-      });
+      const answer = card.properties[field.key];
+      const dates = [
+        ...new Set(
+          (Array.isArray(answer) ? answer : [answer])
+            .map(dateOf)
+            .filter((date): date is string => date !== null)
+        ),
+      ];
+      for (const date of dates) {
+        entries.push({
+          id: `field:${card.id}:${field.key}${Array.isArray(answer) ? `:${date}` : ''}`,
+          date,
+          ...timingFor(field, card, companions),
+          kind: 'field',
+          detail: field.label,
+          fieldKey: field.key,
+          ...(Array.isArray(answer) ? { fieldDates: dates } : {}),
+          ...shared,
+        });
+      }
     }
   }
 
