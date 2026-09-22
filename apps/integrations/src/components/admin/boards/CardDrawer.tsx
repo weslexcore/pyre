@@ -22,6 +22,7 @@ import {
 } from '../goalsUi';
 import { FieldRow } from '../guestUi';
 import { SopMarkdown } from '../SopMarkdown';
+import { useSheetSwipe } from '../useSheetSwipe';
 import { useCardAutosave } from './useCardAutosave';
 
 export interface CardDrawerProps {
@@ -77,11 +78,13 @@ export function CardDrawer({
       setClosing(true);
       // Reverse the actual entry animation, including its current position if
       // closed mid-entry. Reduced motion has no animation, so closes immediately.
-      const animation = panelRef.current?.getAnimations().find(
-        (animation) =>
-          animation instanceof CSSAnimation &&
-          animation.animationName.startsWith('card-drawer-open-')
-      );
+      const animation = panelRef.current
+        ?.getAnimations()
+        .find(
+          (animation) =>
+            animation instanceof CSSAnimation &&
+            animation.animationName.startsWith('card-drawer-open-')
+        );
       if (animation) {
         animation.reverse();
         const duration = animation.effect?.getComputedTiming().duration;
@@ -110,6 +113,23 @@ export function CardDrawer({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // On a phone, pulling the sheet down closes it the way Close does: the
+  // edits are flushed while it slides away, and a save that fails (or a
+  // title left empty) brings it back with the reason showing.
+  useSheetSwipe(panelRef, {
+    enabled: !closing,
+    requestClose: async () => {
+      if (!title.trim() || closeInProgress.current) return false;
+      closeInProgress.current = true;
+      setClosing(true);
+      if (await autosave.flush()) return true;
+      setClosing(false);
+      closeInProgress.current = false;
+      return false;
+    },
+    onClosed: onClose,
+  });
+
   const liveColumns = columns.filter((c) => !c.archived || c.id === card.column_id);
   const liveFields = fields.filter((f) => !f.archived || properties[f.key] != null);
   const finished = card.completed_at !== null;
@@ -133,8 +153,14 @@ export function CardDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="card-drawer-panel relative max-h-[92vh] w-full overflow-y-auto rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-4 shadow-xl sm:max-h-none sm:max-w-lg sm:rounded-none sm:rounded-l-lg"
+        className="card-drawer-panel relative max-h-[92vh] w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-4 shadow-xl sm:max-h-none sm:max-w-lg sm:rounded-none sm:rounded-l-lg"
       >
+        {/* The grip that says the sheet can be pulled down; on a desk it is a
+            side panel, and under a pointer there is nothing to pull. */}
+        <div
+          aria-hidden="true"
+          className="touch-only mx-auto mb-3 h-1 w-9 rounded-full bg-white/25 sm:hidden"
+        />
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 id={titleId} className="font-mono text-xs uppercase tracking-wide text-white/50">
             {finished ? 'Finished card' : 'Card'}
