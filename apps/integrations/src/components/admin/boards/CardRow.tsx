@@ -32,6 +32,11 @@ export interface CardRowProps {
   ghost?: boolean;
 }
 
+// A chip is one line, so one that outgrows the row (a long field value,
+// a long board name) is cut with an ellipsis instead of widening the page;
+// the drawer has the whole of it.
+const chipClip = 'max-w-full overflow-hidden text-ellipsis';
+
 export function CardRow({
   card,
   columns,
@@ -74,12 +79,12 @@ export function CardRow({
             {card.owner_email && <QuietChip>{personName(card.owner_email, people)}</QuietChip>}
             {card.due_date && <DueChip dueDate={card.due_date} today={today} finished={finished} />}
             {card.waiting_on && !finished && <WaitingBadge waitingOn={card.waiting_on} />}
-            {goalTitle && <QuietChip>{goalTitle}</QuietChip>}
-            {boardName && <QuietChip>{boardName}</QuietChip>}
+            {goalTitle && <QuietChip className={chipClip}>{goalTitle}</QuietChip>}
+            {boardName && <QuietChip className={chipClip}>{boardName}</QuietChip>}
             {card.area && <QuietChip>{card.area}</QuietChip>}
             {card.source === 'intake' && <QuietChip>from the web</QuietChip>}
             {shown.map(({ field, text }) => (
-              <QuietChip key={field.key}>
+              <QuietChip key={field.key} className={chipClip}>
                 {field.label}: {text}
               </QuietChip>
             ))}

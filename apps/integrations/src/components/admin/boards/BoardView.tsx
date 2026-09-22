@@ -378,9 +378,14 @@ export function BoardView({ slug }: { slug: string }) {
         onDragEnd={onDragEnd}
         onDragCancel={() => setDraggingId(null)}
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {grouped.map(({ column, cards: columnCards }) => (
-            <DroppableColumn key={column.id} column={column} className={cardClass} disabled={busy}>
+            <DroppableColumn
+              key={column.id}
+              column={column}
+              className={`${cardClass} min-w-0`}
+              disabled={busy}
+            >
               <ColumnHeader
                 column={column}
                 count={columnCards.length}

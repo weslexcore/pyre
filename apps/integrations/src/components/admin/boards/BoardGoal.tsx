@@ -196,7 +196,9 @@ export function BoardGoal({
             Goal
           </SectionTitle>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <h2 className="font-primary-semibold text-xl text-[var(--pyre-creme)]">{goal.title}</h2>
+            <h2 className="min-w-0 break-words font-primary-semibold text-xl text-[var(--pyre-creme)]">
+              {goal.title}
+            </h2>
             {canManage && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={buttonClass} onClick={() => setEditing(true)}>
@@ -231,7 +233,7 @@ export function BoardGoal({
             )}
           </div>
 
-          <div className="mt-3 grid gap-4 ">
+          <div className="mt-3 grid grid-cols-1 gap-4">
             <div>
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/35">
                 {board.card_noun}s done
@@ -257,7 +259,7 @@ export function BoardGoal({
                   No KPIs yet. Without one, “met” is a feeling.
                 </p>
               )}
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {kpis.map((kpi) => (
                   <KpiRow
                     key={kpi.id}

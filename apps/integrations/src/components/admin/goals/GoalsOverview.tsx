@@ -259,9 +259,9 @@ function GoalRowCard({
   const noun = board?.card_noun ?? 'task';
 
   const body = (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="min-w-0">
-        <h3 className="font-primary-semibold text-[var(--pyre-creme)]">{goal.title}</h3>
+        <h3 className="break-words font-primary-semibold text-[var(--pyre-creme)]">{goal.title}</h3>
         <p className="mt-1 font-mono text-[11px] text-white/35">
           {board ? (
             <>

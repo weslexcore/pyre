@@ -204,7 +204,7 @@ export function BoardsIndex() {
       {canManage && creating && (
         <form onSubmit={create} className={cardClass}>
           <SectionTitle>New board</SectionTitle>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelClass} htmlFor="new-board-name">
                 Name
@@ -291,7 +291,7 @@ export function BoardsIndex() {
           </div>
 
           {goalChoice === NEW_GOAL && (
-            <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className={labelClass} htmlFor="new-board-goal-title">
                   What is this board for?
@@ -392,7 +392,7 @@ export function BoardsIndex() {
       {completed.length > 0 && (
         <section>
           <SectionTitle note={String(completed.length)}>Completed</SectionTitle>
-          <div className="grid gap-3 opacity-75 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 opacity-75 sm:grid-cols-2">
             {completed.map((board) => cardFor(board))}
           </div>
         </section>
@@ -401,7 +401,9 @@ export function BoardsIndex() {
       {archived.length > 0 && (
         <section>
           <SectionTitle note={String(archived.length)}>Archived</SectionTitle>
-          <div className="grid gap-3 opacity-60 sm:grid-cols-2">{archived.map(cardFor)}</div>
+          <div className="grid grid-cols-1 gap-3 opacity-60 sm:grid-cols-2">
+            {archived.map(cardFor)}
+          </div>
         </section>
       )}
     </div>
@@ -437,18 +439,20 @@ function BoardCard({
   const left = goal ? daysLeft(goal.target_date, today) : null;
 
   return (
-    <div className={`${cardClass} relative transition-colors hover:border-white/25`}>
+    <div className={`${cardClass} relative min-w-0 transition-colors hover:border-white/25`}>
       {handle && <div className="absolute top-2 right-2">{handle}</div>}
       <a href={`/admin/boards/${board.slug}`} className="block">
         <div className={`flex items-baseline justify-between gap-2 ${handle ? 'pr-8' : ''}`}>
-          <h2 className="font-primary-semibold text-[var(--pyre-creme)]">{board.name}</h2>
+          <h2 className="min-w-0 break-words font-primary-semibold text-[var(--pyre-creme)]">
+            {board.name}
+          </h2>
           {board.archived && <QuietChip>archived</QuietChip>}
         </div>
         {board.description && <p className="mt-1 text-sm text-white/55">{board.description}</p>}
 
         {goal ? (
           <div className="mt-3 border-t border-white/10 pt-3">
-            <p className="text-sm text-[var(--pyre-creme)]">{goal.title}</p>
+            <p className="break-words text-sm text-[var(--pyre-creme)]">{goal.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <GoalStatusBadge status={goal.status} />
               {pace && <PaceChip pace={pace} />}

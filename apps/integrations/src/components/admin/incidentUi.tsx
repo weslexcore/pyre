@@ -17,7 +17,7 @@ import {
 // Tailwind emits `w-full` after the numeric widths, so `${inputClass} w-24` is
 // still full width, and any input that also refuses to shrink overflows its row.
 export const inputBaseClass =
-  'px-3 py-3 rounded bg-white/5 border border-white/10 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+  'min-w-0 px-3 py-3 rounded bg-white/5 border border-white/10 text-base text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
 
 export const inputClass = `w-full ${inputBaseClass}`;
 

@@ -32,7 +32,7 @@ export function KpiRow({
   onRemove: () => void;
 }) {
   return (
-    <li className="rounded border border-white/10 bg-white/[0.03] p-3">
+    <li className="min-w-0 rounded border border-white/10 bg-white/[0.03] p-3">
       <KpiMeter kpi={kpi} nowIso={nowIso} />
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">

@@ -242,7 +242,7 @@ export function BoardSettings({
     <section className={cardClass}>
       <SectionTitle note={board.slug}>Board settings</SectionTitle>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass} htmlFor="board-name">
             Name
@@ -411,7 +411,7 @@ export function BoardSettings({
                   remove
                 </button>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {kindHasOptions(draft.kind) && (
                   <input
                     className={inputClass}

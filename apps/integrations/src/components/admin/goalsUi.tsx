@@ -19,8 +19,10 @@ import { PACE_LABELS, type PaceState, type TaskProgress } from '@/lib/goals/prog
 import { GOAL_STATUS_LABELS } from '@/lib/goals/types';
 import { readError } from './incidentUi';
 
+// min-w-0 lets a date or time input, which carries its own intrinsic width,
+// shrink with a flex row or a grid cell on a phone instead of widening it.
 export const inputBaseClass =
-  'px-3 py-2.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
+  'min-w-0 px-3 py-2.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
 
 export const inputClass = `w-full ${inputBaseClass}`;
 
@@ -92,9 +94,17 @@ export function PaceChip({ pace }: { pace: PaceState }) {
 }
 
 /** A neutral, quiet chip for areas, counts, and board names. */
-export function QuietChip({ children }: { children: ReactNode }) {
+export function QuietChip({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <span className={`${badgeBase} border-white/10 bg-white/5 text-white/50`}>{children}</span>
+    <span className={`${badgeBase} border-white/10 bg-white/5 text-white/50 ${className}`}>
+      {children}
+    </span>
   );
 }
 

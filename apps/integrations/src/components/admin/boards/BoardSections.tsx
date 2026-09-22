@@ -391,7 +391,7 @@ function SectionBlock({
       </div>
 
       <SortableContext items={boards.map((b) => prefix('board', b.id))}>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {boards.map((board) => (
             <SortableBoard key={board.id} board={board} canManage={canManage} locked={locked}>
               {renderBoard}
