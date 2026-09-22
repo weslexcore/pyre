@@ -248,12 +248,18 @@ export function boardCommentText(input: {
   };
 }
 
-export function intakeCardText(input: { cardTitle: string; boardName: string; noun: string }): {
+export function intakeCardText(input: {
+  cardTitle: string;
+  boardName: string;
+  noun: string;
+  /** Where it came in from; 'the web' unless the caller knows better. */
+  via?: string;
+}): {
   title: string;
   body: string;
 } {
   return {
     title: `New ${input.noun}: ${shortTitle(input.cardTitle)}`,
-    body: `Came in from the web, on ${input.boardName}`,
+    body: `Came in from ${input.via ?? 'the web'}, on ${input.boardName}`,
   };
 }

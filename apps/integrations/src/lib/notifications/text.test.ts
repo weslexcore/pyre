@@ -257,6 +257,17 @@ describe('goals and boards text', () => {
     });
   });
 
+  it('says where else a card came in from', () => {
+    expect(
+      intakeCardText({
+        cardTitle: 'Group of 12, Oct 3',
+        boardName: 'Rental & group leads',
+        noun: 'lead',
+        via: 'the form',
+      }).body
+    ).toBe('Came in from the form, on Rental & group leads');
+  });
+
   it('carries a comment excerpt under the commenter', () => {
     expect(
       boardCommentText({

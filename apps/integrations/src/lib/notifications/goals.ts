@@ -243,7 +243,8 @@ export async function notifyGoalComment(
 export async function notifyIntakeCard(
   db: SupabaseClient,
   card: Pick<BoardCardRow, 'id' | 'title'>,
-  board: Pick<BoardRow, 'slug' | 'name' | 'card_noun'>
+  board: Pick<BoardRow, 'slug' | 'name' | 'card_noun'>,
+  via?: string
 ): Promise<void> {
   const rows = (await listStaff()) ?? [];
   await createNotifications(db, boardRecipients(rows, board.slug), {
@@ -252,6 +253,7 @@ export async function notifyIntakeCard(
       cardTitle: card.title,
       boardName: board.name,
       noun: board.card_noun,
+      via,
     }),
     href: cardHrefFor(rows, board.slug, card.id),
     source: { type: 'board_card', id: card.id },

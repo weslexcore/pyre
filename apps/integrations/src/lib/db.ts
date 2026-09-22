@@ -932,11 +932,55 @@ export interface BoardCardRow {
   area: string | null;
   sort_order: number;
   properties: Record<string, BoardFieldValue>;
-  source: 'manual' | 'intake';
+  /** manual: made in the admin. intake: the intake endpoint. form: the board's own form. */
+  source: 'manual' | 'intake' | 'form';
   external_ref: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BoardFormAccess = 'public' | 'admin';
+export type BoardFormLayout = 'single' | 'stepped';
+export type BoardFormTitleMode = 'ask' | 'template';
+
+/** The card's own columns a form may ask for, beside the board's fields. */
+export type BoardFormBuiltin = 'title' | 'notes' | 'due_date';
+
+/**
+ * One question on a board's form: a pointer at a board field (by key) or at
+ * a builtin, with the form's own label and hint over the field's when set.
+ */
+export interface BoardFormQuestion {
+  kind: 'field' | 'builtin';
+  key: string;
+  label: string | null;
+  hint: string | null;
+  required: boolean;
+}
+
+/** The one form a board puts in front of people. Mirrors the board_forms migration. */
+export interface BoardFormRow {
+  id: string;
+  board_id: string;
+  enabled: boolean;
+  /** The heading on the form page; blank means the board's name. */
+  title: string;
+  access: BoardFormAccess;
+  layout: BoardFormLayout;
+  title_mode: BoardFormTitleMode;
+  /** Text with {field_key} placeholders, used when title_mode is 'template'. */
+  title_template: string;
+  intro: string;
+  confirmation: string;
+  submit_label: string;
+  /** Object key in the board-form-media bucket of the image behind the form; null for none. */
+  background_path: string | null;
+  questions: BoardFormQuestion[];
+  created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;

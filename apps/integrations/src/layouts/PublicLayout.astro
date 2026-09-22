@@ -1,0 +1,52 @@
+---
+// The shell for a page anyone might open: a board's form. The same dark
+// brand as the admin and the sign-in screen, without the admin chrome, the
+// view transitions, or the assumption of a session. Kept out of search:
+// a form is shared by its link.
+import Favicon from '@/components/Favicon.astro';
+import '@/styles/admin.css';
+
+interface Props {
+  title: string;
+  /** An image behind the page; the content sits on a darkened panel over it. */
+  backgroundUrl?: string | null;
+}
+
+const { title, backgroundUrl = null } = Astro.props;
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+
+// A CSS url() with the characters that could break out of it escaped.
+const backgroundStyle = backgroundUrl
+  ? `background-image: url("${backgroundUrl.replace(/["\\()]/g, encodeURIComponent)}")`
+  : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} — Pyre</title>
+    <Favicon />
+  </head>
+  <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
+    {
+      backgroundStyle && (
+        <>
+          <div aria-hidden="true" class="fixed inset-0 -z-20 bg-cover bg-center" style={backgroundStyle} />
+          <div aria-hidden="true" class="fixed inset-0 -z-10 bg-black/45" />
+        </>
+      )
+    }
+    <main
+      class={
+        backgroundStyle
+          ? 'mx-auto my-8 max-w-lg rounded-lg border border-white/10 bg-[var(--pyre-black)]/85 px-4 py-8 shadow-2xl backdrop-blur-sm sm:my-12 sm:px-8'
+          : 'mx-auto max-w-lg px-4 py-10'
+      }
+    >
+      <slot />
+    </main>
+  </body>
+</html>

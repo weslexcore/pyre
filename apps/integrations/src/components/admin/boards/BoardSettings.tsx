@@ -21,6 +21,7 @@
 
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
+import { formBuilderHref } from '@/lib/boards/forms';
 import type { ColumnKind, FieldKind } from '@/lib/boards/types';
 import {
   BOARD_LIMITS,
@@ -532,6 +533,17 @@ export function BoardSettings({
           marked "on calendar" draws its answers on the board's calendar — pick a time field beside
           it and each entry gets a time as well as a day.
         </p>
+      </div>
+
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <SectionTitle note={`how a ${cardNoun} arrives from outside`}>Form</SectionTitle>
+        <p className="text-xs text-white/35">
+          A board can put a form in front of people — anyone with the link, or signed-in staff — and
+          each submission becomes a {cardNoun} in the first open column.
+        </p>
+        <a className={`${buttonClass} mt-2 inline-block`} href={formBuilderHref(board.slug)}>
+          Open the form builder
+        </a>
       </div>
 
       {(error || autosave.error) && (

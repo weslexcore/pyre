@@ -38,11 +38,11 @@
 
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
-import { type APIRoute, type Db, json } from '@/lib/boards/route';
-import { loadBoardBySlug, loadColumns } from '@/lib/boards/store';
+import { type APIRoute, json } from '@/lib/boards/route';
+import { loadBoardBySlug, loadColumns, loadFields, nextColumnOrder } from '@/lib/boards/store';
 import { BOARD_LIMITS, isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
-import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
+import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
@@ -163,7 +163,7 @@ export const POST: APIRoute = async ({ request }) => {
       due_date: parsed.value.due_date,
       area: parsed.value.area,
       properties,
-      sort_order: await nextIntakeOrder(db, board.id, column.id),
+      sort_order: await nextColumnOrder(db, board.id, column.id),
       source: 'intake',
       external_ref: externalRef,
       created_by: INTAKE_ACTOR,
@@ -187,24 +187,3 @@ export const POST: APIRoute = async ({ request }) => {
 
   return json({ card, created: true }, 201);
 };
-
-async function loadFields(db: Db, boardId: string): Promise<BoardFieldRow[]> {
-  const { data } = await db
-    .from('board_fields')
-    .select('*')
-    .eq('board_id', boardId)
-    .order('sort_order', { ascending: true });
-  return (data ?? []) as BoardFieldRow[];
-}
-
-/** New leads land under the ones already in the column. */
-async function nextIntakeOrder(db: Db, boardId: string, columnId: string): Promise<number> {
-  const { data } = await db
-    .from('board_cards')
-    .select('sort_order')
-    .eq('board_id', boardId)
-    .eq('column_id', columnId)
-    .order('sort_order', { ascending: false })
-    .limit(1);
-  return (((data ?? []) as { sort_order: number }[])[0]?.sort_order ?? 0) + 10;
-}

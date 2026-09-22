@@ -1,0 +1,133 @@
+---
+// A board's form, filled in. Outside /admin, so the middleware leaves it
+// alone and the page decides for itself: a public form opens for anyone; a
+// staff form sends a stranger to sign in and comes back here after, and
+// turns away a signed-in user whose grant does not reach the board.
+//
+// Everything a form needs is loaded here and handed to the island — the
+// questions already resolved against the board's live fields — so the page
+// paints once, with the form on it.
+import { BoardForm } from '@/components/forms/BoardForm';
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import { getAccess } from '@/lib/auth/access';
+import { validateSession } from '@/lib/auth/session';
+import { canViewBoard } from '@/lib/boards/access';
+import { backgroundOf } from '@/lib/boards/form-media';
+import {
+  type FormConfig,
+  formConfigOf,
+  formHref,
+  formQuestions,
+  formTitle,
+  type ResolvedQuestion,
+} from '@/lib/boards/forms';
+import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
+import { isBoardSlug } from '@/lib/boards/types';
+import { getDb } from '@/lib/db';
+
+type State =
+  | { kind: 'closed'; status: number; title: string; message: string }
+  | {
+      kind: 'open';
+      name: string;
+      noun: string;
+      config: FormConfig;
+      questions: ResolvedQuestion[];
+      backgroundUrl: string | null;
+    };
+
+const { slug } = Astro.params;
+
+async function resolve(): Promise<State | Response> {
+  const notFound: State = {
+    kind: 'closed',
+    status: 404,
+    title: 'Not found',
+    message: 'There is no form at this address.',
+  };
+  if (!slug || !isBoardSlug(slug)) return notFound;
+
+  const db = getDb();
+  if (!db) {
+    return { kind: 'closed', status: 503, title: 'Unavailable', message: 'Please try again shortly.' };
+  }
+
+  const board = await loadBoardBySlug(db, slug);
+  if (!board || board.archived) return notFound;
+  const row = await loadForm(db, board.id);
+  if (!row) return notFound;
+  if (!row.enabled) {
+    return {
+      kind: 'closed',
+      status: 410,
+      title: board.name,
+      message: 'This form is closed.',
+    };
+  }
+
+  if (row.access === 'admin') {
+    const { session } = await validateSession(Astro.cookies);
+    const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+    if (!email) {
+      const params = new URLSearchParams({ returnUrl: formHref(slug) });
+      return Astro.redirect(`/?${params.toString()}`, 302);
+    }
+    const access = await getAccess(email);
+    if (!access || !canViewBoard(access, slug)) {
+      return {
+        kind: 'closed',
+        status: 403,
+        title: board.name,
+        message: 'This form is not available to you.',
+      };
+    }
+  }
+
+  const config = formConfigOf(row);
+  const fields = await loadFields(db, board.id);
+  return {
+    kind: 'open',
+    name: formTitle(config, board.name),
+    noun: board.card_noun,
+    config,
+    questions: formQuestions(config, fields),
+    backgroundUrl: backgroundOf(db, row.background_path)?.url ?? null,
+  };
+}
+
+const state = await resolve();
+if (state instanceof Response) return state;
+if (state.kind === 'closed') Astro.response.status = state.status;
+---
+
+<PublicLayout
+  title={state.kind === 'open' ? state.name : state.title}
+  backgroundUrl={state.kind === 'open' ? state.backgroundUrl : null}
+>
+  {
+    state.kind === 'open' ? (
+      <>
+        <h1 class="mb-5 text-2xl font-semibold">{state.name}</h1>
+        <div>
+          <BoardForm
+            slug={slug!}
+            config={{
+              layout: state.config.layout,
+              submitLabel: state.config.submitLabel,
+              intro: state.config.intro,
+              confirmation: state.config.confirmation,
+            }}
+            questions={state.questions}
+            noun={state.noun}
+            client:load
+          />
+        </div>
+      </>
+    ) : (
+      <>
+        <h1 class="mb-3 text-2xl font-semibold">{state.title}</h1>
+        <p class="text-sm text-white/60">{state.message}</p>
+      </>
+    )
+  }
+</PublicLayout>

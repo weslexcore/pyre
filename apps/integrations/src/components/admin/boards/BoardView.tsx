@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
+import { formBuilderHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
@@ -331,6 +332,11 @@ export function BoardView({ slug }: { slug: string }) {
                 Calendar
               </button>
             </span>
+          )}
+          {canManage && (
+            <a className={toolbarButtonClass} href={formBuilderHref(slug)}>
+              Form
+            </a>
           )}
           {board.archived && <QuietChip>archived</QuietChip>}
         </div>

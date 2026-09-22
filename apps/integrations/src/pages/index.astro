@@ -9,9 +9,10 @@ import '@/styles/admin.css';
 
 Astro.response.headers.set('Cache-Control', 'private, no-store');
 
-// Only ever bounce back to local admin paths (avoids open redirects).
+// Only ever bounce back to local admin paths, or a board's form — the one
+// page outside /admin that asks a visitor to sign in (avoids open redirects).
 const rawReturnUrl = Astro.url.searchParams.get('returnUrl') ?? '/admin';
-const returnUrl = /^\/admin(\/|\?|$)/.test(rawReturnUrl) ? rawReturnUrl : '/admin';
+const returnUrl = /^\/(admin|forms)(\/|\?|$)/.test(rawReturnUrl) ? rawReturnUrl : '/admin';
 const authError = Astro.url.searchParams.get('error');
 
 const { session } = await validateSession(Astro.cookies);

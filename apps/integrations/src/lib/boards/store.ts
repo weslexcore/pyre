@@ -14,6 +14,7 @@ import type {
   BoardCardRow,
   BoardColumnRow,
   BoardFieldRow,
+  BoardFormRow,
   BoardRow,
   BoardSectionRow,
   GoalKpiRow,
@@ -72,6 +73,48 @@ export async function loadColumns(db: SupabaseClient, boardId: string): Promise<
 }
 
 /** One column, used to check a move lands somewhere on the right board. */
+/** A board's fields, archived ones included, in display order. */
+export async function loadFields(db: SupabaseClient, boardId: string): Promise<BoardFieldRow[]> {
+  const { data, error } = await db
+    .from('board_fields')
+    .select('*')
+    .eq('board_id', boardId)
+    .order('sort_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BoardFieldRow[];
+}
+
+/** The board's form, or null when nobody has built one. */
+export async function loadForm(db: SupabaseClient, boardId: string): Promise<BoardFormRow | null> {
+  const { data, error } = await db
+    .from('board_forms')
+    .select('*')
+    .eq('board_id', boardId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as BoardFormRow) ?? null;
+}
+
+/**
+ * The sort order that puts a new card under everything already in the
+ * column. What arrives from outside — intake, the form — lands at the
+ * bottom, so a person's own ordering above it is never disturbed.
+ */
+export async function nextColumnOrder(
+  db: SupabaseClient,
+  boardId: string,
+  columnId: string
+): Promise<number> {
+  const { data } = await db
+    .from('board_cards')
+    .select('sort_order')
+    .eq('board_id', boardId)
+    .eq('column_id', columnId)
+    .order('sort_order', { ascending: false })
+    .limit(1);
+  return (((data ?? []) as { sort_order: number }[])[0]?.sort_order ?? 0) + 10;
+}
+
 export async function loadColumn(db: SupabaseClient, id: string): Promise<BoardColumnRow | null> {
   const { data, error } = await db.from('board_columns').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);

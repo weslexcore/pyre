@@ -16,16 +16,22 @@ export function reorderColumns<T extends { key: string }>(
   return next;
 }
 
+const COLUMN_HELP =
+  'Drag the handles to reorder columns, or focus a handle and use the up and down arrow keys. Choose Save board to apply.';
+
 export function ColumnOrder<T extends { key: string; label: string }>({
   items,
   disabled,
   onChange,
   children,
+  help = COLUMN_HELP,
 }: {
   items: T[];
   disabled: boolean;
   onChange: (items: T[]) => void;
   children: (item: T, index: number) => ReactNode;
+  /** The line above the list; the column wording unless the list holds something else. */
+  help?: string;
 }) {
   const sensors = useBoardSensors();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -53,8 +59,7 @@ export function ColumnOrder<T extends { key: string; label: string }>({
       }}
     >
       <p id="column-order-help" className="mb-3 text-xs text-white/50">
-        Drag the handles to reorder columns, or focus a handle and use the up and down arrow keys.
-        Choose Save board to apply.
+        {help}
       </p>
       <div className="space-y-2">
         {items.map((item, index) => (

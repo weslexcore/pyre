@@ -37,6 +37,12 @@ export interface CardRowProps {
 // the drawer has the whole of it.
 const chipClip = 'max-w-full overflow-hidden text-ellipsis';
 
+/** Where a card came from, when it was not made here by hand. */
+const SOURCE_CHIPS: Partial<Record<BoardCardRow['source'], string>> = {
+  intake: 'from the web',
+  form: 'from a form',
+};
+
 export function CardRow({
   card,
   columns,
@@ -82,7 +88,7 @@ export function CardRow({
             {goalTitle && <QuietChip className={chipClip}>{goalTitle}</QuietChip>}
             {boardName && <QuietChip className={chipClip}>{boardName}</QuietChip>}
             {card.area && <QuietChip>{card.area}</QuietChip>}
-            {card.source === 'intake' && <QuietChip>from the web</QuietChip>}
+            {SOURCE_CHIPS[card.source] && <QuietChip>{SOURCE_CHIPS[card.source]}</QuietChip>}
             {shown.map(({ field, text }) => (
               <QuietChip key={field.key} className={chipClip}>
                 {field.label}: {text}

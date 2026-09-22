@@ -622,7 +622,7 @@ function timeOf(raw: unknown): string | null {
 }
 
 /** One answer, coerced to the shape its field's kind stores. */
-function normalizeAnswer(
+export function normalizeAnswer(
   field: Pick<BoardFieldRow, 'kind' | 'options'>,
   raw: unknown
 ): BoardFieldValue | null {
