@@ -35,6 +35,7 @@ import {
   SectionTitle,
   selectClass,
   TaskBar,
+  toolbarButtonClass,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
 
@@ -97,12 +98,11 @@ export function GoalsOverview() {
 
   return (
     <div className="space-y-6">
-      <a
-        className="inline-block font-mono text-xs text-white/40 underline hover:text-white/70"
-        href={BOARDS_HREF}
-      >
-        ← All boards
-      </a>
+      <div className="flex flex-wrap items-center gap-2">
+        <a className={toolbarButtonClass} href={BOARDS_HREF}>
+          ← All boards
+        </a>
+      </div>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

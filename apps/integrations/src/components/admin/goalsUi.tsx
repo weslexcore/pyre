@@ -40,6 +40,15 @@ export const labelClass = 'block mb-1.5 font-mono text-xs uppercase tracking-wid
 export const buttonClass =
   'px-3 py-2 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
+/**
+ * The compact version, for a toolbar rather than a form: the back links and
+ * the calendar's month controls. Same button as the SOPs pages use above a
+ * document, and the shorter padding is what lines it up with the view pills
+ * (scheduleUi.pillClass) it sits beside on a board.
+ */
+export const toolbarButtonClass =
+  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
+
 export const primaryButtonClass =
   'px-3 py-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 

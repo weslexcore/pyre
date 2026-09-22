@@ -30,6 +30,7 @@ import {
   SectionTitle,
   selectClass,
   send,
+  toolbarButtonClass,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
 
@@ -150,12 +151,11 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   return (
     <div className="space-y-5">
-      <a
-        className="inline-block font-mono text-xs text-white/40 underline hover:text-white/70"
-        href={BOARDS_HREF}
-      >
-        ← All boards
-      </a>
+      <div className="flex flex-wrap items-center gap-2">
+        <a className={toolbarButtonClass} href={BOARDS_HREF}>
+          ← All boards
+        </a>
+      </div>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2">

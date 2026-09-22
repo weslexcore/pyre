@@ -30,7 +30,7 @@ import { BOARDS_HREF } from '@/lib/boards/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { todayEastern } from '../goalsUi';
+import { toolbarButtonClass, todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
@@ -150,12 +150,11 @@ export function BoardsCalendar() {
 
   return (
     <div className="space-y-4">
-      <a
-        className="inline-block font-mono text-xs text-white/40 underline hover:text-white/70"
-        href={BOARDS_HREF}
-      >
-        ← All boards
-      </a>
+      <div className="flex flex-wrap items-center gap-2">
+        <a className={toolbarButtonClass} href={BOARDS_HREF}>
+          ← All boards
+        </a>
+      </div>
 
       {(error || saveError) && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">

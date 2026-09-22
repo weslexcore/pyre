@@ -31,7 +31,7 @@ import {
   movePatch,
   weeksOf,
 } from '@/lib/boards/calendar';
-import { formatYmd } from '../goalsUi';
+import { formatYmd, toolbarButtonClass } from '../goalsUi';
 import { filterChipClass, toolbarCaptionClass } from '../scheduleUi';
 import {
   DndContext,
@@ -43,9 +43,6 @@ import {
   dayCollisions,
   useBoardSensors,
 } from './dnd';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 // Sunday first, so a weekend sits together at the end of a row instead of
 // being split across two.
@@ -183,21 +180,21 @@ export function CalendarMonth({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className={buttonClass}
+            className={toolbarButtonClass}
             onClick={() => onMonthChange(addMonths(monthStart, -1))}
           >
             ‹ Prev
           </button>
           <button
             type="button"
-            className={buttonClass}
+            className={toolbarButtonClass}
             onClick={() => onMonthChange(monthStartOf(today))}
           >
             This month
           </button>
           <button
             type="button"
-            className={buttonClass}
+            className={toolbarButtonClass}
             onClick={() => onMonthChange(addMonths(monthStart, 1))}
           >
             Next ›

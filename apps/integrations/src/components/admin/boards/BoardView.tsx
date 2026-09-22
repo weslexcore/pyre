@@ -47,6 +47,7 @@ import {
   selectBaseClass,
   send,
   todayEastern,
+  toolbarButtonClass,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { pillClass } from '../scheduleUi';
@@ -307,11 +308,8 @@ export function BoardView({ slug }: { slug: string }) {
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <a
-            className="font-mono text-xs text-white/40 underline hover:text-white/70"
-            href={BOARDS_HREF}
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <a className={toolbarButtonClass} href={BOARDS_HREF}>
             ← All boards
           </a>
           {hasCalendar && (
