@@ -25,8 +25,8 @@ if (allowed && slug) {
     const db = getDb();
     const board = db ? await loadBoardBySlug(db, slug) : null;
     if (board) {
-      // title = board.name;
-      // if (board.description) subtitle = board.description;
+      title = board.name;
+      if (board.description) subtitle = board.description;
     }
   } catch (error) {
     console.warn('[boards] title lookup failed:', error);
