@@ -25,7 +25,6 @@ import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
 import {
-  buttonClass,
   cardClass,
   inputBaseClass,
   SectionTitle,
@@ -151,6 +150,12 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   return (
     <div className="space-y-5">
+      <a
+        className="inline-block font-mono text-xs text-white/40 underline hover:text-white/70"
+        href={BOARDS_HREF}
+      >
+        ← All boards
+      </a>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -213,11 +218,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           />
           Waiting on something
         </label>
-
-        <span className="flex-1" />
-        <a className={buttonClass} href={BOARDS_HREF}>
-          All boards
-        </a>
       </div>
 
       {built.overdue.length > 0 && (
