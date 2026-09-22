@@ -8,7 +8,7 @@
 // is where a board lands when its section is deleted, and it disappears
 // from the page the moment it is empty.
 
-import type { BoardRow, BoardSectionRow } from '@/lib/db';
+import type { BoardRow, BoardSectionRow, GoalRow } from '@/lib/db';
 
 type Section = Pick<BoardSectionRow, 'id' | 'name' | 'sort_order'>;
 type Board = Pick<BoardRow, 'id' | 'name' | 'section_id' | 'sort_order'>;
@@ -116,4 +116,25 @@ export function repositionSection<S extends Section>(
   const insertAt = next.findIndex((section) => section.id === targetId);
   next.splice(from < to ? insertAt + 1 : insertAt, 0, moved);
   return next.map((section, index) => ({ ...section, sort_order: index }));
+}
+
+/**
+ * Split the live boards into the ones still working toward something and
+ * the ones whose goal has been called met. A board with a completed goal has
+ * done its job, so it sits under Completed at the bottom of the index rather
+ * than among the work in flight — and comes back up the moment its goal is
+ * reopened or it is pointed at a new one. A board with no goal, or with a
+ * planned, active, or dropped one, stays where it was filed.
+ */
+export function splitCompletedBoards<B extends Pick<BoardRow, 'goal_id'>>(
+  boards: B[],
+  goalsById: Map<string, Pick<GoalRow, 'status'>>
+): { live: B[]; completed: B[] } {
+  const live: B[] = [];
+  const completed: B[] = [];
+  for (const board of boards) {
+    const goal = board.goal_id ? goalsById.get(board.goal_id) : undefined;
+    (goal?.status === 'completed' ? completed : live).push(board);
+  }
+  return { live, completed };
 }

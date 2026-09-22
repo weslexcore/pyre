@@ -13,6 +13,13 @@ export const GOALS_HREF = '/admin/goals';
 /** The cross-board page: everything in flight, wherever it is filed. */
 export const ALL_TASKS_HREF = '/admin/boards/tasks';
 
+/**
+ * The other cross-board page: every goal, where it stands, and the board
+ * that serves it. Lives under /admin/boards so the tool's grant covers it;
+ * /admin/boards/goals is the seeded Tasks board, hence the longer name.
+ */
+export const ALL_GOALS_HREF = '/admin/boards/all-goals';
+
 export const GOAL_STATUSES = ['planned', 'active', 'completed', 'dropped'] as const;
 export type GoalStatusValue = (typeof GOAL_STATUSES)[number];
 

@@ -1,8 +1,9 @@
 // Goals: what a board is for. A goal is written down with its board (or
 // attached to one afterwards, api/admin/boards.ts), judged by its KPIs
 // (goal-kpis.ts), and advanced by the cards on the board that serves it
-// (board-cards.ts). There is no goals page any more; a goal is read as part
-// of its board's bundle (lib/boards/store).
+// (board-cards.ts). A single goal is read as part of its board's bundle
+// (lib/boards/store); the GET here is the overview — every goal at once,
+// for /admin/boards/all-goals.
 //
 // The one rule worth stating out loud: **nothing here closes a goal on its
 // own.** A PATCH to status 'completed' is a person pressing a button, and the
@@ -15,6 +16,8 @@
 // /admin/boards grant (canManageBoards). Measuring a KPI does not; see
 // goal-kpis.ts.
 //
+//   GET    → { goals, kpis, boards, columns, cards, people, today }
+//            (the whole tool's — a single-board grant does not reach it)
 //   POST   { title, descriptionMd?, status?, ownerEmail?, area?, targetDate?,
 //            boardSlug? } → { goal } 201   (boardSlug points that board at it)
 //   PATCH  { id, ...any of the above, sortOrder?, completionNote? } → { goal }
@@ -28,6 +31,7 @@ import {
   type APIRoute,
   beginDelete,
   beginMutation,
+  beginRead,
   type Db,
   isUuidParam,
   json,
@@ -37,9 +41,22 @@ import { attachGoalToBoard, boardsForGoal, loadBoardBySlug, loadGoal } from '@/l
 import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { completionPreview, goalStatusPatch } from '@/lib/goals/access';
+import { loadGoalsOverview } from '@/lib/goals/store';
 import { parseGoalCreate, parseGoalPatch } from '@/lib/goals/validate';
 import { notifyGoalCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
+
+export const GET: APIRoute = async ({ cookies }) => {
+  const ready = await beginRead(cookies, BOARDS_HREF);
+  if (ready instanceof Response) return ready;
+  if (!canManageBoards(ready.gate.access)) return json({ error: 'Forbidden' }, 403);
+
+  try {
+    return json(await loadGoalsOverview(ready.db));
+  } catch (e) {
+    return storeError('goals', e);
+  }
+};
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const ready = await beginMutation(cookies, request, BOARDS_HREF);

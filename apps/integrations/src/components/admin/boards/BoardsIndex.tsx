@@ -1,7 +1,9 @@
 // /admin/boards: the boards this person may open, under their sections,
 // each with the goal it serves — its status, its pace, how many KPIs are
 // met, how much of the work is still open — and the form for a new one.
-// Arranging the sections is BoardSections' job.
+// Arranging the sections is BoardSections' job. A board whose goal has been
+// called met leaves its section for Completed, at the bottom, so the
+// sections only ever hold work still in flight.
 //
 // A single-board grantee sees exactly one card here and no New board form —
 // the list itself is filtered server-side, so the page never even tells them
@@ -9,13 +11,13 @@
 
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
-import { boardsInOrder, sectionsInOrder } from '@/lib/boards/sections';
+import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally } from '@/lib/boards/store';
 import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
-import { ALL_TASKS_HREF } from '@/lib/goals/types';
+import { ALL_GOALS_HREF, ALL_TASKS_HREF } from '@/lib/goals/types';
 import {
   buttonClass,
   cardClass,
@@ -153,9 +155,12 @@ export function BoardsIndex() {
   const today = todayEastern();
   const nowIso = new Date().toISOString();
 
-  const active = boardsInOrder(
-    boards.filter((board) => !board.archived),
-    sections
+  const { live: active, completed } = splitCompletedBoards(
+    boardsInOrder(
+      boards.filter((board) => !board.archived),
+      sections
+    ),
+    goalsById
   );
   const archived = boards.filter((board) => board.archived);
 
@@ -178,6 +183,11 @@ export function BoardsIndex() {
 
       {(canManage || boards.length > 0) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {canManage && (
+            <a className={buttonClass} href={ALL_GOALS_HREF}>
+              All goals
+            </a>
+          )}
           {canManage && (
             <a className={buttonClass} href={ALL_TASKS_HREF}>
               All tasks
@@ -377,6 +387,15 @@ export function BoardsIndex() {
             ? 'No boards yet. Make the first one — what are you actually trying to achieve?'
             : 'No boards have been shared with you.'}
         </p>
+      )}
+
+      {completed.length > 0 && (
+        <section>
+          <SectionTitle note={String(completed.length)}>Completed</SectionTitle>
+          <div className="grid gap-3 opacity-75 sm:grid-cols-2">
+            {completed.map((board) => cardFor(board))}
+          </div>
+        </section>
       )}
 
       {archived.length > 0 && (

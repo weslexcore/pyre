@@ -112,7 +112,7 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
  * Slugs that are pages under /admin/boards rather than boards, so a board
  * could never shadow them.
  */
-export const RESERVED_BOARD_SLUGS = ['tasks', 'new'] as const;
+export const RESERVED_BOARD_SLUGS = ['tasks', 'all-goals', 'new'] as const;
 
 export interface FieldInput {
   key: string;

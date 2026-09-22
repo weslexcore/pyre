@@ -1,0 +1,27 @@
+---
+// All goals: the other cross-board page. Every goal — planned, active, met,
+// dropped — with its status, its pace, its KPIs, and the work under it, and
+// a click through to the board that serves it. `all-goals` is a more
+// specific route than [slug], so this wins over the board page, and
+// parseBoardCreate refuses the slug so no board can ever be shadowed.
+//
+// The page spans every board, so a single-board grantee — who AdminLayout's
+// prefix rule lets through to /admin/boards/* — is turned away here as the
+// API would turn them away anyway.
+import { GoalsOverview } from '@/components/admin/goals/GoalsOverview';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { canManageBoards } from '@/lib/boards/access';
+
+const access = Astro.locals.adminAccess ?? null;
+const allowed = !!access && canManageBoards(access);
+---
+
+<AdminLayout title="All goals" subtitle="Where every goal stands: its pace, its KPIs, and the work under it">
+  {
+    allowed ? (
+      <GoalsOverview client:load />
+    ) : (
+      <p class="text-sm text-white/60">All goals spans every board and is not part of a single-board grant.</p>
+    )
+  }
+</AdminLayout>

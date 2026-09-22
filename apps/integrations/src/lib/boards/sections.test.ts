@@ -6,6 +6,7 @@ import {
   repositionBoard,
   repositionSection,
   sectionsInOrder,
+  splitCompletedBoards,
 } from './sections';
 
 const section = (id: string, sort_order: number, name = id) => ({ id, name, sort_order });
@@ -89,5 +90,33 @@ describe('repositionSection', () => {
       ['growth', 1],
       ['ops', 2],
     ]);
+  });
+});
+
+describe('splitCompletedBoards', () => {
+  const withGoal = (id: string, goal_id: string | null) => ({ id, goal_id });
+  const goals = new Map([
+    ['met', { status: 'completed' as const }],
+    ['live', { status: 'active' as const }],
+    ['gone', { status: 'dropped' as const }],
+  ]);
+
+  it('moves only the boards whose goal was called met, keeping order', () => {
+    const boards = [
+      withGoal('a', 'met'),
+      withGoal('b', 'live'),
+      withGoal('c', null),
+      withGoal('d', 'gone'),
+      withGoal('e', 'met'),
+    ];
+    const { live, completed } = splitCompletedBoards(boards, goals);
+    expect(live.map((b) => b.id)).toEqual(['b', 'c', 'd']);
+    expect(completed.map((b) => b.id)).toEqual(['a', 'e']);
+  });
+
+  it('treats a board whose goal is missing from the map as live', () => {
+    const { live, completed } = splitCompletedBoards([withGoal('a', 'unknown')], goals);
+    expect(live).toHaveLength(1);
+    expect(completed).toEqual([]);
   });
 });

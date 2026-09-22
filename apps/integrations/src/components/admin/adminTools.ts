@@ -4,10 +4,10 @@
 // the staff table (managed from /admin/users).
 
 import { BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
-import { ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
+import { ALL_GOALS_HREF, ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
 
 export { BOARD_GRANT_PREFIX, boardGrantKey, isBoardGrantKey } from '@/lib/boards/types';
-export { ALL_TASKS_HREF, BOARDS_HREF, GOALS_HREF };
+export { ALL_GOALS_HREF, ALL_TASKS_HREF, BOARDS_HREF, GOALS_HREF };
 
 export type AdminToolSection = 'operations' | 'community' | 'marketing' | 'monitoring' | 'admin';
 
@@ -178,8 +178,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     href: BOARDS_HREF,
     title: 'Goals & Boards',
     navLabel: 'Goals & Boards',
-    description:
-      'What we are trying to achieve and the work that gets us there.',
+    description: 'What we are trying to achieve and the work that gets us there.',
     section: 'operations',
     keywords: [
       'trello',
@@ -529,6 +528,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'All tasks',
     parent: BOARDS_HREF,
     keywords: ['in flight', 'overdue', 'todo', 'due this week', 'my tasks', 'who is on what'],
+  },
+  {
+    href: ALL_GOALS_HREF,
+    title: 'All goals',
+    parent: BOARDS_HREF,
+    keywords: ['goals overview', 'kpi', 'okr', 'status', 'pace', 'where we stand', 'progress'],
   },
   {
     href: '/admin/boards/goals',
