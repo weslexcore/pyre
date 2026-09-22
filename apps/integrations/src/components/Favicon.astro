@@ -1,14 +1,25 @@
 ---
-// Tab icon for every page: the Pyre wave mark in brand gold.
+// Icons and install metadata for every page: the Pyre wave mark in brand gold.
 // The SVG uses currentColor, so it is recolored here and inlined as a data
-// URI (no extra request). The PNGs in public/ are rendered from the same SVG
-// for browsers that ignore SVG favicons (Safari) and for iOS home screens.
+// URI (no extra request). Every PNG under public/ is rendered from the same
+// SVG: favicon.png for browsers that ignore SVG favicons (Safari),
+// apple-touch-icon.png for iOS home screens, and public/icons/* for the web
+// app manifest, which is what Android and desktop Chrome/Edge read when
+// someone installs the admin as an app. The maskable icons keep the mark
+// inside Android's central safe zone on a brand-black background.
 import pyreLogo from '@/assets/pyre_logo.svg?raw';
 
 const gold = '#dbb155'; // --pyre-gold in styles/admin.css
+const black = '#23221c'; // --pyre-black in styles/admin.css
 const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, gold))}`;
 ---
 
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
 <link rel="icon" type="image/svg+xml" href={svgHref} />
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content={black} />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Pyre Admin" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
