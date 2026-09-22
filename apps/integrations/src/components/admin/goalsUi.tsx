@@ -160,9 +160,10 @@ export function ColumnDot({ column }: { column: Pick<BoardColumnRow, 'key' | 'la
 
 /** The card's workflow status, kept beside its title for quick scanning. */
 /**
- * A due date as the tools colour it: red once it is past, gold today and
- * tomorrow, quiet after that. Finished cards never shout — a task that
- * shipped late is not still late.
+ * A due date as the tools colour it, a plain traffic light: red once it is
+ * past, gold on the day itself, sage while it is still ahead of you. Finished
+ * cards never shout — a task that shipped late is not still late, so they keep
+ * a quiet grey whatever their date says.
  */
 export function DueChip({
   dueDate,
@@ -179,7 +180,7 @@ export function DueChip({
       ? 'border-[var(--pyre-red)]/60 bg-[var(--pyre-red)]/15 text-[var(--pyre-red)]'
       : dueDate === today
         ? 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]'
-        : 'border-white/15 bg-white/5 text-white/50';
+        : 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]';
   return <span className={`${badgeBase} ${tone}`}>{formatYmd(dueDate)}</span>;
 }
 
