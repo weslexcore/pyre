@@ -2,9 +2,9 @@
 // screen): what the palette matches locally, what it asks the server for, and
 // how the two are ranked into one keyboard-navigable list. Pages match on the
 // client — the palette already holds the list of pages this user may open —
-// and land first; SOP documents, entries inside them, and shift notes come
-// from /api/admin/search, which filters by the same access rules the
-// individual tools use. Client-bundle-safe.
+// and land first; tasks on the boards, SOP documents, entries inside them,
+// and shift notes come from /api/admin/search, which filters by the same
+// access rules the individual tools use. Client-bundle-safe.
 
 import type { SearchPage } from '@/components/admin/adminTools';
 import type { BoardRow } from '@/lib/db';
@@ -34,18 +34,48 @@ export interface NoteHit {
   snippet: string;
 }
 
+/** One card on a board the server matched — a task, or a lead on a pipeline. */
+export interface TaskHit {
+  id: string;
+  title: string;
+  boardSlug: string;
+  boardName: string;
+  /** What the board calls a card — 'task', 'lead'. */
+  cardNoun: string;
+  /** The column the card sits in, as the board labels it. */
+  column: string;
+  /** Finished, well or badly — an open card is what a search most wants. */
+  finished: boolean;
+  /** Roster name for the owner, resolved server-side; '' when unassigned. */
+  owner: string;
+  /** YYYY-MM-DD, when set. */
+  dueDate: string | null;
+  /** The matched line of the notes, when the term is in the notes and not the title. */
+  snippet: string | null;
+}
+
 /** /api/admin/search's response. */
 export interface SearchResponse {
   q: string;
   sops: SopHit[];
   notes: NoteHit[];
+  tasks: TaskHit[];
 }
 
-export type SearchGroup = 'pages' | 'boards' | 'sops' | 'entries' | 'notes' | 'ask' | 'create';
+export type SearchGroup =
+  | 'pages'
+  | 'boards'
+  | 'tasks'
+  | 'sops'
+  | 'entries'
+  | 'notes'
+  | 'ask'
+  | 'create';
 
 export const GROUP_LABELS: Record<SearchGroup, string> = {
   pages: 'Pages',
   boards: 'Boards',
+  tasks: 'Tasks',
   sops: 'SOPs',
   entries: 'In SOPs',
   notes: 'Shift notes',
@@ -110,6 +140,11 @@ export function noteHref(id: string, term: string): string {
   return `/admin/shift-notes?${new URLSearchParams({ q: term })}#note-${id}`;
 }
 
+/** Link to a board, landing with that card's drawer open (BoardView reads #card-). */
+export function taskHref(boardSlug: string, cardId: string): string {
+  return `/admin/boards/${boardSlug}#card-${cardId}`;
+}
+
 /** Link to the Ask page that asks `term` on arrival (SopAsk reads ?q=). */
 export function askHref(term: string): string {
   return `${ASK_HREF}?${new URLSearchParams({ q: term })}`;
@@ -134,11 +169,12 @@ export function askItem(pages: SearchPage[], term: string): SearchItem | null {
 
 /**
  * The palette's rows in display order: the "Ask a question" row for anyone
- * who holds the Ask page, then pages (matched locally), then SOP documents
- * whose title matched, then the matched entries inside every SOP the server
- * returned, then shift notes. A document that matched only in its body
- * doesn't get a document row of its own — its entries are the more useful
- * thing to land on, and they name the document.
+ * who holds the Ask page, then pages (matched locally), then boards, then the
+ * cards on them the server matched, then SOP documents whose title matched,
+ * then the matched entries inside every SOP the server returned, then shift
+ * notes. A document that matched only in its body doesn't get a document row
+ * of its own — its entries are the more useful thing to land on, and they
+ * name the document.
  */
 export function buildItems(
   pages: SearchPage[],
@@ -191,6 +227,23 @@ export function buildItems(
   }
   if (!server || !term) return items;
 
+  for (const task of server.tasks) {
+    const where = [task.boardName, task.column];
+    const meta = [
+      task.owner,
+      task.dueDate ? `due ${task.dueDate}` : '',
+      task.finished ? 'finished' : '',
+    ].filter(Boolean);
+    items.push({
+      key: `task:${task.id}`,
+      group: 'tasks',
+      href: taskHref(task.boardSlug, task.id),
+      title: task.title,
+      hint: where.join(' · '),
+      snippet: task.snippet ?? undefined,
+      meta: meta.length > 0 ? meta.join(' · ') : undefined,
+    });
+  }
   for (const sop of server.sops) {
     if (!sop.titleMatch) continue;
     items.push({

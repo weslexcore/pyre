@@ -1,15 +1,16 @@
 // Global search for the admin dashboard: cmd+K (ctrl+K elsewhere) or the
 // magnifier button in the header opens a palette that finds pages first, then
-// SOP documents, the matched lines inside them, and shift notes. Pages match
-// locally from the list AdminLayout hands over (already filtered to what this
-// user may open); the rest comes from /api/admin/search, which applies each
-// tool's own access rules. Results are one keyboard-navigable list — arrows
+// boards, the tasks on them, SOP documents, the matched lines inside them,
+// and shift notes. Pages match locally from the list AdminLayout hands over
+// (already filtered to what this user may open) and boards from the boards
+// API; the rest comes from /api/admin/search, which applies each tool's own
+// access rules. Results are one keyboard-navigable list — arrows
 // move, Enter activates, Escape closes. Navigation rows are real links, so the
 // ClientRouter handles the navigation exactly as it does for the menu.
 //
 // Opening an SOP entry lands on that very match (?q= highlights, &m= picks
 // the occurrence); a shift note opens the log filtered to the term, scrolled
-// to that note. Anyone who holds the Ask page also gets a gold "Ask a
+// to that note; a task opens its board with the card's drawer already open. Anyone who holds the Ask page also gets a gold "Ask a
 // question" row first, which opens the Ask page and puts the typed text to
 // the knowledge assistant — the semantic search, where the rows below are
 // exact. Modal mechanics follow SopPeekModal (backdrop button, Escape,
@@ -32,13 +33,14 @@ import { Marked } from './Marked';
 import { SearchTaskCreate } from './SearchTaskCreate';
 
 // Quick actions are rendered above these, without a heading.
-const GROUP_ORDER: SearchGroup[] = ['pages', 'boards', 'sops', 'entries', 'notes'];
+const GROUP_ORDER: SearchGroup[] = ['pages', 'boards', 'tasks', 'sops', 'entries', 'notes'];
 
 // One brand color per group heading (text, underline, and dot), so where one
 // group ends and the next begins reads at a glance even in a long list; the
 // rows themselves stay neutral. Pages take the red the nav uses for "where
-// you are"; the two SOP groups share gold (the library's own accent), the
-// entries a step dimmer; shift notes take sage.
+// you are"; boards take sage and the tasks on them a step dimmer; the two
+// SOP groups share gold (the library's own accent), the entries a step
+// dimmer; shift notes take sage.
 const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   pages: {
     heading: 'text-[var(--pyre-red)] border-[var(--pyre-red)]/40',
@@ -47,6 +49,10 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   boards: {
     heading: 'text-[var(--pyre-sage)] border-[var(--pyre-sage)]/40',
     badge: 'bg-[var(--pyre-sage)]',
+  },
+  tasks: {
+    heading: 'text-[var(--pyre-sage)]/80 border-[var(--pyre-sage)]/30',
+    badge: 'bg-[var(--pyre-sage)]/60',
   },
   sops: {
     heading: 'text-[var(--pyre-gold)] border-[var(--pyre-gold)]/40',
@@ -379,7 +385,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const matched = items.filter((item) => item.group !== 'ask' && item.group !== 'create').length;
   const status = !contentSearch
     ? term
-      ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches SOPs and shift notes too.`
+      ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches tasks, SOPs, and shift notes too.`
       : null
     : error
       ? error
@@ -444,7 +450,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck={false}
-                    placeholder="Search pages, boards, SOPs, and shift notes…"
+                    placeholder="Search pages, boards, tasks, SOPs, and shift notes…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={onInputKeyDown}

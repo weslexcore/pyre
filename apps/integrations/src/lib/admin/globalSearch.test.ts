@@ -14,6 +14,7 @@ import {
   noteHref,
   type SearchResponse,
   sopEntryHref,
+  taskHref,
 } from './globalSearch';
 
 const ALL_TOOLS = [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL];
@@ -122,12 +123,40 @@ describe('buildItems', () => {
         snippet: 'The cold plunge was cloudy tonight.',
       },
     ],
+    tasks: [
+      {
+        id: 't1',
+        title: 'Order cold plunge filters',
+        boardSlug: 'goals',
+        boardName: 'Tasks',
+        cardNoun: 'task',
+        column: 'This week',
+        finished: false,
+        owner: 'Marina',
+        dueDate: '2026-09-30',
+        snippet: null,
+      },
+      {
+        id: 't2',
+        title: 'Tub maintenance',
+        boardSlug: 'goals',
+        boardName: 'Tasks',
+        cardNoun: 'task',
+        column: 'Done',
+        finished: true,
+        owner: '',
+        dueDate: null,
+        snippet: 'Drained the cold plunge and refilled',
+      },
+    ],
   };
 
-  it('puts pages first, then titled SOPs, then entries, then notes', () => {
+  it('puts pages first, then tasks, then titled SOPs, then entries, then notes', () => {
     const items = buildItems(pages, server, 'cold plunge');
     expect(items.map((item) => `${item.group}:${item.key}`)).toEqual([
       'pages:page:/admin/water',
+      'tasks:task:t1',
+      'tasks:task:t2',
       'sops:sop:s1',
       'entries:entry:s1:1',
       'entries:entry:s1:2',
@@ -138,10 +167,27 @@ describe('buildItems', () => {
 
   it('links entries to the matched occurrence and notes to their anchor', () => {
     const items = buildItems(pages, server, 'cold plunge');
-    expect(items[1].href).toBe('/admin/sops/cold-plunge-care?q=cold+plunge');
-    expect(items[2].href).toBe('/admin/sops/cold-plunge-care?q=cold+plunge&m=1');
-    expect(items[4].href).toBe('/admin/sops/health-benefits?q=cold+plunge');
-    expect(items[5].href).toBe('/admin/shift-notes?q=cold+plunge#note-n1');
+    expect(items[3].href).toBe('/admin/sops/cold-plunge-care?q=cold+plunge');
+    expect(items[4].href).toBe('/admin/sops/cold-plunge-care?q=cold+plunge&m=1');
+    expect(items[6].href).toBe('/admin/sops/health-benefits?q=cold+plunge');
+    expect(items[7].href).toBe('/admin/shift-notes?q=cold+plunge#note-n1');
+  });
+
+  it('links a task to its board with the card open, and says where it sits', () => {
+    const items = buildItems(pages, server, 'cold plunge');
+    expect(items[1]).toMatchObject({
+      href: '/admin/boards/goals#card-t1',
+      title: 'Order cold plunge filters',
+      hint: 'Tasks · This week',
+      meta: 'Marina · due 2026-09-30',
+    });
+    expect(items[1].snippet).toBeUndefined();
+    expect(items[2]).toMatchObject({
+      href: '/admin/boards/goals#card-t2',
+      hint: 'Tasks · Done',
+      meta: 'finished',
+      snippet: 'Drained the cold plunge and refilled',
+    });
   });
 
   it('lists every page as a jump list when nothing is typed', () => {
@@ -161,7 +207,11 @@ describe('buildItems', () => {
     expect(first.title).toBe('Ask a question: “cold plunge”');
     expect(second.group).toBe('pages');
 
-    const none = buildItems(withAsk, { q: 'zzz', sops: [], notes: [] }, 'why is the tub cloudy');
+    const none = buildItems(
+      withAsk,
+      { q: 'zzz', sops: [], notes: [], tasks: [] },
+      'why is the tub cloudy'
+    );
     expect(none.map((item) => item.group)).toEqual(['ask']);
     expect(none[0].href).toBe(askHref('why is the tub cloudy'));
   });
@@ -192,6 +242,10 @@ describe('hrefs', () => {
 
   it('encodes the note term', () => {
     expect(noteHref('abc', 'pH & chlorine')).toBe('/admin/shift-notes?q=pH+%26+chlorine#note-abc');
+  });
+
+  it('opens a task through the board hash BoardView reads', () => {
+    expect(taskHref('rentals', 'c1')).toBe('/admin/boards/rentals#card-c1');
   });
 });
 
@@ -273,6 +327,7 @@ describe('board search', () => {
       {
         q: 'events',
         sops: [],
+        tasks: [],
         notes: [
           { id: 'n', note_date: '2026-09-21', author_email: 'a', author: 'A', snippet: 'events' },
         ],

@@ -150,3 +150,39 @@ it('renders searchable boards with direct links, highlighting, and keyboard sele
   expect(html).toContain('>Private</mark> Events');
   expect(html).toMatch(/data-index="0"[^>]*aria-selected="true"/);
 });
+
+it('renders tasks under their own heading, after boards and before SOPs, linked to the card', () => {
+  const html = renderToStaticMarkup(
+    <SearchResults
+      items={[
+        {
+          key: 'board:goals',
+          group: 'boards',
+          href: '/admin/boards/goals',
+          title: 'Tasks',
+          hint: 'Board',
+        },
+        {
+          key: 'task:t1',
+          group: 'tasks',
+          href: '/admin/boards/goals#card-t1',
+          title: 'Order towels',
+          hint: 'Tasks · This week',
+          meta: 'Marina · due 2026-09-30',
+        },
+        ITEMS[1],
+      ]}
+      term="towels"
+      selected={1}
+      onSelect={() => {}}
+      onOpen={() => {}}
+    />
+  );
+  expect(html).toContain('aria-label="Tasks"');
+  expect(html.indexOf('aria-label="Boards"')).toBeLessThan(html.indexOf('aria-label="Tasks"'));
+  expect(html.indexOf('aria-label="Tasks"')).toBeLessThan(html.indexOf('aria-label="In SOPs"'));
+  expect(html).toContain('href="/admin/boards/goals#card-t1"');
+  expect(html).toContain('Order <mark');
+  expect(html).toContain('Tasks · This week · Marina · due 2026-09-30');
+  expect(html).toMatch(/data-index="1"[^>]*aria-selected="true"/);
+});
