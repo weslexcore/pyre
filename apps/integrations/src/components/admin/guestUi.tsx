@@ -89,12 +89,15 @@ export function FieldInput({
   value,
   onChange,
   idPrefix = 'guest-field',
+  multiple,
 }: {
   field: FieldDefinition;
   value: GuestFieldValue | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
   /** Namespaces the input id so two forms on one page don't collide. */
   idPrefix?: string;
+  /** A date field takes several dates unless told to take one (a form question can say so). */
+  multiple?: boolean;
 }) {
   const id = `${idPrefix}-${field.key}`;
 
@@ -154,6 +157,28 @@ export function FieldInput({
         />
       );
     case 'date':
+      if (multiple === false) {
+        // One date: the stored answer may still be a list from the drawer, so show its first.
+        const single = Array.isArray(value) ? (value[0] ?? '') : typeof value === 'string' ? value : '';
+        return (
+          <input
+            id={id}
+            className={inputClass}
+            type="date"
+            value={single}
+            onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+          />
+        );
+      }
+      return (
+        <input
+          id={id}
+          className={inputClass}
+          type="date"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+        />
+      );
     case 'time':
       return (
         <input

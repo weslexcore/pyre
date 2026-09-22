@@ -360,6 +360,7 @@ function QuestionRow({
             hint: question.hint,
           }}
           value={value}
+          multiple={question.multiple}
           onChange={onChange}
         />
       ) : question.key === 'notes' ? (

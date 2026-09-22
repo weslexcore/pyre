@@ -434,3 +434,87 @@ describe('parseSubmission', () => {
     expect(result.due_date).toBe('2026-10-03');
   });
 });
+
+describe('several dates on a question', () => {
+  const dateField = {
+    key: 'event_date',
+    label: 'Event date',
+    kind: 'date',
+    options: [],
+    hint: null,
+    archived: false,
+  } as Pick<BoardFieldRow, 'key' | 'label' | 'kind' | 'options' | 'hint' | 'archived'>;
+  const textField = { ...dateField, key: 'name', label: 'Name', kind: 'text' as const };
+
+  it('keeps the flag on a field question and drops it from a builtin', () => {
+    const patch = parseFormPatch({
+      questions: [
+        { kind: 'field', key: 'event_date', multiple: true },
+        { kind: 'builtin', key: 'notes', multiple: true },
+        { kind: 'field', key: 'name', multiple: false },
+      ],
+    });
+    if (!patch.ok) throw new Error(patch.error);
+    expect(patch.value.questions?.[0]).toMatchObject({ multiple: true });
+    expect(patch.value.questions?.[1]).not.toHaveProperty('multiple');
+    expect(patch.value.questions?.[2]).not.toHaveProperty('multiple');
+  });
+
+  it('refuses a flag that is not a boolean', () => {
+    const patch = parseFormPatch({
+      questions: [{ kind: 'field', key: 'event_date', multiple: 'yes' }],
+    });
+    expect(patch.ok).toBe(false);
+  });
+
+  it('resolves to several only for a date field that asked for it', () => {
+    const resolved = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [
+          {
+            kind: 'field',
+            key: 'event_date',
+            label: null,
+            hint: null,
+            required: false,
+            multiple: true,
+          },
+          { kind: 'field', key: 'name', label: null, hint: null, required: false, multiple: true },
+        ],
+      },
+      [dateField, textField]
+    );
+    expect(resolved.map((question) => question.multiple)).toEqual([true, false]);
+  });
+
+  it('keeps one date on a one-date question, several on a several-dates one', () => {
+    const [one] = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [{ kind: 'field', key: 'event_date', label: null, hint: null, required: true }],
+      },
+      [dateField]
+    );
+    expect(answerOf(one, ['2026-10-03', '2026-10-04'])).toBe('2026-10-03');
+    expect(answerOf(one, '2026-10-03')).toBe('2026-10-03');
+    expect(answerOf(one, [])).toBeNull();
+    const [several] = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [
+          {
+            kind: 'field',
+            key: 'event_date',
+            label: null,
+            hint: null,
+            required: true,
+            multiple: true,
+          },
+        ],
+      },
+      [dateField]
+    );
+    expect(answerOf(several, ['2026-10-03', '2026-10-04'])).toEqual(['2026-10-03', '2026-10-04']);
+  });
+});

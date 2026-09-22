@@ -434,6 +434,19 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                       />
                       required
                     </label>
+                    {field?.kind === 'date' && (
+                      <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                        <input
+                          type="checkbox"
+                          checked={question.multiple === true}
+                          aria-label={`Allow several dates for ${item.label}`}
+                          onChange={(e) =>
+                            setQuestion(index, { multiple: e.target.checked || undefined })
+                          }
+                        />
+                        several dates
+                      </label>
+                    )}
                     {!isTitle && (
                       <button
                         type="button"

@@ -11,6 +11,7 @@ const questions: ResolvedQuestion[] = [
     label: 'Title',
     hint: null,
     required: true,
+    multiple: false,
     field: null,
   },
   {
@@ -20,6 +21,7 @@ const questions: ResolvedQuestion[] = [
     label: 'Your name',
     hint: 'First is fine',
     required: false,
+    multiple: false,
     field: { kind: 'text', options: [] },
   },
   {
@@ -29,6 +31,7 @@ const questions: ResolvedQuestion[] = [
     label: 'Catering?',
     hint: null,
     required: true,
+    multiple: false,
     field: { kind: 'yes_no', options: [] },
   },
 ];
@@ -90,6 +93,7 @@ describe('BoardForm', () => {
       label: 'Signed contract',
       hint: null,
       required: true,
+      multiple: false,
       field: { kind: 'files', options: [] },
     };
     const html = render('single', [files]);

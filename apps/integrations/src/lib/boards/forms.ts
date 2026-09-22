@@ -263,6 +263,9 @@ function parseQuestions(value: unknown): ParseResult<BoardFormQuestion[]> {
     if (raw.required !== undefined && typeof raw.required !== 'boolean') {
       return fail('required must be true or false');
     }
+    if (raw.multiple !== undefined && typeof raw.multiple !== 'boolean') {
+      return fail('multiple must be true or false');
+    }
 
     const question: BoardFormQuestion = {
       kind: raw.kind,
@@ -270,6 +273,8 @@ function parseQuestions(value: unknown): ParseResult<BoardFormQuestion[]> {
       label,
       hint,
       required: raw.required === true,
+      // Only a field can take several answers; a builtin never carries the flag.
+      ...(raw.kind === 'field' && raw.multiple === true ? { multiple: true } : {}),
     };
     const id = questionId(question);
     if (seen.has(id)) return fail(`"${key}" is asked twice`);
@@ -412,6 +417,8 @@ export interface ResolvedQuestion {
   label: string;
   hint: string | null;
   required: boolean;
+  /** A date question that takes more than one date; every other question is one answer. */
+  multiple: boolean;
   /** The field's shape, for a field question; null for a builtin. */
   field: Pick<BoardFieldRow, 'kind' | 'options'> | null;
 }
@@ -447,6 +454,7 @@ export function formQuestions(
         label: question.label ?? BUILTIN_LABELS[question.key],
         hint: question.hint,
         required: question.key === 'title' || question.required,
+        multiple: false,
         field: null,
       });
       continue;
@@ -462,6 +470,7 @@ export function formQuestions(
       label: question.label ?? field.label,
       hint: question.hint ?? field.hint,
       required: question.required,
+      multiple: field.kind === 'date' && question.multiple === true,
       field: { kind: field.kind, options: field.options },
     });
   }
@@ -476,6 +485,7 @@ export function formQuestions(
       label: BUILTIN_LABELS.title,
       hint: null,
       required: true,
+      multiple: false,
       field: null,
     });
   }
@@ -489,8 +499,16 @@ export function formQuestions(
  * required question: `false` answers a yes/no, an empty pick-any does not.
  */
 export function answerOf(question: ResolvedQuestion, raw: unknown): BoardFieldValue | null {
-  if (question.field)
-    return raw === null || raw === undefined ? null : normalizeAnswer(question.field, raw);
+  if (question.field) {
+    if (raw === null || raw === undefined) return null;
+    const answer = normalizeAnswer(question.field, raw);
+    // A date question asked for one date takes one, whatever the client
+    // sent: the first, since that is the one the person picked first.
+    if (question.field.kind === 'date' && !question.multiple && Array.isArray(answer)) {
+      return answer[0] ?? null;
+    }
+    return answer;
+  }
   if (typeof raw !== 'string') return null;
   const value = raw.trim();
   if (!value) return null;
@@ -570,7 +588,7 @@ export function parseSubmission(
       if (question.required) return fail(`"${question.label}" is required`);
       continue;
     }
-    if (question.kind === 'field') fieldAnswers[question.key] = answers[question.id];
+    if (question.kind === 'field') fieldAnswers[question.key] = value;
     else if (question.key === 'title') title = String(value);
     else if (question.key === 'notes') notes = String(value);
     else if (question.key === 'due_date') dueDate = String(value);

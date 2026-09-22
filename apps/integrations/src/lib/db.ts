@@ -983,6 +983,8 @@ export interface BoardFormQuestion {
   label: string | null;
   hint: string | null;
   required: boolean;
+  /** For a date field: the form takes more than one date. Absent or false is one. */
+  multiple?: boolean;
 }
 
 /** The one form a board puts in front of people. Mirrors the board_forms migration. */
