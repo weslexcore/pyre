@@ -10,7 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@upstash/redis": "^1.38.0"
+    "@upstash/redis": "^1.38.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
