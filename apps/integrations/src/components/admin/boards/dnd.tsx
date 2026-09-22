@@ -12,11 +12,13 @@
 // reorder.ts decides). The drawer's Column field stays as the keyboard path.
 
 import {
+  closestCenter,
   closestCorners,
   type DraggableAttributes,
   type DraggableSyntheticListeners,
   MouseSensor,
   TouchSensor,
+  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -31,6 +33,13 @@ export { DndContext, DragOverlay } from '@dnd-kit/core';
 /** Cards sit inside their column's box, so the nearest corners pick the card
  * under the pointer and fall back to the column when there is none. */
 export const boardCollisions = closestCorners;
+
+/**
+ * Day cells tile the grid with no gaps, so the cell whose centre is nearest
+ * the pointer is the one being aimed at — closestCorners would let a tall
+ * cell's corner win over the cell the cursor is actually inside.
+ */
+export const dayCollisions = closestCenter;
 
 /**
  * A mouse needs a few pixels of movement, so a click still opens the card. A
@@ -76,6 +85,64 @@ export function DroppableColumn({
     >
       {children}
     </section>
+  );
+}
+
+/**
+ * A day cell on the calendar as a drop target. Unlike a column, a day is
+ * always a legal destination — every date exists — so it only has to say so
+ * while something is held over it.
+ */
+export function DroppableDay({
+  date,
+  disabled = false,
+  className,
+  children,
+}: {
+  date: string;
+  disabled?: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver, active } = useDroppable({ id: `day:${date}`, disabled });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className} transition-colors ${
+        isOver
+          ? 'bg-[var(--pyre-gold)]/10 ring-1 ring-inset ring-[var(--pyre-gold)]/60'
+          : active
+            ? 'ring-1 ring-inset ring-white/10'
+            : ''
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A calendar entry as something to pick up. Not sortable — a day has no
+ * order to drop into, only a date — so this is the plain draggable.
+ */
+export function DraggableEntry({
+  id,
+  disabled = false,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  children: (drag: {
+    listeners: DraggableSyntheticListeners;
+    attributes: DraggableAttributes;
+    dragging: boolean;
+  }) => ReactNode;
+}) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id, disabled });
+  return (
+    <div ref={setNodeRef} className={isDragging ? 'opacity-30' : undefined}>
+      {children({ listeners, attributes, dragging: isDragging })}
+    </div>
   );
 }
 

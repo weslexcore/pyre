@@ -19,7 +19,11 @@ import type {
   GoalKpiRow,
   GoalRow,
 } from '@/lib/db';
+import { todayEastern } from '@/lib/shift-notes/validate';
+import type { PeopleNames } from '@/lib/sops/names';
+import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard } from './access';
+import { type Assignable, listAssignable } from './people';
 import { BOARD_LIMITS } from './types';
 
 /** Every board, archived last, in display order. */
@@ -296,6 +300,102 @@ export async function canReachGoal(
   if (canManageBoards(access)) return true;
   const boards = await boardsForGoal(db, goalId);
   return boards.some((board) => canViewBoard(access, board.slug));
+}
+
+/** A page, not a database; past this the calendar needs a narrower window. */
+const CALENDAR_CARD_LIMIT = 2000;
+const CALENDAR_GOAL_LIMIT = 500;
+
+export interface BoardsCalendarData {
+  boards: BoardRow[];
+  columns: BoardColumnRow[];
+  fields: BoardFieldRow[];
+  cards: BoardCardRow[];
+  goals: GoalRow[];
+  people: PeopleNames;
+  /** Everyone a card can be reassigned to — the drawer opens here. */
+  owners: Assignable[];
+  today: string;
+}
+
+/**
+ * The cross-board calendar: everything dated in one window, on the boards the
+ * caller has already filtered to what this viewer may see.
+ *
+ * The window is applied to due dates in SQL and to the dated fields in
+ * buildCalendar rather than here. Postgres could filter a known jsonb key —
+ * `properties->>requested_date` is indexable and the keys match
+ * ^[a-z][a-z0-9_]+$, so the path is safe to build — but the set of keys
+ * differs per board and grows every time somebody adds a field, so the query
+ * would be assembled from configuration and would need an index per key to be
+ * worth anything. At this scale (a handful of boards, a thousand cards each
+ * at most) one bounded read and a filter in memory is the simpler true thing.
+ * If it ever stops being: a generated `date` column per dated field, or a
+ * board_card_dates projection, is the move.
+ */
+export async function loadBoardsCalendar(
+  db: SupabaseClient,
+  boards: BoardRow[],
+  start: string,
+  end: string
+): Promise<BoardsCalendarData> {
+  const live = boards.filter((board) => !board.archived);
+  const boardIds = live.map((board) => board.id);
+  if (boardIds.length === 0) {
+    return {
+      boards: live,
+      columns: [],
+      fields: [],
+      cards: [],
+      goals: [],
+      people: {},
+      owners: await listAssignable(),
+      today: todayEastern(),
+    };
+  }
+
+  const [columns, fieldsResult, cardsResult, goalsResult] = await Promise.all([
+    loadAllColumns(db),
+    db
+      .from('board_fields')
+      .select('*')
+      .in('board_id', boardIds)
+      .eq('archived', false)
+      .order('sort_order', { ascending: true }),
+    db
+      .from('board_cards')
+      .select('*')
+      .in('board_id', boardIds)
+      .order('created_at', { ascending: true })
+      .limit(CALENDAR_CARD_LIMIT),
+    db
+      .from('goals')
+      .select('*')
+      .not('target_date', 'is', null)
+      .gte('target_date', start)
+      .lte('target_date', end)
+      .order('target_date', { ascending: true })
+      .limit(CALENDAR_GOAL_LIMIT),
+  ]);
+
+  if (fieldsResult.error) throw new Error(fieldsResult.error.message);
+  if (cardsResult.error) throw new Error(cardsResult.error.message);
+  if (goalsResult.error) throw new Error(goalsResult.error.message);
+
+  const cards = (cardsResult.data ?? []) as BoardCardRow[];
+
+  return {
+    boards: live,
+    columns: columns.filter((column) => boardIds.includes(column.board_id)),
+    fields: (fieldsResult.data ?? []) as BoardFieldRow[],
+    cards,
+    goals: (goalsResult.data ?? []) as GoalRow[],
+    people: await getPeopleNames(
+      cards.flatMap((card) => [card.owner_email ?? '', card.created_by])
+    ),
+    owners: await listAssignable(),
+    today: todayEastern(),
+  };
 }
 
 /** Every column on every board, for pages that span boards (All Tasks). */

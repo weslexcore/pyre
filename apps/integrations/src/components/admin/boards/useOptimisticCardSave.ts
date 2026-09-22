@@ -17,10 +17,16 @@ export function optimisticCardPatch(
     dueDate: 'due_date',
     waitingOn: 'waiting_on',
     area: 'area',
-    properties: 'properties',
   } as const;
   for (const [input, field] of Object.entries(fields)) {
     if (input in patch) Object.assign(next, { [field]: patch[input] });
+  }
+  // Merged, not replaced, because the route merges (normalizeProperties takes
+  // the card's current answers as `previous`). A caller that names one key —
+  // the calendar, dragging a date onto another day — must not blank the rest
+  // of the card for the moment before the server answers.
+  if (patch.properties && typeof patch.properties === 'object') {
+    next.properties = { ...card.properties, ...(patch.properties as typeof card.properties) };
   }
   const column = columns.find((column) => column.id === patch.columnId);
   if (column) Object.assign(next, columnPatch(card, column, '', new Date().toISOString()));

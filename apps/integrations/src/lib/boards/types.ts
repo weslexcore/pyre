@@ -7,6 +7,13 @@
 export const BOARDS_HREF = '/admin/boards';
 
 /**
+ * The cross-board month view: every dated thing on every board, plus the
+ * goals' target dates. Lives under /admin/boards so the tool's grant covers
+ * it, and `calendar` is reserved so no board can shadow it.
+ */
+export const BOARDS_CALENDAR_HREF = '/admin/boards/calendar';
+
+/**
  * The seeded board the founders' tasks live on. Its cards are the ones a goal
  * rolls up and All Tasks lists; every other board is a pipeline.
  */
@@ -66,6 +73,14 @@ export function isFieldKind(value: unknown): value is FieldKind {
 /** Kinds whose answers come from `options`. */
 export function kindHasOptions(kind: FieldKind): boolean {
   return kind === 'choice' || kind === 'multi_choice';
+}
+
+/**
+ * Kinds that can time a date field on the calendar. A `time` gives the entry
+ * a moment, a `time_range` gives it a window; anything else leaves it all-day.
+ */
+export function kindIsTime(kind: FieldKind): boolean {
+  return kind === 'time' || kind === 'time_range';
 }
 
 // A staff row's `pages` array holds tool hrefs and capability keys; this is a

@@ -2,6 +2,15 @@
 // purpose: square pills change WHAT you're looking at (views, nav, actions);
 // round gold chips narrow the CURRENT view (filters).
 
+/** View pills — square + red for the control that changes WHICH view you are
+ *  in: the schedule's week/month, a board's board/calendar. */
+export const pillClass = (active: boolean) =>
+  `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
+    active
+      ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
+      : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
+  }`;
+
 /** Filter chips — rounded-full + gold so filters read differently from the
  *  square view pills even when inactive or wrapped onto another line. */
 export const filterChipClass = (active: boolean) =>

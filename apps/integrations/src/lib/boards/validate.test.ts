@@ -137,6 +137,9 @@ describe('parseBoardPatch', () => {
     expect(fields?.[0]).toMatchObject({
       key: 'party_size',
       show_on_card: true,
+      // Nothing is an event until a board says so.
+      show_on_calendar: false,
+      calendar_time_key: null,
       sort_order: 10,
       options: [],
     });
@@ -414,5 +417,126 @@ describe('time range fields', () => {
     expect(formatProperty({ kind: 'time_range' }, ['18:30', '21:00'])).toBe('6:30 PM – 9:00 PM');
     expect(formatProperty({ kind: 'time_range' }, ['18:30'])).toBe('');
     expect(formatProperty({ kind: 'time_range' }, '18:30')).toBe('');
+  });
+});
+
+describe('reserved slugs', () => {
+  it.each(['tasks', 'all-goals', 'calendar', 'new'])(
+    'refuses %s, so no board can shadow a page of the tool',
+    (slug) => {
+      expect(error(parseBoardCreate({ name: 'Nope', slug, columns }))).toMatch(
+        /is a page of the tool/
+      );
+    }
+  );
+});
+
+describe('calendar fields', () => {
+  const fieldsOf = (fields: unknown[]) => value(parseBoardPatch({ fields })).fields;
+
+  const DATE = { key: 'requested_date', label: 'Requested date', kind: 'date' };
+  const TIME = { key: 'requested_time', label: 'Requested time', kind: 'time' };
+
+  it('puts a date field on the calendar, timed by a time field', () => {
+    const fields = fieldsOf([
+      { ...DATE, showOnCalendar: true, calendarTimeKey: 'requested_time' },
+      TIME,
+    ]);
+    expect(fields?.[0]).toMatchObject({
+      show_on_calendar: true,
+      calendar_time_key: 'requested_time',
+    });
+  });
+
+  it('accepts a time range as the companion', () => {
+    const fields = fieldsOf([
+      { ...DATE, showOnCalendar: true, calendarTimeKey: 'window' },
+      { key: 'window', label: 'Window', kind: 'time_range' },
+    ]);
+    expect(fields?.[0].calendar_time_key).toBe('window');
+  });
+
+  it('leaves an untimed calendar field all day', () => {
+    const fields = fieldsOf([{ ...DATE, showOnCalendar: true }]);
+    expect(fields?.[0]).toMatchObject({ show_on_calendar: true, calendar_time_key: null });
+  });
+
+  it('refuses a companion that is not a time field', () => {
+    expect(
+      error(
+        parseBoardPatch({
+          fields: [
+            { ...DATE, showOnCalendar: true, calendarTimeKey: 'occasion' },
+            { key: 'occasion', label: 'Occasion', kind: 'text' },
+          ],
+        })
+      )
+    ).toMatch(/must be timed by a time field/);
+  });
+
+  it('refuses a field that times itself', () => {
+    expect(
+      error(
+        parseBoardPatch({
+          fields: [{ ...DATE, showOnCalendar: true, calendarTimeKey: 'requested_date' }],
+        })
+      )
+    ).toMatch(/cannot be timed by itself/);
+  });
+
+  it('refuses a companion the board does not have', () => {
+    expect(
+      error(
+        parseBoardPatch({
+          fields: [{ ...DATE, showOnCalendar: true, calendarTimeKey: 'nowhere' }],
+        })
+      )
+    ).toMatch(/does not have/);
+  });
+
+  it('refuses a companion that is on its way out', () => {
+    expect(
+      error(
+        parseBoardPatch({
+          fields: [
+            { ...DATE, showOnCalendar: true, calendarTimeKey: 'requested_time' },
+            { ...TIME, archived: true },
+          ],
+        })
+      )
+    ).toMatch(/is archived/);
+  });
+
+  it('drops the pointer from a date field being archived', () => {
+    const fields = fieldsOf([
+      { ...DATE, showOnCalendar: true, calendarTimeKey: 'requested_time', archived: true },
+      TIME,
+    ]);
+    expect(fields?.[0].calendar_time_key).toBeNull();
+  });
+
+  // Meaningless is dropped; wrong is refused. A flag on a text field is a
+  // stale client, not a mistake somebody can fix.
+  it('drops an on-calendar flag from a kind that is not a date', () => {
+    const fields = fieldsOf([
+      { key: 'occasion', label: 'Occasion', kind: 'text', showOnCalendar: true },
+    ]);
+    expect(fields?.[0]).toMatchObject({ show_on_calendar: false, calendar_time_key: null });
+  });
+
+  it('drops a companion named without the flag', () => {
+    const fields = fieldsOf([{ ...DATE, calendarTimeKey: 'requested_time' }, TIME]);
+    expect(fields?.[0].calendar_time_key).toBeNull();
+  });
+});
+
+describe('due dates on the calendar', () => {
+  it('reads the board toggle both ways', () => {
+    expect(value(parseBoardPatch({ dueOnCalendar: false })).due_on_calendar).toBe(false);
+    expect(value(parseBoardPatch({ dueOnCalendar: true })).due_on_calendar).toBe(true);
+  });
+
+  it('insists it is a boolean', () => {
+    expect(error(parseBoardPatch({ dueOnCalendar: 'yes' }))).toMatch(/true or false/);
   });
 });

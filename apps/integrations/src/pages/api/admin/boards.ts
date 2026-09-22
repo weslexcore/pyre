@@ -34,8 +34,14 @@
 //            goalId? | goal?, sectionId?, columns: [{ key, label, kind, sortOrder? }] }
 //                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            archived?, sortOrder?, goalId?, sectionId?, columns?, fields? }
+//            dueOnCalendar?, archived?, sortOrder?, goalId?, sectionId?,
+//            columns?, fields? }
 //                        → { board, columns, fields }
+//
+// A field carries two more answers since the calendar: `showOnCalendar` (a
+// date field is an event) and `calendarTimeKey` (the time field that times
+// it). parseFields checks the pairing against the list it was sent; the
+// sweep at the end of applyFields covers what one request cannot see.
 //   DELETE ?slug=<slug>  → { ok: true, cards }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
@@ -61,7 +67,7 @@ import {
   loadSection,
   unattachedGoals,
 } from '@/lib/boards/store';
-import { GOALS_BOARD_SLUG, isBoardSlug } from '@/lib/boards/types';
+import { GOALS_BOARD_SLUG, isBoardSlug, kindIsTime } from '@/lib/boards/types';
 import {
   type ColumnInput,
   type FieldInput,
@@ -391,6 +397,9 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           options: field.options,
           hint: field.hint,
           show_on_card: field.show_on_card,
+          show_label_on_card: field.show_label_on_card,
+          show_on_calendar: field.show_on_calendar,
+          calendar_time_key: field.calendar_time_key,
           sort_order: field.sort_order,
           archived: field.archived,
         })
@@ -418,6 +427,28 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
         : await db.from('board_fields').delete().eq('id', field.id);
     if (error) return json({ error: error.message }, 500);
   }
+
+  // parseFields refuses a date field timed by something that is not a live
+  // time field — but only when both are on the list it was sent. The archive
+  // and delete passes above can leave a pointer dangling on a field nobody
+  // touched, so the last word is a sweep over what is actually stored. The
+  // calendar would draw those entries all-day anyway; this keeps the rows
+  // honest, so the settings panel never offers a pairing that is already gone.
+  const stored = await loadFields(db, boardId);
+  const live = new Set(
+    stored.filter((field) => !field.archived && kindIsTime(field.kind)).map((field) => field.key)
+  );
+  const stale = stored
+    .filter((field) => field.calendar_time_key !== null && !live.has(field.calendar_time_key))
+    .map((field) => field.id);
+  if (stale.length > 0) {
+    const { error } = await db
+      .from('board_fields')
+      .update({ calendar_time_key: null })
+      .in('id', stale);
+    if (error) return json({ error: error.message }, 500);
+  }
+
   return null;
 }
 

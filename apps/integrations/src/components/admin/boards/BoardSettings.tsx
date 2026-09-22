@@ -13,13 +13,13 @@
 // board (BoardGoal).
 //
 // Fields — the questions a card on this board answers — are edited the same
-// way, as a list saved whole. A field's kind is permanent once saved: the
-// answers on the cards are shaped by it, so the kind select locks after the
-// first save and a change of mind means archive it and add a new one. A
+// way, as a list saved whole. Choose a field's kind before adding it: the
+// answers on the cards are shaped by it, so the first automatic save fixes
+// the kind and a change of mind means archive it and add a new one. A
 // removed field is deleted if no card has answered it and archived if one
 // has, so nothing typed is ever lost.
 
-import { useRef, useState } from 'react';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
 import type { ColumnKind, FieldKind } from '@/lib/boards/types';
 import {
@@ -31,6 +31,7 @@ import {
   FIELD_KINDS,
   GOALS_BOARD_SLUG,
   kindHasOptions,
+  kindIsTime,
 } from '@/lib/boards/types';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -41,13 +42,23 @@ import {
   inputBaseClass,
   inputClass,
   labelClass,
-  primaryButtonClass,
   SectionTitle,
   selectBaseClass,
   send,
 } from '../goalsUi';
 
 import { ColumnOrder } from './ColumnOrder';
+import { useCardAutosave } from './useCardAutosave';
+
+export interface BoardSettingsResult {
+  board: BoardRow;
+  columns: BoardColumnRow[];
+  fields: BoardFieldRow[];
+}
+
+export interface BoardSettingsHandle {
+  flush: () => Promise<boolean>;
+}
 
 interface ColumnDraft {
   key: string;
@@ -57,11 +68,7 @@ interface ColumnDraft {
 }
 
 interface FieldDraft {
-  /**
-   * Identifies the row while it is being edited. The key of a new field
-   * follows its label, so it cannot be the React key: the row would remount
-   * on every keystroke and the input would lose focus.
-   */
+  /** Stable identity while the field is being edited. */
   id: string;
   key: string;
   label: string;
@@ -70,9 +77,12 @@ interface FieldDraft {
   options: string;
   hint: string;
   showOnCard: boolean;
+  showLabelOnCard: boolean;
+  /** Only a date field can be one; the checkbox renders for nothing else. */
+  showOnCalendar: boolean;
+  /** The key of the time field that times it; '' is an all-day entry. */
+  calendarTimeKey: string;
   archived: boolean;
-  /** Not saved yet, so its kind may still change. */
-  isNew: boolean;
 }
 
 export function BoardSettings({
@@ -82,6 +92,7 @@ export function BoardSettings({
   cardCount,
   busy = false,
   onSaved,
+  ref,
 }: {
   board: BoardRow;
   columns: BoardColumnRow[];
@@ -89,12 +100,14 @@ export function BoardSettings({
   /** How many cards a delete would take with it. */
   cardCount: number;
   busy?: boolean;
-  onSaved: () => void;
+  onSaved: (result: BoardSettingsResult) => void;
+  ref?: Ref<BoardSettingsHandle>;
 }) {
   const [name, setName] = useState(board.name);
   const [description, setDescription] = useState(board.description);
   const [cardNoun, setCardNoun] = useState(board.card_noun);
   const [includeInAllTasks, setIncludeInAllTasks] = useState(board.include_in_all_tasks);
+  const [dueOnCalendar, setDueOnCalendar] = useState(board.due_on_calendar);
   const [drafts, setDrafts] = useState<ColumnDraft[]>(() =>
     [...columns]
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -116,8 +129,10 @@ export function BoardSettings({
         options: field.options.join(', '),
         hint: field.hint ?? '',
         showOnCard: field.show_on_card,
+        showLabelOnCard: field.show_label_on_card !== false,
+        showOnCalendar: field.show_on_calendar,
+        calendarTimeKey: field.calendar_time_key ?? '',
         archived: field.archived,
-        isNew: false,
       }))
   );
   const [saving, setSaving] = useState(false);
@@ -125,6 +140,7 @@ export function BoardSettings({
   const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
 
   const nextFieldId = useRef(0);
+  const [newFieldKind, setNewFieldKind] = useState<FieldKind>('text');
 
   const setFieldDraft = (index: number, patch: Partial<FieldDraft>) =>
     setFieldDrafts((current) =>
@@ -144,25 +160,16 @@ export function BoardSettings({
           current.map((draft) => draft.key)
         ),
         label: 'New field',
-        kind: 'text',
+        kind: newFieldKind,
         options: '',
         hint: '',
         showOnCard: false,
+        showLabelOnCard: true,
+        showOnCalendar: false,
+        calendarTimeKey: '',
         archived: false,
-        isNew: true,
       },
     ]);
-
-  /** A new field's key follows its label until the first save fixes it. */
-  const relabelField = (index: number, label: string) =>
-    setFieldDrafts((current) =>
-      current.map((draft, i) => {
-        if (i !== index) return draft;
-        if (!draft.isNew) return { ...draft, label };
-        const taken = current.filter((_, j) => j !== i).map((other) => other.key);
-        return { ...draft, label, key: label.trim() ? columnKeyOf(label, taken) : draft.key };
-      })
-    );
 
   const setDraft = (index: number, patch: Partial<ColumnDraft>) =>
     setDrafts((current) =>
@@ -186,36 +193,57 @@ export function BoardSettings({
       },
     ]);
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await send('/api/admin/boards', 'PATCH', {
-        slug: board.slug,
-        name,
-        description,
-        cardNoun,
-        includeInAllTasks,
-        columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
-        fields: fieldDrafts.map(({ id: _id, isNew: _isNew, ...draft }, index) => ({
-          ...draft,
-          sortOrder: (index + 1) * 10,
-        })),
-      });
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the board');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const autosave = useCardAutosave(async (patch) => {
+    const result = await send<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
+      slug: board.slug,
+      ...patch,
+    });
+    onSaved(result);
+  });
+  useImperativeHandle(ref, () => ({ flush: autosave.flush }));
+
+  // Compare individual settings so a rename never rewrites an unchanged
+  // column or field list. The shared queue preserves edits during a request.
+  const snapshot = JSON.stringify({
+    name,
+    description,
+    cardNoun,
+    includeInAllTasks,
+    dueOnCalendar,
+    columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
+    fields: fieldDrafts.map(({ id: _id, ...draft }, index) => ({
+      ...draft,
+      sortOrder: (index + 1) * 10,
+    })),
+  });
+  const previous = useRef(snapshot);
+  const schedule = useRef(autosave.schedule);
+  schedule.current = autosave.schedule;
+  useEffect(() => {
+    if (previous.current === snapshot) return;
+    const before = JSON.parse(previous.current);
+    const after = JSON.parse(snapshot);
+    const patch = Object.fromEntries(
+      Object.entries(after).filter(
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(before[key])
+      )
+    );
+    previous.current = snapshot;
+    schedule.current(patch);
+  }, [snapshot]);
+
+  const settingsSaving = autosave.status === 'pending' || autosave.status === 'saving';
 
   const toggleArchived = async () => {
+    if (!(await autosave.flush())) return;
     setSaving(true);
     setError(null);
     try {
-      await send('/api/admin/boards', 'PATCH', { slug: board.slug, archived: !board.archived });
-      onSaved();
+      const result = await send<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
+        slug: board.slug,
+        archived: !board.archived,
+      });
+      onSaved(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not change that');
     } finally {
@@ -224,6 +252,7 @@ export function BoardSettings({
   };
 
   const remove = async () => {
+    if (!(await autosave.flush())) return;
     setSaving(true);
     setError(null);
     try {
@@ -298,6 +327,18 @@ export function BoardSettings({
           On for work we owe; off for a pipeline, where forty open leads would drown the twelve
           things that need doing this week.
         </p>
+        <label className="flex items-center gap-2 text-sm text-white/70">
+          <input
+            type="checkbox"
+            checked={dueOnCalendar}
+            onChange={(e) => setDueOnCalendar(e.target.checked)}
+          />
+          Show card due dates on the calendar
+        </label>
+        <p className="ml-6 text-xs text-white/35">
+          On for work with deadlines; off where a follow-up date is noise beside the dates the cards
+          are really about.
+        </p>
       </div>
 
       <div className="mt-5 border-t border-white/10 pt-4">
@@ -355,11 +396,7 @@ export function BoardSettings({
 
       <div className="mt-5 border-t border-white/10 pt-4">
         <SectionTitle note="what a card asks">Fields</SectionTitle>
-        {fieldDrafts.length === 0 && (
-          <p className="mb-2 text-xs text-white/35">
-            No fields yet.
-          </p>
-        )}
+        {fieldDrafts.length === 0 && <p className="mb-2 text-xs text-white/35">No fields yet.</p>}
         <div className="space-y-3">
           {fieldDrafts.map((draft, index) => (
             <div key={draft.id} className="space-y-2 rounded border border-white/10 p-3">
@@ -370,13 +407,13 @@ export function BoardSettings({
                   maxLength={BOARD_LIMITS.fieldLabel}
                   value={draft.label}
                   aria-label={`Label for ${draft.key}`}
-                  onChange={(e) => relabelField(index, e.target.value)}
+                  onChange={(e) => setFieldDraft(index, { label: e.target.value })}
                 />
                 <select
                   className={`${selectBaseClass} w-32 shrink-0 disabled:opacity-60`}
                   value={draft.kind}
-                  disabled={!draft.isNew}
-                  title={draft.isNew ? undefined : 'A saved field keeps its kind'}
+                  disabled
+                  title="Choose the type before adding a field"
                   aria-label={`Kind for ${draft.key}`}
                   onChange={(e) => setFieldDraft(index, { kind: e.target.value as FieldKind })}
                 >
@@ -394,6 +431,34 @@ export function BoardSettings({
                   />
                   on card
                 </label>
+                {draft.showOnCard && (
+                  <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                    <input
+                      type="checkbox"
+                      checked={draft.showLabelOnCard}
+                      aria-label={`Show label for ${draft.label} on cards`}
+                      onChange={(e) => setFieldDraft(index, { showLabelOnCard: e.target.checked })}
+                    />
+                    show label
+                  </label>
+                )}
+                {draft.kind === 'date' && (
+                  <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
+                    <input
+                      type="checkbox"
+                      checked={draft.showOnCalendar}
+                      onChange={(e) =>
+                        setFieldDraft(index, {
+                          showOnCalendar: e.target.checked,
+                          // Unchecking takes the pairing with it, so a hidden
+                          // field can never be saved still naming a time.
+                          calendarTimeKey: e.target.checked ? draft.calendarTimeKey : '',
+                        })
+                      }
+                    />
+                    on calendar
+                  </label>
+                )}
                 <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                   <input
                     type="checkbox"
@@ -432,29 +497,61 @@ export function BoardSettings({
                   onChange={(e) => setFieldDraft(index, { hint: e.target.value })}
                 />
               </div>
+              {draft.kind === 'date' && draft.showOnCalendar && (
+                <CalendarTiming
+                  draft={draft}
+                  companions={fieldDrafts.filter(
+                    (other) => other.id !== draft.id && kindIsTime(other.kind) && !other.archived
+                  )}
+                  onChange={(calendarTimeKey) => setFieldDraft(index, { calendarTimeKey })}
+                />
+              )}
             </div>
           ))}
         </div>
-        <button type="button" className={`${buttonClass} mt-2`} onClick={addField}>
-          Add field
-        </button>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className={selectBaseClass}
+            aria-label="New field type"
+            value={newFieldKind}
+            onChange={(e) => setNewFieldKind(e.target.value as FieldKind)}
+          >
+            {FIELD_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {FIELD_KIND_LABELS[kind]}
+              </option>
+            ))}
+          </select>
+          <button type="button" className={buttonClass} onClick={addField}>
+            Add field
+          </button>
+        </div>
         <p className="mt-2 text-xs text-white/35">
-          A field's kind is fixed once saved; archive it and add a new one to change it. A removed
-          field is deleted if no card has answered it and archived if one has.
+          Choose a field's type before adding it; archive it and add a new one to change it. A
+          removed field is deleted if no card has answered it and archived if one has. A date field
+          marked "on calendar" draws its answers on the board's calendar — pick a time field beside
+          it and each entry gets a time as well as a day.
         </p>
       </div>
 
-      {error && <p className="mt-3 text-sm text-[var(--pyre-red)]">{error}</p>}
-
-      <div className="mt-4 flex justify-end">
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={busy || saving || !name.trim()}
-          onClick={() => void save()}
-        >
-          {saving ? 'Saving…' : 'Save board'}
-        </button>
+      {(error || autosave.error) && (
+        <p role="alert" className="mt-3 text-sm text-[var(--pyre-red)]">
+          {error || autosave.error}
+        </p>
+      )}
+      <div className="mt-4 flex items-center justify-end gap-2">
+        <p role="status" className="text-xs text-white/50">
+          {autosave.error
+            ? 'Changes could not be saved.'
+            : settingsSaving
+              ? 'Saving…'
+              : 'All changes saved'}
+        </p>
+        {autosave.error && (
+          <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+            Retry
+          </button>
+        )}
       </div>
 
       <div className="mt-5 border-t border-white/10 pt-4">
@@ -519,5 +616,54 @@ export function BoardSettings({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Which time field times a date field on the calendar. Its own line rather
+ * than a sixth control on the field row, which is already four wide before a
+ * phone gets to it.
+ *
+ * "All day" is a real answer, not an absence: a rental with a date and no
+ * agreed time belongs on that day regardless.
+ */
+function CalendarTiming({
+  draft,
+  companions,
+  onChange,
+}: {
+  draft: FieldDraft;
+  companions: FieldDraft[];
+  onChange: (calendarTimeKey: string) => void;
+}) {
+  const labelId = `calendar-time-${draft.id}`;
+
+  if (companions.length === 0) {
+    return (
+      <p className="text-xs text-white/35">
+        On the calendar, all day. Add a time or time-range field to this board to give it a time.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-white/50" id={labelId}>
+        Timed by
+      </span>
+      <select
+        className={`${selectBaseClass} w-auto max-w-56`}
+        aria-labelledby={labelId}
+        value={draft.calendarTimeKey}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">All day</option>
+        {companions.map((companion) => (
+          <option key={companion.id} value={companion.key}>
+            {companion.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

@@ -18,7 +18,15 @@ import {
   parseGoalCreate,
 } from '@/lib/goals/validate';
 import type { ColumnKind, FieldKind } from './types';
-import { BOARD_LIMITS, isColumnKind, isFieldKind, KEY_RE, kindHasOptions, SLUG_RE } from './types';
+import {
+  BOARD_LIMITS,
+  isColumnKind,
+  isFieldKind,
+  KEY_RE,
+  kindHasOptions,
+  kindIsTime,
+  SLUG_RE,
+} from './types';
 
 export type { ParseResult };
 
@@ -112,7 +120,7 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
  * Slugs that are pages under /admin/boards rather than boards, so a board
  * could never shadow them.
  */
-export const RESERVED_BOARD_SLUGS = ['tasks', 'all-goals', 'new'] as const;
+export const RESERVED_BOARD_SLUGS = ['tasks', 'all-goals', 'calendar', 'new'] as const;
 
 export interface FieldInput {
   key: string;
@@ -121,6 +129,11 @@ export interface FieldInput {
   options: string[];
   hint: string | null;
   show_on_card: boolean;
+  show_label_on_card: boolean;
+  /** Only set for a `date` kind; anything else is coerced to false. */
+  show_on_calendar: boolean;
+  /** The key of the `time`/`time_range` field that times it, or null. */
+  calendar_time_key: string | null;
   sort_order: number;
   archived: boolean;
 }
@@ -192,6 +205,16 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
       return fail(`Field "${key}" has a bad sort order`);
     }
 
+    // Only a date can be an event. A stale client sending the flag on a text
+    // field has it dropped rather than refused — the same choice
+    // normalizeProperties makes about an answer it cannot use. The pointer
+    // that goes with it is dropped too, so the two can never disagree.
+    const onCalendar = field.kind === 'date' && field.showOnCalendar === true;
+    const timeKey =
+      onCalendar && typeof field.calendarTimeKey === 'string'
+        ? field.calendarTimeKey.trim() || null
+        : null;
+
     fields.push({
       key,
       label,
@@ -199,10 +222,39 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
       options,
       hint: hint ?? null,
       show_on_card: field.showOnCard === true,
+      // Existing fields have always included their label.
+      show_label_on_card: field.showLabelOnCard !== false,
+      show_on_calendar: onCalendar,
+      calendar_time_key: timeKey,
       sort_order: order,
       archived: field.archived === true,
     });
   }
+
+  // The pairing can only be resolved once the whole list is known, and the
+  // whole list always arrives — applyFields reconciles by key, so a save that
+  // left a field out is a save that removes it. A *pointer* that goes nowhere
+  // is somebody's mistake and is worth a message; a *flag* that is merely
+  // meaningless was dropped above without one.
+  const byKey = new Map(fields.map((entry) => [entry.key, entry]));
+  for (const field of fields) {
+    const key = field.calendar_time_key;
+    if (key === null) continue;
+    if (key === field.key) return fail(`"${field.label}" cannot be timed by itself`);
+    const target = byKey.get(key);
+    if (!target) return fail(`"${field.label}" is timed by a field this board does not have`);
+    if (!kindIsTime(target.kind)) {
+      return fail(
+        `"${field.label}" must be timed by a time field, and "${target.label}" is not one`
+      );
+    }
+    if (target.archived) {
+      return fail(`"${target.label}" is archived, so it cannot time "${field.label}"`);
+    }
+    // An archived date field draws nothing, so it carries no pointer either.
+    if (field.archived) field.calendar_time_key = null;
+  }
+
   return { ok: true, value: fields };
 }
 
@@ -305,6 +357,7 @@ export interface BoardPatch {
   description?: string;
   card_noun?: string;
   include_in_all_tasks?: boolean;
+  due_on_calendar?: boolean;
   archived?: boolean;
   sort_order?: number;
   /** Absent leaves the goal alone; null detaches it. */
@@ -346,6 +399,13 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
       return fail('includeInAllTasks must be true or false');
     }
     patch.include_in_all_tasks = body.includeInAllTasks;
+  }
+
+  if (body.dueOnCalendar !== undefined) {
+    if (typeof body.dueOnCalendar !== 'boolean') {
+      return fail('dueOnCalendar must be true or false');
+    }
+    patch.due_on_calendar = body.dueOnCalendar;
   }
 
   if (body.archived !== undefined) {

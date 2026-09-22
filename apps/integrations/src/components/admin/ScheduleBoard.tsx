@@ -52,7 +52,7 @@ import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format'
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
-import { filterChipClass, toolbarCaptionClass } from './scheduleUi';
+import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -117,13 +117,6 @@ const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
 
 const inputClass =
   'w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const pillClass = (active: boolean) =>
-  `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
-    active
-      ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
-      : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
-  }`;
 
 const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';

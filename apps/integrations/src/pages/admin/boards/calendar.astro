@@ -1,0 +1,26 @@
+---
+// The cross-board calendar. `calendar` is a more specific route than [slug],
+// so this wins over the board page for /admin/boards/calendar — and
+// parseBoardCreate refuses the slug, so no board can ever be shadowed.
+//
+// The page spans every board, so a single-board grantee — who AdminLayout's
+// prefix rule lets through to /admin/boards/* — is turned away here as the
+// API would turn them away anyway. One board's own calendar is a view of its
+// board page, and a single-board grant reaches that.
+import { BoardsCalendar } from '@/components/admin/boards/BoardsCalendar';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { canManageBoards } from '@/lib/boards/access';
+
+const access = Astro.locals.adminAccess ?? null;
+const allowed = !!access && canManageBoards(access);
+---
+
+<AdminLayout title="Calendar" subtitle="Every dated thing on every board, and when each goal is due">
+  {
+    allowed ? (
+      <BoardsCalendar client:load />
+    ) : (
+      <p class="text-sm text-white/60">The calendar spans every board and is not part of a single-board grant.</p>
+    )
+  }
+</AdminLayout>

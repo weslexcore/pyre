@@ -3,11 +3,11 @@
 // admins see everything, other users see the pages granted to them in
 // the staff table (managed from /admin/users).
 
-import { BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
+import { BOARDS_CALENDAR_HREF, BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
 import { ALL_GOALS_HREF, ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
 
 export { BOARD_GRANT_PREFIX, boardGrantKey, isBoardGrantKey } from '@/lib/boards/types';
-export { ALL_GOALS_HREF, ALL_TASKS_HREF, BOARDS_HREF, GOALS_HREF };
+export { ALL_GOALS_HREF, ALL_TASKS_HREF, BOARDS_CALENDAR_HREF, BOARDS_HREF, GOALS_HREF };
 
 export type AdminToolSection = 'operations' | 'community' | 'marketing' | 'monitoring' | 'admin';
 
@@ -534,6 +534,21 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     title: 'All goals',
     parent: BOARDS_HREF,
     keywords: ['goals overview', 'kpi', 'okr', 'status', 'pace', 'where we stand', 'progress'],
+  },
+  {
+    href: BOARDS_CALENDAR_HREF,
+    title: 'Calendar',
+    parent: BOARDS_HREF,
+    keywords: [
+      'month',
+      'calendar',
+      'when',
+      'upcoming',
+      'rental date',
+      'due dates',
+      'target date',
+      'what is happening',
+    ],
   },
   {
     href: '/admin/boards/goals',

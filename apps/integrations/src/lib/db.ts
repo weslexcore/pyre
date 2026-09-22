@@ -843,6 +843,8 @@ export interface BoardRow {
   /** What one card is called here — 'task', 'lead'. */
   card_noun: string;
   include_in_all_tasks: boolean;
+  /** Whether cards here put their due_date on the calendar, as an all-day entry. */
+  due_on_calendar: boolean;
   /** The goal this board serves, judged by its KPIs; null for a plain list. */
   goal_id: string | null;
   /** The index heading this board sits under; null for the unnamed group last. */
@@ -899,6 +901,12 @@ export interface BoardFieldRow {
   options: string[];
   hint: string | null;
   show_on_card: boolean;
+  /** Include the field label beside its value on cards. */
+  show_label_on_card: boolean;
+  /** Only meaningful for kind 'date': this answer is an entry on the calendar. */
+  show_on_calendar: boolean;
+  /** A time/time_range field key on the same board that times this date; null is all day. */
+  calendar_time_key: string | null;
   sort_order: number;
   archived: boolean;
   created_at: string;

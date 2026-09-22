@@ -13,7 +13,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally } from '@/lib/boards/store';
-import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
+import { BOARD_LIMITS, BOARDS_CALENDAR_HREF, slugOf } from '@/lib/boards/types';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
@@ -183,6 +183,11 @@ export function BoardsIndex() {
 
       {(canManage || boards.length > 0) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {canManage && (
+            <a className={buttonClass} href={BOARDS_CALENDAR_HREF}>
+              Calendar
+            </a>
+          )}
           {canManage && (
             <a className={buttonClass} href={ALL_GOALS_HREF}>
               All goals

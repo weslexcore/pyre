@@ -35,6 +35,7 @@ function board(id: string, goal_id: string | null, archived = false): BoardRow {
     description: '',
     card_noun: 'task',
     include_in_all_tasks: true,
+    due_on_calendar: true,
     goal_id,
     section_id: null,
     sort_order: 0,
