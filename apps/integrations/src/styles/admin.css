@@ -101,3 +101,34 @@
     display: none;
   }
 }
+
+/* Match the card drawer's bottom-sheet / side-panel layout at Tailwind's sm breakpoint. */
+@media (prefers-reduced-motion: no-preference) {
+  .card-drawer-panel {
+    animation: card-drawer-open-bottom 416.67ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+  }
+}
+
+@media (min-width: 40rem) and (prefers-reduced-motion: no-preference) {
+  .card-drawer-panel {
+    animation-name: card-drawer-open-right;
+  }
+}
+
+@keyframes card-drawer-open-bottom {
+  from {
+    transform: translateY(calc(100% + 32px));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-drawer-open-right {
+  from {
+    transform: translateX(calc(100% + 32px));
+  }
+  to {
+    transform: translateX(0);
+  }
+}

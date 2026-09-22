@@ -5,6 +5,7 @@
 // Edits save automatically; text is debounced and writes are serialized.
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { AREAS } from '@/lib/goals/types';
@@ -49,6 +50,9 @@ export function CardDrawer({
 }: CardDrawerProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeInProgress = useRef(false);
+  const [closing, setClosing] = useState(false);
 
   const [title, setTitle] = useState(card.title);
   const [notes, setNotes] = useState(card.notes_md);
@@ -66,14 +70,39 @@ export function CardDrawer({
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
   const close = async () => {
-    if (!title.trim()) return;
-    if (await autosave.flush()) onClose();
+    if (!title.trim() || closeInProgress.current) return;
+    closeInProgress.current = true;
+    try {
+      if (!(await autosave.flush())) return;
+      setClosing(true);
+      // Reverse the actual entry animation, including its current position if
+      // closed mid-entry. Reduced motion has no animation, so closes immediately.
+      const animation = panelRef.current?.getAnimations().find(
+        (animation) =>
+          animation instanceof CSSAnimation &&
+          animation.animationName.startsWith('card-drawer-open-')
+      );
+      if (animation) {
+        animation.reverse();
+        const duration = animation.effect?.getComputedTiming().duration;
+        if (typeof duration === 'number' && duration > 0) {
+          // A full exit takes 300ms; reversing mid-entry covers less distance.
+          animation.updatePlaybackRate(-duration / 300);
+        }
+        // A breakpoint or reduced-motion change can cancel the animation.
+        await animation.finished.catch(() => undefined);
+      }
+      onClose();
+    } finally {
+      closeInProgress.current = false;
+    }
   };
   const closeAction = useRef(close);
   closeAction.current = close;
 
   useEffect(() => {
-    closeRef.current?.focus();
+    // Focusing a moving panel must not scroll it into view mid-animation.
+    closeRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') void closeAction.current();
     };
@@ -85,20 +114,26 @@ export function CardDrawer({
   const liveFields = fields.filter((f) => !f.archived || properties[f.key] != null);
   const finished = card.completed_at !== null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end overflow-y-auto sm:items-stretch">
+  if (typeof document === 'undefined') return null;
+
+  // Keep the viewport overlay outside the board's spacing and scroll containers.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-end overflow-clip sm:items-stretch">
       <button
         type="button"
         tabIndex={-1}
         aria-label="Close"
+        disabled={closing}
         onClick={() => void close()}
         className="absolute inset-0 h-full w-full cursor-default bg-black/70"
       />
       <div
+        ref={panelRef}
+        inert={closing}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-4 shadow-xl sm:max-h-none sm:max-w-lg sm:rounded-none sm:rounded-l-lg"
+        className="card-drawer-panel relative max-h-[92vh] w-full overflow-y-auto rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-4 shadow-xl sm:max-h-none sm:max-w-lg sm:rounded-none sm:rounded-l-lg"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 id={titleId} className="font-mono text-xs uppercase tracking-wide text-white/50">
@@ -335,6 +370,7 @@ export function CardDrawer({
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
