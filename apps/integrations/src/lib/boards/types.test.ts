@@ -75,6 +75,7 @@ describe('kind guards', () => {
     expect(kindHasOptions('choice')).toBe(true);
     expect(kindHasOptions('multi_choice')).toBe(true);
     expect(kindHasOptions('date')).toBe(false);
+    expect(kindHasOptions('files')).toBe(false);
     expect(kindHasOptions('text')).toBe(false);
   });
 });

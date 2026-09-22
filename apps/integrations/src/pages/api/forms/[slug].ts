@@ -24,6 +24,7 @@ import { getAccess } from '@/lib/auth/access';
 import { assertSameOrigin } from '@/lib/auth/admin';
 import { validateSession } from '@/lib/auth/session';
 import { canViewBoard } from '@/lib/boards/access';
+import { filterFileAnswers, syncCardAttachments } from '@/lib/boards/card-media';
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
 import {
@@ -115,6 +116,9 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
 
     const parsed = parseSubmission(form, fields, body, `New ${board.card_noun}`);
     if (!parsed.ok) return json({ error: parsed.error }, 400);
+    // A file id the form's own upload route did not stage on this board
+    // names nothing the card may list, and is dropped here.
+    const properties = await filterFileAnswers(db, board.id, null, fields, parsed.value.properties);
 
     const { data, error } = await db
       .from('board_cards')
@@ -125,7 +129,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
         title: parsed.value.title,
         notes_md: parsed.value.notes_md,
         due_date: parsed.value.due_date,
-        properties: parsed.value.properties,
+        properties,
         sort_order: await nextColumnOrder(db, board.id, column.id),
         source: 'form',
         created_by: actor,
@@ -139,6 +143,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
     }
 
     const card = data as BoardCardRow;
+    await syncCardAttachments(db, card.id, fields, {}, card.properties);
     await logBoardEvent(db, {
       cardId: card.id,
       action: 'created',

@@ -540,3 +540,24 @@ describe('due dates on the calendar', () => {
     expect(error(parseBoardPatch({ dueOnCalendar: 'yes' }))).toMatch(/true or false/);
   });
 });
+
+describe('files answers', () => {
+  const files = { kind: 'files', options: [] } as Pick<BoardFieldRow, 'kind' | 'options'>;
+  const other = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+
+  it('stores the ids a files answer lists, once each, and clears anything else', () => {
+    const fields = [{ key: 'contract', ...files }];
+    expect(normalizeProperties(fields, { contract: [UUID, 'junk', UUID, other] })).toEqual({
+      contract: [UUID, other],
+    });
+    expect(normalizeProperties(fields, { contract: 'a string' }, { contract: [UUID] })).toEqual({});
+    expect(normalizeProperties(fields, { contract: [] }, { contract: [UUID] })).toEqual({});
+  });
+
+  it('shows a files answer as a count on the card', () => {
+    expect(formatProperty(files, [UUID, other])).toBe('2 files');
+    expect(formatProperty(files, [UUID])).toBe('1 file');
+    expect(formatProperty(files, [])).toBe('');
+    expect(formatProperty(files, 'nope')).toBe('');
+  });
+});

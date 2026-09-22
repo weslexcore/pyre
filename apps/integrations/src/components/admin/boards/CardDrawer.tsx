@@ -6,6 +6,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { type AttachmentSummary, adminAttachmentHref, fileIdsOf } from '@/lib/boards/files';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { AREAS } from '@/lib/goals/types';
@@ -23,6 +24,7 @@ import {
 import { FieldRow } from '../guestUi';
 import { SopMarkdown } from '../SopMarkdown';
 import { useSheetSwipe } from '../useSheetSwipe';
+import { FilesField } from './FilesField';
 import { useCardAutosave } from './useCardAutosave';
 
 export interface CardDrawerProps {
@@ -67,6 +69,8 @@ export function CardDrawer({
   );
   const [preview, setPreview] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // The rows behind the card's files answers: names and sizes for the ids.
+  const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
   const autosave = useCardAutosave(onSave);
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
@@ -102,6 +106,24 @@ export function CardDrawer({
   };
   const closeAction = useRef(close);
   closeAction.current = close;
+
+  const hasFiles = fields.some((field) => fileIdsOf(card.properties[field.key]).length > 0);
+  useEffect(() => {
+    if (!hasFiles) return;
+    let cancelled = false;
+    void fetch(`/api/admin/board-media?card=${encodeURIComponent(card.id)}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const body = (await res.json()) as { attachments?: AttachmentSummary[] };
+        if (!cancelled && body.attachments) setAttachments(body.attachments);
+      })
+      .catch(() => {
+        // The ids still list; the chips just read "File" until the next open.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [card.id, hasFiles]);
 
   useEffect(() => {
     // Focusing a moving panel must not scroll it into view mid-animation.
@@ -301,21 +323,51 @@ export function CardDrawer({
 
           {liveFields.length > 0 && (
             <div className="space-y-3 border-t border-white/10 pt-4">
-              {liveFields.map((field) => (
-                <FieldRow
-                  key={field.key}
-                  idPrefix={`card-${card.id}`}
-                  field={field}
-                  value={properties[field.key]}
-                  onChange={(next) => {
-                    const updated = { ...properties };
-                    // Explicit null clears a saved answer; omitted keys are preserved by PATCH.
-                    updated[field.key] = next;
-                    setProperties(updated);
-                    autosave.schedule({ properties: updated });
-                  }}
-                />
-              ))}
+              {liveFields.map((field) => {
+                const change = (next: BoardFieldValue | null) => {
+                  const updated = { ...properties };
+                  // Explicit null clears a saved answer; omitted keys are preserved by PATCH.
+                  updated[field.key] = next;
+                  setProperties(updated);
+                  autosave.schedule({ properties: updated });
+                };
+                if (field.kind === 'files') {
+                  const inputId = `card-${card.id}-${field.key}`;
+                  return (
+                    <div key={field.key}>
+                      <label className={labelClass} htmlFor={inputId}>
+                        {field.label}
+                        {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
+                      </label>
+                      {field.hint && (
+                        <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>
+                      )}
+                      <FilesField
+                        id={inputId}
+                        label={field.label}
+                        value={fileIdsOf(properties[field.key])}
+                        known={attachments}
+                        action="/api/admin/board-media"
+                        params={{ boardId: card.board_id, field: field.key }}
+                        href={adminAttachmentHref}
+                        disabled={field.archived}
+                        // A file lands on the card as soon as it is uploaded; a
+                        // debounce would only leave a staged row waiting.
+                        onChange={(next) => change(next)}
+                      />
+                    </div>
+                  );
+                }
+                return (
+                  <FieldRow
+                    key={field.key}
+                    idPrefix={`card-${card.id}`}
+                    field={field}
+                    value={properties[field.key]}
+                    onChange={change}
+                  />
+                );
+              })}
             </div>
           )}
 

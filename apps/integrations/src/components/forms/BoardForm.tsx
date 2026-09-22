@@ -3,6 +3,10 @@
 // already resolved (lib/boards/forms.ts formQuestions) and the answers are
 // posted keyed by question id.
 //
+// One question at a time opens on a cover: the intro, if there is one, and
+// a Next. Nobody is asked anything until they have chosen to start, and the
+// first question is not mistaken for the whole form.
+//
 // A field question is asked with the same control the card drawer uses
 // (FieldInput), so an answer given here looks the same on the card as one
 // typed by staff. The yes/no control draws its own label, so that one is
@@ -13,6 +17,7 @@
 // with the answers and checked on the server (lib/boards/form-guard.ts).
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { FilesField } from '@/components/admin/boards/FilesField';
 import {
   buttonClass,
   inputClass,
@@ -23,6 +28,7 @@ import {
 import { FieldInput } from '@/components/admin/guestUi';
 import { readError } from '@/components/admin/incidentUi';
 import { SopMarkdown } from '@/components/admin/SopMarkdown';
+import { fileIdsOf, formMediaHref } from '@/lib/boards/files';
 import { answerOf, type FormConfig, type ResolvedQuestion } from '@/lib/boards/forms';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardFieldValue } from '@/lib/db';
@@ -46,6 +52,9 @@ export interface BoardFormProps {
 export function BoardForm({ slug, config, questions, noun, preview = false }: BoardFormProps) {
   const [answers, setAnswers] = useState<Answers>({});
   const [problems, setProblems] = useState<Record<string, string>>({});
+  // One question at a time starts on the cover; the first question waits
+  // behind its Next.
+  const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -62,11 +71,11 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
 
   // Each step lands on its own question.
   useEffect(() => {
-    if (!stepped || step === 0) return;
+    if (!stepped || !started) return;
     container.current
       ?.querySelector<HTMLElement>('input:not([tabindex="-1"]), textarea, select, button')
       ?.focus();
-  }, [stepped, step]);
+  }, [stepped, started, step]);
 
   const setAnswer = (question: ResolvedQuestion, value: BoardFieldValue | null) => {
     setAnswers((current) => ({ ...current, [question.id]: value }));
@@ -109,6 +118,10 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (stepped && !started) {
+      setStarted(true);
+      return;
+    }
     if (stepped && step < total - 1) {
       next();
       return;
@@ -161,11 +174,12 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
     return <p className="text-sm text-white/60">This form has no questions yet.</p>;
   }
 
-  const shown = stepped ? [questions[step]] : questions;
+  const cover = stepped && !started;
+  const shown = cover ? [] : stepped ? [questions[step]] : questions;
   const last = step === total - 1;
 
-  // The intro is read once: on the one page, or on the first step.
-  const showIntro = config.intro.trim() !== '' && (!stepped || step === 0);
+  // The intro is read once: on the one page, or on the cover.
+  const showIntro = config.intro.trim() !== '' && (!stepped || cover);
 
   return (
     <form onSubmit={submit} noValidate>
@@ -174,13 +188,20 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
           <SopMarkdown content={config.intro} />
         </div>
       )}
+      {cover && (
+        <p className="text-sm text-white/60">
+          {total === 1 ? 'One question.' : `${total} questions, one at a time.`}
+        </p>
+      )}
       <div ref={container} className="space-y-5">
         {shown.map((question) => (
           <QuestionRow
             key={question.id}
+            slug={slug}
             question={question}
             value={answers[question.id]}
             problem={problems[question.id]}
+            preview={preview}
             onChange={(value) => setAnswer(question, value)}
           />
         ))}
@@ -207,7 +228,11 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
       )}
 
       <div className="mt-6 flex items-center justify-between gap-3">
-        {stepped ? (
+        {cover ? (
+          <button type="submit" className={`${primaryButtonClass} ml-auto`}>
+            Next
+          </button>
+        ) : stepped ? (
           <>
             <button type="button" className={buttonClass} onClick={back} disabled={step === 0}>
               Back
@@ -242,14 +267,18 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
 }
 
 function QuestionRow({
+  slug,
   question,
   value,
   problem,
+  preview,
   onChange,
 }: {
+  slug: string;
   question: ResolvedQuestion;
   value: BoardFieldValue | null | undefined;
   problem?: string;
+  preview: boolean;
   onChange: (value: BoardFieldValue | null) => void;
 }) {
   const id = `form-${question.key}`;
@@ -258,6 +287,37 @@ function QuestionRow({
       {problem}
     </p>
   );
+
+  if (question.field?.kind === 'files') {
+    // Uploads go to the form's own door (api/forms/[slug]/media), staged
+    // until the submission naming them lands. A file picked and then
+    // un-picked is deleted there; nothing here can read one back.
+    const media = formMediaHref(slug);
+    return (
+      <div>
+        <label className={labelClass} htmlFor={id}>
+          {question.label}
+          {question.required && (
+            <span className="ml-1.5 normal-case tracking-normal text-white/35">(required)</span>
+          )}
+        </label>
+        {question.hint && <p className="-mt-1 mb-2 text-xs text-white/40">{question.hint}</p>}
+        <FilesField
+          id={id}
+          label={question.label}
+          value={fileIdsOf(value)}
+          action={media}
+          params={{ field: question.key }}
+          preview={preview}
+          unpick={async (fileId) => {
+            await fetch(`${media}?id=${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+          }}
+          onChange={onChange}
+        />
+        {note}
+      </div>
+    );
+  }
 
   if (question.field?.kind === 'yes_no') {
     return (

@@ -17,6 +17,7 @@ import {
   type ParseResult,
   parseGoalCreate,
 } from '@/lib/goals/validate';
+import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import type { ColumnKind, FieldKind } from './types';
 import {
   BOARD_LIMITS,
@@ -667,6 +668,11 @@ export function normalizeAnswer(
         .filter((item) => field.options.includes(item));
       return picked.length > 0 ? [...new Set(picked)] : null;
     }
+    case 'files':
+      // Shaped here, settled by the route: an id that names no row on this
+      // board is dropped there (card-media.ts), the way a pick-one that is
+      // no longer on the list is dropped here.
+      return normalizeFileIds(raw);
     default: {
       if (typeof raw !== 'string') return null;
       const value = raw.trim();
@@ -727,6 +733,11 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
     }
     case 'multi_choice':
       return Array.isArray(value) ? value.map(String).join(', ') : String(value);
+    case 'files': {
+      // The card shows a count; the drawer, with the rows in hand, shows names.
+      const count = fileIdsOf(value).length;
+      return count > 0 ? formatFileCount(count) : '';
+    }
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
     default:

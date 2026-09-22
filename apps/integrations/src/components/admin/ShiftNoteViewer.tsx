@@ -5,6 +5,12 @@
 // shots from one shift reads as one set. PDFs still open in a new tab — they
 // need the browser's own viewer. Modal mechanics follow the SopPeekModal /
 // MeasurementInfo pattern (backdrop button, Escape, focus on Close).
+//
+// The same lightbox opens a board card's files (boards/FilesField), whose
+// bytes come from another route — or, on a form, from the browser's own
+// copy of a file just picked, which has nothing to download. So the viewer
+// takes a `srcOf` and a `downloadOf` and otherwise only needs to know a
+// file's name and kind.
 import { useEffect, useRef } from 'react';
 import type { ShiftNoteAttachmentRow } from '@/lib/db';
 
@@ -12,22 +18,31 @@ const navButtonClass =
   'rounded border border-white/20 bg-black/60 px-3 py-2 font-mono text-xs uppercase tracking-wide text-white/70 transition-colors hover:border-white/50 hover:text-white disabled:cursor-default disabled:opacity-30';
 
 /** The URL the media API serves an attachment's bytes from. */
-export function attachmentSrc(attachment: ShiftNoteAttachmentRow): string {
+export function attachmentSrc(attachment: Pick<ShiftNoteAttachmentRow, 'id'>): string {
   return `/api/admin/shift-note-media?id=${encodeURIComponent(attachment.id)}`;
 }
 
-export function ShiftNoteViewer({
+/** What the lightbox needs to know about a file. */
+export type ViewerItem = Pick<ShiftNoteAttachmentRow, 'id' | 'file_name' | 'kind'>;
+
+export function ShiftNoteViewer<T extends ViewerItem>({
   items,
   index,
   onNavigate,
   onClose,
+  srcOf = attachmentSrc,
+  downloadOf = (item) => `${srcOf(item)}&download=1`,
 }: {
-  /** The note's photos and videos, in display order. */
-  items: ShiftNoteAttachmentRow[];
+  /** The photos and videos, in display order. */
+  items: T[];
   /** Which of `items` is on screen. */
   index: number;
   onNavigate: (index: number) => void;
   onClose: () => void;
+  /** Where an item's bytes come from; the shift-note route unless told otherwise. */
+  srcOf?: (item: T) => string;
+  /** Where the download link goes; null hides it (a file the viewer only has locally). */
+  downloadOf?: (item: T) => string | null;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const current = items[index];
@@ -55,7 +70,8 @@ export function ShiftNoteViewer({
   }, [onClose, onNavigate, index, hasPrev, hasNext]);
 
   if (!current) return null;
-  const src = attachmentSrc(current);
+  const src = srcOf(current);
+  const download = downloadOf(current);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
@@ -81,12 +97,14 @@ export function ShiftNoteViewer({
               {index + 1} / {items.length}
             </span>
           )}
-          <a
-            href={`${src}&download=1`}
-            className="shrink-0 uppercase tracking-wide underline hover:text-white"
-          >
-            download
-          </a>
+          {download && (
+            <a
+              href={download}
+              className="shrink-0 uppercase tracking-wide underline hover:text-white"
+            >
+              download
+            </a>
+          )}
           <button
             ref={closeRef}
             type="button"

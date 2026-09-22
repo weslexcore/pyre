@@ -13,7 +13,10 @@
 //   * entering a done/dropped column stamps completion and clears the
 //     waiting-on badge (lib/boards/cards.ts), and leaving one un-stamps it;
 //   * `properties` is normalized against *this* board's fields, dropping
-//     keys the board does not have rather than storing whatever arrived.
+//     keys the board does not have rather than storing whatever arrived;
+//   * a `files` answer is settled around the write (lib/boards/card-media):
+//     ids that name nothing this card may list are dropped before, and the
+//     rows it now lists are claimed and the ones it dropped removed after.
 //
 // Access is per board: `board:<slug>` opens exactly that board's cards.
 //
@@ -25,6 +28,11 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
+import {
+  deleteCardAttachments,
+  filterFileAnswers,
+  syncCardAttachments,
+} from '@/lib/boards/card-media';
 import { columnPatch, defaultColumn, nextSortOrder } from '@/lib/boards/cards';
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvent, logBoardEvents } from '@/lib/boards/events';
@@ -110,6 +118,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('column_id, sort_order')
     .eq('board_id', board.id);
 
+  const properties = await filterFileAnswers(
+    db,
+    board.id,
+    null,
+    fields,
+    normalizeProperties(fields, body.properties)
+  );
+
   const { data, error } = await db
     .from('board_cards')
     .insert({
@@ -118,7 +134,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       column_id: column.id,
       // Filed under the board's goal, whatever the board's goal is today.
       goal_id: board.goal_id,
-      properties: normalizeProperties(fields, body.properties),
+      properties,
       sort_order: nextSortOrder(
         (siblings ?? []) as Pick<BoardCardRow, 'column_id' | 'sort_order'>[],
         column.id
@@ -130,6 +146,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const card = data as BoardCardRow;
+  await syncCardAttachments(db, card.id, fields, {}, card.properties);
   await logBoardEvent(db, { cardId: card.id, action: 'created', actor: email });
 
   if (card.owner_email) {
@@ -170,14 +187,17 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     completion = columnPatch(before, column, email, new Date().toISOString());
   }
 
+  const fields = body.properties === undefined ? [] : await loadFields(db, before.board_id);
   const properties =
     body.properties === undefined
       ? {}
       : {
-          properties: normalizeProperties(
-            await loadFields(db, before.board_id),
-            body.properties,
-            before.properties
+          properties: await filterFileAnswers(
+            db,
+            before.board_id,
+            before.id,
+            fields,
+            normalizeProperties(fields, body.properties, before.properties)
           ),
         };
 
@@ -190,6 +210,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const card = data as BoardCardRow;
+  if (properties.properties) {
+    await syncCardAttachments(db, card.id, fields, before.properties, card.properties);
+  }
   // The completion columns ride along so that clearing a waiting-on badge on
   // the way into Done shows up in the trail as the change it is.
   const events = eventsForCardPatch(before, {
@@ -237,8 +260,10 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const guard = await refuseUnlessOnAViewableBoard(db, card.board_id, gate.access);
   if (guard) return guard;
 
-  // board_events cascades with the card: a deleted card's trail has nothing
-  // left to describe.
+  // board_events and board_attachments cascade with the card: a deleted
+  // card's trail has nothing left to describe. The bucket does not cascade,
+  // so the files' objects go first.
+  await deleteCardAttachments(db, id);
   const { error } = await db.from('board_cards').delete().eq('id', id);
   if (error) return json({ error: error.message }, 500);
 

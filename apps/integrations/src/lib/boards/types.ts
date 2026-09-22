@@ -52,6 +52,7 @@ export const FIELD_KINDS = [
   'date',
   'time',
   'time_range',
+  'files',
 ] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 
@@ -64,6 +65,7 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   date: 'Date',
   time: 'Time',
   time_range: 'Time range',
+  files: 'Files',
 };
 
 export function isFieldKind(value: unknown): value is FieldKind {
@@ -81,6 +83,15 @@ export function kindHasOptions(kind: FieldKind): boolean {
  */
 export function kindIsTime(kind: FieldKind): boolean {
   return kind === 'time' || kind === 'time_range';
+}
+
+/**
+ * The kind whose answer is a list of attachment ids rather than something
+ * typed. Its bytes live in board_attachments (lib/boards/files.ts has the
+ * rules), and every route that writes a card has to settle them.
+ */
+export function kindIsFiles(kind: FieldKind): boolean {
+  return kind === 'files';
 }
 
 // A staff row's `pages` array holds tool hrefs and capability keys; this is a
@@ -158,6 +169,8 @@ export const BOARD_LIMITS = {
   externalRef: 200,
   comment: 4000,
   textAnswer: 500,
+  /** A files field holds a handful of documents, not a folder. */
+  filesPerField: 10,
   /** A board is a page, not a database: past this it needs paging. */
   cardsPerBoard: 1000,
 } as const;

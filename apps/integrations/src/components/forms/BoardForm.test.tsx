@@ -56,16 +56,18 @@ describe('BoardForm', () => {
     expect(html).not.toContain('>Next<');
   });
 
-  it('asks one question at a time with a count and a Next button', () => {
+  it('opens one question at a time on a cover, with no question until Next', () => {
     const html = render('stepped');
-    expect(html).toContain('Title');
+    expect(html).not.toContain('for="form-title"');
     expect(html).not.toContain('Your name');
-    expect(html).toContain('1 of 3');
+    expect(html).toContain('3 questions, one at a time.');
     expect(html).toContain('>Next<');
+    expect(html).not.toContain('1 of 3');
+    expect(html).not.toContain('>Back<');
     expect(html).not.toContain('Send it');
   });
 
-  it('renders the intro as Markdown, on the one page and on the first step only', () => {
+  it('renders the intro as Markdown, on the one page and on the cover', () => {
     const intro = '## Before you book\n\nWe reply within **one day**.';
     const single = render('single', questions, intro);
     expect(single).toContain('>Before you book</h3>');
@@ -74,10 +76,28 @@ describe('BoardForm', () => {
     expect(render('stepped', questions, intro)).toMatch(/<strong[^>]*>one day<\/strong>/);
   });
 
-  it('offers to skip an optional question, and only an optional one', () => {
+  it('never offers to skip on the cover or on the one page', () => {
     expect(render('stepped')).not.toContain('>Skip<');
-    expect(render('stepped', [questions[1], questions[2]])).toContain('>Skip<');
+    expect(render('stepped', [questions[1], questions[2]])).not.toContain('>Skip<');
     expect(render('single', [questions[1]])).not.toContain('>Skip<');
+  });
+
+  it('asks for files with a picker and no way to read one back', () => {
+    const files: ResolvedQuestion = {
+      id: 'contract',
+      kind: 'field',
+      key: 'contract',
+      label: 'Signed contract',
+      hint: null,
+      required: true,
+      field: { kind: 'files', options: [] },
+    };
+    const html = render('single', [files]);
+    expect(html).toContain('Signed contract');
+    expect(html).toContain('type="file"');
+    expect(html).toContain('multiple');
+    expect(html).toContain('Up to 10 files');
+    expect(html).not.toContain('/api/admin/board-media');
   });
 
   it('marks required questions and leaves the yes/no label to its control', () => {

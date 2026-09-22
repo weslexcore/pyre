@@ -17,7 +17,7 @@ export function reorderColumns<T extends { key: string }>(
 }
 
 const COLUMN_HELP =
-  'Drag the handles to reorder columns, or focus a handle and use the up and down arrow keys. Choose Save board to apply.';
+  'Drag the handles to reorder columns, or focus a handle and use the up and down arrow keys.';
 
 export function ColumnOrder<T extends { key: string; label: string }>({
   items,
@@ -25,6 +25,7 @@ export function ColumnOrder<T extends { key: string; label: string }>({
   onChange,
   children,
   help = COLUMN_HELP,
+  helpId = 'column-order-help',
 }: {
   items: T[];
   disabled: boolean;
@@ -32,6 +33,8 @@ export function ColumnOrder<T extends { key: string; label: string }>({
   children: (item: T, index: number) => ReactNode;
   /** The line above the list; the column wording unless the list holds something else. */
   help?: string;
+  /** The id the handles point at for that line; unique per list on a page. */
+  helpId?: string;
 }) {
   const sensors = useBoardSensors();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -58,7 +61,7 @@ export function ColumnOrder<T extends { key: string; label: string }>({
         if (over) move(String(active.id), String(over.id));
       }}
     >
-      <p id="column-order-help" className="mb-3 text-xs text-white/50">
+      <p id={helpId} className="mb-3 text-xs text-white/50">
         {help}
       </p>
       <div className="space-y-2">
@@ -67,6 +70,7 @@ export function ColumnOrder<T extends { key: string; label: string }>({
             key={item.key}
             item={item}
             disabled={disabled}
+            helpId={helpId}
             insertAfter={activeIndex < index}
             onMove={(direction) => {
               const target = items[index + direction];
@@ -94,12 +98,14 @@ export function ColumnOrder<T extends { key: string; label: string }>({
 function ColumnOrderRow({
   item,
   disabled,
+  helpId,
   insertAfter,
   onMove,
   children,
 }: {
   item: { key: string; label: string };
   disabled: boolean;
+  helpId: string;
   insertAfter: boolean;
   onMove: (direction: number) => void;
   children: ReactNode;
@@ -124,7 +130,7 @@ function ColumnOrderRow({
           {...listeners}
           disabled={disabled}
           aria-label={`Reorder ${item.label}`}
-          aria-describedby="column-order-help"
+          aria-describedby={helpId}
           onKeyDown={(event) => {
             if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
               event.preventDefault();

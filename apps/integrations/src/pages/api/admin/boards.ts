@@ -46,6 +46,7 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
+import { deleteBoardAttachments } from '@/lib/boards/card-media';
 import { logBoardEvent } from '@/lib/boards/events';
 import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
 import {
@@ -279,9 +280,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (cardsError) return json({ error: cardsError.message }, 500);
   const cardIds = ((cardRows ?? []) as { id: string }[]).map((card) => card.id);
 
-  // Columns, fields, cards, and the cards' trails cascade with the board.
+  // Columns, fields, cards, the cards' trails, and the attachment rows
+  // cascade with the board; the files' objects do not, so they go first.
   // The goal does not: boards.goal_id is the only thing pointing at it, and
   // it goes back to being a goal nobody serves yet.
+  await deleteBoardAttachments(db, board.id);
   const { error } = await db.from('boards').delete().eq('id', board.id);
   if (error) return json({ error: error.message }, 500);
 

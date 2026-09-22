@@ -63,6 +63,22 @@ describe('ShiftNoteViewer', () => {
     expect(html).not.toContain('<img');
   });
 
+  it('reads bytes from wherever it is told, and hides the download when there is nowhere', () => {
+    const html = renderToStaticMarkup(
+      <ShiftNoteViewer
+        items={[item('a', 'photo')]}
+        index={0}
+        onNavigate={noop}
+        onClose={noop}
+        srcOf={(entry) => `blob:local/${entry.id}`}
+        downloadOf={() => null}
+      />
+    );
+    expect(html).toContain('src="blob:local/a"');
+    expect(html).not.toContain('shift-note-media');
+    expect(html).not.toContain('download');
+  });
+
   it('renders nothing when the index is out of range', () => {
     const html = renderToStaticMarkup(
       <ShiftNoteViewer items={[]} index={0} onNavigate={noop} onClose={noop} />

@@ -889,7 +889,9 @@ export type BoardFieldKind =
   | 'date'
   | 'time'
   /** A start and an end, stored as a two-element ['HH:MM', 'HH:MM'] array. */
-  | 'time_range';
+  | 'time_range'
+  /** One to many attachments, stored as an array of board_attachments ids. */
+  | 'files';
 
 /** A per-board question. `board_cards.properties` is keyed by `key`. */
 export interface BoardFieldRow {
@@ -915,6 +917,27 @@ export interface BoardFieldRow {
 
 /** A stored answer to one board field. */
 export type BoardFieldValue = string | number | boolean | string[];
+
+/**
+ * One file answering a board's `files` field (see the board_field_files
+ * migration). The card's answer lists ids; this is what an id names.
+ */
+export interface BoardAttachmentRow {
+  id: string;
+  board_id: string;
+  /** Owning card; null while staged (uploaded before the answer naming it was saved). */
+  card_id: string | null;
+  /** The board_fields.key this answers. */
+  field_key: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  kind: 'photo' | 'video' | 'document';
+  /** Session email, or 'form' for a public submission. */
+  uploaded_by: string;
+  created_at: string;
+}
 
 /** One task or lead. */
 export interface BoardCardRow {

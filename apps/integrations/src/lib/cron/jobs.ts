@@ -108,6 +108,15 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Removes board files that were uploaded but never saved onto a card
+    // within a day — an abandoned drawer or a form closed half-filled.
+    name: 'board-media-sweep',
+    run: async (ctx) => {
+      const summary = await (await import('@/lib/boards/card-media')).sweepStagedAttachments(ctx);
+      return summary as unknown as Record<string, unknown>;
+    },
+  },
+  {
     // Monday morning: each employee's locked-in shifts for the week ahead,
     // one deep link per shift. Runs after sync-shifts so the roundup reflects
     // the latest Momence coverage. No-op on every other day/hour.

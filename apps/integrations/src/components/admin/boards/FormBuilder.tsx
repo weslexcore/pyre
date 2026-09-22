@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BoardForm } from '@/components/forms/BoardForm';
+import { FormHeader } from '@/components/forms/FormHeader';
 import {
   BUILTIN_LABELS,
   checkBackgroundFile,
@@ -637,6 +638,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
           >
             Preview
           </SectionTitle>
+          <FormHeader />
           <h3 className="mb-5 text-xl font-semibold">{formTitle(config, board.name)}</h3>
           <BoardForm
             key={`${previewKey}-${config.layout}`}
@@ -691,6 +693,9 @@ function sampleAnswers(fields: BoardFieldRow[]): Record<string, BoardFieldValue>
         break;
       case 'time_range':
         answers[field.key] = ['18:00', '21:00'];
+        break;
+      case 'files':
+        answers[field.key] = ['3f1b8a2c-7d4e-4a1b-9c2d-5e6f7a8b9c0d'];
         break;
       default:
         answers[field.key] = field.label;

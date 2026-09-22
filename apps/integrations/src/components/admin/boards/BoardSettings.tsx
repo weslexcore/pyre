@@ -13,7 +13,8 @@
 // board (BoardGoal).
 //
 // Fields — the questions a card on this board answers — are edited the same
-// way, as a list saved whole. Choose a field's kind before adding it: the
+// way, as a list saved whole, and reordered the same way, by dragging the
+// handles (ColumnOrder). Choose a field's kind before adding it: the
 // answers on the cards are shaped by it, so the first automatic save fixes
 // the kind and a change of mind means archive it and add a new one. A
 // removed field is deleted if no card has answered it and archived if one
@@ -398,9 +399,15 @@ export function BoardSettings({
       <div className="mt-5 border-t border-white/10 pt-4">
         <SectionTitle note="what a card asks">Fields</SectionTitle>
         {fieldDrafts.length === 0 && <p className="mb-2 text-xs text-white/35">No fields yet.</p>}
-        <div className="space-y-3">
-          {fieldDrafts.map((draft, index) => (
-            <div key={draft.id} className="space-y-2 rounded border border-white/10 p-3">
+        <ColumnOrder
+          items={fieldDrafts}
+          disabled={busy || saving}
+          onChange={setFieldDrafts}
+          help="Drag the handles to reorder fields, or focus a handle and use the up and down arrow keys. The card drawer follows this order."
+          helpId="field-order-help"
+        >
+          {(draft, index) => (
+            <div className="space-y-2 rounded border border-white/10 p-3">
               <div className="flex min-w-0 items-center gap-2">
                 <input
                   className={`${inputBaseClass} min-w-0 flex-1`}
@@ -508,8 +515,8 @@ export function BoardSettings({
                 />
               )}
             </div>
-          ))}
-        </div>
+          )}
+        </ColumnOrder>
         <div className="mt-2 flex items-center gap-2">
           <select
             className={selectBaseClass}

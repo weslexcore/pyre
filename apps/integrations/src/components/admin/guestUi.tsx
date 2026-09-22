@@ -65,13 +65,15 @@ export function AnswerPill({ label, value }: { label: string; value: string }) {
  * A field this control can render, structurally rather than by table: a guest
  * profile field and a board field ask the same questions in the same shapes,
  * so the control is shared and the row types stay where they belong. `kind`
- * is widened to the union of both — `date`, `time`, and `time_range` only
- * arrive from boards.
+ * is widened to the union of both — `date`, `time`, `time_range`, and
+ * `files` only arrive from boards. A `files` answer is uploads, which need a
+ * board to go to, so the card drawer and the form mount their own control
+ * (boards/FilesField) for that kind; here it only says so.
  */
 export interface FieldDefinition {
   key: string;
   label: string;
-  kind: GuestProfileFieldRow['kind'] | 'date' | 'time' | 'time_range';
+  kind: GuestProfileFieldRow['kind'] | 'date' | 'time' | 'time_range' | 'files';
   options: string[];
   hint?: string | null;
   archived?: boolean;
@@ -164,6 +166,8 @@ export function FieldInput({
       );
     case 'time_range':
       return <TimeRangeInput id={id} value={value} onChange={onChange} />;
+    case 'files':
+      return <p className="text-xs text-white/35">Files are added from the card.</p>;
     default:
       return (
         <input
