@@ -7,14 +7,22 @@
 // app manifest, which is what Android and desktop Chrome/Edge read when
 // someone installs the admin as an app. The maskable icons keep the mark
 // inside Android's central safe zone on a brand-black background.
+//
+// Deployments of the staging branch swap the browser-tab favicon to brand
+// sage (favicon-staging.png is the same mark recolored) so a staging tab is
+// easy to tell apart from production at a glance. Install icons stay gold.
 import pyreLogo from '@/assets/pyre_logo.svg?raw';
 
 const gold = '#dbb155'; // --pyre-gold in styles/admin.css
 const black = '#23221c'; // --pyre-black in styles/admin.css
-const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, gold))}`;
+const sage = '#839770'; // --pyre-sage in styles/admin.css
+const isStaging = import.meta.env.VERCEL_GIT_COMMIT_REF === 'staging';
+const markColor = isStaging ? sage : gold;
+const pngHref = isStaging ? '/favicon-staging.png' : '/favicon.png';
+const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, markColor))}`;
 ---
 
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href={pngHref} />
 <link rel="icon" type="image/svg+xml" href={svgHref} />
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 <link rel="manifest" href="/manifest.webmanifest" />

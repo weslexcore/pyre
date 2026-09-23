@@ -97,6 +97,9 @@ interface ImportMetaEnv {
   // AGENTS_BASE_URL is a protected (preview/staging) deployment, which 401s at
   // the edge before EVE_CHANNEL_SECRET is checked.
   readonly AGENTS_PROTECTION_BYPASS?: string;
+  // Vercel system env: the git branch a deployment was built from. 'staging'
+  // switches the favicon to brand sage (components/Favicon.astro).
+  readonly VERCEL_GIT_COMMIT_REF?: string;
 }
 
 interface ImportMeta {
