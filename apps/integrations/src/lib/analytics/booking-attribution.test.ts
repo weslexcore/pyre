@@ -57,3 +57,36 @@ describe('decideAttribution', () => {
     expect(decideAttribution([])).toBeNull();
   });
 });
+
+describe('link-level inference', () => {
+  const first = {
+    personId: 'p1',
+    utmCampaign: 'friday',
+    utmSource: 'instagram',
+    utmMedium: 'social',
+    utmContent: 'bio',
+    utmTerm: 'new',
+  };
+  it('preserves the full link tuple for a lone clicker', () => {
+    expect(decideAttribution([first])).toMatchObject({
+      attributed_utm_source: 'instagram',
+      attributed_utm_content: 'bio',
+      attributed_utm_term: 'new',
+    });
+  });
+  it('keeps a link only when all clickers agree on it', () => {
+    expect(decideAttribution([first, { ...first, personId: 'p2' }])).toMatchObject({
+      attributed_utm_content: 'bio',
+    });
+    expect(decideAttribution([first, { ...first, personId: 'p2', utmContent: 'story' }])).toEqual({
+      attribution_method: 'session_click_shared_campaign',
+      attributed_utm_campaign: 'friday',
+    });
+  });
+  it('queries content and term with a consistent campaign origin', () => {
+    const query = buildClickersQuery(123);
+    expect(query).toContain('AS utm_content');
+    expect(query).toContain('AS utm_term');
+    expect(query).toContain('if(notEmpty(coalesce(toString(properties.utm_campaign)');
+  });
+});

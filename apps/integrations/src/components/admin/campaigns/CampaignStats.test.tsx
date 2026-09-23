@@ -58,7 +58,7 @@ describe('CampaignStats event total', () => {
         links={[LINK]}
       />
     );
-    expect(html).toContain('Reading this event&#x27;s bookings from Momence');
+    expect(html).toContain('Reading selected slots from Momence');
     expect(html).toContain('booking total comes from Momence');
   });
 

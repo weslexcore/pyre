@@ -237,3 +237,27 @@ describe('normalizeLinkRequest', () => {
     });
   });
 });
+
+describe('measurement selection writes', () => {
+  it('creates and edits a selection independently of the destination', () => {
+    const result = normalizeCampaignInput(
+      { ...good, measurementSessionIds: ['12', '13', '12'] },
+      ORIGIN
+    );
+    expect(result.ok && result.value.measurementSessionIds).toEqual(['12', '13']);
+    expect(normalizeCampaignPatch({ measurementSessionIds: [] }, ORIGIN)).toEqual({
+      ok: true,
+      value: { measurementSessionIds: [] },
+    });
+    expect(normalizeCampaignPatch({ notes: 'Updated' }, ORIGIN)).toEqual({
+      ok: true,
+      value: { notes: 'Updated' },
+    });
+  });
+  it('rejects malformed selections on create and edit', () => {
+    for (const measurementSessionIds of [null, '12', ['bad'], Array(51).fill('12')]) {
+      expect(normalizeCampaignInput({ ...good, measurementSessionIds }, ORIGIN).ok).toBe(false);
+      expect(normalizeCampaignPatch({ measurementSessionIds }, ORIGIN).ok).toBe(false);
+    }
+  });
+});

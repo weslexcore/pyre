@@ -1,52 +1,58 @@
-// The event-side half of a campaign's bookings: what Momence says the event
-// took in total, said in a sentence next to what the campaign can claim.
-//
-// Client-bundle-safe (no store imports) — the performance panel renders it.
+import type { SessionBookingTotals } from '@/lib/momence/session-totals';
 
-/** Momence's own booking count for the event a campaign points at, as
- * /api/admin/event-bookings returns it. */
-export interface EventBookings {
+export const MAX_MEASUREMENT_SESSIONS = 50;
+
+export function parseSessionIds(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > MAX_MEASUREMENT_SESSIONS) return null;
+  if (
+    value.some(
+      (id) => typeof id !== 'string' || !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))
+    )
+  )
+    return null;
+  return [...new Set(value)];
+}
+
+export interface EventBookings extends SessionBookingTotals {
   sessionId: string;
-  /** Live bookings, cancelled seats dropped. */
-  bookings: number;
-  cancelled: number;
-  seats: number;
-  checkedIn: number;
   generatedAt: string;
   cached: boolean;
 }
 
-/** The Momence session id a campaign's destination names, or null when its
- * links do not open one event (a blog post, the whole schedule, elsewhere). */
+export interface CombinedEventBookings extends SessionBookingTotals {
+  sessions: EventBookings[];
+  generatedAt: string;
+  cached: boolean;
+}
+
 export function campaignEventId(campaign: {
   destinationKind: string;
   destinationValue: string;
 }): string | null {
   if (campaign.destinationKind !== 'event') return null;
-  const value = campaign.destinationValue.trim();
-  return /^\d+$/.test(value) ? value : null;
+  return parseSessionIds([campaign.destinationValue.trim()])?.[0] ?? null;
 }
 
-/**
- * "Momence has 45 bookings for this event. 12 attributed to this campaign, 33
- * from elsewhere." — `attributed` is null while the campaign report is still
- * loading, in which case only the total is claimed.
- *
- * Attributed bookings can outrun the event's total: a booking attributed to
- * this campaign may be for another session entirely (someone follows a flyer's
- * link and books a different night). Saying so beats printing a remainder
- * below zero.
- */
-export function eventBookingSummary(event: EventBookings, attributed: number | null): string {
-  const total = event.bookings;
-  const cancelled =
-    event.cancelled > 0
-      ? ` (${event.cancelled} cancelled booking${event.cancelled === 1 ? '' : 's'} not counted)`
-      : '';
-  const head = `Momence has ${total} booking${total === 1 ? '' : 's'} for this event${cancelled}.`;
-  if (attributed === null) return head;
-  if (attributed > total) {
-    return `${head} ${attributed} bookings are attributed to this campaign — more than the event took, so some are for other sessions.`;
-  }
-  return `${head} ${attributed} attributed to this campaign, ${total - attributed} from elsewhere.`;
+export function campaignSessionIds(campaign: {
+  destinationKind: string;
+  destinationValue: string;
+  measurementSessionIds?: string[];
+}): string[] {
+  if (campaign.measurementSessionIds !== undefined)
+    return parseSessionIds(campaign.measurementSessionIds) ?? [];
+  const id = campaignEventId(campaign);
+  return id ? [id] : [];
+}
+
+export function combineEventBookings(sessions: EventBookings[]): CombinedEventBookings {
+  const unique = [...new Map(sessions.map((session) => [session.sessionId, session])).values()];
+  return {
+    sessions: unique,
+    bookings: unique.reduce((sum, session) => sum + session.bookings, 0),
+    seats: unique.reduce((sum, session) => sum + session.seats, 0),
+    cancelled: unique.reduce((sum, session) => sum + session.cancelled, 0),
+    checkedIn: unique.reduce((sum, session) => sum + session.checkedIn, 0),
+    generatedAt: unique.map((session) => session.generatedAt).sort()[0] ?? new Date().toISOString(),
+    cached: unique.some((session) => session.cached),
+  };
 }

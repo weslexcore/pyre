@@ -7,16 +7,11 @@
 // to the day the campaign started, so a goal is read against the whole run
 // rather than an arbitrary 30 days.
 //
-// A campaign built around one event also reads that event's own booking total
-// from Momence, so the attributed number has a denominator: the rest of the
-// event's bookings came from somewhere this campaign cannot claim.
+// Momence totals describe the selected slots independently of campaign
+// attribution, which may include other sessions and a different date window.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  campaignEventId,
-  type EventBookings,
-  eventBookingSummary,
-} from '@/lib/campaigns/event-bookings';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CombinedEventBookings, campaignSessionIds } from '@/lib/campaigns/event-bookings';
 import {
   elapsedFraction,
   GOAL_STATE_LABEL,
@@ -27,10 +22,18 @@ import {
   goalWindow,
   measurementsOf,
 } from '@/lib/campaigns/goals';
+import {
+  EMPTY_LINK_COUNTS,
+  type LinkMetric,
+  type LinkPerformance,
+  reconcileLinks,
+} from '@/lib/campaigns/link-performance';
 import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type { LinkRow, UtmCampaign } from '@/lib/campaigns/types';
 import { cardClass, SectionTitle } from '../incidentUi';
 import { linkTitle } from './campaignUi';
+import { eventLabel, useEvents } from './DestinationPicker';
+import { LinkBar, LinkBreakdown } from './LinkBreakdown';
 
 interface CampaignRow {
   slug: string;
@@ -43,6 +46,7 @@ interface CampaignRow {
   introPurchases: number;
   creditPacks: number;
   memberships: number;
+  linkPerformance: LinkPerformance[];
 }
 
 interface PerformanceResponse {
@@ -66,45 +70,12 @@ const STATE_TEXT: Record<GoalState, string> = {
   untracked: 'text-[var(--pyre-gold)]',
 };
 
-const STATE_BAR: Record<GoalState, string> = {
-  hit: 'bg-[var(--pyre-sage)]',
-  ahead: 'bg-[var(--pyre-sage)]',
-  'on-track': 'bg-[var(--pyre-sage)]/70',
-  behind: 'bg-[var(--pyre-gold)]/80',
-  missed: 'bg-[var(--pyre-red)]/70',
-  running: 'bg-white/40',
-  untracked: 'bg-white/15',
-};
-
-function GoalBar({ progress }: { progress: GoalProgress }) {
-  const filled = Math.min(100, Math.round(progress.pct * 100));
-  const pace =
-    progress.expected !== null && progress.target > 0
-      ? Math.min(100, Math.round((progress.expected / progress.target) * 100))
-      : null;
-  return (
-    <div className="relative h-2 overflow-hidden rounded bg-white/5">
-      <div
-        className={`h-full rounded ${STATE_BAR[progress.state]}`}
-        style={{ width: `${filled}%` }}
-      />
-      {pace !== null && pace > 0 && pace < 100 && (
-        // Where the campaign should be by now, if its dates are to be believed.
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-0 w-px bg-white/50"
-          style={{ left: `${pace}%` }}
-        />
-      )}
-    </div>
-  );
-}
-
 export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; links: LinkRow[] }) {
   const slug = campaign.slug;
   const today = useMemo(() => todayYmd(), []);
   const window = useMemo(() => goalWindow(campaign, today), [campaign, today]);
 
+  const reportVersion = useRef(0);
   const [data, setData] = useState<PerformanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +84,8 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
 
   const fetchReport = useCallback(
     async (currentDays: number, fresh = false) => {
+      const version = ++reportVersion.current;
+      setData((current) => (current?.days === currentDays ? current : null));
       setLoading(true);
       setError(null);
       try {
@@ -121,14 +94,16 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
         );
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          setError(body?.error ?? `Failed to fetch report (${res.status})`);
+          if (version === reportVersion.current)
+            setError(body?.error ?? `Failed to fetch report (${res.status})`);
           return;
         }
-        setData((await res.json()) as PerformanceResponse);
+        const report = (await res.json()) as PerformanceResponse;
+        if (version === reportVersion.current) setData(report);
       } catch {
-        setError('Network error');
+        if (version === reportVersion.current) setError('Network error');
       } finally {
-        setLoading(false);
+        if (version === reportVersion.current) setLoading(false);
       }
     },
     [slug]
@@ -136,44 +111,82 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
 
   useEffect(() => {
     void fetchReport(days);
+    return () => {
+      reportVersion.current += 1;
+    };
   }, [days, fetchReport]);
 
-  // An event campaign names the Momence session its links open; that session's
-  // booking list is what "every booking for this event" means.
-  const eventId = useMemo(() => campaignEventId(campaign), [campaign]);
-
-  const [eventBookings, setEventBookings] = useState<EventBookings | null>(null);
+  const sessionKey = campaignSessionIds(campaign).join(',');
+  const events = useEvents();
+  useEffect(() => {
+    if (sessionKey) events.load();
+  }, [sessionKey, events.load]);
+  const [eventBookings, setEventBookings] = useState<CombinedEventBookings | null>(null);
   const [eventError, setEventError] = useState<string | null>(null);
-
+  const requestVersion = useRef(0);
   const fetchEventBookings = useCallback(
     async (fresh = false) => {
-      if (!eventId) return;
+      const version = ++requestVersion.current;
+      setEventBookings(null);
       setEventError(null);
+      if (!sessionKey) return;
       try {
         const res = await fetch(
-          `/api/admin/event-bookings?event=${encodeURIComponent(eventId)}${fresh ? '&fresh=1' : ''}`
+          `/api/admin/event-bookings?events=${encodeURIComponent(sessionKey)}${fresh ? '&fresh=1' : ''}`
         );
+        const body = await res.json();
+        if (version !== requestVersion.current) return;
         if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          setEventError(body?.error ?? `Could not read this event's bookings (${res.status})`);
+          setEventError(body.error ?? 'Could not read the selected slots.');
           return;
         }
-        setEventBookings((await res.json()) as EventBookings);
+        setEventBookings(body as CombinedEventBookings);
       } catch {
-        setEventError("Could not read this event's bookings.");
+        if (version === requestVersion.current) setEventError('Could not read the selected slots.');
       }
     },
-    [eventId]
+    [sessionKey]
   );
-
   useEffect(() => {
     void fetchEventBookings();
+    return () => {
+      requestVersion.current += 1;
+    };
   }, [fetchEventBookings]);
+  // Never render a previous selection's totals, even before the effect runs.
+  const currentBookings =
+    eventBookings?.sessions.map((session) => session.sessionId).join(',') === sessionKey
+      ? eventBookings
+      : null;
 
   const row = data?.campaigns[0];
-  const maxClicks = useMemo(() => Math.max(1, ...links.map((l) => l.clicks)), [links]);
-  const sorted = useMemo(() => [...links].sort((a, b) => b.clicks - a.clicks), [links]);
   const liveClicks = useMemo(() => links.reduce((n, l) => n + l.clicks, 0), [links]);
+
+  const breakdown = useMemo(
+    () =>
+      row?.linkPerformance ??
+      reconcileLinks(
+        links.map((link) => ({
+          ...EMPTY_LINK_COUNTS,
+          id: link.id,
+          label: linkTitle(link),
+          url: link.url,
+          tags: null,
+          clicks: link.clicks,
+        })),
+        { ...EMPTY_LINK_COUNTS, clicks: liveClicks }
+      ),
+    [row, links, liveClicks]
+  );
+  const segments = (metric: LinkMetric | 'signups') =>
+    breakdown.map((link) => ({
+      id: link.id,
+      label: link.label,
+      value: metric === 'signups' ? link.introOfferSignups + link.mailingListSignups : link[metric],
+    }));
+  const analyticsAvailable = Boolean(
+    data?.posthog.configured && (!data.posthog.error || data.stale)
+  );
 
   // A metric whose event has never reached PostHog reads zero for want of
   // instrumentation; the goal says so instead of calling the campaign behind.
@@ -212,11 +225,6 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
 
   const metGoals = progress.filter((p) => p.state === 'hit').length;
 
-  const eventSummary = useMemo(
-    () => (eventBookings ? eventBookingSummary(eventBookings, row?.bookings ?? null) : null),
-    [eventBookings, row]
-  );
-
   const posthogIssue = data
     ? !data.posthog.configured
       ? 'PostHog querying is not configured. Showing link clicks only. Set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID on the pyre-integrations Vercel project (Production) and redeploy.'
@@ -227,13 +235,17 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
         : null
     : null;
 
-  const stat = (label: string, value: number | undefined, note?: string) => (
+  const stat = (label: string, value: number | undefined, metric: LinkMetric | 'signups') => (
     <div className="rounded border border-white/10 bg-white/5 px-3 py-2">
       <div className="font-mono text-[10px] uppercase tracking-wide text-white/40">{label}</div>
       <div className="font-mono-bold text-lg text-[var(--pyre-creme)] tabular-nums">
         {value ?? '–'}
       </div>
-      {note && <div className="font-mono text-[10px] text-white/35 tabular-nums">{note}</div>}
+      {(metric === 'clicks' || analyticsAvailable) && value !== undefined && (
+        <div className="mt-2">
+          <LinkBar label={label} total={value} segments={segments(metric)} />
+        </div>
+      )}
     </div>
   );
 
@@ -241,9 +253,9 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
     <section className={cardClass}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionTitle
-          note={`Visits, signups, bookings and purchases are first-touch attributed by utm_campaign in PostHog. Clicks are live from the short links.${
-            eventId
-              ? " The event's booking total comes from Momence, counting every booking however it arrived."
+          note={`Traffic and conversions are broken down by campaign link. Conversions use first-touch attribution where available, with click inference as a fallback. Campaign-attributed bookings count completed reservations; the event bookings total counts people. Clicks are live from the short links.${
+            sessionKey
+              ? ' The event booking total comes from Momence across the selected slots, counting every booking however it arrived.'
               : ''
           }`}
         >
@@ -301,7 +313,13 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
                     <span className="text-white/35"> / {goal.target}</span>
                   </span>
                 </div>
-                <GoalBar progress={goal} />
+                <LinkBar
+                  label={goal.label}
+                  total={goal.value}
+                  target={goal.target}
+                  pace={goal.expected}
+                  segments={segments(goal.metric)}
+                />
                 <div className="flex flex-wrap items-baseline justify-between gap-2 font-mono text-[10px]">
                   <span className={STATE_TEXT[goal.state]}>{GOAL_STATE_LABEL[goal.state]}</span>
                   {goal.state !== 'untracked' && goal.expected !== null && (
@@ -336,49 +354,79 @@ export function CampaignStats({ campaign, links }: { campaign: UtmCampaign; link
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {stat('Clicks', row?.shortlinkClicks ?? liveClicks)}
-        {stat('Pageviews', row?.pageviews)}
-        {stat('Visitors', row?.visitors)}
-        {stat('Signups', row ? row.introOfferSignups + row.mailingListSignups : undefined)}
+        {stat('Clicks', row?.shortlinkClicks ?? liveClicks, 'clicks')}
+        {stat('Pageviews', row?.pageviews, 'pageviews')}
+        {stat('Visitors', row?.visitors, 'visitors')}
         {stat(
-          'Bookings',
-          row?.bookings,
-          eventBookings ? `of ${eventBookings.bookings} on this event` : undefined
+          'Signups',
+          row ? row.introOfferSignups + row.mailingListSignups : undefined,
+          'signups'
         )}
-        {stat('Intro purchases', row?.introPurchases)}
-        {stat('Packs', row?.creditPacks)}
-        {stat('Memberships', row?.memberships)}
+        {stat('Campaign-attributed bookings', row?.bookings, 'bookings')}
+        {stat('Intro purchases', row?.introPurchases, 'introPurchases')}
+        {stat('Packs', row?.creditPacks, 'creditPacks')}
+        {stat('Memberships', row?.memberships, 'memberships')}
       </div>
 
-      {eventId && (
-        <p className="mt-2 text-[11px] text-white/45">
-          {eventSummary ?? (eventError ? null : "Reading this event's bookings from Momence…")}
-          {eventError && (
-            <span className="text-[var(--pyre-gold)]">
-              {eventSummary ? ` ${eventError}` : eventError}
-            </span>
+      {sessionKey && (
+        <section className="mt-4 space-y-2">
+          <h3 className="text-sm">Selected slots · Momence totals</h3>
+          <p className="text-xs text-white/45">
+            Current totals across all booking dates. Campaign-attributed bookings above may include
+            other sessions and follow the selected report period.
+          </p>
+          {currentBookings ? (
+            <>
+              <div className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 p-4">
+                <h4 className="text-sm text-white/70">Bookings</h4>
+                <p className="mt-1 text-3xl font-mono tabular-nums text-[var(--pyre-creme)]">
+                  {currentBookings.seats}
+                </p>
+                <p className="mt-1 text-xs text-white/50">
+                  Across {currentBookings.sessions.length} selected slots
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr>
+                      {['Slot', 'Bookings'].map((label) => (
+                        <th key={label} className="p-2">
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentBookings.sessions.map((session) => {
+                      const event = events.items?.find((item) => item.id === session.sessionId);
+                      return (
+                        <tr key={session.sessionId}>
+                          <td className="p-2">
+                            {event ? eventLabel(event) : `Slot ${session.sessionId}`}
+                          </td>
+                          <td className="p-2 tabular-nums">{session.seats}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-white/40">
+                Bookings count people attending. A group of three counts as three bookings. Someone
+                booked into two slots counts in each slot. Oldest slot update:{' '}
+                {new Date(currentBookings.generatedAt).toLocaleString()}.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-white/50">
+              {eventError ?? 'Reading selected slots from Momence…'}
+            </p>
           )}
-        </p>
+        </section>
       )}
 
-      {sorted.length > 0 && (
-        <ul className="mt-4 space-y-1.5">
-          {sorted.map((link) => (
-            <li key={link.id} className="flex items-center gap-3 text-xs">
-              <span className="w-44 shrink-0 truncate text-white/70">{linkTitle(link)}</span>
-              <span className="h-2 flex-1 overflow-hidden rounded bg-white/5">
-                <span
-                  className="block h-full rounded bg-[var(--pyre-sage)]/70"
-                  style={{ width: `${Math.round((link.clicks / maxClicks) * 100)}%` }}
-                />
-              </span>
-              <span className="w-10 shrink-0 text-right font-mono text-white/60 tabular-nums">
-                {link.clicks}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <LinkBreakdown links={breakdown} conversionsAvailable={analyticsAvailable} />
 
       {data && (
         <p className="mt-3 font-mono text-[10px] text-white/35">

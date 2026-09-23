@@ -79,7 +79,8 @@ export function usePartners(): LazyList<PartnerRef> {
 
 export function eventLabel(event: EventOption): string {
   const when = [event.date, event.time].filter(Boolean).join(' ');
-  return when ? `${event.title} (${when})` : event.title;
+  const duration = event.durationMinutes ? ` · ${event.durationMinutes} min` : '';
+  return (when ? `${event.title} (${when})` : event.title) + duration;
 }
 
 export function DestinationPicker({

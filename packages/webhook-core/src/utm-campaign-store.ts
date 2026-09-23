@@ -95,6 +95,8 @@ export interface UtmCampaign {
   notes: string;
   /** Targets set before the campaign runs; empty when none were set. */
   goals: CampaignGoal[];
+  /** Absent on legacy records; [] explicitly disables event measurement. */
+  measurementSessionIds?: string[];
   createdAt: number;
   createdBy: string; // admin email
   updatedAt: number;
@@ -140,6 +142,8 @@ export interface CreateCampaignInput {
   endsAt: string;
   notes: string;
   goals: CampaignGoal[];
+  /** Absent on legacy records; [] explicitly disables event measurement. */
+  measurementSessionIds?: string[];
   createdBy: string;
 }
 
@@ -161,6 +165,7 @@ export type CampaignPatch = Partial<
     | 'endsAt'
     | 'notes'
     | 'goals'
+    | 'measurementSessionIds'
   >
 >;
 
@@ -261,6 +266,16 @@ const DESTINATION_KINDS: readonly DestinationKind[] = [
 ];
 
 /** Fill defaults for records written before the campaign-centric rework. */
+function parseMeasurementSessionIds(raw: unknown): string[] {
+  try {
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!Array.isArray(value)) return [];
+    return [...new Set(value.map(String).filter(id => /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))))].slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
 export function normalizeCampaignRecord(raw: Record<string, unknown>): UtmCampaign | null {
   const id = str(raw.id);
   if (!id) return null;
@@ -280,6 +295,9 @@ export function normalizeCampaignRecord(raw: Record<string, unknown>): UtmCampai
     endsAt: str(raw.endsAt),
     notes: str(raw.notes),
     goals: parseGoals(raw.goals),
+    ...(raw.measurementSessionIds == null ? {} : {
+      measurementSessionIds: parseMeasurementSessionIds(raw.measurementSessionIds),
+    }),
     createdAt,
     createdBy: str(raw.createdBy),
     updatedAt: num(raw.updatedAt) || createdAt,
@@ -442,6 +460,9 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Create
     endsAt: input.endsAt,
     notes: input.notes,
     goals: input.goals,
+    ...(input.measurementSessionIds === undefined ? {} : {
+      measurementSessionIds: input.measurementSessionIds,
+    }),
     createdAt: now,
     createdBy: input.createdBy,
     updatedAt: now,
@@ -456,10 +477,13 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Create
   }
 
   const pipeline = redis.pipeline();
-  // Goals are the one non-scalar field, so they go in as JSON (see parseGoals).
+  // Array fields are stored as JSON; Upstash may decode them on reads.
   pipeline.hset(`${CAMPAIGN_PREFIX}${campaign.id}`, {
     ...campaign,
     goals: JSON.stringify(campaign.goals),
+    ...(campaign.measurementSessionIds === undefined ? {} : {
+      measurementSessionIds: JSON.stringify(campaign.measurementSessionIds),
+    }),
   });
   pipeline.zadd(CAMPAIGNS_SET, { score: campaign.createdAt, member: campaign.id });
   await pipeline.exec();
@@ -481,7 +505,7 @@ export async function updateCampaign(id: string, patch: CampaignPatch): Promise<
   const fields: Record<string, string | number> = { updatedAt: Date.now() };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
-    fields[key] = key === 'goals' ? JSON.stringify(value) : (value as string | number);
+    fields[key] = (key === 'goals' || key === 'measurementSessionIds') ? JSON.stringify(value) : (value as string | number);
   }
   await redis.hset(`${CAMPAIGN_PREFIX}${id}`, fields);
   return getCampaign(id);

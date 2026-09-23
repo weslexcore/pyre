@@ -1,58 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { campaignEventId, type EventBookings, eventBookingSummary } from './event-bookings';
+import { summarizeSessionBookings } from '@/lib/momence/session-totals';
+import {
+  campaignSessionIds,
+  combineEventBookings,
+  type EventBookings,
+  parseSessionIds,
+} from './event-bookings';
 
-const event = (over: Partial<EventBookings> = {}): EventBookings => ({
-  sessionId: '9001',
-  bookings: 45,
-  cancelled: 0,
-  seats: 47,
-  checkedIn: 40,
-  generatedAt: '2026-09-10T12:00:00.000Z',
-  cached: false,
-  ...over,
+const legacy = { destinationKind: 'event', destinationValue: '9001' };
+describe('measurement selection', () => {
+  it('defaults legacy campaigns to their event, but respects an explicit empty selection', () => {
+    expect(campaignSessionIds(legacy)).toEqual(['9001']);
+    expect(campaignSessionIds({ ...legacy, measurementSessionIds: [] })).toEqual([]);
+    expect(campaignSessionIds({ destinationKind: 'home', destinationValue: '' })).toEqual([]);
+  });
+  it('keeps measurement independent of destination and removes duplicates', () => {
+    expect(campaignSessionIds({ ...legacy, measurementSessionIds: ['2', '3', '2'] })).toEqual([
+      '2',
+      '3',
+    ]);
+  });
+  it('rejects invalid IDs and oversized selections', () => {
+    for (const value of [
+      ['0'],
+      ['-2'],
+      ['01'],
+      ['1.2'],
+      ['9007199254740992'],
+      [2],
+      null,
+      Array(51).fill('1'),
+    ])
+      expect(parseSessionIds(value)).toBeNull();
+  });
 });
-
-describe('campaignEventId', () => {
-  it('takes the session id off an event campaign', () => {
-    expect(campaignEventId({ destinationKind: 'event', destinationValue: ' 9001 ' })).toBe('9001');
-  });
-
-  it('has nothing to count for a campaign that opens something else', () => {
-    expect(campaignEventId({ destinationKind: 'events', destinationValue: '' })).toBeNull();
-    expect(campaignEventId({ destinationKind: 'blog', destinationValue: 'why-cold' })).toBeNull();
-  });
-
-  it('refuses a destination that is not a session id', () => {
-    expect(campaignEventId({ destinationKind: 'event', destinationValue: 'winter' })).toBeNull();
-  });
-});
-
-describe('eventBookingSummary', () => {
-  it('splits the event total into attributed and everything else', () => {
-    expect(eventBookingSummary(event(), 12)).toBe(
-      'Momence has 45 bookings for this event. 12 attributed to this campaign, 33 from elsewhere.'
-    );
-  });
-
-  it('claims only the total while the campaign report is still loading', () => {
-    expect(eventBookingSummary(event(), null)).toBe('Momence has 45 bookings for this event.');
-  });
-
-  it('says where cancelled bookings went', () => {
-    expect(eventBookingSummary(event({ cancelled: 1 }), 12)).toContain(
-      '(1 cancelled booking not counted)'
-    );
-  });
-
-  it('explains an attributed count larger than the event took', () => {
-    expect(eventBookingSummary(event({ bookings: 3 }), 5)).toContain(
-      'more than the event took, so some are for other sessions'
-    );
-  });
-
-  it('reads a session nobody booked', () => {
-    expect(eventBookingSummary(event({ bookings: 0 }), 0)).toBe(
-      'Momence has 0 bookings for this event. 0 attributed to this campaign, 0 from elsewhere.'
-    );
+describe('combined totals', () => {
+  it('sums six overlapping slot choices without expanding durations or deduplicating people', () => {
+    const sessions: EventBookings[] = Array.from({ length: 6 }, (_, index) => ({
+      sessionId: String(index + 1),
+      ...summarizeSessionBookings([
+        { id: index * 3 + 1, checkedIn: true, ticketsBought: 2, cancelledAt: null },
+        { id: index * 3 + 2, checkedIn: false, ticketsBought: 1, cancelledAt: null },
+        { id: index * 3 + 3, checkedIn: true, ticketsBought: 3, cancelledAt: '2026-09-01' },
+      ]),
+      generatedAt: '2026-09-23T12:00:00Z',
+      cached: index === 0,
+    }));
+    expect(combineEventBookings([...sessions, sessions[0]])).toMatchObject({
+      bookings: 12,
+      seats: 18,
+      cancelled: 6,
+      checkedIn: 6,
+      cached: true,
+    });
+    expect(combineEventBookings(sessions).sessions).toHaveLength(6);
   });
 });

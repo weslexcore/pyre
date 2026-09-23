@@ -97,3 +97,19 @@ describe('normalizeLinkRecord', () => {
     expect(link?.shortCode).toBe('2026');
   });
 });
+
+describe('measurement session persistence', () => {
+  it('reads JSON strings and Upstash-decoded arrays', () => {
+    for (const ids of ['["12","13"]', ['12', '13']]) {
+      expect(
+        normalizeCampaignRecord({ ...STORED, measurementSessionIds: ids })?.measurementSessionIds
+      ).toEqual(['12', '13']);
+    }
+  });
+  it('distinguishes legacy from explicitly empty selections', () => {
+    expect(normalizeCampaignRecord(STORED)?.measurementSessionIds).toBeUndefined();
+    expect(
+      normalizeCampaignRecord({ ...STORED, measurementSessionIds: '[]' })?.measurementSessionIds
+    ).toEqual([]);
+  });
+});

@@ -6,6 +6,7 @@
 // at create time and locked afterwards, because every generated link and
 // every PostHog join carries it. `status` is accepted on PATCH only.
 
+import { parseSessionIds } from './event-bookings';
 import { GOAL_METRICS, MAX_GOAL_TARGET, MAX_GOALS } from './goals';
 import { type CustomUtm, resolveDestination } from './links';
 import { type Placement, placementByKey } from './placements';
@@ -59,6 +60,7 @@ export interface CampaignInput {
   endsAt: string;
   notes: string;
   goals: CampaignGoal[];
+  measurementSessionIds?: string[];
 }
 
 function campaignType(value: unknown): CampaignType | null {
@@ -156,6 +158,11 @@ export function normalizeCampaignInput(
   const dates = dateRange(body);
   if (!dates.ok) return dates;
 
+  const sessions =
+    body.measurementSessionIds === undefined
+      ? undefined
+      : parseSessionIds(body.measurementSessionIds);
+  if (sessions === null) return { ok: false, error: 'Select up to 50 valid Momence slots' };
   const targets = goals(body.goals);
   if (!targets.ok) return targets;
 
@@ -168,6 +175,7 @@ export function normalizeCampaignInput(
       ...dates.value,
       notes: text(body.notes, FIELD_LIMITS.notes),
       goals: targets.value,
+      ...(sessions === undefined ? {} : { measurementSessionIds: sessions }),
     },
   };
 }
@@ -215,6 +223,11 @@ export function normalizeCampaignPatch(
     if ('endsAt' in body) patch.endsAt = dates.value.endsAt;
   }
   if ('notes' in body) patch.notes = text(body.notes, FIELD_LIMITS.notes);
+  if ('measurementSessionIds' in body) {
+    const sessions = parseSessionIds(body.measurementSessionIds);
+    if (sessions === null) return { ok: false, error: 'Select up to 50 valid Momence slots' };
+    patch.measurementSessionIds = sessions;
+  }
   if ('goals' in body) {
     const targets = goals(body.goals);
     if (!targets.ok) return targets;

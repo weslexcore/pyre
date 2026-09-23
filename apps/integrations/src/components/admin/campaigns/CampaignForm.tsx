@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
+import { campaignSessionIds } from '@/lib/campaigns/event-bookings';
 import { GOAL_METRICS, MAX_GOAL_TARGET, MAX_GOALS } from '@/lib/campaigns/goals';
 import { newsletterDefaults } from '@/lib/campaigns/newsletter';
 import { slugifyCampaign } from '@/lib/campaigns/slug';
@@ -33,6 +34,7 @@ import {
   eventLabel,
   useEvents,
 } from './DestinationPicker';
+import { MeasurementSlots } from './MeasurementSlots';
 
 interface CampaignFormProps {
   origin: string;
@@ -70,6 +72,10 @@ export function CampaignForm({
     kind: initial?.destinationKind || 'events',
     value: initial?.destinationValue ?? '',
   });
+  const [measurementSessionIds, setMeasurementSessionIds] = useState<string[]>(() =>
+    initial ? campaignSessionIds(initial) : []
+  );
+  const [measurementTouched, setMeasurementTouched] = useState(Boolean(initial));
   const [startsAt, setStartsAt] = useState(initial?.startsAt ?? '');
   const [endsAt, setEndsAt] = useState(initial?.endsAt ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
@@ -129,12 +135,13 @@ export function CampaignForm({
       setEventId(event?.id ?? '');
       if (!event) return;
       setDestination({ kind: 'event', value: event.id });
+      if (!measurementTouched) setMeasurementSessionIds([event.id]);
       setName((current) => (current.trim() === '' || current === autoName ? event.title : current));
       setAutoName(event.title);
       const ymd = ymdOf(event.date);
       if (ymd) setEndsAt((current) => current || ymd);
     },
-    [autoName]
+    [autoName, measurementTouched]
   );
 
   const submit = useCallback(async () => {
@@ -149,6 +156,7 @@ export function CampaignForm({
       endsAt,
       notes,
       goals,
+      measurementSessionIds,
     };
     try {
       const res = await fetch(
@@ -183,7 +191,19 @@ export function CampaignForm({
     } finally {
       setSaving(false);
     }
-  }, [name, type, destination, startsAt, endsAt, notes, goals, editing, initial?.id, onSaved]);
+  }, [
+    name,
+    type,
+    destination,
+    startsAt,
+    endsAt,
+    notes,
+    goals,
+    measurementSessionIds,
+    editing,
+    initial?.id,
+    onSaved,
+  ]);
 
   if (events.sessionExpired) {
     return (
@@ -299,10 +319,22 @@ export function CampaignForm({
           value={destination}
           onChange={(next) => {
             setDestination(next);
-            if (next.kind === 'event') setEventId(next.value);
+            if (next.kind === 'event') {
+              setEventId(next.value);
+              if (!measurementTouched) setMeasurementSessionIds(next.value ? [next.value] : []);
+            }
           }}
         />
       </section>
+
+      <MeasurementSlots
+        events={events}
+        value={measurementSessionIds}
+        onChange={(ids) => {
+          setMeasurementTouched(true);
+          setMeasurementSessionIds(ids);
+        }}
+      />
 
       <section className="grid grid-cols-2 gap-3">
         <div>

@@ -51,15 +51,23 @@ import {
 } from '@/lib/campaigns/conversion-buckets';
 import { describeLink } from '@/lib/campaigns/describe';
 
+import {
+  EMPTY_LINK_COUNTS,
+  type LinkPerformance,
+  matchLink,
+  reconcileLinks,
+  tagsFromUrl,
+} from '@/lib/campaigns/link-performance';
+import { linkRollupBranches } from '@/lib/campaigns/link-performance-query';
+
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
-// v4: rows carry the campaign's goals (v3 added the purchase columns, v2
-// `sources`); an older entry must never be served to a UI that expects them.
-const CACHE_PREFIX = 'cache:campaign-perf:v4:';
+// v5 adds per-link traffic and conversion breakdowns.
+const CACHE_PREFIX = 'cache:campaign-perf:v5:';
 const CACHE_TTL_SECONDS = 5 * 60;
 // Last report that came back with PostHog data intact, kept much longer so a
 // transient PostHog outage degrades to stale numbers instead of an empty table.
-const LAST_GOOD_PREFIX = 'cache:campaign-perf:v4:last-good:';
+const LAST_GOOD_PREFIX = 'cache:campaign-perf:v5:last-good:';
 const LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60;
 const ALLOWED_DAYS = [7, 30, 90];
 
@@ -93,6 +101,7 @@ interface CampaignRow extends ConversionCounts {
   /** Targets set when the campaign was created, so the report can be read
    * against what someone committed to rather than against nothing. */
   goals: CampaignGoal[];
+  linkPerformance: LinkPerformance[];
 }
 
 /** The same numbers rolled up by utm_source across every campaign. */
@@ -151,13 +160,14 @@ const BUCKET_EXPR = `if(event = '${PURCHASE}',
 // `section`; the `people` column is only meaningful for traffic. The `campaign`
 // column holds the utm_source in the *_source sections (the name is shared so
 // the branches union).
-function buildRollupQuery(days: number): string {
+export function buildRollupQuery(days: number): string {
   const traffic = (section: string, field: 'campaign' | 'source') => `
     SELECT '${section}' AS section,
            lower(toString(properties.utm_${field})) AS campaign,
            event AS bucket,
            count() AS n,
-           count(DISTINCT person_id) AS people
+           count(DISTINCT person_id) AS people,
+           '' AS link_source, '' AS link_medium, '' AS link_content, '' AS link_term
     FROM events
     WHERE event = '$pageview'
       AND properties.utm_${field} IS NOT NULL
@@ -172,7 +182,8 @@ function buildRollupQuery(days: number): string {
            ${attributedExpr(field)} AS campaign,
            ${BUCKET_EXPR} AS bucket,
            count() AS n,
-           0 AS people
+           0 AS people,
+           '' AS link_source, '' AS link_medium, '' AS link_content, '' AS link_term
     FROM events
     WHERE event IN (${sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])})
       AND timestamp >= now() - INTERVAL ${days} DAY
@@ -189,7 +200,8 @@ function buildRollupQuery(days: number): string {
     // The same two rollups keyed by utm_source.
     traffic('traffic_source', 'source'),
     conversion('conversion_source', 'source'),
-  ].join('\n    UNION ALL');
+    ...linkRollupBranches(days, BUCKET_EXPR, sqlList([...CONVERSION_EVENTS, BOOKING_BACKFILL])),
+  ].join('\n    UNION ALL\n');
 }
 
 // Which conversion events reach PostHog at all — flags instrumentation gaps
@@ -248,6 +260,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
   ]);
   posthog.missingEvents = missingEvents;
 
+  const linkRollups = new Map<string, unknown[][]>();
   if (rollupRows) {
     for (const row of rollupRows) {
       const [section, rawKey, bucket, count, people] = row as [
@@ -257,6 +270,13 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
         number,
         number,
       ];
+      if (section.endsWith('_link')) {
+        const slug = rawKey ? slugifyCampaign(rawKey) : '';
+        const rows = linkRollups.get(slug) ?? [];
+        rows.push(row);
+        linkRollups.set(slug, rows);
+        continue;
+      }
       const bySource = section.endsWith('_source');
       // Campaign values slugify so free-text variants roll up; sources are
       // already short tokens and only need lowercasing.
@@ -345,6 +365,50 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       if (!claimed.has(legacy.code)) shortlinks.push(legacy);
     }
 
+    const linkPerformance: LinkPerformance[] = links.map((link) => ({
+      ...EMPTY_LINK_COUNTS,
+      id: link.id,
+      label: link.label ? `${describeLink(link)} (${link.label})` : describeLink(link),
+      url: link.url,
+      tags: tagsFromUrl(link.url),
+      clicks: Number(shortlinksByCode.get(link.shortCode)?.clicks) || 0,
+    }));
+    for (const legacy of shortlinkPage.links) {
+      if (utmCampaignOfUrl(legacy.url) !== slug || claimed.has(legacy.code)) continue;
+      linkPerformance.push({
+        ...EMPTY_LINK_COUNTS,
+        id: `short:${legacy.code}`,
+        label: legacy.label || `Short link ${legacy.code}`,
+        url: legacy.url,
+        tags: tagsFromUrl(legacy.url),
+        clicks: Number(legacy.clicks) || 0,
+      });
+    }
+    for (const raw of linkRollups.get(slug) ?? []) {
+      const [section, , bucket, count, people, ...tags] = raw;
+      const link = matchLink(
+        linkPerformance,
+        tags.map((tag) =>
+          String(tag ?? '')
+            .trim()
+            .toLowerCase()
+        )
+      );
+      if (!link) continue;
+      if (section === 'traffic_link') link.pageviews += Number(count) || 0;
+      else if (section === 'visitors_link') link.visitors += Number(people) || 0;
+      else {
+        const metric = bucketColumn(String(bucket));
+        if (metric) link[metric] += Number(count) || 0;
+      }
+    }
+    const totals = {
+      ...conversionCounts(conversions.get(slug)),
+      clicks: shortlinks.reduce((sum, link) => sum + link.clicks, 0),
+      pageviews: traffic.get(slug)?.pageviews ?? 0,
+      visitors: traffic.get(slug)?.visitors ?? 0,
+    };
+
     return {
       id: campaign.id,
       name: campaign.name,
@@ -356,6 +420,7 @@ async function buildReport(days: number): Promise<PerformanceResponse> {
       pageviews: traffic.get(slug)?.pageviews ?? 0,
       visitors: traffic.get(slug)?.visitors ?? 0,
       goals: campaign.goals,
+      linkPerformance: reconcileLinks(linkPerformance, totals),
       ...conversionCounts(conversions.get(slug)),
     };
   });

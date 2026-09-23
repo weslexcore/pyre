@@ -12,7 +12,8 @@
 // This module queries PostHog for those clickers and decides:
 //   - exactly one clicking person  → attribute person + campaign
 //     (attribution_method: 'session_click_inference')
-//   - several people, all carrying the same campaign → attribute campaign only
+//   - several people, all carrying the same campaign → attribute that campaign
+//     (and link tags only when all clickers agree on the complete tuple)
 //     (attribution_method: 'session_click_shared_campaign')
 //   - anything else → no attribution
 //
@@ -41,6 +42,8 @@ export interface BookingAttribution {
   attributed_utm_campaign?: string;
   attributed_utm_source?: string;
   attributed_utm_medium?: string;
+  attributed_utm_content?: string;
+  attributed_utm_term?: string;
 }
 
 export interface ClickerRow {
@@ -48,6 +51,8 @@ export interface ClickerRow {
   utmCampaign: string | null;
   utmSource: string | null;
   utmMedium: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
 }
 
 /**
@@ -58,15 +63,17 @@ export interface ClickerRow {
  */
 function clickersQuery(match: string): string {
   const utm = (field: string) =>
-    `argMax(coalesce(
-       nullif(toString(properties.utm_${field}), ''),
-       nullif(toString(person.properties.$initial_utm_${field}), '')
-     ), timestamp) AS utm_${field}`;
+    `argMax(coalesce(if(notEmpty(coalesce(toString(properties.utm_campaign), '')),
+       toString(properties.utm_${field}),
+       toString(person.properties.$initial_utm_${field})
+     ), ''), tuple(timestamp, uuid)) AS utm_${field}`;
 
   return `SELECT toString(person_id) AS person_id,
        ${utm('campaign')},
        ${utm('source')},
-       ${utm('medium')}
+       ${utm('medium')},
+       ${utm('content')},
+       ${utm('term')}
 FROM events
 WHERE ${match}
   AND timestamp >= now() - INTERVAL ${LOOKBACK_MINUTES} MINUTE
@@ -103,6 +110,8 @@ function parseRows(rows: unknown[][]): ClickerRow[] {
       utmCampaign: str(row[1]),
       utmSource: str(row[2]),
       utmMedium: str(row[3]),
+      utmContent: str(row[4]),
+      utmTerm: str(row[5]),
     }))
     .filter((r) => r.personId !== '');
 }
@@ -119,6 +128,8 @@ export function decideAttribution(rows: ClickerRow[]): BookingAttribution | null
       ...(r.utmCampaign ? { attributed_utm_campaign: r.utmCampaign } : {}),
       ...(r.utmSource ? { attributed_utm_source: r.utmSource } : {}),
       ...(r.utmMedium ? { attributed_utm_medium: r.utmMedium } : {}),
+      ...(r.utmContent ? { attributed_utm_content: r.utmContent } : {}),
+      ...(r.utmTerm ? { attributed_utm_term: r.utmTerm } : {}),
     };
   }
 
@@ -129,9 +140,27 @@ export function decideAttribution(rows: ClickerRow[]): BookingAttribution | null
   // missing campaign disqualifies the whole match.
   const slugs = new Set(rows.map((r) => (r.utmCampaign ? slugifyCampaign(r.utmCampaign) : '')));
   if (slugs.size === 1 && !slugs.has('')) {
+    const first = rows[0];
+    const sameLink =
+      Boolean(first.utmSource) &&
+      rows.every((row) =>
+        ['utmSource', 'utmMedium', 'utmContent', 'utmTerm'].every(
+          (field) =>
+            String(row[field as keyof ClickerRow] ?? '').toLowerCase() ===
+            String(first[field as keyof ClickerRow] ?? '').toLowerCase()
+        )
+      );
     return {
       attribution_method: 'session_click_shared_campaign',
       attributed_utm_campaign: rows[0].utmCampaign as string,
+      ...(sameLink
+        ? {
+            attributed_utm_source: first.utmSource as string,
+            ...(first.utmMedium ? { attributed_utm_medium: first.utmMedium } : {}),
+            ...(first.utmContent ? { attributed_utm_content: first.utmContent } : {}),
+            ...(first.utmTerm ? { attributed_utm_term: first.utmTerm } : {}),
+          }
+        : {}),
     };
   }
   return null;

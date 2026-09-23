@@ -89,6 +89,7 @@ export interface EventOption {
   title: string;
   date?: string;
   time?: string;
+  durationMinutes?: number;
 }
 
 /** A campaign as the index lists it. */
