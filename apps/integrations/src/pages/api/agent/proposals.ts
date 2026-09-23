@@ -25,6 +25,7 @@ import type { APIRoute } from 'astro';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -161,6 +162,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
   const draftAssignments: DraftAssignment[] = [];
   const seenPairs = new Set<string>();
+  const dutyCatalog = await loadDutyCatalog(db);
 
   for (const [i, raw] of rawAssignments.entries()) {
     const a = raw as Record<string, unknown>;
@@ -172,7 +174,7 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ error: `assignments[${i}]: staff member is inactive` }, 400);
     }
 
-    const columns = parseAssignmentFields(a);
+    const columns = parseAssignmentFields(a, dutyCatalog);
     if (typeof columns === 'string') return json({ error: `assignments[${i}]: ${columns}` }, 400);
 
     let date: string;

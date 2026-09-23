@@ -6,7 +6,7 @@
 // Times come straight off the rows as ET wall clock; generateIcsCalendar names
 // that clock with TZID rather than converting to an instant.
 
-import { formatDuties } from '@pyre/schedule-core';
+import { type DutyCatalog, formatDuties } from '@pyre/schedule-core';
 import type { LocalCalendarEvent } from '@/lib/calendar/ics';
 import { VENUE_ADDRESS } from '@/lib/calendar/links';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
@@ -49,8 +49,10 @@ export function buildPersonalEvents(args: {
   shifts: ShiftWithAssignments[];
   staffById: Map<string, StaffRow>;
   origin: string;
+  /** The duty list (loadDutyCatalog) the event's "Duties:" line is labelled from. */
+  dutyCatalog: DutyCatalog;
 }): LocalCalendarEvent[] {
-  const { staffId, shifts, staffById, origin } = args;
+  const { staffId, shifts, staffById, origin, dutyCatalog } = args;
   const events: LocalCalendarEvent[] = [];
 
   for (const shift of shifts) {
@@ -75,7 +77,8 @@ export function buildPersonalEvents(args: {
         `${shift.label}, ${formatWindowLabel(mine)}`,
         // Duties travel with the event so the phone shows what the shift is,
         // not only when it is.
-        formatDuties(mine.duties) && `Duties: ${formatDuties(mine.duties)}`,
+        formatDuties(dutyCatalog, mine.duties) &&
+          `Duties: ${formatDuties(dutyCatalog, mine.duties)}`,
         coworkers.length > 0
           ? `With: ${coworkers.join(', ')}`
           : 'You are on your own for this one.',

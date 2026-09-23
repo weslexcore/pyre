@@ -3,10 +3,9 @@
 // AI-drafted shift passes exactly the same rules as a hand-entered one.
 
 import {
-  ASSIGNMENT_DUTIES,
   ASSIGNMENT_ROLES,
-  type AssignmentDuty,
   type AssignmentRole,
+  type DutyCatalog,
   MAX_SHIFT_MIN,
   normalizeDuties,
   timeToMinutes,
@@ -84,9 +83,17 @@ export function checkShiftWindow(startsAt: string, endsAt: string): string | nul
   return null;
 }
 
-/** Validate assignment time/role/duties/notes fields. Same contract as parseShiftFields. */
+/**
+ * Validate assignment time/role/duties/notes fields. Same contract as
+ * parseShiftFields. Duties are checked against the admin-edited catalog
+ * (loadDutyCatalog): a live duty is always accepted, an archived one only if
+ * the assignment already `held` it — retiring a duty stops new assignments
+ * without making old ones unsaveable.
+ */
 export function parseAssignmentFields(
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  catalog: DutyCatalog,
+  held: readonly string[] = []
 ): Record<string, unknown> | string {
   const fields: Record<string, unknown> = {};
   for (const [key, column] of [
@@ -108,16 +115,18 @@ export function parseAssignmentFields(
   // Duties are a set, not a scalar: sending them at all replaces the whole
   // set (an empty array clears them). Normalising here — dedupe and canonical
   // phase order — keeps the stored array stable however it was clicked or
-  // drafted, since the array check constraint can't do either.
+  // drafted, since there's no database constraint on the array to do either.
   if (body.duties !== undefined) {
     if (!Array.isArray(body.duties)) return 'duties must be an array';
-    const unknown = body.duties.find(
-      (d) => typeof d !== 'string' || !ASSIGNMENT_DUTIES.includes(d as AssignmentDuty)
+    const allowed = new Set(
+      catalog.filter((d) => !d.archived || held.includes(d.key)).map((d) => d.key)
     );
+    const unknown = body.duties.find((d) => typeof d !== 'string' || !allowed.has(d));
     if (unknown !== undefined) {
-      return `duties must each be one of: ${ASSIGNMENT_DUTIES.join(', ')}`;
+      const live = catalog.filter((d) => !d.archived).map((d) => d.key);
+      return `duties must each be one of: ${live.join(', ')}`;
     }
-    fields.duties = normalizeDuties(body.duties as string[]);
+    fields.duties = normalizeDuties(catalog, body.duties as string[]);
   }
   if (body.notes !== undefined) {
     if (body.notes !== null && typeof body.notes !== 'string') return 'notes must be a string';

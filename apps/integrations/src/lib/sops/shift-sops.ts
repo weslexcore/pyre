@@ -7,15 +7,11 @@
 // sees in the chip — an admin who isn't working tonight has no shift SOPs,
 // and one who is gets theirs like anyone else.
 
-import type { AssignmentDuty } from '@pyre/schedule-core';
-import {
-  ASSIGNMENT_DUTY_DETAILS,
-  ASSIGNMENT_DUTY_LABELS,
-  ASSIGNMENT_DUTY_SOPS,
-  normalizeDuties,
-} from '@pyre/schedule-core';
+import type { AssignmentDuty, DutyCatalog } from '@pyre/schedule-core';
+import { dutyDef, normalizeDuties } from '@pyre/schedule-core';
 import { listStaff } from '@/lib/auth/access';
 import type { getDb, SopRow } from '@/lib/db';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { getNextUpcomingShift } from '@/lib/schedule/next-shift';
 import { countTasks } from './checklist';
 import { canViewSop, normalizeEmail, type SopViewer } from './levels';
@@ -50,10 +46,11 @@ export interface ShiftSops {
 /**
  * Pair each duty with the document defining it, in the order the duties were
  * given (set up → session → break down). Duties whose document is missing or
- * off-limits simply drop out — the block names documents this person can
- * open, not ones they can't.
+ * off-limits — or that an admin left unlinked — simply drop out: the block
+ * names documents this person can open, not ones they can't.
  */
 export function resolveShiftSops(
+  catalog: DutyCatalog,
   duties: readonly AssignmentDuty[],
   rows: readonly SopRow[],
   viewer: SopViewer
@@ -63,13 +60,14 @@ export function resolveShiftSops(
     if (canViewSop(viewer, sop)) bySlug.set(sop.slug, sop);
   }
   return duties.flatMap((duty) => {
-    const sop = bySlug.get(ASSIGNMENT_DUTY_SOPS[duty]);
-    if (!sop) return [];
+    const def = dutyDef(catalog, duty);
+    const sop = def?.sopSlug ? bySlug.get(def.sopSlug) : undefined;
+    if (!def || !sop) return [];
     return [
       {
         duty,
-        label: ASSIGNMENT_DUTY_LABELS[duty],
-        detail: ASSIGNMENT_DUTY_DETAILS[duty],
+        label: def.label,
+        detail: def.detail,
         slug: sop.slug,
         title: sop.title,
         taskCount: countTasks(sop.content_md),
@@ -102,14 +100,19 @@ export async function loadShiftSops(db: Db, viewer: SopViewer): Promise<ShiftSop
 
   // A shift can be split across assignments (a Setup block plus a full one);
   // normalizeDuties dedupes them and puts the union in shift order.
-  const duties = normalizeDuties(next.assignments.flatMap((a) => a.duties));
+  const catalog = await loadDutyCatalog(db);
+  const duties = normalizeDuties(
+    catalog,
+    next.assignments.flatMap((a) => a.duties)
+  );
   if (duties.length === 0) return null;
 
-  const slugs = [...new Set(duties.map((duty) => ASSIGNMENT_DUTY_SOPS[duty]))];
+  const slugs = [...new Set(duties.flatMap((duty) => dutyDef(catalog, duty)?.sopSlug ?? []))];
+  if (slugs.length === 0) return null;
   const { data, error } = await db.from('sops').select('*').in('slug', slugs);
   if (error) return null;
 
-  const sops = resolveShiftSops(duties, (data ?? []) as SopRow[], viewer);
+  const sops = resolveShiftSops(catalog, duties, (data ?? []) as SopRow[], viewer);
   if (sops.length === 0) return null;
 
   return {

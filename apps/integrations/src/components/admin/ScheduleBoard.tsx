@@ -6,9 +6,6 @@
 // picked out in gold, with their own name first in each shift's name list.
 
 import {
-  ASSIGNMENT_DUTY_DETAILS,
-  ASSIGNMENT_DUTY_LABELS,
-  ASSIGNMENT_DUTY_SOPS,
   ASSIGNMENT_ROLE_LABELS,
   ASSIGNMENT_ROLES,
   type AssignmentDuty,
@@ -17,8 +14,14 @@ import {
   addDays,
   assignmentHours,
   availabilityFor,
+  DEFAULT_DUTY_CATALOG,
   DOW_LABELS,
-  DUTY_PHASES,
+  type DutyCatalog,
+  type DutyDef,
+  dutyDef,
+  dutyLabel,
+  dutyPhases,
+  dutyTitle,
   findRestViolations,
   firstTentativeDate,
   formatShiftNotes,
@@ -136,18 +139,21 @@ const dutyPillClass = (active: boolean) =>
   }`;
 
 /** "Set Up (A) should pair with Break Down (A)" — the fix, not just the fault. */
-const pairingAdvice = (setup: AssignmentDuty): string => {
-  const pair = pairedDutyFor(setup);
+const pairingAdvice = (catalog: DutyCatalog, setup: AssignmentDuty): string => {
+  const pair = pairedDutyFor(catalog, setup);
   return pair
-    ? `${ASSIGNMENT_DUTY_LABELS[setup]} should pair with ${ASSIGNMENT_DUTY_LABELS[pair]}`
-    : ASSIGNMENT_DUTY_LABELS[setup];
+    ? `${dutyLabel(catalog, setup)} should pair with ${dutyLabel(catalog, pair)}`
+    : dutyLabel(catalog, setup);
 };
 
-/** "Set Up (A) — Fire + Water": the letter alone doesn't say which half it is. */
-const dutyTitle = (duty: AssignmentDuty): string => {
-  const detail = ASSIGNMENT_DUTY_DETAILS[duty];
-  return detail ? `${ASSIGNMENT_DUTY_LABELS[duty]} — ${detail}` : ASSIGNMENT_DUTY_LABELS[duty];
-};
+/**
+ * The admin-edited duty list (/admin/schedule/duties). Every caller shares
+ * one cached fetch; until it lands, the built-in six keep the board usable.
+ */
+function useDutyCatalog(): DutyCatalog {
+  const { data } = useCachedJson<{ duties: DutyDef[] }>('/api/admin/shift-duties');
+  return data?.duties ?? DEFAULT_DUTY_CATALOG;
+}
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -1873,6 +1879,7 @@ function ShiftDetail({
   /** What putting a person on this shift's hours would break, if anything. */
   restCheck: (staffId: string, date: string, startsAt: string, endsAt: string) => string | null;
 }) {
+  const dutyCatalog = useDutyCatalog();
   const startMin = timeToMinutes(shift.starts_at);
   const endMin = timeToMinutes(shift.ends_at);
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
@@ -2088,23 +2095,28 @@ function ShiftDetail({
                 </div>
                 {a.duties.length > 0 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {normalizeDuties(a.duties).map((duty) =>
-                      canViewSops ? (
+                    {normalizeDuties(dutyCatalog, a.duties).map((duty) => {
+                      const sopSlug = dutyDef(dutyCatalog, duty)?.sopSlug;
+                      return canViewSops && sopSlug ? (
                         <a
                           key={duty}
                           className={`${dutyChipClass} underline decoration-[var(--pyre-sage)]/40 hover:bg-[var(--pyre-sage)]/20 hover:text-[var(--pyre-creme)]`}
-                          href={`/admin/sops/${ASSIGNMENT_DUTY_SOPS[duty]}`}
-                          title={dutyTitle(duty)}
+                          href={`/admin/sops/${sopSlug}`}
+                          title={dutyTitle(dutyCatalog, duty)}
                         >
-                          {ASSIGNMENT_DUTY_LABELS[duty]}
+                          {dutyLabel(dutyCatalog, duty)}
                         </a>
                       ) : (
-                        <span key={duty} className={dutyChipClass} title={dutyTitle(duty)}>
-                          {ASSIGNMENT_DUTY_LABELS[duty]}
+                        <span
+                          key={duty}
+                          className={dutyChipClass}
+                          title={dutyTitle(dutyCatalog, duty)}
+                        >
+                          {dutyLabel(dutyCatalog, duty)}
                         </span>
-                      )
-                    )}
-                    {mismatchedDutyPairs(a.duties).length > 0 && (
+                      );
+                    })}
+                    {mismatchedDutyPairs(dutyCatalog, a.duties).length > 0 && (
                       <span
                         className="font-mono text-[10px] text-[var(--pyre-gold)]"
                         title="Whoever takes A at set-up should take A at break down — the person who set a side up is the one who knows its state at close"
@@ -2617,8 +2629,16 @@ function AssignmentEditor({
   // full window and still hold only Set Up (A), or hold Host and Break Down (B).
   // Taking a half fills in the same letter in the other phase and that side's
   // in-session duty (toggleDuty); every part of that stays editable.
-  const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
-  const mismatches = mismatchedDutyPairs(duties);
+  const dutyCatalog = useDutyCatalog();
+  const [duties, setDuties] = useState<AssignmentDuty[]>(() =>
+    normalizeDuties(dutyCatalog, assignment.duties)
+  );
+  const mismatches = mismatchedDutyPairs(dutyCatalog, duties);
+  // Retired duties aren't offered, but one this person already holds stays
+  // on the picker so it can be seen and taken off.
+  const phases = dutyPhases(
+    dutyCatalog.filter((d) => !d.archived || assignment.duties.includes(d.key))
+  );
 
   const [status, setStatus] = useState<AutosaveStatus>({ state: 'idle' });
   // What the server has, so reloads and no-op toggles don't save again.
@@ -2721,38 +2741,40 @@ function AssignmentEditor({
           </button>
         ))}
       </div>
-      {DUTY_PHASES.map((phase) => (
+      {phases.map((phase) => (
         <div key={phase.key} className="flex flex-wrap items-center gap-2">
           <span className="w-20 shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/40">
             {phase.label}
           </span>
           {phase.duties.map((duty) => (
             <button
-              key={duty}
+              key={duty.key}
               type="button"
-              className={dutyPillClass(duties.includes(duty))}
-              title={dutyTitle(duty)}
-              aria-pressed={duties.includes(duty)}
-              onClick={() => setDuties((current) => toggleDuty(current, duty))}
+              className={`${dutyPillClass(duties.includes(duty.key))}${duty.archived ? ' opacity-50' : ''}`}
+              title={
+                duty.archived
+                  ? `${dutyTitle(dutyCatalog, duty.key)} (retired)`
+                  : dutyTitle(dutyCatalog, duty.key)
+              }
+              aria-pressed={duties.includes(duty.key)}
+              onClick={() => setDuties((current) => toggleDuty(dutyCatalog, current, duty.key))}
             >
-              {ASSIGNMENT_DUTY_LABELS[duty]}
-              {ASSIGNMENT_DUTY_DETAILS[duty] && (
-                <span className="ml-1.5 normal-case tracking-normal opacity-60">
-                  {ASSIGNMENT_DUTY_DETAILS[duty]}
-                </span>
+              {duty.label}
+              {duty.detail && (
+                <span className="ml-1.5 normal-case tracking-normal opacity-60">{duty.detail}</span>
               )}
             </button>
           ))}
         </div>
       ))}
       <p className="font-mono text-[10px] text-white/35">
-        Taking a half fills in its pair and that side's in-session duty — A is fire and water, B is
-        the space and guest areas. Change any of it.
+        Taking a half fills in its pair and that side's usual in-session duty (set on the Duties
+        tab). Change any of it.
       </p>
       {mismatches.length > 0 && (
         <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
-          ⚠ {mismatches.map(([setup]) => pairingAdvice(setup)).join('; ')} — whoever set a side up
-          is the one who knows its state at close.
+          ⚠ {mismatches.map(([setup]) => pairingAdvice(dutyCatalog, setup)).join('; ')} — whoever
+          set a side up is the one who knows its state at close.
         </p>
       )}
       <p

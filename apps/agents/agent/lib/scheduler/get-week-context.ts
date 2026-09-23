@@ -12,6 +12,11 @@ import {
   availabilityFor,
   addDays,
   canLeadShift,
+  DEFAULT_DUTY_CATALOG,
+  type DutyDef,
+  dutyDefFromRow,
+  type ShiftDutyRow,
+  sortCatalog,
   rollupHours,
   type StaffRow,
   type ShiftAssignmentRow,
@@ -30,7 +35,7 @@ const HISTORY_WEEKS = 8;
 
 export const getWeekContextTool = defineTool({
   description:
-    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags and weekly hour targets), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours, and history patterns. Call this first, before save_proposal.',
+    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags and weekly hour targets), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours, history patterns, and the duty list (the only keys save_proposal accepts in `duties`). Call this first, before save_proposal.',
   inputSchema: z.object({
     weekStart: z
       .string()
@@ -52,7 +57,7 @@ export const getWeekContextTool = defineTool({
     const dayBefore = addDays(weekStart, -1);
     const dayAfter = addDays(weekEnd, 1);
 
-    const [staffRes, shiftsRes, timeOffRes] = await Promise.all([
+    const [staffRes, shiftsRes, timeOffRes, dutiesRes] = await Promise.all([
       db.from('staff').select('*').eq('active', true).order('display_name'),
       db
         .from('shifts')
@@ -62,6 +67,11 @@ export const getWeekContextTool = defineTool({
         .eq('is_draft', false)
         .order('shift_date'),
       db.from('time_off').select('*'),
+      // Admin-edited at /admin/schedule/duties; archived ones can't be assigned.
+      db
+        .from('shift_duties')
+        .select('key, label, detail, phase, side, session_default, sop_id, sort_order, archived')
+        .eq('archived', false),
     ]);
     for (const res of [staffRes, shiftsRes, timeOffRes]) {
       if (res.error) throw new Error(res.error.message);
@@ -70,6 +80,10 @@ export const getWeekContextTool = defineTool({
     const staff = (staffRes.data ?? []) as StaffRow[];
     const shifts = (shiftsRes.data ?? []) as ShiftRow[];
     const timeOff = (timeOffRes.data ?? []) as TimeOffRow[];
+    // A failed read falls back to the built-in list rather than failing the draft.
+    const duties: DutyDef[] = dutiesRes.error
+      ? DEFAULT_DUTY_CATALOG.filter((d) => !d.archived)
+      : sortCatalog(((dutiesRes.data ?? []) as ShiftDutyRow[]).map((r) => dutyDefFromRow(r, null)));
 
     const shiftIds = shifts.map((s) => s.id);
     let assignments: ShiftAssignmentRow[] = [];
@@ -231,6 +245,17 @@ export const getWeekContextTool = defineTool({
       }),
       recentWeeklyHours,
       historyPatterns,
+      // The jobs an assignment can hold, in shift order. `side` pairs set-up
+      // and break-down halves (whoever takes A at set-up takes A at break
+      // down); `sessionDefault` is the in-session duty that half usually takes.
+      duties: duties.map((d) => ({
+        key: d.key,
+        label: d.label,
+        detail: d.detail,
+        phase: d.phase,
+        side: d.side,
+        sessionDefault: d.sessionDefault,
+      })),
     };
   },
 });

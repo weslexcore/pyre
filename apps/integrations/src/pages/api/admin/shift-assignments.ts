@@ -20,6 +20,7 @@ import {
   timeWindow,
 } from '@/lib/schedule/change-log';
 import { acceptDraftRow } from '@/lib/schedule/draft-accept';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -87,7 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'shiftId and staffId are required' }, 400);
   }
 
-  const fields = parseAssignmentFields(body);
+  const fields = parseAssignmentFields(body, await loadDutyCatalog(db));
   if (typeof fields === 'string') return json({ error: fields }, 400);
 
   const { data: shift, error: shiftError } = await db
@@ -157,10 +158,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const id = body.id;
   if (typeof id !== 'string' || !id) return json({ error: 'id is required' }, 400);
 
-  const fields = parseAssignmentFields(body);
-  if (typeof fields === 'string') return json({ error: fields }, 400);
-  if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
-
   const { data: existing, error: fetchError } = await db
     .from('shift_assignments')
     .select('*')
@@ -168,6 +165,16 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .maybeSingle();
   if (fetchError) return json({ error: fetchError.message }, 500);
   if (!existing) return json({ error: 'Assignment not found' }, 404);
+
+  // Validated against what the row already holds, so an assignment carrying
+  // a since-archived duty can still be edited without dropping it.
+  const fields = parseAssignmentFields(
+    body,
+    await loadDutyCatalog(db),
+    (existing.duties as string[] | null) ?? []
+  );
+  if (typeof fields === 'string') return json({ error: fields }, 400);
+  if (Object.keys(fields).length === 0) return json({ error: 'No fields to update' }, 400);
 
   const startsAt = (fields.starts_at as string) ?? existing.starts_at;
   const endsAt = (fields.ends_at as string) ?? existing.ends_at;

@@ -1,5 +1,6 @@
 export * from "./availability";
 export * from "./constants";
+export * from "./duties";
 export * from "./horizon";
 export * from "./hours";
 export * from "./insights";

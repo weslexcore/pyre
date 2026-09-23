@@ -25,6 +25,7 @@ import {
   buildTeamEvents,
   type ShiftWithAssignments,
 } from '@/lib/schedule/calendar-feed';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { todayEastern } from '@/lib/schedule/sub';
 
 export const prerender = false;
@@ -125,7 +126,13 @@ export const GET: APIRoute = async ({ request, url }) => {
     calendarName: wantsTeam ? 'Pyre — Team Coverage' : 'Pyre — My Shifts',
     events: wantsTeam
       ? buildTeamEvents({ shifts, staffById, origin })
-      : buildPersonalEvents({ staffId: person.id, shifts, staffById, origin }),
+      : buildPersonalEvents({
+          staffId: person.id,
+          shifts,
+          staffById,
+          origin,
+          dutyCatalog: await loadDutyCatalog(db),
+        }),
   });
 
   return new Response(ics, {

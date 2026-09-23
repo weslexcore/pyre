@@ -1,9 +1,13 @@
 // Assignment-field validation, focused on duties — the one field that is a
-// set rather than a scalar, and the only one the database's check constraint
-// can't fully police (an array check can neither dedupe nor order).
+// set rather than a scalar, and the only one checked against an admin-edited
+// list (shift_duties) rather than a database constraint.
 
+import { DEFAULT_DUTY_CATALOG } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
-import { parseAssignmentFields } from './validate';
+import { parseAssignmentFields as parse } from './validate';
+
+const parseAssignmentFields = (body: Record<string, unknown>, held?: string[]) =>
+  parse(body, DEFAULT_DUTY_CATALOG, held);
 
 describe('parseAssignmentFields duties', () => {
   it('normalises the set into canonical phase order', () => {
@@ -26,5 +30,16 @@ describe('parseAssignmentFields duties', () => {
     );
     expect(parseAssignmentFields({ duties: 'host' })).toBe('duties must be an array');
     expect(parseAssignmentFields({ duties: [3] })).toContain('duties must each be');
+  });
+
+  it('accepts an archived duty only on an assignment that already held it', () => {
+    const catalog = DEFAULT_DUTY_CATALOG.map((d) =>
+      d.key === 'host' ? { ...d, archived: true } : d
+    );
+    expect(parse({ duties: ['host'] }, catalog)).toContain('duties must each be');
+    expect(parse({ duties: ['host'] }, catalog)).not.toContain('host,');
+    expect(parse({ duties: ['host', 'setup_a'] }, catalog, ['host'])).toEqual({
+      duties: ['setup_a', 'host'],
+    });
   });
 });

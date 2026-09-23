@@ -1,8 +1,19 @@
-import { ASSIGNMENT_DUTY_SOPS } from '@pyre/schedule-core';
+import { DEFAULT_DUTY_CATALOG, type DutyCatalog } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
 import type { SopRow } from '@/lib/db';
 import type { SopRole, SopViewer } from './levels';
-import { resolveShiftSops } from './shift-sops';
+import { resolveShiftSops as resolve } from './shift-sops';
+
+/** The SOP slug a default duty links to. */
+const slugOf = (key: string): string =>
+  DEFAULT_DUTY_CATALOG.find((d) => d.key === key)?.sopSlug as string;
+
+const resolveShiftSops = (
+  duties: string[],
+  rows: SopRow[],
+  viewer: SopViewer,
+  catalog: DutyCatalog = DEFAULT_DUTY_CATALOG
+) => resolve(catalog, duties, rows, viewer);
 
 const sop = (slug: string, over: Partial<SopRow> = {}): SopRow =>
   ({
@@ -24,11 +35,7 @@ const viewer = (role: SopRole, email = ''): SopViewer => ({ role, email });
 
 describe('resolveShiftSops', () => {
   it('pairs each duty with its document, keeping the duty order', () => {
-    const rows = [
-      sop(ASSIGNMENT_DUTY_SOPS.breakdown_a),
-      sop(ASSIGNMENT_DUTY_SOPS.setup_a),
-      sop(ASSIGNMENT_DUTY_SOPS.customer_care),
-    ];
+    const rows = [sop(slugOf('breakdown_a')), sop(slugOf('setup_a')), sop(slugOf('customer_care'))];
     const resolved = resolveShiftSops(
       ['setup_a', 'customer_care', 'breakdown_a'],
       rows,
@@ -42,18 +49,17 @@ describe('resolveShiftSops', () => {
   });
 
   it('counts the checklist items so a runnable document can say so', () => {
-    const rows = [sop(ASSIGNMENT_DUTY_SOPS.host, { content_md: '- [ ] one\n- [ ] two\n' })];
+    const rows = [sop(slugOf('host'), { content_md: '- [ ] one\n- [ ] two\n' })];
     expect(resolveShiftSops(['host'], rows, viewer('staff'))[0].taskCount).toBe(2);
     expect(
-      resolveShiftSops(['setup_a'], [sop(ASSIGNMENT_DUTY_SOPS.setup_a)], viewer('staff'))[0]
-        .taskCount
+      resolveShiftSops(['setup_a'], [sop(slugOf('setup_a'))], viewer('staff'))[0].taskCount
     ).toBe(0);
   });
 
   it('drops a duty whose document this viewer may not open', () => {
     const rows = [
-      sop(ASSIGNMENT_DUTY_SOPS.setup_a, { view_roles: ['admin'], edit_roles: ['admin'] }),
-      sop(ASSIGNMENT_DUTY_SOPS.breakdown_a),
+      sop(slugOf('setup_a'), { view_roles: ['admin'], edit_roles: ['admin'] }),
+      sop(slugOf('breakdown_a')),
     ];
     expect(resolveShiftSops(['setup_a', 'breakdown_a'], rows, viewer('staff'))).toHaveLength(1);
     // The same shift, for someone who may read both.
@@ -66,7 +72,7 @@ describe('resolveShiftSops', () => {
 
   it('follows a personal grant, like every other access check', () => {
     const rows = [
-      sop(ASSIGNMENT_DUTY_SOPS.host, {
+      sop(slugOf('host'), {
         view_roles: ['admin'],
         edit_roles: ['admin'],
         view_emails: ['ada@pyre.test'],
@@ -74,5 +80,20 @@ describe('resolveShiftSops', () => {
     ];
     expect(resolveShiftSops(['host'], rows, viewer('staff', 'ada@pyre.test'))).toHaveLength(1);
     expect(resolveShiftSops(['host'], rows, viewer('staff', 'bob@pyre.test'))).toEqual([]);
+  });
+
+  it('follows the catalog when an admin re-links or unlinks a duty', () => {
+    const relinked = DEFAULT_DUTY_CATALOG.map((d) =>
+      d.key === 'host' ? { ...d, label: 'Front of House', sopSlug: 'front-of-house' } : d
+    );
+    const rows = [sop('front-of-house'), sop(slugOf('host'))];
+    const [resolved] = resolveShiftSops(['host'], rows, viewer('staff'), relinked);
+    expect(resolved.slug).toBe('front-of-house');
+    expect(resolved.label).toBe('Front of House');
+
+    const unlinked = DEFAULT_DUTY_CATALOG.map((d) =>
+      d.key === 'host' ? { ...d, sopSlug: null } : d
+    );
+    expect(resolveShiftSops(['host'], rows, viewer('staff'), unlinked)).toEqual([]);
   });
 });

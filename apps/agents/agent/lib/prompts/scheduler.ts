@@ -123,13 +123,13 @@ morning instead").
 - Assignment times default to the shift window; give a shorter window
   (setup/partial) by setting startsAt/endsAt explicitly.
 - \`duties\` is a separate question from \`role\`: role is the hours, duties are
-  the jobs held within them. Set-up and break down each split in half —
-  \`setup_a\`/\`breakdown_a\` are the fire-and-water side, \`setup_b\`/\`breakdown_b\`
-  the space and guest areas — plus \`host\` and \`customer_care\` in session.
-  Leave them empty unless the admin note or \`existingAssignments\` shows who
+  the jobs held within them. The list is admin-edited, so use only the keys in
+  the context's \`duties\` (each has a \`phase\`: setup, session or breakdown).
+  Set-up and break-down duties with a \`side\` are halves of a split job.
+  Leave duties empty unless the admin note or \`existingAssignments\` shows who
   does what; an admin assigns them on the board. When you do set them: keep
-  the letter, so whoever takes A at set-up takes A at break down; give the A
-  side \`customer_care\` and the B side \`host\` unless the note says otherwise;
+  the letter, so whoever takes a side at set-up takes the same side at break
+  down; give each half its \`sessionDefault\` unless the note says otherwise;
   never give the same duty to two people on one shift; and give someone
   working a shift alone both halves.
 

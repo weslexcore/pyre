@@ -460,6 +460,12 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
   },
   { href: '/admin/schedule/availability', title: 'Availability', parent: '/admin/schedule' },
   {
+    href: '/admin/schedule/duties',
+    title: 'Shift Duties',
+    parent: '/admin/schedule',
+    keywords: ['sop', 'sops', 'roles', 'setup', 'breakdown', 'host', 'assign'],
+  },
+  {
     href: '/admin/schedule/insights',
     title: 'Schedule Insights',
     parent: '/admin/schedule',

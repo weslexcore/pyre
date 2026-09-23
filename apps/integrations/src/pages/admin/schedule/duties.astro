@@ -1,0 +1,17 @@
+---
+// The duty list: which jobs (and so which SOPs) the schedule board offers when
+// assigning someone to a shift. Everyone with the schedule page can read it;
+// editing needs schedule:manage — the /api/admin/shift-duties route re-checks
+// on every request, the controls hiding is only UX.
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import { ShiftDutiesManager } from '@/components/admin/ShiftDutiesManager';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Shift Duties"
+  subtitle="The jobs you can assign on the schedule, each linked to the SOP that defines it. Retire a duty to stop offering it without touching shifts that already have it."
+>
+  <ScheduleTabs current="/admin/schedule/duties" />
+  <ShiftDutiesManager client:load />
+</AdminLayout>

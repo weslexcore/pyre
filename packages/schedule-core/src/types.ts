@@ -4,7 +4,7 @@
 // never UTC. Shared by apps/integrations (which re-exports them from lib/db)
 // and apps/agents.
 
-import type { AssignmentDuty } from "./constants";
+import type { AssignmentDuty } from "./duties";
 
 /**
  * A person: one row covers both the scheduling roster and dashboard access
@@ -96,7 +96,7 @@ export interface ShiftAssignmentRow {
 	 * The jobs this person holds within those hours — set-up, the in-session
 	 * roles (host, customer care), the break-down split. Orthogonal to `role`,
 	 * which is only the window; empty means nobody assigned any. See
-	 * ASSIGNMENT_DUTIES in constants.ts.
+	 * DutyCatalog in duties.ts (the shift_duties table).
 	 */
 	duties: AssignmentDuty[];
 	notes: string | null;

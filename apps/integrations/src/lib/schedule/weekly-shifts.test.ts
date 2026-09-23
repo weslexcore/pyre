@@ -6,6 +6,10 @@ const getDb = vi.fn();
 
 vi.mock('@/lib/email/send', () => ({ sendTemplate: (args: unknown) => sendTemplate(args) }));
 vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
+vi.mock('@/lib/schedule/duties', async () => {
+  const { DEFAULT_DUTY_CATALOG } = await import('@pyre/schedule-core');
+  return { loadDutyCatalog: async () => DEFAULT_DUTY_CATALOG };
+});
 
 const { formatDayLabel, formatWeekLabel, runWeeklyShiftEmails } = await import('./weekly-shifts');
 

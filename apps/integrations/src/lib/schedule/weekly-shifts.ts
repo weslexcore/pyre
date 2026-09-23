@@ -29,6 +29,7 @@ import {
   type SubRequestRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { formatWindowLabel, todayEastern } from '@/lib/schedule/sub';
 
 /** ET hour from which Monday's roundup may go out. */
@@ -132,6 +133,7 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
   }
 
   const assignments = (assignmentRes.data ?? []) as ShiftAssignmentRow[];
+  const dutyCatalog = await loadDutyCatalog(db);
   const staff = ((staffRes.data ?? []) as StaffRow[]).filter((s) => s.active && s.email);
   // An open sub request means the shift is still theirs, but flagged — the
   // roundup says so rather than pretending it's settled.
@@ -184,8 +186,8 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       shiftUrl: `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`,
       ...(ROLE_LABELS[assignment.role] && { roleLabel: ROLE_LABELS[assignment.role] }),
       // "Setup · Host" — what they're on the hook for, not just when.
-      ...(formatDuties(assignment.duties) && {
-        dutiesLabel: formatDuties(assignment.duties) as string,
+      ...(formatDuties(dutyCatalog, assignment.duties) && {
+        dutiesLabel: formatDuties(dutyCatalog, assignment.duties) as string,
       }),
       ...(shift.notes && { notes: shift.notes }),
       ...(pendingSubs.has(`${shift.id}:${person.id}`) && { subRequested: true }),

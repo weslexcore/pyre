@@ -3,6 +3,7 @@
 // assignment-keyed choice is what makes a sub swap land in the right person's
 // calendar.
 
+import { DEFAULT_DUTY_CATALOG } from '@pyre/schedule-core';
 import { describe, expect, it } from 'vitest';
 import type { ShiftAssignmentRow, StaffRow } from '@/lib/db';
 import { buildPersonalEvents, buildTeamEvents, type ShiftWithAssignments } from './calendar-feed';
@@ -48,7 +49,13 @@ const shift = (over: Partial<ShiftWithAssignments> = {}): ShiftWithAssignments =
   }) as ShiftWithAssignments;
 
 const personal = (s: ShiftWithAssignments) =>
-  buildPersonalEvents({ staffId: ME, shifts: [s], staffById, origin: ORIGIN });
+  buildPersonalEvents({
+    staffId: ME,
+    shifts: [s],
+    staffById,
+    origin: ORIGIN,
+    dutyCatalog: DEFAULT_DUTY_CATALOG,
+  });
 
 describe('buildPersonalEvents', () => {
   it('emits one event per shift the person is on', () => {

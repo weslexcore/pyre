@@ -2,12 +2,16 @@
 // Sub-nav shared by the /admin/schedule pages. The roster itself lives on
 // /admin/users (people, access, founders, and who is available to schedule
 // are all one list) — admin-only, so it isn't linked from here.
+import { hasScheduleManage } from '@/components/admin/adminTools';
+
 interface Props {
   current: string;
 }
 const { current } = Astro.props;
 
-const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
+const access = Astro.locals.adminAccess ?? null;
+const isAdmin = access?.isAdmin ?? false;
+const canManage = !!access && hasScheduleManage(access);
 
 const tabs = [
   { href: '/admin/schedule', label: 'Week' },
@@ -15,6 +19,9 @@ const tabs = [
   { href: '/admin/schedule/hours', label: 'Hours' },
   { href: '/admin/schedule/time-off', label: 'Time Off' },
   { href: '/admin/schedule/availability', label: 'Availability' },
+  // The duty list is readable by anyone on the schedule, but only worth a tab
+  // for the people who assign (and edit) duties.
+  ...(canManage ? [{ href: '/admin/schedule/duties', label: 'Duties' }] : []),
   // Admin-only: insights aggregates everyone's pay, and the change log names
   // who did what across the whole team.
   ...(isAdmin

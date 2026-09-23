@@ -19,6 +19,7 @@ import { generateIcsCalendar } from '@/lib/calendar/ics';
 import { providerCalendarLinks, VENUE_ADDRESS } from '@/lib/calendar/links';
 import { getDb, type ShiftAssignmentRow, type StaffRow } from '@/lib/db';
 import { buildPersonalEvents, type ShiftWithAssignments } from '@/lib/schedule/calendar-feed';
+import { loadDutyCatalog } from '@/lib/schedule/duties';
 
 export const prerender = false;
 
@@ -73,6 +74,7 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
     shifts: [shift],
     staffById: new Map(allStaff.map((s) => [s.id, s])),
     origin: new URL(request.url).origin,
+    dutyCatalog: await loadDutyCatalog(db),
   });
   // The button only renders for shifts you're on, so an empty result means the
   // assignment changed between the page load and the click.
