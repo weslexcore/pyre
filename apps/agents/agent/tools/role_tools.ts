@@ -16,8 +16,15 @@
 // module-level helper still work on the first step, but their executes are
 // registered only in that function instance's memory, so a replay in a fresh
 // invocation (a later step, or a redelivery after a timeout) drops them with
-// "references step function ... which is not registered". The role is fixed
-// for the session, so resolving once on session.started is enough.
+// "references step function ... which is not registered".
+//
+// Resolve on turn.started, not session.started: session-level tools are
+// stored once when the session opens and replayed as-is on every later turn,
+// so a session opened on an older build keeps that build's step names
+// forever. Re-resolving each turn stores fresh names from the running
+// deployment, which lets a follow-up (a draft refinement) work even in a
+// session that started before a deploy. The role is fixed for the session,
+// so every turn resolves the same set.
 
 import { defineDynamic, defineTool } from 'eve/tools';
 import { z } from 'zod';
@@ -41,7 +48,7 @@ function scopeOf(ctx: { session?: { auth?: Parameters<typeof resolveRole>[0] } }
 
 export default defineDynamic({
   events: {
-    'session.started': (_event, ctx) => {
+    'turn.started': (_event, ctx) => {
       if (resolveRole(ctx.session.auth).role !== 'knowledge') {
         return {
           get_week_context: defineTool({
