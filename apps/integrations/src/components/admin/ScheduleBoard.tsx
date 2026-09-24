@@ -2583,7 +2583,8 @@ type AssignmentFields = {
 };
 
 /** How long the editor waits after the last change before saving — long
- * enough that a run of pill clicks lands as one save (and one staff email). */
+ * enough that a run of pill clicks lands as one save (one change-log entry
+ * and one inbox notice for the person, not one per click). */
 const ASSIGNMENT_AUTOSAVE_MS = 800;
 
 const assignmentFieldsKey = (f: AssignmentFields) =>
