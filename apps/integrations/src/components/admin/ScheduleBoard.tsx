@@ -332,13 +332,13 @@ export function ScheduleBoard() {
   // clicking through (managers included); this tracks the ones the viewer
   // closed. Manage controls stay behind the per-shift Edit button below.
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
-  // The shift whose detail is in edit mode (assignment edits, add person).
+  // The shift whose detail is in edit mode (every assignment's hours, role
+  // and duties open inline and autosave; add person).
   const [editShiftId, setEditShiftId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Shift form: 'new:<date>' or 'edit:<shiftId>'
   const [formTarget, setFormTarget] = useState<string | null>(null);
   const [form, setForm] = useState<ShiftFormState>(emptyShiftForm);
-  const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
   // Agent drafting: set while waiting for a new proposal to appear.
   const [drafting, setDrafting] = useState(false);
   // Week whose draft is being revised via the banner's refine composer (the
@@ -681,9 +681,11 @@ export function ScheduleBoard() {
       setBusy(true);
       setError(null);
       const { error: actionError } = await action();
-      if (actionError) setError(actionError);
       await load();
+      // After the reload — load() clears the error banner as it starts.
+      if (actionError) setError(actionError);
       setBusy(false);
+      return actionError ?? null;
     },
     [load]
   );
@@ -1640,8 +1642,6 @@ export function ScheduleBoard() {
                               subs={subs}
                               settings={settings}
                               onEdit={() => openEditShift(shift)}
-                              editingAssignment={editingAssignment}
-                              setEditingAssignment={setEditingAssignment}
                               proposalAction={proposalAction}
                               restNotes={restNotes}
                               restCheck={restCheck}
@@ -1691,7 +1691,7 @@ function ShiftForm({
   busy: boolean;
   /** Present when editing an existing shift — enables cancel/delete actions. */
   shift?: BoardShift;
-  run?: (action: () => Promise<{ error?: string }>) => Promise<void>;
+  run?: (action: () => Promise<{ error?: string }>) => Promise<unknown>;
 }) {
   return (
     <div className="mb-2 space-y-2 rounded border border-white/10 bg-white/5 p-3">
@@ -1841,8 +1841,6 @@ function ShiftDetail({
   subs,
   settings,
   onEdit,
-  editingAssignment,
-  setEditingAssignment,
   proposalAction,
   restNotes,
   restCheck,
@@ -1852,12 +1850,13 @@ function ShiftDetail({
   staffById: Map<string, StaffRow>;
   weekHours: Record<string, number>;
   busy: boolean;
-  run: (action: () => Promise<{ error?: string }>) => Promise<void>;
+  run: (action: () => Promise<{ error?: string }>) => Promise<string | null>;
   canManage: boolean;
   /** Whether duty chips link to their SOP, or render as plain labels. */
   canViewSops: boolean;
   /** Managers read the detail like everyone else until they click Edit —
-   * only then do assignment edits and the add-person picker appear. */
+   * only then do the (autosaving) assignment editors and the add-person
+   * picker appear. */
   editMode: boolean;
   onToggleEditMode: () => void;
   selfId: string | null;
@@ -1867,9 +1866,7 @@ function ShiftDetail({
   subs: SubRequestRow[];
   settings: BoardSettings;
   onEdit: () => void;
-  editingAssignment: string | null;
-  setEditingAssignment: (id: string | null) => void;
-  proposalAction: (body: Record<string, unknown>) => Promise<void>;
+  proposalAction: (body: Record<string, unknown>) => Promise<unknown>;
   /** Assignment id → how it breaks the rest rule (evening close, next-day open). */
   restNotes: Map<string, string>;
   /** What putting a person on this shift's hours would break, if anything. */
@@ -1976,7 +1973,7 @@ function ShiftDetail({
               timeToMinutes(a.starts_at),
               timeToMinutes(a.ends_at)
             );
-            const editing = editingAssignment === a.id;
+            const editing = canManage && editMode;
             return (
               <li
                 key={a.id}
@@ -2074,26 +2071,17 @@ function ShiftDetail({
                         </button>
                       </>
                     )}
-                    {canManage && editMode && (
-                      <>
-                        <button
-                          type="button"
-                          className="font-mono text-xs text-white/50 underline hover:text-white"
-                          onClick={() => setEditingAssignment(editing ? null : a.id)}
-                        >
-                          {editing ? 'close' : 'edit'}
-                        </button>
-                        <button
-                          type="button"
-                          className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
-                          disabled={busy}
-                          onClick={() =>
-                            void run(() => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`))
-                          }
-                        >
-                          remove
-                        </button>
-                      </>
+                    {editing && (
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-white/50 underline hover:text-[var(--pyre-red)]"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => api('DELETE', `/api/admin/shift-assignments?id=${a.id}`))
+                        }
+                      >
+                        remove
+                      </button>
                     )}
                   </span>
                 </div>
@@ -2129,13 +2117,11 @@ function ShiftDetail({
                   <AssignmentEditor
                     assignment={a}
                     shift={shift}
-                    busy={busy}
-                    onSave={async (fields) => {
-                      setEditingAssignment(null);
-                      await run(() =>
+                    onSave={(fields) =>
+                      run(() =>
                         api('PATCH', '/api/admin/shift-assignments', { id: a.id, ...fields })
-                      );
-                    }}
+                      )
+                    }
                   />
                 )}
               </li>
@@ -2518,7 +2504,7 @@ function ShiftDetail({
             <button
               type="button"
               className={buttonClass}
-              title="Change assignments or add people to this shift"
+              title="Change anyone's hours, role or duties (changes save as you make them), or add people to this shift"
               onClick={onToggleEditMode}
             >
               Edit
@@ -2588,21 +2574,39 @@ function AddToCalendar({ shiftId }: { shiftId: string }) {
   );
 }
 
+type AssignmentFields = {
+  startsAt: string;
+  endsAt: string;
+  role: AssignmentRole;
+  duties: AssignmentDuty[];
+};
+
+/** How long the editor waits after the last change before saving — long
+ * enough that a run of pill clicks lands as one save (and one staff email). */
+const ASSIGNMENT_AUTOSAVE_MS = 800;
+
+const assignmentFieldsKey = (f: AssignmentFields) =>
+  JSON.stringify([f.startsAt, f.endsAt, f.role, [...f.duties].sort()]);
+
+type AutosaveStatus =
+  | { state: 'idle' | 'pending' | 'saving' | 'saved' }
+  | { state: 'invalid' | 'error'; message: string };
+
+/**
+ * One assignment's hours, role and duties, open for as long as the shift is
+ * in edit mode. There's no Save button: each change saves itself after a
+ * short pause, and a change still waiting when the editor closes (Done) is
+ * saved on the way out.
+ */
 function AssignmentEditor({
   assignment,
   shift,
-  busy,
   onSave,
 }: {
   assignment: ShiftAssignmentRow;
   shift: BoardShift;
-  busy: boolean;
-  onSave: (fields: {
-    startsAt: string;
-    endsAt: string;
-    role: AssignmentRole;
-    duties: AssignmentDuty[];
-  }) => Promise<void>;
+  /** Resolves to the error message, or null once saved. */
+  onSave: (fields: AssignmentFields) => Promise<string | null>;
 }) {
   const [startsAt, setStartsAt] = useState(hhmm(assignment.starts_at));
   const [endsAt, setEndsAt] = useState(hhmm(assignment.ends_at));
@@ -2613,6 +2617,59 @@ function AssignmentEditor({
   // in-session duty (toggleDuty); every part of that stays editable.
   const [duties, setDuties] = useState<AssignmentDuty[]>(normalizeDuties(assignment.duties));
   const mismatches = mismatchedDutyPairs(duties);
+
+  const [status, setStatus] = useState<AutosaveStatus>({ state: 'idle' });
+  // What the server has, so reloads and no-op toggles don't save again.
+  const savedKeyRef = useRef(
+    assignmentFieldsKey({
+      startsAt: hhmm(assignment.starts_at),
+      endsAt: hhmm(assignment.ends_at),
+      role: assignment.role,
+      duties: normalizeDuties(assignment.duties),
+    })
+  );
+  // The change waiting out the debounce, flushed if the editor unmounts first.
+  const pendingRef = useRef<AssignmentFields | null>(null);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const mountedRef = useRef(true);
+
+  const save = useCallback(async (fields: AssignmentFields) => {
+    const key = assignmentFieldsKey(fields);
+    pendingRef.current = null;
+    if (mountedRef.current) setStatus({ state: 'saving' });
+    const error = await onSaveRef.current(fields);
+    if (!error) savedKeyRef.current = key;
+    if (mountedRef.current) {
+      setStatus(error ? { state: 'error', message: error } : { state: 'saved' });
+    }
+  }, []);
+
+  useEffect(() => {
+    const fields = { startsAt, endsAt, role, duties };
+    if (assignmentFieldsKey(fields) === savedKeyRef.current) {
+      pendingRef.current = null;
+      setStatus((s) => (s.state === 'pending' || s.state === 'invalid' ? { state: 'idle' } : s));
+      return;
+    }
+    if (!startsAt || !endsAt || endsAt <= startsAt) {
+      pendingRef.current = null;
+      setStatus({ state: 'invalid', message: 'End must be after start — not saved yet' });
+      return;
+    }
+    pendingRef.current = fields;
+    setStatus({ state: 'pending' });
+    const timer = setTimeout(() => void save(fields), ASSIGNMENT_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [startsAt, endsAt, role, duties, save]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pendingRef.current) void save(pendingRef.current);
+    };
+  }, [save]);
 
   // Full/Setup snap the times to the shift window. The window already carries
   // the buffers (90min lead before the first session, 30min close after the
@@ -2696,19 +2753,26 @@ function AssignmentEditor({
           is the one who knows its state at close.
         </p>
       )}
-      <button
-        type="button"
-        className={buttonClass}
-        disabled={busy}
-        title={
-          assignment.is_draft
-            ? 'Saving accepts this AI draft onto the live schedule with your changes'
-            : undefined
-        }
-        onClick={() => void onSave({ startsAt, endsAt, role, duties })}
+      <p
+        className={`font-mono text-[10px] ${
+          status.state === 'error' || status.state === 'invalid'
+            ? 'text-[var(--pyre-red)]'
+            : 'text-white/40'
+        }`}
+        aria-live="polite"
       >
-        {assignment.is_draft ? 'Save & accept' : 'Save'}
-      </button>
+        {status.state === 'pending' || status.state === 'saving'
+          ? 'Saving…'
+          : status.state === 'saved'
+            ? 'Saved'
+            : status.state === 'error'
+              ? `Couldn't save: ${status.message}`
+              : status.state === 'invalid'
+                ? status.message
+                : assignment.is_draft
+                  ? 'Changes save automatically — changing this AI draft accepts it onto the live schedule.'
+                  : 'Changes save automatically.'}
+      </p>
     </div>
   );
 }
@@ -2727,7 +2791,7 @@ function ProposalBanner({
   busy: boolean;
   /** A refinement of this week is in flight; its proposal will replace this one. */
   refining: boolean;
-  onAction: (body: Record<string, unknown>) => Promise<void>;
+  onAction: (body: Record<string, unknown>) => Promise<unknown>;
   onRefine: (prompt: string) => Promise<boolean>;
 }) {
   const [showRationale, setShowRationale] = useState(true);
