@@ -29,10 +29,17 @@ const draftFor = (s: StaffRow): PrefsDraft => ({
   maxShifts: String(s.max_shifts_per_week ?? ''),
 });
 
-/** The inputs, in reading order; keys match the PATCH body. */
+/**
+ * The inputs, in reading order; keys match the PATCH body. `help` speaks to
+ * the person editing their own week; `note` is the short version under each
+ * column heading on the manager's table.
+ */
 const FIELDS: Array<{
   key: keyof PrefsDraft;
-  heading: string;
+  title: string;
+  unit: string;
+  help: string;
+  note: string;
   label: string;
   min: number;
   max: number;
@@ -40,22 +47,48 @@ const FIELDS: Array<{
 }> = [
   {
     key: 'targetHours',
-    heading: 'h/wk target',
+    title: 'Weekly hours',
+    unit: 'hrs',
+    help: 'How many hours a week you would like to work.',
+    note: 'hours they want',
     label: 'target hours per week',
     min: 0,
     max: 168,
     step: 0.5,
   },
-  { key: 'minShifts', heading: 'min', label: 'minimum shifts per week', min: 0, max: 14, step: 1 },
+  {
+    key: 'minShifts',
+    title: 'Fewest shifts',
+    unit: 'shifts',
+    help: 'The fewest shifts a week you need. We fill these first.',
+    note: 'filled first',
+    label: 'minimum shifts per week',
+    min: 0,
+    max: 14,
+    step: 1,
+  },
   {
     key: 'preferredShifts',
-    heading: 'preferred',
+    title: 'Ideal shifts',
+    unit: 'shifts',
+    help: 'How many shifts a week you would like. We aim for this.',
+    note: 'what we aim for',
     label: 'preferred shifts per week',
     min: 1,
     max: 14,
     step: 1,
   },
-  { key: 'maxShifts', heading: 'max', label: 'maximum shifts per week', min: 1, max: 14, step: 1 },
+  {
+    key: 'maxShifts',
+    title: 'Most shifts',
+    unit: 'shifts',
+    help: 'The most shifts a week you will take. We never go past this.',
+    note: 'never exceeded',
+    label: 'maximum shifts per week',
+    min: 1,
+    max: 14,
+    step: 1,
+  },
 ];
 
 const EXPLAINER =
@@ -141,6 +174,7 @@ export function ScheduleShiftPrefs({
       min={field.min}
       max={field.max}
       step={field.step}
+      placeholder="none"
       value={draft[field.key]}
       disabled={busyId === person.id}
       onChange={(e) => setDraft({ [field.key]: e.target.value })}
@@ -164,26 +198,33 @@ export function ScheduleShiftPrefs({
         </h2>
         <p className="font-mono text-xs text-white/40">{EXPLAINER}</p>
         {errorBox}
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {FIELDS.map((field) => (
-            <div key={field.key} className="flex flex-col gap-1 font-mono text-xs text-white/60">
-              <label htmlFor={`own-pref-${field.key}`}>
-                {field.key === 'targetHours' ? 'hours target' : `${field.heading} shifts`}
+            <div key={field.key} className="space-y-1.5 rounded border border-white/10 px-3 py-2">
+              <label
+                htmlFor={`own-pref-${field.key}`}
+                className="block font-mono text-xs text-[var(--pyre-creme)]"
+              >
+                {field.title}
               </label>
-              {input(person, field, draft, setDraft, `own-pref-${field.key}`)}
+              <div className="flex items-center gap-1.5 font-mono text-xs text-white/50">
+                {input(person, field, draft, setDraft, `own-pref-${field.key}`)}
+                {field.unit}
+              </div>
+              <p className="text-xs text-white/40">{field.help}</p>
             </div>
           ))}
-          {dirty && (
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={busyId !== null}
-              onClick={() => void save(person, draft)}
-            >
-              Save
-            </button>
-          )}
         </div>
+        {dirty && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={busyId !== null}
+            onClick={() => void save(person, draft)}
+          >
+            Save
+          </button>
+        )}
       </section>
     );
   }
@@ -201,10 +242,16 @@ export function ScheduleShiftPrefs({
           <table className="text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left font-mono text-xs uppercase tracking-wide text-white/40">
-                <th className="py-2 pr-4">Person</th>
+                <th className="py-2 pr-4 align-bottom">Person</th>
                 {FIELDS.map((field) => (
-                  <th key={field.key} className="whitespace-nowrap py-2 pr-3">
-                    {field.key === 'targetHours' ? field.heading : `${field.heading} shifts`}
+                  <th
+                    key={field.key}
+                    className="whitespace-nowrap py-2 pr-3 align-bottom font-normal"
+                  >
+                    <span className="block font-bold">{field.title}</span>
+                    <span className="block normal-case tracking-normal text-white/30">
+                      {field.note}
+                    </span>
                   </th>
                 ))}
                 <th />
