@@ -9,9 +9,15 @@
 // request (this gate is UX; the API gate is the security boundary).
 import { ClientRouter } from 'astro:transitions';
 import { AdminNav } from '@/components/admin/AdminNav';
-import { canViewPath, searchablePages, toolsForAccess } from '@/components/admin/adminTools';
+import {
+  canViewPath,
+  SHIFT_NOTES_HREF,
+  searchablePages,
+  toolsForAccess,
+} from '@/components/admin/adminTools';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
+import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
 import Favicon from '@/components/Favicon.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { getUnreadCount } from '@/lib/notifications/unread';
@@ -42,6 +48,9 @@ const tools = access ? toolsForAccess(access) : [];
 // Pages the global search (cmd+K, or the magnifier in the header) can open:
 // the same tools plus their sub-pages, filtered the same way.
 const searchPages = access ? searchablePages(tools, access.isAdmin) : [];
+// The header's plus button writes a shift note from any page — offered to
+// whoever may open the shift-notes page (everyone on the roster, by default).
+const canAddShiftNote = !!access && canViewPath(access, SHIFT_NOTES_HREF);
 // The user's pin order for the nav's Pinned group — reuse the page's fetch
 // when it already made one (the /admin index memoizes into locals).
 const pinnedHrefs =
@@ -113,6 +122,7 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
                 Pyre Admin
               </a>
               <div class="flex items-center gap-2">
+                {canAddShiftNote && <QuickShiftNote client:load />}
                 <GlobalSearch client:load pages={searchPages} />
                 <NotificationBell client:load initialCount={unreadCount} />
                 <AdminNav
