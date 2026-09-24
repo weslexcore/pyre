@@ -28,8 +28,8 @@ describe('toClassificationView', () => {
       {
         status: 'done',
         signals: [
-          { type: 'action', summary: 'Order towels' },
-          { type: 'retired', summary: 'Old kind' },
+          { type: 'action', probability: 0.8 },
+          { type: 'retired', probability: 0.9 },
         ],
         requested_at: requested,
         classified_at: requested,
@@ -37,14 +37,14 @@ describe('toClassificationView', () => {
       at(PENDING_TIMEOUT_MS * 10)
     );
     expect(view.state).toBe('done');
-    expect(view.signals).toEqual([{ type: 'action', summary: 'Order towels' }]);
+    expect(view.signals).toEqual([{ type: 'action', probability: 0.8 }]);
   });
 
   it('never shows signals on a failed row', () => {
     expect(
       toClassificationView({
         status: 'failed',
-        signals: [{ type: 'action', summary: 'Stale' }],
+        signals: [{ type: 'action', probability: 0.9 }],
         requested_at: requested,
         classified_at: null,
       }).signals

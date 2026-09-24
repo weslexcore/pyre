@@ -1,24 +1,61 @@
-// requestClassification is called on every shift note write, so what it
-// skips matters as much as what it sends: nothing when the agent is not
-// configured, nothing when the same text is already read or being read, and
-// the pending row always filed before the session starts.
+// Classification runs on every shift note write, so two things matter most:
+// the write's own response never waits for it (scheduleClassification only
+// queues work), and the background run skips unchanged text, files its
+// request before asking pyre-agents, and never lets a stale run overwrite a
+// newer one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeClassificationsDb } from './fake-db.test-helper';
 
-const startEveSession = vi.fn();
-vi.mock('@/lib/schedule/eve-session', () => ({
-  startEveSession: (...args: unknown[]) => startEveSession(...args),
-}));
+const waitUntil = vi.fn();
+vi.mock('@vercel/functions', () => ({ waitUntil: (p: unknown) => waitUntil(p) }));
+const getDb = vi.fn();
+vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
 
-const { contentHash, requestClassification } = await import('./request');
+const { contentHash, runClassification, scheduleClassification } = await import('./request');
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
 
-describe('requestClassification', () => {
+const PROBABILITIES = { action: 0.82, question: 0.1, update: 0.05, feedback: 0.2, safety: 0.01 };
+
+function agents(response: () => Response | Promise<Response>) {
+  return vi.fn(async (_url: string, _init?: RequestInit) => response());
+}
+
+describe('scheduleClassification', () => {
   beforeEach(() => {
     vi.stubEnv('AGENTS_BASE_URL', 'https://agents.test');
     vi.stubEnv('EVE_CHANNEL_SECRET', 'secret');
-    startEveSession.mockReset();
+    waitUntil.mockReset();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('hands the work to waitUntil and returns without doing any of it', () => {
+    const { db, log } = fakeClassificationsDb();
+    getDb.mockReturnValue(db);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const result = scheduleClassification('shift_note', NOTE_ID, 'Towels low');
+
+    expect(result).toBeUndefined();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
+    // Nothing ran synchronously: no row filed, no request sent.
+    expect(log).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('does nothing when the agent is not configured', () => {
+    vi.stubEnv('AGENTS_BASE_URL', '');
+    scheduleClassification('shift_note', NOTE_ID, 'Towels low');
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+});
+
+describe('runClassification', () => {
+  beforeEach(() => {
+    vi.stubEnv('AGENTS_BASE_URL', 'https://agents.test/');
+    vi.stubEnv('EVE_CHANNEL_SECRET', 'secret');
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
   afterEach(() => {
@@ -26,43 +63,32 @@ describe('requestClassification', () => {
     vi.restoreAllMocks();
   });
 
-  it('does nothing when the agent is not configured', async () => {
-    vi.stubEnv('AGENTS_BASE_URL', '');
-    const { db, rows } = fakeClassificationsDb();
-    expect(
-      await requestClassification(db as never, 'shift_note', NOTE_ID, 'Towels low')
-    ).toBeNull();
-    expect(rows).toHaveLength(0);
-    expect(startEveSession).not.toHaveBeenCalled();
-  });
-
-  it('files a pending request, then starts a classifier session carrying its id', async () => {
+  it('files a pending request, asks pyre-agents, and stores what clears the thresholds', async () => {
     const { db, rows, log } = fakeClassificationsDb();
-    startEveSession.mockImplementation(async () => {
-      // The row must already exist when the agent could first save.
+    const fetch = agents(() => {
+      // The row must exist before the answer can be written against it.
       expect(log).toEqual(['upsert:pending']);
-      return 'sess_1';
+      return Response.json({ model: 'typesafe-ai/jev', probabilities: PROBABILITIES });
     });
 
-    const view = await requestClassification(db as never, 'shift_note', NOTE_ID, 'Towels low');
+    const view = await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      fetch: fetch as never,
+    });
 
-    expect(view?.state).toBe('pending');
-    expect(rows).toHaveLength(1);
+    expect(view?.state).toBe('done');
+    expect(view?.signals).toEqual([{ type: 'action', probability: 0.82 }]);
     expect(rows[0]).toMatchObject({
       subject_type: 'shift_note',
       subject_id: NOTE_ID,
-      status: 'pending',
+      status: 'done',
+      model: 'typesafe-ai/jev',
+      attempts: 1,
       content_hash: contentHash('Towels low'),
-      agent_session_id: 'sess_1',
     });
-    const [config, message] = startEveSession.mock.calls[0] as [
-      { headers: Record<string, string> },
-      string,
-    ];
-    expect(config.headers['x-pyre-agent']).toBe('classifier');
-    expect(config.headers['x-pyre-classify-request']).toBe(rows[0]?.request_id);
-    expect(message).toContain('<classify subject="shift_note">');
-    expect(message).toContain('Towels low');
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://agents.test/pyre/classify');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+    expect(JSON.parse(init.body as string)).toEqual({ subject: 'shift_note', text: 'Towels low' });
   });
 
   it('skips text that is already classified, unless forced', async () => {
@@ -72,52 +98,79 @@ describe('requestClassification', () => {
         subject_type: 'shift_note',
         subject_id: NOTE_ID,
         status: 'done',
-        signals: [{ type: 'action', summary: 'Order towels' }],
+        signals: [{ type: 'action', probability: 0.9 }],
         request_id: 'old',
         content_hash: contentHash('Towels low'),
+        attempts: 1,
         requested_at: new Date().toISOString(),
         classified_at: new Date().toISOString(),
       },
     ]);
+    const fetch = agents(() => Response.json({ probabilities: PROBABILITIES }));
 
-    const same = await requestClassification(db as never, 'shift_note', NOTE_ID, '  Towels low ');
-    expect(same?.signals).toEqual([{ type: 'action', summary: 'Order towels' }]);
-    expect(startEveSession).not.toHaveBeenCalled();
-
-    startEveSession.mockResolvedValue('sess_2');
-    const forced = await requestClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
-      force: true,
+    const same = await runClassification(db as never, 'shift_note', NOTE_ID, '  Towels low ', {
+      fetch: fetch as never,
     });
-    expect(forced?.state).toBe('pending');
-    expect(startEveSession).toHaveBeenCalledTimes(1);
+    expect(same?.signals).toEqual([{ type: 'action', probability: 0.9 }]);
+    expect(fetch).not.toHaveBeenCalled();
+
+    await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      force: true,
+      fetch: fetch as never,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('re-reads changed text and rotates the request id', async () => {
+  it('counts attempts per text and resets them when the text changes', async () => {
     const { db, rows } = fakeClassificationsDb([
       {
         id: 'row-1',
         subject_type: 'shift_note',
         subject_id: NOTE_ID,
-        status: 'done',
+        status: 'failed',
         signals: [],
         request_id: 'old',
-        content_hash: contentHash('Smooth shift'),
+        content_hash: contentHash('Towels low'),
+        attempts: 2,
         requested_at: new Date().toISOString(),
-        classified_at: new Date().toISOString(),
+        classified_at: null,
       },
     ]);
-    startEveSession.mockResolvedValue('sess_3');
-    await requestClassification(db as never, 'shift_note', NOTE_ID, 'Heater is out');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.request_id).not.toBe('old');
+    const failing = agents(() => Response.json({ error: 'Jev down' }, { status: 502 }));
+
+    const view = await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      fetch: failing as never,
+    });
+    expect(view?.state).toBe('failed');
+    expect(rows[0]).toMatchObject({ attempts: 3, status: 'failed' });
+    expect(rows[0]?.error).toMatch(/502.*Jev down/);
+
+    await runClassification(db as never, 'shift_note', NOTE_ID, 'Heater is out', {
+      fetch: failing as never,
+    });
+    expect(rows[0]?.attempts).toBe(1);
+  });
+
+  it('writes nothing when a newer run replaced this one mid-flight', async () => {
+    const { db, rows } = fakeClassificationsDb();
+    const fetch = agents(() => {
+      // An edit lands while Jev is answering and rotates the request id.
+      (rows[0] as Record<string, unknown>).request_id = 'newer';
+      return Response.json({ probabilities: PROBABILITIES });
+    });
+    const view = await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      fetch: fetch as never,
+    });
+    expect(view).toBeNull();
     expect(rows[0]?.status).toBe('pending');
   });
 
-  it('marks the request failed when the session cannot start', async () => {
+  it('marks an answer that fails validation as failed', async () => {
     const { db, rows } = fakeClassificationsDb();
-    startEveSession.mockRejectedValue(new Error('HTTP 502'));
-    const view = await requestClassification(db as never, 'shift_note', NOTE_ID, 'Towels low');
-    expect(view?.state).toBe('failed');
-    expect(rows[0]).toMatchObject({ status: 'failed', error: 'HTTP 502' });
+    const fetch = agents(() => Response.json({ probabilities: { action: 7 } }));
+    await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      fetch: fetch as never,
+    });
+    expect(rows[0]).toMatchObject({ status: 'failed' });
   });
 });

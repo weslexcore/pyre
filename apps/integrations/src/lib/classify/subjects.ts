@@ -1,21 +1,25 @@
 // This app's side of each classifiable subject: where its text lives and who
 // may look at and re-run its classification. The subject list itself (and
-// what the model is told about each) is @pyre/signals-core's SUBJECT_DEFINITIONS;
+// what Jev is told about each) is @pyre/signals-core's SUBJECT_DEFINITIONS;
 // the Record type below makes a new subject there a type error here until it
 // is wired up.
 
 import type { SubjectType } from '@pyre/signals-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AstroCookies } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, requirePage } from '@/lib/auth/admin';
-import type { getDb } from '@/lib/db';
-
-type Db = NonNullable<ReturnType<typeof getDb>>;
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 function forbidden(message: string): Response {
   return new Response(JSON.stringify({ error: message }), { status: 403, headers: JSON_HEADERS });
+}
+
+/** One record's id and current text. */
+export interface SubjectText {
+  id: string;
+  text: string;
 }
 
 export interface SubjectSource {
@@ -26,7 +30,9 @@ export interface SubjectSource {
    */
   authorize(cookies: AstroCookies): Promise<AdminGate | Response>;
   /** The record's current text, or null when it does not exist. */
-  loadText(db: Db, id: string): Promise<string | null>;
+  loadText(db: SupabaseClient, id: string): Promise<string | null>;
+  /** Records written or edited since `since` (ISO), for the sweep to check. */
+  listChangedSince(db: SupabaseClient, since: string, limit: number): Promise<SubjectText[]>;
 }
 
 export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
@@ -41,6 +47,19 @@ export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
     async loadText(db, id) {
       const { data } = await db.from('shift_notes').select('body').eq('id', id).maybeSingle();
       return (data as { body: string } | null)?.body ?? null;
+    },
+    async listChangedSince(db, since, limit) {
+      const { data, error } = await db
+        .from('shift_notes')
+        .select('id, body')
+        .gte('updated_at', since)
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as { id: string; body: string }[]).map((n) => ({
+        id: n.id,
+        text: n.body,
+      }));
     },
   },
 };

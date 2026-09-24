@@ -18,10 +18,12 @@
 // media route); POST claims them by id once the note exists, and GET sweeps
 // staged rows nobody claimed within a day.
 //
-// Every new note, and every edit that changes a note's text, is sent to the
-// pyre-agents classifier (lib/classify), which reports what the note asks of
-// the team — actions, questions, updates, feedback, safety concerns. Admins,
-// who triage the log, get those signals with each note; authors never do.
+// Every new note, and every edit that changes a note's text, is classified by
+// Jev through pyre-agents (lib/classify), which reports what the note asks of
+// the team — actions, questions, updates, feedback, safety concerns. That runs
+// in the background after the response goes out, so saving a note never waits
+// on it. Admins, who triage the log, get the signals with each note (and a
+// pending marker right after a write); authors never do.
 //
 //   GET                          → { notes, attachments, replies, people, viewer, scope,
 //                                    classifications (admins) }
@@ -32,7 +34,7 @@
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { loadClassifications, requestClassification } from '@/lib/classify/request';
+import { loadClassifications, pendingView, scheduleClassification } from '@/lib/classify/request';
 import type { ClassificationView } from '@/lib/classify/view';
 import {
   getDb,
@@ -120,17 +122,17 @@ function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
 }
 
 /**
- * Send a note's current text to the classifier (a no-op when that text is
- * already classified). Admins get the result back to render; everyone else
- * gets nothing, since signals are triage material.
+ * Queue a classification of the note's current text for after the response
+ * (skipped in the background when that text is already classified). Admins
+ * get a pending marker to render until their page's poll picks up the
+ * result; everyone else gets nothing, since signals are triage material.
  */
-async function classifyNote(
-  db: NonNullable<ReturnType<typeof getDb>>,
+function classifyNote(
   note: ShiftNoteRow,
   gate: AdminGate
-): Promise<{ classification?: ClassificationView }> {
-  const classification = await requestClassification(db, 'shift_note', note.id, note.body);
-  return gate.access.isAdmin && classification ? { classification } : {};
+): { classification?: ClassificationView } {
+  scheduleClassification('shift_note', note.id, note.body);
+  return gate.access.isAdmin ? { classification: pendingView() } : {};
 }
 
 /** The viewer this gate represents, in the shape the access rule reads. */
@@ -335,7 +337,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       note,
       attachments: claimed,
       people: await peopleFor([note]),
-      ...(await classifyNote(db, note, gate)),
+      ...classifyNote(note, gate),
     },
     201
   );
@@ -423,7 +425,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   // Triage is news to the author; an edit of their own text is not.
   if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
   // New text gets read again; a date or status change leaves it alone.
-  const classified = patch.body !== undefined ? await classifyNote(db, note, gate) : {};
+  const classified = patch.body !== undefined ? classifyNote(note, gate) : {};
   return json({ note, people: await peopleFor([note]), ...classified });
 };
 

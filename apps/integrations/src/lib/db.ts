@@ -393,7 +393,7 @@ export interface ShiftNoteAttachmentRow {
   created_at: string;
 }
 
-// What the pyre-agents classifier found in a record's text (see the
+// What Jev (via pyre-agents) found in a record's text (see the
 // content_classifications migration and src/lib/classify). One row per
 // classified record; `signals` is validated against @pyre/signals-core.
 export interface ContentClassificationRow {
@@ -401,11 +401,14 @@ export interface ContentClassificationRow {
   subject_type: string;
   subject_id: string;
   status: ContentClassificationStatus;
-  /** Raw jsonb; read it through readStoredSignals(). */
+  /** Raw jsonb [{ type, probability }]; read it through readStoredSignals(). */
   signals: unknown;
   request_id: string;
   content_hash: string;
-  agent_session_id: string | null;
+  /** Runs for this text so far; the sweep stops retrying at MAX_ATTEMPTS. */
+  attempts: number;
+  /** The evaluation model that answered, e.g. typesafe-ai/jev. */
+  model: string | null;
   error: string | null;
   requested_at: string;
   classified_at: string | null;
