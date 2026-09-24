@@ -8,7 +8,10 @@
 // `x-pyre-agent: knowledge` (plus the asking staff member's access as JSON in
 // `x-pyre-knowledge-scope`) has both stamped onto the session's auth
 // attributes, and the instructions and tools resolve from them per session
-// (lib/role.ts). Anything else is the scheduler. Only an authenticated
+// (lib/role.ts). A request carrying `x-pyre-agent: classifier` runs as the
+// classifier, with the classification request it answers (a UUID in
+// `x-pyre-classify-request`) stamped alongside so its save tool knows where
+// the result goes. Anything else is the scheduler. Only an authenticated
 // caller reaches this point, so the headers are trusted as far as the
 // caller is — and the scope only ever narrows what the knowledge tools read.
 //
@@ -32,7 +35,9 @@ import {
 } from '../lib/knowledge/audit';
 import {
   AGENT_HEADER,
+  CLASSIFY_REQUEST_HEADER,
   type KnowledgeScope,
+  parseClassifyRequestId,
   parseKnowledgeScope,
   resolveRole,
   SCOPE_HEADER,
@@ -68,6 +73,18 @@ export default eveChannel({
     if (!caller) return { auth: caller };
 
     const agent = ctx.eve.request.headers.get(AGENT_HEADER)?.trim().toLowerCase();
+
+    if (agent === 'classifier') {
+      // A classifier session without a well-formed request id could never
+      // save; drop the message (null accepts without dispatching) rather than
+      // let it fall through to the scheduler.
+      const request = parseClassifyRequestId(ctx.eve.request.headers.get(CLASSIFY_REQUEST_HEADER));
+      if (!request) return null;
+      return {
+        auth: { ...caller, attributes: { ...caller.attributes, agent: 'classifier', request } },
+      };
+    }
+
     if (agent !== 'knowledge') return { auth: caller };
 
     // Normalise through the parser so the stored attribute is always a

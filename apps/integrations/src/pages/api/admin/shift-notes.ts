@@ -18,14 +18,22 @@
 // media route); POST claims them by id once the note exists, and GET sweeps
 // staged rows nobody claimed within a day.
 //
-//   GET                          → { notes, attachments, replies, people, viewer, scope }
-//   POST   { noteDate, body, attachmentIds? } → { note, attachments, people }
-//   PATCH  { id, noteDate?, body?, status? } → { note, people }
+// Every new note, and every edit that changes a note's text, is sent to the
+// pyre-agents classifier (lib/classify), which reports what the note asks of
+// the team — actions, questions, updates, feedback, safety concerns. Admins,
+// who triage the log, get those signals with each note; authors never do.
+//
+//   GET                          → { notes, attachments, replies, people, viewer, scope,
+//                                    classifications (admins) }
+//   POST   { noteDate, body, attachmentIds? } → { note, attachments, people, classification? }
+//   PATCH  { id, noteDate?, body?, status? } → { note, people, classification? }
 //   DELETE ?id=<uuid>            → { ok: true }
 
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { loadClassifications, requestClassification } from '@/lib/classify/request';
+import type { ClassificationView } from '@/lib/classify/view';
 import {
   getDb,
   type ShiftNoteAttachmentRow,
@@ -109,6 +117,20 @@ function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
     ...notes.flatMap((n) => [n.author_email, n.updated_by ?? '', n.status_by ?? '']),
     ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
   ]);
+}
+
+/**
+ * Send a note's current text to the classifier (a no-op when that text is
+ * already classified). Admins get the result back to render; everyone else
+ * gets nothing, since signals are triage material.
+ */
+async function classifyNote(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  note: ShiftNoteRow,
+  gate: AdminGate
+): Promise<{ classification?: ClassificationView }> {
+  const classification = await requestClassification(db, 'shift_note', note.id, note.body);
+  return gate.access.isAdmin && classification ? { classification } : {};
 }
 
 /** The viewer this gate represents, in the shape the access rule reads. */
@@ -211,6 +233,16 @@ export const GET: APIRoute = async ({ cookies }) => {
     attachments,
     replies,
     people: await peopleFor(notes, visibleReplies),
+    // What the classifier found in each note, keyed by note id — admins only.
+    ...(viewer.isAdmin
+      ? {
+          classifications: await loadClassifications(
+            db,
+            'shift_note',
+            notes.map((n) => n.id)
+          ),
+        }
+      : {}),
     // So the island knows whether it is showing the whole log or just this
     // person's, and which notes to offer edit/delete on. Both are UX only —
     // every read and every mutation re-checks the same rule here.
@@ -298,7 +330,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
   }
 
-  return json({ note, attachments: claimed, people: await peopleFor([note]) }, 201);
+  return json(
+    {
+      note,
+      attachments: claimed,
+      people: await peopleFor([note]),
+      ...(await classifyNote(db, note, gate)),
+    },
+    201
+  );
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -382,7 +422,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const note = data as ShiftNoteRow;
   // Triage is news to the author; an edit of their own text is not.
   if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
-  return json({ note, people: await peopleFor([note]) });
+  // New text gets read again; a date or status change leaves it alone.
+  const classified = patch.body !== undefined ? await classifyNote(db, note, gate) : {};
+  return json({ note, people: await peopleFor([note]), ...classified });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

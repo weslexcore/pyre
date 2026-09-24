@@ -1,7 +1,7 @@
 # pyre-agents
 
 Vercel [Eve](https://eve.dev) app hosting Pyre's AI agents. One deployment,
-two roles, chosen per session:
+three roles, chosen per session:
 
 - the **staff-scheduling drafter** (the default), which reviews upcoming
   coverage shifts (synced from Momence by the integrations app), everyone's
@@ -13,8 +13,12 @@ two roles, chosen per session:
   log, incident reports, and the staff schedule, citing the dashboard pages
   it drew on. Staff reach it from
   `/admin/sops/ask`.
+- the **classifier**, which reads one piece of staff-written text (a shift
+  note, today) and reports its *signals* — an action to take, a question to
+  answer, a record to update, feedback, a safety concern — so admins can
+  triage `/admin/shift-notes` at a glance.
 
-## Two roles in one Eve app
+## Roles in one Eve app
 
 Eve builds one root agent per app, so the second agent is a *role* the same
 deployment switches into: `agent/instructions/role.ts` and
@@ -95,6 +99,32 @@ never gets a shell.
   `agent/hooks/knowledge_audit.ts` write it from the event stream, so a
   closed browser tab never loses a record. Admins review it at
   `/admin/ask/log`.
+
+### Classifier
+
+```
+shift note written / text edited (integrations: lib/classify/request.ts)
+    files a pending content_classifications row with a fresh request_id
+    │  x-pyre-agent: classifier, x-pyre-classify-request: <request_id>
+    ▼
+POST {this app}/eve/v1/session   <classify subject="shift_note"><text>…
+    save_classification ─▶ POST /api/agent/classifications (integrations)
+                           validates, row → done with its signals
+```
+
+- The vocabulary lives in `@pyre/signals-core` (`packages/signals-core`):
+  signal types and subjects. The prompt (`agent/lib/prompts/classifier.ts`)
+  and the tool schema (`agent/lib/classifier/save-classification.ts`) are
+  built from it, so a new signal type needs no edit here — see that
+  package's README for how to add signals or classify other records.
+- The model never names the record it is saving for: the channel stamps the
+  request id onto the session and the tool sends it back. A session whose
+  request was superseded (the note was edited again or deleted) gets a 409
+  and stops. A classifier request without a valid id is dropped at the
+  channel, never run as the scheduler.
+- Its only tool is `save_classification`; it cannot read the knowledge base
+  or touch the schedule. Sonnet at low effort.
+- Eval: `evals/classify-shift-note.eval.ts`.
 
 ### Staff-scheduling drafter
 

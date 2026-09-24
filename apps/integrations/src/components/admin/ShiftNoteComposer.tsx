@@ -11,6 +11,7 @@
 // the log on /admin/shift-notes picks up a note written from the header modal
 // without a reload, the same way it picks up one written inline.
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { ClassificationView } from '@/lib/classify/view';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
 import {
   ACCEPT_ATTRIBUTE,
@@ -40,6 +41,8 @@ export interface CreatedShiftNote {
   note: ShiftNoteRow;
   attachments: ShiftNoteAttachmentRow[];
   people: PeopleNames;
+  /** The classifier's read of the note, for admins (it starts out pending). */
+  classification?: ClassificationView;
 }
 
 /** Fired on `document` with a CreatedShiftNote detail after every new note. */

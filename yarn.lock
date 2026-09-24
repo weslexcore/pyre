@@ -2432,6 +2432,7 @@ __metadata:
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@pyre/schedule-core": "workspace:^"
+    "@pyre/signals-core": "workspace:^"
     "@pyre/webhook-core": "workspace:^"
     "@react-email/components": "npm:^1.0.12"
     "@react-email/ui": "npm:6.9.1"
@@ -2502,6 +2503,16 @@ __metadata:
 "@pyre/schedule-core@workspace:^, @pyre/schedule-core@workspace:packages/schedule-core":
   version: 0.0.0-use.local
   resolution: "@pyre/schedule-core@workspace:packages/schedule-core"
+  dependencies:
+    "@types/node": "npm:^22.20.1"
+    typescript: "npm:^7.0.2"
+    vitest: "npm:^4.1.10"
+  languageName: unknown
+  linkType: soft
+
+"@pyre/signals-core@workspace:^, @pyre/signals-core@workspace:packages/signals-core":
+  version: 0.0.0-use.local
+  resolution: "@pyre/signals-core@workspace:packages/signals-core"
   dependencies:
     "@types/node": "npm:^22.20.1"
     typescript: "npm:^7.0.2"
@@ -9150,6 +9161,7 @@ __metadata:
   resolution: "pyre-agents@workspace:apps/agents"
   dependencies:
     "@pyre/schedule-core": "workspace:^"
+    "@pyre/signals-core": "workspace:^"
     "@supabase/supabase-js": "npm:^2.110.5"
     "@types/node": "npm:^24.0.0"
     ai: "npm:7.0.34"

@@ -71,13 +71,18 @@ function sessionUrl(config: EveConfig, path = ''): string {
 /**
  * Start a new Eve session with an opening message. Returns the session id
  * from the x-eve-session-id header (null if the header is missing).
- * Throws with the response detail on a non-2xx.
+ * Throws with the response detail on a non-2xx, or when `signal` aborts.
  */
-export async function startEveSession(config: EveConfig, message: string): Promise<string | null> {
+export async function startEveSession(
+  config: EveConfig,
+  message: string,
+  signal?: AbortSignal
+): Promise<string | null> {
   const response = await fetch(sessionUrl(config), {
     method: 'POST',
     headers: headers(config),
     body: JSON.stringify({ message }),
+    signal,
   });
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 300);
