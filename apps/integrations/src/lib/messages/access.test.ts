@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canReplyToMessage, canTouchReply, canViewMessage, resolveAudience } from './access';
+import {
+  addedAudience,
+  canReplyToMessage,
+  canTouchReply,
+  canViewMessage,
+  resolveAudience,
+} from './access';
 
 const message = {
   author_email: 'wes@pyre.test',
@@ -48,16 +54,16 @@ describe('canReplyToMessage / canTouchReply', () => {
   });
 });
 
-describe('resolveAudience', () => {
-  const rows = [
-    { email: 'Admin@pyre.test', active: true, is_admin: true, is_shift_lead: false },
-    { email: 'lead@pyre.test', active: true, is_admin: false, is_shift_lead: true },
-    { email: 'staff@pyre.test', active: true, is_admin: false, is_shift_lead: false },
-    { email: 'named@pyre.test', active: true, is_admin: false, is_shift_lead: false },
-    { email: 'left@pyre.test', active: false, is_admin: false, is_shift_lead: true },
-    { email: null, active: true, is_admin: false, is_shift_lead: true },
-  ];
+const rows = [
+  { email: 'Admin@pyre.test', active: true, is_admin: true, is_shift_lead: false },
+  { email: 'lead@pyre.test', active: true, is_admin: false, is_shift_lead: true },
+  { email: 'staff@pyre.test', active: true, is_admin: false, is_shift_lead: false },
+  { email: 'named@pyre.test', active: true, is_admin: false, is_shift_lead: false },
+  { email: 'left@pyre.test', active: false, is_admin: false, is_shift_lead: true },
+  { email: null, active: true, is_admin: false, is_shift_lead: true },
+];
 
+describe('resolveAudience', () => {
   it('unions roles and named people over active rows with an email', () => {
     expect(resolveAudience(rows, message)).toEqual([
       'admin@pyre.test',
@@ -71,5 +77,22 @@ describe('resolveAudience', () => {
       'admin@pyre.test',
       'lead@pyre.test',
     ]);
+  });
+});
+
+describe('addedAudience', () => {
+  it('lists only the people a widened audience newly reaches', () => {
+    const wider = { ...message, audience_roles: [...message.audience_roles, 'staff' as const] };
+    expect(addedAudience(rows, message, wider)).toEqual(['staff@pyre.test']);
+  });
+
+  it('counts a newly named person, and nobody when the audience narrows', () => {
+    const plusOne = {
+      ...message,
+      audience_emails: [...message.audience_emails, 'staff@pyre.test'],
+    };
+    expect(addedAudience(rows, message, plusOne)).toEqual(['staff@pyre.test']);
+    const narrower = { ...message, audience_roles: ['admin' as const], audience_emails: [] };
+    expect(addedAudience(rows, message, narrower)).toEqual([]);
   });
 });

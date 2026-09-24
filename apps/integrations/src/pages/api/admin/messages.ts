@@ -10,7 +10,10 @@
 //   POST { title, bodyMd, audienceRoles, audienceEmails, pinned? }
 //                              → { message, people, notified }
 //   PATCH { id, title?, bodyMd?, audienceRoles?, audienceEmails?, pinned?, archived? }
-//                              → { message, people }
+//                              → { message, people, notified }
+//
+// Posting notifies the whole audience; an edit that widens it notifies the
+// people it adds (lib/notifications/messages).
 //   DELETE ?id=<uuid>          → { ok: true }
 //
 // Opening one message marks the viewer's notifications about it read.
@@ -23,7 +26,7 @@ import { type AdminGate, assertSameOrigin, requireAdmin, requireStaff } from '@/
 import { type AdminMessageRow, getDb } from '@/lib/db';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
 import { BODY_MAX, normalizeBody, normalizeTitle, parseAudience } from '@/lib/messages/validate';
-import { notifyMessagePosted } from '@/lib/notifications/messages';
+import { notifyMessageAudienceWidened, notifyMessagePosted } from '@/lib/notifications/messages';
 import { deleteBySource, markSourceRead } from '@/lib/notifications/notify';
 import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
@@ -161,6 +164,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<AdminMessageRow> = {};
+  // The audience before this edit, when the edit touches it — whoever the
+  // new one adds is notified once the save lands.
+  let previousAudience: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'> | null = null;
   if (body.title !== undefined) {
     const title = normalizeTitle(body.title);
     if (!title) return json({ error: 'title must be non-empty (max 200 chars)' }, 400);
@@ -178,6 +184,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('id', id)
       .maybeSingle();
     if (!existing) return json({ error: 'Message not found' }, 404);
+    previousAudience = existing;
     const audience = await checkedAudience(
       body.audienceRoles ?? existing.audience_roles,
       body.audienceEmails ?? existing.audience_emails
@@ -207,7 +214,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
   if (!data) return json({ error: 'Message not found' }, 404);
   const message = data as AdminMessageRow;
-  return json({ message, people: await getPeopleNames([message.author_email, email]) });
+  const notified = previousAudience
+    ? await notifyMessageAudienceWidened(db, message, previousAudience, email)
+    : 0;
+  return json({
+    message,
+    people: await getPeopleNames([message.author_email, email]),
+    notified,
+  });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

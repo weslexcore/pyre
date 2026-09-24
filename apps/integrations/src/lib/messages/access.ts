@@ -65,3 +65,18 @@ export function resolveAudience(
   }
   return [...out];
 }
+
+/**
+ * Who an audience edit newly reaches: on the roster under `after` but not
+ * under `before`. Widening a message is how someone who never heard of it
+ * comes to see it, so these are the people its edit notifies — nobody who
+ * already had it gets a second ping.
+ */
+export function addedAudience(
+  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead'>[],
+  before: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>,
+  after: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>
+): string[] {
+  const had = new Set(resolveAudience(rows, before));
+  return resolveAudience(rows, after).filter((email) => !had.has(email));
+}
