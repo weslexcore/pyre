@@ -82,8 +82,20 @@ export function sanitizeQuestion(raw: string): string {
     .trim();
 }
 
-/** The message that carries one staff question into a knowledge session. */
-export function buildAskMessage(question: string, followUp = false): string {
+/**
+ * The message that carries one staff question into a knowledge session.
+ * `hint` is the pre-router's guess at the topic (lib/knowledge/route.ts); it
+ * adds one line after the question and only steers where the agent looks
+ * first — its tools and scope are unchanged.
+ */
+export function buildAskMessage(question: string, followUp = false, hint?: string): string {
+  const message = buildQuestionMessage(question, followUp);
+  return hint
+    ? `${message}\nLikely topic: ${hint}. (A routing guess only; search wherever the question needs.)`
+    : message;
+}
+
+function buildQuestionMessage(question: string, followUp: boolean): string {
   const lead = followUp
     ? 'The same staff member has a follow-up question. Answer it from the knowledge base per ' +
       'your instructions — search again rather than relying on what you found before if the ' +
