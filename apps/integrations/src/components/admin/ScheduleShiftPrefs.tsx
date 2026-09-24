@@ -169,7 +169,7 @@ export function ScheduleShiftPrefs({
   ) => (
     <input
       id={id}
-      className={`${inputClass} w-16`}
+      className={`${inputClass} w-20`}
       type="number"
       min={field.min}
       max={field.max}
