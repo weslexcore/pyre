@@ -42,4 +42,24 @@ describe('parseAssignmentFields duties', () => {
       duties: ['setup_a', 'host'],
     });
   });
+
+  it('accepts several duties from the same phase on one person', () => {
+    const catalog = [
+      ...DEFAULT_DUTY_CATALOG,
+      {
+        key: 'plunge_care',
+        label: 'Plunge Care',
+        detail: null,
+        phase: 'setup' as const,
+        side: null,
+        sessionDefault: null,
+        sopSlug: null,
+        sortOrder: 1.5,
+        archived: false,
+      },
+    ];
+    expect(parse({ duties: ['plunge_care', 'setup_b', 'setup_a'] }, catalog)).toEqual({
+      duties: ['setup_a', 'setup_b', 'plunge_care'],
+    });
+  });
 });

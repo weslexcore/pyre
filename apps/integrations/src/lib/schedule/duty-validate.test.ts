@@ -95,6 +95,11 @@ describe('normalizeDutyCreate', () => {
     ).toBe(true);
   });
 
+  it('adds any number of unsplit duties alongside the A/B halves of a phase', () => {
+    const result = normalizeDutyCreate({ label: 'Plunge Care', phase: 'setup' }, C);
+    expect(result).toMatchObject({ ok: true, value: { key: 'plunge_care', side: null } });
+  });
+
   it('keeps sides and in-session defaults to the set-up and break-down phases', () => {
     expect(normalizeDutyCreate({ label: 'X', phase: 'session', side: 'a' }, C)).toMatchObject({
       ok: false,

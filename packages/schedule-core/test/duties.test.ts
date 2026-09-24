@@ -237,4 +237,24 @@ describe("an admin-edited catalog", () => {
 			"breakdown_a",
 		]);
 	});
+
+	it("lets one person hold several duties in the same phase", () => {
+		const withPlunge: DutyCatalog = [
+			...C,
+			duty({ key: "plunge_care", phase: "setup", label: "Plunge Care", sortOrder: 1.5 }),
+		];
+		const held = toggleDuty(withPlunge, toggleDuty(withPlunge, [], "setup_a"), "plunge_care");
+		expect(held).toEqual(["setup_a", "plunge_care", "customer_care", "breakdown_a"]);
+		expect(formatDuties(withPlunge, held)).toBe(
+			"Set Up (A) · Plunge Care · Customer Care · Break Down (A)",
+		);
+		// An unsplit duty never reads as a letter mismatch.
+		expect(mismatchedDutyPairs(withPlunge, held)).toEqual([]);
+		// Taking it off leaves the half and its pair alone.
+		expect(toggleDuty(withPlunge, held, "plunge_care")).toEqual([
+			"setup_a",
+			"customer_care",
+			"breakdown_a",
+		]);
+	});
 });
