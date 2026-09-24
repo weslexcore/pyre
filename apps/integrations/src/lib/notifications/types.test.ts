@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   excerpt,
+  inCurrentWeek,
   isLive,
   isUnread,
   scheduleHref,
@@ -98,5 +99,27 @@ describe('schedule helpers', () => {
     expect(scheduleHref({ id: 's1', shift_date: '2026-09-20' })).toBe(
       '/admin/schedule?view=week&date=2026-09-20&shift=s1'
     );
+  });
+});
+
+describe('inCurrentWeek', () => {
+  // Wed 2026-09-16; its week runs Mon 9/14 – Sun 9/20.
+  const today = '2026-09-16';
+
+  it('covers Monday through Sunday of the week containing today', () => {
+    expect(inCurrentWeek('2026-09-14', today)).toBe(true);
+    expect(inCurrentWeek('2026-09-16', today)).toBe(true);
+    expect(inCurrentWeek('2026-09-20', today)).toBe(true);
+  });
+
+  it('leaves out next week and last week', () => {
+    expect(inCurrentWeek('2026-09-21', today)).toBe(false);
+    expect(inCurrentWeek('2026-09-13', today)).toBe(false);
+  });
+
+  it('starts a new week on Monday, not Sunday', () => {
+    expect(inCurrentWeek('2026-09-20', '2026-09-20')).toBe(true);
+    expect(inCurrentWeek('2026-09-21', '2026-09-20')).toBe(false);
+    expect(inCurrentWeek('2026-09-27', '2026-09-21')).toBe(true);
   });
 });

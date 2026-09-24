@@ -5,6 +5,8 @@
 //
 // Rules shared by every writer here: draft rows never notify (the accept
 // path does, once they go live); shifts already in the past never notify;
+// changes to a single shift or assignment notify only inside the current
+// week (later weeks reach people through the Monday shifts email);
 // the person who made the change never hears about it from themselves; and
 // a newer notice about the same shift replaces the stale unread one.
 
@@ -30,11 +32,16 @@ import {
   shiftChangeText,
   subRequestText,
 } from './text';
-import { scheduleHref, shiftNotificationExpiry } from './types';
+import { inCurrentWeek, scheduleHref, shiftNotificationExpiry } from './types';
 
 export interface ShiftForNotice extends ShiftLike {
   id: string;
   is_draft?: boolean;
+}
+
+/** Outside the current week — too far out to interrupt anyone about. */
+function beyondThisWeek(shift: { shift_date: string }): boolean {
+  return !inCurrentWeek(shift.shift_date, todayEastern());
 }
 
 function inPast(shift: { shift_date: string }): boolean {
@@ -62,7 +69,14 @@ export async function notifyAssignmentChange(
     actorEmail: string | null;
   }
 ): Promise<void> {
-  if (input.shift.is_draft || input.assignment?.is_draft || inPast(input.shift)) return;
+  if (
+    input.shift.is_draft ||
+    input.assignment?.is_draft ||
+    inPast(input.shift) ||
+    beyondThisWeek(input.shift)
+  ) {
+    return;
+  }
   const rows = (await listStaff()) ?? [];
   const person = rosterById(rows).get(input.staffId);
   const email = (person?.email ?? '').trim().toLowerCase();
@@ -97,7 +111,14 @@ export async function notifyShiftChange(
     actorEmail: string | null;
   }
 ): Promise<void> {
-  if (input.shift.is_draft || inPast(input.shift) || input.staffIds.length === 0) return;
+  if (
+    input.shift.is_draft ||
+    inPast(input.shift) ||
+    beyondThisWeek(input.shift) ||
+    input.staffIds.length === 0
+  ) {
+    return;
+  }
   const rows = (await listStaff()) ?? [];
   const byId = rosterById(rows);
   const emails = input.staffIds
