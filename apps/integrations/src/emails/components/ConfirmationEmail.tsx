@@ -133,6 +133,15 @@ export function ConfirmationEmail({
         Hi {firstName}, you're all set for {sessionTitle}.
       </Text>
 
+      <Text style={text}>{content.introBody}</Text>
+
+      <Text style={{...text, ...valueBoldStyle}}>
+        Need to add someone to your reservation, change your time slot or cancel? Just reply to this email. <br /> <br />
+        </Text>
+        <Text style={{...text, marginBottom: '24px', fontStyle: 'italic'}}>
+          Cancel at least 2 hours before your start time and your credits go straight back to your account.
+      </Text>
+
       <Section style={detailsSection}>
         <Text style={labelStyle}>When</Text>
         <Text style={bigValueStyle}>{dateLabel}</Text>
@@ -178,12 +187,6 @@ export function ConfirmationEmail({
           </>
         )}
       </Section>
-
-      <Text style={text}>{content.introBody}</Text>
-      <Text style={{...text, ...valueBoldStyle}}>
-        Need to change or cancel? Just reply to this email. Cancel at least 2 hours before your
-        start time and your credits go straight back to your account.
-      </Text>
 
       {imageUrl && <Img src={imageUrl} width="512" alt="" style={sessionImage} />}
 

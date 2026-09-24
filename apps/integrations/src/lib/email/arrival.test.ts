@@ -14,15 +14,15 @@ describe('buildArrivalLabel', () => {
 
   it('gives drop-in sessions the first hour as an arrival window', () => {
     expect(buildArrivalLabel('late', START, END)).toBe(
-      'Arrive anytime between 10:00 AM and 11:00 AM to check in and get changed.'
+      'Arrive anytime between 10:00 AM and 10:30 AM to check in and get changed.'
     );
   });
 
   it('caps the drop-in window at the end of a short session', () => {
     const shortEnd = '2026-06-20T14:45:00.000Z';
     expect(buildArrivalLabel('late', START, shortEnd)).toBe(
-      'Arrive anytime between 10:00 AM and 10:45 AM to check in and get changed.'
-    );
+      'Arrive anytime between 10:00 AM and 10:30 AM to check in and get changed.'
+    );  
   });
 
   it('tells the last one-hour slot of the day to arrive at the start', () => {
@@ -40,7 +40,7 @@ describe('buildArrivalLabel', () => {
       buildArrivalLabel('late', '2026-06-20T18:00:00.000Z', '2026-06-20T20:00:00.000Z', {
         lastOfDay: true,
       })
-    ).toBe('Arrive anytime between 2:00 PM and 3:00 PM to check in and get changed.');
+    ).toBe('Arrive anytime between 2:00 PM and 2:30 PM to check in and get changed.');
     // 2:30–4:00 PM EDT: the cutoff (3:00) wins over the first hour (3:30).
     expect(
       buildArrivalLabel('late', '2026-06-20T18:30:00.000Z', '2026-06-20T20:00:00.000Z', {

@@ -5,7 +5,7 @@
 //   early - facilitated sessions (guided, classes, sound baths, events) start
 //           together, so guests should be checked in before the start time.
 //   late  - drop-in sessions (open hours, social) have a rolling arrival
-//           window: anytime in the first hour is fine — except that last
+//           window: anytime in the first 30 minutes is fine — except that last
 //           entry is an hour before closing, so on the last slot of the day
 //           the window closes an hour before the session ends (which, for a
 //           one-hour last slot, means "be here at the start").
@@ -15,7 +15,7 @@ import { formatClockTime } from '@/lib/momence-events';
 export type ArrivalPolicy = 'early' | 'late';
 
 const EARLY_MINUTES = 15;
-const LATE_WINDOW_MINUTES = 60;
+const LATE_WINDOW_MINUTES = 30; // minutes  
 
 const LAST_ENTRY_BEFORE_CLOSE_MINUTES = 60;
 
