@@ -224,21 +224,26 @@ export function ScheduleHours() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="date"
-          className={inputClass}
-          value={start}
-          onChange={(e) => e.target.value && setStart(e.target.value)}
-          aria-label="From"
-        />
-        <span className="font-mono text-xs text-white/40">to</span>
-        <input
-          type="date"
-          className={inputClass}
-          value={end}
-          onChange={(e) => e.target.value && setEnd(e.target.value)}
-          aria-label="To"
-        />
+        {/* The range stays on one line even when the toolbar wraps. */}
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+          <input
+            type="date"
+            className={`${inputClass} min-w-0 flex-1`}
+            value={start}
+            onChange={(e) => e.target.value && setStart(e.target.value)}
+            aria-label="From"
+          />
+          <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-white/40">
+            to
+          </span>
+          <input
+            type="date"
+            className={`${inputClass} min-w-0 flex-1`}
+            value={end}
+            onChange={(e) => e.target.value && setEnd(e.target.value)}
+            aria-label="To"
+          />
+        </div>
         <button
           type="button"
           className={`${buttonClass} ${byPeriod ? 'border-white/40 text-white' : ''}`}
