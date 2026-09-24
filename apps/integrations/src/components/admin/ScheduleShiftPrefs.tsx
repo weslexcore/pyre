@@ -59,7 +59,7 @@ const FIELDS: Array<{
 ];
 
 const EXPLAINER =
-  'The AI drafter aims for the preferred number of shifts, tries to reach the minimum, and never goes past the maximum. The hours target drives the Insights consistency flags. Leave any of them blank for no preference.';
+  'When scheduling we will try to hit your preferred number of shifts and not go past the maximum. Leave any of them blank for no preference.';
 
 async function readError(res: Response): Promise<string> {
   try {
