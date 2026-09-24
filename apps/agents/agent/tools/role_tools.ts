@@ -1,9 +1,10 @@
 // The model's tool set, resolved per session from its role (lib/role.ts):
 // scheduler sessions get the drafting tools, knowledge sessions get the
-// read-only knowledge-base tools, and neither sees the other's. Keeping both
-// sets dynamic (rather than authoring the scheduler's statically) is what
-// keeps save_proposal — the one write path in this app — out of reach of a
-// staff member's question.
+// read-only knowledge-base tools, classifier sessions get only
+// save_classification, and none sees another's. Keeping every set dynamic
+// (rather than authoring the scheduler's statically) is what keeps
+// save_proposal — the scheduler's write path — out of reach of a staff
+// member's question or of note text being classified.
 //
 // Each execute re-derives the scope from the session's auth rather than
 // closing over it, so the tools behave the same on replay as on the first
@@ -28,6 +29,7 @@
 
 import { defineDynamic, defineTool } from 'eve/tools';
 import { z } from 'zod';
+import { saveClassificationTool } from '../lib/classifier/save-classification';
 import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs';
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
@@ -49,7 +51,19 @@ function scopeOf(ctx: { session?: { auth?: Parameters<typeof resolveRole>[0] } }
 export default defineDynamic({
   events: {
     'turn.started': (_event, ctx) => {
-      if (resolveRole(ctx.session.auth).role !== 'knowledge') {
+      const { role } = resolveRole(ctx.session.auth);
+      if (role === 'classifier') {
+        return {
+          save_classification: defineTool({
+            description: saveClassificationTool.description,
+            inputSchema: saveClassificationTool.inputSchema,
+            execute(input, ctx) {
+              return saveClassificationTool.execute(input, ctx);
+            },
+          }),
+        };
+      }
+      if (role === 'scheduler') {
         return {
           get_week_context: defineTool({
             description: getWeekContextTool.description,

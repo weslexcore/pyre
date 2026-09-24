@@ -18,7 +18,15 @@
 // replies back. Replies show to whoever sees the note; an admin can mark one
 // private, which keeps it among the admins (the server never sends those to
 // anyone else).
+//
+// For admins, each note also shows what the pyre-agents classifier found in
+// it — actions to take, questions to answer, records to update, feedback,
+// safety concerns (Signals.tsx, lib/classify) — and the log can be filtered
+// by them. A new note is read within seconds of being written; an edit to
+// its text is read again.
+import type { SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClassificationView } from '@/lib/classify/view';
 import type {
   ShiftNoteAttachmentRow,
   ShiftNoteReplyRow,
@@ -55,6 +63,7 @@ import {
   uploadWithProgress,
 } from './ShiftNoteComposer';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
+import { hasSignal, SignalChips, SignalFilter, useClassifications } from './Signals';
 
 const selectClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
@@ -168,6 +177,12 @@ export function ShiftNotes() {
   // Filters.
   const [personFilter, setPersonFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
+  const [signalFilter, setSignalFilter] = useState<'all' | SignalType>('all');
+
+  // What the classifier found per note — admins only; the server sends
+  // nothing to anyone else, and this fetches nothing for them.
+  const signals = useClassifications('shift_note', viewer.isAdmin);
+  const { reset: resetSignals, merge: mergeSignals, remove: removeSignals } = signals;
   const [query, setQuery] = useState('');
 
   // Arriving from the global search: ?q= seeds the filter and #note-<id>
@@ -193,8 +208,10 @@ export function ShiftNotes() {
         people?: PeopleNames;
         viewer?: Viewer;
         scope?: Scope;
+        classifications?: Record<string, ClassificationView>;
       };
       setNotes(data.notes);
+      resetSignals(data.classifications);
       setAttachments(data.attachments ?? {});
       setReplies(data.replies ?? {});
       setNames(data.people ?? {});
@@ -205,7 +222,7 @@ export function ShiftNotes() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetSignals]);
 
   useEffect(() => {
     void load();
@@ -234,13 +251,19 @@ export function ShiftNotes() {
   // modal — is announced on the document; fold it into the log.
   useEffect(() => {
     const onCreated = (event: Event) => {
-      const { note, attachments: added, people } = (event as CustomEvent<CreatedShiftNote>).detail;
+      const {
+        note,
+        attachments: added,
+        people,
+        classification,
+      } = (event as CustomEvent<CreatedShiftNote>).detail;
       mergeNote(note, people);
+      mergeSignals(note.id, classification);
       if (added.length > 0) setAttachments((prev) => ({ ...prev, [note.id]: added }));
     };
     document.addEventListener(SHIFT_NOTE_CREATED_EVENT, onCreated);
     return () => document.removeEventListener(SHIFT_NOTE_CREATED_EVENT, onCreated);
-  }, [mergeNote]);
+  }, [mergeNote, mergeSignals]);
 
   /** Add media to an existing note (author-or-admin, re-checked server-side). */
   const attachTo = async (noteId: string, list: FileList | null) => {
@@ -332,8 +355,13 @@ export function ShiftNotes() {
         body: JSON.stringify({ id: editId, noteDate: editDate, body: editBody }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { note: ShiftNoteRow; people: PeopleNames };
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        people: PeopleNames;
+        classification?: ClassificationView;
+      };
       mergeNote(data.note, data.people);
+      mergeSignals(data.note.id, data.classification);
       setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the note');
@@ -363,6 +391,7 @@ export function ShiftNotes() {
         const { [note.id]: _gone, ...rest } = prev;
         return rest;
       });
+      removeSignals(note.id);
       if (editId === note.id) setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete the note');
@@ -514,11 +543,14 @@ export function ShiftNotes() {
         return false;
       }
       if (statusFilter !== 'all' && note.status !== statusFilter) return false;
+      if (signalFilter !== 'all' && !hasSignal(signals.classifications[note.id], signalFilter)) {
+        return false;
+      }
       // Same matcher as the highlight, so what filters is what marks.
       if (term && !matchesTerm(note.body, term)) return false;
       return true;
     });
-  }, [notes, personFilter, statusFilter, term, scope]);
+  }, [notes, personFilter, statusFilter, signalFilter, signals.classifications, term, scope]);
 
   // The lightbox browses one note's photos and videos (PDFs open in a tab).
   const viewable = useCallback(
@@ -563,9 +595,9 @@ export function ShiftNotes() {
           {notice}
         </p>
       )}
-      {error && (
+      {(error ?? signals.error) && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
+          {error ?? signals.error}
         </p>
       )}
 
@@ -603,6 +635,9 @@ export function ShiftNotes() {
               ))}
             </select>
           </label>
+          {viewer.isAdmin && (
+            <SignalFilter className={selectClass} value={signalFilter} onChange={setSignalFilter} />
+          )}
           <input
             type="search"
             className={`${inputClass} min-w-48 flex-1`}
@@ -738,9 +773,18 @@ export function ShiftNotes() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                  <MarkedBody text={note.body} term={term} />
-                </p>
+                <>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
+                    <MarkedBody text={note.body} term={term} />
+                  </p>
+                  {viewer.isAdmin && (
+                    <SignalChips
+                      classification={signals.classifications[note.id]}
+                      onRerun={() => void signals.rerun(note.id)}
+                      busy={signals.rerunning === note.id}
+                    />
+                  )}
+                </>
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">

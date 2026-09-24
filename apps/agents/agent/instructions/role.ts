@@ -1,10 +1,11 @@
-// Per-session system prompt: the scheduler's or the knowledge assistant's,
-// chosen from the session's auth attributes (see lib/role.ts). Resolved at
+// Per-session system prompt: the scheduler's, the knowledge assistant's, or
+// the classifier's, chosen from the session's auth attributes (see lib/role.ts). Resolved at
 // session start and re-checked each turn; the initiator decides, so a
 // follow-up can never switch a conversation to the other role.
 
 import { utcToEastern } from '@pyre/schedule-core';
 import { defineDynamic, defineInstructions } from 'eve/instructions';
+import { classifierInstructions } from '../lib/prompts/classifier';
 import { knowledgeInstructionsFor } from '../lib/prompts/knowledge';
 import { schedulerInstructionsWith } from '../lib/prompts/scheduler';
 import { loadStandingInstructions } from '../lib/prompts/standing';
@@ -12,6 +13,7 @@ import { resolveRole } from '../lib/role';
 
 async function instructionsFor(auth: Parameters<typeof resolveRole>[0]) {
   const { role } = resolveRole(auth);
+  if (role === 'classifier') return defineInstructions({ markdown: classifierInstructions() });
   // The knowledge prompt carries today's date (Eastern) for schedule
   // questions; it is re-resolved each turn, so a conversation that crosses
   // midnight picks up the new day.

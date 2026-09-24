@@ -393,6 +393,28 @@ export interface ShiftNoteAttachmentRow {
   created_at: string;
 }
 
+// What the pyre-agents classifier found in a record's text (see the
+// content_classifications migration and src/lib/classify). One row per
+// classified record; `signals` is validated against @pyre/signals-core.
+export interface ContentClassificationRow {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  status: ContentClassificationStatus;
+  /** Raw jsonb; read it through readStoredSignals(). */
+  signals: unknown;
+  request_id: string;
+  content_hash: string;
+  agent_session_id: string | null;
+  error: string | null;
+  requested_at: string;
+  classified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ContentClassificationStatus = 'pending' | 'done' | 'failed';
+
 // An admin-authored markdown message to staff (see the staff notifications
 // migration). Audience semantics — roles as a set plus named people, admins
 // always included — live in lib/messages/access.ts.
