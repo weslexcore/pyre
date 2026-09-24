@@ -50,14 +50,16 @@ export interface StaffRow {
 	 */
 	pay_rate: number | null;
 	/**
-	 * Desired scheduled hours per week; null = no target set. Like pay_rate,
-	 * redacted (nulled) for viewers who are neither admin nor the row's owner.
+	 * Desired scheduled hours per week; null = no target set. Set on the
+	 * schedule's Hours tab by the person or a schedule manager, and redacted
+	 * (nulled) for viewers who are neither a schedule manager nor the owner.
 	 */
 	target_hours_per_week: number | null;
 	/**
 	 * Shifts-per-week preferences (one assignment = one shift); null = unset.
 	 * min <= preferred <= max where set. The AI drafter aims at preferred,
-	 * tries to reach min, and may not exceed max. Redacted like pay_rate.
+	 * tries to reach min, and may not exceed max. Set and redacted like
+	 * target_hours_per_week.
 	 */
 	min_shifts_per_week: number | null;
 	preferred_shifts_per_week: number | null;

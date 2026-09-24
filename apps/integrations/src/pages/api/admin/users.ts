@@ -1,7 +1,9 @@
 // People management for /admin/users: list, add, edit, and remove `staff`
 // rows — one row per person, covering both dashboard access (is_admin, pages)
-// and the scheduling roster (display_name, is_founder, active). Admin-only on
-// every method, CSRF-guarded on mutations.
+// and the scheduling roster (display_name, is_founder, active), plus pay rate.
+// Admin-only on every method, CSRF-guarded on mutations. Scheduling
+// preferences (target hours, shifts per week) are set from the Hours tab via
+// /api/admin/staff-preferences instead.
 //
 // Guards: an admin can't demote, unlink, or delete themselves; the last admin
 // row can't be demoted or deleted; and access can't be granted to a row with
@@ -60,48 +62,6 @@ function parsePayRate(value: unknown): number | Response {
     return json({ error: 'Pay rate must be a number between 0 and 9999.99' }, 400);
   }
   return Math.round(rate * 100) / 100;
-}
-
-/** Hours/week target: null clears; else finite, >0–168, tenth-hour steps. */
-function parseTargetHours(value: unknown): number | null | Response {
-  if (value === null) return null;
-  const hours = typeof value === 'number' ? value : Number(String(value));
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 168) {
-    return json({ error: 'Target hours must be between 0 and 168 (or empty for no target)' }, 400);
-  }
-  return Math.round(hours * 10) / 10;
-}
-
-type ShiftPrefField = 'min_shifts_per_week' | 'preferred_shifts_per_week' | 'max_shifts_per_week';
-
-/** The body keys for the shifts-per-week preferences, with their columns. */
-const SHIFT_PREF_FIELDS: Array<{
-  key: string;
-  column: ShiftPrefField;
-  label: string;
-  min: number;
-}> = [
-  { key: 'minShifts', column: 'min_shifts_per_week', label: 'Minimum shifts', min: 0 },
-  {
-    key: 'preferredShifts',
-    column: 'preferred_shifts_per_week',
-    label: 'Preferred shifts',
-    min: 1,
-  },
-  { key: 'maxShifts', column: 'max_shifts_per_week', label: 'Maximum shifts', min: 1 },
-];
-
-/** Shifts/week bound: null clears; else a whole number, `min`–14. */
-function parseShiftCount(value: unknown, label: string, min: number): number | null | Response {
-  if (value === null) return null;
-  const count = typeof value === 'number' ? value : Number(String(value));
-  if (!Number.isInteger(count) || count < min || count > 14) {
-    return json(
-      { error: `${label} must be a whole number from ${min} to 14 (or empty for none)` },
-      400
-    );
-  }
-  return count;
 }
 
 /**
@@ -336,8 +296,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'active'
       | 'momence_member_id'
       | 'pay_rate'
-      | 'target_hours_per_week'
-      | ShiftPrefField
     >
   > = {};
   let momenceMatch: boolean | undefined;
@@ -393,36 +351,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     const payRate = parsePayRate(body.payRate);
     if (payRate instanceof Response) return payRate;
     fields.pay_rate = payRate;
-  }
-
-  // Explicit null clears the target (no target set).
-  if (body.targetHours !== undefined) {
-    const target = parseTargetHours(body.targetHours);
-    if (target instanceof Response) return target;
-    fields.target_hours_per_week = target;
-  }
-
-  // Shifts/week bounds, each independently clearable with null. Ordering is
-  // checked against the row as it will be, so editing one bound can't slip
-  // past another that was saved earlier (the table's check would reject it
-  // anyway, with a less useful message).
-  for (const { key, column, label, min } of SHIFT_PREF_FIELDS) {
-    if (body[key] === undefined) continue;
-    const count = parseShiftCount(body[key], label, min);
-    if (count instanceof Response) return count;
-    fields[column] = count;
-  }
-  const bound = (column: ShiftPrefField) =>
-    fields[column] !== undefined ? fields[column] : row[column];
-  const [minShifts, preferredShifts, maxShifts] = SHIFT_PREF_FIELDS.map((f) => bound(f.column));
-  const outOfOrder = (low: number | null | undefined, high: number | null | undefined) =>
-    low != null && high != null && low > high;
-  if (
-    outOfOrder(minShifts, preferredShifts) ||
-    outOfOrder(preferredShifts, maxShifts) ||
-    outOfOrder(minShifts, maxShifts)
-  ) {
-    return json({ error: 'Shifts per week must read minimum ≤ preferred ≤ maximum' }, 400);
   }
 
   if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);

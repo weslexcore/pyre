@@ -1,13 +1,16 @@
-// People manager for /admin/users: one row per person, covering dashboard
-// access (admin / per-page grants) and the scheduling roster (founder,
-// available to schedule) — these used to be two pages against two tables.
-// The API enforces the real guards (admin-only, last-admin/self protection,
-// access needs an email); this island just mirrors them in the UI.
+// People manager for /admin/users: one row per person, covering pay, roles
+// (admin, founder, shift lead, available to schedule), and dashboard access
+// (per-page grants). Each person is a one-line summary that expands into an
+// editor, one at a time. Scheduling preferences (hours target, shifts per
+// week) live on the schedule's Hours tab, not here. The API enforces the real
+// guards (admin-only, last-admin/self protection, access needs an email);
+// this island just mirrors them in the UI.
 import { weekStartOf } from '@pyre/schedule-core';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
+  ADMIN_TOOL_SECTIONS,
   ADMIN_TOOLS,
   BOARDS_HREF,
   GUESTS_MANAGE,
@@ -55,33 +58,13 @@ interface PersonDraft {
   name: string;
   email: string;
   payRate: string;
-  targetHours: string;
-  minShifts: string;
-  preferredShifts: string;
-  maxShifts: string;
 }
 
 const draftFor = (s: StaffRow): PersonDraft => ({
   name: s.display_name,
   email: s.email ?? '',
   payRate: String(s.pay_rate ?? ''),
-  targetHours: String(s.target_hours_per_week ?? ''),
-  minShifts: String(s.min_shifts_per_week ?? ''),
-  preferredShifts: String(s.preferred_shifts_per_week ?? ''),
-  maxShifts: String(s.max_shifts_per_week ?? ''),
 });
-
-/** The shifts/week inputs, in reading order; keys match the PATCH body. */
-const SHIFT_PREF_INPUTS: Array<{
-  key: 'minShifts' | 'preferredShifts' | 'maxShifts';
-  placeholder: string;
-  label: string;
-  min: number;
-}> = [
-  { key: 'minShifts', placeholder: 'min', label: 'minimum', min: 0 },
-  { key: 'preferredShifts', placeholder: 'pref', label: 'preferred', min: 1 },
-  { key: 'maxShifts', placeholder: 'max', label: 'maximum', min: 1 },
-];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -379,6 +362,18 @@ function PersonStipends({
   );
 }
 
+/** Titled block inside an open person editor. */
+function EditorSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest text-white/35">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 function PagePicker({
   pages,
   boards,
@@ -391,76 +386,210 @@ function PagePicker({
   disabled: boolean;
   onChange: (next: string[]) => void;
 }) {
-  const toggle = (key: string, granted: boolean) => {
-    let next = granted ? [...pages, key] : pages.filter((p) => p !== key);
-    // Dropping a page drops its manage capability with it, so a revoked page
-    // can't leave a dangling privilege behind.
-    const capability = MANAGE_CAPABILITIES[key];
-    if (capability && !granted) next = next.filter((p) => p !== capability.key);
-    // The Boards page is every board; ticking it makes the per-board grants
-    // redundant, so they come off rather than lingering as dead keys nobody
-    // would think to untick later.
-    if (key === BOARDS_HREF && granted) next = next.filter((p) => !isBoardGrantKey(p));
+  // Dropping a page drops its manage capability with it, so a revoked page
+  // can't leave a dangling privilege behind. The Boards page is every board,
+  // so granting it clears the per-board grants rather than leaving dead keys
+  // nobody would think to untick later.
+  const apply = (grant: string[], revoke: string[]) => {
+    const revoked = new Set(revoke);
+    for (const key of revoke) {
+      const capability = MANAGE_CAPABILITIES[key];
+      if (capability) revoked.add(capability.key);
+    }
+    let next = [...pages.filter((p) => !revoked.has(p)), ...grant];
+    if (grant.includes(BOARDS_HREF)) next = next.filter((p) => !isBoardGrantKey(p));
     onChange([...new Set(next)]);
   };
+  const toggle = (key: string, granted: boolean) => (granted ? apply([key], []) : apply([], [key]));
 
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {ADMIN_TOOLS.map((tool) => {
-        const capability = MANAGE_CAPABILITIES[tool.href];
-        // One checkbox per board under Boards, so a community manager can be
-        // given the rental pipeline and nothing else. Hidden once the whole
-        // page is granted — that already covers every board.
-        const perBoard =
-          tool.href === BOARDS_HREF && boards.length > 0 && !pages.includes(BOARDS_HREF)
-            ? boards
-            : [];
+    <div className="space-y-4">
+      {ADMIN_TOOL_SECTIONS.map((section) => {
+        const tools = ADMIN_TOOLS.filter((tool) => tool.section === section.key);
+        if (tools.length === 0) return null;
+        const hrefs = tools.map((tool) => tool.href);
+        const granted = hrefs.filter((href) => pages.includes(href)).length;
+        const hasBoards = hrefs.includes(BOARDS_HREF);
         return (
-          <span key={tool.href} className="flex items-center gap-2">
-            <label className={checkClass}>
-              <input
-                type="checkbox"
-                checked={pages.includes(tool.href)}
-                disabled={disabled}
-                onChange={(e) => toggle(tool.href, e.target.checked)}
-              />
-              {tool.navLabel}
-            </label>
-            {capability && pages.includes(tool.href) && (
-              <label
-                className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
-                title={capability.hint}
-              >
-                <input
-                  type="checkbox"
-                  checked={pages.includes(capability.key)}
-                  disabled={disabled}
-                  onChange={(e) => toggle(capability.key, e.target.checked)}
-                />
-                manage
-              </label>
-            )}
-            {perBoard.map((board) => (
-              <label
-                key={board.grantKey}
-                className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
-                title={`Opens only the ${board.name} board`}
-              >
-                <input
-                  type="checkbox"
-                  checked={pages.includes(board.grantKey)}
-                  disabled={disabled}
-                  onChange={(e) => toggle(board.grantKey, e.target.checked)}
-                />
-                {board.slug}
-              </label>
-            ))}
-          </span>
+          <div key={section.key} className="space-y-1.5">
+            <div className="flex items-center gap-3 border-b border-white/5 pb-1">
+              <span className="font-mono text-xs text-white/60">{section.label}</span>
+              <span className="font-mono text-[10px] text-white/30">
+                {granted}/{tools.length}
+              </span>
+              <span className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  className="font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white disabled:opacity-40"
+                  disabled={disabled || granted === tools.length}
+                  onClick={() => apply(hrefs, [])}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className="font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white disabled:opacity-40"
+                  disabled={
+                    disabled || (granted === 0 && !(hasBoards && pages.some(isBoardGrantKey)))
+                  }
+                  onClick={() =>
+                    apply([], [...hrefs, ...(hasBoards ? pages.filter(isBoardGrantKey) : [])])
+                  }
+                >
+                  None
+                </button>
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {tools.map((tool) => {
+                const on = pages.includes(tool.href);
+                const capability = MANAGE_CAPABILITIES[tool.href];
+                // One checkbox per board under Boards, so a community manager
+                // can be given the rental pipeline and nothing else. Hidden
+                // once the whole page is granted — that covers every board.
+                const perBoard = tool.href === BOARDS_HREF && !on ? boards : [];
+                return (
+                  <div key={tool.href} className="space-y-1">
+                    <label className={checkClass} title={tool.description}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={disabled}
+                        onChange={(e) => toggle(tool.href, e.target.checked)}
+                      />
+                      <span className={on ? 'text-[var(--pyre-creme)]' : ''}>{tool.navLabel}</span>
+                    </label>
+                    {capability && on && (
+                      <label
+                        className="ml-5 flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
+                        title={capability.hint}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pages.includes(capability.key)}
+                          disabled={disabled}
+                          onChange={(e) => toggle(capability.key, e.target.checked)}
+                        />
+                        can manage
+                      </label>
+                    )}
+                    {perBoard.length > 0 && (
+                      <div className="ml-5 space-y-1">
+                        <p className="font-mono text-[10px] text-white/30">or only these boards:</p>
+                        {perBoard.map((board) => (
+                          <label
+                            key={board.grantKey}
+                            className="flex items-center gap-1.5 font-mono text-xs text-[var(--pyre-gold)]"
+                            title={`Opens only the ${board.name} board`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={pages.includes(board.grantKey)}
+                              disabled={disabled}
+                              onChange={(e) => toggle(board.grantKey, e.target.checked)}
+                            />
+                            {board.name}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </div>
   );
 }
+
+interface Roles {
+  isAdmin: boolean;
+  isFounder: boolean;
+  isShiftLead: boolean;
+  active: boolean;
+}
+
+const ROLE_OPTIONS: Array<{ key: keyof Roles; label: string; hint: string }> = [
+  { key: 'isAdmin', label: 'Admin', hint: 'Sees every page, and manages this list and pay.' },
+  {
+    key: 'active',
+    label: 'Available to schedule',
+    hint: 'Can be assigned shifts, and can open Shift Notes (their own notes only). Turn off when someone leaves: their past shifts and hours stay, and they lose access.',
+  },
+  {
+    key: 'isShiftLead',
+    label: 'Shift lead',
+    hint: 'Can anchor a shift. Anyone who is not a shift lead or founder must be scheduled alongside one.',
+  },
+  {
+    key: 'isFounder',
+    label: 'Founder',
+    hint: 'Counts toward the % founders metric on the hours report.',
+  },
+];
+
+function RoleToggles({
+  roles,
+  disabled,
+  lockAdmin,
+  onChange,
+}: {
+  roles: Roles;
+  disabled: boolean;
+  /** Your own admin box: you can't demote yourself. */
+  lockAdmin?: boolean;
+  onChange: (key: keyof Roles, value: boolean) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {ROLE_OPTIONS.map(({ key, label, hint }) => (
+        <label
+          key={key}
+          className={`flex items-start gap-2 rounded border px-3 py-2 transition-colors ${
+            roles[key] ? 'border-white/25 bg-white/[0.05]' : 'border-white/10'
+          }`}
+        >
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={roles[key]}
+            disabled={disabled || (key === 'isAdmin' && lockAdmin)}
+            onChange={(e) => onChange(key, e.target.checked)}
+          />
+          <span>
+            <span className="block font-mono text-xs text-[var(--pyre-creme)]">{label}</span>
+            <span className="block text-xs text-white/40">{hint}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+const chipClass =
+  'rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/50';
+
+/** One-line access summary for a collapsed row. */
+function accessLabel(person: StaffRow): string {
+  if (person.is_admin) return 'Admin';
+  const pages = person.pages.filter((p) => ADMIN_TOOLS.some((t) => t.href === p)).length;
+  const boards = person.pages.filter(isBoardGrantKey).length;
+  const parts = [
+    pages > 0 ? `${pages} page${pages === 1 ? '' : 's'}` : '',
+    boards > 0 ? `${boards} board${boards === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' + ') : 'No access';
+}
+
+const isFormer = (person: StaffRow): boolean =>
+  !person.active && !person.is_admin && person.pages.length === 0;
+
+const fmtRate = (rate: number | null): string =>
+  rate == null
+    ? ''
+    : `$${Number.isInteger(Number(rate)) ? Number(rate) : Number(rate).toFixed(2)}/hr`;
 
 export function UsersManager() {
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -475,18 +604,25 @@ export function UsersManager() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Name/email/rate/target edits are typed before they're saved, so they live
-  // here until the row's Save button goes.
+  // Which person's editor is open ('new' = the add form); one at a time.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [showFormer, setShowFormer] = useState(false);
+
+  // Name/email/rate edits are typed before they're saved, so they live here
+  // until the row's Save button goes.
   const [drafts, setDrafts] = useState<Record<string, PersonDraft>>({});
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newIsAdmin, setNewIsAdmin] = useState(false);
-  const [newIsFounder, setNewIsFounder] = useState(false);
-  const [newIsShiftLead, setNewIsShiftLead] = useState(false);
-  const [newActive, setNewActive] = useState(true);
   // Blank = let the API default apply (20, or 0 for founders).
   const [newPayRate, setNewPayRate] = useState('');
+  const [newRoles, setNewRoles] = useState<Roles>({
+    isAdmin: false,
+    isFounder: false,
+    isShiftLead: false,
+    active: true,
+  });
   // Employee default: view the schedule, manage their own blackout dates.
   const [newPages, setNewPages] = useState<string[]>(['/admin/schedule']);
 
@@ -552,10 +688,13 @@ export function UsersManager() {
     });
     if (!res.ok) {
       setError(await readError(res));
-    } else if (((await res.json()) as { deactivated: boolean }).deactivated) {
-      setNotice(
-        `${person.display_name} has shifts or time off on record, so they were taken off the schedule and had their access removed instead of being deleted.`
-      );
+    } else {
+      setOpenId(null);
+      if (((await res.json()) as { deactivated: boolean }).deactivated) {
+        setNotice(
+          `${person.display_name} has shifts or time off on record, so they were taken off the schedule and had their access removed instead of being deleted.`
+        );
+      }
     }
     invalidateJson('/api/admin/schedule-board');
     await load();
@@ -596,6 +735,14 @@ export function UsersManager() {
     setBusy(false);
   };
 
+  const resetNew = () => {
+    setNewName('');
+    setNewEmail('');
+    setNewPayRate('');
+    setNewRoles({ isAdmin: false, isFounder: false, isShiftLead: false, active: true });
+    setNewPages(['/admin/schedule']);
+  };
+
   const addPerson = async () => {
     setBusy(true);
     setError(null);
@@ -603,275 +750,353 @@ export function UsersManager() {
     const person = await create({
       displayName: newName.trim(),
       email: newEmail.trim(),
-      isAdmin: newIsAdmin,
-      pages: newIsAdmin ? [] : newPages,
-      isFounder: newIsFounder,
-      isShiftLead: newIsShiftLead,
-      active: newActive,
+      isAdmin: newRoles.isAdmin,
+      pages: newRoles.isAdmin ? [] : newPages,
+      isFounder: newRoles.isFounder,
+      isShiftLead: newRoles.isShiftLead,
+      active: newRoles.active,
       ...(newPayRate.trim() !== '' ? { payRate: Number(newPayRate) } : {}),
     });
     if (person) {
-      setNewName('');
-      setNewEmail('');
-      setNewIsAdmin(false);
-      setNewIsFounder(false);
-      setNewIsShiftLead(false);
-      setNewActive(true);
-      setNewPages(['/admin/schedule']);
-      setNewPayRate('');
+      resetNew();
+      setOpenId(person.id);
     }
     invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
   };
 
+  const visible = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    return staff.filter(
+      (person) =>
+        (showFormer || !isFormer(person) || person.id === openId) &&
+        (!needle ||
+          person.display_name.toLowerCase().includes(needle) ||
+          (person.email ?? '').includes(needle))
+    );
+  }, [staff, filter, showFormer, openId]);
+
   if (loading && staff.length === 0) {
     return <p className="font-mono text-sm text-white/40">Loading…</p>;
   }
 
+  const formerCount = staff.filter(isFormer).length;
   const trimmedNewEmail = newEmail.trim();
-  const grantsAccess = newIsAdmin || newPages.length > 0;
+  const grantsAccess = newRoles.isAdmin || newPages.length > 0;
   const canAdd =
     (trimmedNewEmail ? EMAIL_RE.test(trimmedNewEmail) : !grantsAccess) &&
     (newName.trim().length > 0 || trimmedNewEmail.length > 0);
 
   const missingEmails = staff.filter((s) => s.active && !s.email);
 
+  const banner = (tone: 'red' | 'gold', text: ReactNode) => (
+    <p
+      className={`rounded border px-3 py-2 font-mono text-xs ${
+        tone === 'red'
+          ? 'border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]'
+          : 'border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]'
+      }`}
+    >
+      {text}
+    </p>
+  );
+
   return (
     <div className="space-y-6">
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
-          {notice}
-        </p>
+      {error && banner('red', error)}
+      {notice && banner('gold', notice)}
+
+      {source === 'env' &&
+        banner(
+          'gold',
+          'Access is still coming from the ADMIN_EMAILS env allowlist (no admin exists here yet). Add yourself as an admin below — from then on this page is the source of truth and the env vars are ignored.'
+        )}
+
+      {missingEmails.length > 0 &&
+        banner(
+          'gold',
+          `Missing Momence emails: ${missingEmails.map((s) => s.display_name).join(', ')} — they can be scheduled, but can't sign in or see their own shifts until it's set.`
+        )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          className={`${inputClass} w-full sm:w-64`}
+          type="search"
+          placeholder="Find by name or email"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          aria-label="Find a person"
+        />
+        {formerCount > 0 && (
+          <label className={checkClass}>
+            <input
+              type="checkbox"
+              checked={showFormer}
+              onChange={(e) => setShowFormer(e.target.checked)}
+            />
+            show {formerCount} former
+          </label>
+        )}
+        <button
+          type="button"
+          className={`${buttonClass} ml-auto`}
+          disabled={busy}
+          onClick={() => setOpenId(openId === 'new' ? null : 'new')}
+        >
+          {openId === 'new' ? 'Cancel' : 'Add person'}
+        </button>
+      </div>
+
+      {openId === 'new' && (
+        <div className="space-y-5 rounded border border-white/20 bg-white/[0.04] px-4 py-4">
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/60">
+            Add person
+          </h2>
+          <EditorSection title="Details">
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                className={`${inputClass} w-44`}
+                placeholder="name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                aria-label="Name"
+              />
+              <input
+                className={`${inputClass} w-64`}
+                type="email"
+                placeholder="momence login email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                aria-label="Momence login email"
+              />
+              <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+                <input
+                  className={`${inputClass} w-24`}
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  placeholder={newRoles.isFounder ? '0' : '20'}
+                  value={newPayRate}
+                  onChange={(e) => setNewPayRate(e.target.value)}
+                  aria-label="Hourly pay rate"
+                />
+                $/hr
+              </label>
+            </div>
+            <p className="font-mono text-xs text-white/40">
+              Leave the email blank for someone who is only scheduled. It can be filled in later,
+              and dashboard access needs it.
+            </p>
+          </EditorSection>
+          <EditorSection title="Roles">
+            <RoleToggles
+              roles={newRoles}
+              disabled={busy}
+              onChange={(key, value) => setNewRoles({ ...newRoles, [key]: value })}
+            />
+          </EditorSection>
+          <EditorSection title="Page access">
+            {newRoles.isAdmin ? (
+              <p className="font-mono text-xs text-white/40">Admins can view every page.</p>
+            ) : (
+              <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
+            )}
+          </EditorSection>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy || !canAdd}
+              onClick={() => void addPerson()}
+            >
+              Add person
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy}
+              onClick={() => {
+                resetNew();
+                setOpenId(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
-      {source === 'env' && (
-        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
-          Access is still coming from the ADMIN_EMAILS env allowlist (no admin exists here yet). Add
-          yourself as an admin below — from then on this page is the source of truth and the env
-          vars are ignored.
-        </p>
-      )}
-
-      {missingEmails.length > 0 && (
-        <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
-          Missing Momence emails: {missingEmails.map((s) => s.display_name).join(', ')} — they can
-          be scheduled, but can't sign in or see their own shifts until it's set.
-        </p>
-      )}
-
-      <ul className="space-y-2">
-        {staff.map((person) => {
+      <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.02]">
+        {visible.map((person) => {
           const saved = draftFor(person);
           const draft = drafts[person.id] ?? saved;
           const dirty = (Object.keys(saved) as Array<keyof PersonDraft>).some(
             (k) => draft[k].trim() !== saved[k]
           );
           const isSelf = !!person.email && person.email === self;
+          const open = openId === person.id;
           const setDraft = (fields: Partial<PersonDraft>) =>
             setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
 
           return (
-            <li
-              key={person.id}
-              className={`space-y-2 rounded border border-white/10 bg-white/[0.03] px-3 py-2 ${
-                person.active || person.is_admin || person.pages.length > 0 ? '' : 'opacity-60'
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <input
-                  className={`${inputClass} w-36`}
-                  value={draft.name}
-                  disabled={busy}
-                  onChange={(e) => setDraft({ name: e.target.value })}
-                  aria-label={`${person.display_name} name`}
-                />
-                <input
-                  className={`${inputClass} w-64`}
-                  type="email"
-                  placeholder="momence login email"
-                  value={draft.email}
-                  disabled={busy || isSelf}
-                  onChange={(e) => setDraft({ email: e.target.value })}
-                  aria-label={`${person.display_name} Momence email`}
-                />
-                <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-                  <input
-                    className={`${inputClass} w-20`}
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={draft.payRate}
-                    disabled={busy}
-                    onChange={(e) => setDraft({ payRate: e.target.value })}
-                    aria-label={`${person.display_name} hourly pay rate`}
-                  />
-                  $/hr
-                </label>
-                <label
-                  className="flex items-center gap-1.5 font-mono text-xs text-white/60"
-                  title="Desired scheduled hours per week — drives the Insights consistency flags. Leave blank for no target (e.g. founders or truly flexible people)."
+            <li key={person.id} className={open ? 'bg-white/[0.04]' : ''}>
+              <button
+                type="button"
+                className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left hover:bg-white/[0.04] ${
+                  isFormer(person) ? 'opacity-50' : ''
+                }`}
+                aria-expanded={open}
+                onClick={() => setOpenId(open ? null : person.id)}
+              >
+                <span
+                  className={`inline-block w-3 font-mono text-xs text-white/40 transition-transform ${open ? 'rotate-90' : ''}`}
                 >
-                  <input
-                    className={`${inputClass} w-20`}
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={draft.targetHours}
-                    disabled={busy}
-                    onChange={(e) => setDraft({ targetHours: e.target.value })}
-                    aria-label={`${person.display_name} target hours per week`}
-                  />
-                  h/wk target
-                </label>
-                <fieldset
-                  className="flex items-center gap-1.5 font-mono text-xs text-white/60"
-                  title="Shifts per week: minimum, preferred, maximum. The AI drafter aims for the preferred count, tries to reach the minimum, and never goes past the maximum. Leave any of them blank for no preference."
-                >
-                  <legend className="sr-only">{person.display_name} shifts per week</legend>
-                  {SHIFT_PREF_INPUTS.map(({ key, placeholder, label, min }) => (
-                    <input
-                      key={key}
-                      className={`${inputClass} w-16`}
-                      type="number"
-                      min={min}
-                      max={14}
-                      step={1}
-                      placeholder={placeholder}
-                      value={draft[key]}
-                      disabled={busy}
-                      onChange={(e) => setDraft({ [key]: e.target.value })}
-                      aria-label={`${person.display_name} ${label} shifts per week`}
-                    />
-                  ))}
-                  shifts/wk
-                </fieldset>
-                {dirty && (
-                  <button
-                    type="button"
-                    className={buttonClass}
-                    disabled={busy}
-                    onClick={() =>
-                      void patch(person.id, {
-                        displayName: draft.name.trim(),
-                        email: draft.email.trim() || null,
-                        // Blank keeps the stored rate — Number('') would be 0.
-                        ...(draft.payRate.trim() !== '' ? { payRate: Number(draft.payRate) } : {}),
-                        // Unlike payRate, blank CLEARS the target (the column
-                        // is nullable and "no target" must be settable).
-                        targetHours:
-                          draft.targetHours.trim() === '' ? null : Number(draft.targetHours),
-                        // Blank clears each shifts/week bound, like the target.
-                        ...Object.fromEntries(
-                          SHIFT_PREF_INPUTS.map(({ key }) => [
-                            key,
-                            draft[key].trim() === '' ? null : Number(draft[key]),
-                          ])
-                        ),
-                      })
-                    }
+                  ›
+                </span>
+                <span className="font-medium text-[var(--pyre-creme)]">{person.display_name}</span>
+                {isSelf && <span className={chipClass}>you</span>}
+                <span className="truncate font-mono text-xs text-white/35">
+                  {person.email ?? 'no email'}
+                </span>
+                <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                  {person.is_founder && <span className={chipClass}>founder</span>}
+                  {person.is_shift_lead && <span className={chipClass}>shift lead</span>}
+                  {!person.active && <span className={chipClass}>not scheduled</span>}
+                  <span
+                    className={`${chipClass} ${person.is_admin ? 'border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]' : ''}`}
                   >
-                    Save
-                  </button>
-                )}
-                {isSelf && (
-                  <span className="rounded border border-white/20 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/50">
-                    you
+                    {accessLabel(person)}
                   </span>
-                )}
-                <button
-                  type="button"
-                  className={`${buttonClass} ml-auto`}
-                  disabled={busy || isSelf}
-                  onClick={() => void remove(person)}
-                >
-                  Remove
-                </button>
-              </div>
+                  <span className="w-20 text-right font-mono text-xs text-white/60">
+                    {fmtRate(person.pay_rate)}
+                  </span>
+                </span>
+              </button>
 
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                <label className={checkClass} title="Sees every admin page and manages this list.">
-                  <input
-                    type="checkbox"
-                    checked={person.is_admin}
-                    disabled={busy || isSelf}
-                    onChange={(e) => void patch(person.id, { isAdmin: e.target.checked })}
-                  />
-                  admin
-                </label>
-                <label
-                  className={checkClass}
-                  title="Counts toward the % founders coverage metric on the hours report."
-                >
-                  <input
-                    type="checkbox"
-                    checked={person.is_founder}
-                    disabled={busy}
-                    onChange={(e) => void patch(person.id, { isFounder: e.target.checked })}
-                  />
-                  founder
-                </label>
-                <label
-                  className={checkClass}
-                  title="Can anchor a shift. Anyone without this (or founder) must be scheduled with a founder or shift lead — the boards flag shifts that break the rule."
-                >
-                  <input
-                    type="checkbox"
-                    checked={person.is_shift_lead}
-                    disabled={busy}
-                    onChange={(e) => void patch(person.id, { isShiftLead: e.target.checked })}
-                  />
-                  shift lead
-                </label>
-                <label
-                  className={checkClass}
-                  title="Assignable on the shift board, and unlocks the Shift Notes page (their own notes only) with no page grant needed. Turn off when someone leaves — their past shifts and hours stay, and their access goes."
-                >
-                  <input
-                    type="checkbox"
-                    checked={person.active}
-                    disabled={busy}
-                    onChange={(e) => void patch(person.id, { active: e.target.checked })}
-                  />
-                  available to schedule
-                </label>
-              </div>
+              {open && (
+                <div className="space-y-5 border-t border-white/5 px-4 pb-4 pt-3">
+                  <EditorSection title="Details">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        className={`${inputClass} w-44`}
+                        value={draft.name}
+                        disabled={busy}
+                        onChange={(e) => setDraft({ name: e.target.value })}
+                        aria-label={`${person.display_name} name`}
+                      />
+                      <input
+                        className={`${inputClass} w-64`}
+                        type="email"
+                        placeholder="momence login email"
+                        value={draft.email}
+                        disabled={busy || isSelf}
+                        onChange={(e) => setDraft({ email: e.target.value })}
+                        aria-label={`${person.display_name} Momence email`}
+                      />
+                      <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
+                        <input
+                          className={`${inputClass} w-24`}
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={draft.payRate}
+                          disabled={busy}
+                          onChange={(e) => setDraft({ payRate: e.target.value })}
+                          aria-label={`${person.display_name} hourly pay rate`}
+                        />
+                        $/hr
+                      </label>
+                      {dirty && (
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          disabled={busy}
+                          onClick={() =>
+                            void patch(person.id, {
+                              displayName: draft.name.trim(),
+                              email: draft.email.trim() || null,
+                              // Blank keeps the stored rate — Number('') would be 0.
+                              ...(draft.payRate.trim() !== ''
+                                ? { payRate: Number(draft.payRate) }
+                                : {}),
+                            })
+                          }
+                        >
+                          Save
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`${buttonClass} ml-auto`}
+                        disabled={busy || isSelf}
+                        onClick={() => void remove(person)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="font-mono text-xs text-white/40">
+                      Shift preferences (hours target, shifts per week) are set on{' '}
+                      <a
+                        href="/admin/schedule/hours"
+                        className="underline decoration-white/20 hover:text-white"
+                      >
+                        Schedule → Hours
+                      </a>
+                      .
+                    </p>
+                  </EditorSection>
 
-              {person.is_admin ? (
-                <p className="font-mono text-xs text-white/40">
-                  Admins can view every page and manage this list.
-                </p>
-              ) : (
-                <PagePicker
-                  pages={person.pages}
-                  boards={boards}
-                  disabled={busy}
-                  onChange={(next) => void patch(person.id, { pages: next })}
-                />
+                  <EditorSection title="Roles">
+                    <RoleToggles
+                      roles={{
+                        isAdmin: person.is_admin,
+                        isFounder: person.is_founder,
+                        isShiftLead: person.is_shift_lead,
+                        active: person.active,
+                      }}
+                      disabled={busy}
+                      lockAdmin={isSelf}
+                      onChange={(key, value) => void patch(person.id, { [key]: value })}
+                    />
+                  </EditorSection>
+
+                  <EditorSection title="Page access">
+                    {person.is_admin ? (
+                      <p className="font-mono text-xs text-white/40">
+                        Admins can view every page and manage this list.
+                      </p>
+                    ) : (
+                      <PagePicker
+                        pages={person.pages}
+                        boards={boards}
+                        disabled={busy}
+                        onChange={(next) => void patch(person.id, { pages: next })}
+                      />
+                    )}
+                  </EditorSection>
+
+                  <EditorSection title="Stipends">
+                    <PersonStipends
+                      person={person}
+                      stipends={stipends.filter((s) => s.staff_id === person.id)}
+                      disabled={busy}
+                      onChanged={async () => {
+                        // The hours report folds stipends into its cached
+                        // schedule-board payload, so stipend edits drop it too.
+                        invalidateJson('/api/admin/schedule-board');
+                        await load();
+                      }}
+                    />
+                  </EditorSection>
+                </div>
               )}
-
-              <PersonStipends
-                person={person}
-                stipends={stipends.filter((s) => s.staff_id === person.id)}
-                disabled={busy}
-                onChanged={async () => {
-                  // The hours report folds stipends into its cached
-                  // schedule-board payload, so stipend edits drop it too.
-                  invalidateJson('/api/admin/schedule-board');
-                  await load();
-                }}
-              />
             </li>
           );
         })}
-        {staff.length === 0 && (
-          <li className="rounded border border-white/10 bg-white/[0.03] px-3 py-4 font-mono text-xs text-white/40">
-            Nobody yet.
+        {visible.length === 0 && (
+          <li className="px-3 py-4 font-mono text-xs text-white/40">
+            {staff.length === 0 ? 'Nobody yet.' : 'Nobody matches.'}
           </li>
         )}
       </ul>
@@ -893,9 +1118,7 @@ export function UsersManager() {
                 className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded border border-dashed border-white/15 bg-white/[0.02] px-3 py-2"
               >
                 <span className={`font-medium ${envActive ? '' : 'text-white/50'}`}>{u.email}</span>
-                <span className="rounded border border-white/20 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/50">
-                  {u.isAdmin ? 'admin_emails' : 'staff_emails'}
-                </span>
+                <span className={chipClass}>{u.isAdmin ? 'admin_emails' : 'staff_emails'}</span>
                 <span className="font-mono text-xs text-white/40">
                   {u.isAdmin
                     ? 'all pages'
@@ -916,89 +1139,6 @@ export function UsersManager() {
           </ul>
         </div>
       )}
-
-      <div className="space-y-3 rounded border border-white/10 bg-white/[0.03] px-3 py-3">
-        <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-          Add person
-        </h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            className={`${inputClass} w-36`}
-            placeholder="name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            aria-label="Name"
-          />
-          <input
-            className={`${inputClass} w-64`}
-            type="email"
-            placeholder="momence login email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            aria-label="Momence login email"
-          />
-          <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
-            <input
-              className={`${inputClass} w-24`}
-              type="number"
-              min={0}
-              step={0.5}
-              placeholder="20 (0 for founders)"
-              value={newPayRate}
-              onChange={(e) => setNewPayRate(e.target.value)}
-              aria-label="Hourly pay rate"
-            />
-            $/hr
-          </label>
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              checked={newIsAdmin}
-              onChange={(e) => setNewIsAdmin(e.target.checked)}
-            />
-            admin
-          </label>
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              checked={newIsFounder}
-              onChange={(e) => setNewIsFounder(e.target.checked)}
-            />
-            founder
-          </label>
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              checked={newIsShiftLead}
-              onChange={(e) => setNewIsShiftLead(e.target.checked)}
-            />
-            shift lead
-          </label>
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              checked={newActive}
-              onChange={(e) => setNewActive(e.target.checked)}
-            />
-            available to schedule
-          </label>
-        </div>
-        {!newIsAdmin && (
-          <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
-        )}
-        <p className="font-mono text-xs text-white/40">
-          Leave the email blank for someone who is only scheduled — it can be filled in later, and
-          dashboard access needs it.
-        </p>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={busy || !canAdd}
-          onClick={() => void addPerson()}
-        >
-          Add person
-        </button>
-      </div>
     </div>
   );
 }

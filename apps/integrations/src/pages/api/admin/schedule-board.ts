@@ -275,17 +275,22 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   );
   const stipendIds = new Set(stipends.map((s) => s.id));
 
-  const redactPay = (s: StaffRow): StaffRow =>
-    gate.access.isAdmin || s.id === selfStaffId
-      ? s
+  // Pay rate is admin-only. Scheduling preferences (target hours, shifts per
+  // week) are what a manager plans around and edits on the Hours tab, so the
+  // manage side sees everyone's; employees see only their own.
+  const redactPay = (s: StaffRow): StaffRow => {
+    if (s.id === selfStaffId) return s;
+    const out = gate.access.isAdmin ? s : { ...s, pay_rate: null };
+    return canManage
+      ? out
       : {
-          ...s,
-          pay_rate: null,
+          ...out,
           target_hours_per_week: null,
           min_shifts_per_week: null,
           preferred_shifts_per_week: null,
           max_shifts_per_week: null,
         };
+  };
 
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's

@@ -5,6 +5,8 @@
 // pay rate) show wherever the viewer knows the rate — the server only ships
 // each person's own rate unless the viewer is an admin. A toggle regroups
 // the weekly rows into the bi-weekly pay periods payroll actually pays.
+// Above the report, ScheduleShiftPrefs edits the hours target and shifts per
+// week the drafter plans around (own row, or everyone's on the manage side).
 
 import {
   addDays,
@@ -26,6 +28,7 @@ import type {
   StipendOverrideRow,
   TimeOffRow,
 } from '@/lib/db';
+import { ScheduleShiftPrefs } from './ScheduleShiftPrefs';
 
 interface BoardData {
   staff: StaffRow[];
@@ -211,6 +214,15 @@ export function ScheduleHours() {
 
   return (
     <div className="space-y-4">
+      {data && (
+        <ScheduleShiftPrefs
+          staff={data.staff}
+          canManage={canManage}
+          selfId={selfId}
+          onSaved={() => void reload()}
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="date"

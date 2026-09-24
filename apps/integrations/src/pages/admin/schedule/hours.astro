@@ -1,6 +1,8 @@
 ---
 // Per-person hours by week (the sheet's "Total Hours"), with CSV export.
-// Manage side sees everyone; employees see only their own hours.
+// Manage side sees everyone; employees see only their own hours. Also where
+// shift preferences (hours target, shifts per week) are set — each person
+// their own, managers anyone's.
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { ScheduleHours } from '@/components/admin/ScheduleHours';
 import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
@@ -13,8 +15,8 @@ const canManage = !!access && hasScheduleManage(access);
 <AdminLayout
   title="Hours"
   subtitle={canManage
-    ? 'Scheduled hours per person, Monday–Sunday weeks. ✦ = founder.'
-    : 'Your scheduled hours, Monday–Sunday weeks.'}
+    ? 'Scheduled hours per person, Monday–Sunday weeks, and everyone\'s shift preferences. ✦ = founder.'
+    : 'Your scheduled hours, Monday–Sunday weeks, and how many shifts you want each week.'}
 >
   <ScheduleTabs current="/admin/schedule/hours" />
   <ScheduleHours client:load />

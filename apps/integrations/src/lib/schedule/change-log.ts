@@ -18,7 +18,9 @@ export type ChangeEntityType =
   | 'request'
   | 'sub_request'
   /** The standing instructions the AI drafter carries into every run. */
-  | 'agent_instructions';
+  | 'agent_instructions'
+  /** A person's h/wk target and shifts-per-week range. */
+  | 'staff_prefs';
 
 export type ChangeAction =
   | 'create'
