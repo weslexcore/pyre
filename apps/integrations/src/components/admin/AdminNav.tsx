@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
+import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import { ADMIN_TOOL_SECTIONS, type AdminTool, STAFF_PAGES } from './adminTools';
 
 interface AdminNavProps {
@@ -46,6 +47,7 @@ const LINK_IDLE =
  */
 export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNavProps) {
   const [open, setOpen] = useState(false);
+  const { mounted, closing } = usePresence(open);
   // Server-rendered pins, kept live by the dashboard island's CustomEvent so
   // pinning a card updates the open page's menu without a navigation.
   const [pins, setPins] = useState(pinnedHrefs);
@@ -146,16 +148,17 @@ export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNa
         </span>
       </button>
 
-      {open && (
+      {mounted && (
         <div
           id="admin-menu"
+          inert={closing}
           // The panel hangs off a sticky header, so anything past the bottom
           // of the viewport can never be scrolled to — the header (and the
           // panel with it) stays put as the page scrolls. Cap the panel at
           // the space below the header and scroll the list inside it instead,
           // keeping the account row pinned to the bottom. overscroll-contain
           // stops that scroll from chaining to the page behind the menu.
-          className="absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-4 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-64 md:rounded-md md:border md:border-white/10"
+          className={`absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-4 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-64 md:rounded-md md:border md:border-white/10 ${DROPDOWN_MOTION} ${closing ? DROPDOWN_CLOSED : ''}`}
         >
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2 md:px-2">
             {groups.map((group) => (

@@ -27,6 +27,7 @@ import {
   type SearchResponse,
 } from '@/lib/admin/globalSearch';
 import { BOARDS_HREF } from '@/lib/boards/types';
+import { usePresence } from '@/lib/client/usePresence';
 import type { BoardRow } from '@/lib/db';
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
@@ -256,6 +257,8 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const { mounted, closing } = usePresence(open);
+
   const term = query.trim();
   const contentSearch = queryLength(term) >= MIN_QUERY_LENGTH;
 
@@ -291,8 +294,11 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   // Debounced content search. Stale results stay on screen until the next
   // response lands, so the list doesn't blink between keystrokes; an aborted
   // request never writes.
+  // Closing leaves the results alone, so the list doesn't change under the
+  // palette while it fades out.
   useEffect(() => {
-    if (!open || creating || !contentSearch) {
+    if (!open) return;
+    if (creating || !contentSearch) {
       setServer(null);
       setSearching(false);
       setError(null);
@@ -326,8 +332,9 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   // Load searchable boards through the API's per-board permission filter.
   // Only active task boards enable creation; pipelines are searchable too.
   useEffect(() => {
+    if (!open) return;
     setBoards([]);
-    if (!open || !pages.some((page) => page.href === BOARDS_HREF)) return;
+    if (!pages.some((page) => page.href === BOARDS_HREF)) return;
     const controller = new AbortController();
     void (async () => {
       try {
@@ -409,20 +416,23 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
         <SearchIcon />
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center sm:p-4 sm:pt-[12vh]">
+      {mounted && (
+        <div
+          inert={closing}
+          className="fixed inset-0 z-50 flex items-start justify-center sm:p-4 sm:pt-[12vh]"
+        >
           <button
             type="button"
             tabIndex={-1}
             aria-label="Close search"
             onClick={close}
-            className="absolute inset-0 h-full w-full cursor-default bg-black/70"
+            className={`absolute inset-0 h-full w-full cursor-default bg-black/70 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none ${closing ? 'opacity-0' : ''}`}
           />
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Search"
-            className="relative flex h-full w-full max-w-xl flex-col bg-[var(--pyre-black)] shadow-xl sm:h-auto sm:max-h-[70vh] sm:rounded-lg sm:border sm:border-white/15"
+            className={`relative flex h-full w-full max-w-xl flex-col bg-[var(--pyre-black)] shadow-xl transition duration-150 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:h-auto sm:max-h-[70vh] sm:rounded-lg sm:border sm:border-white/15 ${closing ? 'translate-y-2 scale-[0.98] opacity-0' : ''}`}
           >
             {creating ? (
               <SearchTaskCreate

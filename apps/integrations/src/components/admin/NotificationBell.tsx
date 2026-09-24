@@ -9,6 +9,7 @@
 // Popover mechanics follow AdminNav.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import type { StaffNotificationRow } from '@/lib/db';
 import { isUnread, NOTIFICATIONS_EVENT } from '@/lib/notifications/types';
 import { NOTIFICATIONS_HREF } from './adminTools';
@@ -46,6 +47,7 @@ function BellIcon() {
 export function NotificationBell({ initialCount }: { initialCount: number }) {
   const [count, setCount] = useState(initialCount);
   const [open, setOpen] = useState(false);
+  const { mounted, closing } = usePresence(open);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feed, setFeed] = useState<FeedResponse | null>(null);
@@ -180,10 +182,11 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
         )}
       </button>
 
-      {open && (
+      {mounted && (
         <div
           id="notification-panel"
-          className="absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-0 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-80 md:rounded-md md:border md:border-white/10"
+          inert={closing}
+          className={`absolute inset-x-0 top-full z-50 flex max-h-[calc(100dvh-4.25rem)] flex-col border-t border-white/10 bg-[var(--pyre-black)] shadow-lg md:inset-x-auto md:right-0 md:mt-2 md:max-h-[calc(100dvh-5rem)] md:w-80 md:rounded-md md:border md:border-white/10 ${DROPDOWN_MOTION} ${closing ? DROPDOWN_CLOSED : ''}`}
         >
           <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
             <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-white/40">
