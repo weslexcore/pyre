@@ -2647,7 +2647,7 @@ function AssignmentEditor({
       startsAt: hhmm(assignment.starts_at),
       endsAt: hhmm(assignment.ends_at),
       role: assignment.role,
-      duties: normalizeDuties(assignment.duties),
+      duties: normalizeDuties(dutyCatalog, assignment.duties),
     })
   );
   // The change waiting out the debounce, flushed if the editor unmounts first.
