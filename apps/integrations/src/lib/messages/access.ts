@@ -10,7 +10,7 @@
 // controls to draw, and every route re-checks it server-side.
 
 import type { AdminMessageReplyRow, AdminMessageRow, StaffRow } from '@/lib/db';
-import { roleForStaffRow, type SopViewer } from '@/lib/sops/levels';
+import { canUseDashboard, roleForStaffRow, type SopViewer } from '@/lib/sops/levels';
 
 /** The parts of a message row the access rules read. */
 export type MessageAccessFields = Pick<
@@ -48,17 +48,19 @@ export function canManageMessages(viewer: SopViewer): boolean {
 
 /**
  * Everyone on the roster this message reaches — the fan-out list for its
- * notifications. Active rows with an email whose role is granted or who are
- * named personally; the author is included here and dropped by the notifier.
+ * notifications. Rows that can use the dashboard (canUseDashboard — not just
+ * the ones available to schedule) with an email, whose role is granted or
+ * who are named personally; the author is included here and dropped by the
+ * notifier.
  */
 export function resolveAudience(
-  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead'>[],
+  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead' | 'pages'>[],
   message: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>
 ): string[] {
   const named = new Set(message.audience_emails.map((e) => e.trim().toLowerCase()));
   const out = new Set<string>();
   for (const row of rows) {
-    if (!row.active) continue;
+    if (!canUseDashboard(row)) continue;
     const email = (row.email ?? '').trim().toLowerCase();
     if (!email) continue;
     if (message.audience_roles.includes(roleForStaffRow(row)) || named.has(email)) out.add(email);
@@ -73,7 +75,7 @@ export function resolveAudience(
  * already had it gets a second ping.
  */
 export function addedAudience(
-  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead'>[],
+  rows: Pick<StaffRow, 'email' | 'active' | 'is_admin' | 'is_shift_lead' | 'pages'>[],
   before: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>,
   after: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>
 ): string[] {

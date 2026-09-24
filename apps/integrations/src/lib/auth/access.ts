@@ -6,6 +6,7 @@
 // deployment can never lock every admin out.
 
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
+import { canUseDashboard } from '@/lib/sops/levels';
 import { getDb, type StaffRow } from '../db';
 
 export interface DashboardAccess {
@@ -98,7 +99,7 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   // everyone else only the notes they wrote (see lib/shift-notes/access).
   // Inactive rows are people who have left: no implicit grant, so their
   // access ends with the job.
-  if (row && (hasDashboardAccess(row) || row.active)) {
+  if (row && canUseDashboard(row)) {
     const pages =
       row.active && !row.pages.includes(SHIFT_NOTES_HREF)
         ? [...row.pages, SHIFT_NOTES_HREF]

@@ -55,27 +55,51 @@ describe('canReplyToMessage / canTouchReply', () => {
 });
 
 const rows = [
-  { email: 'Admin@pyre.test', active: true, is_admin: true, is_shift_lead: false },
-  { email: 'lead@pyre.test', active: true, is_admin: false, is_shift_lead: true },
-  { email: 'staff@pyre.test', active: true, is_admin: false, is_shift_lead: false },
-  { email: 'named@pyre.test', active: true, is_admin: false, is_shift_lead: false },
-  { email: 'left@pyre.test', active: false, is_admin: false, is_shift_lead: true },
-  { email: null, active: true, is_admin: false, is_shift_lead: true },
+  { email: 'Admin@pyre.test', active: true, is_admin: true, is_shift_lead: false, pages: [] },
+  { email: 'lead@pyre.test', active: true, is_admin: false, is_shift_lead: true, pages: [] },
+  { email: 'staff@pyre.test', active: true, is_admin: false, is_shift_lead: false, pages: [] },
+  { email: 'named@pyre.test', active: true, is_admin: false, is_shift_lead: false, pages: [] },
+  // Left: off the schedule, no grants, no dashboard.
+  { email: 'left@pyre.test', active: false, is_admin: false, is_shift_lead: true, pages: [] },
+  // Off the schedule but granted a page: still signs in and reads messages.
+  {
+    email: 'marketing@pyre.test',
+    active: false,
+    is_admin: false,
+    is_shift_lead: false,
+    pages: ['/admin/campaigns'],
+  },
+  // An admin who never works a shift.
+  { email: 'owner@pyre.test', active: false, is_admin: true, is_shift_lead: false, pages: [] },
+  { email: null, active: true, is_admin: false, is_shift_lead: true, pages: [] },
 ];
 
 describe('resolveAudience', () => {
-  it('unions roles and named people over active rows with an email', () => {
+  it('unions roles and named people over dashboard users with an email', () => {
     expect(resolveAudience(rows, message)).toEqual([
       'admin@pyre.test',
       'lead@pyre.test',
       'named@pyre.test',
+      'owner@pyre.test',
     ]);
+  });
+
+  it('reaches people off the schedule who still use the dashboard, not people who left', () => {
+    const everyone = {
+      ...message,
+      audience_roles: ['staff' as const, 'shift_lead' as const, 'admin' as const],
+    };
+    const reached = resolveAudience(rows, everyone);
+    expect(reached).toContain('marketing@pyre.test');
+    expect(reached).toContain('owner@pyre.test');
+    expect(reached).not.toContain('left@pyre.test');
   });
 
   it('dedupes someone both named and role-granted', () => {
     expect(resolveAudience(rows, { ...message, audience_emails: ['lead@pyre.test'] })).toEqual([
       'admin@pyre.test',
       'lead@pyre.test',
+      'owner@pyre.test',
     ]);
   });
 });
@@ -83,7 +107,7 @@ describe('resolveAudience', () => {
 describe('addedAudience', () => {
   it('lists only the people a widened audience newly reaches', () => {
     const wider = { ...message, audience_roles: [...message.audience_roles, 'staff' as const] };
-    expect(addedAudience(rows, message, wider)).toEqual(['staff@pyre.test']);
+    expect(addedAudience(rows, message, wider)).toEqual(['staff@pyre.test', 'marketing@pyre.test']);
   });
 
   it('counts a newly named person, and nobody when the audience narrows', () => {

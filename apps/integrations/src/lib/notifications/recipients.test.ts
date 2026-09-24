@@ -26,12 +26,13 @@ const roster: RosterRow[] = [
   person({ id: 'lead', is_shift_lead: true, pages: ['/admin/sops', '/admin/schedule'] }),
   person({ id: 'staff', pages: ['/admin/sops'] }),
   person({ id: 'nosops', pages: ['/admin/schedule'] }),
-  person({ id: 'gone', active: false, is_admin: true }),
+  // Left: off the schedule with no admin flag or grants, so no dashboard.
+  person({ id: 'gone', active: false, pages: [] }),
   person({ id: 'noemail', email: null }),
 ];
 
 describe('dashboardRecipients / adminEmails', () => {
-  it('keeps active rows with an email', () => {
+  it('keeps dashboard users with an email', () => {
     expect(dashboardRecipients(roster).map((r) => r.id)).toEqual([
       'admin',
       'lead',
@@ -39,6 +40,15 @@ describe('dashboardRecipients / adminEmails', () => {
       'nosops',
     ]);
     expect(adminEmails(roster)).toEqual(['admin@pyre.test']);
+  });
+
+  it('keeps people off the schedule who still use the dashboard', () => {
+    const offSchedule = [
+      person({ id: 'owner', active: false, is_admin: true }),
+      person({ id: 'marketing', active: false, pages: ['/admin/campaigns'] }),
+    ];
+    expect(dashboardRecipients(offSchedule).map((r) => r.id)).toEqual(['owner', 'marketing']);
+    expect(adminEmails(offSchedule)).toEqual(['owner@pyre.test']);
   });
 });
 
@@ -87,11 +97,15 @@ describe('boardRecipients', () => {
     person({ id: 'cofounder', pages: ['/admin/boards'] }),
     person({ id: 'community', pages: ['board:rentals'] }),
     person({ id: 'attendant', pages: ['/admin/shift-notes'] }),
-    person({ id: 'former', pages: ['/admin/boards'], active: false }),
+    // Left: off the schedule and their grants taken away.
+    person({ id: 'former', pages: [], active: false }),
+    // Off the schedule but still holding the page — still works the boards.
+    person({ id: 'advisor', pages: ['/admin/boards'], active: false }),
   ];
 
   it('reaches admins, the page grant, and that board\u2019s own grant', () => {
     expect(boardRecipients(boardRoster, 'rentals').sort()).toEqual([
+      'advisor@pyre.test',
       'boss@pyre.test',
       'cofounder@pyre.test',
       'community@pyre.test',
@@ -102,6 +116,7 @@ describe('boardRecipients', () => {
     // The whole point of board:rentals: the founders' task board stays out
     // of this person's inbox as well as out of their nav.
     expect(boardRecipients(boardRoster, 'goals').sort()).toEqual([
+      'advisor@pyre.test',
       'boss@pyre.test',
       'cofounder@pyre.test',
     ]);

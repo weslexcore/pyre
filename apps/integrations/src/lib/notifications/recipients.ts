@@ -2,9 +2,10 @@
 // pure functions over StaffRow[] so the rules are testable, with the roster
 // fetched by the callers (the cached listStaff in lib/auth/access).
 //
-// Everyone active on the roster with an email has dashboard access (the
-// implicit shift-notes grant in lib/auth/access), so they can open the
-// inbox. Whether they can open the page an event lives on is a separate
+// Everyone who can use the dashboard (canUseDashboard: an admin, anyone
+// granted a page, or anyone available to schedule) can open the inbox —
+// being on the schedule is not required, so an admin who never works a
+// shift or a marketer granted Campaigns still hears about things. Whether they can open the page an event lives on is a separate
 // question, answered per event: an SOP notice only goes to people who can
 // read that SOP, and a schedule notice reaches the person scheduled either
 // way but links to the board only when they hold the schedule page.
@@ -13,7 +14,12 @@ import { canViewPage } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type { StaffRow } from '@/lib/db';
-import { canViewSop, roleForStaffRow, type SopAccessFields } from '@/lib/sops/levels';
+import {
+  canUseDashboard,
+  canViewSop,
+  roleForStaffRow,
+  type SopAccessFields,
+} from '@/lib/sops/levels';
 
 export type RosterRow = Pick<
   StaffRow,
@@ -24,9 +30,9 @@ function emailOf(row: RosterRow): string {
   return (row.email ?? '').trim().toLowerCase();
 }
 
-/** Active roster rows that can receive anything at all. */
+/** Roster rows that can receive anything at all. */
 export function dashboardRecipients(rows: RosterRow[]): RosterRow[] {
-  return rows.filter((row) => row.active && emailOf(row));
+  return rows.filter((row) => canUseDashboard(row) && emailOf(row));
 }
 
 export function adminEmails(rows: RosterRow[]): string[] {

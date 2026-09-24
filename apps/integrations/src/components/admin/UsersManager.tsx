@@ -516,7 +516,7 @@ const ROLE_OPTIONS: Array<{ key: keyof Roles; label: string; hint: string }> = [
   {
     key: 'active',
     label: 'Available to schedule',
-    hint: 'Can be assigned shifts, and can open Shift Notes (their own notes only). Turn off when someone leaves: their past shifts and hours stay, and they lose access.',
+    hint: 'Can be assigned shifts, and can open Shift Notes (their own notes only). Turn off for anyone who does not work shifts: they keep the pages ticked below and still get messages. When someone leaves, turn this off and untick their pages too; their past shifts and hours stay.',
   },
   {
     key: 'isShiftLead',

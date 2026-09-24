@@ -36,6 +36,22 @@ export function roleForStaffRow(row: { is_admin: boolean; is_shift_lead: boolean
   return row.is_admin ? 'admin' : row.is_shift_lead ? 'shift_lead' : 'staff';
 }
 
+/**
+ * Whether this roster row can sign in to the dashboard at all — the same
+ * test getAccess (lib/auth/access) applies: an admin, anyone granted a page,
+ * or anyone available to schedule (who gets Shift Notes implicitly).
+ * "Available to schedule" alone is not the test: an admin who never works
+ * a shift, or a marketer granted Campaigns, is off the schedule but still
+ * reads messages and SOPs. Someone who has left has neither and drops out.
+ */
+export function canUseDashboard(row: {
+  is_admin: boolean;
+  active: boolean;
+  pages?: string[] | null;
+}): boolean {
+  return row.is_admin || row.active || (row.pages ?? []).length > 0;
+}
+
 /** Who is asking: their resolved role, and the email their grants are named by. */
 export interface SopViewer {
   role: SopRole;
