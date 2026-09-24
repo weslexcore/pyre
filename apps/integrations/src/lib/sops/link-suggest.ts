@@ -1,8 +1,8 @@
-// Internal-link autocomplete for the SOP editor. When an admin types a
-// markdown link whose href starts with "/" — `[Towels](/adm` — the editor
-// offers the library's documents and the admin tool pages as targets, so
-// nobody has to remember a slug. Pure string work only; the dropdown itself
-// lives in components/admin/SopLinkPicker.tsx. Client-bundle-safe.
+// Internal-link autocomplete for the dashboard's markdown fields. When someone
+// types a markdown link whose href starts with "/" — `[Towels](/adm` — the
+// field offers the library's documents and the admin pages they may open as
+// targets, so nobody has to remember a slug. Pure string work only; the
+// dropdown itself lives in components/admin/LinkPicker.tsx. Client-bundle-safe.
 
 export type LinkTargetKind = 'sop' | 'page';
 
@@ -11,7 +11,7 @@ export interface LinkTarget {
   title: string;
   /** Section for a document, or a short description for a page. */
   detail: string;
-  /** SOP links open in the peek modal; pages navigate. */
+  /** SOP links open in the peek modal where the renderer offers one; pages navigate. */
   kind: LinkTargetKind;
 }
 

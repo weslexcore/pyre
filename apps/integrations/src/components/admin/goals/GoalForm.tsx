@@ -24,6 +24,7 @@ import {
   selectClass,
   textareaClass,
 } from '../goalsUi';
+import { LinkTextarea } from '../LinkTextarea';
 
 export function GoalForm({
   goal,
@@ -176,13 +177,13 @@ export function GoalForm({
           <label className={labelClass} htmlFor="goal-description">
             What does good look like?
           </label>
-          <textarea
+          <LinkTextarea
             id="goal-description"
             className={textareaClass}
             maxLength={GOAL_LIMITS.description}
-            placeholder="Markdown is fine here."
+            placeholder="Markdown is fine here. Type [name](/ to link a page or SOP."
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
           />
         </div>
       </div>

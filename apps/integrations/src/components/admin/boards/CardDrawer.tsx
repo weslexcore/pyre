@@ -22,6 +22,7 @@ import {
   textareaClass,
 } from '../goalsUi';
 import { FieldRow } from '../guestUi';
+import { LinkTextarea } from '../LinkTextarea';
 import { SopMarkdown } from '../SopMarkdown';
 import { useSheetSwipe } from '../useSheetSwipe';
 import { FilesField } from './FilesField';
@@ -387,14 +388,14 @@ export function CardDrawer({
                 )}
               </div>
             ) : (
-              <textarea
+              <LinkTextarea
                 className={textareaClass}
                 maxLength={BOARD_LIMITS.notes}
-                placeholder="Markdown is fine here."
+                placeholder="Markdown is fine here. Type [name](/ to link a page or SOP."
                 value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  autosave.schedule({ notesMd: e.target.value }, 600);
+                onChange={(next) => {
+                  setNotes(next);
+                  autosave.schedule({ notesMd: next }, 600);
                 }}
               />
             )}

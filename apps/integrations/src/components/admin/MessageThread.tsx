@@ -14,6 +14,7 @@ import { REPLY_MAX } from '@/lib/messages/validate';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from './ConfirmDialog';
+import { LinkTextarea } from './LinkTextarea';
 import { MessageComposer, type MessageDraft } from './MessageComposer';
 import {
   buttonClass,
@@ -347,11 +348,11 @@ export function MessageThread({
             </div>
             {editingReply?.id === reply.id ? (
               <div className="mt-2 space-y-2">
-                <textarea
+                <LinkTextarea
                   className={replyTextareaClass}
                   maxLength={REPLY_MAX}
                   value={editingReply.body}
-                  onChange={(e) => setEditingReply({ id: reply.id, body: e.target.value })}
+                  onChange={(body) => setEditingReply({ id: reply.id, body })}
                 />
                 <div className="flex gap-2">
                   <button
@@ -382,12 +383,12 @@ export function MessageThread({
 
         {canReplyToMessage(viewer, message) ? (
           <div className="space-y-2">
-            <textarea
+            <LinkTextarea
               className={replyTextareaClass}
               placeholder="Reply… (markdown works)"
               maxLength={REPLY_MAX}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={setDraft}
               aria-label={`Reply to ${message.title}`}
             />
             <button

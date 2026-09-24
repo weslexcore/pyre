@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
+import { LinkTextarea } from './LinkTextarea';
 import { buttonClass, inputClass, primaryButtonClass, textareaClass } from './messagesUi';
 import {
   type GrantablePerson,
@@ -104,12 +105,12 @@ export function MessageComposer({
           )}
         </div>
       ) : (
-        <textarea
+        <LinkTextarea
           className={textareaClass}
-          placeholder="Write the message in markdown…"
+          placeholder="Write the message in markdown… type [name](/ to link a page or SOP"
           maxLength={BODY_MAX}
           value={draft.bodyMd}
-          onChange={(e) => setDraft((d) => ({ ...d, bodyMd: e.target.value }))}
+          onChange={(bodyMd) => setDraft((d) => ({ ...d, bodyMd }))}
           aria-label="Message body"
           required
         />

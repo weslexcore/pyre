@@ -29,9 +29,9 @@ import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
+import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
-import { SopLinkTextarea } from './SopLinkTextarea';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
@@ -717,12 +717,13 @@ export function SopDocument({
               <SopMarkdown content={draftContent} onSopLink={setPeekSlug} />
             </div>
           ) : (
-            <SopLinkTextarea
+            <LinkTextarea
               className={`${inputClass} min-h-[50vh] w-full resize-y font-mono text-xs leading-relaxed`}
               value={draftContent}
               disabled={busy}
+              spellCheck={false}
               onChange={setDraftContent}
-              currentSlug={sop.slug}
+              excludeHref={`/admin/sops/${sop.slug}`}
             />
           )}
           <div className="flex flex-wrap items-center gap-2">

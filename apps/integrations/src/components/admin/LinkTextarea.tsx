@@ -1,10 +1,19 @@
-// The SOP editor's markdown textarea, with internal-link autocomplete: once
-// the href of a markdown link starts with "/", a dropdown under the caret
-// lists the library's documents and the admin pages (lib/sops/link-suggest.ts
-// ranks them; SopLinkPicker draws them). Arrow keys move, Enter or Tab picks,
-// Escape hides the list until the next link. Picking writes the full href and
-// the closing paren in one go, so a finished link is always well-formed.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+// A markdown textarea with internal-link autocomplete, used by every markdown
+// field in the dashboard (SOPs, messages and replies, card notes, goal
+// descriptions): once the href of a markdown link starts with "/", a dropdown
+// under the caret lists the SOPs and admin pages the signed-in user may open
+// (served by /api/admin/link-targets, ranked by lib/sops/link-suggest.ts,
+// drawn by LinkPicker). Arrow keys move, Enter or Tab picks, Escape hides the
+// list until the next link. Picking writes the full href and the closing
+// paren in one go, so a finished link is always well-formed.
+import {
+  type TextareaHTMLAttributes,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   applyLink,
   type LinkContext,
@@ -12,54 +21,49 @@ import {
   linkContextAt,
   suggestLinks,
 } from '@/lib/sops/link-suggest';
-import { ADMIN_TOOLS } from './adminTools';
-import { caretAnchor, SopLinkPicker } from './SopLinkPicker';
+import { caretAnchor, LinkPicker } from './LinkPicker';
 
-interface Props {
+type Props = Omit<
+  TextareaHTMLAttributes<HTMLTextAreaElement>,
+  'value' | 'onChange' | 'onKeyDown' | 'onKeyUp' | 'onClick' | 'onBlur' | 'onScroll'
+> & {
   value: string;
-  disabled?: boolean;
   onChange: (next: string) => void;
-  /** The document being edited; it's left out of its own suggestions. */
-  currentSlug: string;
-  className?: string;
+  /** A page that shouldn't suggest itself — the SOP being edited, say. */
+  excludeHref?: string;
+};
+
+// One fetch serves every field on the page (a card drawer and a reply box
+// can be open together). The client router keeps this module alive between
+// admin pages, so the list is refetched once it is a minute old — long
+// enough to share, short enough that a new SOP shows up.
+const TARGETS_TTL_MS = 60_000;
+let cached: { at: number; promise: Promise<LinkTarget[]> } | null = null;
+
+function loadTargets(): Promise<LinkTarget[]> {
+  if (cached && Date.now() - cached.at < TARGETS_TTL_MS) return cached.promise;
+  const promise = fetch('/api/admin/link-targets')
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as { targets: LinkTarget[] };
+      return body.targets;
+    })
+    .catch((err: unknown) => {
+      // Don't keep a failure around; the next field to mount tries again.
+      cached = null;
+      throw err;
+    });
+  cached = { at: Date.now(), promise };
+  return promise;
 }
 
-interface ListedSop {
-  slug: string;
-  title: string;
-  category: string;
-  archived: boolean;
-}
-
-/** Documents the caller may read plus every admin page, as link targets. */
-async function loadTargets(currentSlug: string): Promise<LinkTarget[]> {
-  const res = await fetch('/api/admin/sops');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const body = (await res.json()) as { sops: ListedSop[] };
-  const sops: LinkTarget[] = body.sops
-    .filter((sop) => !sop.archived && sop.slug !== currentSlug)
-    .map((sop) => ({
-      href: `/admin/sops/${sop.slug}`,
-      title: sop.title,
-      detail: sop.category,
-      kind: 'sop',
-    }));
-  const pages: LinkTarget[] = ADMIN_TOOLS.map((tool) => ({
-    href: tool.href,
-    title: tool.title,
-    detail: tool.description,
-    kind: 'page',
-  }));
-  return [...sops, ...pages];
-}
-
-export function SopLinkTextarea({ value, disabled, onChange, currentSlug, className }: Props) {
+export function LinkTextarea({ value, onChange, excludeHref, disabled, ...rest }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const [targets, setTargets] = useState<LinkTarget[] | null>(null);
+  const [loaded, setLoaded] = useState<LinkTarget[] | null>(null);
   const [context, setContext] = useState<LinkContext | null>(null);
   const [anchor, setAnchor] = useState({ top: 0, left: 0 });
   const [activeIndex, setActiveIndex] = useState(0);
-  // Start offset of the link the admin hit Escape on — the picker stays away
+  // Start offset of the link the user hit Escape on — the picker stays away
   // from that one, and reappears for the next.
   const [dismissedStart, setDismissedStart] = useState<number | null>(null);
   // Caret to restore after a pick re-renders the textarea.
@@ -67,18 +71,20 @@ export function SopLinkTextarea({ value, disabled, onChange, currentSlug, classN
 
   useEffect(() => {
     let cancelled = false;
-    loadTargets(currentSlug)
+    loadTargets()
       .then((list) => {
-        if (!cancelled) setTargets(list);
+        if (!cancelled) setLoaded(list);
       })
       .catch(() => {
         // Without the list the textarea still works; there is just no picker.
-        if (!cancelled) setTargets([]);
+        if (!cancelled) setLoaded([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [currentSlug]);
+  }, []);
+
+  const targets = loaded && excludeHref ? loaded.filter((t) => t.href !== excludeHref) : loaded;
 
   // After a pick, the controlled value re-renders the textarea with the
   // caret at the end; put it back just past the link. Cheap enough to check
@@ -118,15 +124,19 @@ export function SopLinkTextarea({ value, disabled, onChange, currentSlug, classN
     const el = ref.current;
     if (!el || !context) return;
     const result = applyLink(el.value, context, el.selectionStart, target.href);
+    // Respect the field's cap rather than write past it.
+    if (rest.maxLength !== undefined && result.text.length > rest.maxLength) return;
     pendingCaret.current = result.caret;
     setContext(null);
     onChange(result.text);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!open) return;
+    if (!open || e.nativeEvent.isComposing) return;
     if (e.key === 'Escape') {
       e.preventDefault();
+      // Keep the Escape from closing a drawer or dialog the field sits in.
+      e.stopPropagation();
       setDismissedStart(context?.start ?? null);
       setContext(null);
       return;
@@ -147,11 +157,10 @@ export function SopLinkTextarea({ value, disabled, onChange, currentSlug, classN
   return (
     <div className="relative">
       <textarea
+        {...rest}
         ref={ref}
-        className={className}
         value={value}
         disabled={disabled}
-        spellCheck={false}
         onChange={(e) => {
           onChange(e.target.value);
           sync(e.target);
@@ -170,7 +179,7 @@ export function SopLinkTextarea({ value, disabled, onChange, currentSlug, classN
         }}
       />
       {open && (
-        <SopLinkPicker
+        <LinkPicker
           items={items}
           activeIndex={Math.min(activeIndex, Math.max(0, items.length - 1))}
           anchor={anchor}

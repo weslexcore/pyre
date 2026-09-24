@@ -1,8 +1,8 @@
-// Autocomplete dropdown for internal links in the SOP editor. Appears under
-// the caret while an href starting with "/" is being typed (see
-// lib/sops/link-suggest.ts for the detection and ranking) and lists library
-// documents and admin pages; the editor owns the keyboard handling and just
-// tells this component which row is active.
+// Autocomplete dropdown for internal links in the dashboard's markdown fields
+// (LinkTextarea). Appears under the caret while an href starting with "/" is
+// being typed (see lib/sops/link-suggest.ts for the detection and ranking)
+// and lists library documents and admin pages; the textarea owns the
+// keyboard handling and just tells this component which row is active.
 import { useLayoutEffect, useRef } from 'react';
 import type { LinkTarget } from '@/lib/sops/link-suggest';
 
@@ -76,7 +76,7 @@ export function caretAnchor(textarea: HTMLTextAreaElement): { top: number; left:
   return { top, left };
 }
 
-export function SopLinkPicker({ items, activeIndex, anchor, onPick, onHover }: Props) {
+export function LinkPicker({ items, activeIndex, anchor, onPick, onHover }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
 
   // Keep the keyboard-selected row in view as it moves.
@@ -116,7 +116,7 @@ export function SopLinkPicker({ items, activeIndex, anchor, onPick, onHover }: P
             <span className="flex w-full items-baseline gap-2">
               <span className="truncate text-sm text-[var(--pyre-creme)]">{item.title}</span>
               <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                {item.kind === 'sop' ? 'modal' : 'page'}
+                {item.kind === 'sop' ? 'sop' : 'page'}
               </span>
             </span>
             <span className="w-full truncate font-mono text-[10px] text-white/40">
