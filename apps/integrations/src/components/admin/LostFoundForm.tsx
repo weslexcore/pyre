@@ -28,10 +28,12 @@ import { useMemo, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
 import {
-  ACCEPT_ATTRIBUTE,
+  CAMERA_ACCEPT,
   checkFile,
   downscaleImage,
   formatBytes,
+  kindForMime,
+  LIBRARY_ACCEPT,
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import {
@@ -107,7 +109,7 @@ export function LostFoundForm() {
     if (!incoming) return;
     const room = MAX_ATTACHMENTS_PER_ITEM - files.length;
     if (room <= 0) {
-      setError(`That's the ${MAX_ATTACHMENTS_PER_ITEM}-photo limit`);
+      setError(`That's the ${MAX_ATTACHMENTS_PER_ITEM}-file limit`);
       return;
     }
 
@@ -185,7 +187,7 @@ export function LostFoundForm() {
       let failed = 0;
       for (let i = 0; i < files.length; i += 1) {
         const pending = files[i];
-        setProgress(`Uploading photo ${i + 1} of ${files.length}…`);
+        setProgress(`Uploading file ${i + 1} of ${files.length}…`);
         const body = new FormData();
         body.set('itemId', item.id);
         body.set('file', pending.file);
@@ -296,16 +298,28 @@ export function LostFoundForm() {
       </a>
 
       <section>
-        <SectionTitle note="Upload a clear photo of the item">Photo</SectionTitle>
+        <SectionTitle note="Take a clear photo or video of the item, or upload one you already have">
+          Photo or video
+        </SectionTitle>
 
         <div className="flex flex-wrap gap-3">
           {files.map((file) => (
             <div key={file.id} className="relative">
-              <img
-                src={file.previewUrl}
-                alt=""
-                className="h-24 w-24 rounded border border-white/10 object-cover"
-              />
+              {kindForMime(file.file.type) === 'video' ? (
+                <video
+                  src={file.previewUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="h-24 w-24 rounded border border-white/10 object-cover"
+                />
+              ) : (
+                <img
+                  src={file.previewUrl}
+                  alt=""
+                  className="h-24 w-24 rounded border border-white/10 object-cover"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => removeFile(file.id)}
@@ -321,24 +335,44 @@ export function LostFoundForm() {
           ))}
 
           {files.length < MAX_ATTACHMENTS_PER_ITEM && (
-            <label
-              className={`flex h-24 w-24 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 text-center font-mono text-[10px] uppercase tracking-wide text-white/50 hover:border-white/40 ${
-                submitting ? 'pointer-events-none opacity-40' : ''
-              }`}
-            >
-              Add photo
-              <input
-                type="file"
-                accept={ACCEPT_ATTRIBUTE}
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void addFiles(e.target.files);
-                  e.target.value = '';
-                }}
-              />
-            </label>
+            <>
+              {/* `capture` opens the camera and skips the library, so uploading
+                  something already on the phone needs its own input. */}
+              <label
+                className={`flex h-24 w-24 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 px-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/50 hover:border-white/40 ${
+                  submitting ? 'pointer-events-none opacity-40' : ''
+                }`}
+              >
+                Take photo or video
+                <input
+                  type="file"
+                  accept={CAMERA_ACCEPT}
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    void addFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <label
+                className={`flex h-24 w-24 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 px-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/50 hover:border-white/40 ${
+                  submitting ? 'pointer-events-none opacity-40' : ''
+                }`}
+              >
+                Upload
+                <input
+                  type="file"
+                  accept={LIBRARY_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void addFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </>
           )}
         </div>
       </section>
