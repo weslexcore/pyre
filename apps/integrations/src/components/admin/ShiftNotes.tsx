@@ -626,11 +626,11 @@ export function ShiftNotes() {
           ? 'No notes match.'
           : scope === 'all'
             ? notes.length === 0
-              ? 'No shift notes yet — every note anyone writes lands here.'
-              : 'Every note anyone has written.'
+              ? 'No notes yet — feedback, issues, and anything worth passing along land here as the team adds them.'
+              : 'Every note anyone has left, newest first.'
             : notes.length === 0
-              ? 'You have not written a shift note yet — add your first above. Only admins read the whole log.'
-              : 'The notes you have written. Only admins read the whole log.'}
+              ? 'You have not left a note yet — add one above whenever something comes up, no need to wait for the end of your shift. Only admins read the whole log.'
+              : 'The notes you have left, newest first. Only admins read the whole log.'}
       </p>
 
       {byDay.map(([date, dayNotes]) => (

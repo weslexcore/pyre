@@ -28,8 +28,8 @@ describe('QuickShiftNote', () => {
 
   it('offers text, a camera shot, and photo / video uploads', () => {
     const html = renderToStaticMarkup(<QuickShiftNote />);
-    expect(html).toContain('How the shift went');
-    expect(html).toContain('New shift note');
+    expect(html).toContain('What&#x27;s worth noting');
+    expect(html).toContain('No need to wait for the end of your shift');
     expect(html).toContain('capture="environment"');
     expect(html).toContain('Add photos / video');
     expect(html).toMatch(/role="dialog"[^>]*aria-labelledby="([^"]+)"/);

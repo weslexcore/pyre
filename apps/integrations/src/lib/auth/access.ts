@@ -91,8 +91,8 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   const row = rows?.find((r) => r.email === normalized);
   // A row without access is a roster-only person (scheduled, but no dashboard)
   // — they fall through to the same env check as anyone unknown. Shift notes
-  // are the exception: writing up the shift you just worked is something
-  // everyone on the roster does, so an active staff row implies that page
+  // are the exception: leaving notes as things come up on shift is
+  // something everyone on the roster does, so an active staff row implies that page
   // (and with it, dashboard access) without an admin ticking the checkbox on
   // /admin/users. The page still splits by role — admins read the whole log,
   // everyone else only the notes they wrote (see lib/shift-notes/access).

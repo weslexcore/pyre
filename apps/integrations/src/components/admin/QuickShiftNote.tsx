@@ -94,7 +94,7 @@ export function QuickShiftNote() {
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
             <h2 id={titleId} className="text-lg font-semibold text-[var(--pyre-creme)]">
-              New shift note
+              Add a shift note
             </h2>
             <button
               type="button"
