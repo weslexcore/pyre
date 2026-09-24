@@ -182,15 +182,16 @@ export function ScheduleCalendar() {
 
   const selfId = data?.selfStaffId ?? null;
 
-  // Days the viewer is on the schedule — those cells get the gold treatment.
-  const selfDates = useMemo(() => {
-    const dates = new Set<string>();
-    if (!selfId) return dates;
+  // Shifts the viewer is on — those blocks get the gold ring (the shift, not
+  // its whole day cell: a day can hold slots they aren't working).
+  const selfShiftIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!selfId) return ids;
     for (const shift of data?.shifts ?? []) {
       if (shift.status === 'cancelled') continue;
-      if (shift.assignments.some((a) => a.staff_id === selfId)) dates.add(shift.shift_date);
+      if (shift.assignments.some((a) => a.staff_id === selfId)) ids.add(shift.id);
     }
-    return dates;
+    return ids;
   }, [data, selfId]);
 
   // Per-day time-off markers: every active person with any busy interval.
@@ -366,12 +367,7 @@ export function ScheduleCalendar() {
                 const markers = (timeOffByDate.get(date) ?? []).filter(
                   (m) => staffFilter.size === 0 || staffFilter.has(m.staff.id)
                 );
-                const selfWorks = selfDates.has(date);
-                const cellTone = selfWorks
-                  ? 'bg-[var(--pyre-gold)]/[0.08] ring-1 ring-inset ring-[var(--pyre-gold)]/40'
-                  : inMonth
-                    ? ''
-                    : 'bg-white/[0.02]';
+                const cellTone = inMonth ? '' : 'bg-white/[0.02]';
                 return (
                   <div
                     key={date}
@@ -381,11 +377,7 @@ export function ScheduleCalendar() {
                   >
                     <div
                       className={`mb-1 text-right font-mono text-[11px] ${
-                        date === today
-                          ? 'font-bold text-[var(--pyre-red)]'
-                          : selfWorks
-                            ? 'font-bold text-[var(--pyre-gold)]'
-                            : 'text-white/40'
+                        date === today ? 'font-bold text-[var(--pyre-red)]' : 'text-white/40'
                       }`}
                     >
                       {date >= firstTentative &&
@@ -411,12 +403,15 @@ export function ScheduleCalendar() {
                           shift.status === 'active' &&
                           missingShiftLead(shift.assignments, staffById);
                         const tentative = isTentativeShift(shift, today);
+                        const selfWorks = selfShiftIds.has(shift.id);
                         return (
                           <a
                             key={shift.id}
                             href={`/admin/schedule?view=month&date=${date}&shift=${shift.id}`}
                             title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}${tentative ? ' · tentative — may change' : ''}`}
-                            className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]} ${tentative ? 'border-dashed' : ''}`}
+                            className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]} ${tentative ? 'border-dashed' : ''} ${
+                              selfWorks ? 'ring-2 ring-[var(--pyre-gold)]' : ''
+                            }`}
                           >
                             <span className="block truncate text-[11px] font-semibold leading-tight">
                               {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}{' '}
@@ -485,6 +480,12 @@ export function ScheduleCalendar() {
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/15 align-middle" />
           covered
         </span>
+        {selfId && (
+          <span className="text-[var(--pyre-gold)]">
+            <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm ring-2 ring-[var(--pyre-gold)] align-middle" />
+            you're on
+          </span>
+        )}
         <span className="text-[var(--pyre-red)]">
           <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-dashed border-[var(--pyre-red)]/70 align-middle" />
           dashed = tentative (not locked or confirmed yet)

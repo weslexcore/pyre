@@ -1,11 +1,19 @@
-// The "next shift" chip on the /admin directory: the soonest shift still
-// ahead of the ET clock — the viewer's own (staffId given), or the next one
-// on the schedule regardless of who's on it (admins). Read-only; drafts and
-// cancelled shifts never count. The chip is decorative, so every failure
-// path returns null rather than surfacing an error on the admin home.
+// The shift chips on the /admin directory: the soonest shift still ahead of
+// the ET clock — the viewer's own (staffId given), or the next one on the
+// schedule regardless of who's on it (admins) — and the viewer's shifts for
+// the current week. Read-only; drafts and cancelled shifts never count. The
+// chips are decorative, so every failure path returns null rather than
+// surfacing an error on the admin home.
 
 import type { LocalWallClock } from '@pyre/schedule-core';
-import { DOW_LABELS, dayOfWeek, timeToMinutes, utcToEastern } from '@pyre/schedule-core';
+import {
+  addDays,
+  DOW_LABELS,
+  dayOfWeek,
+  timeToMinutes,
+  utcToEastern,
+  weekStartOf,
+} from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ShiftAssignmentRow, ShiftRow } from '@/lib/db';
 
@@ -115,6 +123,87 @@ export async function getNextUpcomingShift(
     isToday: shift.shift_date === now.date,
     isInSession: isInSession(shift, now),
   };
+}
+
+export interface WeekShift {
+  shift: ShiftRow;
+  /** The viewer's non-draft assignments on the shift, in starts_at order. */
+  assignments: ShiftAssignmentRow[];
+  isToday: boolean;
+  isInSession: boolean;
+  /** Already ended on the ET clock — shown, but dimmed. */
+  isPast: boolean;
+}
+
+/**
+ * The viewer's shifts in a Monday–Sunday week, in date/start order, each
+ * with the assignments that put them there. Pure — the query lives in
+ * getWeekShifts.
+ */
+export function pickWeekShifts(
+  shifts: ShiftRow[],
+  assignments: ShiftAssignmentRow[],
+  now: LocalWallClock
+): WeekShift[] {
+  const byShift = new Map<string, ShiftAssignmentRow[]>();
+  for (const assignment of assignments) {
+    const list = byShift.get(assignment.shift_id) ?? [];
+    list.push(assignment);
+    byShift.set(assignment.shift_id, list);
+  }
+  return shifts
+    .filter((s) => byShift.has(s.id))
+    .sort(
+      (a, b) =>
+        a.shift_date.localeCompare(b.shift_date) ||
+        timeToMinutes(a.starts_at) - timeToMinutes(b.starts_at)
+    )
+    .map((shift) => ({
+      shift,
+      assignments: (byShift.get(shift.id) ?? []).sort(
+        (a, b) => timeToMinutes(a.starts_at) - timeToMinutes(b.starts_at)
+      ),
+      isToday: shift.shift_date === now.date,
+      isInSession: isInSession(shift, now),
+      isPast: !isUpcoming(shift, now),
+    }));
+}
+
+/**
+ * Every non-cancelled, non-draft shift `staffId` is on in the current ET
+ * week (Monday–Sunday), past ones included. Null on any failure — like the
+ * next-shift chip, this is a convenience on the admin home.
+ */
+export async function getWeekShifts(
+  db: SupabaseClient,
+  staffId: string
+): Promise<WeekShift[] | null> {
+  const now = utcToEastern(new Date().toISOString());
+  const weekStart = weekStartOf(now.date);
+
+  const { data: shiftRows, error } = await db
+    .from('shifts')
+    .select('*')
+    .eq('is_draft', false)
+    .eq('status', 'active')
+    .gte('shift_date', weekStart)
+    .lte('shift_date', addDays(weekStart, 6));
+  if (error) return null;
+  const shifts = (shiftRows ?? []) as ShiftRow[];
+  if (shifts.length === 0) return [];
+
+  const { data: mine, error: mError } = await db
+    .from('shift_assignments')
+    .select('*')
+    .eq('staff_id', staffId)
+    .eq('is_draft', false)
+    .in(
+      'shift_id',
+      shifts.map((s) => s.id)
+    );
+  if (mError) return null;
+
+  return pickWeekShifts(shifts, (mine ?? []) as ShiftAssignmentRow[], now);
 }
 
 /** '16:00' → '4p', '09:30' → '9:30a' — same shorthand the calendar uses. */
