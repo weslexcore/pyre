@@ -80,6 +80,63 @@ export const DEFAULT_LOOKBACK_HOURS = 6;
 /** Widest window we will ask Momence about — a guard, not a policy. */
 export const MAX_WINDOW_HOURS = 72;
 
+/** The studio's clock. Day boundaries in the session picker are its days. */
+const STUDIO_TIME_ZONE = 'America/New_York';
+const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** "2026-09-21" for the studio's calendar day that `date` falls on. */
+export function studioDateOf(date: Date): string {
+  // en-CA formats as YYYY-MM-DD.
+  return date.toLocaleDateString('en-CA', { timeZone: STUDIO_TIME_ZONE });
+}
+
+/** How far the studio's wall clock is ahead of UTC at `ms` (negative here). */
+function studioOffsetMs(ms: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: STUDIO_TIME_ZONE,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(ms));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second')
+  );
+  return wall - Math.floor(ms / 1000) * 1000;
+}
+
+/** The instant the studio's day `y-m-d` begins. Two passes settle DST days. */
+function studioMidnight(y: number, m: number, d: number): number {
+  const wall = Date.UTC(y, m - 1, d);
+  const guess = wall - studioOffsetMs(wall);
+  return wall - studioOffsetMs(guess);
+}
+
+/**
+ * One studio calendar day as a session window, for jumping straight to a day
+ * instead of widening the lookback hour by hour. The end never runs past
+ * `now`: nothing after it has been left behind yet. Null for a malformed or
+ * future date.
+ */
+export function studioDayWindow(ymd: string, now: Date): { start: string; end: string } | null {
+  const match = YMD_RE.exec(ymd);
+  if (!match) return null;
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const start = studioMidnight(y, m, d);
+  const end = Math.min(studioMidnight(y, m, d + 1), now.getTime());
+  if (Number.isNaN(start) || end <= start) return null;
+  return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
+}
+
 /**
  * "a" or "an" for what staff actually type into the item field. The vowel test
  * is enough here — the words that break it ("a unicorn", "an hour") are not
