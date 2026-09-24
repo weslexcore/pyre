@@ -21,7 +21,7 @@
 //   POST   { title, descriptionMd?, status?, ownerEmail?, area?, targetDate?,
 //            boardSlug? } → { goal } 201   (boardSlug points that board at it)
 //   PATCH  { id, ...any of the above, sortOrder?, completionNote? } → { goal }
-//   DELETE ?id=<uuid>   → { ok: true }
+//   DELETE ?id=<uuid>   → { ok: true }   (its board and cards let go of it)
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
@@ -177,24 +177,19 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const id = url.searchParams.get('id');
   if (!isUuidParam(id)) return json({ error: 'id must be a UUID' }, 400);
 
-  // Deleting a goal that a board serves or that carries work would either
-  // orphan the cards or take the board's purpose away under it, and neither
-  // is what anybody means by "remove this". 'dropped' is: it keeps the goal,
-  // its tasks, and the reasoning. Detaching it from the board is the other.
-  const [boards, { count: cardCount, error: cardError }] = await Promise.all([
-    boardsForGoal(db, id),
-    db.from('board_cards').select('id', { count: 'exact', head: true }).eq('goal_id', id),
-  ]);
-  if (cardError) return json({ error: cardError.message }, 500);
-
-  if (boards.length > 0) {
-    return json(
-      { error: `The board "${boards[0].name}" serves this goal. Detach it there first.` },
-      409
-    );
-  }
-  if ((cardCount ?? 0) > 0) {
-    return json({ error: 'This goal has tasks filed under it. Mark it dropped instead.' }, 409);
+  // Deleting is deleting: the goal, its KPIs and its trail go (cascade), and
+  // the board that served it and the cards filed under it let go of it
+  // (set null) — the board carries on as a plain list and keeps every card.
+  // 'dropped' is still there for a goal whose reasoning is worth keeping.
+  // The one thing that holds is a sub-goal, which the database refuses to
+  // orphan.
+  const { count: childCount, error: childError } = await db
+    .from('goals')
+    .select('id', { count: 'exact', head: true })
+    .eq('parent_id', id);
+  if (childError) return json({ error: childError.message }, 500);
+  if ((childCount ?? 0) > 0) {
+    return json({ error: 'This goal has sub-goals under it. Delete or move those first.' }, 409);
   }
 
   const { error } = await db.from('goals').delete().eq('id', id);
