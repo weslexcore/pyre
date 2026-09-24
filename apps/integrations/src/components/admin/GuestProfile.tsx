@@ -22,6 +22,7 @@ import { habitLine, type PackSummary } from '@/lib/guests/insights';
 import type { GuestMomenceSnapshot } from '@/lib/guests/momence';
 import { FIELD_LIMITS, groupFields, hasAnswer } from '@/lib/guests/types';
 import { actorLabel, type PeopleNames, sameActor } from '@/lib/sops/names';
+import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import { FieldRow, formatMonth, QuietBadge, StandingBadge, send } from './guestUi';
 import {
@@ -234,9 +235,7 @@ export function GuestProfile({
               {account?.phone ? ` · ${account.phone}` : ''}
             </p>
           </div>
-          <a href="/admin/guests" className={buttonClass}>
-            All guests
-          </a>
+          <BackLink href="/admin/guests">All guests</BackLink>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">

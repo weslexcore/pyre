@@ -13,6 +13,7 @@ import type { MessageThreadPayload } from '@/lib/messages/store';
 import { REPLY_MAX } from '@/lib/messages/validate';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkTextarea } from './LinkTextarea';
 import { MessageComposer, type MessageDraft } from './MessageComposer';
@@ -191,9 +192,7 @@ export function MessageThread({
         <p role="alert" className="text-sm text-[var(--pyre-red)]">
           {error ?? 'Message not found'}
         </p>
-        <a href="/admin/messages" data-astro-prefetch className={`${buttonClass} inline-block`}>
-          Back to messages
-        </a>
+        <BackLink href="/admin/messages">All messages</BackLink>
       </div>
     );
   }
@@ -207,13 +206,7 @@ export function MessageThread({
 
   return (
     <div className="space-y-6">
-      <a
-        href="/admin/messages"
-        data-astro-prefetch
-        className="font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
-      >
-        ← All messages
-      </a>
+      <BackLink href="/admin/messages">All messages</BackLink>
 
       {error && (
         <p

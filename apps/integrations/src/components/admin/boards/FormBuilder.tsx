@@ -47,6 +47,7 @@ import type {
   BoardRow,
 } from '@/lib/db';
 import { downscaleImage } from '@/lib/media/attachments';
+import { BackLink } from '../BackLink';
 import {
   buttonClass,
   cardClass,
@@ -57,7 +58,6 @@ import {
   selectBaseClass,
   send,
   textareaClass,
-  toolbarButtonClass,
 } from '../goalsUi';
 import { Chip, readError } from '../incidentUi';
 import { ColumnOrder } from './ColumnOrder';
@@ -261,9 +261,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <a className={toolbarButtonClass} href={`/admin/boards/${slug}`}>
-            ← {board.name}
-          </a>
+          <BackLink href={`/admin/boards/${slug}`}>{board.name}</BackLink>
         </div>
 
         <section className={cardClass}>

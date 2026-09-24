@@ -17,6 +17,7 @@ import { PLACEMENTS } from '@/lib/campaigns/placements';
 import { slugToName } from '@/lib/campaigns/slug';
 import type { CampaignGoal } from '@/lib/campaigns/types';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { BackLink } from './BackLink';
 import { buttonClass } from './incidentUi';
 
 interface CampaignRow {
@@ -248,9 +249,9 @@ export function CampaignPerformance() {
 
   return (
     <div>
-      <a href="/admin/campaigns" className={`${buttonClass} mb-4 inline-block`}>
-        <span aria-hidden="true">&larr;</span> All campaigns
-      </a>
+      <BackLink href="/admin/campaigns" className="mb-4">
+        All campaigns
+      </BackLink>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1" role="tablist" aria-label="Group by">
           <button

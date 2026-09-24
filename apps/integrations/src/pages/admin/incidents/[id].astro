@@ -5,6 +5,7 @@
 //
 // ?uploads=failed comes from the filing form when the report saved but a
 // photo upload didn't, so the page can say so and offer to take them again.
+import { BackLink } from '@/components/admin/BackLink';
 import { IncidentDetail } from '@/components/admin/IncidentDetail';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 
@@ -15,13 +16,8 @@ if (!id) return Astro.redirect('/admin/incidents');
 ---
 
 <AdminLayout title="Incident Report" subtitle="The record, its media, and everything since">
-  <p class="mb-4">
-    <a
-      href="/admin/incidents"
-      class="font-mono text-xs uppercase tracking-wide text-white/40 hover:text-white"
-    >
-      ← Back to the log
-    </a>
-  </p>
+  <div class="mb-4">
+    <BackLink href="/admin/incidents">All incidents</BackLink>
+  </div>
   <IncidentDetail client:load incidentId={id} uploadsFailed={uploadsFailed} />
 </AdminLayout>

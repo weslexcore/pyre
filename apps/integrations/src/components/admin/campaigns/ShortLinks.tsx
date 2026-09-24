@@ -20,6 +20,7 @@ import type {
   ShortLinkListResponse,
   StandaloneShortLink,
 } from '@/lib/shortlinks/types';
+import { BackLink } from '../BackLink';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CopyButton } from '../CopyButton';
 import {
@@ -146,9 +147,7 @@ export function ShortLinks() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <a href="/admin/campaigns" className={buttonClass}>
-          Back to campaigns
-        </a>
+        <BackLink href="/admin/campaigns">All campaigns</BackLink>
         {refreshing && <span className="font-mono text-xs text-white/35">Refreshing…</span>}
       </div>
 

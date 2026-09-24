@@ -13,6 +13,7 @@ import type {
 } from '@/lib/campaigns/types';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { QrStyle } from '@/lib/qr/style';
+import { BackLink } from '../BackLink';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CopyButton } from '../CopyButton';
 import { buttonClass, cardClass, readError, SectionTitle } from '../incidentUi';
@@ -191,12 +192,12 @@ export function CampaignDetail({
   }
   if (error) {
     return (
-      <p className="text-sm text-[var(--pyre-red)]">
-        {error.includes('404') ? 'That campaign no longer exists.' : `Could not load: ${error}`}{' '}
-        <a href="/admin/campaigns" className="underline">
-          Back to campaigns
-        </a>
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-[var(--pyre-red)]">
+          {error.includes('404') ? 'That campaign no longer exists.' : `Could not load: ${error}`}
+        </p>
+        <BackLink href="/admin/campaigns">All campaigns</BackLink>
+      </div>
     );
   }
   if (loading || !campaign) return <p className="font-mono text-xs text-white/40">Loading…</p>;
@@ -207,9 +208,7 @@ export function CampaignDetail({
 
   return (
     <div className="space-y-6">
-      <a href="/admin/campaigns" className={`${buttonClass} inline-block`}>
-        <span aria-hidden="true">&larr;</span> All campaigns
-      </a>
+      <BackLink href="/admin/campaigns">All campaigns</BackLink>
 
       <header className={cardClass}>
         {editing ? (

@@ -30,7 +30,8 @@ import { BOARDS_HREF } from '@/lib/boards/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { todayEastern, toolbarButtonClass } from '../goalsUi';
+import { BackLink } from '../BackLink';
+import { todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
@@ -151,9 +152,7 @@ export function BoardsCalendar() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <a className={toolbarButtonClass} href={BOARDS_HREF}>
-          ← All boards
-        </a>
+        <BackLink href={BOARDS_HREF}>All boards</BackLink>
       </div>
 
       {(error || saveError) && (

@@ -29,6 +29,7 @@ import { formatDaysLeft } from '@/lib/goals/progress';
 import type { GoalsOverviewData } from '@/lib/goals/store';
 import { GOAL_STATUS_LABELS, isClosedStatus } from '@/lib/goals/types';
 import { personName } from '@/lib/sops/names';
+import { BackLink } from '../BackLink';
 import {
   cardClass,
   formatYmd,
@@ -42,7 +43,6 @@ import {
   selectClass,
   send,
   TaskBar,
-  toolbarButtonClass,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { GoalForm } from './GoalForm';
@@ -173,9 +173,7 @@ export function GoalsOverview() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <a className={toolbarButtonClass} href={BOARDS_HREF}>
-          ← All boards
-        </a>
+        <BackLink href={BOARDS_HREF}>All boards</BackLink>
         {!creating && (
           <button
             type="button"

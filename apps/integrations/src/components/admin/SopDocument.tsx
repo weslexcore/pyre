@@ -28,6 +28,7 @@ import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
+import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
@@ -382,9 +383,7 @@ export function SopDocument({
           {error ?? 'SOP not found'}
         </p>
         <div className="flex gap-2">
-          <a href="/admin/sops" className={buttonClass}>
-            ← All SOPs
-          </a>
+          <BackLink href="/admin/sops">All SOPs</BackLink>
           <button type="button" className={buttonClass} onClick={() => void load()}>
             Retry
           </button>
@@ -400,9 +399,7 @@ export function SopDocument({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <a href="/admin/sops" className={buttonClass}>
-          ← All SOPs
-        </a>
+        <BackLink href="/admin/sops">All SOPs</BackLink>
         {mode === 'view' && canEdit && !sop.archived && (
           <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
             Edit

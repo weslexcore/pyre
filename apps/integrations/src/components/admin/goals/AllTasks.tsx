@@ -20,18 +20,12 @@ import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
 import type { GroupBy } from '@/lib/goals/types';
 import { AREAS, GROUP_BY } from '@/lib/goals/types';
+import { BackLink } from '../BackLink';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
-import {
-  cardClass,
-  inputBaseClass,
-  SectionTitle,
-  selectClass,
-  send,
-  toolbarButtonClass,
-} from '../goalsUi';
+import { cardClass, inputBaseClass, SectionTitle, selectClass, send } from '../goalsUi';
 import { readError } from '../incidentUi';
 
 type TasksData = AllTasksData & { owners?: Assignable[] };
@@ -152,9 +146,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <a className={toolbarButtonClass} href={BOARDS_HREF}>
-          ← All boards
-        </a>
+        <BackLink href={BOARDS_HREF}>All boards</BackLink>
       </div>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 

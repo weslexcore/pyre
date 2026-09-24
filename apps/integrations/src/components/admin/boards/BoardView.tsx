@@ -39,6 +39,7 @@ import type {
   GoalRow,
 } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
+import { BackLink } from '../BackLink';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
 import {
@@ -310,9 +311,7 @@ export function BoardView({ slug }: { slug: string }) {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <a className={toolbarButtonClass} href={BOARDS_HREF}>
-            ← All boards
-          </a>
+          <BackLink href={BOARDS_HREF}>All boards</BackLink>
           {hasCalendar && (
             <span className="flex gap-1.5">
               <button

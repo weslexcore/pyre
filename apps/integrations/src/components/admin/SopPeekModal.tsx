@@ -18,6 +18,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import type { CheckItems } from '@/lib/sops/optimistic';
+import { backLinkClass } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { cascadeLinked } from './linkedCascade';
 import { SopMarkdown } from './SopMarkdown';
@@ -239,9 +240,10 @@ export function SopPeekModal({
             <button
               type="button"
               onClick={() => navigate(stack.slice(0, -1))}
-              className="shrink-0 rounded border border-white/10 px-2 py-1.5 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:border-white/30 hover:text-white"
+              className={backLinkClass}
             >
-              ← Back
+              <span aria-hidden="true">←</span>
+              Back
             </button>
           )}
           <h2

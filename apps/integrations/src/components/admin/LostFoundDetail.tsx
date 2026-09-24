@@ -27,6 +27,7 @@ import {
 import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
   buttonClass,
@@ -344,9 +345,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-24">
-      <a href="/admin/lost-found" className="font-mono text-xs text-white/45 hover:text-white/70">
-        ← All items
-      </a>
+      <BackLink href="/admin/lost-found">All items</BackLink>
 
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">

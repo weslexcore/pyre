@@ -9,6 +9,7 @@
 // given. isAdmin decides one thing here: whether a run can be deleted.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
+import { BackLink } from './BackLink';
 import { type RunEntry, RunsList } from './SopRunsList';
 
 const buttonClass =
@@ -146,9 +147,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <a href="/admin/sops" className={buttonClass}>
-          ← All SOPs
-        </a>
+        <BackLink href="/admin/sops">All SOPs</BackLink>
         <span className="mx-2 h-4 w-px bg-white/10" />
         {STATUS_FILTERS.map(({ key, label }) => (
           <button

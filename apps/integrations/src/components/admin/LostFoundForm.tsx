@@ -46,6 +46,7 @@ import {
   studioDayWindow,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
+import { BackLink } from './BackLink';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
 import {
   buttonClass,
@@ -310,9 +311,7 @@ export function LostFoundForm() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 pb-24">
-      <a href="/admin/lost-found" className="font-mono text-xs text-white/45 hover:text-white/70">
-        ← All items
-      </a>
+      <BackLink href="/admin/lost-found">All items</BackLink>
 
       <section>
         <SectionTitle note="Take a clear photo or video of the item, or upload one you already have">

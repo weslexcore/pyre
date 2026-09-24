@@ -18,6 +18,7 @@ import {
 } from '@/lib/campaigns/types';
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { BackLink } from '../BackLink';
 import {
   buttonClass,
   inputBaseClass,
@@ -221,11 +222,7 @@ export function CampaignForm({
         void submit();
       }}
     >
-      {!editing && (
-        <a href="/admin/campaigns" className={`${buttonClass} inline-block`}>
-          <span aria-hidden="true">&larr;</span> All campaigns
-        </a>
-      )}
+      {!editing && <BackLink href="/admin/campaigns">All campaigns</BackLink>}
 
       <section>
         <span className={labelClass}>What kind of campaign</span>
