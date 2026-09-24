@@ -392,7 +392,7 @@ describe('buildCalendar — goals', () => {
       { includeGoals: true }
     );
     expect(entries[0].href).toBe('/admin/boards/rentals');
-    expect(entries[1].href).toBe('/admin/boards/all-goals');
+    expect(entries[1].href).toBe(`/admin/boards/all-goals#goal-${entries[1].goalId}`);
   });
 });
 

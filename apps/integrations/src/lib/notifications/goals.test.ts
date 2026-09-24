@@ -98,4 +98,23 @@ describe('comment notifications', () => {
       }),
     ]);
   });
+  it('links a goal no board serves to the overview, for whoever holds the whole tool', async () => {
+    listStaff.mockResolvedValue(
+      roster.map((row) => (row.email === 'owner@pyre.test' ? { ...row, is_admin: true } : row))
+    );
+    const { db, insert } = database();
+    await notifyGoalComment(
+      db,
+      { id: 'goal', title: 'Goal', owner_email: 'owner@pyre.test' },
+      null,
+      'A note',
+      'actor@pyre.test'
+    );
+    expect(insert.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        recipient_email: 'owner@pyre.test',
+        href: '/admin/boards/all-goals#goal-goal',
+      }),
+    ]);
+  });
 });

@@ -21,7 +21,7 @@
 
 import { addDays } from '@pyre/schedule-core';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
-import { ALL_GOALS_HREF, isClosedStatus } from '@/lib/goals/types';
+import { goalOverviewHref, isClosedStatus } from '@/lib/goals/types';
 import { isYmd } from '@/lib/goals/validate';
 import { isFinishedKind, kindIsTime } from './types';
 
@@ -300,7 +300,7 @@ export function buildCalendar(
         boardSlug: board?.slug,
         boardName: board?.name,
         finished: isClosedStatus(goal.status),
-        href: board ? `/admin/boards/${board.slug}` : ALL_GOALS_HREF,
+        href: board ? `/admin/boards/${board.slug}` : goalOverviewHref(goal.id),
         // Goals sort after every board, so a target date reads as the
         // horizon behind the day's work rather than a line of it.
         sortKey: boardsById.size,

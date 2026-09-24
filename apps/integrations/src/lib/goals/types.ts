@@ -20,6 +20,15 @@ export const ALL_TASKS_HREF = '/admin/boards/tasks';
  */
 export const ALL_GOALS_HREF = '/admin/boards/all-goals';
 
+/**
+ * A goal on the overview, opened. The page every goal can be managed from,
+ * whether or not a board serves it — so a goal with no board still has
+ * somewhere to link to.
+ */
+export function goalOverviewHref(goalId: string): string {
+  return `${ALL_GOALS_HREF}#goal-${goalId}`;
+}
+
 export const GOAL_STATUSES = ['planned', 'active', 'completed', 'dropped'] as const;
 export type GoalStatusValue = (typeof GOAL_STATUSES)[number];
 

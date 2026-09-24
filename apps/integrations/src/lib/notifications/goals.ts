@@ -9,7 +9,8 @@
 //   * a goal's owner hears when it is marked completed by someone else. The
 //     founders are the audience for that one, and it is the moment the whole
 //     tool exists for, so it carries the note they wrote. The link opens the
-//     board that serves the goal, since that is where a goal lives now.
+//     board that serves the goal, or the goals overview for a goal no board
+//     serves.
 //   * a comment reaches its owner and explicitly mentioned people with access.
 //   * a lead from the web reaches whoever holds that board (boardRecipients),
 //     which for the rental pipeline is the community manager and the
@@ -20,11 +21,11 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
-import { canViewBoard } from '@/lib/boards/access';
+import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { notifyRecipients } from '@/lib/boards/forms';
 import { mentionedEmails, mentionPeople } from '@/lib/boards/mentions';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
-import { ALL_TASKS_HREF } from '@/lib/goals/types';
+import { ALL_TASKS_HREF, goalOverviewHref } from '@/lib/goals/types';
 import { createNotifications } from './notify';
 import {
   boardRecipients,
@@ -71,16 +72,19 @@ function cardHrefFor(rows: RosterRow[], boardSlug: string, cardId: string) {
 }
 
 /**
- * Where a goal opens: the board that serves it, for whoever holds that
- * board. A goal no board serves has no page, so no link.
+ * Where a goal opens: the first board serving it that this person holds,
+ * else the goals overview when they hold the whole tool (every goal is
+ * managed there, board or no board), else nowhere.
  */
-function goalHrefFor(rows: RosterRow[], board: Pick<BoardRow, 'slug'> | null) {
+function goalHrefFor(rows: RosterRow[], goalId: string, boards: Pick<BoardRow, 'slug'>[]) {
   const byEmail = rosterByEmail(rows);
   return (recipient: string): string | null => {
     const row = byEmail.get(recipient);
-    if (!row || !board) return null;
+    if (!row) return null;
     const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
-    return canViewBoard(access, board.slug) ? `/admin/boards/${board.slug}` : null;
+    const board = boards.find((item) => canViewBoard(access, item.slug));
+    if (board) return `/admin/boards/${board.slug}`;
+    return canManageBoards(access) ? goalOverviewHref(goalId) : null;
   };
 }
 
@@ -169,7 +173,7 @@ export async function notifyGoalCompleted(
       openCards: preview.openCards,
       note: goal.completion_note,
     }),
-    href: goalHrefFor(rows, board),
+    href: goalHrefFor(rows, goal.id, board ? [board] : []),
     source: { type: 'goal', id: goal.id },
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),
@@ -228,8 +232,7 @@ export async function notifyGoalComment(
       commenterName: nameFor(rows, actorEmail),
       excerpt: excerpt(note, 160),
     }),
-    href: (recipient) =>
-      boards.map((item) => goalHrefFor(rows, item)(recipient)).find(Boolean) ?? null,
+    href: goalHrefFor(rows, goal.id, boards),
     source: { type: 'goal', id: goal.id },
     actorEmail,
     expiresAt: daysFromNow(NOTICE_DAYS),

@@ -1,9 +1,10 @@
-// Goals: what a board is for. A goal is written down with its board (or
-// attached to one afterwards, api/admin/boards.ts), judged by its KPIs
-// (goal-kpis.ts), and advanced by the cards on the board that serves it
-// (board-cards.ts). A single goal is read as part of its board's bundle
-// (lib/boards/store); the GET here is the overview — every goal at once,
-// for /admin/boards/all-goals.
+// Goals: what a board is for. A goal is written down with its board, or on
+// its own from the goals overview and attached to a board later (or never —
+// api/admin/boards.ts), judged by its KPIs (goal-kpis.ts), and advanced by
+// the cards on the board that serves it (board-cards.ts). A single goal is
+// read as part of its board's bundle (lib/boards/store); the GET here is the
+// overview — every goal at once, for /admin/boards/all-goals, where any goal
+// can be managed whether or not a board serves it.
 //
 // The one rule worth stating out loud: **nothing here closes a goal on its
 // own.** A PATCH to status 'completed' is a person pressing a button, and the
@@ -16,7 +17,7 @@
 // /admin/boards grant (canManageBoards). Measuring a KPI does not; see
 // goal-kpis.ts.
 //
-//   GET    → { goals, kpis, boards, columns, cards, people, today }
+//   GET    → { goals, kpis, boards, columns, owners, cards, people, today }
 //            (the whole tool's — a single-board grant does not reach it)
 //   POST   { title, descriptionMd?, status?, ownerEmail?, area?, targetDate?,
 //            boardSlug? } → { goal } 201   (boardSlug points that board at it)

@@ -83,7 +83,10 @@ export interface GoalsOverviewData {
   goals: GoalRow[];
   kpis: GoalKpiRow[];
   boards: BoardRow[];
-  columns: Pick<BoardColumnRow, 'id' | 'kind'>[];
+  /** Whole rows, because a goal's trail names the columns its cards moved through. */
+  columns: BoardColumnRow[];
+  /** Who a goal can be put on, for the form. */
+  owners: Assignable[];
   /** Every card filed under a goal — just enough to tally it by column kind. */
   cards: Pick<BoardCardRow, 'column_id' | 'goal_id'>[];
   people: PeopleNames;
@@ -92,8 +95,9 @@ export interface GoalsOverviewData {
 
 /**
  * The goals overview: every goal (closed ones too — a finished goal is part
- * of where we stand), its KPIs, the boards that serve them, and the cards
- * under them slimmed to the two columns the task bar needs.
+ * of where we stand), its KPIs, the boards that serve them, the cards under
+ * them slimmed to the two columns the task bar needs, and the people a goal
+ * can be put on — the overview is where a goal is managed, board or no board.
  */
 export async function loadGoalsOverview(db: SupabaseClient): Promise<GoalsOverviewData> {
   const [goalsResult, kpisResult, boards, columns, cardsResult] = await Promise.all([
@@ -121,7 +125,8 @@ export async function loadGoalsOverview(db: SupabaseClient): Promise<GoalsOvervi
     goals,
     kpis: (kpisResult.data ?? []) as GoalKpiRow[],
     boards,
-    columns: columns.map((column) => ({ id: column.id, kind: column.kind })),
+    columns,
+    owners: await listAssignable(),
     cards: (cardsResult.data ?? []) as Pick<BoardCardRow, 'column_id' | 'goal_id'>[],
     people: await getPeopleNames(
       goals.flatMap((goal) => [goal.owner_email ?? '', goal.completed_by ?? ''])

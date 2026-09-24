@@ -1,10 +1,12 @@
 ---
-// A goal's old page. Goals are read from the board that serves them now, so
-// this sends the visitor there — inbox rows written before the merge still
-// point here, and a bell that opens nothing is worse than a redirect.
-// Whether they may open that board is the board page's decision.
+// A goal's old page. Goals are read from the board that serves them now, or
+// from the goals overview when no board does, so this sends the visitor
+// there — inbox rows written before the merge still point here, and a bell
+// that opens nothing is worse than a redirect. Whether they may open that
+// page is its own decision.
 import { boardsForGoal } from '@/lib/boards/store';
 import { getDb } from '@/lib/db';
+import { goalOverviewHref } from '@/lib/goals/types';
 import { isUuid } from '@/lib/goals/validate';
 
 const { id } = Astro.params;
@@ -13,7 +15,7 @@ if (id && isUuid(id)) {
   try {
     const db = getDb();
     const boards = db ? await boardsForGoal(db, id) : [];
-    if (boards[0]) target = `/admin/boards/${boards[0].slug}`;
+    target = boards[0] ? `/admin/boards/${boards[0].slug}` : goalOverviewHref(id);
   } catch (error) {
     console.warn('[goals] redirect lookup failed:', error);
   }

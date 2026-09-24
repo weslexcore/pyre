@@ -24,8 +24,7 @@ import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CompleteGoalDialog } from '../goals/CompleteGoalDialog';
 import { GoalForm } from '../goals/GoalForm';
-import { KpiForm } from '../goals/KpiForm';
-import { KpiRow } from '../goals/KpiRow';
+import { GoalKpis } from '../goals/GoalKpis';
 import {
   buttonClass,
   dangerButtonClass,
@@ -79,8 +78,6 @@ export function BoardGoal({
   const [editing, setEditing] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
   const [existingId, setExistingId] = useState('');
-  const [kpiFormFor, setKpiFormFor] = useState<GoalKpiRow | 'new' | null>(null);
-  const [removingKpi, setRemovingKpi] = useState<GoalKpiRow | null>(null);
   const [completing, setCompleting] = useState(false);
   const [detaching, setDetaching] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -250,65 +247,15 @@ export function BoardGoal({
               <TaskBar progress={rollup.tasks} />
             </div>
 
-            <div>
-              <div className="mb-1 flex items-baseline justify-between gap-2">
-                <p className="font-mono text-[10px] uppercase tracking-wide text-white/35">KPIs</p>
-                {canManage && kpiFormFor === null && (
-                  <button
-                    type="button"
-                    className="font-mono text-[11px] text-white/45 underline hover:text-white/70"
-                    onClick={() => setKpiFormFor('new')}
-                  >
-                    Add a KPI
-                  </button>
-                )}
-              </div>
-              {kpis.length === 0 && kpiFormFor === null && (
-                <p className="font-mono text-xs text-white/35">
-                  No KPIs yet. Without one, “met” is a feeling.
-                </p>
-              )}
-              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {kpis.map((kpi) => (
-                  <KpiRow
-                    key={kpi.id}
-                    kpi={kpi}
-                    nowIso={nowIso}
-                    busy={busy}
-                    canManage={canManage}
-                    canMeasure={canWorkGoal}
-                    onEdit={() => setKpiFormFor(kpi)}
-                    onRemove={() => setRemovingKpi(kpi)}
-                    onMeasure={(value) =>
-                      mutate(() =>
-                        send('/api/admin/goal-kpis', 'PATCH', { id: kpi.id, currentValue: value })
-                      )
-                    }
-                  />
-                ))}
-              </ul>
-              {kpiFormFor !== null && (
-                <div className="mt-2">
-                  <KpiForm
-                    kpi={kpiFormFor === 'new' ? undefined : kpiFormFor}
-                    busy={busy}
-                    onCancel={() => setKpiFormFor(null)}
-                    onSave={async (values) => {
-                      if (kpiFormFor === 'new') {
-                        await mutate(() =>
-                          send('/api/admin/goal-kpis', 'POST', { goalId: goal.id, ...values })
-                        );
-                      } else {
-                        await mutate(() =>
-                          send('/api/admin/goal-kpis', 'PATCH', { id: kpiFormFor.id, ...values })
-                        );
-                      }
-                      setKpiFormFor(null);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <GoalKpis
+              goalId={goal.id}
+              kpis={kpis}
+              nowIso={nowIso}
+              busy={busy}
+              canManage={canManage}
+              canMeasure={canWorkGoal}
+              mutate={mutate}
+            />
           </div>
 
           {goal.description_md.trim() && (
@@ -350,22 +297,6 @@ export function BoardGoal({
               onCompleted();
               return saved;
             });
-          }}
-        />
-      )}
-
-      {removingKpi && (
-        <ConfirmDialog
-          title={`Remove “${removingKpi.name}”?`}
-          body="The KPI and every measurement on it go with it. The goal keeps its tasks and its history."
-          confirmLabel="Remove"
-          danger
-          busy={busy}
-          onCancel={() => setRemovingKpi(null)}
-          onConfirm={() => {
-            const id = removingKpi.id;
-            setRemovingKpi(null);
-            void mutate(() => send(`/api/admin/goal-kpis?id=${id}`, 'DELETE'));
           }}
         />
       )}
