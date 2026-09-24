@@ -12,8 +12,8 @@
 //
 // Who may do what follows the board's grants: anyone who can open the board
 // sees the goal and may type in a KPI measurement (canWorkGoal); writing the
-// goal, defining KPIs, detaching it, and calling it met need the whole tool
-// (canManage).
+// goal, defining KPIs, detaching it, deleting it, and calling it met need the
+// whole tool (canManage).
 
 import { useMemo, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
@@ -28,6 +28,7 @@ import { KpiForm } from '../goals/KpiForm';
 import { KpiRow } from '../goals/KpiRow';
 import {
   buttonClass,
+  dangerButtonClass,
   formatYmd,
   GoalStatusBadge,
   PaceChip,
@@ -82,6 +83,7 @@ export function BoardGoal({
   const [removingKpi, setRemovingKpi] = useState<GoalKpiRow | null>(null);
   const [completing, setCompleting] = useState(false);
   const [detaching, setDetaching] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.id, column])),
@@ -206,6 +208,13 @@ export function BoardGoal({
                 </button>
                 <button type="button" className={buttonClass} onClick={() => setDetaching(true)}>
                   Detach
+                </button>
+                <button
+                  type="button"
+                  className={dangerButtonClass}
+                  onClick={() => setDeleting(true)}
+                >
+                  Delete
                 </button>
                 {goal.status !== 'completed' && (
                   <button
@@ -373,6 +382,22 @@ export function BoardGoal({
             void mutate(() =>
               send('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: null })
             );
+          }}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete “${goal.title}”?`}
+          body={`The goal, its KPIs and every measurement, and its history are gone for good. The board and its ${board.card_noun}s stay. To keep the record instead, detach it or mark it dropped.`}
+          confirmLabel="Delete goal"
+          danger
+          busy={busy}
+          onCancel={() => setDeleting(false)}
+          onConfirm={() => {
+            const id = goal.id;
+            setDeleting(false);
+            void mutate(() => send(`/api/admin/goals?id=${id}`, 'DELETE'));
           }}
         />
       )}
