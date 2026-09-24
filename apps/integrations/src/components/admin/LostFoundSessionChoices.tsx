@@ -12,9 +12,9 @@
 // the count. "Nobody was here" and "we can't see who was here" are different
 // problems and only the second is worth escalating.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { cardClass } from './incidentUi';
+import { cardClass, inputClass } from './incidentUi';
 
 export interface SessionAttendee {
   name: string;
@@ -56,6 +56,44 @@ export function sessionTime(iso: string): string {
 export function askableSessions(sessions: PickerSession[]): PickerSession[] {
   return sessions.filter((s) => s.attendees.length > 0 || s.bookingCount > 0);
 }
+
+/**
+ * The sessions a search leaves on screen: the query matched against the
+ * session's name, its day and time as displayed ("fri", "sep 19", "7:30"), or
+ * the name of anyone booked into it. Picked sessions always stay, so a search
+ * never hides what is about to be sent. Each shown session carries the guests
+ * whose names matched, so "whose was it — Dana's?" finds her session and says
+ * why.
+ */
+export function searchSessions(
+  sessions: PickerSession[],
+  query: string,
+  picked: Set<string>
+): { session: PickerSession; matchedNames: string[] }[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return sessions.map((session) => ({ session, matchedNames: [] }));
+
+  const results: { session: PickerSession; matchedNames: string[] }[] = [];
+  for (const session of sessions) {
+    const label = `${session.name} ${sessionTime(session.startsAt)}`
+      .toLowerCase()
+      .replace(/,/g, '');
+    const matchedNames = session.attendees
+      .map((a) => a.name)
+      .filter((name) => {
+        const lower = name.toLowerCase();
+        return terms.every((t) => lower.includes(t));
+      });
+    const labelMatches = terms.every((t) => label.includes(t));
+    if (labelMatches || matchedNames.length > 0 || picked.has(session.id)) {
+      results.push({ session, matchedNames });
+    }
+  }
+  return results;
+}
+
+/** Past this many sessions, scrolling for one is slower than typing. */
+const SEARCH_THRESHOLD = 4;
 
 /** How many people a selection actually reaches, minus anyone already asked. */
 export function countReachable(
@@ -112,6 +150,9 @@ export function SessionChoices({
   /** What to suggest when there is nothing to pick. */
   emptyHint: string;
 }) {
+  const [query, setQuery] = useState('');
+  const shown = useMemo(() => searchSessions(sessions, query, picked), [sessions, query, picked]);
+
   if (loading) return <p className="font-mono text-xs text-white/40">Checking who was here…</p>;
 
   if (data?.available === false) {
@@ -149,8 +190,30 @@ export function SessionChoices({
         </div>
       )}
 
+      {sessions.length > SEARCH_THRESHOLD && (
+        <div>
+          <input
+            type="search"
+            className={inputClass}
+            value={query}
+            placeholder="Search by class, day, or guest name"
+            aria-label="Search sessions"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query.trim() && (
+            <p className="mt-1 font-mono text-xs text-white/35" aria-live="polite">
+              {shown.length} of {sessions.length} sessions
+            </p>
+          )}
+        </div>
+      )}
+
+      {query.trim() && shown.length === 0 && (
+        <p className="text-sm text-white/50">No session or guest here matches “{query.trim()}”.</p>
+      )}
+
       <ul className="space-y-2">
-        {sessions.map((session) => {
+        {shown.map(({ session, matchedNames }) => {
           const selected = picked.has(session.id);
           const fresh = session.attendees.filter((a) => !alreadyAsked.has(a.maskedEmail));
           const disabled = fresh.length === 0;
@@ -186,6 +249,12 @@ export function SessionChoices({
                     )}
                   </span>
                 </span>
+
+                {matchedNames.length > 0 && (
+                  <span className="mt-1.5 block text-xs text-[var(--pyre-gold)]">
+                    {matchedNames.join(', ')}
+                  </span>
+                )}
 
                 {session.bookingCount > 0 && !session.identityAvailable && (
                   <span className="mt-1.5 block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-red)]">

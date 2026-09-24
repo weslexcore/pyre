@@ -42,6 +42,8 @@ import {
   DONATION_WINDOW_DAYS,
   guestItemClause,
   MAX_WINDOW_HOURS,
+  studioDateOf,
+  studioDayWindow,
 } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
@@ -81,6 +83,8 @@ export function LostFoundForm() {
   const [description, setDescription] = useState('');
   const [storageLocation, setStorageLocation] = useState('');
   const [lookbackHours, setLookbackHours] = useState(DEFAULT_LOOKBACK_HOURS);
+  /** A studio calendar day to list instead of the lookback, as YYYY-MM-DD. */
+  const [day, setDay] = useState('');
   const [sessionIds, setSessionIds] = useState<Set<string>>(new Set());
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [owner, setOwner] = useState<PersonResult | null>(null);
@@ -244,11 +248,24 @@ export function LostFoundForm() {
   // Sessions are only a question when nobody is named — with an owner there is
   // one person to email and no list to read. Passing an empty range skips the
   // Momence call entirely rather than fetching a list we would not show.
+  const dayWindow = useMemo(() => (day ? studioDayWindow(day, now) : null), [day, now]);
   const lookbackStart = useMemo(
-    () => new Date(now.getTime() - lookbackHours * 3_600_000).toISOString(),
-    [now, lookbackHours]
+    () => dayWindow?.start ?? new Date(now.getTime() - lookbackHours * 3_600_000).toISOString(),
+    [now, lookbackHours, dayWindow]
   );
-  const lookbackEnd = useMemo(() => now.toISOString(), [now]);
+  const lookbackEnd = useMemo(() => dayWindow?.end ?? now.toISOString(), [now, dayWindow]);
+  const today = useMemo(() => studioDateOf(now), [now]);
+  const earliestDay = useMemo(
+    () => studioDateOf(new Date(now.getTime() - DONATION_WINDOW_DAYS * 86_400_000)),
+    [now]
+  );
+
+  // A different day is a different list: a pick from the old one would fall
+  // outside the stored window and be dropped at send time, so start clean.
+  const showDay = (next: string) => {
+    setDay(next);
+    setSessionIds(new Set());
+  };
   const { data, loading, sessions, hiddenCount } = useSessionChoices(
     owner ? '' : lookbackStart,
     owner ? '' : lookbackEnd
@@ -473,7 +490,7 @@ export function LostFoundForm() {
           />
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            {nextLookback && (
+            {!dayWindow && nextLookback && (
               <button
                 type="button"
                 className={buttonClass}
@@ -482,8 +499,31 @@ export function LostFoundForm() {
                 Look further back
               </button>
             )}
+            <label className="flex items-center gap-2 font-mono text-xs text-white/50">
+              Jump to a day
+              <input
+                type="date"
+                className="rounded border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-[var(--pyre-creme)] [color-scheme:dark]"
+                value={day}
+                min={earliestDay}
+                max={today}
+                onChange={(e) => showDay(e.target.value)}
+              />
+            </label>
+            {dayWindow && (
+              <button type="button" className={buttonClass} onClick={() => showDay('')}>
+                Back to recent
+              </button>
+            )}
             <span className="font-mono text-xs text-white/35">
-              Last {lookbackHours} hours
+              {dayWindow
+                ? new Date(dayWindow.start).toLocaleDateString('en-US', {
+                    timeZone: 'America/New_York',
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : `Last ${lookbackHours} hours`}
               {sessionIds.size > 0 &&
                 ` · ${sessionIds.size} selected, ${pickedPeople} ${pickedPeople === 1 ? 'person' : 'people'}`}
             </span>
