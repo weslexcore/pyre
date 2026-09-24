@@ -2,17 +2,16 @@
 // shifts-per-week range (min / preferred / max), which the AI drafter plans
 // around. Managers get a table of everyone on the roster; everyone else gets
 // a card for their own row. Rows come from the schedule-board payload the
-// Hours tab already loads; saves go through /api/admin/staff-preferences.
+// Hours tab already loads. Edits save themselves: a row goes to
+// /api/admin/staff-preferences shortly after the last keystroke, or as soon as
+// the field loses focus.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow } from '@/lib/db';
 
 const inputClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 /** A row's typed-but-unsaved values, as the inputs hold them. */
 interface PrefsDraft {
@@ -45,17 +44,17 @@ const FIELDS: Array<{
   max: number;
   step: number;
 }> = [
-  {
-    key: 'targetHours',
-    title: 'Weekly hours',
-    unit: 'hrs',
-    help: 'How many hours a week you would like to work.',
-    note: 'hours they want',
-    label: 'target hours per week',
-    min: 0,
-    max: 168,
-    step: 0.5,
-  },
+  // {
+  //   key: 'targetHours',
+  //   title: 'Weekly hours',
+  //   unit: 'hrs',
+  //   help: 'How many hours a week you would like to work.',
+  //   note: 'hours they want',
+  //   label: 'target hours per week',
+  //   min: 0,
+  //   max: 168,
+  //   step: 0.5,
+  // },
   {
     key: 'minShifts',
     title: 'Fewest shifts',
@@ -82,7 +81,7 @@ const FIELDS: Array<{
     key: 'maxShifts',
     title: 'Most shifts',
     unit: 'shifts',
-    help: 'The most shifts a week you will take. We never go past this.',
+    help: 'The most shifts a week you will take. We never go past this without your approval.',
     note: 'never exceeded',
     label: 'maximum shifts per week',
     min: 1,
@@ -93,6 +92,18 @@ const FIELDS: Array<{
 
 const EXPLAINER =
   'When scheduling we will try to hit your preferred number of shifts and not go past the maximum. Leave any of them blank for no preference.';
+
+/** How long a row waits after the last keystroke before saving. */
+const AUTOSAVE_DELAY_MS = 800;
+
+/** Same value as far as the column cares: both blank, or the same number. */
+const sameValue = (a: string, b: string): boolean =>
+  a.trim() === '' || b.trim() === '' ? a.trim() === b.trim() : Number(a) === Number(b);
+
+const sameDraft = (a: PrefsDraft, b: PrefsDraft): boolean =>
+  FIELDS.every(({ key }) => sameValue(a[key], b[key]));
+
+type RowStatus = { state: 'saving' } | { state: 'saved' } | { state: 'error'; message: string };
 
 async function readError(res: Response): Promise<string> {
   try {
@@ -114,8 +125,86 @@ export function ScheduleShiftPrefs({
   onSaved: () => void;
 }) {
   const [drafts, setDrafts] = useState<Record<string, PrefsDraft>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<Record<string, RowStatus>>({});
+
+  // The save timers and in-flight requests run outside render, so they read
+  // the latest drafts and rows through refs rather than a stale closure.
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const staffRef = useRef(staff);
+  staffRef.current = staff;
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const inFlight = useRef(new Set<string>());
+
+  // Once the reloaded rows carry a draft's values, the draft has nothing left
+  // to say — drop it, so a later change from someone else shows through.
+  useEffect(() => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const [id, draft] of Object.entries(prev)) {
+        const row = staff.find((s) => s.id === id);
+        if (
+          row &&
+          sameDraft(draft, draftFor(row)) &&
+          !timers.current[id] &&
+          !inFlight.current.has(id)
+        ) {
+          delete next[id];
+        }
+      }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [staff]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of Object.values(pending)) clearTimeout(timer);
+    };
+  }, []);
+
+  const flush = async (id: string): Promise<void> => {
+    clearTimeout(timers.current[id]);
+    delete timers.current[id];
+    // One request per row at a time; edits made meanwhile go in the next one.
+    if (inFlight.current.has(id)) {
+      timers.current[id] = setTimeout(() => void flush(id), AUTOSAVE_DELAY_MS);
+      return;
+    }
+    const draft = draftsRef.current[id];
+    const row = staffRef.current.find((s) => s.id === id);
+    if (!draft || !row || sameDraft(draft, draftFor(row))) return;
+
+    inFlight.current.add(id);
+    setStatus((prev) => ({ ...prev, [id]: { state: 'saving' } }));
+    let next: RowStatus;
+    try {
+      const res = await fetch('/api/admin/staff-preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        // Lets a save started by leaving the page (blur, then navigate) land.
+        keepalive: true,
+        // Blank clears each value (all four columns are nullable).
+        body: JSON.stringify({
+          id,
+          ...Object.fromEntries(
+            FIELDS.map(({ key }) => [key, draft[key].trim() === '' ? null : Number(draft[key])])
+          ),
+        }),
+      });
+      next = res.ok ? { state: 'saved' } : { state: 'error', message: await readError(res) };
+      if (res.ok) {
+        // The board and the Calendar/Hours tabs all read staff rows from the
+        // cached schedule-board payload.
+        invalidateJson('/api/admin/schedule-board');
+        onSaved();
+      }
+    } catch {
+      next = { state: 'error', message: 'Could not save — check your connection.' };
+    }
+    inFlight.current.delete(id);
+    setStatus((prev) => ({ ...prev, [id]: next }));
+  };
 
   // Managers plan everyone on the roster (yourself included, if you're on
   // it); everyone else sees only their own row.
@@ -124,40 +213,17 @@ export function ScheduleShiftPrefs({
     : staff.filter((s) => s.id === selfId);
   if (people.length === 0) return null;
 
-  const save = async (person: StaffRow, draft: PrefsDraft) => {
-    setBusyId(person.id);
-    setError(null);
-    const res = await fetch('/api/admin/staff-preferences', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      // Blank clears each value (all four columns are nullable).
-      body: JSON.stringify({
-        id: person.id,
-        ...Object.fromEntries(
-          FIELDS.map(({ key }) => [key, draft[key].trim() === '' ? null : Number(draft[key])])
-        ),
-      }),
-    });
-    if (!res.ok) {
-      setError(await readError(res));
-    } else {
-      const { [person.id]: _saved, ...rest } = drafts;
-      setDrafts(rest);
-      // The board and the Calendar/Hours tabs all read staff rows from the
-      // cached schedule-board payload.
-      invalidateJson('/api/admin/schedule-board');
-      onSaved();
-    }
-    setBusyId(null);
-  };
-
   const rowState = (person: StaffRow) => {
-    const saved = draftFor(person);
-    const draft = drafts[person.id] ?? saved;
-    const dirty = FIELDS.some(({ key }) => draft[key].trim() !== saved[key]);
-    const setDraft = (fields: Partial<PrefsDraft>) =>
-      setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
-    return { draft, dirty, setDraft };
+    const draft = drafts[person.id] ?? draftFor(person);
+    const setDraft = (fields: Partial<PrefsDraft>) => {
+      setDrafts((prev) => ({
+        ...prev,
+        [person.id]: { ...(prev[person.id] ?? draftFor(person)), ...fields },
+      }));
+      clearTimeout(timers.current[person.id]);
+      timers.current[person.id] = setTimeout(() => void flush(person.id), AUTOSAVE_DELAY_MS);
+    };
+    return { draft, setDraft };
   };
 
   const input = (
@@ -176,28 +242,37 @@ export function ScheduleShiftPrefs({
       step={field.step}
       placeholder="none"
       value={draft[field.key]}
-      disabled={busyId === person.id}
       onChange={(e) => setDraft({ [field.key]: e.target.value })}
+      onBlur={() => void flush(person.id)}
       aria-label={`${person.display_name} ${field.label}`}
     />
   );
 
-  const errorBox = error && (
-    <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-      {error}
-    </p>
-  );
+  const statusLine = (id: string) => {
+    const row = status[id];
+    if (!row) return null;
+    if (row.state === 'error') {
+      return <span className="font-mono text-xs text-[var(--pyre-red)]">{row.message}</span>;
+    }
+    return (
+      <span className="font-mono text-xs text-white/40" aria-live="polite">
+        {row.state === 'saving' ? 'Saving…' : 'Saved'}
+      </span>
+    );
+  };
 
   if (!canManage) {
     const [person] = people;
-    const { draft, dirty, setDraft } = rowState(person);
+    const { draft, setDraft } = rowState(person);
     return (
       <section className="space-y-3 rounded border border-white/10 bg-white/[0.03] px-4 py-3">
-        <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
-          Your week
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+            Your week
+          </h2>
+          <span className="ml-auto">{statusLine(person.id)}</span>
+        </div>
         <p className="font-mono text-xs text-white/40">{EXPLAINER}</p>
-        {errorBox}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {FIELDS.map((field) => (
             <div key={field.key} className="space-y-1.5 rounded border border-white/10 px-3 py-2">
@@ -215,16 +290,6 @@ export function ScheduleShiftPrefs({
             </div>
           ))}
         </div>
-        {dirty && (
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={busyId !== null}
-            onClick={() => void save(person, draft)}
-          >
-            Save
-          </button>
-        )}
       </section>
     );
   }
@@ -236,8 +301,7 @@ export function ScheduleShiftPrefs({
         Shift preferences
       </summary>
       <div className="mt-3 space-y-3">
-        <p className="font-mono text-xs text-white/40">{EXPLAINER}</p>
-        {errorBox}
+        <p className="font-mono text-xs text-white/40">{EXPLAINER} Changes save automatically.</p>
         <div className="overflow-x-auto">
           <table className="text-sm">
             <thead>
@@ -259,7 +323,7 @@ export function ScheduleShiftPrefs({
             </thead>
             <tbody>
               {people.map((person) => {
-                const { draft, dirty, setDraft } = rowState(person);
+                const { draft, setDraft } = rowState(person);
                 return (
                   <tr key={person.id} className="border-b border-white/5">
                     <td className="whitespace-nowrap py-1.5 pr-4">
@@ -275,18 +339,7 @@ export function ScheduleShiftPrefs({
                         {input(person, field, draft, setDraft)}
                       </td>
                     ))}
-                    <td className="py-1.5">
-                      {dirty && (
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          disabled={busyId !== null}
-                          onClick={() => void save(person, draft)}
-                        >
-                          Save
-                        </button>
-                      )}
-                    </td>
+                    <td className="min-w-24 py-1.5">{statusLine(person.id)}</td>
                   </tr>
                 );
               })}
