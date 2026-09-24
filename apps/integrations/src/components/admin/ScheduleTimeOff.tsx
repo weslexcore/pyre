@@ -368,21 +368,26 @@ export function ScheduleTimeOff() {
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className={inputClass}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              aria-label={kind === 'range' ? 'First day' : 'Starting (optional)'}
-            />
-            <span className="font-mono text-xs text-white/40">to</span>
-            <input
-              type="date"
-              className={inputClass}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              aria-label={kind === 'range' ? 'Last day (blank = single day)' : 'Until (optional)'}
-            />
+            {/* The range stays on one line even when the row wraps. */}
+            <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+              <input
+                type="date"
+                className={`${inputClass} min-w-0 flex-1`}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label={kind === 'range' ? 'First day' : 'Starting (optional)'}
+              />
+              <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-white/40">
+                to
+              </span>
+              <input
+                type="date"
+                className={`${inputClass} min-w-0 flex-1`}
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                aria-label={kind === 'range' ? 'Last day (blank = single day)' : 'Until (optional)'}
+              />
+            </div>
             {kind === 'recurring' && (
               <span className="font-mono text-[10px] text-white/40">dates optional</span>
             )}
@@ -405,25 +410,27 @@ export function ScheduleTimeOff() {
               All day
             </label>
             {!allDay && (
-              <>
+              <div className="flex min-w-0 items-center gap-2">
                 <input
                   type="time"
                   step={1800}
-                  className={inputClass}
+                  className={`${inputClass} min-w-0`}
                   value={startsAt}
                   onChange={(e) => setStartsAt(e.target.value)}
                   aria-label="From time"
                 />
-                <span className="font-mono text-xs text-white/40">to</span>
+                <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-white/40">
+                  to
+                </span>
                 <input
                   type="time"
                   step={1800}
-                  className={inputClass}
+                  className={`${inputClass} min-w-0`}
                   value={endsAt}
                   onChange={(e) => setEndsAt(e.target.value)}
                   aria-label="To time"
                 />
-              </>
+              </div>
             )}
           </div>
 
