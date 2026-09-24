@@ -171,7 +171,7 @@ export const ADMIN_TOOLS: AdminTool[] = [
     navLabel: 'Shift Notes',
     keywords: ['handoff', 'log', 'journal'],
     description:
-      'A running log of feedback, issues, and anything worth passing along — add a note the moment something comes up, with photos or video if they help. Admins read every note; everyone else reads their own.',
+      'A running log of feedback, issues, and anything else worth noting — add a note the moment something comes up, with photos or video if they help. Admins read every note; everyone else reads their own.',
     section: 'operations',
   },
   {

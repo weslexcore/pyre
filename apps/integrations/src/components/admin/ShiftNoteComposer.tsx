@@ -331,17 +331,13 @@ export function ShiftNoteComposer({
         <label htmlFor={`${fieldId}-body`} className={fieldLabelClass}>
           What's worth noting
         </label>
-        <p id={`${fieldId}-hint`} className="text-xs text-white/40">
-          Jot it down as it happens — a line or two is plenty, and you can add as many notes as you
-          like. No need to wait for the end of your shift.
-        </p>
         <textarea
           id={`${fieldId}-body`}
           ref={textareaRef}
           aria-describedby={`${fieldId}-hint`}
           rows={6}
           className={`${inputClass} block min-h-40 w-full px-3.5 py-3 text-base leading-relaxed sm:text-sm`}
-          placeholder="Tub 2 heater is short-cycling again — logged it in Water."
+          placeholder="Cold plunge is warming up // running low on towels // etc. "
           maxLength={NOTE_BODY_MAX}
           value={draftBody}
           onChange={(e) => setDraftBody(e.target.value)}
