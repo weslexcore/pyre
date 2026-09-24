@@ -2,9 +2,10 @@
 // Admin home: directory of the tools this user may view, grouped by section,
 // with a per-user Pinned section at the top (pinning and drag-reordering live
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
-// island renders the same filtered tool list the nav uses. Above the cards, a
-// next-shift chip: staff see their own next upcoming shift, admins see the
-// next one on the schedule overall. Under the chip come the SOPs for the
+// island renders the same filtered tool list the nav uses. Above the cards,
+// the shift chips: everyone on the schedule sees each of their shifts this
+// week (staff with none this week see their next one instead), and admins
+// also see the next shift on the schedule overall. Under the chips come the SOPs for the
 // duties this person holds on their own current-or-next shift, then every
 // checklist run still open on an SOP they may view, their own first, so what
 // they are on the hook to finish is the first thing they see.
@@ -20,7 +21,9 @@ import {
   formatChipDate,
   formatChipTime,
   getNextUpcomingShift,
+  getWeekShifts,
   type NextShift,
+  type WeekShift,
 } from '@/lib/schedule/next-shift';
 import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
@@ -43,18 +46,22 @@ let nextShift: NextShift | null = null;
 // admin's schedule-wide one ("Next shift", with who's on it).
 let chipIsOwn = false;
 let assignedNames: string[] = [];
+// The viewer's own shifts this week, one chip each.
+let weekShifts: WeekShift[] = [];
 if (db && access) {
   const staff = (await listStaff()) ?? [];
   const selfStaffId = email
     ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
     : null;
+  if (selfStaffId) weekShifts = (await getWeekShifts(db, selfStaffId)) ?? [];
   if (access.isAdmin) {
     nextShift = await getNextUpcomingShift(db);
     if (nextShift) {
       const nameById = new Map(staff.map((s) => [s.id, s.display_name]));
       assignedNames = nextShift.assignments.map((a) => nameById.get(a.staff_id) ?? '?');
     }
-  } else if (selfStaffId) {
+  } else if (selfStaffId && weekShifts.length === 0) {
+    // Nothing this week — the next one ahead is still worth a chip.
     nextShift = await getNextUpcomingShift(db, selfStaffId);
     chipIsOwn = true;
   }
@@ -84,10 +91,10 @@ if (db && access && canViewPage(access, '/admin/sops')) {
 
 // Deep-link into the schedule board's month view, same as the calendar's
 // shift blocks — but only when this viewer may open the schedule page.
-const chipHref =
-  nextShift && access && canViewPage(access, '/admin/schedule')
-    ? `/admin/schedule?view=month&date=${nextShift.shift.shift_date}&shift=${nextShift.shift.id}`
-    : null;
+const canOpenSchedule = !!access && canViewPage(access, '/admin/schedule');
+const shiftHref = (shift: { id: string; shift_date: string }) =>
+  canOpenSchedule ? `/admin/schedule?view=month&date=${shift.shift_date}&shift=${shift.id}` : null;
+const chipHref = nextShift ? shiftHref(nextShift.shift) : null;
 
 const ChipTag = chipHref ? 'a' : 'span';
 // A shift that's live right now reads "In session" in sage instead of the
@@ -107,6 +114,56 @@ const chipWindow = nextShift
 
 <AdminLayout title="Admin" subtitle="Internal tools for the Pyre team.">
   <div class="space-y-8">
+    {
+      weekShifts.length > 0 && (
+        <section>
+          <h2 class="mb-2 font-mono text-xs uppercase tracking-wide text-[var(--pyre-gold)]">
+            Your shifts this week
+          </h2>
+          <div class="flex flex-wrap gap-2">
+            {weekShifts.map((week) => {
+              const href = shiftHref(week.shift);
+              const Tag = href ? 'a' : 'span';
+              // Live now in sage, ended ones dimmed, the rest in gold.
+              const accent = week.isInSession ? 'var(--pyre-sage)' : 'var(--pyre-gold)';
+              return (
+                <Tag
+                  href={href ?? undefined}
+                  class={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-[var(--chip-accent)]/60 bg-[var(--chip-accent)]/10 px-4 py-2 font-mono text-xs ${
+                    week.isPast ? 'opacity-40' : ''
+                  } ${
+                    href
+                      ? 'transition-colors hover:border-[var(--chip-accent)] hover:bg-[var(--chip-accent)]/20'
+                      : ''
+                  }`}
+                  style={`--chip-accent: ${accent}`}
+                >
+                  <span class="font-bold uppercase tracking-wide text-[var(--chip-accent)]">
+                    {week.isInSession && (
+                      <span
+                        aria-hidden="true"
+                        class="mr-1.5 inline-block h-2 w-2 rounded-full bg-[var(--chip-accent)] align-middle"
+                      />
+                    )}
+                    {week.isInSession
+                      ? 'In session'
+                      : week.isToday
+                        ? 'Today'
+                        : formatChipDate(week.shift.shift_date)}
+                  </span>
+                  <span class="text-[var(--pyre-creme)]">
+                    {week.assignments
+                      .map((a) => `${formatChipTime(a.starts_at)}–${formatChipTime(a.ends_at)}`)
+                      .join(', ')}{' '}
+                    {week.shift.label}
+                  </span>
+                </Tag>
+              );
+            })}
+          </div>
+        </section>
+      )
+    }
     {
       nextShift && (
         <div>

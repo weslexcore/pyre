@@ -576,15 +576,16 @@ export function ScheduleBoard() {
     return map;
   }, [data]);
 
-  // Days the viewer is on the schedule — those get the gold treatment.
-  const selfDates = useMemo(() => {
-    const dates = new Set<string>();
-    if (!selfId) return dates;
+  // Shifts the viewer is on — those cards get the gold treatment (the shift,
+  // not its whole day: a double-shift day has slots they aren't working).
+  const selfShiftIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!selfId) return ids;
     for (const shift of data?.shifts ?? []) {
       if (shift.status === 'cancelled') continue;
-      if (shift.assignments.some((a) => a.staff_id === selfId)) dates.add(shift.shift_date);
+      if (shift.assignments.some((a) => a.staff_id === selfId)) ids.add(shift.id);
     }
-    return dates;
+    return ids;
   }, [data, selfId]);
 
   // The rest rule (an evening close followed by a next-morning open) over
@@ -1368,7 +1369,6 @@ export function ScheduleBoard() {
               ) {
                 return null;
               }
-              const selfWorks = selfDates.has(date);
               // Beyond the horizon a day is tentative until every shift on
               // it has been confirmed by hand; a day with nothing on it yet
               // stays tentative. Mixed days label each shift so the
@@ -1385,24 +1385,11 @@ export function ScheduleBoard() {
               return (
                 <section
                   key={date}
-                  className={`rounded-lg border p-3 ${
-                    selfWorks
-                      ? 'border-[var(--pyre-gold)]/60 bg-[var(--pyre-gold)]/[0.06]'
-                      : 'border-white/10 bg-white/[0.03]'
-                  }`}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <h2
-                      className={`flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide ${
-                        selfWorks ? 'text-[var(--pyre-gold)]' : 'text-white/70'
-                      }`}
-                    >
+                    <h2 className="flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide text-white/70">
                       {formatDay(date)}
-                      {selfWorks && (
-                        <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-gold)]">
-                          you're on
-                        </span>
-                      )}
                       {beyondHorizon && !dayConfirmed && (
                         <span
                           className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
@@ -1472,6 +1459,7 @@ export function ScheduleBoard() {
                           (a) =>
                             `${staffById.get(a.staff_id)?.display_name ?? '?'} ${restNotes.get(a.id)}`
                         );
+                      const selfWorks = selfShiftIds.has(shift.id);
                       const expanded = !collapsedIds.has(shift.id);
                       const toggleExpanded = () => {
                         const next = new Set(collapsedIds);
@@ -1483,7 +1471,11 @@ export function ScheduleBoard() {
                         <div
                           key={shift.id}
                           id={`shift-${shift.id}`}
-                          className={`rounded border bg-white/[0.03] ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
+                          className={`rounded border ${toneBorder[tone]} ${shift.is_draft ? 'border-dashed' : ''} ${
+                            selfWorks
+                              ? 'border-l-4 border-l-[var(--pyre-gold)] bg-[var(--pyre-gold)]/[0.08]'
+                              : 'bg-white/[0.03]'
+                          } ${
                             initialLink.shift === shift.id
                               ? 'ring-2 ring-[var(--pyre-gold)]/60'
                               : ''
@@ -1495,10 +1487,19 @@ export function ScheduleBoard() {
                               className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-left"
                               onClick={toggleExpanded}
                             >
-                              <span className="font-semibold">{shift.label}</span>
+                              <span
+                                className={`font-semibold ${selfWorks ? 'text-[var(--pyre-gold)]' : ''}`}
+                              >
+                                {shift.label}
+                              </span>
                               <span className="font-mono text-sm text-white/60">
                                 {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
                               </span>
+                              {selfWorks && (
+                                <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+                                  you're on
+                                </span>
+                              )}
                               <span
                                 className={`rounded px-2 py-0.5 font-mono text-xs ${toneChip[tone]}`}
                               >
