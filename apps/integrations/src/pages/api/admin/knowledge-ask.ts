@@ -3,13 +3,19 @@
 // shift notes, water log, and incident reports on the asker's behalf and
 // answers with links back here.
 //
-//   POST { question, session? }  → opens a knowledge session (or sends a
+//   POST { question, session?, force? }
+//                                → opens a knowledge session (or sends a
 //                                  follow-up into the caller's own session)
 //                                  and returns { sessionId, token, fresh,
 //                                  nextIndex? } — nextIndex only for a
 //                                  conversation reopened from the history
 //                                  sidebar (session.resume), which the island
-//                                  otherwise has no stream position for
+//                                  otherwise has no stream position for.
+//                                  A fresh question is first screened by the
+//                                  Jev pre-router (lib/knowledge/route.ts,
+//                                  behind ASK_ROUTER_ENABLED): one it is very
+//                                  sure is off-topic gets 200 { ok, offTopic,
+//                                  message } and no session; `force` skips it.
 //   GET  ?sessionId&token&startIndex → proxies the session's event stream
 //                                  as a reduced NDJSON feed the island renders
 //
@@ -22,6 +28,12 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
+import {
+  classifyAskQuestion,
+  decideAskRoute,
+  isAskRouterEnabled,
+  logAskRoute,
+} from '@/lib/knowledge/route';
 import {
   buildAskMessage,
   knowledgeHeaders,
@@ -62,6 +74,10 @@ function eveConfig(): EveConfig | null {
 }
 
 const AGENT_BUSY_ERROR = 'The assistant is still answering your last question — give it a moment';
+
+const OFF_TOPIC_MESSAGE =
+  "That's outside what the Ask box knows. It covers SOPs, water, incidents, schedule and shift " +
+  'notes. Try rephrasing if I got that wrong.';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);
@@ -141,10 +157,28 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     // 'gone' — fall through to a fresh session; the island tells the reader.
   }
 
+  // Pre-route a new conversation (never a follow-up: those lean on context
+  // the router can't see). With the router off this is a no-op — the
+  // message and the flow below are exactly as they were before it existed.
+  let hint: string | undefined;
+  let routeLogged: Promise<void> = Promise.resolve();
+  if (!session && isAskRouterEnabled()) {
+    const forced = body.force === true;
+    const route = forced ? null : await classifyAskQuestion(question);
+    const decision = decideAskRoute(route, { force: forced });
+    routeLogged = logAskRoute(email, route, decision, { forced });
+    if (decision === 'short_circuit') {
+      await routeLogged;
+      return json({ ok: true, offTopic: true, message: OFF_TOPIC_MESSAGE });
+    }
+    if (typeof decision === 'object') hint = decision.hint;
+  }
+
   let sessionId: string | null;
   try {
-    sessionId = await startEveSession(sessionConfig, buildAskMessage(question));
+    sessionId = await startEveSession(sessionConfig, buildAskMessage(question, false, hint));
   } catch (error) {
+    await routeLogged;
     return json(
       {
         error: `Assistant session failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -152,6 +186,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       502
     );
   }
+  // The log line was captured alongside the session start; flush it before
+  // the function can freeze.
+  await routeLogged;
   if (!sessionId) return json({ error: 'Assistant session failed: no session id returned' }, 502);
 
   const token = createAskSessionToken(sessionId, email);

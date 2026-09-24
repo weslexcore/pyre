@@ -18,6 +18,10 @@
 // questions, answers and trails and a token to continue it; the next
 // question then either lands in the same session or, when the assistant has
 // let it go, starts a fresh one and says so.
+//
+// A new question the pre-router is very sure is off-topic comes back with a
+// short "that's outside what I know" note instead of a session; the turn
+// shows it with an "Ask anyway" that re-sends the question past the router.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
@@ -50,6 +54,8 @@ interface Turn {
   error?: string;
   /** Set when the previous conversation had expired and this turn started anew. */
   fresh?: boolean;
+  /** The pre-router turned the question away; `answer` holds its note. */
+  offTopic?: boolean;
 }
 
 interface AskSession {
@@ -286,6 +292,70 @@ export function SopAsk({ isAdmin = false }: Props) {
     [patchTurn]
   );
 
+  // Posts a turn's question and streams the answer. `force` skips the
+  // pre-router — the "Ask anyway" on an off-topic reply.
+  const sendTurn = useCallback(
+    async (id: string, text: string, force: boolean) => {
+      try {
+        const prior = session.current;
+        const res = await fetch('/api/admin/knowledge-ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: text,
+            ...(force ? { force: true } : {}),
+            ...(prior
+              ? {
+                  session: {
+                    id: prior.id,
+                    token: prior.token,
+                    ...(prior.nextIndex === null ? { resume: true } : {}),
+                  },
+                }
+              : {}),
+          }),
+        });
+        if (!res.ok) throw new Error(await readError(res));
+        const body = (await res.json()) as
+          | { offTopic: true; message: string }
+          | {
+              offTopic?: undefined;
+              sessionId: string;
+              token: string;
+              fresh: boolean;
+              nextIndex?: number;
+            };
+
+        // Turned away before any session opened: nothing to stream or keep.
+        if (body.offTopic) {
+          patchTurn(id, { status: 'done', answer: body.message, offTopic: true });
+          return;
+        }
+
+        const current: AskSession =
+          !body.fresh && prior && prior.id === body.sessionId
+            ? { ...prior, nextIndex: prior.nextIndex ?? body.nextIndex ?? 0 }
+            : { id: body.sessionId, token: body.token, nextIndex: 0 };
+        session.current = current;
+        setActiveSessionId(current.id);
+        if (prior && body.fresh) patchTurn(id, { fresh: true });
+
+        await streamAnswer(id, current);
+      } catch (error) {
+        patchTurn(id, {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Something went wrong',
+        });
+      } finally {
+        setBusy(false);
+        // The agent writes the log row as the turn runs; give it a beat, then
+        // refresh the sidebar so this conversation shows up (or moves up).
+        setTimeout(() => void history.reload(), 800);
+      }
+    },
+    [patchTurn, streamAnswer, history.reload]
+  );
+
   const ask = useCallback(
     async (raw: string) => {
       const text = raw.trim();
@@ -310,55 +380,23 @@ export function SopAsk({ isAdmin = false }: Props) {
         },
       ]);
 
-      try {
-        const prior = session.current;
-        const res = await fetch('/api/admin/knowledge-ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: text,
-            ...(prior
-              ? {
-                  session: {
-                    id: prior.id,
-                    token: prior.token,
-                    ...(prior.nextIndex === null ? { resume: true } : {}),
-                  },
-                }
-              : {}),
-          }),
-        });
-        if (!res.ok) throw new Error(await readError(res));
-        const body = (await res.json()) as {
-          sessionId: string;
-          token: string;
-          fresh: boolean;
-          nextIndex?: number;
-        };
-
-        const current: AskSession =
-          !body.fresh && prior && prior.id === body.sessionId
-            ? { ...prior, nextIndex: prior.nextIndex ?? body.nextIndex ?? 0 }
-            : { id: body.sessionId, token: body.token, nextIndex: 0 };
-        session.current = current;
-        setActiveSessionId(current.id);
-        if (prior && body.fresh) patchTurn(id, { fresh: true });
-
-        await streamAnswer(id, current);
-      } catch (error) {
-        patchTurn(id, {
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Something went wrong',
-        });
-      } finally {
-        setBusy(false);
-        // The agent writes the log row as the turn runs; give it a beat, then
-        // refresh the sidebar so this conversation shows up (or moves up).
-        setTimeout(() => void history.reload(), 800);
-      }
+      await sendTurn(id, text, false);
     },
-    [busy, openingSessionId, patchTurn, streamAnswer, history.reload, resizeComposer]
+    [busy, openingSessionId, sendTurn, resizeComposer]
   );
+
+  const askAnyway = (turn: Turn) => {
+    if (busy || openingSessionId) return;
+    setBusy(true);
+    patchTurn(turn.id, {
+      status: 'pending',
+      answer: '',
+      offTopic: false,
+      trail: [],
+      trailOpen: true,
+    });
+    void sendTurn(turn.id, turn.question, true);
+  };
 
   // Arriving from the global search's "Ask a question" row: ?q= is the
   // question, asked once on mount as a new conversation. The param is dropped
@@ -554,7 +592,19 @@ export function SopAsk({ isAdmin = false }: Props) {
                         open={turn.trailOpen}
                         onToggle={() => patchTurn(turn.id, (t) => ({ trailOpen: !t.trailOpen }))}
                       />
-                      {turn.status === 'error' ? (
+                      {turn.offTopic ? (
+                        <div className="space-y-2">
+                          <p className="text-sm text-white/70">{turn.answer}</p>
+                          <button
+                            type="button"
+                            className={smallButtonClass}
+                            disabled={busy || openingSessionId !== null}
+                            onClick={() => askAnyway(turn)}
+                          >
+                            Ask anyway
+                          </button>
+                        </div>
+                      ) : turn.status === 'error' ? (
                         <p className="text-sm text-[var(--pyre-red)]">{turn.error}</p>
                       ) : turn.status === 'empty' ? (
                         <p className="text-sm text-white/40">No answer was recorded.</p>
