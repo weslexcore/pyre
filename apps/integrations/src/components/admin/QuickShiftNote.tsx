@@ -9,6 +9,7 @@
 // uploads already running keep going. Once a note lands the modal closes
 // and a short confirmation links to it in the log.
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { usePresence } from '@/lib/client/usePresence';
 import { SHIFT_NOTES_HREF } from './adminTools';
 import { type CreatedShiftNote, ShiftNoteComposer } from './ShiftNoteComposer';
 
@@ -26,6 +27,10 @@ export function QuickShiftNote() {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<{ noteId: string; message: string } | null>(null);
   const titleId = useId();
+  // The overlay only toggles display (the composer stays mounted to keep a
+  // draft), so entry runs off @starting-style as the overlay turns visible,
+  // and `closing` holds it on screen, inert, while it fades back out.
+  const { mounted: shown, closing } = usePresence(open);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const close = useCallback(() => setOpen(false), []);
@@ -69,8 +74,9 @@ export function QuickShiftNote() {
       </button>
 
       <div
+        inert={closing}
         className={`fixed inset-0 z-50 items-start justify-center sm:p-4 sm:pt-[12vh] ${
-          open ? 'flex' : 'hidden'
+          shown ? 'flex' : 'hidden'
         }`}
       >
         <button
@@ -78,13 +84,13 @@ export function QuickShiftNote() {
           tabIndex={-1}
           aria-label="Close"
           onClick={close}
-          className="absolute inset-0 h-full w-full cursor-default bg-black/70"
+          className={`absolute inset-0 h-full w-full cursor-default bg-black/70 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none ${closing ? 'opacity-0' : ''}`}
         />
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
-          className="relative flex h-full w-full max-w-2xl flex-col bg-[var(--pyre-black)] shadow-xl sm:h-auto sm:max-h-[85vh] sm:rounded-lg sm:border sm:border-white/15"
+          className={`relative flex h-full w-full max-w-2xl flex-col bg-[var(--pyre-black)] shadow-xl transition duration-150 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:h-auto sm:max-h-[85vh] sm:rounded-lg sm:border sm:border-white/15 ${closing ? 'translate-y-2 scale-[0.98] opacity-0' : ''}`}
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
             <h2 id={titleId} className="text-lg font-semibold text-[var(--pyre-creme)]">
@@ -116,7 +122,7 @@ export function QuickShiftNote() {
       {done && (
         <div
           role="status"
-          className="fixed inset-x-4 bottom-4 z-50 flex items-center gap-3 rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-black)] px-3 py-2 text-sm text-[var(--pyre-sage)] shadow-xl sm:inset-x-auto sm:right-4 sm:max-w-sm"
+          className="fixed inset-x-4 bottom-4 z-50 flex items-center gap-3 rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-black)] px-3 py-2 text-sm text-[var(--pyre-sage)] shadow-xl transition duration-150 ease-out starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none sm:inset-x-auto sm:right-4 sm:max-w-sm"
         >
           <span className="min-w-0 flex-1">{done.message}</span>
           <a
