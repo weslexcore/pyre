@@ -25,6 +25,7 @@ import {
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
+import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -32,6 +33,8 @@ import {
   cardClass,
   formatDateTime,
   formatDayAndTime,
+  inputClass,
+  labelClass,
   primaryButtonClass,
   readError,
   SectionTitle,
@@ -78,6 +81,37 @@ const EVENT_LABELS: Record<string, string> = {
   donation_due: 'Flagged for donation',
 };
 
+/** How an edited column reads in the history, e.g. "Kept: Front desk bin → Shelf B". */
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Item',
+  description: 'Details',
+  storage_location: 'Kept',
+};
+
+/**
+ * The lines an 'updated' event adds under itself. Where an item moved to is
+ * the edit people come looking for later ("it was on shelf B yesterday"), so
+ * the history spells it out rather than just saying "Edited". The details
+ * text can be long, so it is named rather than quoted.
+ */
+function describeEdit(detail: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  for (const [key, change] of Object.entries(detail)) {
+    const label = FIELD_LABELS[key];
+    if (!label || !change || typeof change !== 'object') continue;
+    const { from, to } = change as { from: unknown; to: unknown };
+    if (key === 'description') {
+      lines.push(to ? 'Details updated' : 'Details removed');
+      continue;
+    }
+    lines.push(`${label}: ${from || '—'} → ${to || '—'}`);
+  }
+  return lines;
+}
+
+/** Which part of the item is open for editing: just where it's kept, or all of it. */
+type EditMode = 'none' | 'location' | 'details';
+
 /**
  * What the log form couldn't finish saying. It hands over through the URL
  * rather than holding that page open: the item is saved by then, and a staff
@@ -123,6 +157,8 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
   const [notice, setNotice] = useState<string | null>(() => landingNotice().notice);
   const [actionError, setActionError] = useState<string | null>(() => landingNotice().problem);
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [editing, setEditing] = useState<EditMode>('none');
+  const [draft, setDraft] = useState({ title: '', description: '', storageLocation: '' });
 
   // Said once. A refresh should show the item, not re-announce an email that
   // went out minutes ago.
@@ -190,6 +226,58 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
           ? 'Marked as theirs. No email went out.'
           : "Unmarked — it's back in the queue with everything else."
       );
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startEditing = (mode: EditMode) => {
+    if (!item) return;
+    setDraft({
+      title: item.title,
+      description: item.description ?? '',
+      storageLocation: item.storage_location ?? '',
+    });
+    setActionError(null);
+    setEditing(mode);
+  };
+
+  /**
+   * Saves only what the open editor shows. A move sends the location alone,
+   * so moving an item can't overwrite a title someone else fixed a minute ago.
+   * The route drops unchanged fields before it writes or audits anything.
+   */
+  const saveEdit = async () => {
+    if (editing === 'details' && !draft.title.trim()) {
+      setActionError('Say what the item is');
+      return;
+    }
+    const fields =
+      editing === 'location'
+        ? { storageLocation: draft.storageLocation }
+        : {
+            title: draft.title,
+            description: draft.description,
+            storageLocation: draft.storageLocation,
+          };
+
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch('/api/admin/lost-found', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, ...fields }),
+      });
+      if (!res.ok) {
+        setActionError(await readError(res));
+        return;
+      }
+      setNotice(editing === 'location' ? 'Moved.' : 'Saved.');
+      setEditing('none');
       await refresh();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Something went wrong');
@@ -402,49 +490,175 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
         </div>
       )}
 
-      <section className={cardClass}>
-        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-          {item.description && (
-            <div className="sm:col-span-2">
-              <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
-                Distinguishing details
-              </dt>
-              <dd className="text-white/80">{item.description}</dd>
+      {editing === 'details' ? (
+        <section className={`${cardClass} space-y-4`}>
+          <div>
+            <label className={labelClass} htmlFor="lf-edit-title">
+              Item
+            </label>
+            <input
+              id="lf-edit-title"
+              className={inputClass}
+              value={draft.title}
+              maxLength={FIELD_LIMITS.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+            {(data?.notices ?? []).length > 0 && (
+              <p className="mt-1 text-xs text-white/40">
+                Guests already emailed keep the name they were sent.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="lf-edit-description">
+              Distinguishing details — staff only
+            </label>
+            <textarea
+              id="lf-edit-description"
+              className={`${inputClass} min-h-24`}
+              value={draft.description}
+              maxLength={FIELD_LIMITS.description}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className={labelClass} htmlFor="lf-edit-storage">
+              Where it's kept
+            </label>
+            <input
+              id="lf-edit-storage"
+              className={inputClass}
+              value={draft.storageLocation}
+              maxLength={FIELD_LIMITS.storageLocation}
+              placeholder="Front desk bin"
+              onChange={(e) => setDraft({ ...draft, storageLocation: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={primaryButtonClass}
+              disabled={busy}
+              onClick={() => void saveEdit()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy}
+              onClick={() => setEditing('none')}
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className={cardClass}>
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={busy}
+              onClick={() => startEditing('details')}
+            >
+              Edit details
+            </button>
+          </div>
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {item.description && (
+              <div className="sm:col-span-2">
+                <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
+                  Distinguishing details
+                </dt>
+                <dd className="text-white/80">{item.description}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="font-mono text-xs uppercase tracking-wide text-white/40">Kept</dt>
+              {editing === 'location' ? (
+                <dd className="mt-1 space-y-2">
+                  <input
+                    className={inputClass}
+                    aria-label="Where it's kept"
+                    value={draft.storageLocation}
+                    maxLength={FIELD_LIMITS.storageLocation}
+                    placeholder="Front desk bin"
+                    // biome-ignore lint/a11y/noAutofocus: only ever opened by pressing Move
+                    autoFocus
+                    onChange={(e) => setDraft({ ...draft, storageLocation: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void saveEdit();
+                      if (e.key === 'Escape') setEditing('none');
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      disabled={busy}
+                      onClick={() => void saveEdit()}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={busy}
+                      onClick={() => setEditing('none')}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </dd>
+              ) : (
+                <dd className="flex items-baseline gap-3 text-white/80">
+                  {item.storage_location || '—'}
+                  {/* The edit that happens most: the bin got emptied onto a shelf. */}
+                  {!closed && (
+                    <button
+                      type="button"
+                      className="font-mono text-xs text-white/45 underline-offset-2 hover:text-white/80 hover:underline"
+                      disabled={busy}
+                      onClick={() => startEditing('location')}
+                    >
+                      Move
+                    </button>
+                  )}
+                </dd>
+              )}
             </div>
-          )}
-          <div>
-            <dt className="font-mono text-xs uppercase tracking-wide text-white/40">Kept</dt>
-            <dd className="text-white/80">{item.storage_location || '—'}</dd>
-          </div>
-          <div>
-            <dt className="font-mono text-xs uppercase tracking-wide text-white/40">Logged by</dt>
-            <dd className="text-white/80">
-              {item.logged_by_name || personName(item.logged_by, data?.people)}
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
-              Could have been left
-            </dt>
-            <dd className="text-white/80">
-              {formatDayAndTime(item.left_window_start)} – {formatDayAndTime(item.left_window_end)}
-            </dd>
-          </div>
-          {/* A countdown the sweep will never reach is worse than no countdown. */}
-          {!closed && !item.owner_confirmed && (
-            <div className="sm:col-span-2">
-              <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
-                {DONATION_PARTNER}
-              </dt>
-              <dd className={days <= 7 ? 'text-[var(--pyre-red)]' : 'text-white/80'}>
-                {days <= 0
-                  ? 'Ready to go on the next run'
-                  : `${days} ${days === 1 ? 'day' : 'days'} left — ${formatDateTime(item.donate_after)}`}
+            <div>
+              <dt className="font-mono text-xs uppercase tracking-wide text-white/40">Logged by</dt>
+              <dd className="text-white/80">
+                {item.logged_by_name || personName(item.logged_by, data?.people)}
               </dd>
             </div>
-          )}
-        </dl>
-      </section>
+            <div className="sm:col-span-2">
+              <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
+                Could have been left
+              </dt>
+              <dd className="text-white/80">
+                {formatDayAndTime(item.left_window_start)} –{' '}
+                {formatDayAndTime(item.left_window_end)}
+              </dd>
+            </div>
+            {/* A countdown the sweep will never reach is worse than no countdown. */}
+            {!closed && !item.owner_confirmed && (
+              <div className="sm:col-span-2">
+                <dt className="font-mono text-xs uppercase tracking-wide text-white/40">
+                  {DONATION_PARTNER}
+                </dt>
+                <dd className={days <= 7 ? 'text-[var(--pyre-red)]' : 'text-white/80'}>
+                  {days <= 0
+                    ? 'Ready to go on the next run'
+                    : `${days} ${days === 1 ? 'day' : 'days'} left — ${formatDateTime(item.donate_after)}`}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       {/*
         The person on the record, and the two different things that can be true
@@ -569,6 +783,12 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
                   : event.actor === 'guest'
                     ? 'by the guest'
                     : personName(event.actor, data?.people)}
+                {event.action === 'updated' &&
+                  describeEdit(event.detail ?? {}).map((line) => (
+                    <span key={line} className="block pl-2 text-white/35">
+                      {line}
+                    </span>
+                  ))}
                 {event.note && <span className="block pl-2 text-white/35">{event.note}</span>}
               </li>
             ))}
