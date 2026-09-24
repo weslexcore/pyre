@@ -18,9 +18,10 @@ import type {
   LostFoundNoticeRow,
 } from '@/lib/db';
 import {
-  ACCEPT_ATTRIBUTE,
+  CAMERA_ACCEPT,
   checkFile,
   downscaleImage,
+  LIBRARY_ACCEPT,
   MAX_ATTACHMENTS_PER_ITEM,
 } from '@/lib/lost-found/media';
 import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
@@ -249,7 +250,9 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
   }
 
   const days = daysUntilDonation(item.donate_after);
-  const photos = (data?.attachments ?? []).filter((a) => a.kind === 'photo');
+  const media = (data?.attachments ?? []).filter((a) => a.kind === 'photo' || a.kind === 'video');
+  const addTileClass =
+    'flex h-32 w-32 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 px-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/50 hover:border-white/40';
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-24">
@@ -337,37 +340,64 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
         </div>
       )}
 
-      {photos.length > 0 && (
+      {(media.length > 0 || !closed) && (
         <div className="flex flex-wrap gap-3">
-          {photos.map((photo) => (
+          {media.map((file) => (
             <a
-              key={photo.id}
-              href={`/api/admin/lost-found-media?id=${photo.id}`}
+              key={file.id}
+              href={`/api/admin/lost-found-media?id=${file.id}`}
               target="_blank"
               rel="noreferrer"
             >
-              <img
-                src={`/api/admin/lost-found-media?id=${photo.id}`}
-                alt={photo.file_name}
-                className="h-32 w-32 rounded border border-white/10 object-cover"
-              />
+              {file.kind === 'video' ? (
+                <video
+                  src={`/api/admin/lost-found-media?id=${file.id}#t=0.1`}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  aria-label={file.file_name}
+                  className="h-32 w-32 rounded border border-white/10 object-cover"
+                />
+              ) : (
+                <img
+                  src={`/api/admin/lost-found-media?id=${file.id}`}
+                  alt={file.file_name}
+                  className="h-32 w-32 rounded border border-white/10 object-cover"
+                />
+              )}
             </a>
           ))}
-          {!closed && photos.length < MAX_ATTACHMENTS_PER_ITEM && (
-            <label className="flex h-32 w-32 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 text-center font-mono text-[10px] uppercase tracking-wide text-white/50 hover:border-white/40">
-              Add photo
-              <input
-                type="file"
-                accept={ACCEPT_ATTRIBUTE}
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void addPhoto(e.target.files);
-                  e.target.value = '';
-                }}
-              />
-            </label>
+          {!closed && media.length < MAX_ATTACHMENTS_PER_ITEM && (
+            <>
+              {/* `capture` opens the camera and skips the library, so uploading
+                  something already on the phone needs its own input. */}
+              <label className={`${addTileClass} ${busy ? 'pointer-events-none opacity-40' : ''}`}>
+                Take photo or video
+                <input
+                  type="file"
+                  accept={CAMERA_ACCEPT}
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    void addPhoto(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <label className={`${addTileClass} ${busy ? 'pointer-events-none opacity-40' : ''}`}>
+                Upload
+                <input
+                  type="file"
+                  accept={LIBRARY_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void addPhoto(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </>
           )}
         </div>
       )}
