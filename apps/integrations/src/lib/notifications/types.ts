@@ -6,6 +6,7 @@
 // expiry is the event's — a shift change stops mattering the day after the
 // shift, an SOP edit a couple of weeks on.
 
+import { addDays, weekStartOf } from '@pyre/schedule-core';
 import type { NotificationKind, StaffNotificationRow } from '@/lib/db';
 
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
@@ -100,6 +101,17 @@ export function shiftNotificationExpiry(shiftDate: string): string {
   return new Date(
     new Date(`${shiftDate}T00:00:00Z`).getTime() + 2 * 24 * 60 * 60 * 1000
   ).toISOString();
+}
+
+/**
+ * Whether a shift falls in the current Monday–Sunday week (`today` is the ET
+ * wall-clock date). Only those shifts' changes reach people's inboxes — later
+ * weeks are covered by the Monday "your shifts this week" email, so changes
+ * made while they're still being planned stay quiet.
+ */
+export function inCurrentWeek(shiftDate: string, today: string): boolean {
+  const weekStart = weekStartOf(today);
+  return shiftDate >= weekStart && shiftDate <= addDays(weekStart, 6);
 }
 
 /** The board deep link the rest of the schedule tools use. */
