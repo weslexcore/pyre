@@ -2,17 +2,18 @@
 // it again. The page that lists the records normally carries their
 // classifications itself (see loadClassifications); this route serves the
 // follow-ups — polling notes that are still being read, and an admin's
-// "run again" on one that failed or read wrong.
+// "run again" on one that failed or read wrong. A re-run is queued like any
+// other classification (after the response), and the page polls for it.
 //
 //   GET  ?subject=shift_note&ids=<uuid>,<uuid>  → { classifications }
-//   POST { subject, id }                        → { classification }
+//   POST { subject, id }                        → 202 { classification: pending }
 //
 // Who may do either is the subject's call (lib/classify/subjects.ts).
 
 import { isSubjectType } from '@pyre/signals-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin } from '@/lib/auth/admin';
-import { loadClassifications, requestClassification } from '@/lib/classify/request';
+import { loadClassifications, pendingView, scheduleClassification } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
 
@@ -74,12 +75,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const text = await source.loadText(db, id);
   if (text === null) return json({ error: 'Not found' }, 404);
 
-  const classification = await requestClassification(db, subject, id, text, { force: true });
-  if (!classification) {
+  if (!import.meta.env.AGENTS_BASE_URL || !import.meta.env.EVE_CHANNEL_SECRET) {
     return json(
       { error: 'Classifier unavailable (AGENTS_BASE_URL / EVE_CHANNEL_SECRET not configured)' },
       503
     );
   }
-  return json({ classification });
+  scheduleClassification(subject, id, text, { force: true });
+  return json({ classification: pendingView() }, 202);
 };

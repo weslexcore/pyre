@@ -19,11 +19,12 @@
 // private, which keeps it among the admins (the server never sends those to
 // anyone else).
 //
-// For admins, each note also shows what the pyre-agents classifier found in
-// it — actions to take, questions to answer, records to update, feedback,
-// safety concerns (Signals.tsx, lib/classify) — and the log can be filtered
-// by them. A new note is read within seconds of being written; an edit to
-// its text is read again.
+// For admins, each note also shows what Jev found in it — actions to take,
+// questions to answer, records to update, feedback, safety concerns
+// (Signals.tsx, lib/classify) — and the log can be filtered by them. The
+// read happens in the background after a note is saved, so the note appears
+// at once marked "Reading…" and its chips fill in a few seconds later; an
+// edit to its text is read again.
 import type { SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';

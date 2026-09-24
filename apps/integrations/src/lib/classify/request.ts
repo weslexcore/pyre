@@ -1,148 +1,192 @@
-// Ask the pyre-agents classifier what a record's text contains, and read the
-// answers back. This is the one entry point every feature uses: a route that
-// writes text calls requestClassification() after the write, and a route
-// that lists records calls loadClassifications() for the ones it returns.
-// What a subject is, and which signals exist, is @pyre/signals-core's
-// business; see src/lib/classify/subjects.ts for the per-subject hooks this
-// app needs (where the text lives, who may re-run it).
+// Classify a record's text with Jev (TypeSafe AI's System One model, served by
+// the pyre-agents Eve app) and read the answers back. This is the one entry
+// point every feature uses: a route that writes text calls
+// scheduleClassification() after the write, and a route that lists records
+// calls loadClassifications() for the ones it returns. What a subject is, and
+// which signals exist, is @pyre/signals-core's business; see
+// src/lib/classify/subjects.ts for the per-subject hooks this app needs.
 //
-// Classification is best-effort by design: nothing here throws, and a
-// missing agent configuration (AGENTS_BASE_URL / EVE_CHANNEL_SECRET) simply
-// turns it off. The record's own write never waits on the model — only on
-// starting the session, capped at START_TIMEOUT_MS.
+// Nothing here is on a person's critical path. scheduleClassification()
+// returns immediately and hands the work to waitUntil, so the response that
+// saved the note goes out first; the bookkeeping, the call to pyre-agents,
+// and the result write all happen after. If that background work dies with
+// the instance, the hourly classify sweep (runClassifySweep) finds the note
+// and tries again. Nothing here throws, and a missing agent configuration
+// (AGENTS_BASE_URL / EVE_CHANNEL_SECRET) simply turns classification off.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { buildClassifyMessage, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
+import { parseSignals, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ContentClassificationRow } from '@/lib/db';
-import { type EveConfig, startEveSession } from '@/lib/schedule/eve-session';
+import { waitUntil } from '@vercel/functions';
+import { type ContentClassificationRow, getDb } from '@/lib/db';
 import { type ClassificationView, toClassificationView } from './view';
 
-/** The role and request headers pyre-agents reads (agent/lib/role.ts there). */
-const AGENT_HEADER = 'x-pyre-agent';
-const CLASSIFY_REQUEST_HEADER = 'x-pyre-classify-request';
+/** Jev answers in well under a second; this only bounds a stuck upstream. */
+const CLASSIFY_TIMEOUT_MS = 30_000;
 
-/** How long a write waits for the agent to accept the session. */
-const START_TIMEOUT_MS = 8_000;
+/** Tries per text before the sweep leaves it failed (an admin can still re-run it). */
+export const MAX_ATTEMPTS = 3;
 
-function classifierConfig(requestId: string): EveConfig | null {
+interface AgentsConfig {
+  url: string;
+  headers: Record<string, string>;
+}
+
+function agentsConfig(): AgentsConfig | null {
   const baseUrl = import.meta.env.AGENTS_BASE_URL;
   const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
   if (!baseUrl || !channelSecret) return null;
+  // Preview deployments of pyre-agents sit behind Vercel Deployment
+  // Protection; the bypass clears the edge only, the secret still authenticates.
+  const bypass = import.meta.env.AGENTS_PROTECTION_BYPASS;
   return {
-    baseUrl,
-    channelSecret,
-    bypassSecret: import.meta.env.AGENTS_PROTECTION_BYPASS,
-    headers: { [AGENT_HEADER]: 'classifier', [CLASSIFY_REQUEST_HEADER]: requestId },
+    url: `${baseUrl.replace(/\/$/, '')}/pyre/classify`,
+    headers: {
+      Authorization: `Bearer ${channelSecret}`,
+      'Content-Type': 'application/json',
+      ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}),
+    },
   };
 }
 
-/** sha256 of the text as the model would see it. Exported for tests. */
+/** sha256 of the text as Jev would see it. Exported for tests. */
 export function contentHash(text: string): string {
   return createHash('sha256').update(sanitizeClassifyText(text)).digest('hex');
 }
 
-export interface RequestClassificationOptions {
-  /** Re-run even when the text has not changed since the last request (an admin's retry). */
+export interface ClassifyOptions {
+  /** Re-run even when the text has not changed since the last run (an admin's retry). */
   force?: boolean;
 }
 
 /**
- * Classify `text` as the current content of one record. Skips the model when
- * the same text is already classified or in flight (unless `force`), so
- * callers can call this on every write without checking what changed.
- * Returns the resulting view, or null when classification is off or the
- * bookkeeping itself failed.
+ * Classify a record's current text in the background. Returns at once; the
+ * caller's response is never held for it. Call it on every write that may
+ * have changed the text: unchanged text is skipped in the background.
  */
-export async function requestClassification(
+export function scheduleClassification(
+  subject: SubjectType,
+  subjectId: string,
+  text: string,
+  options: ClassifyOptions = {}
+): void {
+  if (!agentsConfig()) return;
+  const db = getDb();
+  if (!db) return;
+  waitUntil(runClassification(db, subject, subjectId, text, options));
+}
+
+/** What an admin's page shows right after scheduling: a read in progress. */
+export function pendingView(now: Date = new Date()): ClassificationView {
+  return { state: 'pending', signals: [], requestedAt: now.toISOString(), classifiedAt: null };
+}
+
+/**
+ * Classify `text` as the current content of one record, now: file the
+ * request, ask pyre-agents, store the answer. Runs in the background (via
+ * scheduleClassification) or from the sweep. Returns the resulting view, or
+ * null when classification is off or the bookkeeping itself failed. Never
+ * throws.
+ */
+export async function runClassification(
   db: SupabaseClient,
   subject: SubjectType,
   subjectId: string,
   text: string,
-  options: RequestClassificationOptions = {}
+  options: ClassifyOptions & { fetch?: typeof fetch } = {}
 ): Promise<ClassificationView | null> {
   try {
-    if (!sanitizeClassifyText(text)) return null;
+    const config = agentsConfig();
+    if (!config || !sanitizeClassifyText(text)) return null;
     const hash = contentHash(text);
 
-    const requestId = randomUUID();
-    const config = classifierConfig(requestId);
-    if (!config) return null;
-
-    if (!options.force) {
-      const { data: existing } = await db
-        .from('content_classifications')
-        .select('status, signals, requested_at, classified_at, content_hash')
-        .eq('subject_type', subject)
-        .eq('subject_id', subjectId)
-        .maybeSingle();
-      const row = existing as ContentClassificationRow | null;
-      if (row && row.content_hash === hash) {
-        const view = toClassificationView(row);
-        if (view.state !== 'failed') return view;
-      }
+    const { data: existingData } = await db
+      .from('content_classifications')
+      .select('status, signals, requested_at, classified_at, content_hash, attempts')
+      .eq('subject_type', subject)
+      .eq('subject_id', subjectId)
+      .maybeSingle();
+    const existing = existingData as ContentClassificationRow | null;
+    const sameText = existing?.content_hash === hash;
+    if (!options.force && existing && sameText) {
+      const view = toClassificationView(existing);
+      if (view.state !== 'failed') return view;
     }
 
-    // File the request before starting the session, so the agent's save can
-    // never arrive ahead of the row it lands on.
-    const requestedAt = new Date().toISOString();
-    const { data: filed, error: fileError } = await db
-      .from('content_classifications')
-      .upsert(
-        {
-          subject_type: subject,
-          subject_id: subjectId,
-          status: 'pending',
-          signals: [],
-          request_id: requestId,
-          content_hash: hash,
-          agent_session_id: null,
-          error: null,
-          requested_at: requestedAt,
-          classified_at: null,
-        },
-        { onConflict: 'subject_type,subject_id' }
-      )
-      .select('*')
-      .single();
+    // A fresh request id on every run, so an older run finishing late can
+    // never overwrite this one (its guarded write below matches nothing).
+    const requestId = randomUUID();
+    const { error: fileError } = await db.from('content_classifications').upsert(
+      {
+        subject_type: subject,
+        subject_id: subjectId,
+        status: 'pending',
+        signals: [],
+        request_id: requestId,
+        content_hash: hash,
+        attempts: (sameText && existing ? existing.attempts : 0) + 1,
+        model: null,
+        error: null,
+        requested_at: new Date().toISOString(),
+        classified_at: null,
+      },
+      { onConflict: 'subject_type,subject_id' }
+    );
     if (fileError) {
       console.error('[classify] could not file request:', fileError.message);
       return null;
     }
 
+    let update: Partial<ContentClassificationRow>;
     try {
-      const sessionId = await startEveSession(
-        config,
-        buildClassifyMessage(subject, text),
-        AbortSignal.timeout(START_TIMEOUT_MS)
-      );
-      if (sessionId) {
-        await db
-          .from('content_classifications')
-          .update({ agent_session_id: sessionId })
-          .eq('request_id', requestId);
+      const response = await (options.fetch ?? fetch)(config.url, {
+        method: 'POST',
+        headers: config.headers,
+        body: JSON.stringify({ subject, text }),
+        signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        model?: unknown;
+        probabilities?: unknown;
+        error?: unknown;
+      };
+      if (!response.ok) {
+        throw new Error(
+          `pyre-agents HTTP ${response.status}: ${typeof body.error === 'string' ? body.error : 'no detail'}`
+        );
       }
-      return toClassificationView(filed as ContentClassificationRow);
+      const parsed = parseSignals(body.probabilities, subject);
+      if (!parsed.ok) throw new Error(`pyre-agents answer rejected: ${parsed.error}`);
+      update = {
+        status: 'done',
+        signals: parsed.signals,
+        model: typeof body.model === 'string' ? body.model.slice(0, 100) : null,
+        classified_at: new Date().toISOString(),
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[classify] ${subject} ${subjectId}: session failed:`, message);
-      const { data: failed } = await db
-        .from('content_classifications')
-        .update({ status: 'failed', error: message.slice(0, 500) })
-        .eq('request_id', requestId)
-        .select('*')
-        .maybeSingle();
-      return failed ? toClassificationView(failed as ContentClassificationRow) : null;
+      console.error(`[classify] ${subject} ${subjectId}:`, message);
+      update = { status: 'failed', error: message.slice(0, 500) };
     }
+
+    const { data: saved } = await db
+      .from('content_classifications')
+      .update(update)
+      .eq('request_id', requestId)
+      .select('status, signals, requested_at, classified_at')
+      .maybeSingle();
+    // Nothing saved means a newer run (an edit, a retry) replaced this one,
+    // or the record was deleted meanwhile; either way this answer is stale.
+    return saved ? toClassificationView(saved as ContentClassificationRow) : null;
   } catch (error) {
-    console.error(`[classify] ${subject} ${subjectId}: request failed:`, error);
+    console.error(`[classify] ${subject} ${subjectId}: run failed:`, error);
     return null;
   }
 }
 
 /**
  * The classifications of `ids`, keyed by subject id. Records never
- * classified are simply absent. Errors read as "none" — a page listing
+ * classified are simply absent. Errors read as "none": a page listing
  * records must render without them.
  */
 export async function loadClassifications(

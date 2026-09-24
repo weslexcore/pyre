@@ -10,10 +10,11 @@
 //   2. extend the subject_type check in a new migration and attach the
 //      delete-cleanup trigger to its table (see the content_classifications
 //      migration for the shift_notes example);
-//   3. call requestClassification() from the route that writes it, and read
+//   3. call scheduleClassification() from the route that writes it, and read
 //      results back with loadClassifications() (apps/integrations
 //      src/lib/classify).
-// The agent side needs no change: its prompt and tool are built from this list.
+// The agent side needs no change: the questions it puts to Jev are built
+// from this list.
 
 import { SIGNAL_TYPES, type SignalType } from './signals';
 

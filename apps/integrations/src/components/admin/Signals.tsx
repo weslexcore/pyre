@@ -1,9 +1,10 @@
-// What the classifier found in a record, drawn as chips — and the hook that
-// keeps those results current on a page. Generic over subjects: a page that
-// lists classifiable records (shift notes today) seeds useClassifications
-// with what its own GET returned, merges in what its writes return, and
-// renders <SignalChips> per record. Records still being read are polled
-// until they settle; "Run again" asks for a fresh read.
+// What Jev found in a record, drawn as chips — and the hook that keeps those
+// results current on a page. Generic over subjects: a page that lists
+// classifiable records (shift notes today) seeds useClassifications with what
+// its own GET returned, merges in what its writes return, and renders
+// <SignalChips> per record. Classification runs in the background after a
+// write, so records still being read are polled until they settle; "Run
+// again" queues a fresh read.
 //
 // Labels come from @pyre/signals-core, so a new signal type shows up here
 // with no change; SIGNAL_TONES only picks its colour (unknown → neutral).
@@ -44,11 +45,12 @@ export function SignalTypeBadge({ type }: { type: SignalType }) {
   );
 }
 
-function SignalLine({ signal }: { signal: Signal }) {
+function SignalChip({ signal }: { signal: Signal }) {
+  const percent = Math.round(signal.probability * 100);
   return (
-    <li className="flex items-baseline gap-2 text-xs text-white/70">
+    <li title={`${signalLabel(signal.type)} — ${percent}% likely`}>
       <SignalTypeBadge type={signal.type} />
-      <span>{signal.summary}</span>
+      <span className="sr-only"> ({percent}% likely)</span>
     </li>
   );
 }
@@ -99,13 +101,14 @@ export function SignalChips({
     );
   }
   return (
-    <div className="mt-2 rounded border border-white/10 bg-black/20 px-2 py-1.5">
-      <ul className="space-y-1" aria-label="Detected in this note">
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="font-mono text-[10px] text-white/40">✦</span>
+      <ul className="flex flex-wrap gap-1.5" aria-label="Detected">
         {classification.signals.map((signal) => (
-          <SignalLine key={`${signal.type}:${signal.summary}`} signal={signal} />
+          <SignalChip key={signal.type} signal={signal} />
         ))}
       </ul>
-      {rerun && <div className="mt-1 text-right">{rerun}</div>}
+      {rerun}
     </div>
   );
 }
@@ -144,7 +147,10 @@ export function hasSignal(view: ClassificationView | undefined, type: SignalType
   return !!view && view.signals.some((s) => s.type === type);
 }
 
-const POLL_MS = 4_000;
+const POLL_MS = 3_000;
+
+/** How long a just-written record may show "Reading…" before its row exists. */
+const UNFILED_GRACE_MS = 60_000;
 
 /**
  * A page's classifications for one subject, keyed by record id, kept current:
@@ -203,13 +209,22 @@ export function useClassifications(subject: SubjectType, enabled: boolean) {
           if (!cancelled) {
             setClassifications((prev) => {
               const next = { ...prev };
+              const now = Date.now();
               for (const id of pendingIds.split(',')) {
                 // Settled, still pending, or — once the server's timeout
-                // passes — failed. A row that vanished (the record was
-                // deleted elsewhere) stops being polled.
+                // passes — failed.
                 const fresh = data.classifications[id];
-                if (fresh) next[id] = fresh;
-                else delete next[id];
+                if (fresh) {
+                  next[id] = fresh;
+                  continue;
+                }
+                // No row yet: the background run that files it may not have
+                // started. Keep waiting a little; after that the record was
+                // deleted elsewhere or classification is off, so stop polling.
+                const current = prev[id];
+                if (!current || now - new Date(current.requestedAt).getTime() > UNFILED_GRACE_MS) {
+                  delete next[id];
+                }
               }
               return next;
             });

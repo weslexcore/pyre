@@ -3,10 +3,12 @@
 // is waiting on, a record that needs changing — and this list is the single
 // source of truth for all of it:
 //
-//   * the agents app builds the classifier's system prompt from the
-//     definitions below and its save tool only accepts these keys;
-//   * the integrations app validates what the agent sends back against the
-//     same keys and labels the chips it draws with the same labels.
+//   * the agents app asks Jev (TypeSafe's System One evaluation model) one
+//     yes/no question per entry, built from its definition and examples, and
+//     gets back the probability that the text carries it;
+//   * the integrations app validates the answers against the same keys,
+//     keeps the ones at or above the entry's threshold, and labels the chips
+//     it draws with the same labels.
 //
 // To detect something new, add an entry here (key, label, definition, and a
 // couple of examples). Nothing else has to change for it to be detected,
@@ -24,7 +26,16 @@ export interface SignalDefinition {
   definition: string;
   /** A few short, realistic snippets that carry this signal. */
   examples: readonly string[];
+  /**
+   * The probability at or above which the text counts as carrying it.
+   * Defaults to DEFAULT_SIGNAL_THRESHOLD; raise it for a signal that fires
+   * too eagerly, lower it for one that must not be missed.
+   */
+  threshold?: number;
 }
+
+/** Jev's boolean answers are P(true); a coin flip or better counts by default. */
+export const DEFAULT_SIGNAL_THRESHOLD = 0.5;
 
 export const SIGNAL_DEFINITIONS = [
   {
@@ -77,6 +88,8 @@ export const SIGNAL_DEFINITIONS = [
       'Guest felt faint after the third round and sat out with water.',
       'The step into the plunge is cracked and a bit sharp.',
     ],
+    // A missed safety note costs more than a spurious chip.
+    threshold: 0.35,
   },
 ] as const satisfies readonly SignalDefinition[];
 
@@ -99,9 +112,13 @@ export function signalLabel(type: SignalType): string {
   return signalDefinition(type).label;
 }
 
-/** One thing the classifier found in a piece of text. */
+export function signalThreshold(type: SignalType): number {
+  return signalDefinition(type).threshold ?? DEFAULT_SIGNAL_THRESHOLD;
+}
+
+/** One kind of signal the classifier found in a piece of text. */
 export interface Signal {
   type: SignalType;
-  /** One line in plain words: what needs doing, answering, changing, or knowing. */
-  summary: string;
+  /** Jev's estimate, in [0, 1], that the text carries this signal. */
+  probability: number;
 }

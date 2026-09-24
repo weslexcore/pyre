@@ -1,7 +1,7 @@
 # pyre-agents
 
 Vercel [Eve](https://eve.dev) app hosting Pyre's AI agents. One deployment,
-three roles, chosen per session:
+two roles, chosen per session, plus a Jev classification endpoint:
 
 - the **staff-scheduling drafter** (the default), which reviews upcoming
   coverage shifts (synced from Momence by the integrations app), everyone's
@@ -13,12 +13,14 @@ three roles, chosen per session:
   log, incident reports, and the staff schedule, citing the dashboard pages
   it drew on. Staff reach it from
   `/admin/sops/ask`.
-- the **classifier**, which reads one piece of staff-written text (a shift
-  note, today) and reports its *signals* — an action to take, a question to
-  answer, a record to update, feedback, a safety concern — so admins can
-  triage `/admin/shift-notes` at a glance.
+- **classification** (`POST /pyre/classify`, not a session): Jev, TypeSafe
+  AI's System One evaluation model, reads one piece of staff-written text (a
+  shift note, today) and answers, per *signal* type, how likely the text is
+  to carry it — an action to take, a question to answer, a record to update,
+  feedback, a safety concern — so admins can triage `/admin/shift-notes` at
+  a glance.
 
-## Roles in one Eve app
+## Two roles in one Eve app
 
 Eve builds one root agent per app, so the second agent is a *role* the same
 deployment switches into: `agent/instructions/role.ts` and
@@ -100,31 +102,33 @@ never gets a shell.
   closed browser tab never loses a record. Admins review it at
   `/admin/ask/log`.
 
-### Classifier
+### Classification with Jev
 
 ```
-shift note written / text edited (integrations: lib/classify/request.ts)
-    files a pending content_classifications row with a fresh request_id
-    │  x-pyre-agent: classifier, x-pyre-classify-request: <request_id>
+shift note saved ─▶ response sent ─▶ waitUntil (integrations: lib/classify/request.ts)
+    files a pending content_classifications row (fresh request_id)
+    │  POST {this app}/pyre/classify  { subject, text }   Bearer EVE_CHANNEL_SECRET
     ▼
-POST {this app}/eve/v1/session   <classify subject="shift_note"><text>…
-    save_classification ─▶ POST /api/agent/classifications (integrations)
-                           validates, row → done with its signals
+agent/channels/classify.ts ─▶ Jev via AI Gateway (typesafe-ai/jev)
+    one boolean question per signal type ─▶ { model, probabilities }
+    ▼
+integrations keeps what clears each threshold, writes the row (guarded on request_id)
+hourly cron classify-sweep re-runs anything that never landed
 ```
 
+- No language model, no session, no tools: a custom channel route asks Jev
+  typed yes/no questions and returns the probabilities. Nothing in this app
+  writes anywhere for it; the integrations app stores the answer.
 - The vocabulary lives in `@pyre/signals-core` (`packages/signals-core`):
-  signal types and subjects. The prompt (`agent/lib/prompts/classifier.ts`)
-  and the tool schema (`agent/lib/classifier/save-classification.ts`) are
-  built from it, so a new signal type needs no edit here — see that
-  package's README for how to add signals or classify other records.
-- The model never names the record it is saving for: the channel stamps the
-  request id onto the session and the tool sends it back. A session whose
-  request was superseded (the note was edited again or deleted) gets a 409
-  and stops. A classifier request without a valid id is dropped at the
-  channel, never run as the scheduler.
-- Its only tool is `save_classification`; it cannot read the knowledge base
-  or touch the schedule. Sonnet at low effort.
-- Eval: `evals/classify-shift-note.eval.ts`.
+  the questions (`agent/lib/classify/questions.ts`) are built from its
+  signal definitions, so a new signal type needs no edit here. See that
+  package's README for adding signals or classifying other records.
+- `agent/lib/jev.ts` speaks AI Gateway's evaluation protocol directly (same
+  request `@ai-sdk/gateway` makes, same credentials as the language models:
+  `AI_GATEWAY_API_KEY` locally, OIDC on Vercel). eve ≥ 0.66 (`evaluate` from
+  `eve/ai`) and ai ≥ 7.0.105 (`experimental_evaluate`) wrap the same call but
+  are still inside the repo's 14-day npm age gate; swap them in once the
+  pins move.
 
 ### Staff-scheduling drafter
 

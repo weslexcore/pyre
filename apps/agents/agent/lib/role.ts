@@ -1,36 +1,19 @@
-// Which agent a session is. One Eve deployment hosts three roles — the
-// staff-scheduling drafter (the original, and the default), the knowledge
-// assistant, and the classifier — and the role is decided when the session
-// is created: the integrations app sends `x-pyre-agent: knowledge` plus the
-// asking staff member's knowledge scope, or `x-pyre-agent: classifier` plus
-// the id of the classification request the session answers, and the channel
-// (agent/channels/eve.ts) stamps them onto the session's auth attributes.
-// Instructions and tools then resolve per session from those attributes
-// (agent/instructions/role.ts, agent/tools/role_tools.ts). Anything without
-// the header — cron schedules, the schedule board's draft button, evals by
-// default — is the scheduler.
+// Which agent a session is. One Eve deployment hosts two roles — the
+// staff-scheduling drafter (the original, and the default) and the knowledge
+// assistant — and the role is decided when the session is created: the
+// integrations app sends `x-pyre-agent: knowledge` plus the asking staff
+// member's knowledge scope, and the channel (agent/channels/eve.ts) stamps
+// both onto the session's auth attributes. Instructions and tools then
+// resolve per session from those attributes (agent/instructions/role.ts,
+// agent/tools/role_tools.ts). Anything without the header — cron schedules,
+// the schedule board's draft button, evals by default — is the scheduler.
 
 import type { SessionAuth, SessionAuthContext } from 'eve/context';
 
-export type AgentRole = 'scheduler' | 'knowledge' | 'classifier';
+export type AgentRole = 'scheduler' | 'knowledge';
 
 export const AGENT_HEADER = 'x-pyre-agent';
 export const SCOPE_HEADER = 'x-pyre-knowledge-scope';
-/**
- * The classification request a classifier session answers: a UUID the
- * integrations app filed before starting the session. The save tool sends it
- * back so results land on the right record without the model ever naming it.
- */
-export const CLASSIFY_REQUEST_HEADER = 'x-pyre-classify-request';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** A request id from an untrusted header: a lowercased UUID, or null. */
-export function parseClassifyRequestId(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const id = raw.trim().toLowerCase();
-  return UUID_RE.test(id) ? id : null;
-}
 
 export const SOP_ROLES = ['staff', 'shift_lead', 'admin'] as const;
 export type SopRole = (typeof SOP_ROLES)[number];
@@ -120,22 +103,8 @@ export function resolveRole(auth: SessionAuth | undefined): {
   scope: KnowledgeScope;
 } {
   const principal = auth?.initiator ?? auth?.current ?? null;
-  const agent = attribute(principal, 'agent');
-  if (agent === 'knowledge') {
-    return { role: 'knowledge', scope: parseKnowledgeScope(attribute(principal, 'scope')) };
+  if (attribute(principal, 'agent') !== 'knowledge') {
+    return { role: 'scheduler', scope: { ...DEFAULT_KNOWLEDGE_SCOPE } };
   }
-  if (agent === 'classifier') {
-    return { role: 'classifier', scope: { ...DEFAULT_KNOWLEDGE_SCOPE } };
-  }
-  return { role: 'scheduler', scope: { ...DEFAULT_KNOWLEDGE_SCOPE } };
-}
-
-/**
- * The classification request id of a classifier session (from its
- * initiator, like the role), or null for any other session.
- */
-export function classifyRequestOf(auth: SessionAuth | undefined): string | null {
-  const principal = auth?.initiator ?? auth?.current ?? null;
-  if (attribute(principal, 'agent') !== 'classifier') return null;
-  return parseClassifyRequestId(attribute(principal, 'request'));
+  return { role: 'knowledge', scope: parseKnowledgeScope(attribute(principal, 'scope')) };
 }
