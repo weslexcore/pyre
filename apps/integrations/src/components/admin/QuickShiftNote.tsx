@@ -84,17 +84,12 @@ export function QuickShiftNote() {
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
-          className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto overscroll-contain bg-[var(--pyre-black)] p-4 shadow-xl sm:h-auto sm:max-h-[80vh] sm:rounded-lg sm:border sm:border-white/15"
+          className="relative flex h-full w-full max-w-2xl flex-col bg-[var(--pyre-black)] shadow-xl sm:h-auto sm:max-h-[85vh] sm:rounded-lg sm:border sm:border-white/15"
         >
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <a
-              href={SHIFT_NOTES_HREF}
-              data-astro-prefetch="tap"
-              onClick={close}
-              className="font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
-            >
-              All shift notes
-            </a>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6">
+            <h2 id={titleId} className="text-lg font-semibold text-[var(--pyre-creme)]">
+              New shift note
+            </h2>
             <button
               type="button"
               onClick={close}
@@ -104,7 +99,17 @@ export function QuickShiftNote() {
               <span className="hidden sm:inline">esc</span>
             </button>
           </div>
-          <ShiftNoteComposer headingId={titleId} textareaRef={textareaRef} onCreated={onCreated} />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+            <ShiftNoteComposer heading={null} textareaRef={textareaRef} onCreated={onCreated} />
+            <a
+              href={SHIFT_NOTES_HREF}
+              data-astro-prefetch="tap"
+              onClick={close}
+              className="mt-4 inline-block font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
+            >
+              All shift notes
+            </a>
+          </div>
         </div>
       </div>
 

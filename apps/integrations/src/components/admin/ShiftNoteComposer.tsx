@@ -33,6 +33,8 @@ export const inputClass =
 
 export const textareaClass = `${inputClass} min-h-[100px] w-full`;
 
+const fieldLabelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
+
 /** What POST /api/admin/shift-notes hands back for a new note. */
 export interface CreatedShiftNote {
   note: ShiftNoteRow;
@@ -135,7 +137,6 @@ export function ShiftNoteComposer({
   onUploadingChange,
   textareaRef,
   heading = 'Add a shift note',
-  headingId,
 }: {
   /** After a note lands; `notice` is the summary line to show the writer. */
   onCreated?: (created: CreatedShiftNote, notice: string) => void;
@@ -143,11 +144,10 @@ export function ShiftNoteComposer({
   onUploadingChange?: (uploading: boolean) => void;
   /** Lets a host focus the note field (the modal does on open). */
   textareaRef?: Ref<HTMLTextAreaElement>;
-  heading?: string;
-  /** id for the heading, so a dialog can point aria-labelledby at it. */
-  headingId?: string;
+  /** null when the host titles the form itself (the modal's own header). */
+  heading?: string | null;
 }) {
-  const fallbackId = useId();
+  const fieldId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftDate, setDraftDate] = useState(todayEastern);
@@ -309,121 +309,140 @@ export function ShiftNoteComposer({
   }, [uploading, onUploadingChange]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2
-          id={headingId ?? fallbackId}
-          className="font-mono text-xs uppercase tracking-wide text-white/60"
-        >
-          {heading}
-        </h2>
-        <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-          shift date
-          <input
-            type="date"
-            className={inputClass}
-            value={draftDate}
-            onChange={(e) => setDraftDate(e.target.value)}
-          />
-        </label>
-      </div>
-      <textarea
-        ref={textareaRef}
-        className={textareaClass}
-        placeholder="Slow start, packed from 7 on. Tub 2 heater kept short-cycling — logged it in Water. Maya handled a tough guest situation really well."
-        maxLength={NOTE_BODY_MAX}
-        value={draftBody}
-        onChange={(e) => setDraftBody(e.target.value)}
-        aria-label="Shift note"
-      />
-      {staged.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {staged.map((entry) => (
-            <li
-              key={entry.key}
-              aria-busy={entry.status === 'uploading'}
-              className={`flex items-center gap-2 rounded border px-2 py-1 font-mono text-[10px] ${
-                entry.status === 'failed'
-                  ? 'border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]'
-                  : 'border-white/10 bg-white/5 text-white/60'
-              }`}
-            >
-              <span className="max-w-40 truncate" title={entry.file.name}>
-                {entry.file.name}
-              </span>
-              <span className="text-white/30">{formatBytes(entry.file.size)}</span>
-              {entry.status === 'uploading' && (
-                <span className="text-white/40">uploading {entry.progress}%</span>
-              )}
-              {entry.status === 'uploaded' && (
-                <span className="text-[var(--pyre-sage)]">uploaded</span>
-              )}
-              {entry.status === 'failed' && (
-                <>
-                  <span title={entry.error}>failed</span>
-                  <button
-                    type="button"
-                    className="uppercase underline hover:text-white"
-                    onClick={() => startUpload(entry.key, entry.file)}
-                  >
-                    Retry
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                className="text-white/40 hover:text-[var(--pyre-red)]"
-                aria-label={`Remove ${entry.file.name}`}
-                onClick={() => removeStaged(entry)}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
+    <div className="space-y-5">
+      {heading && (
+        <h2 className="font-mono text-xs uppercase tracking-wide text-white/60">{heading}</h2>
       )}
+
+      <div className="space-y-1.5">
+        <label htmlFor={`${fieldId}-date`} className={fieldLabelClass}>
+          Shift date
+        </label>
+        <input
+          id={`${fieldId}-date`}
+          type="date"
+          className={`${inputClass} block w-full py-2 sm:w-56`}
+          value={draftDate}
+          onChange={(e) => setDraftDate(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor={`${fieldId}-body`} className={fieldLabelClass}>
+          How the shift went
+        </label>
+        <textarea
+          id={`${fieldId}-body`}
+          ref={textareaRef}
+          rows={6}
+          className={`${inputClass} block min-h-40 w-full px-3.5 py-3 text-base leading-relaxed sm:text-sm`}
+          placeholder="Slow start, packed from 7 on. Tub 2 heater kept short-cycling — logged it in Water. Maya handled a tough guest situation really well."
+          maxLength={NOTE_BODY_MAX}
+          value={draftBody}
+          onChange={(e) => setDraftBody(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <p className={fieldLabelClass}>
+          Photos &amp; video{' '}
+          <span className="normal-case tracking-normal text-white/30">
+            (optional, up to {MAX_ATTACHMENTS_PER_NOTE})
+          </span>
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <label className={`${buttonClass} cursor-pointer py-2`}>
+            Take a photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={staged.length >= MAX_ATTACHMENTS_PER_NOTE}
+              onChange={(e) => {
+                stageFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <label className={`${buttonClass} cursor-pointer py-2`}>
+            Add photos / video
+            <input
+              type="file"
+              accept={ACCEPT_ATTRIBUTE}
+              multiple
+              className="hidden"
+              disabled={staged.length >= MAX_ATTACHMENTS_PER_NOTE}
+              onChange={(e) => {
+                stageFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+        {staged.length > 0 && (
+          <ul className="flex flex-wrap gap-2 pt-1">
+            {staged.map((entry) => (
+              <li
+                key={entry.key}
+                aria-busy={entry.status === 'uploading'}
+                className={`flex items-center gap-2 rounded border px-2.5 py-1.5 font-mono text-[10px] ${
+                  entry.status === 'failed'
+                    ? 'border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]'
+                    : 'border-white/10 bg-white/5 text-white/60'
+                }`}
+              >
+                <span className="max-w-40 truncate" title={entry.file.name}>
+                  {entry.file.name}
+                </span>
+                <span className="text-white/30">{formatBytes(entry.file.size)}</span>
+                {entry.status === 'uploading' && (
+                  <span className="text-white/40">uploading {entry.progress}%</span>
+                )}
+                {entry.status === 'uploaded' && (
+                  <span className="text-[var(--pyre-sage)]">uploaded</span>
+                )}
+                {entry.status === 'failed' && (
+                  <>
+                    <span title={entry.error}>failed</span>
+                    <button
+                      type="button"
+                      className="uppercase underline hover:text-white"
+                      onClick={() => startUpload(entry.key, entry.file)}
+                    >
+                      Retry
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="text-white/40 hover:text-[var(--pyre-red)]"
+                  aria-label={`Remove ${entry.file.name}`}
+                  onClick={() => removeStaged(entry)}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {error && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
           {error}
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-2">
+
+      <div className="flex justify-end border-t border-white/10 pt-4">
         <button
           type="button"
-          className={primaryButtonClass}
+          className={`${primaryButtonClass} w-full py-2.5 sm:w-auto sm:px-5`}
           disabled={busy || !draftBody.trim() || !draftDate}
           onClick={() => void addNote()}
         >
           {waitingUploads ? 'Waiting for uploads…' : 'Add note'}
         </button>
-        <label className={`${buttonClass} cursor-pointer`}>
-          Take a photo
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            disabled={staged.length >= MAX_ATTACHMENTS_PER_NOTE}
-            onChange={(e) => {
-              stageFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-        </label>
-        <label className={`${buttonClass} cursor-pointer`}>
-          Add photos / video
-          <input
-            type="file"
-            accept={ACCEPT_ATTRIBUTE}
-            multiple
-            className="hidden"
-            disabled={staged.length >= MAX_ATTACHMENTS_PER_NOTE}
-            onChange={(e) => {
-              stageFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-        </label>
       </div>
     </div>
   );

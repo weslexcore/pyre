@@ -549,7 +549,7 @@ export function ShiftNotes() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded border border-white/10 bg-white/5 p-4">
+      <section className="rounded border border-white/10 bg-white/5 p-5 sm:p-6">
         <ShiftNoteComposer
           onCreated={(_created, message) => {
             setError(null);
