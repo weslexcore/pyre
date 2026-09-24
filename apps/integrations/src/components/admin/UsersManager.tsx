@@ -50,6 +50,39 @@ const buttonClass =
 
 const checkClass = 'flex items-center gap-1.5 font-mono text-xs text-white/60';
 
+/** A row's typed-but-unsaved text fields, as the inputs hold them. */
+interface PersonDraft {
+  name: string;
+  email: string;
+  payRate: string;
+  targetHours: string;
+  minShifts: string;
+  preferredShifts: string;
+  maxShifts: string;
+}
+
+const draftFor = (s: StaffRow): PersonDraft => ({
+  name: s.display_name,
+  email: s.email ?? '',
+  payRate: String(s.pay_rate ?? ''),
+  targetHours: String(s.target_hours_per_week ?? ''),
+  minShifts: String(s.min_shifts_per_week ?? ''),
+  preferredShifts: String(s.preferred_shifts_per_week ?? ''),
+  maxShifts: String(s.max_shifts_per_week ?? ''),
+});
+
+/** The shifts/week inputs, in reading order; keys match the PATCH body. */
+const SHIFT_PREF_INPUTS: Array<{
+  key: 'minShifts' | 'preferredShifts' | 'maxShifts';
+  placeholder: string;
+  label: string;
+  min: number;
+}> = [
+  { key: 'minShifts', placeholder: 'min', label: 'minimum', min: 0 },
+  { key: 'preferredShifts', placeholder: 'pref', label: 'preferred', min: 1 },
+  { key: 'maxShifts', placeholder: 'max', label: 'maximum', min: 1 },
+];
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const todayLocal = (): string => {
@@ -444,9 +477,7 @@ export function UsersManager() {
 
   // Name/email/rate/target edits are typed before they're saved, so they live
   // here until the row's Save button goes.
-  const [drafts, setDrafts] = useState<
-    Record<string, { name: string; email: string; payRate: string; targetHours: string }>
-  >({});
+  const [drafts, setDrafts] = useState<Record<string, PersonDraft>>({});
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -469,19 +500,7 @@ export function UsersManager() {
       setStaff(body.staff);
       setStipends(body.stipends ?? []);
       setBoards(body.boards ?? []);
-      setDrafts(
-        Object.fromEntries(
-          body.staff.map((s) => [
-            s.id,
-            {
-              name: s.display_name,
-              email: s.email ?? '',
-              payRate: String(s.pay_rate ?? ''),
-              targetHours: String(s.target_hours_per_week ?? ''),
-            },
-          ])
-        )
-      );
+      setDrafts(Object.fromEntries(body.staff.map((s) => [s.id, draftFor(s)])));
       setEnvUsers(body.envUsers);
       setEnvActive(body.envActive);
       setSelf(body.self);
@@ -648,21 +667,14 @@ export function UsersManager() {
 
       <ul className="space-y-2">
         {staff.map((person) => {
-          const draft = drafts[person.id] ?? {
-            name: person.display_name,
-            email: person.email ?? '',
-            payRate: String(person.pay_rate ?? ''),
-            targetHours: String(person.target_hours_per_week ?? ''),
-          };
-          const dirty =
-            draft.name.trim() !== person.display_name ||
-            draft.email.trim() !== (person.email ?? '') ||
-            draft.payRate.trim() !== String(person.pay_rate ?? '') ||
-            draft.targetHours.trim() !== String(person.target_hours_per_week ?? '');
+          const saved = draftFor(person);
+          const draft = drafts[person.id] ?? saved;
+          const dirty = (Object.keys(saved) as Array<keyof PersonDraft>).some(
+            (k) => draft[k].trim() !== saved[k]
+          );
           const isSelf = !!person.email && person.email === self;
-          const setDraft = (
-            fields: Partial<{ name: string; email: string; payRate: string; targetHours: string }>
-          ) => setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
+          const setDraft = (fields: Partial<PersonDraft>) =>
+            setDrafts({ ...drafts, [person.id]: { ...draft, ...fields } });
 
           return (
             <li
@@ -717,6 +729,28 @@ export function UsersManager() {
                   />
                   h/wk target
                 </label>
+                <fieldset
+                  className="flex items-center gap-1.5 font-mono text-xs text-white/60"
+                  title="Shifts per week: minimum, preferred, maximum. The AI drafter aims for the preferred count, tries to reach the minimum, and never goes past the maximum. Leave any of them blank for no preference."
+                >
+                  <legend className="sr-only">{person.display_name} shifts per week</legend>
+                  {SHIFT_PREF_INPUTS.map(({ key, placeholder, label, min }) => (
+                    <input
+                      key={key}
+                      className={`${inputClass} w-16`}
+                      type="number"
+                      min={min}
+                      max={14}
+                      step={1}
+                      placeholder={placeholder}
+                      value={draft[key]}
+                      disabled={busy}
+                      onChange={(e) => setDraft({ [key]: e.target.value })}
+                      aria-label={`${person.display_name} ${label} shifts per week`}
+                    />
+                  ))}
+                  shifts/wk
+                </fieldset>
                 {dirty && (
                   <button
                     type="button"
@@ -732,6 +766,13 @@ export function UsersManager() {
                         // is nullable and "no target" must be settable).
                         targetHours:
                           draft.targetHours.trim() === '' ? null : Number(draft.targetHours),
+                        // Blank clears each shifts/week bound, like the target.
+                        ...Object.fromEntries(
+                          SHIFT_PREF_INPUTS.map(({ key }) => [
+                            key,
+                            draft[key].trim() === '' ? null : Number(draft[key]),
+                          ])
+                        ),
                       })
                     }
                   >

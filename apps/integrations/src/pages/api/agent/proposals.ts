@@ -3,8 +3,9 @@
 // live shifts) — and this route validates everything with the SAME parsers
 // the admin edit routes use, enforces the hard time-off rule, the
 // uncovered-shifts-only rule (no assignments to covered shifts, no
-// overfilling past staff_needed) and the rest rule (nobody closes one
-// evening and opens the next morning) server-side, supersedes the week's
+// overfilling past staff_needed), the rest rule (nobody closes one evening
+// and opens the next morning) and each person's shifts-per-week cap
+// server-side, supersedes the week's
 // previous draft, and writes the batch as is_draft rows for review on
 // /admin/schedule.
 //
@@ -346,6 +347,47 @@ export const POST: APIRoute = async ({ request }) => {
         error:
           'An evening shift may not be followed by an opening shift the next day — move one side of each pair and resubmit',
         restViolations,
+      },
+      422
+    );
+  }
+
+  // --- Shift cap: nobody past their max_shifts_per_week ---
+  // One assignment is one shift. Counted across the week's live assignments
+  // plus this draft; only people the draft adds shifts to can be over by the
+  // draft's fault, so a week the admin already overbooked by hand is left be.
+  const weekShiftCounts = new Map<string, { live: number; proposed: number }>();
+  const bumpShiftCount = (staffId: string, kind: 'live' | 'proposed') => {
+    const counts = weekShiftCounts.get(staffId) ?? { live: 0, proposed: 0 };
+    counts[kind] += 1;
+    weekShiftCounts.set(staffId, counts);
+  };
+  for (const a of liveAssignments) {
+    if (liveShiftById.has(a.shift_id)) bumpShiftCount(a.staff_id, 'live');
+  }
+  for (const a of draftAssignments) bumpShiftCount(a.staffId, 'proposed');
+  const overShiftCap = [...weekShiftCounts]
+    .filter(([staffId, { live, proposed }]) => {
+      const max = staffById.get(staffId)?.max_shifts_per_week ?? null;
+      return proposed > 0 && max !== null && live + proposed > max;
+    })
+    .map(([staffId, { live, proposed }]) => {
+      const person = staffById.get(staffId) as StaffRow;
+      return {
+        staffId,
+        staffName: person.display_name,
+        maxShifts: person.max_shifts_per_week as number,
+        liveShifts: live,
+        proposedShifts: proposed,
+        detail: `${person.display_name} takes at most ${person.max_shifts_per_week} shifts a week; they have ${live} and the draft adds ${proposed}`,
+      };
+    });
+  if (overShiftCap.length > 0) {
+    return json(
+      {
+        error:
+          "Nobody may be drafted past their maxShiftsPerWeek — drop or reassign these people's extra shifts and resubmit",
+        overShiftCap,
       },
       422
     );

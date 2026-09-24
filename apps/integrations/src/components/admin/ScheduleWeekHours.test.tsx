@@ -4,7 +4,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
-import { WeekHoursList, weekHoursRows } from './ScheduleWeekHours';
+import { shiftPrefLine, WeekHoursList, weekHoursRows } from './ScheduleWeekHours';
 
 const person = (id: string, over: Partial<StaffRow> = {}): StaffRow => ({
   id,
@@ -20,6 +20,9 @@ const person = (id: string, over: Partial<StaffRow> = {}): StaffRow => ({
   calendar_token: null,
   pay_rate: null,
   target_hours_per_week: null,
+  min_shifts_per_week: null,
+  preferred_shifts_per_week: null,
+  max_shifts_per_week: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   ...over,
@@ -104,7 +107,7 @@ describe('weekHoursRows', () => {
     ];
     const { rows, totals } = weekHoursRows(staff, shifts, WEEK);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ live: 6, draft: 4 });
+    expect(rows[0]).toMatchObject({ live: 6, draft: 4, liveShifts: 1, draftShifts: 1 });
     expect(totals).toEqual({ live: 6, draft: 4, shifts: 1, scheduled: 1 });
   });
 
@@ -142,5 +145,47 @@ describe('WeekHoursList', () => {
     );
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(html).toContain('0 of 2');
+  });
+});
+
+describe('shiftPrefLine', () => {
+  it('says nothing for someone with no shift preferences', () => {
+    expect(shiftPrefLine(person('ana'), 3)).toBeNull();
+  });
+
+  it('reads the count against preferred and range, toned by where it lands', () => {
+    const ana = person('ana', {
+      min_shifts_per_week: 2,
+      preferred_shifts_per_week: 3,
+      max_shifts_per_week: 4,
+    });
+    expect(shiftPrefLine(ana, 3)).toEqual({
+      text: '3 shifts · want 3 (2–4)',
+      tone: 'text-[var(--pyre-sage)]',
+    });
+    expect(shiftPrefLine(ana, 1)?.tone).toBe('text-[var(--pyre-gold)]');
+    expect(shiftPrefLine(ana, 5)?.tone).toBe('text-[var(--pyre-red)]');
+    expect(shiftPrefLine(ana, 4)?.tone).toBe('text-white/50');
+  });
+
+  it('handles a lone bound', () => {
+    expect(shiftPrefLine(person('ben', { max_shifts_per_week: 2 }), 1)?.text).toBe(
+      '1 shift · (max 2)'
+    );
+  });
+
+  it('shows in the list, counting draft assignments', () => {
+    const { rows, totals } = weekHoursRows(
+      [person('ana', { preferred_shifts_per_week: 2 })],
+      [
+        shift('2026-09-15', [assignment('ana', '16:00', '22:00')]),
+        shift('2026-09-16', [assignment('ana', '16:00', '22:00', true)], { is_draft: true }),
+      ],
+      WEEK
+    );
+    const html = renderToStaticMarkup(
+      <WeekHoursList rows={rows} totals={totals} selected={new Set()} onToggle={() => {}} />
+    );
+    expect(html).toContain('2 shifts · want 2');
   });
 });

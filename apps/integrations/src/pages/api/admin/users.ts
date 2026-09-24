@@ -72,6 +72,38 @@ function parseTargetHours(value: unknown): number | null | Response {
   return Math.round(hours * 10) / 10;
 }
 
+type ShiftPrefField = 'min_shifts_per_week' | 'preferred_shifts_per_week' | 'max_shifts_per_week';
+
+/** The body keys for the shifts-per-week preferences, with their columns. */
+const SHIFT_PREF_FIELDS: Array<{
+  key: string;
+  column: ShiftPrefField;
+  label: string;
+  min: number;
+}> = [
+  { key: 'minShifts', column: 'min_shifts_per_week', label: 'Minimum shifts', min: 0 },
+  {
+    key: 'preferredShifts',
+    column: 'preferred_shifts_per_week',
+    label: 'Preferred shifts',
+    min: 1,
+  },
+  { key: 'maxShifts', column: 'max_shifts_per_week', label: 'Maximum shifts', min: 1 },
+];
+
+/** Shifts/week bound: null clears; else a whole number, `min`–14. */
+function parseShiftCount(value: unknown, label: string, min: number): number | null | Response {
+  if (value === null) return null;
+  const count = typeof value === 'number' ? value : Number(String(value));
+  if (!Number.isInteger(count) || count < min || count > 14) {
+    return json(
+      { error: `${label} must be a whole number from ${min} to 14 (or empty for none)` },
+      400
+    );
+  }
+  return count;
+}
+
 /**
  * The boards a 'board:<slug>' grant may name: the live ones. Checking against
  * the table rather than a constant is the point — boards are created from
@@ -305,6 +337,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'momence_member_id'
       | 'pay_rate'
       | 'target_hours_per_week'
+      | ShiftPrefField
     >
   > = {};
   let momenceMatch: boolean | undefined;
@@ -367,6 +400,29 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     const target = parseTargetHours(body.targetHours);
     if (target instanceof Response) return target;
     fields.target_hours_per_week = target;
+  }
+
+  // Shifts/week bounds, each independently clearable with null. Ordering is
+  // checked against the row as it will be, so editing one bound can't slip
+  // past another that was saved earlier (the table's check would reject it
+  // anyway, with a less useful message).
+  for (const { key, column, label, min } of SHIFT_PREF_FIELDS) {
+    if (body[key] === undefined) continue;
+    const count = parseShiftCount(body[key], label, min);
+    if (count instanceof Response) return count;
+    fields[column] = count;
+  }
+  const bound = (column: ShiftPrefField) =>
+    fields[column] !== undefined ? fields[column] : row[column];
+  const [minShifts, preferredShifts, maxShifts] = SHIFT_PREF_FIELDS.map((f) => bound(f.column));
+  const outOfOrder = (low: number | null | undefined, high: number | null | undefined) =>
+    low != null && high != null && low > high;
+  if (
+    outOfOrder(minShifts, preferredShifts) ||
+    outOfOrder(preferredShifts, maxShifts) ||
+    outOfOrder(minShifts, maxShifts)
+  ) {
+    return json({ error: 'Shifts per week must read minimum ≤ preferred ≤ maximum' }, 400);
   }
 
   if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);

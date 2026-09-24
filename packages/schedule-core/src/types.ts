@@ -54,6 +54,14 @@ export interface StaffRow {
 	 * redacted (nulled) for viewers who are neither admin nor the row's owner.
 	 */
 	target_hours_per_week: number | null;
+	/**
+	 * Shifts-per-week preferences (one assignment = one shift); null = unset.
+	 * min <= preferred <= max where set. The AI drafter aims at preferred,
+	 * tries to reach min, and may not exceed max. Redacted like pay_rate.
+	 */
+	min_shifts_per_week: number | null;
+	preferred_shifts_per_week: number | null;
+	max_shifts_per_week: number | null;
 	created_at: string;
 	updated_at: string;
 }

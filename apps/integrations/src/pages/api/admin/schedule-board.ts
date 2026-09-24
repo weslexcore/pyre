@@ -278,7 +278,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const redactPay = (s: StaffRow): StaffRow =>
     gate.access.isAdmin || s.id === selfStaffId
       ? s
-      : { ...s, pay_rate: null, target_hours_per_week: null };
+      : {
+          ...s,
+          pay_rate: null,
+          target_hours_per_week: null,
+          min_shifts_per_week: null,
+          preferred_shifts_per_week: null,
+          max_shifts_per_week: null,
+        };
 
   const payload: ScheduleBoardPayload = {
     // Employees only need names for the board — emails and everyone's

@@ -35,3 +35,18 @@ describe('schedulerInstructionsWith', () => {
     expect(SCHEDULER_INSTRUCTIONS).toContain('`<standing-instructions>` block');
   });
 });
+
+describe('SCHEDULER_INSTRUCTIONS', () => {
+  it('makes the shift cap a hard rule and the other shift preferences judgment', () => {
+    const [hardRules, rest] = SCHEDULER_INSTRUCTIONS.split('## Admin notes');
+    expect(hardRules).toContain('Nobody goes past their `maxShiftsPerWeek`');
+    expect(rest).toContain('aim at `preferredShiftsPerWeek`');
+    expect(rest).toContain('`minShiftsPerWeek`');
+  });
+
+  it('asks for duties on every drafted assignment', () => {
+    expect(SCHEDULER_INSTRUCTIONS).toContain('Propose duties on every assignment you draft');
+    expect(SCHEDULER_INSTRUCTIONS).toContain('`historyPatterns.byDuty`');
+    expect(SCHEDULER_INSTRUCTIONS).not.toContain('Leave duties empty');
+  });
+});

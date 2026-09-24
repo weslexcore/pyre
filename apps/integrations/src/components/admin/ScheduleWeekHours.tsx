@@ -3,6 +3,8 @@
 // tab. Scheduled shift hours only (no stipends — those are fixed and never
 // change with the board). Live hours and hours in an unaccepted AI draft are
 // kept apart, since a draft under review is exactly when this matters.
+// Each row also counts the person's shifts against their min / preferred /
+// max shifts per week, when any are set.
 //
 // Desktop: a sticky column to the left of the day list. Phone: a floating
 // Hours button opens the same list as a bottom sheet. Clicking a person
@@ -19,6 +21,10 @@ export interface WeekHoursRow {
   live: number;
   /** Hours on draft assignments still under review. */
   draft: number;
+  /** Accepted assignments this week — one assignment is one shift. */
+  liveShifts: number;
+  /** Draft assignments still under review. */
+  draftShifts: number;
 }
 
 export interface WeekHoursTotals {
@@ -42,6 +48,8 @@ export function weekHoursRows(
 ): { rows: WeekHoursRow[]; totals: WeekHoursTotals } {
   const live: Record<string, number> = {};
   const draft: Record<string, number> = {};
+  const liveShifts: Record<string, number> = {};
+  const draftShifts: Record<string, number> = {};
   let shiftCount = 0;
   for (const shift of shifts) {
     if (shift.status !== 'active' || weekStartOf(shift.shift_date) !== weekStart) continue;
@@ -49,11 +57,19 @@ export function weekHoursRows(
     for (const a of shift.assignments) {
       const bucket = a.is_draft ? draft : live;
       bucket[a.staff_id] = (bucket[a.staff_id] ?? 0) + assignmentHours(a.starts_at, a.ends_at);
+      const counts = a.is_draft ? draftShifts : liveShifts;
+      counts[a.staff_id] = (counts[a.staff_id] ?? 0) + 1;
     }
   }
   const rows = staff
     .filter((s) => s.active || live[s.id] || draft[s.id])
-    .map((s) => ({ staff: s, live: live[s.id] ?? 0, draft: draft[s.id] ?? 0 }))
+    .map((s) => ({
+      staff: s,
+      live: live[s.id] ?? 0,
+      draft: draft[s.id] ?? 0,
+      liveShifts: liveShifts[s.id] ?? 0,
+      draftShifts: draftShifts[s.id] ?? 0,
+    }))
     .sort(
       (a, b) =>
         b.live + b.draft - (a.live + a.draft) ||
@@ -88,6 +104,45 @@ const barTone = (total: number, target: number | null): string => {
   return 'bg-[var(--pyre-gold)]';
 };
 
+/**
+ * The shift count against the person's preferences, e.g. "3 shifts · want 4
+ * (2–5)": over the max in red, under the min in gold, on the preferred count
+ * in sage. Null when they have no preferences set — managers never receive
+ * them (they're redacted like pay), so the line only shows for admins and
+ * the person themselves.
+ */
+export function shiftPrefLine(
+  staff: StaffRow,
+  shifts: number
+): { text: string; tone: string } | null {
+  const {
+    min_shifts_per_week: min,
+    preferred_shifts_per_week: preferred,
+    max_shifts_per_week: max,
+  } = staff;
+  if (min === null && preferred === null && max === null) return null;
+  const range =
+    min !== null && max !== null
+      ? `${min}–${max}`
+      : min !== null
+        ? `min ${min}`
+        : max !== null
+          ? `max ${max}`
+          : '';
+  const parts = [preferred !== null ? `want ${preferred}` : '', range ? `(${range})` : '']
+    .filter(Boolean)
+    .join(' ');
+  const tone =
+    max !== null && shifts > max
+      ? 'text-[var(--pyre-red)]'
+      : min !== null && shifts < min
+        ? 'text-[var(--pyre-gold)]'
+        : preferred !== null && shifts === preferred
+          ? 'text-[var(--pyre-sage)]'
+          : 'text-white/50';
+  return { text: `${shifts} shift${shifts === 1 ? '' : 's'} · ${parts}`, tone };
+}
+
 export function WeekHoursList({
   rows,
   totals,
@@ -108,8 +163,9 @@ export function WeekHoursList({
   return (
     <div className="space-y-3">
       <ul className="space-y-1.5">
-        {rows.map(({ staff, live, draft }) => {
+        {rows.map(({ staff, live, draft, liveShifts, draftShifts }) => {
           const total = live + draft;
+          const shiftPrefs = shiftPrefLine(staff, liveShifts + draftShifts);
           const target = staff.target_hours_per_week;
           const active = selected.has(staff.id);
           const width = Math.min(100, (total / (target ?? heaviest)) * 100);
@@ -161,6 +217,13 @@ export function WeekHoursList({
                     style={{ width: `${width}%` }}
                   />
                 </span>
+                {shiftPrefs && (
+                  <span
+                    className={`mt-1 block font-mono text-[10px] tabular-nums ${shiftPrefs.tone}`}
+                  >
+                    {shiftPrefs.text}
+                  </span>
+                )}
               </button>
             </li>
           );

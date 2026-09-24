@@ -1,8 +1,9 @@
-// The scheduler's entire world view, pre-computed: roster (with lead flags
-// and weekly hour targets), the target week's shifts (coverage windows
+// The scheduler's entire world view, pre-computed: roster (with lead flags,
+// weekly hour targets and shifts-per-week preferences), the target week's shifts (coverage windows
 // already synced from Momence by the integrations cron), accepted
 // assignments, pending shift requests, per-person availability for every
-// shift, recent weekly hours, and history patterns. All judgment-free math
+// shift, recent weekly hours and shift counts, and history patterns
+// (including who usually holds which duties). All judgment-free math
 // lives here (via @pyre/schedule-core) so the model only decides who works
 // when.
 //
@@ -35,7 +36,7 @@ const HISTORY_WEEKS = 8;
 
 export const getWeekContextTool = defineTool({
   description:
-    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags and weekly hour targets), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours, history patterns, and the duty list (the only keys save_proposal accepts in `duties`). Call this first, before save_proposal.',
+    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags, weekly hour targets and min/preferred/max shifts per week), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours and shift counts, history patterns (including the duties each person usually holds), and the duty list (the only keys save_proposal accepts in `duties`). Call this first, before save_proposal.',
   inputSchema: z.object({
     weekStart: z
       .string()
@@ -173,6 +174,15 @@ export const getWeekContextTool = defineTool({
       })),
       founderIds
     );
+    // Shifts per person per history week (one assignment = one shift), to
+    // read beside the hours: the shifts-per-week preferences count these.
+    const shiftsByWeek = new Map<string, Record<string, number>>();
+    for (const a of historyAssignments) {
+      const week = weekStartOf((shiftById.get(a.shift_id) as ShiftRow).shift_date);
+      const counts = shiftsByWeek.get(week) ?? {};
+      counts[a.staff_id] = (counts[a.staff_id] ?? 0) + 1;
+      shiftsByWeek.set(week, counts);
+    }
     const recentWeeklyHours = staff.map((person) => ({
       staffId: person.id,
       name: person.display_name,
@@ -180,24 +190,28 @@ export const getWeekContextTool = defineTool({
       weekly: weeks.map((w) => ({
         weekStart: w.weekStart,
         hours: Math.round((w.byStaff[person.id] ?? 0) * 10) / 10,
+        shifts: shiftsByWeek.get(w.weekStart)?.[person.id] ?? 0,
       })),
     }));
 
-    // History patterns: per person, how often they worked each label/weekday
-    // and how often their assignments were setup vs full.
+    // History patterns: per person, how often they worked each label/weekday,
+    // how often their assignments were setup vs full, and how often they held
+    // each duty — the basis for proposing who does what on the draft.
     const historyPatterns = staff.map((person) => {
       const theirs = historyAssignments.filter((a) => a.staff_id === person.id);
       const byLabel: Record<string, number> = {};
       const byWeekday: Record<string, number> = {};
       const byRole: Record<string, number> = {};
+      const byDuty: Record<string, number> = {};
       for (const a of theirs) {
         const shift = shiftById.get(a.shift_id) as ShiftRow;
         byLabel[shift.label] = (byLabel[shift.label] ?? 0) + 1;
         const weekday = new Date(`${shift.shift_date}T00:00:00Z`).getUTCDay();
         byWeekday[String(weekday)] = (byWeekday[String(weekday)] ?? 0) + 1;
         byRole[a.role] = (byRole[a.role] ?? 0) + 1;
+        for (const duty of a.duties ?? []) byDuty[duty] = (byDuty[duty] ?? 0) + 1;
       }
-      return { staffId: person.id, name: person.display_name, byLabel, byWeekday, byRole };
+      return { staffId: person.id, name: person.display_name, byLabel, byWeekday, byRole, byDuty };
     });
 
     return {
@@ -209,6 +223,11 @@ export const getWeekContextTool = defineTool({
         isFounder: s.is_founder,
         canLead: canLeadShift(s),
         targetHoursPerWeek: s.target_hours_per_week,
+        // Shifts this week, counting existingAssignments: aim at preferred,
+        // reach min where you can; max is a hard cap the server enforces.
+        minShiftsPerWeek: s.min_shifts_per_week,
+        preferredShiftsPerWeek: s.preferred_shifts_per_week,
+        maxShiftsPerWeek: s.max_shifts_per_week,
       })),
       shifts: shiftsOut,
       pendingShiftRequests: pendingRequests.map((r) => ({

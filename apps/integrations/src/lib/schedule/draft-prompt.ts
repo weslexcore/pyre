@@ -35,7 +35,8 @@ export function buildDraftMessage(weekStart: string, prompt = ''): string {
     'Fill only shifts that are still below their staffNeeded count — leave fully staffed ' +
     "shifts untouched, and never add more people than a shift's remaining need. " +
     'Apply every scheduling rule in your instructions — shift-lead coverage, weekly hour ' +
-    'targets, and pending shift requests included. ' +
+    'targets, shifts-per-week preferences (never past anyone’s maximum), and pending shift ' +
+    'requests included — and propose duties for every assignment you draft. ' +
     'Any previous draft for that week is superseded automatically.';
 
   if (!prompt) return base;
@@ -44,7 +45,8 @@ export function buildDraftMessage(weekStart: string, prompt = ''): string {
     `${base}\n\n` +
     'The admin added a note for this draft. Treat it as a high-priority preference for the ' +
     'judgment calls, but the hard rules in your instructions still win — never assign over ' +
-    '"busy" availability, never touch covered shifts, never overfill. Open the rationale with ' +
+    '"busy" availability, never touch covered shifts, never overfill, never go past anyone’s ' +
+    'maximum shifts. Open the rationale with ' +
     'a short line on how you handled the note, including anything you could not honour.\n' +
     `<admin-note>\n${prompt}\n</admin-note>`
   );
