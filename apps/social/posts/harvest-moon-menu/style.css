@@ -40,11 +40,11 @@
   padding: 0;
 }
 
-/* Three overlapping circles stacked vertically (viewBox 400×1000). */
+/* Three overlapping circles in a horizontal row (viewBox 1000×400). */
 .menu__moon {
   display: block;
-  width: 440px;
-  height: 1100px;
+  width: 1300px;
+  height: 520px;
 }
 
 .drink {
