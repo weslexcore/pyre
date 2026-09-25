@@ -84,4 +84,16 @@ describe('card discussion and activity', () => {
     );
     expect(goal).not.toContain('<details');
   });
+
+  it('renders comment markdown: links and checklists', () => {
+    const html = render('comments', [
+      {
+        ...events[1],
+        note: 'See [the SOP](https://example.com/sop)\n\n- [ ] Call vendor\n- [x] Order towels',
+      },
+    ]);
+    expect(html).toContain('<a href="https://example.com/sop"');
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain('Order towels');
+  });
 });

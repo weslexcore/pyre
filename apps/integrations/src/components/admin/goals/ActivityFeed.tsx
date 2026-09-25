@@ -8,6 +8,7 @@ import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { buttonClass, SectionTitle, send } from '../goalsUi';
 import { readError } from '../incidentUi';
+import { SopMarkdown } from '../SopMarkdown';
 import { MentionInput } from './MentionInput';
 
 interface EventsResponse {
@@ -202,19 +203,27 @@ export function EventEntries({
           >
             {timeAgo(entry.created_at, nowIso)}
           </time>
-          <span className="min-w-0 flex-1 break-words">
-            <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
-            <span
-              className={
-                entry.action === 'comment' ? 'whitespace-pre-wrap text-white/80' : 'text-white/45'
-              }
-            >
-              {describeEvent(entry, subjectTitle, columnsById, people)}
+          {entry.action === 'comment' ? (
+            // Comments are markdown like every other body in the admin, so
+            // links and checklists render; the outer margins are trimmed to
+            // keep a one-line comment on one line's worth of space.
+            <div className="min-w-0 flex-1 break-words">
+              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>
+              <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
+                <SopMarkdown content={entry.note ?? ''} />
+              </div>
+            </div>
+          ) : (
+            <span className="min-w-0 flex-1 break-words">
+              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
+              <span className="text-white/45">
+                {describeEvent(entry, subjectTitle, columnsById, people)}
+              </span>
+              {entry.note && (
+                <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
+              )}
             </span>
-            {entry.action !== 'comment' && entry.note && (
-              <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
-            )}
-          </span>
+          )}
         </li>
       ))}
     </ol>
