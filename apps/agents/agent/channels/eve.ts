@@ -32,6 +32,7 @@ import {
   auditTrailResult,
   auditTurnStarted,
 } from '../lib/knowledge/audit';
+import { reportTurnEnded } from '../lib/suggester/report';
 import {
   AGENT_HEADER,
   type KnowledgeScope,
@@ -59,6 +60,14 @@ function channelSecretAuth(): AuthFn<Request> {
       attributes: {},
     };
   };
+}
+
+/** The suggestion run a suggester session saves into, or undefined for other roles. */
+function suggestRunOf(ctx: {
+  session: { auth: Parameters<typeof resolveRole>[0] };
+}): string | null | undefined {
+  const { role, suggest } = resolveRole(ctx.session.auth);
+  return role === 'suggester' ? (suggest?.runId ?? null) : undefined;
 }
 
 /** The knowledge scope of a session, or null for scheduler sessions. */
@@ -164,15 +173,32 @@ export default eveChannel({
         await auditAnswer(ctx.session.id, data.turnId, data.message);
       }
     },
+    // A suggester turn's end is reported to the integrations app, which
+    // fails the run if the agent never saved (lib/suggester/report.ts).
     async 'turn.completed'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id);
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'answered');
     },
     async 'turn.failed'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id, `${data.code}: ${data.message}`);
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'failed', `${data.code}: ${data.message}`);
     },
     async 'turn.cancelled'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id, 'The agent was cancelled');
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'cancelled');
     },

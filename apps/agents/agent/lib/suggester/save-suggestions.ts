@@ -113,6 +113,12 @@ export async function saveSuggestions(
     suggestions: input.suggestions,
   });
   if (status >= 400) {
+    // Logged as well as returned: a refusal the model can fix is routine, but
+    // one it can't (the integrations app unreachable or behind Deployment
+    // Protection) otherwise leaves no trace outside the session.
+    console.error(
+      `[suggester] save_suggestions for run ${target.runId ?? '(dry run)'} refused (HTTP ${status}): ${String(body.error ?? '')}`
+    );
     return {
       saved: false,
       status,

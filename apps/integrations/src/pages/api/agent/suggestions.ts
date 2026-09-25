@@ -10,6 +10,10 @@
 //     → 200 { saved, count }            (an empty list closes the run with none)
 //     → 200 { dryRun: true, suggestions } (validated, nothing written)
 //     → 4xx { error, index? }           (index names the suggestion to fix)
+//   POST { runId, ended: true, error? } → 200 { run: status }
+//     The agent's turn ended. A run that saved is left alone; one still open
+//     is failed on the spot (with the turn's error, if it had one), so the
+//     page stops showing "Looking…" instead of waiting for it to go stale.
 //
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). The run —
 // and through it the source record — comes from the session's auth on the
@@ -20,7 +24,7 @@ import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
 import { intakeSuggestions } from '@/lib/suggestions/intake';
 import { notifySuggestionsReady } from '@/lib/suggestions/notify';
-import { loadRun } from '@/lib/suggestions/runs';
+import { loadRun, markFailed } from '@/lib/suggestions/runs';
 import { SUGGESTION_SOURCES } from '@/lib/suggestions/sources';
 import { insertSuggestions } from '@/lib/suggestions/store';
 import { isUuid } from '@/lib/suggestions/types';
@@ -48,6 +52,20 @@ export const POST: APIRoute = async ({ request }) => {
 
   const dryRun = body.dryRun === true;
   const run = isUuid(body.runId) ? await loadRun(db, body.runId) : null;
+
+  if (body.ended === true) {
+    if (!run) return json({ error: 'runId must name a suggestion run' }, 400);
+    if (run.status === 'queued' || run.status === 'running') {
+      const reason =
+        typeof body.error === 'string' && body.error.trim()
+          ? `The agent stopped: ${body.error.trim()}`
+          : 'The agent finished without saving any suggestions';
+      console.warn(`[suggestions] run ${run.id} ended unsaved: ${reason}`);
+      await markFailed(db, run.id, reason);
+      return json({ run: 'failed' });
+    }
+    return json({ run: run.status });
+  }
   if (!dryRun) {
     if (!run) return json({ error: 'runId must name an open suggestion run' }, 400);
     if (run.status === 'done') {
