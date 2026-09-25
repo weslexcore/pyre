@@ -33,14 +33,22 @@ export const boardCardCreate: KindHandler<'board_card.create'> = {
       };
     }
 
-    let columnKey = payload.columnKey;
+    const columnKey = payload.columnKey;
     if (columnKey) {
       const columns = await loadColumns(db, board.id);
       const column = columns.find((c) => c.key === columnKey && !c.archived);
       if (!column) {
         return { ok: false, status: 422, error: `No column "${columnKey}" on "${payload.board}"` };
       }
-      if (column.kind !== 'open') columnKey = null;
+      // An open column, or a done one for work already finished (the card
+      // is stamped complete); a dropped column is never where new work goes.
+      if (column.kind === 'dropped') {
+        return {
+          ok: false,
+          status: 422,
+          error: `"${column.label}" is for dropped work; choose an open or done column`,
+        };
+      }
     }
 
     const parsed = parseCardCreate({

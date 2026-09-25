@@ -135,7 +135,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return json({
       boards: (boards.data ?? []).map((b) => ({
         ...b,
-        columns: (columns.data ?? []).filter((c) => c.board_id === b.id && c.kind === 'open'),
+        // Open columns for new work, done ones for work already finished.
+        columns: (columns.data ?? []).filter(
+          (c) => c.board_id === b.id && (c.kind === 'open' || c.kind === 'done')
+        ),
         fields: ((fields.data ?? []) as BoardFieldRow[]).filter((f) => f.board_id === b.id),
       })),
     });

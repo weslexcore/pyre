@@ -15,6 +15,7 @@ import { filterFileAnswers, syncCardAttachments } from './card-media';
 import { defaultColumn, nextSortOrder } from './cards';
 import { logBoardEvent } from './events';
 import { loadColumns } from './store';
+import { isFinishedKind } from './types';
 import type { CardCreate } from './validate';
 import { normalizeProperties } from './validate';
 
@@ -89,6 +90,16 @@ export async function createCard(
       ...input.card,
       board_id: board.id,
       column_id: column.id,
+      // Filed straight into a done or dropped column (work already finished),
+      // it is stamped complete on the way in — the same stamp a move there
+      // gives (lib/boards/cards columnPatch) — and waits on nobody.
+      ...(isFinishedKind(column.kind)
+        ? {
+            completed_at: new Date().toISOString(),
+            completed_by: input.actor,
+            waiting_on: null,
+          }
+        : {}),
       // Filed under the board's goal, whatever the board's goal is today.
       goal_id: board.goal_id,
       properties,

@@ -78,7 +78,8 @@ export interface BoardOption {
   slug: string;
   name: string;
   card_noun: string;
-  columns: { key: string; label: string }[];
+  /** Open columns, then done ones (for work already finished). */
+  columns: { key: string; label: string; kind: 'open' | 'done' }[];
   fields: BoardFieldRow[];
 }
 

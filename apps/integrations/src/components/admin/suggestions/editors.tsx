@@ -96,12 +96,31 @@ function CardCreateEditor({
             onChange={(e) => set({ columnKey: e.target.value || null })}
           >
             <option value="">First open column</option>
-            {board?.columns.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
+            {board?.columns
+              .filter((c) => c.kind === 'open')
+              .map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            {/* Already done: the card is filed there, marked complete. */}
+            {board?.columns.some((c) => c.kind === 'done') && (
+              <optgroup label="Already done">
+                {board.columns
+                  .filter((c) => c.kind === 'done')
+                  .map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
+          {board?.columns.find((c) => c.key === value.columnKey)?.kind === 'done' && (
+            <span className="mt-1 block font-mono text-[10px] text-white/40">
+              Filed as already done: the card is marked complete.
+            </span>
+          )}
         </label>
       </div>
       {loadError && <p className="font-mono text-[10px] text-[var(--pyre-red)]">{loadError}</p>}
