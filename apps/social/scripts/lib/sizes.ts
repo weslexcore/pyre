@@ -8,7 +8,8 @@ export type SizeKey =
   | 'postcard-4x6'
   | 'business-card'
   | 'letter'
-  | 'letter-landscape';
+  | 'letter-landscape'
+  | 'tall-menu';
 
 export interface Size {
   w: number;
@@ -31,6 +32,8 @@ export const SIZES: Record<SizeKey, Size> = {
   letter: { w: 2550, h: 3300, label: '8.5x11in print' },
   /* Print: US Letter (8.5×11in) rotated to landscape at 300dpi. Full-sheet sign — keep content within comfortable margins. */
   'letter-landscape': { w: 3300, h: 2550, label: '11x8.5in print' },
+  /* Print: 4.25×11in tall cocktail/table menu at 300dpi — half a letter sheet cut lengthwise, so two print per sheet. */
+  'tall-menu': { w: 1275, h: 3300, label: '4.25x11in print' },
 };
 
 export const SIZE_KEYS = Object.keys(SIZES) as SizeKey[];

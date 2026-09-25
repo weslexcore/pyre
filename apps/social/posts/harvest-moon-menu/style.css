@@ -1,9 +1,10 @@
-/* Harvest moon party menu — printable 8.5×11" sheet (2550×3300 at 300dpi).
+/* Harvest moon party menu — 4.25×11" tall cocktail menu (1275×3300 at 300dpi).
    Transparent background for printing onto creme paper: dark ink type, with a single
-   hand-stamped gold moon (SVG ink filter in index.html) between the two drinks.
+   row of hand-stamped moons (SVG ink filter in index.html) between the two drinks.
    Small gold text uses a deeper gold so it holds contrast on creme stock.
    Type follows the landing page: Fraktion Mono labels, Neue Montreal Mono body copy.
-   Sized in px for the letter canvas; preview at other sizes will look oversized. */
+   Sized in px for the tall-menu canvas. Type stays readable at print size (~7pt labels,
+   ~10pt body), so long names wrap onto balanced lines rather than shrinking. */
 
 :root {
   --menu-gold-ink: #9c7428;
@@ -23,6 +24,7 @@
   align-items: center;
   width: 100%;
   height: 100%;
+  padding: 0 150px;
   color: var(--pyre-black);
   text-align: center;
 }
@@ -43,15 +45,15 @@
 /* Three overlapping circles in a horizontal row (viewBox 1000×400). */
 .menu__moon {
   display: block;
-  width: 1300px;
-  height: 520px;
+  width: 900px;
+  height: 360px;
 }
 
 .drink {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 48px;
+  gap: 40px;
 }
 
 .drink__name {
@@ -59,25 +61,29 @@
   /* font-family: var(--font-logo); */
   text-transform: uppercase;
   font-weight: 400;
-  font-size: 150px;
+  font-size: 100px;
   line-height: 1.05;
+  text-wrap: balance;
 }
 
 .drink__notes {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 42px;
-  letter-spacing: 0.18em;
+  font-size: 28px;
+  letter-spacing: 0.16em;
+  line-height: 1.6;
+  text-wrap: balance;
   text-transform: uppercase;
   color: var(--menu-gold-ink);
 }
 
 .drink__description {
-  max-width: 36ch;
+  max-width: 30ch;
   margin: 0;
   font-family: var(--font-body-mono);
-  font-size: 50px;
+  font-size: 40px;
   line-height: 1.55;
+  text-wrap: balance;
   color: rgba(35, 34, 28, 0.8);
 }
 
@@ -89,7 +95,7 @@
 }
 
 .menu__logo {
-  height: 300px;
+  height: 150px;
   width: auto;
   opacity: 0.9;
 }
