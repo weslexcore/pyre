@@ -56,9 +56,14 @@ interface ImportMetaEnv {
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
   // QStash publish token. Lets a Momence session webhook schedule a debounced
-  // schedule-lint run (lib/schedule-lint/trigger.ts); unset = the next hourly
-  // tick runs it instead.
+  // schedule-lint run (lib/schedule-lint/trigger.ts; unset = the next hourly
+  // tick runs it instead), and queues shift-note classification to
+  // /api/classify/run with retries (lib/classify/dispatch.ts; unset = it runs
+  // best-effort in the saving request's background).
   readonly QSTASH_TOKEN?: string;
+  // Set by Vercel when Protection Bypass for Automation is enabled; forwarded
+  // on QStash classify jobs so they get past Deployment Protection on previews.
+  readonly VERCEL_AUTOMATION_BYPASS_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)
   readonly UNSUBSCRIBE_SECRET?: string;
   // Partner verification: shared secret the landing page sends on /api/partner/request

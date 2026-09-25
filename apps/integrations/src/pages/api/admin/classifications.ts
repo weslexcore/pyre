@@ -13,7 +13,8 @@
 import { isSubjectType } from '@pyre/signals-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin } from '@/lib/auth/admin';
-import { loadClassifications, pendingView, scheduleClassification } from '@/lib/classify/request';
+import { scheduleClassification } from '@/lib/classify/dispatch';
+import { loadClassifications, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
 

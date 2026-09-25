@@ -1,17 +1,10 @@
-// Classification runs on every shift note write, so two things matter most:
-// the write's own response never waits for it (scheduleClassification only
-// queues work), and the background run skips unchanged text, files its
-// request before asking pyre-agents, and never lets a stale run overwrite a
-// newer one.
+// The background run behind every shift note write: it skips unchanged text,
+// files its request before asking pyre-agents, and never lets a stale run
+// overwrite a newer one. Scheduling it is ./dispatch (dispatch.test.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeClassificationsDb } from './fake-db.test-helper';
 
-const waitUntil = vi.fn();
-vi.mock('@vercel/functions', () => ({ waitUntil: (p: unknown) => waitUntil(p) }));
-const getDb = vi.fn();
-vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
-
-const { contentHash, runClassification, scheduleClassification } = await import('./request');
+const { contentHash, runClassification } = await import('./request');
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -20,37 +13,6 @@ const PROBABILITIES = { action: 0.82, question: 0.1, update: 0.05, feedback: 0.2
 function agents(response: () => Response | Promise<Response>) {
   return vi.fn(async (_url: string, _init?: RequestInit) => response());
 }
-
-describe('scheduleClassification', () => {
-  beforeEach(() => {
-    vi.stubEnv('AGENTS_BASE_URL', 'https://agents.test');
-    vi.stubEnv('EVE_CHANNEL_SECRET', 'secret');
-    waitUntil.mockReset();
-  });
-  afterEach(() => vi.unstubAllEnvs());
-
-  it('hands the work to waitUntil and returns without doing any of it', () => {
-    const { db, log } = fakeClassificationsDb();
-    getDb.mockReturnValue(db);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-
-    const result = scheduleClassification('shift_note', NOTE_ID, 'Towels low');
-
-    expect(result).toBeUndefined();
-    expect(waitUntil).toHaveBeenCalledTimes(1);
-    expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
-    // Nothing ran synchronously: no row filed, no request sent.
-    expect(log).toEqual([]);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-  });
-
-  it('does nothing when the agent is not configured', () => {
-    vi.stubEnv('AGENTS_BASE_URL', '');
-    scheduleClassification('shift_note', NOTE_ID, 'Towels low');
-    expect(waitUntil).not.toHaveBeenCalled();
-  });
-});
 
 describe('runClassification', () => {
   beforeEach(() => {
