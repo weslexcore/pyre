@@ -71,7 +71,7 @@ import {
 } from '@/lib/shift-notes/media';
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { highlightSegments, matchesTerm } from '@/lib/sops/search';
+import { matchesTerm } from '@/lib/sops/search';
 import { BulkClassify } from './BulkClassify';
 import { FilterMultiSelect } from './FilterMultiSelect';
 import {
@@ -97,10 +97,18 @@ import {
   SparkleIcon,
   useClassifications,
 } from './Signals';
+import { SopMarkdown } from './SopMarkdown';
 import { SuggestionPanel } from './suggestions/SuggestionPanel';
 import { useSuggestions } from './suggestions/useSuggestions';
 
 const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
+
+// Notes and replies are written as markdown (links, lists, checklists) but
+// sit in a card, so the renderer's paragraph margins are trimmed at the edges
+// and a note's headings are kept to text size.
+const NOTE_MARKDOWN_CLASS =
+  'mt-2 break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h2]:mt-3 [&_h2]:text-base [&_h3]:mt-3 [&_h3]:text-sm [&_h4]:mt-3 [&_h4]:text-sm [&_p]:my-2';
+const REPLY_MARKDOWN_CLASS = NOTE_MARKDOWN_CLASS.replace('mt-2 ', 'mt-1 ');
 
 const STATUS_OPTIONS = SHIFT_NOTE_STATUSES.map((status) => ({
   value: status,
@@ -158,34 +166,6 @@ interface Viewer {
 
 /** Whose notes came back: the whole log, or only this person's. */
 type Scope = 'all' | 'mine';
-
-/**
- * Note body with every occurrence of `term` wrapped in <mark>, so a search hit
- * is visible at a glance instead of having to be re-read for. Same styling as
- * the SOP search so the two feel like one feature.
- */
-function MarkedBody({ text, term }: { text: string; term: string }) {
-  if (!term) return <>{text}</>;
-  let offset = 0;
-  return (
-    <>
-      {highlightSegments(text, term).map((segment) => {
-        const key = offset;
-        offset += segment.text.length;
-        return segment.match ? (
-          <mark
-            key={key}
-            className="rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]"
-          >
-            {segment.text}
-          </mark>
-        ) : (
-          segment.text
-        );
-      })}
-    </>
-  );
-}
 
 /** "Aug 21, 9:42 PM" in shift wall-clock time, for replies and status changes. */
 function formatStamp(timestamp: string): string {
@@ -959,9 +939,12 @@ export function ShiftNotes() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                  <MarkedBody text={note.body} term={term} />
-                </p>
+                <SopMarkdown
+                  content={note.body}
+                  highlight={term}
+                  lineBreaks
+                  className={NOTE_MARKDOWN_CLASS}
+                />
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1188,9 +1171,11 @@ export function ShiftNotes() {
                             </div>
                           </div>
                         ) : (
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">
-                            {reply.body}
-                          </p>
+                          <SopMarkdown
+                            content={reply.body}
+                            lineBreaks
+                            className={REPLY_MARKDOWN_CLASS}
+                          />
                         )}
                       </div>
                     )
@@ -1312,7 +1297,7 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
 /** An edit's text change: removed words struck through, added ones highlighted. */
 function EditDiff({ before, after }: { before: string; after: string }) {
   // Keyed by where each run starts in the old and new text, which is unique
-  // and stable (the same scheme as MarkedBody).
+  // and stable.
   let inBefore = 0;
   let inAfter = 0;
   return (

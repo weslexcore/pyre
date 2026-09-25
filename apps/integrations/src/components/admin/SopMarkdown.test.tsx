@@ -2,7 +2,7 @@
 // shapes the seeded checklists rely on (headings, task lists, blockquotes).
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SopMarkdown } from './SopMarkdown';
+import { keepLineBreaks, SopMarkdown } from './SopMarkdown';
 
 const SAMPLE = `## Large Sauna
 
@@ -124,5 +124,31 @@ describe('SopMarkdown', () => {
     );
     expect(html).toContain('<a href="/admin/sops/momence-dirty-towels"');
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('keepLineBreaks', () => {
+  it('keeps typed lines apart', () => {
+    expect(keepLineBreaks('Towels low\nHeater slow')).toBe('Towels low  \nHeater slow');
+  });
+
+  it('leaves blank lines, the last line, and code fences alone', () => {
+    expect(keepLineBreaks('a\n\nb')).toBe('a\n\nb');
+    expect(keepLineBreaks('```\nx\ny\n```')).toBe('```\nx\ny\n```');
+  });
+
+  it('renders a note with links and a checklist', () => {
+    const html = renderToStaticMarkup(
+      <SopMarkdown
+        lineBreaks
+        content={
+          'Towels low\nSee [closing](/admin/sops/closing)\n\n- [x] restocked\n- [ ] ordered more'
+        }
+      />
+    );
+    expect(html).toContain('Towels low<br/>');
+    expect(html).toContain('href="/admin/sops/closing"');
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain('checked=""');
   });
 });

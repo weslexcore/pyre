@@ -10,6 +10,11 @@
 // into buttons that open the peek modal instead of navigating; without it
 // they stay plain links.
 //
+// `lineBreaks` keeps every line the writer typed on its own line — for text
+// written as notes rather than as markdown (shift notes and their replies),
+// where "Towels low\nHeater slow" is two things, not one sentence. Markdown
+// proper (lists, checklists, headings, fences) is unaffected.
+//
 // `highlight` wraps every occurrence of the term in <mark> for the in-document
 // search: every text node is a direct string child of one of the overridden
 // elements below, so marking string children in each override covers the
@@ -65,6 +70,26 @@ function CopyableCodeBlock({ children }: { children?: ReactNode }) {
   );
 }
 
+/**
+ * Turn each single line break outside a code fence into a hard break (two
+ * trailing spaces), the way remark-breaks would: a line followed by another
+ * non-blank line would otherwise be joined to it in one paragraph. Lines that
+ * start a list item, heading, quote or table already stand alone, so the
+ * extra spaces are harmless there. Exported for tests.
+ */
+export function keepLineBreaks(content: string): string {
+  const lines = content.split('\n');
+  let fenced = false;
+  return lines
+    .map((line, i) => {
+      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+      const next = lines[i + 1];
+      if (fenced || next === undefined || !line.trim() || !next.trim()) return line;
+      return /\s{2}$/.test(line) ? line : `${line}  `;
+    })
+    .join('\n');
+}
+
 /** A required task line (`- [!] text`) — see lib/sops/checklist. */
 const REQUIRED_TASK_RE = /^(\s*[-*+]\s+)\[!\]\s+/gm;
 
@@ -118,10 +143,16 @@ export const SopMarkdown = memo(function SopMarkdown({
   content,
   highlight,
   onSopLink,
+  lineBreaks = false,
+  className = '',
 }: {
   content: string;
   highlight?: string;
   onSopLink?: (slug: string) => void;
+  /** Keep single line breaks as line breaks (see the header). */
+  lineBreaks?: boolean;
+  /** Extra classes on the wrapper, e.g. to trim the outer margins in a card. */
+  className?: string;
 }) {
   const term = highlight?.trim() ?? '';
   const active = term.length >= MIN_QUERY_LENGTH;
@@ -140,7 +171,9 @@ export const SopMarkdown = memo(function SopMarkdown({
     // Descendant rules handle nested lists (sub-tasks under a checklist item):
     // tighter vertical rhythm and their own indent, overriding the top-level
     // ul classes below.
-    <div className="text-sm leading-relaxed text-white/80 [&_ul_ul]:my-1 [&_ul_ul]:pl-7">
+    <div
+      className={`text-sm leading-relaxed text-white/80 [&_ul_ul]:my-1 [&_ul_ul]:pl-7 ${className}`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -247,7 +280,7 @@ export const SopMarkdown = memo(function SopMarkdown({
           em: ({ children }) => <em className="italic">{hl(children)}</em>,
         }}
       >
-        {renderable(content)}
+        {lineBreaks ? keepLineBreaks(renderable(content)) : renderable(content)}
       </ReactMarkdown>
     </div>
   );
