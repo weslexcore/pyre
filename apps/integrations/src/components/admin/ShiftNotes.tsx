@@ -73,6 +73,7 @@ import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { highlightSegments, matchesTerm } from '@/lib/sops/search';
 import { BulkClassify } from './BulkClassify';
+import { FilterMultiSelect } from './FilterMultiSelect';
 import {
   buttonClass,
   type CreatedShiftNote,
@@ -100,6 +101,11 @@ import { SuggestionPanel } from './suggestions/SuggestionPanel';
 import { useSuggestions } from './suggestions/useSuggestions';
 
 const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
+
+const STATUS_OPTIONS = SHIFT_NOTE_STATUSES.map((status) => ({
+  value: status,
+  label: statusLabel(status),
+}));
 
 /** Badge colours per status: quiet while open, gold while owed, sage once done. */
 const statusBadgeClass: Record<ShiftNoteStatus, string> = {
@@ -238,9 +244,10 @@ export function ShiftNotes() {
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
 
   // Filters.
-  const [personFilter, setPersonFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
-  const [signalFilter, setSignalFilter] = useState<'all' | SignalType>('all');
+  // Each is a multi-select; an empty set means no filtering.
+  const [personFilter, setPersonFilter] = useState<ReadonlySet<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<ReadonlySet<ShiftNoteStatus>>(new Set());
+  const [signalFilter, setSignalFilter] = useState<ReadonlySet<SignalType>>(new Set());
 
   /**
    * Re-read one note and its thread from the server — once the classifier
@@ -646,7 +653,9 @@ export function ShiftNotes() {
   // Author options for the filter, ordered by display name.
   const authorOptions = useMemo(() => {
     const set = new Set(notes.map((n) => n.author_email));
-    return [...set].sort((a, b) => personName(a, names).localeCompare(personName(b, names)));
+    return [...set]
+      .map((email) => ({ value: email, label: personName(email, names) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [notes, names]);
 
   // The trimmed term drives both the filter and the highlight, so what marks
@@ -655,11 +664,14 @@ export function ShiftNotes() {
 
   const visible = useMemo(() => {
     return notes.filter((note) => {
-      if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
+      if (scope === 'all' && personFilter.size > 0 && !personFilter.has(note.author_email)) {
         return false;
       }
-      if (statusFilter !== 'all' && note.status !== statusFilter) return false;
-      if (signalFilter !== 'all' && !hasSignal(signals.classifications[note.id], signalFilter)) {
+      if (statusFilter.size > 0 && !statusFilter.has(note.status)) return false;
+      if (
+        signalFilter.size > 0 &&
+        ![...signalFilter].some((type) => hasSignal(signals.classifications[note.id], type))
+      ) {
         return false;
       }
       // Same matcher as the highlight, so what filters is what marks.
@@ -720,37 +732,21 @@ export function ShiftNotes() {
       {notes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           {scope === 'all' && (
-            <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-              person
-              <select
-                className={selectClass}
-                value={personFilter}
-                onChange={(e) => setPersonFilter(e.target.value)}
-              >
-                <option value="all">Anyone</option>
-                {authorOptions.map((email) => (
-                  <option key={email} value={email}>
-                    {personName(email, names)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            status
-            <select
+            <FilterMultiSelect
+              placeholder="Person"
+              options={authorOptions}
+              selected={personFilter}
+              onChange={setPersonFilter}
               className={selectClass}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | ShiftNoteStatus)}
-            >
-              <option value="all">Any status</option>
-              {SHIFT_NOTE_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {statusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          )}
+          <FilterMultiSelect
+            placeholder="Status"
+            options={STATUS_OPTIONS}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            className={selectClass}
+          />
           {viewer.isAdmin && (
             <SignalFilter className={selectClass} value={signalFilter} onChange={setSignalFilter} />
           )}
@@ -777,8 +773,11 @@ export function ShiftNotes() {
           notes={notes}
           classifications={signals.classifications}
           names={names}
-          authors={authorOptions}
-          onRun={signals.rerunMany}
+          authors={authorOptions.map((o) => o.value)}
+          onRun={(ids, { suggest }) =>
+            signals.rerunMany(ids, suggest ? { suggest: true } : undefined)
+          }
+          canSuggest={canSuggest}
         />
       )}
 

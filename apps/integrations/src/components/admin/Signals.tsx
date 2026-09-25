@@ -21,6 +21,7 @@ import {
 } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
+import { FilterMultiSelect } from './FilterMultiSelect';
 
 const NEUTRAL_TONE = 'border-white/20 bg-white/5 text-white/70';
 
@@ -113,32 +114,26 @@ export function SignalChips({
   return <SignalList signals={classification.signals} />;
 }
 
-/** A <select> over the signal types, for filtering a list by what was found. */
+const SIGNAL_OPTIONS = SIGNAL_TYPES.map((type) => ({ value: type, label: signalLabel(type) }));
+
+/** A multi-select over the signal types, for filtering a list by what was found. */
 export function SignalFilter({
   value,
   onChange,
   className,
 }: {
-  value: 'all' | SignalType;
-  onChange: (value: 'all' | SignalType) => void;
+  value: ReadonlySet<SignalType>;
+  onChange: (value: ReadonlySet<SignalType>) => void;
   className?: string;
 }) {
   return (
-    <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-      detected
-      <select
-        className={className}
-        value={value}
-        onChange={(e) => onChange(e.target.value as 'all' | SignalType)}
-      >
-        <option value="all">Anything</option>
-        {SIGNAL_TYPES.map((type) => (
-          <option key={type} value={type}>
-            {signalLabel(type)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <FilterMultiSelect
+      placeholder="Detected"
+      options={SIGNAL_OPTIONS}
+      selected={value}
+      onChange={onChange}
+      className={className}
+    />
   );
 }
 
@@ -308,11 +303,14 @@ export function useClassifications(
    * how many were queued; throws with the server's reason on failure.
    */
   const rerunMany = useCallback(
-    async (ids: readonly string[]): Promise<{ queued: number; missing: number }> => {
+    async (
+      ids: readonly string[],
+      extra?: Record<string, unknown>
+    ): Promise<{ queued: number; missing: number }> => {
       const res = await fetch('/api/admin/classifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, ids }),
+        body: JSON.stringify({ ...extra, subject, ids }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         classifications?: Record<string, ClassificationView>;
