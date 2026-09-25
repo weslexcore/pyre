@@ -268,6 +268,8 @@ export function ShiftNotes() {
     void refreshThread(noteId);
   });
   const { refresh: refreshSuggestions, remove: removeSuggestions } = suggestions;
+  // Whether to offer Suggest: suggestions can be switched off in Settings.
+  const [canSuggest, setCanSuggest] = useState(false);
 
   // What the classifier found per note — admins only; the server sends
   // nothing to anyone else, and this fetches nothing for them. Each finished
@@ -308,6 +310,7 @@ export function ShiftNotes() {
         viewer?: Viewer;
         scope?: Scope;
         classifications?: Record<string, ClassificationView>;
+        suggestionsEnabled?: boolean;
       };
       setNotes(data.notes);
       resetSignals(data.classifications);
@@ -316,6 +319,7 @@ export function ShiftNotes() {
       setNames(data.people ?? {});
       if (data.viewer) setViewer(data.viewer);
       if (data.scope) setScope(data.scope);
+      setCanSuggest(data.suggestionsEnabled === true);
       if (data.viewer?.isAdmin) void refreshSuggestions(data.notes.map((n) => n.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load shift notes');
@@ -860,7 +864,7 @@ export function ShiftNotes() {
                     )}
                     {/* Asks the suggestion agent to draft tasks, comments,
                         or SOP edits from this note for an admin to review. */}
-                    {viewer.isAdmin && (
+                    {viewer.isAdmin && canSuggest && (
                       <button
                         type="button"
                         className={buttonClass}

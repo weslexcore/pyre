@@ -61,6 +61,7 @@ import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
+import { suggestionsEnabled } from '@/lib/suggestions/eligibility';
 import { suggestionNoticeSource } from '@/lib/suggestions/notify';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -255,6 +256,8 @@ export const GET: APIRoute = async ({ cookies }) => {
             'shift_note',
             notes.map((n) => n.id)
           ),
+          // Whether to offer the Suggest button (the settings page's switch).
+          suggestionsEnabled: await suggestionsEnabled(),
         }
       : {}),
     // So the island knows whether it is showing the whole log or just this

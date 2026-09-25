@@ -5,7 +5,7 @@
 // after-hook, the QStash worker — can import it. The Record type makes a new
 // source in ./types a type error here until it is wired up.
 
-import { hasActionableSignal, readStoredSignals, type Signal } from '@pyre/signals-core';
+import { readStoredSignals, type Signal } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { contentHash } from '@/lib/classify/hash';
 import type { ShiftNoteRow } from '@/lib/db';
@@ -30,25 +30,21 @@ export interface SuggestionSource {
   loadMany(db: SupabaseClient, ids: readonly string[]): Promise<Map<string, SourceRecord>>;
   /**
    * Whether a classification of this record should start a suggestion run on
-   * its own: the record is still open and the classifier found something to
-   * do in it. An admin's Suggest button ignores this.
+   * its own: the record is still open and the classifier found one of
+   * `autoSignals` in it (the suggestions.autoSignals setting). An admin's
+   * Suggest button ignores this.
    */
-  autoEligible(record: SourceRecord, signals: unknown): boolean;
+  autoEligible(record: SourceRecord, signals: unknown, autoSignals: readonly string[]): boolean;
 }
 
 /**
- * The signals that start a run: an action someone should take, or a record
- * (an SOP, a list) that needs updating. Questions and safety concerns go to
- * people first.
+ * Whether the classifier found one of `autoSignals` in a record — by default
+ * (the suggestions.autoSignals setting) an action someone should take, or a
+ * record (an SOP, a list) that needs updating.
  */
-export const AUTO_SUGGEST_SIGNALS = ['action', 'update'] as const;
-
-export function hasAutoSuggestSignal(signals: unknown): boolean {
+export function hasAutoSuggestSignal(signals: unknown, autoSignals: readonly string[]): boolean {
   const read: Signal[] = readStoredSignals(signals);
-  return (
-    hasActionableSignal(read) &&
-    read.some((s) => (AUTO_SUGGEST_SIGNALS as readonly string[]).includes(s.type))
-  );
+  return read.some((s) => autoSignals.includes(s.type));
 }
 
 /** Sep 24 — the date a note is about, as people refer to it. */
@@ -115,8 +111,8 @@ export const SUGGESTION_SOURCES: Record<SuggestionSourceType, SuggestionSource> 
       for (const note of notes) out.set(note.id, noteRecord(note, names));
       return out;
     },
-    autoEligible(record, signals) {
-      return !record.closed && hasAutoSuggestSignal(signals);
+    autoEligible(record, signals, autoSignals) {
+      return !record.closed && hasAutoSuggestSignal(signals, autoSignals);
     },
   },
 };

@@ -18,7 +18,7 @@ export async function maybeSuggestAfterClassification(
   sourceId: string,
   signals: unknown
 ): Promise<void> {
-  if (!autoSuggestEnabled()) return;
+  if (!(await autoSuggestEnabled())) return;
   try {
     const check = await autoSuggestCheck(db, sourceType, sourceId, signals);
     if (check.ok) await dispatchSuggestion({ sourceType, sourceId, trigger: 'auto' });

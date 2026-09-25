@@ -28,16 +28,23 @@ describe('shouldAutoSuggest', () => {
 });
 
 describe('hasAutoSuggestSignal', () => {
+  const DEFAULT = ['action', 'update'];
+
   it('fires on actions and updates', () => {
-    expect(hasAutoSuggestSignal([{ type: 'action', probability: 0.9 }])).toBe(true);
-    expect(hasAutoSuggestSignal([{ type: 'update', probability: 0.7 }])).toBe(true);
+    expect(hasAutoSuggestSignal([{ type: 'action', probability: 0.9 }], DEFAULT)).toBe(true);
+    expect(hasAutoSuggestSignal([{ type: 'update', probability: 0.7 }], DEFAULT)).toBe(true);
   });
 
   it('leaves questions, feedback, and nothing alone', () => {
-    expect(hasAutoSuggestSignal([{ type: 'question', probability: 0.9 }])).toBe(false);
-    expect(hasAutoSuggestSignal([{ type: 'feedback', probability: 0.9 }])).toBe(false);
-    expect(hasAutoSuggestSignal([])).toBe(false);
-    expect(hasAutoSuggestSignal(null)).toBe(false);
+    expect(hasAutoSuggestSignal([{ type: 'question', probability: 0.9 }], DEFAULT)).toBe(false);
+    expect(hasAutoSuggestSignal([{ type: 'feedback', probability: 0.9 }], DEFAULT)).toBe(false);
+    expect(hasAutoSuggestSignal([], DEFAULT)).toBe(false);
+    expect(hasAutoSuggestSignal(null, DEFAULT)).toBe(false);
+  });
+
+  it('follows the signals chosen in Settings', () => {
+    expect(hasAutoSuggestSignal([{ type: 'question', probability: 0.9 }], ['question'])).toBe(true);
+    expect(hasAutoSuggestSignal([{ type: 'action', probability: 0.9 }], ['safety'])).toBe(false);
   });
 });
 

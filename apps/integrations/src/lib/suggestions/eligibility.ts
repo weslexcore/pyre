@@ -5,12 +5,19 @@
 // the text makes it eligible again. An admin's Suggest button skips all this.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSetting } from '@/lib/settings/store';
 import { suggesterConfigured } from './session';
 import { SUGGESTION_SOURCES } from './sources';
 import type { SuggestionSourceType } from './types';
 
-export function autoSuggestEnabled(): boolean {
-  return import.meta.env.SUGGESTIONS_AUTO === 'on' && suggesterConfigured();
+/** Whether suggestions are on at all (the Suggest button, and anything automatic). */
+export async function suggestionsEnabled(): Promise<boolean> {
+  return (await getSetting('suggestions.enabled')) && suggesterConfigured();
+}
+
+/** Whether classifications may start runs on their own (both settings on). */
+export async function autoSuggestEnabled(): Promise<boolean> {
+  return (await suggestionsEnabled()) && (await getSetting('suggestions.auto'));
 }
 
 /** The rule itself, apart from the reads it needs. */
@@ -52,8 +59,12 @@ export async function autoSuggestCheck(
   ]);
   return {
     ok: shouldAutoSuggest({
-      enabled: autoSuggestEnabled(),
-      eligible: SUGGESTION_SOURCES[sourceType].autoEligible(source, signals),
+      enabled: await autoSuggestEnabled(),
+      eligible: SUGGESTION_SOURCES[sourceType].autoEligible(
+        source,
+        signals,
+        await getSetting('suggestions.autoSignals')
+      ),
       alreadyRun: (runs ?? 0) > 0,
       dismissed: (dismissed ?? 0) > 0,
     }),

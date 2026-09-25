@@ -22,6 +22,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { getSetting } from '@/lib/settings/store';
 import { getPeopleNames } from '@/lib/sops/people';
 import {
   approveSuggestion,
@@ -220,6 +221,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       rows.flatMap((r) => [r.decided_by, r.edited_by]).filter((e): e is string => !!e)
     ),
     agentsConfigured: suggesterConfigured(),
+    suggestionsEnabled: await getSetting('suggestions.enabled'),
   });
 };
 
@@ -288,6 +290,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           { error: 'The agents app is not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' },
           503
         );
+      }
+      if (!(await getSetting('suggestions.enabled'))) {
+        return json({ error: 'Suggestions are turned off in Settings' }, 409);
       }
       const source = await SUGGESTION_SOURCES[sourceType].load(db, sourceId);
       if (!source) return json({ error: 'Not found' }, 404);

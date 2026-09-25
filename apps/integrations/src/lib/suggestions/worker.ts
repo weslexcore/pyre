@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentSuggestionRunRow } from '@/lib/db';
-import { autoSuggestCheck } from './eligibility';
+import { autoSuggestCheck, suggestionsEnabled } from './eligibility';
 import { claimAutoRun, loadRun, markFailed, markRunning } from './runs';
 import { startSuggesterSession } from './session';
 import { SUGGESTION_SOURCES } from './sources';
@@ -49,6 +49,12 @@ export async function runSuggestJob(
   job: SuggestJob,
   options: { retried?: boolean; finalAttempt?: boolean } = {}
 ): Promise<SuggestJobOutcome> {
+  // Switched off on the settings page since the job was queued.
+  if (!(await suggestionsEnabled())) {
+    if (job.runId) await markFailed(db, job.runId, 'Suggestions are turned off in Settings');
+    return { state: 'skipped', reason: 'suggestions are off' };
+  }
+
   const source = await SUGGESTION_SOURCES[job.sourceType].load(db, job.sourceId);
   if (!source) {
     if (job.runId) await markFailed(db, job.runId, 'The record was deleted');

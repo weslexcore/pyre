@@ -301,6 +301,17 @@ export const SUGGESTIONS_TOOL: AdminTool = {
   keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox'],
 };
 
+// Admin-only: settings change what the whole app does.
+export const SETTINGS_TOOL: AdminTool = {
+  href: '/admin/settings',
+  title: 'Settings',
+  navLabel: 'Settings',
+  description:
+    'Turn features on and off and adjust how they behave, without changing environment variables or redeploying.',
+  section: 'admin',
+  keywords: ['features', 'toggles', 'flags', 'configuration', 'preferences'],
+};
+
 /** The isAdmin/pages half of DashboardAccess (kept client-bundle-safe here). */
 export interface PageAccess {
   isAdmin: boolean;
@@ -413,7 +424,9 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL, SUGGESTIONS_TOOL];
+  if (access.isAdmin) {
+    return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL, SUGGESTIONS_TOOL, SETTINGS_TOOL];
+  }
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 
