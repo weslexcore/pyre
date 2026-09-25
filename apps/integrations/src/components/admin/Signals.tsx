@@ -58,6 +58,23 @@ function SignalChip({ signal }: { signal: Signal }) {
   );
 }
 
+/** The AI sparkle: one large four-point star and a small one, in currentColor. */
+export function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 18 18"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M7.5 4.5c.55 3.5 2 4.95 5.5 5.5-3.5.55-4.95 2-5.5 5.5-.55-3.5-2-4.95-5.5-5.5 3.5-.55 4.95-2 5.5-5.5Z" />
+      <path d="M14 1.5c.25 1.6.9 2.25 2.5 2.5-1.6.25-2.25.9-2.5 2.5-.25-1.6-.9-2.25-2.5-2.5 1.6-.25 2.25-.9 2.5-2.5Z" />
+    </svg>
+  );
+}
+
 /** A set of signals as chips, e.g. what one run found. */
 export function SignalList({ signals }: { signals: readonly Signal[] }) {
   return (

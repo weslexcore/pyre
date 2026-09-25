@@ -71,7 +71,14 @@ import {
   uploadWithProgress,
 } from './ShiftNoteComposer';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
-import { hasSignal, SignalChips, SignalFilter, SignalList, useClassifications } from './Signals';
+import {
+  hasSignal,
+  SignalChips,
+  SignalFilter,
+  SignalList,
+  SparkleIcon,
+  useClassifications,
+} from './Signals';
 
 const selectClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
@@ -759,12 +766,23 @@ export function ShiftNotes() {
                     {viewer.isAdmin && (
                       <button
                         type="button"
-                        className={buttonClass}
+                        className={`${buttonClass} flex items-center px-2`}
                         disabled={busy || signals.rerunning === note.id}
+                        aria-label={
+                          signals.classifications[note.id] ? 'Reclassify note' : 'Classify note'
+                        }
                         title="Read this note for anything actionable and, unless an admin has set its status, mark it To do or Resolved"
                         onClick={() => void signals.rerun(note.id)}
                       >
-                        {signals.classifications[note.id] ? 'Reclassify' : 'Classify'}
+                        {/* Pulses while a read is under way. */}
+                        <SparkleIcon
+                          className={
+                            signals.rerunning === note.id ||
+                            signals.classifications[note.id]?.state === 'pending'
+                              ? 'animate-pulse'
+                              : undefined
+                          }
+                        />
                       </button>
                     )}
                     {canSetStatus(viewer) &&
