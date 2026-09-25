@@ -58,14 +58,14 @@
   /* font-family: var(--font-logo); */
   text-transform: uppercase;
   font-weight: 400;
-  font-size: 128px;
+  font-size: 150px;
   line-height: 1.05;
 }
 
 .drink__notes {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 38px;
+  font-size: 42px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--menu-gold-ink);
@@ -75,7 +75,7 @@
   max-width: 36ch;
   margin: 0;
   font-family: var(--font-body-mono);
-  font-size: 42px;
+  font-size: 50px;
   line-height: 1.55;
   color: rgba(35, 34, 28, 0.8);
 }
