@@ -14,24 +14,36 @@ import { resolveRole } from './lib/role';
 // session (prompt caches are per model, so switching mid-session would
 // re-ingest the conversation at uncached prices) from the same auth
 // attributes that pick the role's prompt and tools (lib/role.ts).
+//
+// The suggester reads one record (a shift note) and proposes follow-up work
+// for an admin to review — structured judgment over a small context, like the
+// scheduler, and it runs once per flagged note, so it gets Sonnet too.
 const SCHEDULER_MODEL = 'anthropic/claude-sonnet-5';
 const KNOWLEDGE_MODEL = 'anthropic/claude-opus-5';
+const SUGGESTER_MODEL = 'anthropic/claude-sonnet-5';
 
 export default defineAgent({
-  // Neither role uses eve's optional built-in tools (shell, sandbox files,
-  // web, subagents, questions, sleep): the scheduler works from
-  // get_week_context, the assistant from the knowledge base, and document
-  // text never gets a shell. Their tools come from agent/tools/role_tools.ts.
+  // No role uses eve's optional built-in tools (shell, sandbox files, web,
+  // subagents, questions, sleep): the scheduler works from get_week_context,
+  // the assistant from the knowledge base, the suggester from its record's
+  // context, and document text never gets a shell. Their tools come from
+  // agent/tools/role_tools.ts.
   defaultTools: false,
   // Every session gets a concrete model (eve has no compiled fallback for a
   // dynamic model): Opus 5 at low effort for the knowledge assistant, Sonnet
-  // at the provider default for everything else.
+  // at the provider default for the scheduler and the suggester.
   model: defineDynamic({
     events: {
-      'session.started': (_event, ctx) =>
-        resolveRole(ctx.session.auth).role === 'knowledge'
-          ? { model: KNOWLEDGE_MODEL, reasoning: 'low' as const }
-          : SCHEDULER_MODEL,
+      'session.started': (_event, ctx) => {
+        switch (resolveRole(ctx.session.auth).role) {
+          case 'knowledge':
+            return { model: KNOWLEDGE_MODEL, reasoning: 'low' as const };
+          case 'suggester':
+            return SUGGESTER_MODEL;
+          case 'scheduler':
+            return SCHEDULER_MODEL;
+        }
+      },
     },
   }),
 });

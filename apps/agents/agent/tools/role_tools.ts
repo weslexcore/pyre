@@ -1,9 +1,10 @@
 // The model's tool set, resolved per session from its role (lib/role.ts):
 // scheduler sessions get the drafting tools, knowledge sessions get the
-// read-only knowledge-base tools, and neither sees the other's. Keeping both
-// sets dynamic (rather than authoring the scheduler's statically) is what
-// keeps save_proposal — the one write path in this app — out of reach of a
-// staff member's question.
+// read-only knowledge-base tools, suggester sessions get their record's
+// context plus save_suggestions, and none sees another's. Keeping every set
+// dynamic (rather than authoring the scheduler's statically) is what keeps
+// the write paths — save_proposal and save_suggestions — out of reach of a
+// staff member's question, and of each other's role.
 //
 // Each execute re-derives the scope from the session's auth rather than
 // closing over it, so the tools behave the same on replay as on the first
@@ -32,13 +33,23 @@ import { getShiftNotes, getWaterLog, readIncident } from '../lib/knowledge/logs'
 import { getShifts } from '../lib/knowledge/schedule';
 import { KNOWLEDGE_SOURCES, searchKnowledge } from '../lib/knowledge/search';
 import { readSop, sopTableOfContents } from '../lib/knowledge/sops';
-import { type KnowledgeScope, resolveRole } from '../lib/role';
+import { type KnowledgeScope, resolveRole, suggestTargetOf } from '../lib/role';
 import { getWeekContextTool } from '../lib/scheduler/get-week-context';
 import { saveProposalTool } from '../lib/scheduler/save-proposal';
+import { searchOpenCards } from '../lib/suggester/cards';
+import { getSuggestionContext } from '../lib/suggester/context';
+import {
+  SAVE_SUGGESTIONS_DESCRIPTION,
+  saveSuggestions,
+  saveSuggestionsInput,
+} from '../lib/suggester/save-suggestions';
+import { readSopForEdit, suggesterSopContents } from '../lib/suggester/sops';
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 
-function scopeOf(ctx: { session?: { auth?: Parameters<typeof resolveRole>[0] } }): KnowledgeScope {
+function scopeOf(ctx: {
+  session?: { auth?: Parameters<typeof resolveRole>[0] };
+}): KnowledgeScope {
   const { role, scope } = resolveRole(ctx.session?.auth);
   if (role !== 'knowledge') {
     throw new Error('Knowledge tools are only available in knowledge sessions.');
@@ -49,7 +60,63 @@ function scopeOf(ctx: { session?: { auth?: Parameters<typeof resolveRole>[0] } }
 export default defineDynamic({
   events: {
     'turn.started': (_event, ctx) => {
-      if (resolveRole(ctx.session.auth).role !== 'knowledge') {
+      const { role } = resolveRole(ctx.session.auth);
+      if (role === 'suggester') {
+        return {
+          get_suggestion_context: defineTool({
+            description:
+              'The record you are suggesting follow-up work for (a shift note: its text, date, author and status), what the classifier found in it, the suggestions already made for it and what the admins did with each, the default board, and every board you can file work on with its open columns and fields. Call this first.',
+            inputSchema: z.object({}),
+            execute(_input, ctx) {
+              return getSuggestionContext(suggestTargetOf(ctx).source);
+            },
+          }),
+          search_open_cards: defineTool({
+            description:
+              'Open cards (not done or dropped) whose title or notes match the key words, best matches first, across every board or one. Search before proposing any new card; when one already covers the work, propose a board_card.comment on it instead.',
+            inputSchema: z.object({
+              query: z
+                .string()
+                .min(3)
+                .max(200)
+                .describe('Key words for the work, e.g. "sauna 2 heater" or "towels restock".'),
+              board: z.string().max(60).optional().describe('Limit to one board, by slug.'),
+            }),
+            execute(input, ctx) {
+              suggestTargetOf(ctx);
+              return searchOpenCards(input);
+            },
+          }),
+          list_sops: defineTool({
+            description:
+              'The SOP library as a table of contents: every document with its slug, category, last-updated date and section headings. Use it to find the document a note says is wrong or out of date.',
+            inputSchema: z.object({}),
+            execute(_input, ctx) {
+              suggestTargetOf(ctx);
+              return suggesterSopContents();
+            },
+          }),
+          read_sop_for_edit: defineTool({
+            description:
+              "One SOP's full markdown, exactly as stored, and its current version. Read before proposing an sop.edit: copy each edit's find text from here character for character, and pass version as baseVersion.",
+            inputSchema: z.object({
+              slug: z.string().min(1).max(120).describe('The document slug from list_sops.'),
+            }),
+            execute(input, ctx) {
+              suggestTargetOf(ctx);
+              return readSopForEdit(input.slug);
+            },
+          }),
+          save_suggestions: defineTool({
+            description: SAVE_SUGGESTIONS_DESCRIPTION,
+            inputSchema: saveSuggestionsInput,
+            execute(input, ctx) {
+              return saveSuggestions(input, suggestTargetOf(ctx), ctx.session?.id ?? null);
+            },
+          }),
+        };
+      }
+      if (role === 'scheduler') {
         return {
           get_week_context: defineTool({
             description: getWeekContextTool.description,

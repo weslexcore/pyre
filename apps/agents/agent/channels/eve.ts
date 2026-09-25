@@ -7,8 +7,10 @@
 // Which role a session runs as is decided here too: a request carrying
 // `x-pyre-agent: knowledge` (plus the asking staff member's access as JSON in
 // `x-pyre-knowledge-scope`) has both stamped onto the session's auth
-// attributes, and the instructions and tools resolve from them per session
-// (lib/role.ts). Anything else is the scheduler. Only an authenticated
+// attributes, and so does `x-pyre-agent: suggester` with the suggestion run
+// and the record it is about (`x-pyre-suggest-run`, `x-pyre-suggest-source`);
+// the instructions and tools resolve from them per session (lib/role.ts).
+// Anything else is the scheduler. Only an authenticated
 // caller reaches this point, so the headers are trusted as far as the
 // caller is — and the scope only ever narrows what the knowledge tools read.
 //
@@ -34,8 +36,12 @@ import {
   AGENT_HEADER,
   type KnowledgeScope,
   parseKnowledgeScope,
+  parseSuggestRun,
+  parseSuggestSource,
   resolveRole,
   SCOPE_HEADER,
+  SUGGEST_RUN_HEADER,
+  SUGGEST_SOURCE_HEADER,
 } from '../lib/role';
 
 function channelSecretAuth(): AuthFn<Request> {
@@ -72,6 +78,24 @@ export default eveChannel({
     if (!caller) return { auth: caller };
 
     const agent = ctx.eve.request.headers.get(AGENT_HEADER)?.trim().toLowerCase();
+    if (agent === 'suggester') {
+      // Normalised through the parsers, so the stored attributes are either
+      // well-formed or empty — and an empty source leaves the tools refusing
+      // to run rather than guessing.
+      const run = parseSuggestRun(ctx.eve.request.headers.get(SUGGEST_RUN_HEADER));
+      const source = parseSuggestSource(ctx.eve.request.headers.get(SUGGEST_SOURCE_HEADER));
+      return {
+        auth: {
+          ...caller,
+          attributes: {
+            ...caller.attributes,
+            agent: 'suggester',
+            ...(run ? { run } : {}),
+            ...(source ? { source: `${source.type}:${source.id}` } : {}),
+          },
+        },
+      };
+    }
     if (agent !== 'knowledge') return { auth: caller };
 
     // Normalise through the parser so the stored attribute is always a
