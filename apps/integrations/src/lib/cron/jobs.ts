@@ -108,6 +108,11 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Purges picked-up and donated items, including photos, after 30 days.
+    name: 'lost-found-cleanup',
+    run: async (ctx) => (await import('@/lib/lost-found/cleanup')).runLostFoundCleanup(ctx),
+  },
+  {
     // Removes board files that were uploaded but never saved onto a card
     // within a day — an abandoned drawer or a form closed half-filled.
     name: 'board-media-sweep',

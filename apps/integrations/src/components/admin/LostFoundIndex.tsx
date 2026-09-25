@@ -194,7 +194,8 @@ export function LostFoundIndex() {
       {data && (
         <p className="text-xs text-white/35">
           Unclaimed items are flagged for {DONATION_PARTNER} after 30 days. Nothing is donated
-          automatically — someone marks it done after the drop-off.
+          automatically — someone marks it done after the drop-off. Picked-up and donated items,
+          including their photos and history, are permanently deleted after 30 days.
         </p>
       )}
     </div>
