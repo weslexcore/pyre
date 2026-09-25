@@ -13,8 +13,7 @@
 //   3. call scheduleClassification() from the route that writes it, and read
 //      results back with loadClassifications() (apps/integrations
 //      src/lib/classify).
-// The agent side needs no change: the questions it puts to Jev are built
-// from this list.
+// The questions put to Jev (./classify) are built from this list.
 
 import { SIGNAL_TYPES, type SignalType } from './signals';
 

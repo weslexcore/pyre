@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
-  "description": "The shared vocabulary for AI classification of free text (shift notes first): what the classifier detects (signal types), what it can read (subject types), and the payload rules both the agents app and the integrations app enforce.",
+  "description": "The shared vocabulary for classifying free text with Jev (shift notes first): what it detects (signal types), what it can read (subject types), the questions put to Jev, and the rules for keeping its answers.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -12,9 +12,14 @@
   "scripts": {
     "test": "vitest run"
   },
+  "dependencies": {
+    "@pyre/jev": "workspace:^"
+  },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "ai": "7.0.105",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3"
   }
 }

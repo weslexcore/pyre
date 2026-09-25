@@ -33,8 +33,7 @@ const NOTE_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('scheduleClassification', () => {
   beforeEach(() => {
-    vi.stubEnv('AGENTS_BASE_URL', 'https://agents.test');
-    vi.stubEnv('EVE_CHANNEL_SECRET', 'secret');
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-key');
     waitUntil.mockReset();
     publishJSON.mockReset();
     runClassification.mockReset();
@@ -47,8 +46,9 @@ describe('scheduleClassification', () => {
     expect(waitUntil.mock.calls[0]?.[0]).toBeInstanceOf(Promise);
   });
 
-  it('does nothing when the agent is not configured', () => {
-    vi.stubEnv('AGENTS_BASE_URL', '');
+  it('does nothing when Jev cannot be reached', () => {
+    vi.stubEnv('AI_GATEWAY_API_KEY', '');
+    vi.stubEnv('VERCEL', '');
     scheduleClassification('shift_note', NOTE_ID, 'Towels low');
     expect(waitUntil).not.toHaveBeenCalled();
   });

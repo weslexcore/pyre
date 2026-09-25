@@ -3,7 +3,7 @@
 //
 //   with QStash  — publish one message to /api/classify/run naming the record.
 //                  QStash calls the worker within seconds and retries it with
-//                  backoff when pyre-agents or Jev fails (the worker answers a
+//                  backoff when AI Gateway or Jev fails (the worker answers a
 //                  failed run with a retryable status);
 //   without it   — run the classification in this instance's background
 //                  (waitUntil), best-effort, as in local dev.
@@ -15,8 +15,9 @@
 import type { SubjectType } from '@pyre/signals-core';
 import { waitUntil } from '@vercel/functions';
 import { getDb } from '@/lib/db';
+import { jevOptions } from '@/lib/jev';
 import { appOrigin } from '@/lib/schedule-lint/labels';
-import { agentsConfig, type ClassifyOptions, runClassification } from './request';
+import { type ClassifyOptions, runClassification } from './request';
 
 /** QStash retries a failed call this many times, with exponential backoff. */
 export const CLASSIFY_RETRIES = 3;
@@ -49,7 +50,7 @@ export function scheduleClassification(
   text: string,
   options: ClassifyOptions = {}
 ): void {
-  if (!agentsConfig()) return;
+  if (!jevOptions()) return;
   waitUntil(dispatchClassification(subject, subjectId, text, options));
 }
 

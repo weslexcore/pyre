@@ -2432,6 +2432,7 @@ __metadata:
     "@biomejs/biome": "npm:^2.5.5"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
+    "@pyre/jev": "workspace:^"
     "@pyre/schedule-core": "workspace:^"
     "@pyre/signals-core": "workspace:^"
     "@pyre/webhook-core": "workspace:^"
@@ -2444,6 +2445,7 @@ __metadata:
     "@types/react-dom": "npm:^19.2.3"
     "@upstash/qstash": "npm:^2.11.3"
     "@vercel/functions": "npm:^3.4.3"
+    ai: "npm:7.0.105"
     astro: "npm:^7.1.6"
     posthog-node: "npm:^5.46.0"
     qr-code-styling: "npm:^1.9.2"
@@ -2456,6 +2458,19 @@ __metadata:
     tailwindcss: "npm:^4.3.3"
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.10"
+    zod: "npm:^4.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@pyre/jev@workspace:^, @pyre/jev@workspace:packages/jev":
+  version: 0.0.0-use.local
+  resolution: "@pyre/jev@workspace:packages/jev"
+  dependencies:
+    "@types/node": "npm:^22.20.1"
+    ai: "npm:7.0.105"
+    typescript: "npm:^7.0.2"
+    vitest: "npm:^4.1.10"
+    zod: "npm:^4.4.3"
   languageName: unknown
   linkType: soft
 
@@ -2516,9 +2531,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pyre/signals-core@workspace:packages/signals-core"
   dependencies:
+    "@pyre/jev": "workspace:^"
     "@types/node": "npm:^22.20.1"
+    ai: "npm:7.0.105"
     typescript: "npm:^7.0.2"
     vitest: "npm:^4.1.10"
+    zod: "npm:^4.4.3"
   languageName: unknown
   linkType: soft
 
@@ -9099,7 +9117,6 @@ __metadata:
   resolution: "pyre-agents@workspace:apps/agents"
   dependencies:
     "@pyre/schedule-core": "workspace:^"
-    "@pyre/signals-core": "workspace:^"
     "@supabase/supabase-js": "npm:^2.110.5"
     "@types/node": "npm:^24.0.0"
     ai: "npm:7.0.105"

@@ -3,12 +3,12 @@
 // is waiting on, a record that needs changing — and this list is the single
 // source of truth for all of it:
 //
-//   * the agents app asks Jev (TypeSafe's System One evaluation model) one
-//     yes/no question per entry, built from its definition and examples, and
-//     gets back the probability that the text carries it;
-//   * the integrations app validates the answers against the same keys,
-//     keeps the ones at or above the entry's threshold, and labels the chips
-//     it draws with the same labels.
+//   * classifySignals() (./classify) asks Jev (TypeSafe's System One
+//     evaluation model) one yes/no question per entry, built from its
+//     definition and examples, and keeps the answers at or above the entry's
+//     threshold;
+//   * the integrations app stores those and labels the chips it draws with
+//     the same labels.
 //
 // To detect something new, add an entry here (key, label, definition, and a
 // couple of examples). Nothing else has to change for it to be detected,

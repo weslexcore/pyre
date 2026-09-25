@@ -19,7 +19,7 @@
 // hooks do not; the question itself is recorded by
 // agent/hooks/knowledge_audit.ts.
 
-import { localDev, vercelOidc } from 'eve/channels/auth';
+import { type AuthFn, extractBearerToken, localDev, vercelOidc } from 'eve/channels/auth';
 import { defaultEveAuth, eveChannel } from 'eve/channels/eve';
 import {
   auditAnswer,
@@ -30,7 +30,6 @@ import {
   auditTrailResult,
   auditTurnStarted,
 } from '../lib/knowledge/audit';
-import { channelSecretAuth } from '../lib/channel-auth';
 import {
   AGENT_HEADER,
   type KnowledgeScope,
@@ -38,6 +37,23 @@ import {
   resolveRole,
   SCOPE_HEADER,
 } from '../lib/role';
+
+function channelSecretAuth(): AuthFn<Request> {
+  return (request) => {
+    const secret = process.env.EVE_CHANNEL_SECRET;
+    if (!secret) return null;
+
+    const token = extractBearerToken(request.headers.get('authorization'));
+    if (!token || token !== secret) return null;
+
+    return {
+      authenticator: 'channel-secret',
+      principalId: 'pyre-integrations',
+      principalType: 'service',
+      attributes: {},
+    };
+  };
+}
 
 /** The knowledge scope of a session, or null for scheduler sessions. */
 function knowledgeScopeOf(ctx: { session: { auth: Parameters<typeof resolveRole>[0] } }): KnowledgeScope | null {

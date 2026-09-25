@@ -1,7 +1,7 @@
 # pyre-agents
 
 Vercel [Eve](https://eve.dev) app hosting Pyre's AI agents. One deployment,
-two roles, chosen per session, plus a Jev classification endpoint:
+two roles, chosen per session:
 
 - the **staff-scheduling drafter** (the default), which reviews upcoming
   coverage shifts (synced from Momence by the integrations app), everyone's
@@ -13,12 +13,12 @@ two roles, chosen per session, plus a Jev classification endpoint:
   log, incident reports, and the staff schedule, citing the dashboard pages
   it drew on. Staff reach it from
   `/admin/sops/ask`.
-- **classification** (`POST /pyre/classify`, not a session): Jev, TypeSafe
-  AI's System One evaluation model, reads one piece of staff-written text (a
-  shift note, today) and answers, per *signal* type, how likely the text is
-  to carry it — an action to take, a question to answer, a record to update,
-  feedback, a safety concern — so admins can triage `/admin/shift-notes` at
-  a glance.
+
+Jev (TypeSafe AI's evaluation model) is not hosted here: it is an AI
+Gateway model any app calls directly through `@pyre/jev`
+(`packages/jev`). Shift note classification runs in the integrations app
+(`@pyre/signals-core`). An agent tool that needs Jev imports `askJev` the
+same way.
 
 ## Two roles in one Eve app
 
@@ -102,34 +102,6 @@ never gets a shell.
   `agent/hooks/knowledge_audit.ts` write it from the event stream, so a
   closed browser tab never loses a record. Admins review it at
   `/admin/ask/log`.
-
-### Classification with Jev
-
-```
-shift note saved ─▶ response sent ─▶ QStash job ─▶ integrations /api/classify/run
-    files a pending content_classifications row (fresh request_id)
-    │  POST {this app}/pyre/classify  { subject, text }   Bearer EVE_CHANNEL_SECRET
-    ▼
-agent/channels/classify.ts ─▶ Jev via AI Gateway (typesafe-ai/jev)
-    one boolean question per signal type ─▶ { model, probabilities }
-    ▼
-integrations keeps what clears each threshold, writes the row (guarded on request_id)
-a failed run is retried by QStash with backoff
-```
-
-- No language model, no session, no tools: a custom channel route asks Jev
-  typed yes/no questions and returns the probabilities. Nothing in this app
-  writes anywhere for it; the integrations app stores the answer.
-- The vocabulary lives in `@pyre/signals-core` (`packages/signals-core`):
-  the questions (`agent/lib/classify/questions.ts`) are built from its
-  signal definitions, so a new signal type needs no edit here. See that
-  package's README for adding signals or classifying other records.
-- `agent/lib/classify/classify.ts` calls Jev with `evaluate` from `eve/ai`
-  (the AI SDK evaluation API with eve's model authentication). The
-  `typesafe-ai/jev` model string resolves through AI Gateway with the same
-  credentials as the language models: `AI_GATEWAY_API_KEY` locally, OIDC on
-  Vercel. The evaluation API is experimental upstream, so bump `eve` / `ai`
-  deliberately.
 
 ### Staff-scheduling drafter
 

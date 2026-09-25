@@ -19,7 +19,7 @@
 // staged rows nobody claimed within a day.
 //
 // Every new note, and every edit that changes a note's text, is classified by
-// Jev through pyre-agents (lib/classify), which reports what the note asks of
+// Jev (lib/classify), which reports what the note asks of
 // the team — actions, questions, updates, feedback, safety concerns. That runs
 // in the background after the response goes out, so saving a note never waits
 // on it. Admins, who triage the log, get the signals with each note (and a

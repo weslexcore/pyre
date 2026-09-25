@@ -1,5 +1,6 @@
-// Classify a record's text with Jev (TypeSafe AI's System One model, served by
-// the pyre-agents Eve app) and read the answers back. A route that writes
+// Classify a record's text with Jev (TypeSafe AI's System One model, asked
+// directly through AI Gateway by @pyre/signals-core) and read the answers
+// back. A route that writes
 // text calls scheduleClassification() (./dispatch) after the write, which
 // queues a QStash message; the worker route (/api/classify/run) then calls
 // runClassification() here. A route that lists records calls
@@ -7,39 +8,16 @@
 // which signals exist, is @pyre/signals-core's business; see
 // src/lib/classify/subjects.ts for the per-subject hooks this app needs.
 //
-// Nothing here throws, and a missing agent configuration (AGENTS_BASE_URL /
-// EVE_CHANNEL_SECRET) simply turns classification off.
+// Nothing here throws, and Jev being unreachable (no AI Gateway key locally,
+// see lib/jev.ts) simply turns classification off.
 
 import { createHash, randomUUID } from 'node:crypto';
-import { parseSignals, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
+import type { EvaluationModel } from '@pyre/jev';
+import { classifySignals, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContentClassificationRow } from '@/lib/db';
+import { jevOptions } from '@/lib/jev';
 import { type ClassificationView, toClassificationView } from './view';
-
-/** Jev answers in well under a second; this only bounds a stuck upstream. */
-const CLASSIFY_TIMEOUT_MS = 30_000;
-
-interface AgentsConfig {
-  url: string;
-  headers: Record<string, string>;
-}
-
-export function agentsConfig(): AgentsConfig | null {
-  const baseUrl = import.meta.env.AGENTS_BASE_URL;
-  const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
-  if (!baseUrl || !channelSecret) return null;
-  // Preview deployments of pyre-agents sit behind Vercel Deployment
-  // Protection; the bypass clears the edge only, the secret still authenticates.
-  const bypass = import.meta.env.AGENTS_PROTECTION_BYPASS;
-  return {
-    url: `${baseUrl.replace(/\/$/, '')}/pyre/classify`,
-    headers: {
-      Authorization: `Bearer ${channelSecret}`,
-      'Content-Type': 'application/json',
-      ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}),
-    },
-  };
-}
 
 /** sha256 of the text as Jev would see it. Exported for tests. */
 export function contentHash(text: string): string {
@@ -58,9 +36,9 @@ export function pendingView(now: Date = new Date()): ClassificationView {
 
 /**
  * Classify `text` as the current content of one record, now: file the
- * request, ask pyre-agents, store the answer. Runs from the QStash worker
+ * request, ask Jev, store the answer. Runs from the QStash worker
  * (/api/classify/run), or inline in the background where QStash is not
- * configured. Returns the resulting view (state 'failed' when pyre-agents or
+ * configured. Returns the resulting view (state 'failed' when AI Gateway or
  * Jev failed — the worker answers that with a retryable status), or null when
  * classification is off, the answer was superseded, or the bookkeeping itself
  * failed. Never throws.
@@ -70,11 +48,11 @@ export async function runClassification(
   subject: SubjectType,
   subjectId: string,
   text: string,
-  options: ClassifyOptions & { fetch?: typeof fetch } = {}
+  options: ClassifyOptions & { model?: EvaluationModel } = {}
 ): Promise<ClassificationView | null> {
   try {
-    const config = agentsConfig();
-    if (!config || !sanitizeClassifyText(text)) return null;
+    const jev = jevOptions();
+    if (!jev || !sanitizeClassifyText(text)) return null;
     const hash = contentHash(text);
 
     const { data: existingData } = await db
@@ -116,28 +94,14 @@ export async function runClassification(
 
     let update: Partial<ContentClassificationRow>;
     try {
-      const response = await (options.fetch ?? fetch)(config.url, {
-        method: 'POST',
-        headers: config.headers,
-        body: JSON.stringify({ subject, text }),
-        signal: AbortSignal.timeout(CLASSIFY_TIMEOUT_MS),
+      const result = await classifySignals(subject, text, {
+        ...jev,
+        ...(options.model ? { model: options.model } : {}),
       });
-      const body = (await response.json().catch(() => ({}))) as {
-        model?: unknown;
-        probabilities?: unknown;
-        error?: unknown;
-      };
-      if (!response.ok) {
-        throw new Error(
-          `pyre-agents HTTP ${response.status}: ${typeof body.error === 'string' ? body.error : 'no detail'}`
-        );
-      }
-      const parsed = parseSignals(body.probabilities, subject);
-      if (!parsed.ok) throw new Error(`pyre-agents answer rejected: ${parsed.error}`);
       update = {
         status: 'done',
-        signals: parsed.signals,
-        model: typeof body.model === 'string' ? body.model.slice(0, 100) : null,
+        signals: result.signals,
+        model: result.model,
         classified_at: new Date().toISOString(),
       };
     } catch (error) {
