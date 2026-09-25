@@ -1,9 +1,9 @@
-/* Harvest moon party menu — printable 8.5×11" sheet (2550×3300 at 300dpi).
-   Transparent background for printing onto creme paper: dark ink type, with a single
+/* Harvest moon party menu — 9:16 card (1080×1920), same size as the hours menu.
+   Transparent background for placing onto creme: dark ink type, with a single
    hand-stamped gold moon (SVG ink filter in index.html) between the two drinks.
    Small gold text uses a deeper gold so it holds contrast on creme stock.
    Type follows the landing page: Fraktion Mono labels, Neue Montreal Mono body copy.
-   Sized in px for the letter canvas; preview at other sizes will look oversized. */
+   Sized in px for the reel canvas; preview at other sizes will look off-scale. */
 
 :root {
   --menu-gold-ink: #9c7428;
@@ -42,15 +42,15 @@
 
 .menu__moon {
   display: block;
-  width: 520px;
-  height: 520px;
+  width: 260px;
+  height: 260px;
 }
 
 .drink {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 48px;
+  gap: 24px;
 }
 
 .drink__name {
@@ -58,14 +58,14 @@
   /* font-family: var(--font-logo); */
   text-transform: uppercase;
   font-weight: 400;
-  font-size: 128px;
+  font-size: 64px;
   line-height: 1.05;
 }
 
 .drink__notes {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 38px;
+  font-size: 20px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--menu-gold-ink);
@@ -75,7 +75,7 @@
   max-width: 36ch;
   margin: 0;
   font-family: var(--font-body-mono);
-  font-size: 42px;
+  font-size: 22px;
   line-height: 1.55;
   color: rgba(35, 34, 28, 0.8);
 }
@@ -88,7 +88,7 @@
 }
 
 .menu__logo {
-  height: 300px;
+  height: 150px;
   width: auto;
   opacity: 0.9;
 }
