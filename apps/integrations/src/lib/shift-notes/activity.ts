@@ -125,3 +125,33 @@ export function recordClassification(
     },
   });
 }
+
+/**
+ * An admin decided one of the note's agent suggestions: approved it (with a
+ * link to the card or SOP version it made) or dismissed it. Admins only, like
+ * the suggestions themselves.
+ */
+export function recordSuggestionDecision(
+  db: SupabaseClient,
+  noteId: string,
+  decision: {
+    suggestionId: string;
+    kind: string;
+    action: 'approved' | 'dismissed';
+    by: string;
+    result?: { type: string; id: string; href: string | null; label: string };
+  }
+): Promise<ShiftNoteReplyRow | null> {
+  return record(db, {
+    note_id: noteId,
+    kind: 'suggestion',
+    author_email: decision.by,
+    is_private: true,
+    data: {
+      suggestion_id: decision.suggestionId,
+      suggestion_kind: decision.kind,
+      action: decision.action,
+      ...(decision.result ? { result: decision.result } : {}),
+    },
+  });
+}
