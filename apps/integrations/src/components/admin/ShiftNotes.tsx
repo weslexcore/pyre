@@ -753,6 +753,20 @@ export function ShiftNotes() {
                 <StatusBadge status={note.status} />
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
+                    {/* Reads the note and, if no admin has set its status,
+                        sorts it into To do or Resolved — so it sits with the
+                        note's other actions rather than the chips. */}
+                    {viewer.isAdmin && (
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        disabled={busy || signals.rerunning === note.id}
+                        title="Read this note for anything actionable and, unless an admin has set its status, mark it To do or Resolved"
+                        onClick={() => void signals.rerun(note.id)}
+                      >
+                        {signals.classifications[note.id] ? 'Reclassify' : 'Classify'}
+                      </button>
+                    )}
                     {canSetStatus(viewer) &&
                       SHIFT_NOTE_STATUSES.map((status) => (
                         <button
@@ -835,11 +849,7 @@ export function ShiftNotes() {
                     <MarkedBody text={note.body} term={term} />
                   </p>
                   {viewer.isAdmin && (
-                    <SignalChips
-                      classification={signals.classifications[note.id]}
-                      onRerun={() => void signals.rerun(note.id)}
-                      busy={signals.rerunning === note.id}
-                    />
+                    <SignalChips classification={signals.classifications[note.id]} />
                   )}
                 </>
               )}

@@ -3,8 +3,9 @@
 // classifiable records (shift notes today) seeds useClassifications with what
 // its own GET returned, merges in what its writes return, and renders
 // <SignalChips> per record. Classification runs in the background after a
-// write, so records still being read are polled until they settle;
-// "Classify" queues a fresh read of any record, classified before or not.
+// write, so records still being read are polled until they settle, and
+// rerun() queues a fresh read of any record, classified before or not (the
+// page puts that button with the record's other actions).
 // Nothing here names the model behind the classifier (lib/classify picks it),
 // so the page reads the same whichever one is answering.
 //
@@ -57,9 +58,6 @@ function SignalChip({ signal }: { signal: Signal }) {
   );
 }
 
-const quietButtonClass =
-  'font-mono text-[10px] text-white/40 underline-offset-2 hover:text-white/70 hover:underline disabled:opacity-40';
-
 /** A set of signals as chips, e.g. what one run found. */
 export function SignalList({ signals }: { signals: readonly Signal[] }) {
   return (
@@ -72,56 +70,36 @@ export function SignalList({ signals }: { signals: readonly Signal[] }) {
 }
 
 /**
- * One record's classification: its signals, or where the read stands. With
- * `onRerun`, always offers a run — "Classify" on a record never classified
- * (written before the classifier, or while it was off), "Run again" on any
- * other, including one still reading that may be stuck. Without it, draws
+ * One record's classification: its signals, or where the read stands. Draws
  * nothing for a record never classified.
  */
 export function SignalChips({
   classification,
-  onRerun,
-  busy = false,
 }: {
   classification: ClassificationView | undefined;
-  onRerun?: () => void;
-  busy?: boolean;
 }) {
-  const rerun = onRerun && (
-    <button type="button" className={quietButtonClass} disabled={busy} onClick={onRerun}>
-      {classification ? 'Run again' : 'Classify'}
-    </button>
-  );
-
-  if (!classification) {
-    if (!rerun) return null;
-    return (
-      <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Not classified yet. {rerun}
-      </p>
-    );
-  }
+  if (!classification) return null;
   if (classification.state === 'pending') {
     return (
       <p
         className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40"
         aria-live="polite"
       >
-        ✦ Reading… {rerun}
+        ✦ Reading…
       </p>
     );
   }
   if (classification.state === 'failed') {
     return (
       <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Couldn’t classify this. {rerun}
+        ✦ Couldn’t classify this.
       </p>
     );
   }
   if (classification.signals.length === 0) {
     return (
       <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Nothing to act on. {rerun}
+        ✦ Nothing to act on.
       </p>
     );
   }
@@ -129,7 +107,6 @@ export function SignalChips({
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <span className="font-mono text-[10px] text-white/40">✦</span>
       <SignalList signals={classification.signals} />
-      {rerun}
     </div>
   );
 }
