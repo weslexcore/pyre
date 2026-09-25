@@ -100,22 +100,42 @@
   opacity: 0.9;
 }
 
-/* Pages 2–3 — Instagram posts (portrait 1080×1350), one drink each on a creme background.
-   The drink fills the top half and the row of moons the bottom half; type is sized for a
-   phone screen instead of print. */
+/* Pages 2–3 — Instagram posts (portrait 1080×1350), one drink each under a moonrise sky:
+   deep night blue with stars at the top, warming to a low rust horizon glow where the moons
+   rise. The drink fills the top half and the row of moons the bottom half; type is sized
+   for a phone screen instead of print. */
 
 .page.page--social {
-  background: var(--pyre-creme);
+  position: relative;
+  background:
+    radial-gradient(ellipse 90% 38% at 50% 78%, rgba(209, 82, 50, 0.42), transparent 70%),
+    linear-gradient(to bottom, #141b29 0%, #1c2a40 45%, #3a3240 72%, #5a3a30 100%);
+}
+
+.slide__sky {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .slide {
+  position: relative;
   display: grid;
   grid-template-rows: 1fr 1fr;
   width: 100%;
   height: 100%;
   padding: 110px 96px;
-  color: var(--pyre-black);
+  color: var(--pyre-creme);
   text-align: center;
+}
+
+.slide .drink__notes {
+  color: var(--pyre-gold);
+}
+
+.slide .drink__description {
+  color: rgba(245, 241, 233, 0.82);
 }
 
 /* Top-aligned so both slides start their drink at the same height, whatever its length. */
