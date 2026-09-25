@@ -757,7 +757,19 @@ export function ShiftNotes() {
                   {formatTime(note.created_at)}
                   {note.updated_by && ` · edited by ${personName(note.updated_by, names)}`}
                 </span>
-                <StatusBadge status={note.status} />
+                {/* Status, then what the classifier found (admins only), on
+                    one line: the status is often the classifier's call. */}
+                <span className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={note.status} />
+                  {viewer.isAdmin && signals.classifications[note.id] && (
+                    <>
+                      <span aria-hidden="true" className="font-mono text-[10px] text-white/20">
+                        |
+                      </span>
+                      <SignalChips classification={signals.classifications[note.id]} />
+                    </>
+                  )}
+                </span>
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
                     {/* Reads the note and, if no admin has set its status,
@@ -862,14 +874,9 @@ export function ShiftNotes() {
                   </div>
                 </div>
               ) : (
-                <>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                    <MarkedBody text={note.body} term={term} />
-                  </p>
-                  {viewer.isAdmin && (
-                    <SignalChips classification={signals.classifications[note.id]} />
-                  )}
-                </>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
+                  <MarkedBody text={note.body} term={term} />
+                </p>
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">

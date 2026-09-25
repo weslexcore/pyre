@@ -87,8 +87,9 @@ export function SignalList({ signals }: { signals: readonly Signal[] }) {
 }
 
 /**
- * One record's classification: its signals, or where the read stands. Draws
- * nothing for a record never classified.
+ * One record's classification, inline: its signals as chips, or where the
+ * read stands. Sized to sit in a row of badges (the caller places it and
+ * any separator). Draws nothing for a record never classified.
  */
 export function SignalChips({
   classification,
@@ -96,36 +97,17 @@ export function SignalChips({
   classification: ClassificationView | undefined;
 }) {
   if (!classification) return null;
+  const note = 'font-mono text-[10px] text-white/40';
   if (classification.state === 'pending') {
     return (
-      <p
-        className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40"
-        aria-live="polite"
-      >
-        ✦ Reading…
-      </p>
+      <span className={note} aria-live="polite">
+        Reading…
+      </span>
     );
   }
-  if (classification.state === 'failed') {
-    return (
-      <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Couldn’t classify this.
-      </p>
-    );
-  }
-  if (classification.signals.length === 0) {
-    return (
-      <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Nothing to act on.
-      </p>
-    );
-  }
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <span className="font-mono text-[10px] text-white/40">✦</span>
-      <SignalList signals={classification.signals} />
-    </div>
-  );
+  if (classification.state === 'failed') return <span className={note}>Couldn’t classify</span>;
+  if (classification.signals.length === 0) return <span className={note}>Nothing to act on</span>;
+  return <SignalList signals={classification.signals} />;
 }
 
 /** A <select> over the signal types, for filtering a list by what was found. */
