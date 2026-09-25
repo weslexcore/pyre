@@ -17,6 +17,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'shift_note_reply',
   'sub_request',
   'goal_activity',
+  'agent_suggestion',
 ];
 
 export function isNotificationKind(value: unknown): value is NotificationKind {
@@ -32,6 +33,7 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   shift_note_reply: 'Shift note',
   sub_request: 'Sub',
   goal_activity: 'Goals',
+  agent_suggestion: 'Suggestion',
 };
 
 /** The subset of a row the rules below read. */

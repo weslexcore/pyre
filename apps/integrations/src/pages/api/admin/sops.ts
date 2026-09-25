@@ -34,6 +34,7 @@ import {
 import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
+import { MAX_SOP_CONTENT, MAX_SOP_TITLE, saveSopVersion } from '@/lib/sops/save-version';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { loadShiftSops } from '@/lib/sops/shift-sops';
 
@@ -44,11 +45,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 const PAGE = '/admin/sops';
-const MAX_TITLE = 200;
+const MAX_TITLE = MAX_SOP_TITLE;
 const MAX_CATEGORY = 60;
-const MAX_NOTE = 300;
-// Generous for a procedure document, small enough to keep payloads sane.
-const MAX_CONTENT = 100_000;
+const MAX_CONTENT = MAX_SOP_CONTENT;
 // History panel cap — nobody scrolls past this, and it bounds the payload.
 const MAX_VERSIONS = 100;
 
@@ -424,10 +423,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     return json({ error: `content is required (max ${MAX_CONTENT} chars)` }, 400);
   }
 
-  const changeNote =
-    typeof body.changeNote === 'string' && body.changeNote.trim()
-      ? body.changeNote.trim().slice(0, MAX_NOTE)
-      : null;
+  const changeNote = typeof body.changeNote === 'string' ? body.changeNote : null;
 
   // Optimistic lock: the client says which version it edited. A mismatch means
   // someone saved in between — surface it instead of silently overwriting.
@@ -435,58 +431,18 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
   if (typeof baseVersion !== 'number' || !Number.isInteger(baseVersion)) {
     return json({ error: 'baseVersion is required' }, 400);
   }
-  if (baseVersion !== sop.current_version) {
-    return json(
-      { error: 'This SOP changed since you opened it. Reload to get the latest version.' },
-      409
-    );
-  }
 
-  if (content === sop.content_md && title === sop.title) {
-    return json({ error: 'No changes to save' }, 400);
-  }
-
-  const email = gate.user.email ?? '';
-  const nextVersion = sop.current_version + 1;
-
-  // Insert the history row first — its (sop_id, version) unique constraint is
-  // the race guard: two simultaneous saves can both pass the check above, but
-  // only one insert of version N succeeds.
-  const { error: versionError } = await db.from('sop_versions').insert({
-    sop_id: sop.id,
-    version: nextVersion,
+  const saved = await saveSopVersion(db, {
+    sop,
     title,
-    content_md: content,
-    edited_by: email,
-    change_note: changeNote,
-  });
-  if (versionError) {
-    if (versionError.code === '23505') {
-      return json(
-        { error: 'This SOP changed since you opened it. Reload to get the latest version.' },
-        409
-      );
-    }
-    return json({ error: versionError.message }, 500);
-  }
-
-  const { data, error } = await db
-    .from('sops')
-    .update({ title, content_md: content, current_version: nextVersion, updated_by: email })
-    .eq('id', sop.id)
-    .select('*')
-    .single();
-  if (error) return json({ error: error.message }, 500);
-
-  await notifySopSaved(db, {
-    sop: data as SopRow,
-    editorEmail: email,
-    version: nextVersion,
-    created: false,
+    content,
+    baseVersion,
+    editorEmail: gate.user.email ?? '',
     changeNote,
   });
+  if (!saved.ok) return json({ error: saved.error }, saved.conflict ? 409 : saved.status);
 
-  return json({ sop: data as SopRow });
+  return json({ sop: saved.sop });
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {

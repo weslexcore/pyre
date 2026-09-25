@@ -20,6 +20,7 @@
 // checkbox on /admin/users — so the assistant is opt-in per person.
 
 import type { APIRoute } from 'astro';
+import { agentsEveConfig } from '@/lib/agent/eve-config';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
@@ -55,17 +56,6 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-function eveConfig(): EveConfig | null {
-  const baseUrl = import.meta.env.AGENTS_BASE_URL;
-  const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
-  if (!baseUrl || !channelSecret) return null;
-  return {
-    baseUrl,
-    channelSecret,
-    bypassSecret: import.meta.env.AGENTS_PROTECTION_BYPASS,
-  };
-}
-
 const AGENT_BUSY_ERROR = 'The assistant is still answering your last question — give it a moment';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -75,7 +65,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
 
-  const config = eveConfig();
+  const config = agentsEveConfig();
   if (!config) {
     return json({ error: 'Assistant not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
   }
@@ -174,7 +164,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);
   if (gate instanceof Response) return gate;
 
-  const config = eveConfig();
+  const config = agentsEveConfig();
   if (!config) {
     return json({ error: 'Assistant not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
   }

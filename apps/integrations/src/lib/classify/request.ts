@@ -11,19 +11,17 @@
 // Nothing here throws, and Jev being unreachable (no AI Gateway key locally,
 // see lib/jev.ts) simply turns classification off.
 
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { EvaluationModel } from '@pyre/jev';
 import { classifySignals, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContentClassificationRow } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
 import { AFTER_CLASSIFIED } from './activity';
+import { contentHash } from './hash';
 import { type ClassificationView, toClassificationView } from './view';
 
-/** sha256 of the text as Jev would see it. Exported for tests. */
-export function contentHash(text: string): string {
-  return createHash('sha256').update(sanitizeClassifyText(text)).digest('hex');
-}
+export { contentHash };
 
 export interface ClassifyOptions {
   /** Re-run even when the text has not changed since the last run (an admin's retry). */

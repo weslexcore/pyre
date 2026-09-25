@@ -299,6 +299,8 @@ export interface SopVersionRow {
   content_md: string;
   edited_by: string;
   change_note: string | null;
+  /** The agent suggestion an admin approved to save this version, if any. */
+  suggestion_id: string | null;
   created_at: string;
 }
 
@@ -387,7 +389,7 @@ export interface ShiftNoteReplyRow {
   updated_at: string;
 }
 
-export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classification';
+export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classification' | 'suggestion';
 
 /** The edited fields of a note, as an edit event keeps them. */
 export interface ShiftNoteEditValues {
@@ -412,6 +414,12 @@ export interface ShiftNoteActivityData {
   model?: string | null;
   /** classification: the admin who asked for the run; absent when a write triggered it. */
   requested_by?: string;
+  /** suggestion: which suggestion was decided, and how. */
+  suggestion_id?: string;
+  suggestion_kind?: string;
+  action?: 'approved' | 'dismissed';
+  /** suggestion: what approving it made, to link to. */
+  result?: { type: string; id: string; href: string | null; label: string };
 }
 
 // A photo/video/document backing a shift note (see the shift-note media
@@ -428,6 +436,67 @@ export interface ShiftNoteAttachmentRow {
   kind: 'photo' | 'video' | 'document';
   uploaded_by: string;
   created_at: string;
+}
+
+// Agent suggestions (see the agent_suggestions migration and
+// src/lib/suggestions): an AI agent's proposed action from a source record,
+// applied only when an admin approves it.
+export type AgentSuggestionKind = 'board_card.create' | 'board_card.comment' | 'sop.edit';
+export type AgentSuggestionStatus =
+  | 'pending'
+  | 'applying'
+  | 'approved'
+  | 'dismissed'
+  | 'superseded';
+export type AgentSuggestionSourceType = 'shift_note';
+export type AgentSuggestionRunStatus = 'queued' | 'running' | 'done' | 'failed';
+
+/** One pass of an agent over a source record. */
+export interface AgentSuggestionRunRow {
+  id: string;
+  source_type: AgentSuggestionSourceType;
+  source_id: string;
+  source_hash: string;
+  trigger: 'auto' | 'manual';
+  requested_by: string | null;
+  status: AgentSuggestionRunStatus;
+  suggestion_count: number;
+  agent_session_id: string | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One proposed action. `payload` is the agent's original and never changes. */
+export interface AgentSuggestionRow {
+  id: string;
+  run_id: string;
+  position: number;
+  kind: AgentSuggestionKind;
+  status: AgentSuggestionStatus;
+  source_type: AgentSuggestionSourceType;
+  source_id: string;
+  source_hash: string;
+  payload: Record<string, unknown>;
+  edited_payload: Record<string, unknown> | null;
+  edited_by: string | null;
+  edited_at: string | null;
+  rationale: string;
+  confidence: number | null;
+  target_type: 'board_card' | 'sop' | null;
+  target_id: string | null;
+  result_type: 'board_card' | 'board_event' | 'sop_version' | null;
+  result_id: string | null;
+  applied_payload: Record<string, unknown> | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  error: string | null;
+  agent_session_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // What Jev (via pyre-agents) found in a record's text (see the
@@ -496,7 +565,8 @@ export type NotificationKind =
   | 'schedule_change'
   | 'shift_note_reply'
   | 'sub_request'
-  | 'goal_activity';
+  | 'goal_activity'
+  | 'agent_suggestion';
 
 // One row in one person's inbox (see the staff notifications migration).
 // Written by the API routes that record the event; read/dismissed/expires
@@ -1023,9 +1093,14 @@ export interface BoardCardRow {
   area: string | null;
   sort_order: number;
   properties: Record<string, BoardFieldValue>;
-  /** manual: made in the admin. intake: the intake endpoint. form: the board's own form. */
-  source: 'manual' | 'intake' | 'form';
+  /**
+   * manual: made in the admin. intake: the intake endpoint. form: the board's
+   * own form. suggestion: an admin approved an agent's suggestion.
+   */
+  source: 'manual' | 'intake' | 'form' | 'suggestion';
   external_ref: string | null;
+  /** The agent suggestion this card was approved from (source = suggestion). */
+  suggestion_id: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string;

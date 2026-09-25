@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { SopRow, SopVersionRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
-import { diffLines, diffSummary } from '@/lib/sops/diff';
+import { diffSummary } from '@/lib/sops/diff';
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import { EVERYONE_LABEL } from '@/lib/sops/levels';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
@@ -33,6 +33,7 @@ import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
+import { SopDiff } from './SopDiff';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
@@ -72,34 +73,6 @@ function formatWhen(iso: string): string {
 
 function editorLabel(email: string, people?: PeopleNames): string {
   return email === 'seed' ? 'initial import' : personName(email, people);
-}
-
-/** Line diff of one version against its predecessor (empty for v1). */
-function VersionDiff({ version, previous }: { version: SopVersionRow; previous?: SopVersionRow }) {
-  const lines = useMemo(
-    () => diffLines(previous?.content_md ?? '', version.content_md),
-    [version, previous]
-  );
-  return (
-    <pre className="mt-2 max-h-96 overflow-auto rounded border border-white/10 bg-black/30 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-      {lines.map((line, i) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff lines are positional
-          key={i}
-          className={
-            line.kind === 'added'
-              ? 'bg-[var(--pyre-sage)]/15 text-[var(--pyre-sage)]'
-              : line.kind === 'removed'
-                ? 'bg-[var(--pyre-red)]/15 text-[var(--pyre-red)] line-through decoration-[var(--pyre-red)]/40'
-                : 'text-white/50'
-          }
-        >
-          {line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}
-          {line.text || ' '}
-        </div>
-      ))}
-    </pre>
-  );
 }
 
 export function SopDocument({
@@ -630,7 +603,7 @@ export function SopDocument({
                       )}
                     </span>
                   </div>
-                  {expanded && <VersionDiff version={v} previous={previous} />}
+                  {expanded && <SopDiff before={previous?.content_md ?? ''} after={v.content_md} />}
                 </li>
               );
             })}

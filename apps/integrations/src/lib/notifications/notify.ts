@@ -280,3 +280,26 @@ export async function sweepInbox(db: SupabaseClient, email: string): Promise<voi
     console.warn('[notifications] sweep failed:', error);
   }
 }
+
+/**
+ * Mark every recipient's unread rows about a source read — for when the thing
+ * they announce has been dealt with by somebody (a suggestion an admin
+ * decided), so the rest of the team's bells stop pointing at it. Best-effort.
+ */
+export async function resolveSourceForAll(
+  db: SupabaseClient,
+  sourceType: string,
+  sourceId: string
+): Promise<void> {
+  try {
+    const { error } = await db
+      .from('staff_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('source_type', sourceType)
+      .eq('source_id', sourceId)
+      .is('read_at', null);
+    if (error) console.warn('[notifications] source resolve failed:', error.message);
+  } catch (error) {
+    console.warn('[notifications] source resolve failed:', error);
+  }
+}
