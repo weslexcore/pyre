@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyTailEvent, countEveSessionEvents } from './eve-session';
+import { classifyTailEvent, countEveSessionEvents, sendEveFollowUp } from './eve-session';
 
 describe('classifyTailEvent', () => {
-  it('reads the continuation token off a parked session', () => {
-    expect(
-      classifyTailEvent({ type: 'session.waiting', data: { continuationToken: 'eve:7f3c' } })
-    ).toEqual({ state: 'waiting', continuationToken: 'eve:7f3c' });
-  });
-
-  it('treats a waiting event without a token as gone (nothing to resume with)', () => {
-    expect(classifyTailEvent({ type: 'session.waiting', data: {} })).toEqual({ state: 'gone' });
+  it('reads a parked session as waiting', () => {
+    expect(classifyTailEvent({ type: 'session.waiting', data: {} })).toEqual({ state: 'waiting' });
   });
 
   it.each(['session.completed', 'session.failed'])('%s means the session is gone', (type) => {
@@ -32,64 +26,57 @@ describe('classifyTailEvent', () => {
 
 describe('countEveSessionEvents', () => {
   const config = { baseUrl: 'https://agents.test', channelSecret: 'secret' };
+  afterEach(() => vi.restoreAllMocks());
 
-  function ndjsonResponse(lines: string[], keepOpen = false): Response {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(`${lines.join('\n')}\n`));
-        if (!keepOpen) controller.close();
-      },
-    });
-    return new Response(stream, { status: 200 });
-  }
-
-  const waiting = (token: string) =>
-    JSON.stringify({ type: 'session.waiting', data: { continuationToken: token } });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('counts events up to and including the waiting event for the current token', async () => {
-    const lines = [
-      '{"type":"turn.started"}',
-      '{"type":"message.appended","data":{"messageSoFar":"Hi"}}',
-      waiting('eve:turn-1'),
-      '{"type":"turn.started"}',
-      '',
-      '{"type":"message.completed","data":{"message":"Answer"}}',
-      waiting('eve:turn-2'),
-    ];
-    const fetchMock = vi.fn(async () => ndjsonResponse(lines, true));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(countEveSessionEvents(config, 'ses_1', 'eve:turn-2')).resolves.toBe(6);
-    const [url] = fetchMock.mock.calls[0] as unknown as [string];
-    expect(url).toBe('https://agents.test/eve/v1/session/ses_1/stream?startIndex=0');
-  });
-
-  it('stops at the first turn when that is the current one', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ndjsonResponse(['{"type":"turn.started"}', waiting('eve:turn-1')]))
+  it('reads the event count off the tail-index header', async () => {
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { headers: { 'x-eve-stream-tail-index': '41' } }));
+    expect(await countEveSessionEvents(config, 'sess_1')).toBe(42);
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      'https://agents.test/eve/v1/session/sess_1/stream?startIndex=-1&includeTailIndex=1'
     );
-    await expect(countEveSessionEvents(config, 'ses_1', 'eve:turn-1')).resolves.toBe(2);
   });
 
-  it('is null when the log ends without the current waiting event', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ndjsonResponse(['{"type":"turn.started"}', waiting('eve:stale')]))
-    );
-    await expect(countEveSessionEvents(config, 'ses_1', 'eve:turn-2')).resolves.toBeNull();
+  it('is null when the session cannot be read or the header is missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 404 }));
+    expect(await countEveSessionEvents(config, 'sess_1')).toBeNull();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(''));
+    expect(await countEveSessionEvents(config, 'sess_1')).toBeNull();
+  });
+});
+
+describe('sendEveFollowUp', () => {
+  const config = { baseUrl: 'https://agents.test', channelSecret: 'secret' };
+  afterEach(() => vi.restoreAllMocks());
+
+  it('posts the message to the session id with no continuation token', async () => {
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{"ok":true}', { status: 202 }));
+    expect(await sendEveFollowUp(config, 'sess_1', 'Swap Liz and Omar')).toEqual({ ok: true });
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://agents.test/eve/v1/session/sess_1');
+    expect(JSON.parse(init.body as string)).toEqual({ message: 'Swap Liz and Omar' });
   });
 
-  it('is null when the session cannot be read', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(null, { status: 404 }))
+  it('reports an ended session as gone so the caller starts fresh', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      Response.json({ ok: false, code: 'session_not_active' }, { status: 409 })
     );
-    await expect(countEveSessionEvents(config, 'ses_1', 'eve:turn-1')).resolves.toBeNull();
+    expect(await sendEveFollowUp(config, 'sess_1', 'hi')).toEqual({ ok: false, reason: 'gone' });
+  });
+
+  it('retries a session whose inbox is still opening', async () => {
+    vi.useFakeTimers();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({ code: 'session_not_ready' }, { status: 409 }))
+      .mockResolvedValueOnce(new Response('{"ok":true}', { status: 202 }));
+    const sent = sendEveFollowUp(config, 'sess_1', 'hi');
+    await vi.runAllTimersAsync();
+    expect(await sent).toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });

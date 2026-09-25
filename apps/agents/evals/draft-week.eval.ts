@@ -16,8 +16,8 @@ export default defineEval({
     t.maxToolCalls(6);
     t.noFailedActions();
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       'The assistant reports the draft was saved (or dry-run validated) with no hard availability conflicts, and its summary mentions any shifts left under-staffed.'
-    );
+    ).atLeast(0.7);
   },
 });

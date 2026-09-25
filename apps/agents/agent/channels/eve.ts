@@ -47,6 +47,10 @@ function knowledgeScopeOf(ctx: { session: { auth: Parameters<typeof resolveRole>
 
 export default eveChannel({
   auth: [channelSecretAuth(), vercelOidc(), localDev()],
+  // A follow-up that lands mid-turn waits for the turn to finish instead of
+  // steering it (eve's default since 0.33). A refinement or a second question
+  // is a new request, not a correction to the answer being written.
+  turnPolicy: 'queue',
   onMessage(ctx) {
     const caller = defaultEveAuth(ctx);
     if (!caller) return { auth: caller };

@@ -20,7 +20,8 @@ export default defineEval({
     draftTurn.calledTool('save_proposal');
     draftTurn.noFailedActions();
 
-    const refineTurn = await t.send(
+    // A follow-up in the same conversation (each t.send() opens a fresh session).
+    const refineTurn = await draftTurn.session.send(
       'The admin reviewed your current draft for next week and wants changes. ' +
         'Call get_week_context again before doing anything else — items may have been ' +
         'accepted, rejected, or edited since your last draft, and accepted items are now live ' +
@@ -40,11 +41,12 @@ export default defineEval({
 
     t.maxToolCalls(10);
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The assistant's second rationale opens with a short \"What changed\" summary describing " +
         'the swap it made, keeps the rest of the week as previously drafted rather than ' +
         'reshuffling unrelated placements, and does not claim to have broken availability or ' +
-        'staffing limits to satisfy the request.'
-    );
+        'staffing limits to satisfy the request.',
+      { on: refineTurn.message ?? '' }
+    ).atLeast(0.7);
   },
 });
