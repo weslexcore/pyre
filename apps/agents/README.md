@@ -106,7 +106,7 @@ never gets a shell.
 ### Classification with Jev
 
 ```
-shift note saved ─▶ response sent ─▶ waitUntil (integrations: lib/classify/request.ts)
+shift note saved ─▶ response sent ─▶ QStash job ─▶ integrations /api/classify/run
     files a pending content_classifications row (fresh request_id)
     │  POST {this app}/pyre/classify  { subject, text }   Bearer EVE_CHANNEL_SECRET
     ▼
@@ -114,7 +114,7 @@ agent/channels/classify.ts ─▶ Jev via AI Gateway (typesafe-ai/jev)
     one boolean question per signal type ─▶ { model, probabilities }
     ▼
 integrations keeps what clears each threshold, writes the row (guarded on request_id)
-hourly cron classify-sweep re-runs anything that never landed
+a failed run is retried by QStash with backoff
 ```
 
 - No language model, no session, no tools: a custom channel route asks Jev

@@ -20,12 +20,13 @@ sent first.
 
 ```
 shift note POST / PATCH (apps/integrations) ─▶ response sent
-  └─ waitUntil: runClassification()          lib/classify/request.ts
-       files a pending content_classifications row (fresh request_id)
-       └─ POST {pyre-agents}/pyre/classify { subject, text }
-            └─ Jev (typesafe-ai/jev): one boolean question per signal
-       parseSignals() keeps what clears each threshold → row done
-  hourly cron classify-sweep: re-runs anything that never landed
+  └─ waitUntil: publish a QStash job           lib/classify/dispatch.ts
+       └─ QStash ─▶ POST /api/classify/run      (retried with backoff on failure)
+            runClassification()                 lib/classify/request.ts
+              files a pending content_classifications row (fresh request_id)
+              └─ POST {pyre-agents}/pyre/classify { subject, text }
+                   └─ Jev (typesafe-ai/jev): one boolean question per signal
+              parseSignals() keeps what clears each threshold → row done
 /admin/shift-notes (admins): chips per note, "detected" filter, polling while pending
 ```
 
@@ -46,8 +47,8 @@ Never reuse a retired key for a different meaning; stored rows keep it.
    `content_classifications` and attach the cleanup trigger to the record's
    table (`execute function public.delete_content_classification('<key>')`).
 3. In apps/integrations, add its entry to `SUBJECT_SOURCES`
-   (`src/lib/classify/subjects.ts` — the compiler insists; the sweep uses
-   it too), call `scheduleClassification('<key>', id, text)` from the route
+   (`src/lib/classify/subjects.ts` — the compiler insists; the worker
+   reads the text through it), call `scheduleClassification('<key>', id, text)` from the route
    that writes it, and return `loadClassifications(db, '<key>', ids)` from
    the route that lists it.
 4. In the page's island: `useClassifications('<key>', canSee)` and

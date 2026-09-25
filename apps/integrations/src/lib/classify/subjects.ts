@@ -16,12 +16,6 @@ function forbidden(message: string): Response {
   return new Response(JSON.stringify({ error: message }), { status: 403, headers: JSON_HEADERS });
 }
 
-/** One record's id and current text. */
-export interface SubjectText {
-  id: string;
-  text: string;
-}
-
 export interface SubjectSource {
   /**
    * Gate a request to read or re-run classifications of this subject: the
@@ -31,8 +25,6 @@ export interface SubjectSource {
   authorize(cookies: AstroCookies): Promise<AdminGate | Response>;
   /** The record's current text, or null when it does not exist. */
   loadText(db: SupabaseClient, id: string): Promise<string | null>;
-  /** Records written or edited since `since` (ISO), for the sweep to check. */
-  listChangedSince(db: SupabaseClient, since: string, limit: number): Promise<SubjectText[]>;
 }
 
 export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
@@ -47,19 +39,6 @@ export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
     async loadText(db, id) {
       const { data } = await db.from('shift_notes').select('body').eq('id', id).maybeSingle();
       return (data as { body: string } | null)?.body ?? null;
-    },
-    async listChangedSince(db, since, limit) {
-      const { data, error } = await db
-        .from('shift_notes')
-        .select('id, body')
-        .gte('updated_at', since)
-        .order('updated_at', { ascending: false })
-        .limit(limit);
-      if (error) throw new Error(error.message);
-      return ((data ?? []) as { id: string; body: string }[]).map((n) => ({
-        id: n.id,
-        text: n.body,
-      }));
     },
   },
 };

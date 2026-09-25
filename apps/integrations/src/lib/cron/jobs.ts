@@ -66,12 +66,6 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
-    // Backstop for background Jev classification of shift notes: re-runs
-    // notes whose classification never landed (lib/classify/sweep).
-    name: 'classify-sweep',
-    run: async (ctx) => (await import('@/lib/classify/sweep')).runClassifySweep(ctx),
-  },
-  {
     // The schedule lint: regular sessions under a special event, untagged
     // sessions, late drafts, duplicates, odd capacities, a schedule running
     // out — emailed to the admins when the list turns up something they have

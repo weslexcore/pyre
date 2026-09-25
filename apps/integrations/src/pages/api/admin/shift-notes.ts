@@ -34,7 +34,8 @@
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { loadClassifications, pendingView, scheduleClassification } from '@/lib/classify/request';
+import { scheduleClassification } from '@/lib/classify/dispatch';
+import { loadClassifications, pendingView } from '@/lib/classify/request';
 import type { ClassificationView } from '@/lib/classify/view';
 import {
   getDb,

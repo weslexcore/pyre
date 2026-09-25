@@ -1,38 +1,30 @@
 // Classify a record's text with Jev (TypeSafe AI's System One model, served by
-// the pyre-agents Eve app) and read the answers back. This is the one entry
-// point every feature uses: a route that writes text calls
-// scheduleClassification() after the write, and a route that lists records
-// calls loadClassifications() for the ones it returns. What a subject is, and
+// the pyre-agents Eve app) and read the answers back. A route that writes
+// text calls scheduleClassification() (./dispatch) after the write, which
+// queues a QStash message; the worker route (/api/classify/run) then calls
+// runClassification() here. A route that lists records calls
+// loadClassifications() for the ones it returns. What a subject is, and
 // which signals exist, is @pyre/signals-core's business; see
 // src/lib/classify/subjects.ts for the per-subject hooks this app needs.
 //
-// Nothing here is on a person's critical path. scheduleClassification()
-// returns immediately and hands the work to waitUntil, so the response that
-// saved the note goes out first; the bookkeeping, the call to pyre-agents,
-// and the result write all happen after. If that background work dies with
-// the instance, the hourly classify sweep (runClassifySweep) finds the note
-// and tries again. Nothing here throws, and a missing agent configuration
-// (AGENTS_BASE_URL / EVE_CHANNEL_SECRET) simply turns classification off.
+// Nothing here throws, and a missing agent configuration (AGENTS_BASE_URL /
+// EVE_CHANNEL_SECRET) simply turns classification off.
 
 import { createHash, randomUUID } from 'node:crypto';
 import { parseSignals, type SubjectType, sanitizeClassifyText } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { waitUntil } from '@vercel/functions';
-import { type ContentClassificationRow, getDb } from '@/lib/db';
+import type { ContentClassificationRow } from '@/lib/db';
 import { type ClassificationView, toClassificationView } from './view';
 
 /** Jev answers in well under a second; this only bounds a stuck upstream. */
 const CLASSIFY_TIMEOUT_MS = 30_000;
-
-/** Tries per text before the sweep leaves it failed (an admin can still re-run it). */
-export const MAX_ATTEMPTS = 3;
 
 interface AgentsConfig {
   url: string;
   headers: Record<string, string>;
 }
 
-function agentsConfig(): AgentsConfig | null {
+export function agentsConfig(): AgentsConfig | null {
   const baseUrl = import.meta.env.AGENTS_BASE_URL;
   const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
   if (!baseUrl || !channelSecret) return null;
@@ -59,23 +51,6 @@ export interface ClassifyOptions {
   force?: boolean;
 }
 
-/**
- * Classify a record's current text in the background. Returns at once; the
- * caller's response is never held for it. Call it on every write that may
- * have changed the text: unchanged text is skipped in the background.
- */
-export function scheduleClassification(
-  subject: SubjectType,
-  subjectId: string,
-  text: string,
-  options: ClassifyOptions = {}
-): void {
-  if (!agentsConfig()) return;
-  const db = getDb();
-  if (!db) return;
-  waitUntil(runClassification(db, subject, subjectId, text, options));
-}
-
 /** What an admin's page shows right after scheduling: a read in progress. */
 export function pendingView(now: Date = new Date()): ClassificationView {
   return { state: 'pending', signals: [], requestedAt: now.toISOString(), classifiedAt: null };
@@ -83,10 +58,12 @@ export function pendingView(now: Date = new Date()): ClassificationView {
 
 /**
  * Classify `text` as the current content of one record, now: file the
- * request, ask pyre-agents, store the answer. Runs in the background (via
- * scheduleClassification) or from the sweep. Returns the resulting view, or
- * null when classification is off or the bookkeeping itself failed. Never
- * throws.
+ * request, ask pyre-agents, store the answer. Runs from the QStash worker
+ * (/api/classify/run), or inline in the background where QStash is not
+ * configured. Returns the resulting view (state 'failed' when pyre-agents or
+ * Jev failed — the worker answers that with a retryable status), or null when
+ * classification is off, the answer was superseded, or the bookkeeping itself
+ * failed. Never throws.
  */
 export async function runClassification(
   db: SupabaseClient,

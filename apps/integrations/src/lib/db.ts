@@ -405,7 +405,7 @@ export interface ContentClassificationRow {
   signals: unknown;
   request_id: string;
   content_hash: string;
-  /** Runs for this text so far; the sweep stops retrying at MAX_ATTEMPTS. */
+  /** Runs for this text so far (QStash retries and admin re-runs count). */
   attempts: number;
   /** The evaluation model that answered, e.g. typesafe-ai/jev. */
   model: string | null;

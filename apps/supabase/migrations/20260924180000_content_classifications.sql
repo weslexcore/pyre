@@ -16,16 +16,17 @@
 --
 -- Lifecycle (apps/integrations src/lib/classify), all of it in the
 -- background after the write's response has gone out:
---   1. A write to the record (a new note, an edited body) upserts the row as
---      'pending' with a fresh request_id and the hash of the text.
+--   0. A write to the record (a new note, an edited body) publishes a QStash
+--      job; QStash calls /api/classify/run within seconds.
+--   1. The worker upserts the row as 'pending' with a fresh request_id and
+--      the hash of the text.
 --   2. It asks pyre-agents (POST /pyre/classify), which asks Jev, and writes
 --      the answer back guarded on that request_id: 'done' with its signals,
 --      or 'failed' with the error. A run whose request_id was replaced in the
 --      meantime (the text changed again, or the record was deleted) writes
 --      nothing.
---   3. The hourly classify-sweep cron job re-runs records whose result never
---      landed or failed, up to three attempts per text; admins can re-run any
---      record from the page.
+--   3. A failed run answers QStash with a retryable status, and QStash
+--      retries it with backoff; admins can re-run any record from the page.
 
 create table public.content_classifications (
   id uuid primary key default gen_random_uuid(),
@@ -44,7 +45,7 @@ create table public.content_classifications (
   -- sha256 of the text that was sent, so an edit that leaves the text alone
   -- (a date change) does not re-run the classifier.
   content_hash text not null,
-  -- Runs for the current text; the sweep stops retrying at three.
+  -- Runs for the current text (QStash retries and admin re-runs count).
   attempts integer not null default 1 check (attempts >= 1),
   -- The evaluation model that answered, e.g. typesafe-ai/jev.
   model text,
