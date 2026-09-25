@@ -44,6 +44,8 @@ const MAX_IDS = 100;
 
 /** One bulk reclassify at most: the whole log the page loads (its LIST_LIMIT). */
 const MAX_BULK = 500;
+/** Records per bulk run that also asks for suggestions (one agent session each). */
+const MAX_BULK_SUGGEST = 100;
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const subject = url.searchParams.get('subject');
@@ -101,6 +103,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (ids.length > MAX_BULK) {
       return json({ error: `At most ${MAX_BULK} records per bulk run` }, 400);
     }
+    // Suggesting too starts an agent session per record once its read is
+    // saved, so a bulk run that asks for it is held to fewer records.
+    const suggest = body.suggest === true;
+    if (suggest && ids.length > MAX_BULK_SUGGEST) {
+      return json(
+        { error: `At most ${MAX_BULK_SUGGEST} notes per run when also suggesting tasks` },
+        400
+      );
+    }
 
     let texts: Map<string, string>;
     try {
@@ -114,7 +125,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     });
 
     await markQueued(db, subject, items);
-    const outcome = await dispatchClassifications(subject, items, options);
+    const outcome = await dispatchClassifications(subject, items, {
+      ...options,
+      ...(suggest ? { thenSuggest: true } : {}),
+    });
     if (outcome.via === 'none' && items.length > 0) return json({ error: outcome.reason }, 503);
 
     const pending = pendingView();

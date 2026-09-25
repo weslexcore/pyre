@@ -46,20 +46,29 @@ function matchesRead(view: ClassificationView | undefined, filter: ReadFilter): 
 
 const labelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
 
+/** Notes per run that may also ask for suggestions (the route holds to the same). */
+export const MAX_BULK_SUGGEST = 100;
+
 export function BulkClassify({
   notes,
   classifications,
   names,
   authors,
   onRun,
+  canSuggest = false,
 }: {
   notes: readonly ShiftNoteRow[];
   classifications: Record<string, ClassificationView>;
   names: PeopleNames;
   /** Author emails to offer, in display order. */
   authors: readonly string[];
-  /** Queue the notes; resolves to how many were queued. */
-  onRun: (ids: string[]) => Promise<{ queued: number; missing: number }>;
+  /** Queue the notes (and, with `suggest`, have the agent look at each once read). */
+  onRun: (
+    ids: string[],
+    options: { suggest: boolean }
+  ) => Promise<{ queued: number; missing: number }>;
+  /** Suggestions are on (Settings), so offer to ask for them too. */
+  canSuggest?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [statuses, setStatuses] = useState<ReadonlySet<ShiftNoteStatus>>(
@@ -69,6 +78,7 @@ export function BulkClassify({
   const [person, setPerson] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [suggest, setSuggest] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
@@ -93,13 +103,20 @@ export function BulkClassify({
       return next;
     });
 
+  const suggesting = canSuggest && suggest;
+  const overSuggestLimit = suggesting && matching.length > MAX_BULK_SUGGEST;
+
   const run = async () => {
     const count = matching.length;
-    if (count === 0) return;
+    if (count === 0 || overSuggestLimit) return;
     const noun = count === 1 ? 'note' : 'notes';
     if (
       !window.confirm(
-        `Classify ${count} ${noun}? Notes nobody has set a status on will move to To do or Resolved by what is found.`
+        `Classify ${count} ${noun}? Notes nobody has set a status on will move to To do or Resolved by what is found.${
+          suggesting
+            ? ` The agent will then read each one and suggest tasks or SOP edits for you to review — ${count} agent ${count === 1 ? 'run' : 'runs'}, two at a time.`
+            : ''
+        }`
       )
     ) {
       return;
@@ -107,12 +124,17 @@ export function BulkClassify({
     setRunning(true);
     setResult(null);
     try {
-      const { queued, missing } = await onRun(matching.map((n) => n.id));
+      const { queued, missing } = await onRun(
+        matching.map((n) => n.id),
+        { suggest: suggesting }
+      );
       setResult({
         tone: 'ok',
         text: `Queued ${queued} ${queued === 1 ? 'note' : 'notes'}. They show “Reading…” until their turn comes — a few at a time.${
-          missing > 0 ? ` ${missing} had been deleted.` : ''
-        }`,
+          suggesting
+            ? ' Suggestions appear under each note, and in Suggestions, as the agent finishes.'
+            : ''
+        }${missing > 0 ? ` ${missing} had been deleted.` : ''}`,
       });
     } catch (e) {
       setResult({
@@ -235,19 +257,41 @@ export function BulkClassify({
         </div>
       </div>
 
+      {canSuggest && (
+        <label className="flex items-start gap-2 text-sm text-white/80">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={suggest}
+            onChange={(e) => setSuggest(e.target.checked)}
+          />
+          <span>
+            Also suggest tasks and SOP edits
+            <span className="block text-xs text-white/40">
+              After reading each note, the agent proposes tasks, comments on existing tasks, or SOP
+              edits for you to review. One agent run per note, up to {MAX_BULK_SUGGEST} at a time.
+            </span>
+          </span>
+        </label>
+      )}
+
       <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
         <button
           type="button"
           className={primaryButtonClass}
-          disabled={running || matching.length === 0}
+          disabled={running || matching.length === 0 || overSuggestLimit}
           onClick={() => void run()}
         >
           {running
             ? 'Queuing…'
-            : `Classify ${matching.length} ${matching.length === 1 ? 'note' : 'notes'}`}
+            : `Classify ${matching.length} ${matching.length === 1 ? 'note' : 'notes'}${
+                suggesting ? ' and suggest' : ''
+              }`}
         </button>
         <span className="font-mono text-[10px] text-white/40">
           {matching.length} of {notes.length} notes match.
+          {overSuggestLimit &&
+            ` Narrow the filters to ${MAX_BULK_SUGGEST} or fewer to suggest tasks too.`}
         </span>
       </div>
       {result && (
