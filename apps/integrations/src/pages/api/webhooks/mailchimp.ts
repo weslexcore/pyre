@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createWebhookLogger } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { suppressEmail } from '@/lib/email/suppression';
+import { json } from '@/lib/http/route';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 
 export const prerender = false;
@@ -55,26 +56,17 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
   const expectedSecret = import.meta.env.MAILCHIMP_WEBHOOK_SECRET;
   if (!expectedSecret) {
     log.error('MAILCHIMP_WEBHOOK_SECRET not configured');
-    return new Response(JSON.stringify({ error: 'Not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Not configured' }, 500);
   }
 
   if (url.searchParams.get('secret') !== expectedSecret) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Unauthorized' }, 401);
   }
 
   const signingSecret = import.meta.env.MAILCHIMP_WEBHOOK_SIGNING_SECRET;
   if (!signingSecret) {
     log.error('MAILCHIMP_WEBHOOK_SIGNING_SECRET not configured');
-    return new Response(JSON.stringify({ error: 'Not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Not configured' }, 500);
   }
 
   // Signature covers the raw body bytes — read text first, parse form after.
@@ -82,10 +74,7 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
   const signatureHeader = request.headers.get('x-mailchimp-signature');
   if (!verifyMailchimpSignature(rawBody, signatureHeader, signingSecret)) {
     log.warn('Invalid webhook signature', { hasHeader: signatureHeader !== null });
-    return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Invalid signature' }, 401);
   }
 
   const form = new URLSearchParams(rawBody);
@@ -104,10 +93,7 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
     log.info(`Ignoring unhandled event: ${type}`);
   }
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ success: true });
 };
 
 export const POST = instrumentWebhook('mailchimp', handler);

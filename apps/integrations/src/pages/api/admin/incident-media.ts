@@ -18,6 +18,7 @@ import { hasIncidentsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { IncidentAttachmentRow, IncidentRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { logIncidentEvent } from '@/lib/incidents/log';
 import {
   buildStoragePath,
@@ -28,15 +29,8 @@ import {
 } from '@/lib/incidents/media';
 import { FIELD_LIMITS } from '@/lib/incidents/validate';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/incidents';
 const BUCKET = 'incident-media';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Long enough to load a page of media, short enough that a leaked link dies. */
 const SIGNED_URL_TTL_SECONDS = 600;
@@ -94,7 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const incidentId = String(form.get('incidentId') ?? '');
-  if (!UUID_RE.test(incidentId)) return json({ error: 'incidentId must be a UUID' }, 400);
+  if (!isUuid(incidentId)) return json({ error: 'incidentId must be a UUID' }, 400);
 
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'No file was uploaded' }, 400);
@@ -126,7 +120,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .from('incident_attachments')
     .select('id', { count: 'exact', head: true })
     .eq('incident_id', incidentId);
-  if (countError) return json({ error: countError.message }, 500);
+  if (countError) return dbError(countError);
   if ((count ?? 0) >= MAX_ATTACHMENTS_PER_INCIDENT) {
     return json(
       { error: `A report can hold ${MAX_ATTACHMENTS_PER_INCIDENT} attachments at most` },
@@ -169,7 +163,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) {
     // Don't leave an orphan object behind when the row fails.
     await db.storage.from(BUCKET).remove([storagePath]);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
 
   const attachment = data as IncidentAttachmentRow;
@@ -191,14 +185,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('incident_attachments')
     .select('*, incidents(reported_by)')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const row = data as
     | (IncidentAttachmentRow & { incidents: { reported_by: string } | null })
@@ -240,14 +234,14 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('incident_attachments')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const attachment = (data as IncidentAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Attachment not found' }, 404);
@@ -268,7 +262,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error: deleteError } = await db.from('incident_attachments').delete().eq('id', id);
-  if (deleteError) return json({ error: deleteError.message }, 500);
+  if (deleteError) return dbError(deleteError);
 
   await logIncidentEvent(db, {
     incidentId: attachment.incident_id,

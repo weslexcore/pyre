@@ -37,7 +37,6 @@ import {
   tooFast,
 } from '@/lib/boards/form-guard';
 import { formConfigOf, parseSubmission } from '@/lib/boards/forms';
-import { type APIRoute, json } from '@/lib/boards/route';
 import {
   loadBoardBySlug,
   loadColumns,
@@ -48,6 +47,7 @@ import {
 import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { type APIRoute, dbError, json } from '@/lib/http/route';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
 /** The actor on a public submission's card and trail. */
@@ -139,7 +139,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
     if (error) {
       // Our failure should not count against the sender.
       if (limitKey) await refundRateLimit(limitKey);
-      return json({ error: error.message }, 500);
+      return dbError(error);
     }
 
     const card = data as BoardCardRow;

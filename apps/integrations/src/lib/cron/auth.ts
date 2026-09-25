@@ -2,18 +2,10 @@
 // ${CRON_SECRET}` via its `Upstash-Forward-Authorization` header; the same
 // header works for manual curl testing.
 
+import { hasBearer, unauthorized } from '@/lib/http/bearer';
+
 export function isCronAuthorized(request: Request): boolean {
-  const secret = import.meta.env.CRON_SECRET;
-  if (!secret) {
-    console.error('[Cron] CRON_SECRET not configured — rejecting all cron requests');
-    return false;
-  }
-  return request.headers.get('Authorization') === `Bearer ${secret}`;
+  return hasBearer(request, import.meta.env.CRON_SECRET ?? process.env.CRON_SECRET, 'Cron');
 }
 
-export function unauthorizedResponse(): Response {
-  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+export const unauthorizedResponse = unauthorized;

@@ -13,10 +13,17 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
-import { type APIRoute, beginDelete, beginMutation, isUuidParam, json } from '@/lib/boards/route';
 import { loadSection, loadSections } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardSectionRow } from '@/lib/db';
+import {
+  type APIRoute,
+  beginDelete,
+  beginMutation,
+  dbError,
+  isUuidParam,
+  json,
+} from '@/lib/http/route';
 
 /** Trimmed name, or null when it isn't a usable section name. */
 function readName(value: unknown): string | null {
@@ -49,7 +56,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ name, sort_order: last + 1 })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return json({ section: data as BoardSectionRow }, 201);
 };
 
@@ -82,7 +89,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', section.id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return json({ section: data as BoardSectionRow });
 };
 
@@ -103,7 +110,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .from('boards')
     .select('id', { count: 'exact', head: true })
     .eq('section_id', id);
-  if (countError) return json({ error: countError.message }, 500);
+  if (countError) return dbError(countError);
   if ((count ?? 0) > 0) {
     return json(
       {
@@ -114,7 +121,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('board_sections').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   console.info(`[boards] ${email} deleted section ${section.name}`);
   return json({ ok: true });

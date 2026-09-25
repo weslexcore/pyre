@@ -16,6 +16,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { isUuid, json } from '@/lib/http/route';
 import {
   countUnread,
   dismiss,
@@ -24,14 +25,6 @@ import {
   markUnread,
   sweepInbox,
 } from '@/lib/notifications/notify';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -92,7 +85,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       !Array.isArray(ids) ||
       ids.length === 0 ||
       ids.length > MAX_IDS ||
-      !ids.every((id): id is string => typeof id === 'string' && UUID_RE.test(id))
+      !ids.every((id): id is string => isUuid(id))
     ) {
       return json({ error: 'ids must be a non-empty list of UUIDs (or all: true)' }, 400);
     }

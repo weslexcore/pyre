@@ -22,6 +22,7 @@
 import type { APIRoute } from 'astro';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import { intakeSuggestions } from '@/lib/suggestions/intake';
 import { notifySuggestionsReady } from '@/lib/suggestions/notify';
 import { loadRun, markFailed } from '@/lib/suggestions/runs';
@@ -30,12 +31,6 @@ import { insertSuggestions } from '@/lib/suggestions/store';
 import { isUuid } from '@/lib/suggestions/types';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isAgentAuthorized(request)) return agentUnauthorizedResponse();

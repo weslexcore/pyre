@@ -38,20 +38,21 @@ import { createCard, goalTitle, loadBoardFields } from '@/lib/boards/create-card
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvents } from '@/lib/boards/events';
 import { boardViewerExtras } from '@/lib/boards/people';
+import { loadBoardBundle, loadCard, loadColumn, unattachedGoals } from '@/lib/boards/store';
+import { isBoardSlug } from '@/lib/boards/types';
+import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
+import type { BoardCardRow, BoardRow } from '@/lib/db';
 import {
   type APIRoute,
   beginDelete,
   beginMutation,
   beginRead,
   type Db,
+  dbError,
   isUuidParam,
   json,
   storeError,
-} from '@/lib/boards/route';
-import { loadBoardBundle, loadCard, loadColumn, unattachedGoals } from '@/lib/boards/store';
-import { isBoardSlug } from '@/lib/boards/types';
-import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
-import type { BoardCardRow, BoardRow } from '@/lib/db';
+} from '@/lib/http/route';
 import { notifyCardAssigned, notifyCardCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
 
@@ -150,7 +151,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', before.id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const card = data as BoardCardRow;
   if (properties.properties) {
@@ -208,7 +209,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   // so the files' objects go first.
   await deleteCardAttachments(db, id);
   const { error } = await db.from('board_cards').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // A bell row pointing at a card that no longer exists is a dead end.
   await deleteBySource(db, 'board_card', id);

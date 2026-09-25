@@ -14,6 +14,7 @@ import type { APIRoute } from 'astro';
 import { PARTNERS_MANAGE } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type PartnerVerificationRow } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import {
   applyDecision,
   type DecisionActor,
@@ -23,12 +24,6 @@ import {
 export const prerender = false;
 
 const PAGE = '/admin/partners';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const TABLE = 'partner_verifications';
 const STATUSES = ['pending', 'confirmed', 'denied', 'expired', 'revoked'] as const;
@@ -74,7 +69,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (before) query = query.lt('created_at', before);
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // Status tallies across the whole table, not the filtered page, so the
   // filter pills can show totals. Cheap at this table's size (hundreds of

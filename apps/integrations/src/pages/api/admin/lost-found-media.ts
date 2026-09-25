@@ -17,6 +17,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { logLostFoundEvent } from '@/lib/lost-found/log';
 import {
   LOST_FOUND_BUCKET as BUCKET,
@@ -29,14 +30,7 @@ import {
 import { CLOSED_STATUSES } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/lost-found';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Long enough to load a page of photos, short enough that a leaked link dies. */
 const SIGNED_URL_TTL_SECONDS = 600;
@@ -65,7 +59,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const itemId = String(form.get('itemId') ?? '');
-  if (!UUID_RE.test(itemId)) return json({ error: 'itemId must be a UUID' }, 400);
+  if (!isUuid(itemId)) return json({ error: 'itemId must be a UUID' }, 400);
 
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'No file was uploaded' }, 400);
@@ -97,7 +91,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .from('lost_found_attachments')
     .select('id', { count: 'exact', head: true })
     .eq('item_id', itemId);
-  if (countError) return json({ error: countError.message }, 500);
+  if (countError) return dbError(countError);
   if ((count ?? 0) >= MAX_ATTACHMENTS_PER_ITEM) {
     return json({ error: `An item can hold ${MAX_ATTACHMENTS_PER_ITEM} photos at most` }, 409);
   }
@@ -131,7 +125,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) {
     // Don't leave an orphan object behind when the row fails.
     await db.storage.from(BUCKET).remove([storagePath]);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
 
   const attachment = data as LostFoundAttachmentRow;
@@ -153,14 +147,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('lost_found_attachments')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const row = (data as LostFoundAttachmentRow) ?? null;
   if (!row) return json({ error: 'Photo not found' }, 404);
@@ -195,14 +189,14 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('lost_found_attachments')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const attachment = (data as LostFoundAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Photo not found' }, 404);
@@ -213,7 +207,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error: deleteError } = await db.from('lost_found_attachments').delete().eq('id', id);
-  if (deleteError) return json({ error: deleteError.message }, 500);
+  if (deleteError) return dbError(deleteError);
 
   await logLostFoundEvent(db, {
     itemId: attachment.item_id,

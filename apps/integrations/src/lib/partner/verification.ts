@@ -3,6 +3,7 @@ import { captureEvent } from '@/lib/analytics/posthog';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb, type PartnerRow, type PartnerVerificationRow } from '@/lib/db';
 import { type SendResult, sendTemplate } from '@/lib/email/send';
+import { isUniqueViolation } from '@/lib/http/json';
 import {
   assignMemberTag,
   createMember,
@@ -197,7 +198,7 @@ export async function createVerificationRequest(params: {
     .single();
   if (error || !inserted) {
     // Unique-index race with a concurrent submission counts as a duplicate.
-    if (error?.code === '23505') return { outcome: 'duplicate', status: 'pending' };
+    if (isUniqueViolation(error)) return { outcome: 'duplicate', status: 'pending' };
     log.error('Failed to insert verification request', error);
     return { outcome: 'unavailable', reason: 'db-insert-failed' };
   }

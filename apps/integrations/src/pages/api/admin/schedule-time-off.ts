@@ -8,8 +8,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
-import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { type AdminGate, requirePage } from '@/lib/auth/admin';
 import { getDb, type StaffRow, type TimeOffRow } from '@/lib/db';
+import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import {
   actorFromGate,
   changedFields,
@@ -20,12 +21,6 @@ import {
 } from '@/lib/schedule/change-log';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
@@ -42,7 +37,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (staffId) query = query.eq('staff_id', staffId);
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // Other people's time off is manage-side information — employees only ever
   // read their own entries, whatever staffId the request asked for.
@@ -151,16 +146,13 @@ async function selfStaffId(db: SupabaseClient, gate: AdminGate): Promise<string 
  * back the single staff id they may act on (ownStaffId; null = their login
  * has no roster row, so they may touch nothing).
  */
-async function gateMutation(
+async function gateSchedule(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request,
   db: SupabaseClient
 ): Promise<{ gate: AdminGate; canManage: boolean; ownStaffId: string | null } | Response> {
-  const gate = await requirePage(cookies, '/admin/schedule');
+  const gate = await gateMutation(cookies, request, '/admin/schedule');
   if (gate instanceof Response) return gate;
-
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
 
   const canManage = hasScheduleManage(gate.access);
   return { gate, canManage, ownStaffId: canManage ? null : await selfStaffId(db, gate) };
@@ -168,22 +160,11 @@ async function gateMutation(
 
 const OWN_ONLY_ERROR = 'You can only manage your own time off';
 
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
-
 export const POST: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const auth = await gateMutation(cookies, request, db);
+  const auth = await gateSchedule(cookies, request, db);
   if (auth instanceof Response) return auth;
 
   const body = await readJsonBody(request);
@@ -201,7 +182,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ ...columns, created_by: auth.canManage ? 'admin' : 'staff' })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const entry = data as TimeOffRow;
   await logScheduleChange(db, {
@@ -220,7 +201,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const auth = await gateMutation(cookies, request, db);
+  const auth = await gateSchedule(cookies, request, db);
   if (auth instanceof Response) return auth;
 
   const body = await readJsonBody(request);
@@ -237,7 +218,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
 
   if (!auth.canManage) {
     // Both the existing entry and its new shape must stay their own.
@@ -253,7 +234,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Entry not found' }, 404);
 
   const entry = data as TimeOffRow;
@@ -276,7 +257,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const auth = await gateMutation(cookies, request, db);
+  const auth = await gateSchedule(cookies, request, db);
   if (auth instanceof Response) return auth;
 
   const id = url.searchParams.get('id');
@@ -289,14 +270,14 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Entry not found' }, 404);
   if (!auth.canManage && existing.staff_id !== auth.ownStaffId) {
     return json({ error: OWN_ONLY_ERROR }, 403);
   }
 
   const { error, count } = await db.from('time_off').delete({ count: 'exact' }).eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!count) return json({ error: 'Entry not found' }, 404);
 
   const entry = existing as TimeOffRow;

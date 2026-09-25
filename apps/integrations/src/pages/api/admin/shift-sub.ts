@@ -22,6 +22,7 @@ import {
   type TimeOffRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { dbError, json, readJsonBody } from '@/lib/http/route';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
 import { getScheduleSettings } from '@/lib/schedule/settings';
@@ -36,12 +37,6 @@ import { createSubClaimToken } from '@/lib/schedule/sub-token';
 
 export const prerender = false;
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 /** The staff row matching the caller's login email, or null. */
 async function selfStaff(db: SupabaseClient, gate: AdminGate): Promise<StaffRow | null> {
   const email = (gate.user.email ?? '').toLowerCase();
@@ -50,17 +45,6 @@ async function selfStaff(db: SupabaseClient, gate: AdminGate): Promise<StaffRow 
   const { data } = await db.from('staff').select('*');
   const rows = (data ?? []) as StaffRow[];
   return rows.find((s) => (s.email ?? '').toLowerCase() === email) ?? null;
-}
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
 }
 
 /** Claim links outlive the shift date by a couple of days; the claim path
@@ -101,7 +85,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('id, shift_date, label, starts_at, ends_at, status, is_draft')
     .eq('id', shiftId)
     .maybeSingle();
-  if (shiftError) return json({ error: shiftError.message }, 500);
+  if (shiftError) return dbError(shiftError);
   if (!shift || shift.is_draft) return json({ error: 'Shift not found' }, 404);
   if (shift.status !== 'active') return json({ error: 'Shift is cancelled' }, 400);
   if (shift.shift_date < todayEastern()) {
@@ -115,7 +99,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .eq('staff_id', self.id)
     .eq('is_draft', false)
     .maybeSingle();
-  if (assignmentError) return json({ error: assignmentError.message }, 500);
+  if (assignmentError) return dbError(assignmentError);
   if (!assignmentRow) return json({ error: "You're not on this shift" }, 404);
   const assignment = assignmentRow as ShiftAssignmentRow;
 
@@ -138,7 +122,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (timeOffError) return json({ error: timeOffError.message }, 500);
+  if (timeOffError) return dbError(timeOffError);
   const timeOff = timeOffRow as TimeOffRow;
 
   // 2. The open sub request (the unique index rejects a duplicate open one).
@@ -158,10 +142,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (subError) {
     // Roll the blackout back so a retry doesn't stack duplicates.
     await db.from('time_off').delete().eq('id', timeOff.id);
-    if (subError.code === '23505') {
-      return json({ error: 'You already have an open sub request for this shift' }, 409);
-    }
-    return json({ error: subError.message }, 500);
+    return dbError(subError, 'You already have an open sub request for this shift');
   }
   const sub = subRow as SubRequestRow;
 
@@ -331,7 +312,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     case 'already-assigned':
       return json({ error: "You're already on this shift" }, 409);
     case 'error':
-      return json({ error: result.message }, 500);
+      return dbError(result);
   }
 };
 
@@ -354,7 +335,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Sub request not found' }, 404);
   const sub = existing as SubRequestRow;
 
@@ -376,7 +357,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .eq('status', 'open')
     .select('*')
     .maybeSingle();
-  if (cancelError) return json({ error: cancelError.message }, 500);
+  if (cancelError) return dbError(cancelError);
   if (!cancelled) return json({ error: 'Someone just took this shift' }, 409);
 
   // The blackout came in with the request, so it leaves with it too.

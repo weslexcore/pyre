@@ -6,15 +6,10 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import type { ChangeEntityType, ScheduleChangeRow } from '@/lib/schedule/change-log';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -67,7 +62,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const entries = (data ?? []) as ScheduleChangeRow[];
   return json({ entries, hasMore: entries.length === limit });

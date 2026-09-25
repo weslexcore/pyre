@@ -14,9 +14,10 @@
 
 import type { APIRoute } from 'astro';
 import { PARTNERS_MANAGE } from '@/components/admin/adminTools';
-import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 import { getDb, type PartnerRow } from '@/lib/db';
 import { getEmailGate } from '@/lib/email/dev-mode';
+import { dbError, gateMutation, json, readJsonBody, sessionEmail } from '@/lib/http/route';
 import { fetchTagMap, invalidateTagCache } from '@/lib/momence/host-api';
 import {
   getLegacyContactEnv,
@@ -28,12 +29,6 @@ import {
 export const prerender = false;
 
 const PAGE = '/admin/partners';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -116,29 +111,16 @@ function parsePartnerColumns(
 }
 
 /** requireAdmin OR the partners:manage capability, plus the CSRF backstop. */
-async function gateMutation(
+async function gatePartnersManage(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<{ email: string } | Response> {
-  const gate = await requirePage(cookies, PAGE);
+  const gate = await gateMutation(cookies, request, PAGE);
   if (gate instanceof Response) return gate;
   if (!gate.access.isAdmin && !gate.access.pages.includes(PARTNERS_MANAGE)) {
     return json({ error: 'Forbidden' }, 403);
   }
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  return { email: (gate.user.email ?? '').toLowerCase() };
-}
-
-async function readJson(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Expected application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
+  return { email: sessionEmail(gate) };
 }
 
 /** Verification-row counts per slug, for the disable/delete guards and the UI. */
@@ -205,13 +187,13 @@ export const GET: APIRoute = async ({ cookies }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gatePartnersManage(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const body = await readJson(request);
+  const body = await readJsonBody(request);
   if (body instanceof Response) return body;
 
   const slug = String(body.slug ?? '')
@@ -240,10 +222,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
 
-  if (error) {
-    if (error.code === '23505') return json({ error: `Partner "${slug}" already exists` }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, `Partner "${slug}" already exists`);
 
   invalidatePartnerCache();
   // A brand-new tag won't be in the 24h-cached map yet.
@@ -252,13 +231,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gatePartnersManage(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const body = await readJson(request);
+  const body = await readJsonBody(request);
   if (body instanceof Response) return body;
 
   const id = String(body.id ?? '');
@@ -300,7 +279,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
 
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   invalidatePartnerCache();
   if (tagChanged) await invalidateTagCache().catch(() => {});
@@ -315,7 +294,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gatePartnersManage(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -343,7 +322,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('partners').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   invalidatePartnerCache();
   return json({ ok: true });

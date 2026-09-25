@@ -14,6 +14,7 @@ import { type ScheduleDraftMessageRow, weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { actorFromGate, logScheduleChange } from '@/lib/schedule/change-log';
 import {
   buildRefineFallbackMessage,
@@ -24,12 +25,6 @@ import {
 import { readEveSessionTail, sendEveFollowUp, startEveSession } from '@/lib/schedule/eve-session';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -93,7 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (proposalError) return json({ error: proposalError.message }, 500);
+  if (proposalError) return dbError(proposalError);
   if (!proposal) return json({ error: 'No open draft for that week' }, 404);
 
   const priorSessionId = proposal.agent_session_id as string | null;

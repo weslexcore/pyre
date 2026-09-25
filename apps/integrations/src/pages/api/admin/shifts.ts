@@ -4,8 +4,9 @@
 // sync_locked so the Phase-3 sync won't overwrite the admin's adjustment.
 
 import type { APIRoute } from 'astro';
-import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftRow } from '@/lib/db';
+import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import { assigneesOf, notifyShiftChange } from '@/lib/notifications/schedule';
 import {
   actorFromGate,
@@ -20,36 +21,8 @@ import { checkShiftWindow, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-async function gateMutation(
-  cookies: Parameters<APIRoute>[0]['cookies'],
-  request: Request
-): Promise<AdminGate | Response> {
-  const gate = await requireScheduleManage(cookies);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  return gate;
-}
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
-
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -71,7 +44,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ ...fields, source: 'manual' })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const shift = data as ShiftRow;
   await logScheduleChange(db, {
@@ -87,7 +60,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -121,7 +94,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Shift not found' }, 404);
 
   // Re-confirming keeps the original timestamp — the change log would
@@ -144,7 +117,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const { data, error } = await db.from('shifts').update(fields).eq('id', id).select('*').single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   let shift = data as ShiftRow;
   const actor = actorFromGate(gate);
@@ -205,7 +178,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -220,7 +193,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Shift not found' }, 404);
 
   // Who was on it, read before the delete cascades their assignments away.
@@ -230,7 +203,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   // that people were scheduled for should PATCH status instead, so the record
   // survives.
   const { error, count } = await db.from('shifts').delete({ count: 'exact' }).eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!count) return json({ error: 'Shift not found' }, 404);
 
   const shift = existing as ShiftRow;

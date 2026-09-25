@@ -4,8 +4,7 @@
 import { getExecution, getRecentExecutions } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { json } from '@/lib/http/route';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, '/admin/webhooks');
@@ -16,12 +15,9 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (id) {
     const record = await getExecution(id);
     if (!record) {
-      return new Response(JSON.stringify({ error: 'Not found' }), {
-        status: 404,
-        headers: JSON_HEADERS,
-      });
+      return json({ error: 'Not found' }, 404);
     }
-    return new Response(JSON.stringify(record), { status: 200, headers: JSON_HEADERS });
+    return json(record);
   }
 
   // Paginated list
@@ -30,8 +26,5 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const { records, total } = await getRecentExecutions(limit, offset);
 
-  return new Response(JSON.stringify({ records, total, limit, offset }), {
-    status: 200,
-    headers: JSON_HEADERS,
-  });
+  return json({ records, total, limit, offset });
 };

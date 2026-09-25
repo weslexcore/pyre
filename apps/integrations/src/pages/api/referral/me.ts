@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 import { isReferralAuthorized } from '@/lib/referral/api-auth';
 import { getReferralClicks } from '@/lib/referral/codes';
@@ -19,39 +20,32 @@ export const prerender = false;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function json(status: number, body: Record<string, unknown>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 export const POST: APIRoute = async ({ request }) => {
   if (!isReferralAuthorized(request)) {
-    return json(401, { error: 'Unauthorized' });
+    return json({ error: 'Unauthorized' }, 401);
   }
 
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return json(400, { error: 'Invalid JSON' });
+    return json({ error: 'Invalid JSON' }, 400);
   }
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
-  if (!EMAIL_RE.test(email)) return json(400, { error: 'Invalid email' });
+  if (!EMAIL_RE.test(email)) return json({ error: 'Invalid email' }, 400);
 
   try {
     const member = await findMemberByEmail(email);
-    if (!member) return json(404, { error: 'member-not-found' });
+    if (!member) return json({ error: 'member-not-found' }, 404);
 
     const result = await getOrCreateMemberReferrer({
       momenceMemberId: member.id,
       email,
       firstName: firstName || member.firstName,
     });
-    if (result.outcome === 'unavailable') return json(503, { error: result.reason });
+    if (result.outcome === 'unavailable') return json({ error: result.reason }, 503);
     const referrer = result.referrer;
 
     const db = getDb();
@@ -80,21 +74,24 @@ export const POST: APIRoute = async ({ request }) => {
       rewardsActive = rewards?.filter((r) => r.status === 'granted').length ?? 0;
     }
 
-    return json(200, {
-      code: referrer.code,
-      url: referralUrl(referrer.code),
-      discountPercent: referrer.discount_percent,
-      enabled: referrer.enabled,
-      stats: {
-        clicks: await getReferralClicks(referrer.code),
-        redemptions,
-        conversions,
-        rewardsEarned,
-        rewardsActive,
+    return json(
+      {
+        code: referrer.code,
+        url: referralUrl(referrer.code),
+        discountPercent: referrer.discount_percent,
+        enabled: referrer.enabled,
+        stats: {
+          clicks: await getReferralClicks(referrer.code),
+          redemptions,
+          conversions,
+          rewardsEarned,
+          rewardsActive,
+        },
       },
-    });
+      200
+    );
   } catch (error) {
     console.error('[Referral] /me failed', error);
-    return json(502, { error: 'Request failed' });
+    return json({ error: 'Request failed' }, 502);
   }
 };

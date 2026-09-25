@@ -14,16 +14,9 @@ import { runClassification } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { isCronAuthorized, unauthorizedResponse } from '@/lib/cron/auth';
 import { getDb } from '@/lib/db';
+import { isUuid, json } from '@/lib/http/route';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isCronAuthorized(request)) return unauthorizedResponse();
@@ -36,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ skipped: 'invalid body' });
   }
   const { subject, id } = body;
-  if (!isSubjectType(subject) || typeof id !== 'string' || !UUID_RE.test(id)) {
+  if (!isSubjectType(subject) || typeof id !== 'string' || !isUuid(id)) {
     return json({ skipped: 'invalid job' });
   }
 

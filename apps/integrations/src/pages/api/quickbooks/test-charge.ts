@@ -5,10 +5,9 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { createCharge, toErrorResponse } from '@/lib/quickbooks/client';
 import { getEnvironment } from '@/lib/quickbooks/config';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 // Intuit's sandbox test Visa (developer.intuit.com Payments docs).
 const SANDBOX_TEST_CHARGE = {
@@ -30,10 +29,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (gate instanceof Response) return gate;
 
   if (getEnvironment() !== 'sandbox') {
-    return new Response(JSON.stringify({ error: 'Test charges are sandbox-only' }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Test charges are sandbox-only' }, 400);
   }
 
   // Callers may POST their own charge body; empty body = documented test card.
@@ -43,16 +39,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     try {
       charge = JSON.parse(raw);
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400,
-        headers: JSON_HEADERS,
-      });
+      return json({ error: 'Invalid JSON body' }, 400);
     }
   }
 
   try {
     const result = await createCharge(charge);
-    return new Response(JSON.stringify(result), { status: 201, headers: JSON_HEADERS });
+    return json(result, 201);
   } catch (error) {
     return toErrorResponse(error);
   }

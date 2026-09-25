@@ -26,18 +26,11 @@ import { dispatchClassifications, scheduleClassification } from '@/lib/classify/
 import { loadClassifications, markQueued, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
+import { isUuid, json } from '@/lib/http/route';
 import { jevOptions } from '@/lib/jev';
 import { normalizeEmail } from '@/lib/shift-notes/access';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A poll covers what is on screen; more than this is a client bug. */
 const MAX_IDS = 100;
@@ -55,7 +48,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (gate instanceof Response) return gate;
 
   const ids = [...new Set((url.searchParams.get('ids') ?? '').split(',').filter(Boolean))];
-  if (ids.length > MAX_IDS || ids.some((id) => !UUID_RE.test(id))) {
+  if (ids.length > MAX_IDS || ids.some((id) => !isUuid(id))) {
     return json({ error: `ids must be up to ${MAX_IDS} comma-separated UUIDs` }, 400);
   }
 
@@ -95,7 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (
       !Array.isArray(body.ids) ||
       body.ids.length === 0 ||
-      body.ids.some((id) => typeof id !== 'string' || !UUID_RE.test(id))
+      body.ids.some((id) => typeof id !== 'string' || !isUuid(id))
     ) {
       return json({ error: 'ids must be a non-empty array of UUIDs' }, 400);
     }
@@ -144,7 +137,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const text = await source.loadText(db, id);
   if (text === null) return json({ error: 'Not found' }, 404);

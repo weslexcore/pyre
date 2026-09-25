@@ -7,8 +7,7 @@ import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
 import { JOURNEYS } from '@/lib/email/journeys/registry';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { json } from '@/lib/http/route';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_DAYS = 7;
@@ -45,10 +44,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const db = getDb();
   if (!db) {
-    return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
-      status: 503,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Supabase not configured' }, 503);
   }
 
   const daysRaw = Number.parseInt(url.searchParams.get('days') ?? '', 10);
@@ -124,10 +120,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   if (firstError) {
     console.error('[EmailStats] Query failed:', firstError.message);
-    return new Response(JSON.stringify({ error: 'Query failed' }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Query failed' }, 500);
   }
 
   const sends = sendsRes.data ?? [];
@@ -256,5 +249,5 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     },
   };
 
-  return new Response(JSON.stringify(body), { status: 200, headers: JSON_HEADERS });
+  return json(body);
 };

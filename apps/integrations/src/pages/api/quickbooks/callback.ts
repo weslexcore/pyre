@@ -5,10 +5,9 @@
 
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { exchangeCodeForTokens, QBO_STATE_COOKIE } from '@/lib/quickbooks/oauth';
 import { saveConnection } from '@/lib/quickbooks/store';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requireAdmin(cookies);
@@ -20,10 +19,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // Intuit reports consent-screen failures (e.g. access_denied) in ?error=.
   const oauthError = url.searchParams.get('error');
   if (oauthError) {
-    return new Response(JSON.stringify({ error: `Intuit returned: ${oauthError}` }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: `Intuit returned: ${oauthError}` }, 400);
   }
 
   const code = url.searchParams.get('code');
@@ -31,36 +27,24 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const state = url.searchParams.get('state');
 
   if (!code || !realmId) {
-    return new Response(JSON.stringify({ error: 'Missing code or realmId' }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Missing code or realmId' }, 400);
   }
   if (!state || !expectedState || state !== expectedState) {
-    return new Response(JSON.stringify({ error: 'State mismatch; restart the connect flow' }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'State mismatch; restart the connect flow' }, 400);
   }
 
   try {
     const tokens = await exchangeCodeForTokens(url, code);
     await saveConnection(realmId, tokens, gate.user.email || undefined);
 
-    return new Response(
-      JSON.stringify({
-        connected: true,
-        realmId,
-        accessTokenExpiresAt: new Date(tokens.accessTokenExpiresAt).toISOString(),
-        refreshTokenExpiresAt: new Date(tokens.refreshTokenExpiresAt).toISOString(),
-      }),
-      { status: 200, headers: JSON_HEADERS }
-    );
+    return json({
+      connected: true,
+      realmId,
+      accessTokenExpiresAt: new Date(tokens.accessTokenExpiresAt).toISOString(),
+      refreshTokenExpiresAt: new Date(tokens.refreshTokenExpiresAt).toISOString(),
+    });
   } catch (error) {
     console.error('[QuickBooks] callback failed:', error);
-    return new Response(JSON.stringify({ error: 'Token exchange failed; see server logs' }), {
-      status: 502,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Token exchange failed; see server logs' }, 502);
   }
 };

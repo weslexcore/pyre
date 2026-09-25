@@ -41,6 +41,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { countTasks, forbiddenSkips, parseChecklist } from '@/lib/sops/checklist';
 import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -57,17 +58,9 @@ import {
   type UncheckedItem,
 } from '@/lib/sops/runs';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/sops';
 const MAX_ITEM_TEXT = 500;
 const LIST_LIMIT = 100;
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CheckItem {
   itemIndex: number;
@@ -177,7 +170,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // narrows to one document (the SOP page's Runs panel).
   if (url.searchParams.get('view') === 'list') {
     const listSopId = url.searchParams.get('sopId');
-    if (listSopId && !UUID_RE.test(listSopId)) {
+    if (listSopId && !isUuid(listSopId)) {
       return json({ error: 'sopId must be a UUID' }, 400);
     }
 
@@ -216,7 +209,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     }
 
     const { data, error } = await query;
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     const runRows = (data ?? []) as RunWithChecks[];
     // Name the items each short-ended run skipped, so the log shows what was
     // left undone rather than only how many items were. Best effort: a
@@ -239,14 +232,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // In-progress run for one document (the doc page's "Resume" lookup).
   const sopId = url.searchParams.get('sopId');
   if (sopId) {
-    if (!UUID_RE.test(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
+    if (!isUuid(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
 
     const { data: sopData, error: sopError } = await db
       .from('sops')
       .select('*')
       .eq('id', sopId)
       .maybeSingle();
-    if (sopError) return json({ error: sopError.message }, 500);
+    if (sopError) return dbError(sopError);
     const sop = (sopData as SopRow) ?? null;
     if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
 
@@ -261,21 +254,21 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Single run by id.
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id (UUID) or sopId is required' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id (UUID) or sopId is required' }, 400);
 
   const { data: runData, error: runError } = await db
     .from('sop_runs')
     .select('*, sops(*)')
     .eq('id', id)
     .maybeSingle();
-  if (runError) return json({ error: runError.message }, 500);
+  if (runError) return dbError(runError);
   if (!runData) return json({ error: 'Run not found' }, 404);
   const { sops: sop, ...run } = runData as SopRunRow & { sops: SopRow };
   if (!sop || !canViewSop(viewer, sop)) return json({ error: 'Run not found' }, 404);
 
   const [{ data: checks, error: checksError }, { content, error: contentError }] =
     await Promise.all([loadRunChecks(db, run.id), resolveRunContent(db, sop, run as SopRunRow)]);
-  if (checksError) return json({ error: checksError.message }, 500);
+  if (checksError) return dbError(checksError);
   if (contentError) return json({ error: contentError }, 500);
 
   const runChecks = (checks ?? []) as SopRunCheckRow[];
@@ -309,7 +302,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const sopId = typeof body.sopId === 'string' ? body.sopId : '';
-  if (!UUID_RE.test(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
+  if (!isUuid(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
 
   // Optional first checks, recorded in the same request as the start so the
   // UI's tap-to-start needs no second round trip (and no window where a run
@@ -388,7 +381,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         joinable.map((item) => checkRow(run.id, item, gate.user.email ?? '')),
         { onConflict: 'run_id,item_index', ignoreDuplicates: true }
       );
-      if (checkError) return json({ error: checkError.message }, 500);
+      if (checkError) return dbError(checkError);
     }
     const [{ data: checks, error: checksError }, { content }] = await Promise.all([
       loadRunChecks(db, run.id),
@@ -396,7 +389,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         ? Promise.resolve({ content: runContent })
         : resolveRunContent(db, sop, run),
     ]);
-    if (checksError) return json({ error: checksError.message }, 500);
+    if (checksError) return dbError(checksError);
     const runChecks = (checks ?? []) as SopRunCheckRow[];
     const full = await completeIfFull(db, run, runChecks, gate.user.email ?? '');
     if (full.error) return json({ error: full.error }, 500);
@@ -426,7 +419,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (createError) return json({ error: createError.message }, 500);
+  if (createError) return dbError(createError);
 
   const newRun = created as SopRunRow;
   let newChecks: SopRunCheckRow[] = [];
@@ -442,7 +435,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       .select('*');
     if (checkError) {
       await db.from('sop_runs').delete().eq('id', newRun.id);
-      return json({ error: checkError.message }, 500);
+      return dbError(checkError);
     }
     newChecks = (checkRows ?? []) as SopRunCheckRow[];
   }
@@ -481,7 +474,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const runId = typeof body.runId === 'string' ? body.runId : '';
-  if (!UUID_RE.test(runId)) return json({ error: 'runId must be a UUID' }, 400);
+  if (!isUuid(runId)) return json({ error: 'runId must be a UUID' }, 400);
 
   // There is deliberately no 'complete': a run finishes itself when its last
   // item is resolved, so the record never carries items nobody accounted for.
@@ -495,7 +488,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*, sops(*)')
     .eq('id', runId)
     .maybeSingle();
-  if (runError) return json({ error: runError.message }, 500);
+  if (runError) return dbError(runError);
   if (!runData) return json({ error: 'Run not found' }, 404);
   const { sops: sop, ...run } = runData as SopRunRow & { sops: SopRow };
 
@@ -541,7 +534,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       parsed.items.map((item) => checkRow(runId, item, email)),
       { onConflict: 'run_id,item_index', ignoreDuplicates: true }
     );
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   } else if (action === 'uncheck') {
     const itemIndex = body.itemIndex;
     if (typeof itemIndex !== 'number' || !Number.isInteger(itemIndex) || itemIndex < 0) {
@@ -552,7 +545,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .delete()
       .eq('run_id', runId)
       .eq('item_index', itemIndex);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     // Un-resolving covers skipped items too: the row goes either way. Runs
     // start implicitly with the first check, so they end implicitly when
@@ -564,7 +557,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     // row goes, that insert fails on the FK and their client retries as a
     // fresh start.
     const { data: remaining, error: remainingError } = await loadRunChecks(db, runId);
-    if (remainingError) return json({ error: remainingError.message }, 500);
+    if (remainingError) return dbError(remainingError);
     const remainingChecks = (remaining ?? []) as SopRunCheckRow[];
     if (remainingChecks.length === 0) {
       const { error: discardError } = await db
@@ -572,7 +565,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         .delete()
         .eq('id', runId)
         .eq('status', 'in_progress');
-      if (discardError) return json({ error: discardError.message }, 500);
+      if (discardError) return dbError(discardError);
       return json({ run: null, checks: [], discarded: true });
     }
     return json({
@@ -589,7 +582,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .delete()
       .eq('id', runId)
       .eq('status', 'in_progress');
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     return json({ run: null, checks: [], discarded: true });
   }
 
@@ -598,7 +591,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   // looked — and finish the run if that was the last of them (skipped items
   // count: the run is done once every item is accounted for).
   const { data: checks, error: checksError } = await loadRunChecks(db, runId);
-  if (checksError) return json({ error: checksError.message }, 500);
+  if (checksError) return dbError(checksError);
   const runChecks = (checks ?? []) as SopRunCheckRow[];
   const full = await completeIfFull(db, run, runChecks, email);
   if (full.error) return json({ error: full.error }, 500);
@@ -622,7 +615,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('sop_runs')
@@ -630,7 +623,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .eq('id', id)
     .select('id')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Run not found' }, 404);
 
   return json({ ok: true });

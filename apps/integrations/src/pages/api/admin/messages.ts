@@ -24,6 +24,7 @@
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireAdmin, requireStaff } from '@/lib/auth/admin';
 import { type AdminMessageRow, getDb } from '@/lib/db';
+import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
 import { BODY_MAX, normalizeBody, normalizeTitle, parseAudience } from '@/lib/messages/validate';
 import { notifyMessageAudienceWidened, notifyMessagePosted } from '@/lib/notifications/messages';
@@ -31,14 +32,6 @@ import { deleteBySource, markSourceRead } from '@/lib/notifications/notify';
 import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function viewerOf(gate: AdminGate): Promise<SopViewer> {
   return {
@@ -65,14 +58,7 @@ async function checkedAudience(
 async function readJson(request: Request): Promise<Record<string, unknown> | Response> {
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
+  return readJsonBody(request);
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -85,7 +71,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const viewer = await viewerOf(gate);
   const id = url.searchParams.get('id');
   if (id) {
-    if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
     const result = await loadMessageForViewer(db, viewer, id);
     if (!result.ok) return json({ error: result.error }, result.status);
     if (viewer.email) await markSourceRead(db, viewer.email, 'admin_message', id);
@@ -141,7 +127,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const message = data as AdminMessageRow;
 
   const notified = await notifyMessagePosted(db, message);
@@ -161,7 +147,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<AdminMessageRow> = {};
   // The audience before this edit, when the edit touches it — whoever the
@@ -211,7 +197,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Message not found' }, 404);
   const message = data as AdminMessageRow;
   const notified = previousAudience
@@ -234,10 +220,10 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id') ?? '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { error, count } = await db.from('admin_messages').delete({ count: 'exact' }).eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!count) return json({ error: 'Message not found' }, 404);
   await deleteBySource(db, 'admin_message', id);
 

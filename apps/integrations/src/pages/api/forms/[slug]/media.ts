@@ -23,11 +23,11 @@ import { loadAttachment, removeAttachments, storeAttachment } from '@/lib/boards
 import { summaryOf, UPLOAD_RATE } from '@/lib/boards/files';
 import { clientIp, isRateLimited } from '@/lib/boards/form-guard';
 import { formConfigOf, formQuestions } from '@/lib/boards/forms';
-import { type APIRoute, isUuidParam, json } from '@/lib/boards/route';
 import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
 import { isBoardSlug, KEY_RE } from '@/lib/boards/types';
 import type { BoardFormRow, BoardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { type APIRoute, isUuidParam, json } from '@/lib/http/route';
 
 /** The actor on a public upload. */
 const FORM_ACTOR = 'form';

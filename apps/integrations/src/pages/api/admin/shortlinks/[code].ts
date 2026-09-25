@@ -6,14 +6,9 @@
 import { deleteShortLink, getShortLink, updateShortLinkLabel } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { SHORT_LINK_LIMITS } from '@/lib/shortlinks/alias';
 import { listStandaloneShortLinks } from '@/lib/shortlinks/server';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /** The standalone record for `code`, or null when it is missing or campaign-owned. */
 async function standalone(code: string) {

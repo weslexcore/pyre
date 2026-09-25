@@ -15,6 +15,7 @@
 // `parent_id` is not here. Sub-goals had a UI when goals were their own
 // page; a goal is reached from its board now, and boards do not nest.
 
+import { isUuid } from '@/lib/http/json';
 import { isNoteDate } from '@/lib/shift-notes/validate';
 import type { GoalStatusValue, KpiDirectionValue } from './types';
 import { GOAL_LIMITS, isArea, isGoalStatus, isKpiDirection } from './types';
@@ -25,11 +26,7 @@ function fail<T>(error: string): ParseResult<T> {
   return { ok: false, error };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_RE.test(value);
-}
+export { isUuid };
 
 /** A real YYYY-MM-DD date, re-exported so callers need one import. */
 export const isYmd = isNoteDate;

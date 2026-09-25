@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentSuggestionRunRow } from '@/lib/db';
+import { isUniqueViolation } from '@/lib/http/json';
 import type { SourceRecord } from './sources';
 
 /** A run still queued or running after this long is treated as failed. */
@@ -48,7 +49,7 @@ export async function claimAutoRun(
     .select('*')
     .single();
   if (error) {
-    if (error.code !== '23505')
+    if (!isUniqueViolation(error))
       console.error('[suggestions] could not file auto run:', error.message);
     return null;
   }

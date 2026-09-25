@@ -11,6 +11,7 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { isUniqueViolation } from '@/lib/http/json';
 import {
   assignMemberTag,
   createMember,
@@ -118,7 +119,7 @@ export async function redeemReferral(params: {
     .select('id')
     .single();
   if (error || !inserted) {
-    if (error?.code === '23505') return { outcome: 'already-redeemed', status: 'pending' };
+    if (isUniqueViolation(error)) return { outcome: 'already-redeemed', status: 'pending' };
     log.error('Redemption insert failed', error);
     return { outcome: 'unavailable', reason: 'db-insert-failed' };
   }

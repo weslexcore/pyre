@@ -20,18 +20,13 @@ import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { computeDailyCosts } from '@/lib/business/costs';
 import { type BusinessCostRow, type BusinessMetricRow, getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { HOST_API_SOURCE } from '@/lib/reports/activity';
 import { hoursSince, nextSyncAfter, SYNC_STALE_HOURS } from '@/lib/reports/schedule';
 import { DAILY_REPORTS } from '@/lib/reports/sync';
 import { computeDailyLabor } from '@/lib/schedule/labor';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export type BucketGroup = 'day' | 'week' | 'month';
 
@@ -251,7 +246,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     lastReportRes.error ??
     lastActivityRes.error ??
     costsRes.error;
-  if (queryError) return json({ error: queryError.message }, 500);
+  if (queryError) return dbError(queryError);
 
   const metricRows = (metricsRes.data ?? []) as BusinessMetricRow[];
   const byDate = new Map<string, Map<string, number>>();

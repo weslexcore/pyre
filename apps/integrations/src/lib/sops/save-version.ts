@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SopRow } from '@/lib/db';
+import { isUniqueViolation } from '@/lib/http/json';
 import { notifySopSaved } from '@/lib/notifications/sops';
 
 /** Generous for a procedure document, small enough to keep payloads sane. */
@@ -60,7 +61,7 @@ export async function saveSopVersion(
     ...(input.suggestionId ? { suggestion_id: input.suggestionId } : {}),
   });
   if (versionError) {
-    if (versionError.code === '23505') {
+    if (isUniqueViolation(versionError)) {
       return { ok: false, conflict: true, error: SOP_CONFLICT_ERROR };
     }
     return { ok: false, status: 500, error: versionError.message };

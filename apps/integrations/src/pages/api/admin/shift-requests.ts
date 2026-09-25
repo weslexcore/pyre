@@ -17,9 +17,10 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
-import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import type { AdminGate } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow, type ShiftRequestRow, type StaffRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { dbError, gateMutation, isUniqueViolation, json, readJsonBody } from '@/lib/http/route';
 import {
   actorFromGate,
   describeShift,
@@ -31,12 +32,6 @@ import { formatDateLabel, formatWindowLabel } from '@/lib/schedule/sub';
 import { TIME_RE } from '@/lib/schedule/validate';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /**
  * The staff row belonging to the caller's login email, or null when their
@@ -51,28 +46,14 @@ async function selfStaffId(db: SupabaseClient, gate: AdminGate): Promise<string 
   return rows.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null;
 }
 
-async function gateMutation(
+async function gateSchedule(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<{ gate: AdminGate; canManage: boolean } | Response> {
-  const gate = await requirePage(cookies, '/admin/schedule');
+  const gate = await gateMutation(cookies, request, '/admin/schedule');
   if (gate instanceof Response) return gate;
 
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-
   return { gate, canManage: hasScheduleManage(gate.access) };
-}
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
 }
 
 /** Today's date in the schedule's wall-clock timezone (America/New_York). */
@@ -81,7 +62,7 @@ const todayEastern = (): string => utcToEastern(new Date().toISOString()).date;
 // --- POST: an employee asks to work a shift -------------------------------
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const auth = await gateMutation(cookies, request);
+  const auth = await gateSchedule(cookies, request);
   if (auth instanceof Response) return auth;
 
   const db = getDb();
@@ -134,7 +115,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('id, shift_date, label, status, is_draft')
     .eq('id', shiftId)
     .maybeSingle();
-  if (shiftError) return json({ error: shiftError.message }, 500);
+  if (shiftError) return dbError(shiftError);
   if (!shift || shift.is_draft) return json({ error: 'Shift not found' }, 404);
   if (shift.status !== 'active') return json({ error: 'Shift is cancelled' }, 400);
   if (shift.shift_date < todayEastern()) {
@@ -147,7 +128,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .eq('shift_id', shiftId)
     .eq('staff_id', staffId)
     .maybeSingle();
-  if (assignedError) return json({ error: assignedError.message }, 500);
+  if (assignedError) return dbError(assignedError);
   if (existing) return json({ error: "You're already on this shift" }, 409);
 
   const { data, error } = await db
@@ -162,11 +143,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) {
-    // 23505 = the partial unique index on pending (shift_id, staff_id)
-    if (error.code === '23505') return json({ error: 'Already requested — pending review' }, 409);
-    return json({ error: error.message }, 500);
-  }
+  // 23505 = the partial unique index on pending (shift_id, staff_id)
+  if (error) return dbError(error, 'Already requested — pending review');
 
   const request_ = data as ShiftRequestRow;
   await logScheduleChange(db, {
@@ -188,7 +166,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 // --- PATCH: a schedule manager approves or denies -------------------------
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const auth = await gateMutation(cookies, request);
+  const auth = await gateSchedule(cookies, request);
   if (auth instanceof Response) return auth;
   if (!auth.canManage) return json({ error: 'Forbidden' }, 403);
 
@@ -213,7 +191,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Request not found' }, 404);
   const pending = existing as ShiftRequestRow;
   if (pending.status !== 'pending') {
@@ -230,7 +208,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('id, shift_date, label, starts_at, ends_at, status')
     .eq('id', pending.shift_id)
     .maybeSingle();
-  if (shiftError) return json({ error: shiftError.message }, 500);
+  if (shiftError) return dbError(shiftError);
   const shift = shiftRow as {
     id: string;
     shift_date: string;
@@ -279,7 +257,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .single();
     // 23505 = already assigned by hand in the meantime — the approval's goal
     // is already met, so just close out the request.
-    if (error && error.code !== '23505') return json({ error: error.message }, 500);
+    if (error && !isUniqueViolation(error)) return dbError(error);
     assignment = (data as ShiftAssignmentRow | null) ?? null;
 
     if (assignment) {
@@ -306,7 +284,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (updateError) return json({ error: updateError.message }, 500);
+  if (updateError) return dbError(updateError);
 
   const decided = updated as ShiftRequestRow;
   await logScheduleChange(db, {
@@ -360,7 +338,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 // --- DELETE: withdraw a pending request -----------------------------------
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const auth = await gateMutation(cookies, request);
+  const auth = await gateSchedule(cookies, request);
   if (auth instanceof Response) return auth;
 
   const db = getDb();
@@ -374,7 +352,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Request not found' }, 404);
 
   const row = existing as ShiftRequestRow;
@@ -389,7 +367,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error, count } = await db.from('shift_requests').delete({ count: 'exact' }).eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!count) return json({ error: 'Request not found' }, 404);
 
   await logScheduleChange(db, {

@@ -5,11 +5,10 @@
 
 import type { AstroCookies } from 'astro';
 import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
+import { json } from '@/lib/http/json';
 import { type DashboardAccess, getAccess } from './access';
 import { validateSession } from './session';
 import type { MomenceUserProfile } from './types';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 export interface AdminGate {
   user: MomenceUserProfile;
@@ -23,20 +22,17 @@ async function requireAccess(
   const { session } = await validateSession(cookies);
 
   if (!session.isAuthenticated || !session.user) {
-    return new Response(JSON.stringify({ error: 'Not authenticated' }), {
-      status: 401,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Not authenticated' }, 401);
   }
 
   const access = session.user.email ? await getAccess(session.user.email) : null;
   if (!access || !isAllowed(access)) {
-    return new Response(
-      JSON.stringify({
+    return json(
+      {
         error: 'Forbidden',
         detected: { email: session.user.email || null, userId: session.user.id || null },
-      }),
-      { status: 403, headers: JSON_HEADERS }
+      },
+      403
     );
   }
 
@@ -109,10 +105,7 @@ export function assertSameOrigin(request: Request): Response | null {
   if (!origin) return null;
 
   if (origin !== new URL(request.url).origin) {
-    return new Response(JSON.stringify({ error: 'Cross-origin request rejected' }), {
-      status: 403,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'Cross-origin request rejected' }, 403);
   }
 
   return null;

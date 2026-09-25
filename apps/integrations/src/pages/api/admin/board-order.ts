@@ -13,9 +13,9 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
-import { type APIRoute, beginMutation, isUuidParam, json } from '@/lib/boards/route';
 import { loadSection, loadSections } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
+import { type APIRoute, beginMutation, dbError, isUuidParam, json } from '@/lib/http/route';
 
 function uniqueUuids(value: unknown, max: number): string[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > max) return null;
@@ -43,7 +43,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     if (!ids.every((id) => known.has(id))) return json({ error: 'Unknown section' }, 400);
     for (const [index, id] of ids.entries()) {
       const { error } = await db.from('board_sections').update({ sort_order: index }).eq('id', id);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 
@@ -62,7 +62,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
         .from('boards')
         .update({ section_id: sectionId, sort_order: (index + 1) * 10 })
         .eq('id', id);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 

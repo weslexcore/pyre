@@ -12,17 +12,12 @@
 import type { APIRoute } from 'astro';
 import { isCronAuthorized, unauthorizedResponse } from '@/lib/cron/auth';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import { SUGGEST_RETRIES } from '@/lib/suggestions/dispatch';
 import { isSuggestionSourceType, isUuid } from '@/lib/suggestions/types';
 import { runSuggestJob } from '@/lib/suggestions/worker';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isCronAuthorized(request)) return unauthorizedResponse();

@@ -19,6 +19,7 @@ import type {
   AgentSuggestionSourceType,
   AgentSuggestionStatus,
 } from '@/lib/db';
+import { isUuid } from '@/lib/http/json';
 
 export type SuggestionKind = AgentSuggestionKind;
 export type SuggestionStatus = AgentSuggestionStatus;
@@ -122,12 +123,9 @@ export type SuggestionPayload = PayloadByKind[SuggestionKind];
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID_RE.test(value);
-}
+export { isUuid };
 
 function asObject(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === 'object' && !Array.isArray(raw)

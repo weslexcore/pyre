@@ -16,13 +16,8 @@ import { getDb } from '@/lib/db';
 import { rosterForSession, sessionsOnDate } from '@/lib/guests/roster';
 import { loadFields } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
+import { json } from '@/lib/http/route';
 import { getPeopleNames } from '@/lib/sops/people';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SESSION_ID_RE = /^\d{1,20}$/;

@@ -11,6 +11,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import {
   ENTRY_TYPES,
   type EntryType,
@@ -23,12 +24,6 @@ import {
   type Tub,
 } from '@/lib/water/charts';
 import { waterTestsToCsv } from '@/lib/water/csv';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
@@ -169,7 +164,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (since) csvQuery = csvQuery.gte('created_at', since);
 
     const { data: csvRows, error: csvError } = await csvQuery;
-    if (csvError) return json({ error: csvError.message }, 500);
+    if (csvError) return dbError(csvError);
 
     const filename = `water-log-${tub ?? 'all'}-${entryType ?? 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
     return new Response(waterTestsToCsv((csvRows ?? []) as WaterTestRow[]), {
@@ -197,7 +192,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (since) query = query.gte('created_at', since);
 
   const { data, error, count } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ records: (data ?? []) as WaterTestRow[], total: count ?? 0, limit, offset });
 };
@@ -275,7 +270,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ record: data as WaterTestRow }, 201);
 };
@@ -320,7 +315,7 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .select('id, recorded_by, entry_type')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Entry not found' }, 404);
 
   // Same rule as DELETE: the log is an audit record, so only the person who
@@ -394,7 +389,7 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ record: data as WaterTestRow });
 };
@@ -417,7 +412,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('id, recorded_by')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Entry not found' }, 404);
 
   // Only the person who logged an entry can remove it — the log is an audit
@@ -428,7 +423,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('water_tests').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

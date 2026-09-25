@@ -23,6 +23,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import { fetchMomenceEvents, SESSION_TYPES } from '@/lib/momence-events';
 import { runScheduleLint } from '@/lib/schedule-lint/job';
 import { countFindings, runLint } from '@/lib/schedule-lint/lint';
@@ -54,12 +55,6 @@ import {
 import { HORIZON_DAYS, SCHEDULE_LINT_PAGE } from '@/lib/schedule-lint/types';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /** The page's own budget for a real run: leave headroom under the function's 60s. */
 const TIME_BUDGET_MS = 50_000;

@@ -16,12 +16,7 @@ import {
 } from '@/lib/email/dev-mode';
 import { JOURNEYS } from '@/lib/email/journeys/registry';
 import { getJourneySettings, setJourneyEnabled } from '@/lib/email/journeys/settings';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { json } from '@/lib/http/route';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

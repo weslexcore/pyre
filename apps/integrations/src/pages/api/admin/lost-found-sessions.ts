@@ -14,14 +14,9 @@
 
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { attendeesInWindow } from '@/lib/lost-found/attendees';
 import { MAX_WINDOW_HOURS } from '@/lib/lost-found/types';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const PAGE = '/admin/lost-found';
 const HOUR_MS = 3_600_000;

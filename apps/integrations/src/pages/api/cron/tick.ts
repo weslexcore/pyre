@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { isCronAuthorized, unauthorizedResponse } from '@/lib/cron/auth';
 import { CRON_JOBS, type CronJobContext } from '@/lib/cron/jobs';
+import { json } from '@/lib/http/route';
 
 export const prerender = false;
 
@@ -37,12 +38,12 @@ const handler: APIRoute = async ({ request, url }) => {
     ]);
     const journey = JOURNEYS.find((j) => j.id === enrollJourneyId);
     if (!journey) {
-      return new Response(
-        JSON.stringify({
+      return json(
+        {
           error: `Unknown journey '${enrollJourneyId}'`,
           known: JOURNEYS.map((j) => j.id),
-        }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        },
+        400
       );
     }
     const member = await fetchHostMember(Number.parseInt(enrollMemberId, 10));
@@ -52,18 +53,12 @@ const handler: APIRoute = async ({ request, url }) => {
       firstName: member.firstName,
       lastName: member.lastName,
     });
-    return new Response(JSON.stringify({ enrolled: member.email, journey: journey.id, outcome }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ enrolled: member.email, journey: journey.id, outcome });
   }
 
   const jobs = only ? CRON_JOBS.filter((j) => j.name === only) : CRON_JOBS;
   if (only && jobs.length === 0) {
-    return new Response(
-      JSON.stringify({ error: `Unknown job '${only}'`, known: CRON_JOBS.map((j) => j.name) }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return json({ error: `Unknown job '${only}'`, known: CRON_JOBS.map((j) => j.name) }, 400);
   }
 
   const ctx: CronJobContext = {
@@ -92,10 +87,7 @@ const handler: APIRoute = async ({ request, url }) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ dryRun, jobs: results, totalDurationMs: Date.now() - started }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
+  return json({ dryRun, jobs: results, totalDurationMs: Date.now() - started });
 };
 
 // GET for manual curl testing, POST for QStash (its default publish method).

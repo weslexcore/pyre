@@ -25,17 +25,12 @@ import {
 import type { APIRoute } from 'astro';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const MAX_SHIFTS = 40;
 const MAX_ASSIGNMENTS = 120;
@@ -128,7 +123,7 @@ export const POST: APIRoute = async ({ request }) => {
     db.from('time_off').select('*'),
   ]);
   const refError = staffRes.error ?? liveShiftsRes.error ?? timeOffRes.error;
-  if (refError) return json({ error: refError.message }, 500);
+  if (refError) return dbError(refError);
 
   const staff = (staffRes.data ?? []) as StaffRow[];
   const staffById = new Map(staff.map((s) => [s.id, s]));
@@ -270,7 +265,7 @@ export const POST: APIRoute = async ({ request }) => {
         activeNearby.map((s) => s.id)
       )
       .eq('is_draft', false);
-    if (liveError) return json({ error: liveError.message }, 500);
+    if (liveError) return dbError(liveError);
     liveAssignments = (data ?? []) as LiveAssignment[];
   }
 
@@ -410,7 +405,7 @@ export const POST: APIRoute = async ({ request }) => {
     .select('id')
     .eq('week_start', weekStart)
     .eq('status', 'draft');
-  if (openError) return json({ error: openError.message }, 500);
+  if (openError) return dbError(openError);
   for (const prior of openProposals ?? []) {
     // Remaining draft rows die with the supersede; accepted rows (is_draft
     // already false) keep their proposal_id for provenance and are untouched.
@@ -424,7 +419,7 @@ export const POST: APIRoute = async ({ request }) => {
     ];
     for (const op of deletes) {
       const { error } = await op;
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 
@@ -441,7 +436,7 @@ export const POST: APIRoute = async ({ request }) => {
     })
     .select('id')
     .single();
-  if (proposalError) return json({ error: proposalError.message }, 500);
+  if (proposalError) return dbError(proposalError);
   const proposalId = proposal.id as string;
 
   const shiftIdByKey = new Map<string, string>();
@@ -456,7 +451,7 @@ export const POST: APIRoute = async ({ request }) => {
       })
       .select('id')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     shiftIdByKey.set(draft.key, data.id as string);
   }
 
@@ -474,7 +469,7 @@ export const POST: APIRoute = async ({ request }) => {
         is_draft: true,
       }))
     );
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   // The rationale doubles as the agent's reply in the draft conversation

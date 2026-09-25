@@ -21,18 +21,13 @@ import {
   SCHEDULE_MANAGE,
 } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { requireAdmin } from '@/lib/auth/admin';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
+import { dbError, gateMutation, json, sessionEmail } from '@/lib/http/route';
 import { findMemberByEmail } from '@/lib/momence/host-api';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 // Tool hrefs plus the manage capabilities (see adminTools.ts).
 // Each manage capability implies view access to the page it governs, so a row
@@ -98,15 +93,12 @@ function parsePages(value: unknown, boardSlugs: Set<string>): string[] | Respons
   return pages;
 }
 
-async function gateMutation(
+async function gateAdmin(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<{ email: string } | Response> {
-  const gate = await requireAdmin(cookies);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  return { email: (gate.user.email ?? '').toLowerCase() };
+  const gate = await gateMutation(cookies, request, requireAdmin);
+  return gate instanceof Response ? gate : { email: sessionEmail(gate) };
 }
 
 /** True when `row` is the only admin row in the table. */
@@ -187,7 +179,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateAdmin(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -253,17 +245,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .single();
 
-  if (error) {
-    if (error.code === '23505') return json({ error: `${email} is already on this list` }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, `${email} is already on this list`);
 
   invalidateAccessCache();
   return json({ person: redactCalendarToken(data as StaffRow), momenceMatch: member.matched }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateAdmin(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -365,17 +354,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
 
-  if (error) {
-    if (error.code === '23505') return json({ error: 'That email is already in use' }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, 'That email is already in use');
 
   invalidateAccessCache();
   return json({ person: redactCalendarToken(data as StaffRow), momenceMatch });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateAdmin(cookies, request);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -403,11 +389,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .from('staff')
       .update({ active: false, is_admin: false, pages: [] })
       .eq('id', id);
-    if (deactivateError) return json({ error: deactivateError.message }, 500);
+    if (deactivateError) return dbError(deactivateError);
     invalidateAccessCache();
     return json({ ok: true, deactivated: true });
   }
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   invalidateAccessCache();
   return json({ ok: true, deactivated: false });

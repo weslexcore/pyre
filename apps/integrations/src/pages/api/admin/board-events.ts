@@ -17,17 +17,18 @@ import { canManageBoards, canViewBoard } from '@/lib/boards/access';
 import { addCardComment } from '@/lib/boards/comment';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
 import { mentionPeople } from '@/lib/boards/mentions';
+import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
+import { BOARD_LIMITS } from '@/lib/boards/types';
+import type { BoardEventRow, GoalRow } from '@/lib/db';
 import {
   type APIRoute,
   beginMutation,
   beginRead,
   type Db,
+  dbError,
   isUuidParam,
   json,
-} from '@/lib/boards/route';
-import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
-import { BOARD_LIMITS } from '@/lib/boards/types';
-import type { BoardEventRow, GoalRow } from '@/lib/db';
+} from '@/lib/http/route';
 import { notifyGoalComment } from '@/lib/notifications/goals';
 import { markSourceRead } from '@/lib/notifications/notify';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -154,7 +155,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // Notify the owner and explicitly mentioned users who can read the goal.
   if (goalId) {

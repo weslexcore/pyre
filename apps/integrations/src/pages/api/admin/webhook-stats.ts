@@ -10,8 +10,7 @@ import {
 } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { json } from '@/lib/http/route';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_DAYS = 7;
@@ -74,20 +73,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         durationMs,
       }));
 
-    return new Response(
-      JSON.stringify({
-        generatedAt: new Date(now).toISOString(),
-        days: dailyStats,
-        last24h: summarizeLast24h(last24hRecords),
-        recentFailures,
-      }),
-      { status: 200, headers: JSON_HEADERS }
-    );
+    return json({
+      generatedAt: new Date(now).toISOString(),
+      days: dailyStats,
+      last24h: summarizeLast24h(last24hRecords),
+      recentFailures,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: message }, 500);
   }
 };

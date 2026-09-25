@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { htmlPage } from '@/lib/http/page';
 import { verifyDecisionToken } from '@/lib/partner/decision-token';
 import { applyDecision } from '@/lib/partner/verification';
 
@@ -11,10 +12,7 @@ export const prerender = false;
 // render a <form method="post"> button page instead of acting on GET.
 
 function page(title: string, body: string, status: number): Response {
-  return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Pyre — ${title}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1a1a1a}h1{font-size:1.25rem}</style></head><body><h1>Pyre Sauna</h1><p>${body}</p></body></html>`,
-    { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-  );
+  return htmlPage({ title, body: `<p>${body}</p>`, status });
 }
 
 export const GET: APIRoute = async ({ url }) => {

@@ -17,6 +17,7 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { createAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
   type ConversationTurn,
@@ -29,12 +30,6 @@ import { normalizeEmail } from '@/lib/sops/levels';
 export const prerender = false;
 
 const PAGE = '/admin/ask';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /** Rows scanned for the list — plenty of questions for one person's sidebar. */
 const MAX_ROWS = 600;
@@ -72,7 +67,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       .eq('asked_by', email)
       .order('asked_at', { ascending: false })
       .limit(MAX_ROWS);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     return json({
       conversations: groupConversations((data ?? []) as HistoryRow[], MAX_CONVERSATIONS),
     });
@@ -85,7 +80,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     .eq('session_id', sessionId)
     .order('asked_at', { ascending: true })
     .limit(MAX_TURNS);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const rows = (data ?? []) as TurnRow[];
   if (rows.length === 0) return json({ error: 'Conversation not found' }, 404);

@@ -16,6 +16,7 @@ import {
   type ReferralTierRow,
   type ReferrerRow,
 } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { findMemberByEmail, getTagIdByName, invalidateTagCache } from '@/lib/momence/host-api';
 import { revokeRedemption, revokeReward } from '@/lib/referral/admin-actions';
 import { createPartnerReferrer, getOrCreateMemberReferrer } from '@/lib/referral/referrers';
@@ -24,11 +25,6 @@ import { getRewardTagName, invalidateTierCache } from '@/lib/referral/registry';
 export const prerender = false;
 
 const PAGE = '/admin/referrals';
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const REDEMPTION_STATUSES = ['pending', 'redeemed', 'converted', 'expired', 'revoked'] as const;
 const DEFAULT_LIMIT = 100;
@@ -86,7 +82,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     db.from('referral_tiers').select('*').order('percent'),
     db.from('referral_redemptions').select('status'),
   ]);
-  if (referrersError) return json({ error: referrersError.message }, 500);
+  if (referrersError) return dbError(referrersError);
 
   const counts: Record<string, number> = {};
   for (const row of (allStatuses ?? []) as { status: string }[]) {
@@ -206,7 +202,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           if (error.code === '23503') {
             return json({ error: 'No tier for that percent — create the tier first' }, 400);
           }
-          return json({ error: error.message }, 500);
+          return dbError(error);
         }
         if (!data) return json({ error: 'No such referrer' }, 404);
         return json({ ok: true, referrer: data });
@@ -223,11 +219,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           .insert({ percent, tag_name: tagName })
           .select('*')
           .single<ReferralTierRow>();
-        if (error) {
-          if (error.code === '23505')
-            return json({ error: 'That percent or tag already exists' }, 409);
-          return json({ error: error.message }, 500);
-        }
+        if (error) return dbError(error, 'That percent or tag already exists');
         invalidateTierCache();
         await invalidateTagCache();
         return json({ ok: true, tier: data });
@@ -242,7 +234,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           .eq('percent', percent)
           .select('*')
           .maybeSingle<ReferralTierRow>();
-        if (error) return json({ error: error.message }, 500);
+        if (error) return dbError(error);
         if (!data) return json({ error: 'No such tier' }, 404);
         invalidateTierCache();
         return json({ ok: true, tier: data });

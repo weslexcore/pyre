@@ -8,6 +8,7 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow, type ReferrerRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { isUniqueViolation } from '@/lib/http/json';
 import { assignMemberTag, getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
 import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { getReferrer, getReferrerByMemberId, getRewardTagName } from './registry';
@@ -73,7 +74,7 @@ async function grantReward(
     reward_tag_name: rewardTagName,
   });
   if (error) {
-    if (error.code !== '23505') log.error('Reward insert failed', error);
+    if (!isUniqueViolation(error)) log.error('Reward insert failed', error);
     return;
   }
 

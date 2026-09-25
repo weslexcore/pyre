@@ -13,12 +13,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb, type SopCategoryRow } from '@/lib/db';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { dbError, json } from '@/lib/http/route';
 
 // Matches the sop_categories check constraint.
 const MAX_CATEGORY = 60;
@@ -75,7 +70,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('name')
     .eq('name', name)
     .maybeSingle();
-  if (existingError) return json({ error: existingError.message }, 500);
+  if (existingError) return dbError(existingError);
   if (existing) return json({ error: `A section named "${name}" already exists` }, 409);
 
   // Place it last, after every section that already has a position.
@@ -85,7 +80,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .order('sort_order', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (lastError) return json({ error: lastError.message }, 500);
+  if (lastError) return dbError(lastError);
   const sortOrder = lastRanked ? (lastRanked.sort_order as number) + 1 : 0;
 
   const { data, error } = await db
@@ -93,10 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ name, sort_order: sortOrder })
     .select('*')
     .single();
-  if (error) {
-    if (error.code === '23505') return json({ error: `A section named "${name}" exists` }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, `A section named "${name}" exists`);
 
   return json({ category: data as SopCategoryRow }, 201);
 };
@@ -137,7 +129,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('name')
     .eq('name', newName)
     .maybeSingle();
-  if (rankedError) return json({ error: rankedError.message }, 500);
+  if (rankedError) return dbError(rankedError);
   if (collisions > 0 || rankedCollision) {
     return json({ error: `A section named "${newName}" already exists` }, 409);
   }
@@ -149,7 +141,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .from('sops')
     .update({ category: newName })
     .eq('category', name);
-  if (sopsError) return json({ error: sopsError.message }, 500);
+  if (sopsError) return dbError(sopsError);
 
   // Carry the position across: delete the old row, insert the new one at the
   // same rank (the primary key is the name, so this can't be an update).
@@ -158,16 +150,16 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('sort_order')
     .eq('name', name)
     .maybeSingle();
-  if (existingError) return json({ error: existingError.message }, 500);
+  if (existingError) return dbError(existingError);
 
   const { error: insertError } = await db
     .from('sop_categories')
     .insert({ name: newName, sort_order: existing ? (existing.sort_order as number) : 0 });
-  if (insertError) return json({ error: insertError.message }, 500);
+  if (insertError) return dbError(insertError);
 
   if (existing) {
     const { error: deleteError } = await db.from('sop_categories').delete().eq('name', name);
-    if (deleteError) return json({ error: deleteError.message }, 500);
+    if (deleteError) return dbError(deleteError);
   }
 
   return json({ ok: true, name: newName });
@@ -200,7 +192,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('sop_categories').delete().eq('name', name);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

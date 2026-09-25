@@ -5,6 +5,8 @@ import {
   type WebhookTracer,
 } from '@pyre/webhook-core';
 import { upsertResendContact } from '@/lib/email/audience';
+import { hasBearer } from '@/lib/http/bearer';
+import { json } from '@/lib/http/route';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/webhooks/momence';
 
@@ -76,22 +78,15 @@ async function syncMember(
 }
 
 const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
-  const authHeader = request.headers.get('Authorization');
   const expectedSecret = import.meta.env.MOMENCE_BACKFILL_SECRET;
 
   if (!expectedSecret) {
     log.error('MOMENCE_BACKFILL_SECRET not configured');
-    return new Response(JSON.stringify({ error: 'Not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Not configured' }, 500);
   }
 
-  if (authHeader !== `Bearer ${expectedSecret}`) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (!hasBearer(request, expectedSecret, 'momence-backfill')) {
+    return json({ error: 'Unauthorized' }, 401);
   }
 
   const offset = Number.parseInt(url.searchParams.get('offset') ?? '0', 10);
@@ -100,10 +95,7 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
   const dryRun = url.searchParams.get('dryRun') === 'true';
 
   if (targetParam !== 'mailchimp' && targetParam !== 'resend' && targetParam !== 'both') {
-    return new Response(
-      JSON.stringify({ error: 'Invalid target — use mailchimp, resend, or both' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return json({ error: 'Invalid target — use mailchimp, resend, or both' }, 400);
   }
   const target: BackfillTarget = targetParam;
 
@@ -131,29 +123,20 @@ const handler: TracedAPIRoute = async ({ request, url }, tracer) => {
 
     log.info(`Backfill complete: ${successes} synced, ${failures.length} failed`);
 
-    return new Response(
-      JSON.stringify({
-        totalInMomence: totalCount,
-        target,
-        dryRun,
-        processed: results.length,
-        successes,
-        failures,
-        offset,
-        limit,
-        nextOffset: offset + members.length < totalCount ? offset + members.length : null,
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return json({
+      totalInMomence: totalCount,
+      target,
+      dryRun,
+      processed: results.length,
+      successes,
+      failures,
+      offset,
+      limit,
+      nextOffset: offset + members.length < totalCount ? offset + members.length : null,
+    });
   } catch (error) {
     log.error('Backfill failed', error);
-    return new Response(JSON.stringify({ error: 'Backfill failed' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Backfill failed' }, 500);
   }
 };
 

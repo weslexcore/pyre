@@ -16,9 +16,9 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
 import { monthGridRange, monthStartOf } from '@/lib/boards/calendar';
-import { type APIRoute, beginRead, json, storeError } from '@/lib/boards/route';
 import { loadBoards, loadBoardsCalendar } from '@/lib/boards/store';
 import { isYmd } from '@/lib/goals/validate';
+import { type APIRoute, beginRead, json, storeError } from '@/lib/http/route';
 import { todayEastern } from '@/lib/shift-notes/validate';
 
 /**

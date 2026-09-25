@@ -7,15 +7,10 @@ import { codeExists } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { parseExternalUrl } from '@/lib/campaigns/links';
+import { json } from '@/lib/http/route';
 import { normalizeAlias, SHORT_LINK_LIMITS } from '@/lib/shortlinks/alias';
 import { findShortLinksTo } from '@/lib/shortlinks/server';
 import type { ShortLinkCheckResponse } from '@/lib/shortlinks/types';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');

@@ -7,8 +7,9 @@
 
 import type { AssignmentDuty, AssignmentRole } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
+import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import { notifyAssignmentChange, type ShiftForNotice } from '@/lib/notifications/schedule';
 import {
   actorFromGate,
@@ -24,23 +25,6 @@ import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-async function gateMutation(
-  cookies: Parameters<APIRoute>[0]['cookies'],
-  request: Request
-): Promise<AdminGate | Response> {
-  const gate = await requireScheduleManage(cookies);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  return gate;
-}
 
 /** "'Morning' on 2026-08-14", looked up for log summaries; tolerant of a
  * just-deleted or missing shift so logging can't fail the mutation. */
@@ -61,19 +45,8 @@ function shiftDescription(shift: ShiftForNotice | null): string {
   return shift ? describeShift(shift) : 'a shift';
 }
 
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
-
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -96,7 +69,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('id, shift_date, label, starts_at, ends_at, status, is_draft')
     .eq('id', shiftId)
     .maybeSingle();
-  if (shiftError) return json({ error: shiftError.message }, 500);
+  if (shiftError) return dbError(shiftError);
   if (!shift) return json({ error: 'Shift not found' }, 404);
   if (shift.status !== 'active') return json({ error: 'Shift is cancelled' }, 400);
 
@@ -119,11 +92,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) {
-    // 23505 = unique_violation on (shift_id, staff_id)
-    if (error.code === '23505') return json({ error: 'Already assigned to this shift' }, 409);
-    return json({ error: error.message }, 500);
-  }
+  // 23505 = unique_violation on (shift_id, staff_id)
+  if (error) return dbError(error, 'Already assigned to this shift');
 
   const assignment = data as ShiftAssignmentRow;
   await logScheduleChange(db, {
@@ -146,7 +116,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -163,7 +133,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Assignment not found' }, 404);
 
   // Validated against what the row already holds, so an assignment carrying
@@ -188,7 +158,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   let assignment = data as ShiftAssignmentRow;
   const actor = actorFromGate(gate);
@@ -252,7 +222,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -271,7 +241,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .select('*')
       .eq('shift_id', shiftId)
       .eq('is_draft', false);
-    if (fetchError) return json({ error: fetchError.message }, 500);
+    if (fetchError) return dbError(fetchError);
     const assignments = (rows ?? []) as ShiftAssignmentRow[];
     if (assignments.length === 0) return json({ ok: true, cleared: 0 });
 
@@ -280,7 +250,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .delete()
       .eq('shift_id', shiftId)
       .eq('is_draft', false);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     const shift = await loadShiftLite(db, shiftId);
     const shiftDesc = shiftDescription(shift);
@@ -314,14 +284,14 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return dbError(fetchError);
   if (!existing) return json({ error: 'Assignment not found' }, 404);
 
   const { error, count } = await db
     .from('shift_assignments')
     .delete({ count: 'exact' })
     .eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!count) return json({ error: 'Assignment not found' }, 404);
 
   const assignment = existing as ShiftAssignmentRow;

@@ -10,15 +10,10 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { parseExternalUrl } from '@/lib/campaigns/links';
 import { LANDING_ORIGIN, shortUrlFor } from '@/lib/campaigns/server';
+import { json } from '@/lib/http/route';
 import { aliasError, normalizeAlias, SHORT_LINK_LIMITS } from '@/lib/shortlinks/alias';
 import { listStandaloneShortLinks } from '@/lib/shortlinks/server';
 import type { ShortLinkListResponse, StandaloneShortLink } from '@/lib/shortlinks/types';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 function text(value: unknown, limit: number): string {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';

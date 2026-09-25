@@ -8,6 +8,7 @@
 // bytes live on the rows, which the API hands back beside the card.
 
 import type { BoardAttachmentRow, BoardFieldRow } from '@/lib/db';
+import { isUuid } from '@/lib/http/json';
 import { BOARD_LIMITS } from './types';
 
 export {
@@ -37,11 +38,7 @@ export const FILE_NAME_MAX = 200;
 /** What a public form may upload in ten minutes from one address. */
 export const UPLOAD_RATE = { limit: 30, windowSeconds: 600 } as const;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function isAttachmentId(value: unknown): value is string {
-  return typeof value === 'string' && UUID_RE.test(value);
-}
+export const isAttachmentId = isUuid;
 
 /**
  * A raw `files` answer as it is stored: the ids that look like ids, each

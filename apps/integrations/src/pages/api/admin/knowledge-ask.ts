@@ -22,6 +22,7 @@
 import type { APIRoute } from 'astro';
 import { agentsEveConfig } from '@/lib/agent/eve-config';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
   buildAskMessage,
@@ -49,12 +50,6 @@ import { normalizeEmail } from '@/lib/sops/levels';
 export const prerender = false;
 
 const PAGE = '/admin/ask';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const AGENT_BUSY_ERROR = 'The assistant is still answering your last question — give it a moment';
 

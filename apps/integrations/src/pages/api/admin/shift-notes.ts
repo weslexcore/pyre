@@ -47,6 +47,7 @@ import {
   type ShiftNoteReplyRow,
   type ShiftNoteRow,
 } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { deleteBySource } from '@/lib/notifications/notify';
 import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
@@ -63,14 +64,6 @@ import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
 import { suggestionsEnabled } from '@/lib/suggestions/eligibility';
 import { suggestionNoticeSource } from '@/lib/suggestions/notify';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The log is young and notes are short; a cap this size is years of shifts.
 // Revisit with paging if the page ever feels heavy.
@@ -164,7 +157,7 @@ async function loadOwnNote(
   gate: AdminGate
 ): Promise<ShiftNoteRow | Response> {
   const { data, error } = await db.from('shift_notes').select('*').eq('id', id).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const note = (data as ShiftNoteRow) ?? null;
   if (!note || !canSeeNote(note, viewerOf(gate))) return json({ error: 'Note not found' }, 404);
@@ -196,7 +189,7 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (!viewer.isAdmin) query = query.eq('author_email', viewer.email);
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const notes = (data ?? []) as ShiftNoteRow[];
 
@@ -211,7 +204,7 @@ export const GET: APIRoute = async ({ cookies }) => {
         notes.map((n) => n.id)
       )
       .order('created_at', { ascending: true });
-    if (attachError) return json({ error: attachError.message }, 500);
+    if (attachError) return dbError(attachError);
     for (const row of (rows ?? []) as ShiftNoteAttachmentRow[]) {
       if (!row.note_id) continue; // staged rows never match the .in() filter
       const group = attachments[row.note_id];
@@ -233,7 +226,7 @@ export const GET: APIRoute = async ({ cookies }) => {
         notes.map((n) => n.id)
       )
       .order('created_at', { ascending: true });
-    if (replyError) return json({ error: replyError.message }, 500);
+    if (replyError) return dbError(replyError);
     for (const row of (rows ?? []) as ShiftNoteReplyRow[]) {
       if (!canSeeReply(row, viewer)) continue;
       visibleReplies.push(row);
@@ -301,7 +294,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body.attachmentIds !== undefined) {
     if (
       !Array.isArray(body.attachmentIds) ||
-      body.attachmentIds.some((id) => typeof id !== 'string' || !UUID_RE.test(id))
+      body.attachmentIds.some((id) => typeof id !== 'string' || !isUuid(id))
     ) {
       return json({ error: 'attachmentIds must be an array of UUIDs' }, 400);
     }
@@ -319,7 +312,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ note_date: body.noteDate, body: noteBody, author_email: email })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const note = data as ShiftNoteRow;
 
@@ -381,7 +374,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<
     Pick<ShiftNoteRow, 'note_date' | 'body' | 'updated_by' | 'status' | 'status_by' | 'status_at'>
@@ -434,7 +427,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const note = data as ShiftNoteRow;
 
@@ -465,7 +458,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id') ?? '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const existing = await loadOwnNote(db, id, gate);
   if (existing instanceof Response) return existing;
@@ -487,7 +480,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('shift_notes').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // Its undecided agent suggestions went with it (a trigger); the admins'
   // bell rows about them would point at nothing.

@@ -23,15 +23,10 @@ import {
   type SubRequestRow,
   type TimeOffRow,
 } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { getScheduleSettings, type ScheduleSettings } from '@/lib/schedule/settings';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -141,7 +136,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     timeOffRes.error ??
     stipendsRes.error ??
     overridesRes.error;
-  if (firstError) return json({ error: firstError.message }, 500);
+  if (firstError) return dbError(firstError);
 
   const shifts = (shiftsRes.data ?? []) as Array<ShiftRow & { assignments: ShiftAssignmentRow[] }>;
   for (const shift of shifts) shift.assignments = [];
@@ -158,7 +153,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (!includeDrafts) assignmentsQuery = assignmentsQuery.eq('is_draft', false);
 
     const { data: assignments, error } = await assignmentsQuery;
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     const byShift = new Map(shifts.map((s) => [s.id, s]));
     for (const assignment of (assignments ?? []) as ShiftAssignmentRow[]) {
@@ -172,7 +167,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .in('shift_date', [addDays(start, -1), addDays(end, 1)])
     .eq('is_draft', false)
     .eq('status', 'active');
-  if (neighborError) return json({ error: neighborError.message }, 500);
+  if (neighborError) return dbError(neighborError);
   const neighborAssignments: NeighborAssignment[] = [];
   if ((neighborShifts ?? []).length > 0) {
     const dateOf = new Map(
@@ -183,7 +178,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .select('shift_id, staff_id, starts_at, ends_at')
       .in('shift_id', [...dateOf.keys()])
       .eq('is_draft', false);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     for (const a of (rows ?? []) as Array<{
       shift_id: string;
       staff_id: string;
@@ -221,7 +216,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (!canManage) requestsQuery = requestsQuery.eq('staff_id', selfStaffId as string);
 
     const { data: requests, error } = await requestsQuery;
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     shiftRequests = (requests ?? []) as ShiftRequestRow[];
   }
 
@@ -245,7 +240,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         .gte('shifts.shift_date', today),
     ]);
     const countError = requestsCount.error ?? subsCount.error;
-    if (countError) return json({ error: countError.message }, 500);
+    if (countError) return dbError(countError);
     pendingRequestCount = (requestsCount.count ?? 0) + (subsCount.count ?? 0);
   }
 
@@ -260,7 +255,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         shifts.map((s) => s.id)
       )
       .order('created_at');
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     subRequests = (subs ?? []) as SubRequestRow[];
   }
 
@@ -335,7 +330,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .gte('week_start', addDaysStr(start, -6))
       .lte('week_start', end)
       .order('created_at', { ascending: false });
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     payload.proposals = (proposals ?? []) as ScheduleProposalRow[];
 
     // The drafting conversations behind those proposals (admin notes +
@@ -349,7 +344,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         .select('*')
         .in('agent_session_id', sessionIds)
         .order('created_at', { ascending: true });
-      if (messagesError) return json({ error: messagesError.message }, 500);
+      if (messagesError) return dbError(messagesError);
       payload.draftMessages = (messages ?? []) as ScheduleDraftMessageRow[];
     }
   }

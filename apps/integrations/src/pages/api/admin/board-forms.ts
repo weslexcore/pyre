@@ -31,17 +31,18 @@ import {
   parseFormPatch,
 } from '@/lib/boards/forms';
 import { type Assignable, listBoardWatchers } from '@/lib/boards/people';
+import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
+import { isBoardSlug } from '@/lib/boards/types';
+import type { BoardFieldRow, BoardFormRow, BoardRow } from '@/lib/db';
 import {
   type APIRoute,
   beginMutation,
   beginRead,
   type Db,
+  dbError,
   json,
   storeError,
-} from '@/lib/boards/route';
-import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
-import { isBoardSlug } from '@/lib/boards/types';
-import type { BoardFieldRow, BoardFormRow, BoardRow } from '@/lib/db';
+} from '@/lib/http/route';
 
 interface FormResponse {
   board: Pick<BoardRow, 'slug' | 'name' | 'card_noun' | 'archived'>;
@@ -165,7 +166,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       )
       .select('*')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     return json(respond(db, board, data as BoardFormRow, fields, recipients));
   } catch (e) {

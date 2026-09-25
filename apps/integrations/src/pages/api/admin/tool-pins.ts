@@ -15,12 +15,7 @@ import type { APIRoute } from 'astro';
 import { toolsForAccess } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { dbError, json } from '@/lib/http/route';
 
 // Sanity bound far above the size of the tool directory.
 const MAX_PINS = 50;
@@ -68,7 +63,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
       hrefs.map((tool_href, index) => ({ user_email: email, tool_href, sort_order: index })),
       { onConflict: 'user_email,tool_href' }
     );
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   let stale = db.from('admin_tool_pins').delete().eq('user_email', email);
@@ -76,7 +71,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     stale = stale.not('tool_href', 'in', `(${hrefs.map((href) => `"${href}"`).join(',')})`);
   }
   const { error: staleError } = await stale;
-  if (staleError) return json({ error: staleError.message }, 500);
+  if (staleError) return dbError(staleError);
 
   const { data: pins, error: pinsError } = await db
     .from('admin_tool_pins')
@@ -84,7 +79,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     .eq('user_email', email)
     .order('sort_order', { ascending: true })
     .order('tool_href', { ascending: true });
-  if (pinsError) return json({ error: pinsError.message }, 500);
+  if (pinsError) return dbError(pinsError);
 
   return json({ ok: true, hrefs: (pins ?? []).map((pin) => pin.tool_href as string) });
 };

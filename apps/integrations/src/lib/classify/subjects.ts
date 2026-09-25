@@ -9,11 +9,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AstroCookies } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, requirePage } from '@/lib/auth/admin';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { json } from '@/lib/http/json';
 
 function forbidden(message: string): Response {
-  return new Response(JSON.stringify({ error: message }), { status: 403, headers: JSON_HEADERS });
+  return json({ error: message }, 403);
 }
 
 export interface SubjectSource {

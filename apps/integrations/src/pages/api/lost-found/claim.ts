@@ -20,22 +20,18 @@
 import type { APIRoute } from 'astro';
 import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { escapeHtml, htmlPage } from '@/lib/http/page';
+import { isUuid } from '@/lib/http/route';
 import { verifyClaimToken } from '@/lib/lost-found/claim-token';
 import { logLostFoundEvent } from '@/lib/lost-found/log';
 import { notifyStaffOfClaim } from '@/lib/lost-found/notify';
 import { CLOSED_STATUSES, DONATION_PARTNER } from '@/lib/lost-found/types';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
+const PAGE_STYLE =
+  'body{line-height:1.6}button{background:#d15232;color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600;padding:12px 24px;cursor:pointer}button:disabled{opacity:.6;cursor:default}';
 
 function page(body: string, status = 200): Response {
-  return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Pyre — Lost &amp; Found</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1a1a1a;line-height:1.6}h1{font-size:1.25rem}button{background:#d15232;color:#fff;border:0;border-radius:6px;font:inherit;font-weight:600;padding:12px 24px;cursor:pointer}button:disabled{opacity:.6;cursor:default}</style></head><body><h1>Pyre Sauna</h1>${body}</body></html>`,
-    { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-  );
+  return htmlPage({ title: 'Lost &amp; Found', body, status, style: PAGE_STYLE });
 }
 
 /** Same neutral page for a bad token, a deleted item, and one already gone. */
@@ -53,7 +49,7 @@ interface Resolved {
 
 async function resolve(token: string): Promise<Resolved | null> {
   const noticeId = verifyClaimToken(token);
-  if (!noticeId || !UUID_RE.test(noticeId)) return null;
+  if (!noticeId || !isUuid(noticeId)) return null;
 
   const db = getDb();
   if (!db) return null;

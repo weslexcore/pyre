@@ -12,14 +12,9 @@ import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type StaffRow } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 function mintToken(): string {
   return randomBytes(24).toString('base64url');
@@ -66,7 +61,7 @@ async function selfRow(
   if (!email) return json({ error: "Your login isn't linked to the schedule roster" }, 403);
 
   const { data, error } = await db.from('staff').select('*').eq('email', email).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: "Your login isn't linked to the schedule roster" }, 403);
 
   return { person: data as StaffRow, db };
@@ -89,7 +84,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
       .is('calendar_token', null)
       .select('calendar_token')
       .maybeSingle();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     if (data) {
       token = minted;
@@ -130,7 +125,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const token = mintToken();
   const { error } = await db.from('staff').update({ calendar_token: token }).eq('id', person.id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json(urlsFor(request, person, token));
 };

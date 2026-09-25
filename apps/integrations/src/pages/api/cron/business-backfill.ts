@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { isCronAuthorized, unauthorizedResponse } from '@/lib/cron/auth';
+import { json } from '@/lib/http/route';
 import { runActivityMetricsSync } from '@/lib/reports/activity';
 import { runBusinessReportSync } from '@/lib/reports/sync';
 
@@ -32,10 +33,7 @@ const handler: APIRoute = async ({ request, url }) => {
   const weeksParam = url.searchParams.get('weeks');
   const weeks = weeksParam === null ? 26 : Number(weeksParam);
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS) {
-    return new Response(
-      JSON.stringify({ error: `weeks must be an integer between 1 and ${MAX_WEEKS}` }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    return json({ error: `weeks must be an integer between 1 and ${MAX_WEEKS}` }, 400);
   }
 
   const ctx = {
@@ -57,10 +55,7 @@ const handler: APIRoute = async ({ request, url }) => {
     redisPrefix: 'activity-sync:backfill',
   });
 
-  return new Response(JSON.stringify({ weeks, ...reports, activity }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ weeks, ...reports, activity });
 };
 
 export const GET = handler;

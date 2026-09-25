@@ -13,18 +13,11 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { dbError, isUuid, json } from '@/lib/http/route';
 
 const MAX_CATEGORY = 60;
 // Sanity bounds far above any plausible library size.
 const MAX_ITEMS = 200;
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const PUT: APIRoute = async ({ cookies, request }) => {
   const gate = await requireAdmin(cookies);
@@ -70,7 +63,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
       categories.map((name, index) => ({ name, sort_order: index })),
       { onConflict: 'name' }
     );
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   if (hasSops) {
@@ -83,7 +76,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
       !Array.isArray(sopIds) ||
       sopIds.length === 0 ||
       sopIds.length > MAX_ITEMS ||
-      !sopIds.every((id): id is string => typeof id === 'string' && UUID_RE.test(id)) ||
+      !sopIds.every((id): id is string => isUuid(id)) ||
       new Set(sopIds).size !== sopIds.length
     ) {
       return json({ error: 'sopIds must be a non-empty array of unique UUIDs' }, 400);
@@ -98,7 +91,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
         .update({ sort_order: index })
         .eq('id', id)
         .eq('category', category);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 

@@ -11,16 +11,11 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { isSettingKey, parseSettingValue, SETTINGS } from '@/lib/settings/registry';
 import { getAllSettings, resetSetting, saveSetting } from '@/lib/settings/store';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requireAdmin(cookies);

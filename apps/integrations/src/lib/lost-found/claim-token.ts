@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { emailLinkSecret, signString, verifyString } from '@/lib/http/signed-token';
 
 // Signed claim links. Every "is this yours?" email carries
 // /api/lost-found/claim?token=<base64url(noticeId)>.<hmac>, so the link works
@@ -13,38 +13,14 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // Same construction as lib/email/unsubscribe-token.ts, deliberately: one HMAC
 // pattern to reason about, and the same secret already in the environment.
 
-function getSecret(): string | null {
-  return import.meta.env.UNSUBSCRIBE_SECRET ?? import.meta.env.CRON_SECRET ?? null;
-}
-
-function sign(payload: string, secret: string): string {
-  return createHmac('sha256', secret).update(`lost-found:${payload}`).digest('base64url');
-}
+const SIGNING = { secret: emailLinkSecret, messagePrefix: 'lost-found:' };
 
 export function createClaimToken(noticeId: string): string | null {
-  const secret = getSecret();
-  if (!secret) return null;
-  const payload = Buffer.from(noticeId).toString('base64url');
-  return `${payload}.${sign(payload, secret)}`;
+  return signString(noticeId, SIGNING);
 }
 
 export function verifyClaimToken(token: string): string | null {
-  const secret = getSecret();
-  if (!secret) return null;
-
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature) return null;
-
-  const expected = sign(payload, secret);
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-
-  try {
-    return Buffer.from(payload, 'base64url').toString('utf8');
-  } catch {
-    return null;
-  }
+  return verifyString(token, SIGNING);
 }
 
 /** The app's own origin, matching how buildUnsubscribeUrl derives it. */

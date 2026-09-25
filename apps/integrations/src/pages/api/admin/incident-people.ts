@@ -19,13 +19,8 @@
 import type { APIRoute } from 'astro';
 import { listStaff } from '@/lib/auth/access';
 import { requireAnyPage } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { fetchMembersFiltered } from '@/lib/momence/host-api';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const PAGES = ['/admin/incidents', '/admin/lost-found', '/admin/guests'];
 

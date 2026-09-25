@@ -4,12 +4,11 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { actorFromGate } from '@/lib/schedule/change-log';
 import { syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 /** How far back a manual sync may reach to repair past days. */
 const MAX_LOOKBACK_DAYS = 7;
@@ -40,22 +39,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const lookbackDays = await readLookbackDays(request);
   if (typeof lookbackDays === 'string') {
-    return new Response(JSON.stringify({ error: lookbackDays }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: lookbackDays }, 400);
   }
 
   try {
     const summary = await syncShifts({ actor: actorFromGate(gate), lookbackDays });
-    return new Response(JSON.stringify({ ok: true, sync: summary }), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+    return json({ ok: true, sync: summary });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Sync failed' }),
-      { status: 500, headers: JSON_HEADERS }
-    );
+    return json({ error: error instanceof Error ? error.message : 'Sync failed' }, 500);
   }
 };

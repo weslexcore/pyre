@@ -27,6 +27,10 @@ import {
   storeAttachment,
 } from '@/lib/boards/card-media';
 import { summaryOf } from '@/lib/boards/files';
+import { loadCard, loadFields } from '@/lib/boards/store';
+import { KEY_RE } from '@/lib/boards/types';
+import type { BoardRow } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import {
   type APIRoute,
   beginDelete,
@@ -35,11 +39,7 @@ import {
   isUuidParam,
   json,
   storeError,
-} from '@/lib/boards/route';
-import { loadCard, loadFields } from '@/lib/boards/store';
-import { KEY_RE } from '@/lib/boards/types';
-import type { BoardRow } from '@/lib/db';
-import { getDb } from '@/lib/db';
+} from '@/lib/http/route';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, BOARDS_HREF);

@@ -22,6 +22,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { getSetting } from '@/lib/settings/store';
 import { getPeopleNames } from '@/lib/sops/people';
 import {
@@ -53,12 +54,6 @@ import {
 } from '@/lib/suggestions/types';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const MAX_IDS = 100;
 const INBOX_LIMIT = 100;
@@ -131,7 +126,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         .order('sort_order'),
     ]);
     const error = boards.error ?? columns.error ?? fields.error;
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     return json({
       boards: (boards.data ?? []).map((b) => ({
         ...b,
@@ -151,7 +146,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .select('id, slug, title, content_md, current_version')
       .eq('id', id)
       .maybeSingle();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     if (!data) return json({ error: 'SOP not found' }, 404);
     return json({ sop: data });
   }

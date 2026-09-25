@@ -10,13 +10,8 @@ import {
   type EventBookings,
   parseSessionIds,
 } from '@/lib/campaigns/event-bookings';
+import { json } from '@/lib/http/route';
 import { fetchSessionBookingTotals } from '@/lib/momence/session-totals';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const CACHE_PREFIX = 'cache:event-bookings:v1:';
 const CACHE_TTL_SECONDS = 5 * 60;

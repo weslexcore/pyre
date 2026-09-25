@@ -15,6 +15,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { notifySopSaved } from '@/lib/notifications/sops';
 import { countTasks } from '@/lib/sops/checklist';
 import { loadSop, loadSopDocument, redactGrantEmails } from '@/lib/sops/document';
@@ -39,20 +40,12 @@ import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from 
 import { loadShiftSops } from '@/lib/sops/shift-sops';
 import { suggestionOrigins } from '@/lib/suggestions/origins';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/sops';
 const MAX_TITLE = MAX_SOP_TITLE;
 const MAX_CATEGORY = 60;
 const MAX_CONTENT = MAX_SOP_CONTENT;
 // History panel cap — nobody scrolls past this, and it bounds the payload.
 const MAX_VERSIONS = 100;
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Matches the sops_*_emails_bounded check constraints.
 const MAX_GRANT_EMAILS = 100;
@@ -161,7 +154,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // opens — the bodies of up to MAX_VERSIONS saves have no business on the
   // document's critical path.
   if ((id || slug) && url.searchParams.get('view') === 'versions') {
-    if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    if (id && !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
     const { sop, error } = await loadSop(db, { id, slug });
     if (error) return json({ error }, 500);
     if (!sop || !canViewSop(viewer, sop)) return json({ error: 'SOP not found' }, 404);
@@ -172,7 +165,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .eq('sop_id', sop.id)
       .order('version', { ascending: false })
       .limit(MAX_VERSIONS);
-    if (versionsError) return json({ error: versionsError.message }, 500);
+    if (versionsError) return dbError(versionsError);
 
     const rows = (versions ?? []) as SopVersionRow[];
     // Versions saved by approving an agent suggestion link back to the shift
@@ -207,7 +200,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // modal passes the parent run's start, so a sub-checklist ticked off
   // during it opens showing those ticks.
   if (id || slug) {
-    if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    if (id && !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
     const since = url.searchParams.get('since');
     if (since && Number.isNaN(Date.parse(since))) {
       return json({ error: 'since must be an ISO date-time' }, 400);
@@ -220,12 +213,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   // Library listing, filtered to what this role may view and sorted by the
   // admin-managed category order (see /api/admin/sop-order).
   const { data, error } = await db.from('sops').select('*');
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const { data: categories, error: categoriesError } = await db
     .from('sop_categories')
     .select('name, sort_order');
-  if (categoriesError) return json({ error: categoriesError.message }, 500);
+  if (categoriesError) return dbError(categoriesError);
 
   const visible = ((data ?? []) as SopRow[]).filter((sop) => canViewSop(viewer, sop));
   const ranks = (categories ?? []) as CategoryRank[];
@@ -278,7 +271,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .from('sop_pins')
       .select('sop_id')
       .eq('user_email', email);
-    if (pinsError) return json({ error: pinsError.message }, 500);
+    if (pinsError) return dbError(pinsError);
     const visibleIds = new Set(sorted.map((s) => s.id));
     pins = (pinRows ?? []).map((p) => p.sop_id as string).filter((id) => visibleIds.has(id));
   }
@@ -377,10 +370,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) {
-    if (error.code === '23505') return json({ error: `An SOP with slug "${slug}" exists` }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, `An SOP with slug "${slug}" exists`);
   const sop = data as SopRow;
 
   const { error: versionError } = await db.from('sop_versions').insert({
@@ -391,7 +381,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     edited_by: email,
     change_note: 'Created',
   });
-  if (versionError) return json({ error: versionError.message }, 500);
+  if (versionError) return dbError(versionError);
 
   await ensureCategory(db, category);
   await notifySopSaved(db, { sop, editorEmail: email, version: 1, created: true });
@@ -420,7 +410,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { sop, error: loadError } = await loadSop(db, { id });
   if (loadError) return json({ error: loadError }, 500);
@@ -486,7 +476,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<SopRow> & { updated_by: string } = { updated_by: gate.user.email ?? '' };
 
@@ -537,7 +527,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'SOP not found' }, 404);
 
   if (patch.category) await ensureCategory(db, patch.category);
@@ -565,7 +555,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { sop, error: loadError } = await loadSop(db, { id });
   if (loadError) return json({ error: loadError }, 500);
@@ -578,7 +568,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('sops').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/db';
+import { isUniqueViolation } from '@/lib/http/json';
 
 // Append-only send log in Supabase (email_sends). Two jobs:
 //  1. Audit trail — every email the app sends, queryable by recipient/journey.
@@ -37,7 +38,7 @@ export async function claimSend(entry: SendLogEntry): Promise<ClaimResult> {
 
   if (error) {
     // 23505 = unique_violation on send_key
-    if (error.code === '23505') return { outcome: 'duplicate' };
+    if (isUniqueViolation(error)) return { outcome: 'duplicate' };
     console.error(`[SendLog] Claim failed for ${entry.sendKey}: ${error.message}`);
     return { outcome: 'unavailable' };
   }

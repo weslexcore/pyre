@@ -12,14 +12,9 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { parseCostInput } from '@/lib/business/validate';
 import { type BusinessCostRow, getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export interface BusinessCostsPayload {
   costs: BusinessCostRow[];
@@ -35,7 +30,7 @@ export const GET: APIRoute = async ({ cookies }) => {
   // The whole table every time — it's a handful of definitions, and the
   // manager UI groups them client-side.
   const { data, error } = await db.from('business_costs').select('*').order('kind').order('name');
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const payload: BusinessCostsPayload = { costs: (data ?? []) as BusinessCostRow[] };
   return json(payload);
@@ -74,7 +69,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ cost: data as BusinessCostRow }, 201);
 };
@@ -112,7 +107,7 @@ export const PUT: APIRoute = async ({ cookies, request, url }) => {
     .eq('id', id)
     .select('*')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Cost not found' }, 404);
 
   return json({ cost: data as BusinessCostRow });
@@ -137,7 +132,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .eq('id', id)
     .select('id')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Cost not found' }, 404);
 
   return json({ ok: true });

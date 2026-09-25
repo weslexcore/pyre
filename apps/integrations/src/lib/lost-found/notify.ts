@@ -16,6 +16,7 @@ import { LOST_FOUND_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { isUniqueViolation } from '@/lib/http/json';
 import { buildClaimUrl } from './claim-token';
 import { logLostFoundEvent } from './log';
 import { DONATION_PARTNER } from './types';
@@ -139,7 +140,7 @@ export async function notifyAboutItem(
     if (noticeError || !noticeData) {
       // A unique violation means another request got there first — which is
       // exactly the outcome we want, just via a different path.
-      const raced = noticeError?.code === '23505';
+      const raced = isUniqueViolation(noticeError);
       outcomes.push({
         email: person.email,
         status: raced ? 'already_asked' : 'failed',

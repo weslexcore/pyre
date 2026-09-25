@@ -24,6 +24,7 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { canSeeNote, normalizeEmail } from '@/lib/shift-notes/access';
 import {
   buildNoteStoragePath,
@@ -35,14 +36,7 @@ import {
   MAX_STAGED_PER_UPLOADER,
 } from '@/lib/shift-notes/media';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const BUCKET = 'shift-note-media';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Long enough to load a page of media, short enough that a leaked link dies. */
 const SIGNED_URL_TTL_SECONDS = 600;
@@ -61,7 +55,7 @@ async function loadOwnNote(
   gate: AdminGate
 ): Promise<ShiftNoteRow | Response> {
   const { data, error } = await db.from('shift_notes').select('*').eq('id', noteId).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const note = (data as ShiftNoteRow) ?? null;
   const viewer = { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
@@ -113,7 +107,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   // No noteId means a staged upload: the composer sends files as soon as
   // they're picked, before the note exists to attach them to.
   const noteId = String(form.get('noteId') ?? '');
-  if (noteId && !UUID_RE.test(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
+  if (noteId && !isUuid(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
 
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'No file was uploaded' }, 400);
@@ -143,7 +137,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       .from('shift_note_attachments')
       .select('id', { count: 'exact', head: true })
       .eq('note_id', noteId);
-    if (countError) return json({ error: countError.message }, 500);
+    if (countError) return dbError(countError);
     if ((count ?? 0) >= MAX_ATTACHMENTS_PER_NOTE) {
       return json(
         { error: `A note can hold ${MAX_ATTACHMENTS_PER_NOTE} attachments at most` },
@@ -159,7 +153,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       .select('id', { count: 'exact', head: true })
       .is('note_id', null)
       .eq('uploaded_by', email);
-    if (countError) return json({ error: countError.message }, 500);
+    if (countError) return dbError(countError);
     if ((count ?? 0) >= MAX_STAGED_PER_UPLOADER) {
       return json({ error: 'Too many unattached uploads — add a note or remove some files' }, 409);
     }
@@ -195,7 +189,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) {
     // Don't leave an orphan object behind when the row fails.
     await db.storage.from(BUCKET).remove([storagePath]);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
 
   return json({ attachment: data as ShiftNoteAttachmentRow }, 201);
@@ -209,14 +203,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('shift_note_attachments')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const row = (data as ShiftNoteAttachmentRow) ?? null;
   if (!row) return json({ error: 'Attachment not found' }, 404);
@@ -258,14 +252,14 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('shift_note_attachments')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const attachment = (data as ShiftNoteAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Attachment not found' }, 404);
@@ -279,7 +273,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error: deleteError } = await db.from('shift_note_attachments').delete().eq('id', id);
-  if (deleteError) return json({ error: deleteError.message }, 500);
+  if (deleteError) return dbError(deleteError);
 
   return json({ ok: true });
 };

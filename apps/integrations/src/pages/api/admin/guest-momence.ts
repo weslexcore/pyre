@@ -17,12 +17,7 @@ import { loadMomenceSnapshot } from '@/lib/guests/momence';
 import { loadProfileByMemberId } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { normalizeMemberId } from '@/lib/guests/validate';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { json } from '@/lib/http/route';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const gate = await requirePage(cookies, GUESTS_PAGE);
