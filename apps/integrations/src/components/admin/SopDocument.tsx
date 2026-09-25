@@ -44,6 +44,11 @@ type DocResponse = SopDocumentPayload;
 interface VersionsResponse {
   versions: SopVersionRow[];
   people?: PeopleNames;
+  /**
+   * For versions saved by approving an agent suggestion: the shift note it
+   * came from, by version id (admins only; others read it in the change note).
+   */
+  origins?: Record<string, { label: string; href: string | null }>;
 }
 
 const inputClass =
@@ -559,6 +564,8 @@ export function SopDocument({
               const previous = versions[i + 1];
               const summary = diffSummary(previous?.content_md ?? '', v.content_md);
               const expanded = expandedVersion === v.version;
+              // The shift note an approved suggestion made this version from.
+              const origin = versionsQuery.data?.origins?.[v.id];
               return (
                 <li key={v.id} className="py-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -574,6 +581,21 @@ export function SopDocument({
                     )}
                     {v.change_note && (
                       <span className="text-xs text-white/60 italic">“{v.change_note}”</span>
+                    )}
+                    {origin && (
+                      <span className="text-xs text-white/50">
+                        from{' '}
+                        {origin.href ? (
+                          <a
+                            href={origin.href}
+                            className="text-[var(--pyre-gold)] underline hover:text-white"
+                          >
+                            {origin.label}
+                          </a>
+                        ) : (
+                          origin.label
+                        )}
+                      </span>
                     )}
                     <span className="ml-auto flex gap-2">
                       <button

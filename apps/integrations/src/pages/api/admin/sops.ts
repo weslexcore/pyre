@@ -37,6 +37,7 @@ import { getSopRole } from '@/lib/sops/role';
 import { MAX_SOP_CONTENT, MAX_SOP_TITLE, saveSopVersion } from '@/lib/sops/save-version';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { loadShiftSops } from '@/lib/sops/shift-sops';
+import { suggestionOrigins } from '@/lib/suggestions/origins';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -174,11 +175,29 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (versionsError) return json({ error: versionsError.message }, 500);
 
     const rows = (versions ?? []) as SopVersionRow[];
+    // Versions saved by approving an agent suggestion link back to the shift
+    // note it came from — for admins, who are the ones who can open any
+    // note (everyone else still reads the source in the change note).
+    const fromSuggestions = rows.filter((v) => v.suggestion_id);
+    let origins: Record<string, { label: string; href: string | null }> = {};
+    if (gate.access.isAdmin && fromSuggestions.length > 0) {
+      const bySuggestion = await suggestionOrigins(
+        db,
+        fromSuggestions.map((v) => v.suggestion_id as string)
+      );
+      origins = Object.fromEntries(
+        fromSuggestions.flatMap((v) => {
+          const origin = bySuggestion[v.suggestion_id as string];
+          return origin ? [[v.id, origin]] : [];
+        })
+      );
+    }
     return json({
       versions: rows,
       // Names for the editors, so history reads as people rather than
       // mailbox local parts.
       people: await getPeopleNames(rows.map((v) => v.edited_by)),
+      origins,
     });
   }
 
