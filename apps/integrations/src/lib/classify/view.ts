@@ -1,5 +1,5 @@
 // What a page sees of a classification: its state and the signals found,
-// never the request id or session plumbing. Client-bundle-safe (no db/env
+// never the request id or other bookkeeping. Client-bundle-safe (no db/env
 // imports) so islands can import the type and the helpers alike.
 
 import { readStoredSignals, type Signal } from '@pyre/signals-core';
@@ -16,8 +16,8 @@ export interface ClassificationView {
 }
 
 /**
- * A session that has not saved within this long is not going to: the agent
- * finishes a note in seconds, so anything this old failed without telling
+ * A run that has not saved within this long is not going to: Jev reads a
+ * note in well under a second, so anything this old failed without telling
  * us (a crashed turn, a lost request). It reads as failed and can be re-run.
  */
 export const PENDING_TIMEOUT_MS = 10 * 60 * 1000;

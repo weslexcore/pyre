@@ -4,7 +4,7 @@
 // itself, so a job queued before a later edit classifies the latest text.
 //
 //   POST { subject, id, force? } → 200 { state } | 200 { skipped }
-//                                   503 when pyre-agents or Jev failed (QStash retries)
+//                                   503 when AI Gateway or Jev failed (QStash retries)
 //
 // Auth: Bearer CRON_SECRET, forwarded by QStash (same as the cron tick).
 

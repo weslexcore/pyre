@@ -1,6 +1,6 @@
-// The text a classification reads, normalised the same way on both sides:
-// the integrations app hashes it (so unchanged text is never re-read) and the
-// agents app sends it to Jev.
+// The text a classification reads, normalised one way everywhere: the
+// integrations app hashes it (so unchanged text is never re-read) and
+// classifyState() hands it to Jev.
 
 /** The longest text sent for classification — the shift note body cap. */
 export const MAX_CLASSIFY_TEXT = 8000;

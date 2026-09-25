@@ -17,6 +17,7 @@ import { scheduleClassification } from '@/lib/classify/dispatch';
 import { loadClassifications, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
+import { jevOptions } from '@/lib/jev';
 
 export const prerender = false;
 
@@ -76,11 +77,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const text = await source.loadText(db, id);
   if (text === null) return json({ error: 'Not found' }, 404);
 
-  if (!import.meta.env.AGENTS_BASE_URL || !import.meta.env.EVE_CHANNEL_SECRET) {
-    return json(
-      { error: 'Classifier unavailable (AGENTS_BASE_URL / EVE_CHANNEL_SECRET not configured)' },
-      503
-    );
+  if (!jevOptions()) {
+    return json({ error: 'Classifier unavailable (AI_GATEWAY_API_KEY not configured)' }, 503);
   }
   scheduleClassification(subject, id, text, { force: true });
   return json({ classification: pendingView() }, 202);
