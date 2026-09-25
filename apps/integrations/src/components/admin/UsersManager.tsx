@@ -720,6 +720,25 @@ export function UsersManager() {
     return body.person;
   };
 
+  // Emails a one-time link to set (or reset) their admin password — for
+  // people who never linked through Momence, or who are locked out.
+  const sendPasswordLink = async (person: StaffRow) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    const res = await fetch('/api/admin/staff-password-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: person.id }),
+    });
+    if (!res.ok) {
+      setError(await readError(res));
+    } else {
+      setNotice(`Sent a set-password link to ${person.email}.`);
+    }
+    setBusy(false);
+  };
+
   const importEnvUser = async (envUser: EnvUser) => {
     setBusy(true);
     setError(null);
@@ -865,7 +884,7 @@ export function UsersManager() {
               <input
                 className={`${inputClass} w-64`}
                 type="email"
-                placeholder="momence login email"
+                placeholder="login email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 aria-label="Momence login email"
@@ -963,6 +982,9 @@ export function UsersManager() {
                   {person.is_founder && <span className={chipClass}>founder</span>}
                   {person.is_shift_lead && <span className={chipClass}>shift lead</span>}
                   {!person.active && <span className={chipClass}>not scheduled</span>}
+                  {person.email && !person.auth_user_id && !isFormer(person) && (
+                    <span className={chipClass}>no password yet</span>
+                  )}
                   <span
                     className={`${chipClass} ${person.is_admin ? 'border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]' : ''}`}
                   >
@@ -988,11 +1010,11 @@ export function UsersManager() {
                       <input
                         className={`${inputClass} w-64`}
                         type="email"
-                        placeholder="momence login email"
+                        placeholder="login email"
                         value={draft.email}
                         disabled={busy || isSelf}
                         onChange={(e) => setDraft({ email: e.target.value })}
-                        aria-label={`${person.display_name} Momence email`}
+                        aria-label={`${person.display_name} login email`}
                       />
                       <label className="flex items-center gap-1.5 font-mono text-xs text-white/60">
                         <input
@@ -1033,6 +1055,21 @@ export function UsersManager() {
                         onClick={() => void remove(person)}
                       >
                         Remove
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="font-mono text-xs text-white/60">
+                        {person.auth_user_id
+                          ? 'Signs in with a password.'
+                          : 'No password yet — they set one the next time they sign in, or from an emailed link.'}
+                      </span>
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        disabled={busy || !person.email || isFormer(person)}
+                        onClick={() => void sendPasswordLink(person)}
+                      >
+                        {person.auth_user_id ? 'Send reset link' : 'Send set-password link'}
                       </button>
                     </div>
                     <p className="font-mono text-xs text-white/40">

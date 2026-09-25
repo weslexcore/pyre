@@ -9,6 +9,8 @@
 // row can't be demoted or deleted; and access can't be granted to a row with
 // no email (nobody could log in as them). Rows referenced by assignments or
 // time off are deactivated instead of deleted, so schedule history survives.
+// Each person's Supabase login follows their row (lib/auth/provision.ts):
+// its email tracks the row's, and losing all access bans it.
 
 import type { APIRoute } from 'astro';
 import {
@@ -22,6 +24,7 @@ import {
 } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { syncAuthBan, syncAuthEmail } from '@/lib/auth/provision';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { findMemberByEmail } from '@/lib/momence/host-api';
@@ -371,7 +374,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   invalidateAccessCache();
-  return json({ person: redactCalendarToken(data as StaffRow), momenceMatch });
+
+  // Keep the person's Supabase login in step: the login email follows the
+  // row, and losing (or regaining) all access bans (or unbans) the account.
+  const updated = data as StaffRow;
+  if (fields.email !== undefined) await syncAuthEmail(updated.auth_user_id ?? null, updated.email);
+  await syncAuthBan(updated);
+
+  return json({ person: redactCalendarToken(updated), momenceMatch });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -405,10 +415,12 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .eq('id', id);
     if (deactivateError) return json({ error: deactivateError.message }, 500);
     invalidateAccessCache();
+    await syncAuthBan({ ...row, active: false, is_admin: false, pages: [] });
     return json({ ok: true, deactivated: true });
   }
   if (error) return json({ error: error.message }, 500);
 
   invalidateAccessCache();
+  await syncAuthBan(row, { deleted: true });
   return json({ ok: true, deactivated: false });
 };

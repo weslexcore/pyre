@@ -72,7 +72,12 @@ async function resolve(): Promise<State | Response> {
 
   if (row.access === 'admin') {
     const { session } = await validateSession(Astro.cookies);
-    const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+    // A cutover (Momence) session hasn't set a password yet — treat it as
+    // signed out, so the login page routes it to /set-password.
+    const email =
+      session.isAuthenticated && session.source === 'supabase'
+        ? (session.user?.email ?? '').trim().toLowerCase()
+        : '';
     if (!email) {
       const params = new URLSearchParams({ returnUrl: formHref(slug) });
       return Astro.redirect(`/?${params.toString()}`, 302);

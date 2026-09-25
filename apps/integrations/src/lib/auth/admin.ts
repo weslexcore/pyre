@@ -1,4 +1,4 @@
-// Admin gates: Momence OAuth session + the staff table (managed
+// Admin gates: Supabase Auth session + the staff table (managed
 // from /admin/users; env allowlists are only the bootstrap fallback — see
 // ./access.ts). requireAdmin gates admin-only routes; requirePage gates a
 // route on view access to the admin page it serves.
@@ -7,12 +7,12 @@ import type { AstroCookies } from 'astro';
 import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
 import { type DashboardAccess, getAccess } from './access';
 import { validateSession } from './session';
-import type { MomenceUserProfile } from './types';
+import type { SessionUser } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 export interface AdminGate {
-  user: MomenceUserProfile;
+  user: SessionUser;
   access: DashboardAccess;
 }
 
@@ -25,6 +25,15 @@ async function requireAccess(
   if (!session.isAuthenticated || !session.user) {
     return new Response(JSON.stringify({ error: 'Not authenticated' }), {
       status: 401,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  // A Momence session during the cutover only proves identity for
+  // /set-password; nothing else runs until the Supabase account exists.
+  if (session.source === 'momence') {
+    return new Response(JSON.stringify({ error: 'password_setup_required' }), {
+      status: 403,
       headers: JSON_HEADERS,
     });
   }

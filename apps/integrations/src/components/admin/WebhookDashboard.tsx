@@ -359,7 +359,7 @@ export function WebhookDashboard({
         </h2>
         <p className="text-white/60 mb-6">Log in again to continue.</p>
         <a
-          href="/api/auth/login?returnUrl=%2Fadmin%2Fwebhooks"
+          href="/?returnUrl=%2Fadmin%2Fwebhooks"
           className="inline-block px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
         >
           Log In

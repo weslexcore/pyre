@@ -21,6 +21,7 @@ import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
+import { StaffPasswordLink } from './templates/StaffPasswordLink';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
@@ -52,4 +53,5 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'lost-found-found': LostFoundFound.PreviewProps,
   'lost-found-claimed': LostFoundClaimed.PreviewProps,
   'schedule-lint': ScheduleLint.PreviewProps,
+  'staff-password-link': StaffPasswordLink.PreviewProps,
 };

@@ -46,6 +46,15 @@ interface ImportMetaEnv {
   readonly SUPABASE_URL?: string;
   readonly SUPABASE_SECRET_KEY?: string;
   readonly SUPABASE_SERVICE_ROLE_KEY?: string;
+  // Staff sign-in (Supabase Auth). The publishable (anon) key is safe in the
+  // browser — RLS gates every table — and powers lib/supabase/{server,browser}.
+  // PUBLIC_SUPABASE_URL falls back to SUPABASE_URL on the server.
+  readonly PUBLIC_SUPABASE_URL?: string;
+  readonly PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
+  // Momence -> Supabase login cutover. Unset/anything = staff without a
+  // Supabase password sign in through Momence and set one; 'off' = the
+  // Momence path is gone and they get an emailed set-password link instead.
+  readonly AUTH_MOMENCE_LOGIN?: string;
   // Bootstrap admin allowlist (comma-separated emails). Access is managed in
   // the staff table via /admin/users; this env var only applies
   // while that table has no admin row (or Supabase is unreachable).
@@ -108,9 +117,9 @@ interface ImportMeta {
 
 declare namespace App {
   interface Locals {
-    // Set by src/middleware.ts for /admin/* pages: the authenticated Momence
+    // Set by src/middleware.ts for /admin/* pages: the signed-in (Supabase)
     // user (not yet access-checked — AdminLayout enforces adminAccess).
-    adminUser?: import('./lib/auth/types').MomenceUserProfile;
+    adminUser?: import('./lib/auth/types').SessionUser;
     // Their dashboard access (null = no dashboard access at all).
     adminAccess?: import('./lib/auth/access').DashboardAccess | null;
     // Per-request memo: the user's ordered pinned tool hrefs, set by pages

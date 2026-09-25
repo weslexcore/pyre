@@ -1,5 +1,6 @@
-// Momence OAuth types — trimmed port of apps/landing-page/src/lib/momence-oauth-types.ts
-// (only what the admin dashboard's auth flow needs).
+// Session types for the admin dashboard. The session comes from Supabase Auth;
+// Momence OAuth survives only as the cutover path for staff who haven't set a
+// Supabase password yet (see ./session.ts).
 
 export interface MomenceTokenResponse {
   access_token: string;
@@ -25,14 +26,36 @@ export interface MomenceUserProfile {
   lastName: string;
 }
 
+/**
+ * The signed-in person, whichever way they signed in. `id` is the Supabase
+ * auth user id (uuid), or the Momence user id as a string on a cutover
+ * session. Access checks key on `email`, never `id`.
+ */
+export interface SessionUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * 'supabase' = the real session. 'momence' = a cutover session: the person
+ * proved who they are through Momence but hasn't set a Supabase password, so
+ * all they may do is set one (middleware + requireAccess enforce that).
+ */
+export type SessionSource = 'supabase' | 'momence';
+
 /** OAuth state stored in a short-lived cookie for CSRF protection. */
 export interface OAuthState {
   state: string;
   returnUrl?: string;
+  /** The email typed on the login page, to flag a different Momence account. */
+  email?: string;
 }
 
 export interface AuthSession {
   isAuthenticated: boolean;
-  user: MomenceUserProfile | null;
+  user: SessionUser | null;
   expiresAt: number | null;
+  source: SessionSource | null;
 }

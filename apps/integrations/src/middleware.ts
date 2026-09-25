@@ -5,6 +5,10 @@
 // locals. /api/admin/* routes are NOT covered (different path prefix): each
 // one re-checks the session via requireAdmin/requirePage and returns JSON
 // 401/403 instead of redirecting.
+//
+// During the Supabase cutover, a visitor holding only a Momence session is
+// sent to /set-password first: the dashboard itself runs on Supabase
+// sessions alone.
 
 import { defineMiddleware } from 'astro/middleware';
 import { getAccess } from '@/lib/auth/access';
@@ -23,6 +27,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const authError = context.url.searchParams.get('error');
     if (authError) params.set('error', authError);
     return context.redirect(`/?${params.toString()}`, 302);
+  }
+
+  if (session.source === 'momence') {
+    const params = new URLSearchParams({ returnUrl: `${pathname}${context.url.search}` });
+    return context.redirect(`/set-password?${params.toString()}`, 302);
   }
 
   context.locals.adminUser = session.user;

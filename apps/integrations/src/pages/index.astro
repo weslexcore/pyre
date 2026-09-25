@@ -1,21 +1,26 @@
 ---
 // Admin sign-in for the Pyre integrations service. All /admin pages redirect
-// unauthenticated visitors here; after Momence OAuth the callback returns the
-// user to returnUrl. Signed-in admins skip straight to the dashboard.
-import Favicon from '@/components/Favicon.astro';
+// unauthenticated visitors here. Email first: /api/auth/identify decides
+// whether this email signs in with a password (step=password) or, during the
+// Momence cutover, goes through Momence to set one. Signed-in staff skip
+// straight to returnUrl.
+import AuthShell from '@/components/auth/AuthShell.astro';
+import { AUTH_BUTTON, AUTH_INPUT, AUTH_LABEL, AUTH_LINK } from '@/components/auth/styles';
 import { getAccess } from '@/lib/auth/access';
+import { safeReturnUrl, withReturnUrl } from '@/lib/auth/return-url';
 import { validateSession } from '@/lib/auth/session';
-import '@/styles/admin.css';
 
-Astro.response.headers.set('Cache-Control', 'private, no-store');
-
-// Only ever bounce back to local admin paths, or a board's form — the one
-// page outside /admin that asks a visitor to sign in (avoids open redirects).
-const rawReturnUrl = Astro.url.searchParams.get('returnUrl') ?? '/admin';
-const returnUrl = /^\/(admin|forms)(\/|\?|$)/.test(rawReturnUrl) ? rawReturnUrl : '/admin';
-const authError = Astro.url.searchParams.get('error');
+const params = Astro.url.searchParams;
+const returnUrl = safeReturnUrl(params.get('returnUrl'));
+const step = params.get('step');
+const email = (params.get('email') ?? '').trim().toLowerCase();
+const errorCode = params.get('error');
+const notice = params.get('notice');
 
 const { session } = await validateSession(Astro.cookies);
+if (session.source === 'momence') {
+  return Astro.redirect(withReturnUrl('/set-password', returnUrl), 302);
+}
 const user = session.isAuthenticated ? session.user : null;
 
 // Anyone with dashboard access (admin or page-granted) goes through; the
@@ -23,55 +28,142 @@ const user = session.isAuthenticated ? session.user : null;
 if (user?.email && (await getAccess(user.email))) {
   return Astro.redirect(returnUrl, 302);
 }
+
+const ERRORS: Record<string, string> = {
+  invalid_email: 'Enter a valid email address.',
+  invalid_credentials: 'That email and password do not match.',
+  rate_limited: 'Too many attempts. Wait a few minutes and try again.',
+  unavailable: 'Sign-in is not configured here. Ask an admin.',
+  no_access: 'That account does not have access to the admin tools.',
+  auth_failed: 'Momence sign-in failed. Try again.',
+  invalid_callback: 'Momence sign-in failed. Try again.',
+  state_mismatch: 'Momence sign-in expired. Try again.',
+  token_exchange_failed: 'Momence sign-in failed. Try again.',
+};
+const errorMessage = errorCode ? (ERRORS[errorCode] ?? 'Sign-in failed. Try again.') : null;
+const showPassword = step === 'password' && !!email;
+const showSent = step === 'sent';
+const startOver = withReturnUrl('/', returnUrl);
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-    />
-    <meta name="robots" content="noindex, nofollow" />
-    <title>Pyre Admin</title>
-    <Favicon />
-  </head>
-  <body class="min-h-screen bg-[var(--pyre-black)] font-sans text-[var(--pyre-creme)] antialiased">
-    <main class="mx-auto max-w-md px-4 py-16 text-center">
-      {
-        user ? (
-          <>
-            <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
-            <p class="text-white/60">You do not have access to the admin tools.</p>
-            <p class="mt-4 font-mono text-xs text-white/40">
-              Signed in as {user.email || '(no email)'} (id {user.id})
-            </p>
-            <a
-              href="/api/auth/logout"
-              class="mt-6 inline-block font-mono text-xs uppercase tracking-wide text-white/60 underline hover:text-white"
-            >
-              Log out
-            </a>
-          </>
-        ) : (
-          <>
-            <h1 class="mb-4 text-2xl font-semibold">Pyre Admin</h1>
-            <p class="mb-6 text-white/60">Sign in with your Momence account to continue.</p>
-            {authError && (
-              <p class="mb-4 font-mono text-xs text-[var(--pyre-red)]">
-                Sign-in failed ({authError}). Try again.
-              </p>
-            )}
-            <a
-              href={`/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`}
-              class="inline-block rounded-md bg-[var(--pyre-red)] px-6 py-3 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] transition-opacity hover:opacity-90"
-            >
-              Log In
-            </a>
-          </>
-        )
-      }
-    </main>
-  </body>
-</html>
+<AuthShell>
+  {
+    user ? (
+      <>
+        <h1 class="mb-4 text-2xl font-semibold">Unauthorized</h1>
+        <p class="text-white/60">You do not have access to the admin tools.</p>
+        <p class="mt-4 font-mono text-xs text-white/40">
+          Signed in as {user.email || '(no email)'} (id {user.id})
+        </p>
+        <a
+          href="/api/auth/logout?returnUrl=%2Fadmin"
+          class={AUTH_LINK}
+        >
+          Log out
+        </a>
+      </>
+    ) : showSent ? (
+      <>
+        <h1 class="mb-4 text-2xl font-semibold">Check your email</h1>
+        <p class="text-white/60">
+          If {email || 'that address'} has access to the admin tools, we sent it a link to set a
+          password. The link works once and expires in an hour.
+        </p>
+        <a
+          href={startOver}
+          class={AUTH_LINK}
+        >
+          Use a different email
+        </a>
+      </>
+    ) : showPassword ? (
+      <>
+        <h1 class="mb-2 text-2xl font-semibold">Pyre Admin</h1>
+        <p class="mb-6 text-white/60">
+          {email}{' '}
+          <a href={startOver} class="font-mono text-xs underline hover:text-white">
+            not you?
+          </a>
+        </p>
+        {notice === 'already_linked' && (
+          <p class="mb-4 text-sm text-white/70">
+            You already have a password for this email. Sign in with it below.
+          </p>
+        )}
+        {errorMessage && (
+          <p class="mb-4 font-mono text-xs text-[var(--pyre-red)]">{errorMessage}</p>
+        )}
+        <form method="post" action="/api/auth/sign-in" class="space-y-4 text-left">
+          <input type="hidden" name="returnUrl" value={returnUrl} />
+          <input type="hidden" name="email" value={email} />
+          <input
+            type="email"
+            value={email}
+            autocomplete="username"
+            class="hidden"
+            aria-hidden="true"
+            tabindex="-1"
+            readonly
+          />
+          <label class="block">
+            <span class={AUTH_LABEL}>
+              Password
+            </span>
+            <input
+              type="password"
+              name="password"
+              required
+              autofocus
+              autocomplete="current-password"
+              class={AUTH_INPUT}
+            />
+          </label>
+          <button
+            type="submit"
+            class={AUTH_BUTTON}
+          >
+            Log In
+          </button>
+        </form>
+        <a
+          href={withReturnUrl('/forgot-password', returnUrl, { email })}
+          class={AUTH_LINK}
+        >
+          Forgot password
+        </a>
+      </>
+    ) : (
+      <>
+        <h1 class="mb-4 text-2xl font-semibold">Pyre Admin</h1>
+        <p class="mb-6 text-white/60">Enter your email to sign in.</p>
+        {errorMessage && (
+          <p class="mb-4 font-mono text-xs text-[var(--pyre-red)]">{errorMessage}</p>
+        )}
+        <form method="post" action="/api/auth/identify" class="space-y-4 text-left">
+          <input type="hidden" name="returnUrl" value={returnUrl} />
+          <label class="block">
+            <span class={AUTH_LABEL}>
+              Email
+            </span>
+            <input
+              type="email"
+              name="email"
+              value={email}
+              required
+              autofocus
+              autocomplete="username"
+              inputmode="email"
+              class={AUTH_INPUT}
+            />
+          </label>
+          <button
+            type="submit"
+            class={AUTH_BUTTON}
+          >
+            Continue
+          </button>
+        </form>
+      </>
+    )
+  }
+</AuthShell>

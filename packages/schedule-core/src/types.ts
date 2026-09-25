@@ -44,6 +44,13 @@ export interface StaffRow {
 	 */
 	calendar_token: string | null;
 	/**
+	 * The Supabase Auth user this person signs in as. Set once they have a
+	 * password (first sign-in after the Momence cutover, or an emailed
+	 * set-password link); null = not linked yet. Optional because older
+	 * fixtures and pre-migration rows don't carry it.
+	 */
+	auth_user_id?: string | null;
+	/**
 	 * Hourly wage in dollars. Never null in the database (default 20; founders
 	 * 0) — null here means "redacted": the API only ships the real value to
 	 * admins and to the row's own person.

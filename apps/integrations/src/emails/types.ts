@@ -326,6 +326,14 @@ export interface ScheduleLintProps {
   notices: ScheduleLintLine[];
 }
 
+export interface StaffPasswordLinkProps {
+  firstName: string;
+  /** One-time link to /api/auth/confirm, which opens /set-password. */
+  actionUrl: string;
+  /** true = first password for the new login; false = a reset. */
+  isInvite: boolean;
+}
+
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
@@ -350,6 +358,7 @@ export interface EmailPropsByTemplate {
   'lost-found-found': LostFoundFoundProps;
   'lost-found-claimed': LostFoundClaimedProps;
   'schedule-lint': ScheduleLintProps;
+  'staff-password-link': StaffPasswordLinkProps;
 }
 
 export type EmailTemplateKey = keyof EmailPropsByTemplate;

@@ -17,6 +17,7 @@ import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
 import { ReviewRequest } from './templates/ReviewRequest';
 import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
+import { StaffPasswordLink } from './templates/StaffPasswordLink';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
@@ -144,6 +145,11 @@ export const EMAIL_TEMPLATES: Registry = {
         .filter(Boolean)
         .join(', ')}`,
     Component: ScheduleLint,
+  },
+  'staff-password-link': {
+    subject: (p) =>
+      p.isInvite ? 'Set your Pyre admin password' : 'Reset your Pyre admin password',
+    Component: StaffPasswordLink,
   },
 };
 

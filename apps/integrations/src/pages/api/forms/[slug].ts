@@ -99,7 +99,12 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
       const crossOrigin = assertSameOrigin(request);
       if (crossOrigin) return crossOrigin;
       const { session } = await validateSession(cookies);
-      const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+      // A cutover (Momence) session hasn't set a password yet — treat it as
+      // signed out, so the login page routes it to /set-password.
+      const email =
+        session.isAuthenticated && session.source === 'supabase'
+          ? (session.user?.email ?? '').trim().toLowerCase()
+          : '';
       if (!email) return json({ error: 'Sign in to send this form' }, 401);
       const access = await getAccess(email);
       // Not-found and not-yours look the same, as on the board routes.
