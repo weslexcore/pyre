@@ -99,3 +99,35 @@
   width: auto;
   opacity: 0.9;
 }
+
+/* Page 2 — Instagram version (portrait 1080×1350). Same layout on a creme background,
+   with type sized for a phone screen instead of print. */
+
+.page.page--social {
+  background: var(--pyre-creme);
+}
+
+.menu--social {
+  padding: 0 96px;
+}
+
+.menu--social .menu__moon {
+  width: 560px;
+  height: 224px;
+}
+
+.menu--social .drink {
+  gap: 24px;
+}
+
+.menu--social .drink__name {
+  font-size: 68px;
+}
+
+.menu--social .drink__notes {
+  font-size: 20px;
+}
+
+.menu--social .drink__description {
+  font-size: 26px;
+}

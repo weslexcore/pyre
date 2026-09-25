@@ -99,6 +99,7 @@ async function renderPost(vite: ViteDevServer, postName: string, filter?: string
       const pagePaths: string[] = [];
       const pageDurationsMs: number[] = [];
       for (let page = 1; page <= totalPages; page++) {
+        if (entry.pages && !entry.pages.includes(page)) continue;
         const out = outputPath(postName, entry, page, PROJECT_ROOT);
         const durationMs =
           entry.format === 'mp4' ? resolvePageDuration(config, entry, page - 1) : undefined;
@@ -122,9 +123,9 @@ async function renderPost(vite: ViteDevServer, postName: string, filter?: string
         pagePaths.push(out);
         if (durationMs !== undefined) pageDurationsMs.push(durationMs);
       }
-      if (entry.format === 'mp4' && totalPages > 1) {
+      if (entry.format === 'mp4' && pagePaths.length > 1) {
         const joined = joinedOutputPath(postName, entry, PROJECT_ROOT);
-        const transitions = Array.from({ length: totalPages - 1 }, (_, i) =>
+        const transitions = Array.from({ length: pagePaths.length - 1 }, (_, i) =>
           resolveTransitionForPair(config, i)
         );
         const tag = transitions
@@ -133,7 +134,7 @@ async function renderPost(vite: ViteDevServer, postName: string, filter?: string
           )
           .join(', ');
         console.log(
-          `  → ${entry.size} (mp4) joined ${totalPages} pages [${tag}]  ${joined.replace(PROJECT_ROOT, '.')}`
+          `  → ${entry.size} (mp4) joined ${pagePaths.length} pages [${tag}]  ${joined.replace(PROJECT_ROOT, '.')}`
         );
         await concatMp4Pages(pagePaths, joined, TEMP_DIR, {
           transitions,
