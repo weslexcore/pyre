@@ -69,6 +69,7 @@ export function SuggestionPanel({
           names={names}
           onChange={onChange}
           onDecided={onDecided}
+          collapsible
         />
       ))}
       {decided.length > 0 && (

@@ -66,6 +66,18 @@ describe('SuggestionCard', () => {
     expect(html).toContain('90% sure');
   });
 
+  it('folds to one line under a shift note until opened', () => {
+    const html = renderToStaticMarkup(
+      <SuggestionCard suggestion={suggestion({})} names={{}} onChange={noop} collapsible />
+    );
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('New task: Replace left tub filter');
+    expect(html).toContain('Review');
+    // The editor isn't drawn until it is opened.
+    expect(html).not.toContain('value="Replace left tub filter"');
+    expect(html).not.toContain('>Approve<');
+  });
+
   it('says when the admin has edited it, and offers the original back', () => {
     const html = renderToStaticMarkup(
       <SuggestionCard

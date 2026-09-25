@@ -62,6 +62,7 @@ export function SuggestionCard({
   names,
   onChange,
   onDecided,
+  collapsible = false,
 }: {
   suggestion: SuggestionView;
   result?: SuggestionResultLink;
@@ -71,6 +72,11 @@ export function SuggestionCard({
   onChange: (next: SuggestionView, result?: SuggestionResultLink) => void;
   /** It was approved or dismissed. */
   onDecided?: (next: SuggestionView) => void;
+  /**
+   * Start as a one-line summary that opens into the editor on a click (under
+   * a shift note, where an open editor would crowd out the note itself).
+   */
+  collapsible?: boolean;
 }) {
   const kind = suggestion.kind;
   const saved = currentPayload(suggestion);
@@ -84,6 +90,7 @@ export function SuggestionCard({
   const [conflict, setConflict] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [dismissNote, setDismissNote] = useState('');
+  const [open, setOpen] = useState(!collapsible);
 
   // A saved edit or a rebase from elsewhere replaces the draft.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the saved copy's identity
@@ -153,6 +160,33 @@ export function SuggestionCard({
     );
   }
 
+  // Folded: one line saying what it proposes; the editor mounts on opening,
+  // and a draft typed before folding it again is kept.
+  if (!open) {
+    return (
+      <button
+        type="button"
+        aria-expanded={false}
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-2 rounded border border-[var(--pyre-gold)]/25 bg-black/20 px-3 py-2 text-left transition-colors hover:border-[var(--pyre-gold)]/50 hover:bg-black/30"
+      >
+        <SparkleIcon className="shrink-0 text-[var(--pyre-gold)]" />
+        <KindBadge kind={kind} />
+        <span className="min-w-0 flex-1 truncate text-xs text-white/80">
+          {describeSuggestion(kind, draft ?? saved)}
+        </span>
+        {(dirty || suggestion.edited_by) && (
+          <span className="hidden shrink-0 font-mono text-[10px] text-white/40 sm:inline">
+            edited
+          </span>
+        )}
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+          Review
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded border border-[var(--pyre-gold)]/25 bg-black/20 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -172,6 +206,16 @@ export function SuggestionCard({
           <span className="font-mono text-[10px] text-[var(--pyre-gold)]">
             note edited since this was suggested
           </span>
+        )}
+        {collapsible && (
+          <button
+            type="button"
+            aria-expanded={true}
+            className="ml-auto font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
+            onClick={() => setOpen(false)}
+          >
+            Hide
+          </button>
         )}
       </div>
       {suggestion.rationale && (
