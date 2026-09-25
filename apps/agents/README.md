@@ -123,12 +123,13 @@ hourly cron classify-sweep re-runs anything that never landed
   the questions (`agent/lib/classify/questions.ts`) are built from its
   signal definitions, so a new signal type needs no edit here. See that
   package's README for adding signals or classifying other records.
-- `agent/lib/jev.ts` speaks AI Gateway's evaluation protocol directly (same
-  request `@ai-sdk/gateway` makes, same credentials as the language models:
-  `AI_GATEWAY_API_KEY` locally, OIDC on Vercel). eve ≥ 0.66 (`evaluate` from
-  `eve/ai`) and ai ≥ 7.0.105 (`experimental_evaluate`) wrap the same call but
-  are still inside the repo's 14-day npm age gate; swap them in once the
-  pins move.
+- `agent/lib/classify/classify.ts` calls Jev with the AI SDK's
+  `experimental_evaluate` (ai ≥ 7.0.105, pinned in package.json and
+  pre-approved past the npm age gate in `.yarnrc.yml` until it ages out).
+  The `typesafe-ai/jev` model string resolves through AI Gateway with the
+  same credentials as the language models: `AI_GATEWAY_API_KEY` locally,
+  OIDC on Vercel. The API is experimental and can change in patch
+  releases, so bump `ai` deliberately.
 
 ### Staff-scheduling drafter
 
