@@ -149,6 +149,9 @@ export function hasSignal(view: ClassificationView | undefined, type: SignalType
 
 const POLL_MS = 3_000;
 
+/** Ids per poll request; the route's own cap (MAX_IDS) is 100. */
+const POLL_CHUNK = 100;
+
 /** How long a just-written record may show "Reading…" before its row exists. */
 const UNFILED_GRACE_MS = 60_000;
 
@@ -208,40 +211,55 @@ export function useClassifications(
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/admin/classifications?subject=${subject}&ids=${encodeURIComponent(pendingIds)}`
+        // The route answers up to POLL_CHUNK ids per request; a bulk run can
+        // leave hundreds pending, so ask in chunks. A chunk that fails is
+        // simply asked again next tick.
+        const all = pendingIds.split(',');
+        const chunks: string[][] = [];
+        for (let i = 0; i < all.length; i += POLL_CHUNK) chunks.push(all.slice(i, i + POLL_CHUNK));
+        const answers = await Promise.all(
+          chunks.map(async (ids) => {
+            const res = await fetch(
+              `/api/admin/classifications?subject=${subject}&ids=${encodeURIComponent(ids.join(','))}`
+            );
+            if (!res.ok) return null;
+            const data = (await res.json()) as {
+              classifications: Record<string, ClassificationView>;
+            };
+            return { ids, found: data.classifications };
+          })
         );
-        if (res.ok && !cancelled) {
-          const data = (await res.json()) as {
-            classifications: Record<string, ClassificationView>;
-          };
-          if (!cancelled) {
-            for (const id of pendingIds.split(',')) {
-              const fresh = data.classifications[id];
-              if (fresh && fresh.state !== 'pending') onSettledRef.current?.(id, fresh);
-            }
-            setClassifications((prev) => {
-              const next = { ...prev };
-              const now = Date.now();
-              for (const id of pendingIds.split(',')) {
-                // Settled, still pending, or — once the server's timeout
-                // passes — failed.
-                const fresh = data.classifications[id];
-                if (fresh) {
-                  next[id] = fresh;
-                  continue;
-                }
-                // No row yet: the background run that files it may not have
-                // started. Keep waiting a little; after that the record was
-                // deleted elsewhere or classification is off, so stop polling.
-                const current = prev[id];
-                if (!current || now - new Date(current.requestedAt).getTime() > UNFILED_GRACE_MS) {
-                  delete next[id];
-                }
-              }
-              return next;
-            });
+        const polled = answers.flatMap((a) => (a ? a.ids : []));
+        const found: Record<string, ClassificationView> = Object.assign(
+          {},
+          ...answers.map((a) => a?.found ?? {})
+        );
+        if (!cancelled && polled.length > 0) {
+          for (const id of polled) {
+            const fresh = found[id];
+            if (fresh && fresh.state !== 'pending') onSettledRef.current?.(id, fresh);
           }
+          setClassifications((prev) => {
+            const next = { ...prev };
+            const now = Date.now();
+            for (const id of polled) {
+              // Settled, still pending, or — once the server's timeout
+              // passes — failed.
+              const fresh = found[id];
+              if (fresh) {
+                next[id] = fresh;
+                continue;
+              }
+              // No row yet: the background run that files it may not have
+              // started. Keep waiting a little; after that the record was
+              // deleted elsewhere or classification is off, so stop polling.
+              const current = prev[id];
+              if (!current || now - new Date(current.requestedAt).getTime() > UNFILED_GRACE_MS) {
+                delete next[id];
+              }
+            }
+            return next;
+          });
         }
       } catch {
         // A missed poll is simply retried on the next tick.
@@ -279,5 +297,31 @@ export function useClassifications(
     [merge, subject]
   );
 
-  return { classifications, reset, merge, remove, rerun, rerunning, error };
+  /**
+   * Reclassify many records at once (a bulk run): they all show "Reading…"
+   * straight away and settle as the queue works through them. Resolves to
+   * how many were queued; throws with the server's reason on failure.
+   */
+  const rerunMany = useCallback(
+    async (ids: readonly string[]): Promise<{ queued: number; missing: number }> => {
+      const res = await fetch('/api/admin/classifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, ids }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        classifications?: Record<string, ClassificationView>;
+        queued?: number;
+        missing?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.classifications) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const fresh = data.classifications;
+      setClassifications((prev) => ({ ...prev, ...fresh }));
+      return { queued: data.queued ?? 0, missing: data.missing ?? 0 };
+    },
+    [subject]
+  );
+
+  return { classifications, reset, merge, remove, rerun, rerunMany, rerunning, error };
 }

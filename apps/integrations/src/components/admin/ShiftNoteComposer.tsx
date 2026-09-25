@@ -34,6 +34,9 @@ export const inputClass =
 
 export const textareaClass = `${inputClass} min-h-[100px] w-full`;
 
+export const selectClass =
+  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
+
 const fieldLabelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
 
 /** What POST /api/admin/shift-notes hands back for a new note. */

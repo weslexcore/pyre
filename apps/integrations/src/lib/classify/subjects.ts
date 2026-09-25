@@ -25,6 +25,8 @@ export interface SubjectSource {
   authorize(cookies: AstroCookies): Promise<AdminGate | Response>;
   /** The record's current text, or null when it does not exist. */
   loadText(db: SupabaseClient, id: string): Promise<string | null>;
+  /** Many records' current text, keyed by id; records that don't exist are absent. */
+  loadTexts(db: SupabaseClient, ids: readonly string[]): Promise<Map<string, string>>;
 }
 
 export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
@@ -39,6 +41,14 @@ export const SUBJECT_SOURCES: Record<SubjectType, SubjectSource> = {
     async loadText(db, id) {
       const { data } = await db.from('shift_notes').select('body').eq('id', id).maybeSingle();
       return (data as { body: string } | null)?.body ?? null;
+    },
+    async loadTexts(db, ids) {
+      const { data, error } = await db
+        .from('shift_notes')
+        .select('id, body')
+        .in('id', [...ids]);
+      if (error) throw new Error(error.message);
+      return new Map(((data ?? []) as { id: string; body: string }[]).map((n) => [n.id, n.body]));
     },
   },
 };

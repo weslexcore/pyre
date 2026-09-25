@@ -8,16 +8,22 @@
 // the unchanged-text skip, and recorded in the record's activity with the
 // admin who asked for it; the page polls for the answer.
 //
+// An admin can also reclassify many records at once (the shift notes page's
+// bulk panel picks them with its own filters): the records' rows are marked
+// pending straight away, and the jobs go to QStash in batches, run a few at a
+// time (lib/classify/dispatch).
+//
 //   GET  ?subject=shift_note&ids=<uuid>,<uuid>  → { classifications }
 //   POST { subject, id }                        → 202 { classification: pending }
+//   POST { subject, ids: [<uuid>, ...] }        → 202 { classifications, queued, missing }
 //
 // Who may do either is the subject's call (lib/classify/subjects.ts).
 
 import { isSubjectType } from '@pyre/signals-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin } from '@/lib/auth/admin';
-import { scheduleClassification } from '@/lib/classify/dispatch';
-import { loadClassifications, pendingView } from '@/lib/classify/request';
+import { dispatchClassifications, scheduleClassification } from '@/lib/classify/dispatch';
+import { loadClassifications, markQueued, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
@@ -35,6 +41,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** A poll covers what is on screen; more than this is a client bug. */
 const MAX_IDS = 100;
+
+/** One bulk reclassify at most: the whole log the page loads (its LIST_LIMIT). */
+const MAX_BULK = 500;
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const subject = url.searchParams.get('subject');
@@ -72,22 +81,60 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await source.authorize(cookies);
   if (gate instanceof Response) return gate;
 
-  const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
-
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
-
-  const text = await source.loadText(db, id);
-  if (text === null) return json({ error: 'Not found' }, 404);
-
   if (!jevOptions()) {
     return json({ error: 'Classifier unavailable (AI_GATEWAY_API_KEY not configured)' }, 503);
   }
   const requestedBy = normalizeEmail(gate.user.email);
-  scheduleClassification(subject, id, text, {
-    force: true,
-    ...(requestedBy ? { requestedBy } : {}),
-  });
+  const options = { force: true, ...(requestedBy ? { requestedBy } : {}) };
+
+  if (body.ids !== undefined) {
+    if (
+      !Array.isArray(body.ids) ||
+      body.ids.length === 0 ||
+      body.ids.some((id) => typeof id !== 'string' || !UUID_RE.test(id))
+    ) {
+      return json({ error: 'ids must be a non-empty array of UUIDs' }, 400);
+    }
+    const ids = [...new Set(body.ids as string[])];
+    if (ids.length > MAX_BULK) {
+      return json({ error: `At most ${MAX_BULK} records per bulk run` }, 400);
+    }
+
+    let texts: Map<string, string>;
+    try {
+      texts = await source.loadTexts(db, ids);
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Load failed' }, 500);
+    }
+    const items = ids.flatMap((id) => {
+      const text = texts.get(id);
+      return text === undefined ? [] : [{ id, text }];
+    });
+
+    await markQueued(db, subject, items);
+    const outcome = await dispatchClassifications(subject, items, options);
+    if (outcome.via === 'none' && items.length > 0) return json({ error: outcome.reason }, 503);
+
+    const pending = pendingView();
+    return json(
+      {
+        classifications: Object.fromEntries(items.map((item) => [item.id, pending])),
+        queued: items.length,
+        // Deleted since the page loaded.
+        missing: ids.length - items.length,
+      },
+      202
+    );
+  }
+
+  const id = typeof body.id === 'string' ? body.id : '';
+  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+
+  const text = await source.loadText(db, id);
+  if (text === null) return json({ error: 'Not found' }, 404);
+
+  scheduleClassification(subject, id, text, options);
   return json({ classification: pendingView() }, 202);
 };

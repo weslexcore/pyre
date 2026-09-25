@@ -8,6 +8,7 @@ const waitUntil = vi.fn();
 vi.mock('@vercel/functions', () => ({ waitUntil: (p: unknown) => waitUntil(p) }));
 
 const publishJSON = vi.fn();
+const batchJSON = vi.fn();
 const ClientCtor = vi.fn();
 vi.mock('@upstash/qstash', () => ({
   Client: class {
@@ -15,6 +16,7 @@ vi.mock('@upstash/qstash', () => ({
       ClientCtor(opts);
     }
     publishJSON = publishJSON;
+    batchJSON = batchJSON;
   },
 }));
 
@@ -26,8 +28,14 @@ vi.mock('./request', async (importOriginal) => ({
 const getDb = vi.fn(() => ({}));
 vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
 
-const { CLASSIFY_RETRIES, classifyRunUrl, dispatchClassification, scheduleClassification } =
-  await import('./dispatch');
+const {
+  CLASSIFY_PARALLELISM,
+  CLASSIFY_RETRIES,
+  classifyRunUrl,
+  dispatchClassification,
+  dispatchClassifications,
+  scheduleClassification,
+} = await import('./dispatch');
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -77,6 +85,7 @@ describe('dispatchClassification', () => {
       url: 'https://integrations.pyre.test/api/classify/run',
       body: { subject: 'shift_note', id: NOTE_ID },
       retries: CLASSIFY_RETRIES,
+      flowControl: { key: 'classify', parallelism: CLASSIFY_PARALLELISM },
       headers: { Authorization: 'Bearer cron_secret' },
     });
     expect(classifyRunUrl()).toBe('https://integrations.pyre.test/api/classify/run');
@@ -117,5 +126,62 @@ describe('dispatchClassification', () => {
       via: 'inline',
     });
     expect(runClassification).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dispatchClassifications', () => {
+  const items = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `11111111-1111-4111-8111-${String(i).padStart(12, '0')}`,
+      text: `Note ${i}`,
+    }));
+
+  beforeEach(() => {
+    vi.stubEnv('QSTASH_TOKEN', 'qs_token');
+    vi.stubEnv('CRON_SECRET', 'cron_secret');
+    vi.stubEnv('PUBLIC_EMAIL_ASSET_BASE', 'https://integrations.pyre.test/assets');
+    batchJSON.mockReset().mockResolvedValue([]);
+    waitUntil.mockReset();
+    runClassification.mockReset().mockResolvedValue(null);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('publishes in batches of 100, each job forced and attributed', async () => {
+    const outcome = await dispatchClassifications('shift_note', items(250), {
+      force: true,
+      requestedBy: 'wes@pyresauna.com',
+    });
+    expect(outcome).toEqual({ via: 'qstash', queued: 250 });
+    expect(batchJSON.mock.calls.map((c) => (c[0] as unknown[]).length)).toEqual([100, 100, 50]);
+    const firstBatch = batchJSON.mock.calls[0]?.[0] as Array<{ body: unknown }>;
+    expect(firstBatch[0]?.body).toEqual({
+      subject: 'shift_note',
+      id: items(1)[0]?.id,
+      force: true,
+      requestedBy: 'wes@pyresauna.com',
+    });
+  });
+
+  it('runs a few at a time in the background without QStash', async () => {
+    vi.stubEnv('QSTASH_TOKEN', '');
+    expect(await dispatchClassifications('shift_note', items(5), { force: true })).toEqual({
+      via: 'inline',
+      queued: 5,
+    });
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await waitUntil.mock.calls[0]?.[0];
+    expect(runClassification).toHaveBeenCalledTimes(5);
+  });
+
+  it('queues nothing for an empty list', async () => {
+    expect(await dispatchClassifications('shift_note', [])).toEqual({
+      via: 'none',
+      reason: 'nothing to classify',
+    });
+    expect(batchJSON).not.toHaveBeenCalled();
   });
 });

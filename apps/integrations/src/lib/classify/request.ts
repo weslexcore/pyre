@@ -141,6 +141,37 @@ export async function runClassification(
 }
 
 /**
+ * Mark records as waiting for a read the moment they're queued, so the page
+ * shows "Reading…" (and polls) from the start instead of the old answer
+ * until each job's turn comes. The worker files its own request when it
+ * runs; this only fronts the wait. Best-effort: returns whether it saved.
+ */
+export async function markQueued(
+  db: SupabaseClient,
+  subject: SubjectType,
+  items: ReadonlyArray<{ id: string; text: string }>
+): Promise<boolean> {
+  if (items.length === 0) return true;
+  const now = new Date().toISOString();
+  const { error } = await db.from('content_classifications').upsert(
+    items.map((item) => ({
+      subject_type: subject,
+      subject_id: item.id,
+      status: 'pending',
+      signals: [],
+      request_id: randomUUID(),
+      content_hash: contentHash(item.text),
+      error: null,
+      requested_at: now,
+      classified_at: null,
+    })),
+    { onConflict: 'subject_type,subject_id' }
+  );
+  if (error) console.error('[classify] could not mark queued:', error.message);
+  return !error;
+}
+
+/**
  * The classifications of `ids`, keyed by subject id. Records never
  * classified are simply absent. Errors read as "none": a page listing
  * records must render without them.

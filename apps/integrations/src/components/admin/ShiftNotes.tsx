@@ -28,7 +28,8 @@
 // (Signals.tsx, lib/classify) — and the log can be filtered by them. The
 // read happens in the background after a note is saved, so the note appears
 // at once marked "Reading…" and its chips fill in a few seconds later; an
-// edit to its text is read again, and an admin can run the classifier on any note.
+// edit to its text is read again, and an admin can run the classifier on any
+// note, or on many at once from the bulk panel (BulkClassify).
 // A note no admin has triaged yet follows what the classifier found: to do
 // when anything is actionable, resolved when it is purely informational
 // (lib/shift-notes/triage); an admin's status always wins.
@@ -61,6 +62,7 @@ import {
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { highlightSegments, matchesTerm } from '@/lib/sops/search';
+import { BulkClassify } from './BulkClassify';
 import {
   buttonClass,
   type CreatedShiftNote,
@@ -70,6 +72,7 @@ import {
   readError,
   SHIFT_NOTE_CREATED_EVENT,
   ShiftNoteComposer,
+  selectClass,
   textareaClass,
   uploadWithProgress,
 } from './ShiftNoteComposer';
@@ -83,9 +86,6 @@ import {
   SparkleIcon,
   useClassifications,
 } from './Signals';
-
-const selectClass =
-  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
 
 const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
 
@@ -731,6 +731,18 @@ export function ShiftNotes() {
             </span>
           )}
         </div>
+      )}
+
+      {/* Admins can read old notes again — with its own filters, since what
+          to reclassify is a different question from what to read. */}
+      {viewer.isAdmin && notes.length > 0 && (
+        <BulkClassify
+          notes={notes}
+          classifications={signals.classifications}
+          names={names}
+          authors={authorOptions}
+          onRun={signals.rerunMany}
+        />
       )}
 
       {/* Whose log this is, so a non-admin isn't left wondering where the
