@@ -56,21 +56,24 @@ export const SIGNAL_DEFINITIONS = [
     key: 'action',
     label: 'Action',
     definition:
-      'Something someone still needs to do: a repair, a restock, a follow-up with a guest, a task handed to the next shift or to an admin. Only work that is still outstanding counts.',
+      'Something someone still needs to do that the text asks for or names: a repair, a restock, a follow-up with a guest, a task handed to the next shift or to an admin. Only outstanding work the writer points to counts, not a follow-up a reader might think up on their own.',
     examples: [
       'We are down to the last box of eucalyptus oil.',
       'The left cold tub filter needs replacing before Saturday.',
       'Guest left a voicemail about a refund — someone should call her back.',
     ],
-    // A report of work already done is informational, not a task: without
-    // this the model reads "restocked the towels" as an action to take.
+    // Two look-alikes the model otherwise reads as tasks: a report of work
+    // already done ("restocked the towels"), and good news it could imagine
+    // a follow-up for ("one potential member") when nobody asked for one.
     notThis: {
       means:
-        'Nothing is left for anyone to do. A note saying something was already done — fixed, restocked, cleaned, called back, handled — is a report of completed work, not an action, unless it also says something still needs doing.',
+        'Nothing is left for anyone to do. A note saying something was already done — fixed, restocked, written up, called back, handled — is a report of completed work. A note about how the shift went — turnout, a good class, a guest who might join — is a report too; do not invent a follow-up the writer did not ask for. Either is only an action if it also says something still needs doing.',
       examples: [
         'Restocked the towels and eucalyptus oil before close.',
         'Replaced the left cold tub filter this afternoon.',
         'Called the guest back about her refund; it is sorted.',
+        'Wrote up a checklist for private events and put it in the SOP folder.',
+        'Busy social tonight, great energy, and a couple of guests seemed keen on memberships.',
       ],
     },
     actionable: true,
