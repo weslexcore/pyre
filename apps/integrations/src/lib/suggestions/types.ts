@@ -285,3 +285,32 @@ export interface SuggestionResultLink {
   label: string;
   href: string | null;
 }
+
+/** A suggestion as the review UI reads it. */
+export type SuggestionView = AgentSuggestionRow & {
+  /** The source's text has changed since the agent read it. */
+  sourceChanged: boolean;
+};
+
+/** A run as the review UI reads it: stale open runs read as failed. */
+export interface RunView {
+  id: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  trigger: 'auto' | 'manual';
+  count: number;
+  error: string | null;
+  createdAt: string;
+}
+
+/** A source record as the inbox shows it; null when it has been deleted. */
+export interface SourceSummary {
+  label: string;
+  href: string;
+  excerpt: string;
+}
+
+/** Links the review UI needs per suggestion: what approving made, and what it acts on. */
+export interface SuggestionLinks {
+  results: Record<string, SuggestionResultLink>;
+  targets: Record<string, SuggestionResultLink>;
+}

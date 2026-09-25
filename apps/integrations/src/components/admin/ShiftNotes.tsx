@@ -35,6 +35,14 @@
 // (lib/shift-notes/triage); an admin's status always wins.
 // The page never names the model behind it (lib/classify picks that), so
 // swapping models changes nothing here.
+//
+// Admins also see what the suggestion agent proposes for a note — new tasks,
+// comments on existing tasks, SOP edits (suggestions/, lib/suggestions) —
+// under the note, each an editor they can change before approving or
+// dismissing. The agent looks at a note when an admin presses Suggest, or on
+// its own after the classifier finds an action (when that is switched on).
+// Nothing it proposes happens until an admin approves it, and every decision
+// lands in the note's history with a link to what it made.
 import { readStoredSignals, type SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
@@ -86,6 +94,8 @@ import {
   SparkleIcon,
   useClassifications,
 } from './Signals';
+import { SuggestionPanel } from './suggestions/SuggestionPanel';
+import { useSuggestions } from './suggestions/useSuggestions';
 
 const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
 
@@ -118,6 +128,12 @@ function describeEvent(entry: ShiftNoteReplyRow): string {
       );
       return parts.length > 0 ? `edited ${parts.join(' and ')}` : 'edited the note';
     }
+    case 'suggestion':
+      return data.action === 'approved'
+        ? 'approved a suggestion'
+        : data.action === 'dismissed'
+          ? 'dismissed a suggestion'
+          : 'decided a suggestion';
     default:
       return '';
   }
@@ -246,13 +262,24 @@ export function ShiftNotes() {
     }
   }, []);
 
+  // What the suggestion agent proposes per note — admins only, like the
+  // signals. A decision is recorded in the note's history, so re-read it.
+  const suggestions = useSuggestions('shift_note', viewer.isAdmin, (noteId) => {
+    void refreshThread(noteId);
+  });
+  const { refresh: refreshSuggestions, remove: removeSuggestions } = suggestions;
+
   // What the classifier found per note — admins only; the server sends
   // nothing to anyone else, and this fetches nothing for them. Each finished
   // read is also an entry in the note's thread, and may triage the note; the
   // worker does both just after the answer, so give it a moment before
-  // reading the note back.
+  // reading the note back. A read that found an action may also have started
+  // the suggestion agent on the note, so look for its run a little later.
   const signals = useClassifications('shift_note', viewer.isAdmin, (noteId, view) => {
-    if (view.state === 'done') window.setTimeout(() => void refreshThread(noteId), 1_000);
+    if (view.state === 'done') {
+      window.setTimeout(() => void refreshThread(noteId), 1_000);
+      window.setTimeout(() => void refreshSuggestions([noteId]), 3_000);
+    }
   });
   const { reset: resetSignals, merge: mergeSignals, remove: removeSignals } = signals;
   const [query, setQuery] = useState('');
@@ -289,12 +316,13 @@ export function ShiftNotes() {
       setNames(data.people ?? {});
       if (data.viewer) setViewer(data.viewer);
       if (data.scope) setScope(data.scope);
+      if (data.viewer?.isAdmin) void refreshSuggestions(data.notes.map((n) => n.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load shift notes');
     } finally {
       setLoading(false);
     }
-  }, [resetSignals]);
+  }, [resetSignals, refreshSuggestions]);
 
   useEffect(() => {
     void load();
@@ -466,6 +494,7 @@ export function ShiftNotes() {
         return rest;
       });
       removeSignals(note.id);
+      removeSuggestions(note.id);
       if (editId === note.id) setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete the note');
@@ -674,9 +703,9 @@ export function ShiftNotes() {
           {notice}
         </p>
       )}
-      {(error ?? signals.error) && (
+      {(error ?? signals.error ?? suggestions.error) && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error ?? signals.error}
+          {error ?? signals.error ?? suggestions.error}
         </p>
       )}
 
@@ -793,6 +822,14 @@ export function ShiftNotes() {
                       <SignalChips classification={signals.classifications[note.id]} />
                     </>
                   )}
+                  {viewer.isAdmin && suggestions.pendingCount(note.id) > 0 && (
+                    <a
+                      href={`#note-${note.id}-suggestions`}
+                      className={`${CHIP_CLASS} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/10`}
+                    >
+                      {suggestions.pendingCount(note.id)} suggested
+                    </a>
+                  )}
                 </span>
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
@@ -819,6 +856,24 @@ export function ShiftNotes() {
                               : undefined
                           }
                         />
+                      </button>
+                    )}
+                    {/* Asks the suggestion agent to draft tasks, comments,
+                        or SOP edits from this note for an admin to review. */}
+                    {viewer.isAdmin && (
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        disabled={
+                          busy ||
+                          suggestions.requesting === note.id ||
+                          suggestions.runs[note.id]?.status === 'queued' ||
+                          suggestions.runs[note.id]?.status === 'running'
+                        }
+                        title="Ask the agent to draft tasks or SOP edits from this note for you to review"
+                        onClick={() => void suggestions.suggest(note.id)}
+                      >
+                        Suggest
                       </button>
                     )}
                     {canSetStatus(viewer) &&
@@ -1012,6 +1067,20 @@ export function ShiftNotes() {
                     )}
                   </div>
                 )}
+              {viewer.isAdmin && (
+                <div id={`note-${note.id}-suggestions`} className="scroll-mt-20">
+                  <SuggestionPanel
+                    suggestions={suggestions.suggestions[note.id] ?? []}
+                    run={suggestions.runs[note.id]}
+                    results={suggestions.results}
+                    targets={suggestions.targets}
+                    names={names}
+                    onRetry={() => void suggestions.suggest(note.id)}
+                    onChange={suggestions.replace}
+                    onDecided={(next) => suggestions.decided(next.source_id)}
+                  />
+                </div>
+              )}
               {((replies[note.id]?.length ?? 0) > 0 || canReply(note, viewer)) && (
                 <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
                   <HistoryToggle
@@ -1203,6 +1272,7 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
   }
   const before = entry.data?.before?.body;
   const after = entry.data?.after?.body;
+  const made = entry.kind === 'suggestion' ? entry.data?.result : undefined;
   return (
     <div className="px-3 py-1">
       <p className="font-mono text-[10px] text-white/40">
@@ -1211,6 +1281,18 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
           {entry.author_email ? personName(entry.author_email, names) : 'Classifier'}
         </span>{' '}
         {describeEvent(entry)}
+        {made && (
+          <>
+            {' → '}
+            {made.href ? (
+              <a href={made.href} className="text-[var(--pyre-gold)] underline hover:text-white">
+                {made.label}
+              </a>
+            ) : (
+              made.label
+            )}
+          </>
+        )}
         {stamp}
       </p>
       {/* A text edit shows what it changed, the rest as context. */}

@@ -41,6 +41,7 @@ const chipClip = 'max-w-full overflow-hidden text-ellipsis';
 const SOURCE_CHIPS: Partial<Record<BoardCardRow['source'], string>> = {
   intake: 'from the web',
   form: 'from a form',
+  suggestion: 'suggested',
 };
 
 export function CardRow({

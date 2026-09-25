@@ -4,9 +4,9 @@
 // admin approves it here. See lib/suggestions for the lifecycle.
 //
 //   GET ?source=shift_note&ids=a,b  → { suggestions: { [id]: SuggestionView[] },
-//                                       runs: { [id]: RunView }, results }
+//                                       runs: { [id]: RunView }, results, targets }
 //   GET ?status=pending|decided&kind=&sourceType=&limit=
-//                                    → { suggestions, sources, results, people }  (the inbox)
+//                                    → { suggestions, sources, results, targets, people }  (the inbox)
 //   GET ?count=1                     → { pending }
 //   GET ?context=boards              → { boards } (the card editor's pickers)
 //   GET ?context=sop&id=<uuid>       → { sop } (current text, for the diff)
@@ -39,13 +39,16 @@ import {
   type InboxFilter,
   listForSources,
   listInbox,
-  resolveResults,
+  resolveLinks,
 } from '@/lib/suggestions/store';
 import {
   isSuggestionKind,
   isSuggestionSourceType,
   isUuid,
   MAX_DECISION_NOTE,
+  type RunView,
+  type SourceSummary,
+  type SuggestionView,
 } from '@/lib/suggestions/types';
 
 export const prerender = false;
@@ -58,22 +61,6 @@ function json(body: unknown, status = 200): Response {
 
 const MAX_IDS = 100;
 const INBOX_LIMIT = 100;
-
-/** A suggestion as the review UI reads it. */
-export type SuggestionView = AgentSuggestionRow & {
-  /** The source's text has changed since the agent read it. */
-  sourceChanged: boolean;
-};
-
-/** A run as the review UI reads it: stale open runs read as failed. */
-export interface RunView {
-  id: string;
-  status: AgentSuggestionRunRow['status'];
-  trigger: AgentSuggestionRunRow['trigger'];
-  count: number;
-  error: string | null;
-  createdAt: string;
-}
 
 function toRunView(run: AgentSuggestionRunRow): RunView {
   const status = runState(run);
@@ -169,7 +156,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (sourceType) {
     if (!isSuggestionSourceType(sourceType)) return json({ error: 'Unknown source' }, 400);
     const ids = (params.get('ids') ?? '').split(',').filter(isUuid);
-    if (ids.length === 0) return json({ suggestions: {}, runs: {}, results: {} });
+    if (ids.length === 0) return json({ suggestions: {}, runs: {}, results: {}, targets: {} });
     if (ids.length > MAX_IDS) return json({ error: `At most ${MAX_IDS} ids` }, 400);
 
     const [byId, runs, sources] = await Promise.all([
@@ -183,7 +170,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         [...byId].map(([id, rows]) => [id, rows.map((row) => toView(row, sources.get(id)))])
       ),
       runs: Object.fromEntries([...runs].map(([id, run]) => [id, toRunView(run)])),
-      results: await resolveResults(db, all),
+      ...(await resolveLinks(db, all)),
     });
   }
 
@@ -203,7 +190,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const { rows, error } = await listInbox(db, filter);
   if (error) return json({ error }, 500);
 
-  const sources: Record<string, { label: string; href: string; excerpt: string } | null> = {};
+  const sources: Record<string, SourceSummary | null> = {};
   const byType = new Map<string, string[]>();
   for (const row of rows) {
     const list = byType.get(row.source_type) ?? [];
@@ -228,7 +215,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   return json({
     suggestions: rows.map((row) => toView(row, loaded.get(`${row.source_type}:${row.source_id}`))),
     sources,
-    results: await resolveResults(db, rows),
+    ...(await resolveLinks(db, rows)),
     people: await getPeopleNames(
       rows.flatMap((r) => [r.decided_by, r.edited_by]).filter((e): e is string => !!e)
     ),

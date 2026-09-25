@@ -11,6 +11,7 @@ import { markDone } from './runs';
 import {
   cardHref,
   type SuggestionKind,
+  type SuggestionLinks,
   type SuggestionResultLink,
   type SuggestionSourceType,
   type SuggestionStatus,
@@ -268,25 +269,26 @@ export async function dismissPending(
 }
 
 /**
- * Where each approved suggestion's result lives, keyed by suggestion id:
- * the card it made or commented on, the SOP it edited. Looked up in a few
- * batched reads rather than stored, so a card that moves boards still links
- * to where it is now.
+ * The links the review UI shows per suggestion, keyed by suggestion id:
+ * `results` — where an approved one's result lives (the card it made or
+ * commented on, the SOP it edited); `targets` — the existing card or SOP a
+ * pending one acts on. Looked up in a few batched reads rather than stored,
+ * so a card that moves boards still links to where it is now.
  */
-export async function resolveResults(
+export async function resolveLinks(
   db: SupabaseClient,
   rows: readonly AgentSuggestionRow[]
-): Promise<Record<string, SuggestionResultLink>> {
-  const out: Record<string, SuggestionResultLink> = {};
-  const approved = rows.filter((r) => r.status === 'approved' && r.result_id);
-  if (approved.length === 0) return out;
+): Promise<SuggestionLinks> {
+  const results: Record<string, SuggestionResultLink> = {};
+  const targets: Record<string, SuggestionResultLink> = {};
+  if (rows.length === 0) return { results, targets };
 
   const cardIds = new Set<string>();
   const sopIds = new Set<string>();
-  for (const row of approved) {
+  for (const row of rows) {
+    if (row.target_type === 'board_card' && row.target_id) cardIds.add(row.target_id);
+    if (row.target_type === 'sop' && row.target_id) sopIds.add(row.target_id);
     if (row.result_type === 'board_card' && row.result_id) cardIds.add(row.result_id);
-    if (row.result_type === 'board_event' && row.target_id) cardIds.add(row.target_id);
-    if (row.result_type === 'sop_version' && row.target_id) sopIds.add(row.target_id);
   }
 
   const cards = new Map<string, Pick<BoardCardRow, 'id' | 'title' | 'board_id'>>();
@@ -317,21 +319,27 @@ export async function resolveResults(
     }
   }
 
-  for (const row of approved) {
-    if (row.result_type === 'sop_version') {
-      const sop = row.target_id ? sops.get(row.target_id) : undefined;
-      out[row.id] = sop
-        ? { label: sop.title, href: `/admin/sops/${sop.slug}` }
-        : { label: 'SOP (deleted)', href: null };
-      continue;
-    }
-    const cardId = row.result_type === 'board_card' ? row.result_id : row.target_id;
-    const card = cardId ? cards.get(cardId) : undefined;
+  const cardLink = (id: string | null): SuggestionResultLink => {
+    const card = id ? cards.get(id) : undefined;
     const slug = card ? boardSlugs.get(card.board_id) : undefined;
-    out[row.id] =
-      card && slug
-        ? { label: card.title, href: cardHref(slug, card.id) }
-        : { label: 'Task (deleted)', href: null };
+    return card && slug
+      ? { label: card.title, href: cardHref(slug, card.id) }
+      : { label: 'Task (deleted)', href: null };
+  };
+  const sopLink = (id: string | null): SuggestionResultLink => {
+    const sop = id ? sops.get(id) : undefined;
+    return sop
+      ? { label: sop.title, href: `/admin/sops/${sop.slug}` }
+      : { label: 'SOP (deleted)', href: null };
+  };
+
+  for (const row of rows) {
+    if (row.target_type === 'board_card') targets[row.id] = cardLink(row.target_id);
+    if (row.target_type === 'sop') targets[row.id] = sopLink(row.target_id);
+    if (row.status !== 'approved' || !row.result_id) continue;
+    if (row.result_type === 'board_card') results[row.id] = cardLink(row.result_id);
+    else if (row.result_type === 'board_event') results[row.id] = cardLink(row.target_id);
+    else if (row.result_type === 'sop_version') results[row.id] = sopLink(row.target_id);
   }
-  return out;
+  return { results, targets };
 }

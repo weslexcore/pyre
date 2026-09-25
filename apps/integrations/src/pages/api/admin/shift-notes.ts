@@ -47,6 +47,7 @@ import {
   type ShiftNoteReplyRow,
   type ShiftNoteRow,
 } from '@/lib/db';
+import { deleteBySource } from '@/lib/notifications/notify';
 import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
   canSeeNote,
@@ -60,6 +61,7 @@ import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
+import { suggestionNoticeSource } from '@/lib/suggestions/notify';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -483,6 +485,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const { error } = await db.from('shift_notes').delete().eq('id', id);
   if (error) return json({ error: error.message }, 500);
+
+  // Its undecided agent suggestions went with it (a trigger); the admins'
+  // bell rows about them would point at nothing.
+  const notice = suggestionNoticeSource('shift_note', id);
+  await deleteBySource(db, notice.type, notice.id);
 
   return json({ ok: true });
 };

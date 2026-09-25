@@ -1,0 +1,17 @@
+---
+// Agent suggestions inbox: everything the suggestion agent has proposed —
+// new tasks, comments on existing tasks, SOP edits — across every record it
+// looked at, for admins to edit and approve or dismiss in one place. Each one
+// links back to where it came from (a shift note). Admin-only: the
+// middleware + AdminLayout gate keeps everyone else out (the page is not
+// grantable), and /api/admin/suggestions re-checks on every request.
+import { SuggestionsInbox } from '@/components/admin/suggestions/SuggestionsInbox';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Suggestions"
+  subtitle="Tasks, comments, and SOP edits the agent proposes from shift notes. Nothing happens until you approve it — edit anything first."
+>
+  <SuggestionsInbox client:load />
+</AdminLayout>
