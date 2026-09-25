@@ -35,8 +35,9 @@ scheduler. The initiator decides for the life of a session, so a follow-up
 can never flip a conversation to the other role, and a knowledge session
 never sees `save_proposal`.
 
-Both roles run with the sandbox, web, delegation, and question tools
-disabled (`agent/tools/{bash,read_file,...}.ts`): the scheduler works from
+Both roles run with eve's optional built-in tools off (`defaultTools: false`
+in `agent/agent.ts`: no sandbox, web, delegation, or question tools): the
+scheduler works from
 `get_week_context`, the assistant from the knowledge base, and document text
 never gets a shell.
 
@@ -123,13 +124,12 @@ hourly cron classify-sweep re-runs anything that never landed
   the questions (`agent/lib/classify/questions.ts`) are built from its
   signal definitions, so a new signal type needs no edit here. See that
   package's README for adding signals or classifying other records.
-- `agent/lib/classify/classify.ts` calls Jev with the AI SDK's
-  `experimental_evaluate` (ai ≥ 7.0.105, pinned in package.json and
-  pre-approved past the npm age gate in `.yarnrc.yml` until it ages out).
-  The `typesafe-ai/jev` model string resolves through AI Gateway with the
-  same credentials as the language models: `AI_GATEWAY_API_KEY` locally,
-  OIDC on Vercel. The API is experimental and can change in patch
-  releases, so bump `ai` deliberately.
+- `agent/lib/classify/classify.ts` calls Jev with `evaluate` from `eve/ai`
+  (the AI SDK evaluation API with eve's model authentication). The
+  `typesafe-ai/jev` model string resolves through AI Gateway with the same
+  credentials as the language models: `AI_GATEWAY_API_KEY` locally, OIDC on
+  Vercel. The evaluation API is experimental upstream, so bump `eve` / `ai`
+  deliberately.
 
 ### Staff-scheduling drafter
 
@@ -183,6 +183,15 @@ dedicated Supabase secret key for this whole app (`SUPABASE_AGENTS_SECRET_KEY`
 integrations'), `AGENT_API_SECRET` for outbound writes to integrations,
 `EVE_CHANNEL_SECRET` for inbound session triggers. A future agent needing
 riskier access should graduate to its own Eve app + Vercel project.
+
+## Session protocol (eve ≥ 0.31)
+
+Sessions are addressed by id alone: follow-ups `POST /eve/v1/session/:id`
+with `{ message }` (no continuation token), an ended session answers `409
+session_not_active`, and the channel sets `turnPolicy: "queue"` so a
+follow-up waits for an active turn instead of steering it. Stream text
+appends are deltas (`messageDelta`); the integrations Ask proxy accumulates
+them. See `apps/integrations/src/lib/schedule/eve-session.ts`.
 
 ## Local dev (Node 24)
 

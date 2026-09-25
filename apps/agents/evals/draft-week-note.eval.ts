@@ -26,8 +26,8 @@ export default defineEval({
     t.maxToolCalls(6);
     t.noFailedActions();
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       "The assistant's rationale opens by saying how it handled the admin's note — which of the named people it placed as asked, and explicitly which parts it could not honour and why (e.g. unavailable, shift already covered). It does not claim to have broken availability or staffing limits to satisfy the note."
-    );
+    ).atLeast(0.7);
   },
 });

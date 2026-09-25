@@ -100,7 +100,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   // Try to resume the drafting session; fall back to a fresh one when it's
   // gone. The tail read doubles as the concurrency guard: a session mid-turn
-  // (or a continuation someone else just took) means one refine at a time.
+  // means one refine at a time.
   let sessionId = priorSessionId;
   let resumed = false;
   if (priorSessionId) {
@@ -110,12 +110,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       const sent = await sendEveFollowUp(
         eveConfig,
         priorSessionId,
-        tail.continuationToken,
         buildRefineMessage(weekStart, prompt)
       );
       if (!sent.ok && sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
-      if (!sent.ok) return json({ error: `Agent follow-up failed: ${sent.detail}` }, 502);
-      resumed = true;
+      if (!sent.ok && sent.reason === 'error') {
+        return json({ error: `Agent follow-up failed: ${sent.detail}` }, 502);
+      }
+      // 'gone' (ended between the tail read and the send) falls back below.
+      resumed = sent.ok;
     }
   }
 

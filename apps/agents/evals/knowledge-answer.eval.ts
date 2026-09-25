@@ -52,11 +52,12 @@ export default defineEval({
       satisfies((v) => !/save_proposal|get_week_context/.test(String(v)), 'never names scheduler tools')
     );
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       'The reply answers from the sauna and cold plunge health guide: it lists benefits with the ' +
         "guide's evidence qualifiers (strong / moderate / early) or equivalent caution, does not " +
         'invent claims beyond what a knowledge base would hold, and ends with a Sources list ' +
-        'linking to /admin/sops/ pages.'
-    );
+        'linking to /admin/sops/ pages.',
+      { on: turn.message ?? '' }
+    ).atLeast(0.7);
   },
 });

@@ -29,7 +29,12 @@ import {
   MAX_QUESTION_LENGTH,
   sanitizeQuestion,
 } from '@/lib/knowledge/scope';
-import { type AskStreamEvent, reduceStreamEvent, type UpstreamEvent } from '@/lib/knowledge/stream';
+import {
+  type AskStreamEvent,
+  createStreamReducerState,
+  reduceStreamEvent,
+  type UpstreamEvent,
+} from '@/lib/knowledge/stream';
 import type { EveConfig } from '@/lib/schedule/eve-session';
 import {
   countEveSessionEvents,
@@ -111,7 +116,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (tail.state === 'waiting') {
       const nextIndex =
         session.resume === true
-          ? await countEveSessionEvents(sessionConfig, session.id, tail.continuationToken)
+          ? await countEveSessionEvents(sessionConfig, session.id)
           : undefined;
       // A resume whose log could not be measured is treated as gone: a
       // fresh session beats streaming the new answer from a guessed index.
@@ -119,7 +124,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         const sent = await sendEveFollowUp(
           sessionConfig,
           session.id,
-          tail.continuationToken,
           buildAskMessage(question, true)
         );
         if (sent.ok) {
@@ -135,7 +139,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           );
         }
         if (sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
-        return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
+        if (sent.reason === 'error') {
+          return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
+        }
+        // 'gone': the session ended between the tail read and the send.
       }
     }
     // 'gone' — fall through to a fresh session; the island tells the reader.
@@ -201,6 +208,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     async start(controller) {
       let index = startIndex;
       let buffer = '';
+      const reducerState = createStreamReducerState();
       let closed = false;
       const emit = (event: AskStreamEvent) => {
         if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
@@ -229,7 +237,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
               continue;
             }
             index += 1;
-            const reduced = reduceStreamEvent(event, index);
+            const reduced = reduceStreamEvent(event, index, reducerState);
             if (!reduced) continue;
             emit(reduced);
             if (reduced.type === 'done') {
