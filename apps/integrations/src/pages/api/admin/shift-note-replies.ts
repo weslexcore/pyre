@@ -7,11 +7,11 @@
 // its author or an admin. Author identity always comes from the session.
 //
 // The thread is the note's whole activity: these comments, plus the events
-// the app records for status changes, edits, and Jev's answers (see
+// the app records for status changes, edits, and the classifier's answers (see
 // lib/shift-notes/activity). Events are history — they come back in reads
 // but can't be edited or deleted here. The page reads every thread on the
 // notes route (GET /api/admin/shift-notes); GET here refreshes one note's,
-// e.g. once Jev's answer has landed in it.
+// e.g. once the classifier's answer has landed in it.
 //
 //   GET    ?noteId=<uuid>               → { replies, people }
 //   POST   { noteId, body, isPrivate? } → { reply, people }

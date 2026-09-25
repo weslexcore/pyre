@@ -1,10 +1,10 @@
 -- Shift note activity: everything that happens to a note becomes an entry in
 -- its thread, so the history of a note reads top to bottom — who replied,
--- who moved it to "to do", who edited it, what Jev found each time it read
--- it. Until now only replies lived in the thread; a status change or an edit
--- just overwrote a "marked by" / "edited by" stamp on the note, and a Jev
--- re-run replaced the last answer, so nothing showed how a note got to where
--- it is. As more actions land on notes, each one adds a kind here rather than
+-- who moved it to "to do", who edited it, what the classifier found each
+-- time it read it. Until now only replies lived in the thread; a status
+-- change or an edit just overwrote a "marked by" / "edited by" stamp on the
+-- note, and a classifier re-run replaced the last answer, so nothing showed
+-- how a note got to where it is. As more actions land on notes, each one adds a kind here rather than
 -- another stamp on the card.
 --
 -- shift_note_replies keeps its name and its rows (every existing row is a
@@ -12,7 +12,8 @@
 --
 --   kind — comment (a person writing in the thread, as before), status (an
 --          admin moved the note between open / todo / resolved), edit (the
---          note's text or date changed), classification (Jev read the note).
+--          note's text or date changed), classification (the classifier
+--          read the note; data.model says which model answered).
 --   data — what the event carries: { from, to } for status, { fields } for
 --          edit, { signals, model, requested_by } for classification.
 --
@@ -22,8 +23,8 @@
 -- author, like the status badge always was; classification events stay with
 -- the admins, like the signal chips.
 --
--- A classification event has no author_email: Jev wrote it. The admin who
--- asked for the run, if one did, is data.requested_by.
+-- A classification event has no author_email: the classifier wrote it. The
+-- admin who asked for the run, if one did, is data.requested_by.
 
 alter table public.shift_note_replies
   add column kind text not null default 'comment'
@@ -32,7 +33,7 @@ alter table public.shift_note_replies
     check (data is null or jsonb_typeof(data) = 'object'),
   alter column author_email drop not null,
   alter column body set default '',
-  -- Everyone but Jev signs their entries.
+  -- Everyone but the classifier signs their entries.
   add constraint shift_note_replies_author_check
     check (author_email is not null or kind = 'classification');
 
@@ -61,7 +62,7 @@ select
 from public.shift_notes n
 where n.status_by is not null and n.status_at is not null;
 
--- ... and every note's last Jev answer.
+-- ... and every note's last classifier answer.
 insert into public.shift_note_replies
   (note_id, kind, author_email, body, is_private, data, created_at, updated_at)
 select
@@ -80,8 +81,8 @@ where c.subject_type = 'shift_note'
   and c.classified_at is not null;
 
 comment on column public.shift_note_replies.kind is
-  'comment (a person in the thread), status (admin triage), edit (note text/date changed), classification (Jev read the note). Events are app-written and immutable.';
+  'comment (a person in the thread), status (admin triage), edit (note text/date changed), classification (the classifier read the note). Events are app-written and immutable.';
 comment on column public.shift_note_replies.data is
   'Event payload: { from, to } for status, { fields } for edit, { signals, model, requested_by } for classification; null for comments.';
 comment on table public.shift_note_replies is
-  'A shift note''s activity (/admin/shift-notes): comments from admins and the author, plus status changes, edits, and Jev classifications as events. Visible to whoever can see the note, except is_private entries (private comments, classifications), which only admins read.';
+  'A shift note''s activity (/admin/shift-notes): comments from admins and the author, plus status changes, edits, and classifications as events. Visible to whoever can see the note, except is_private entries (private comments, classifications), which only admins read.';

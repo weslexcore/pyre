@@ -1,8 +1,9 @@
 // A shift note's activity: every action on a note is written into its thread
 // (shift_note_replies) as an event next to the comments, so the page can show
 // how a note got where it is — who moved it to "to do", who edited it, what
-// Jev found each time it read it — instead of only the latest stamp on the
-// card. Comments are written by the replies route; this records the rest.
+// the classifier found each time it read it — instead of only the latest
+// stamp on the card. Comments are written by the replies route; this records
+// the rest.
 //
 // Recording is best-effort: the action itself (the status flip, the edit,
 // the classification) has already been saved, and a lost history entry must
@@ -68,8 +69,9 @@ export function recordEdit(
 }
 
 /**
- * Jev read the note. Admins only, like the signal chips; `requestedBy` is the
- * admin who asked for the run, absent when a write triggered it.
+ * The classifier read the note. Admins only, like the signal chips;
+ * `requestedBy` is the admin who asked for the run, absent when a write
+ * triggered it.
  */
 export function recordClassification(
   db: SupabaseClient,

@@ -12,7 +12,7 @@
 //     (an admin, or the author on their own note); an entry is visible to
 //     whoever sees the note, unless it is private, in which case only admins
 //     read it. Editing or deleting a comment is its author or an admin. The
-//     other entries are events the app recorded (status changes, edits, Jev
+//     other entries are events the app recorded (status changes, edits,
 //     classifications) and nobody edits or deletes them.
 //
 // Client-bundle-safe (no db/env imports): the island uses it to decide which

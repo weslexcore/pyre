@@ -364,7 +364,7 @@ export type ShiftNoteStatus = 'open' | 'todo' | 'resolved';
 
 // One entry in a shift note's activity thread: a comment (an admin
 // responding in context, or the author replying back) or an event the app
-// recorded — a status change, an edit, a Jev classification. Private entries
+// recorded — a status change, an edit, a classification. Private entries
 // are admin-only (see lib/shift-notes/access).
 export interface ShiftNoteReplyRow {
   id: string;
@@ -373,7 +373,7 @@ export interface ShiftNoteReplyRow {
   kind: ShiftNoteActivityKind;
   /** The comment's text; '' on events. */
   body: string;
-  /** Who wrote it; null only on a classification (Jev wrote it). */
+  /** Who wrote it; null only on a classification (the classifier wrote it). */
   author_email: string | null;
   is_private: boolean;
   /** Event payload (see ShiftNoteActivityData); null on comments. */

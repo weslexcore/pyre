@@ -16,7 +16,7 @@ export interface ClassificationView {
 }
 
 /**
- * A run that has not saved within this long is not going to: Jev reads a
+ * A run that has not saved within this long is not going to: the classifier reads a
  * note in well under a second, so anything this old failed without telling
  * us (a crashed turn, a lost request). It reads as failed and can be re-run.
  */

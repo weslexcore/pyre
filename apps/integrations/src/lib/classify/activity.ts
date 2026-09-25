@@ -1,6 +1,6 @@
 // Where each subject keeps its history of classifications. Every run that
 // saves an answer is also written to the record's own activity (for shift
-// notes, an entry in the note's thread), so the page shows what Jev found
+// notes, an entry in the note's thread), so the page shows what the classifier found
 // each time it read the record, not only the latest answer. The Record type
 // makes a new subject a type error here until it says where that goes.
 //

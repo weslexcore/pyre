@@ -1,10 +1,12 @@
-// What Jev found in a record, drawn as chips — and the hook that keeps those
+// What the classifier found in a record, drawn as chips — and the hook that keeps those
 // results current on a page. Generic over subjects: a page that lists
 // classifiable records (shift notes today) seeds useClassifications with what
 // its own GET returned, merges in what its writes return, and renders
 // <SignalChips> per record. Classification runs in the background after a
-// write, so records still being read are polled until they settle; "Run
-// Jev" queues a fresh read of any record, classified before or not.
+// write, so records still being read are polled until they settle;
+// "Classify" queues a fresh read of any record, classified before or not.
+// Nothing here names the model behind the classifier (lib/classify picks it),
+// so the page reads the same whichever one is answering.
 //
 // Labels come from @pyre/signals-core, so a new signal type shows up here
 // with no change; SIGNAL_TONES only picks its colour (unknown → neutral).
@@ -71,7 +73,7 @@ export function SignalList({ signals }: { signals: readonly Signal[] }) {
 
 /**
  * One record's classification: its signals, or where the read stands. With
- * `onRerun`, always offers a run — "Run Jev" on a record never classified
+ * `onRerun`, always offers a run — "Classify" on a record never classified
  * (written before the classifier, or while it was off), "Run again" on any
  * other, including one still reading that may be stuck. Without it, draws
  * nothing for a record never classified.
@@ -87,7 +89,7 @@ export function SignalChips({
 }) {
   const rerun = onRerun && (
     <button type="button" className={quietButtonClass} disabled={busy} onClick={onRerun}>
-      {classification ? 'Run again' : 'Run Jev'}
+      {classification ? 'Run again' : 'Classify'}
     </button>
   );
 
@@ -95,7 +97,7 @@ export function SignalChips({
     if (!rerun) return null;
     return (
       <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
-        ✦ Not read by Jev yet. {rerun}
+        ✦ Not classified yet. {rerun}
       </p>
     );
   }

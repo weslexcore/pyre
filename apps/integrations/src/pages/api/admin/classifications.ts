@@ -2,7 +2,7 @@
 // it on demand. The page that lists the records normally carries their
 // classifications itself (see loadClassifications); this route serves the
 // follow-ups — polling notes that are still being read, and an admin's
-// "Run Jev" on any record: one never classified (written before the
+// "Classify" on any record: one never classified (written before the
 // classifier existed), one that failed, or one that read wrong. The run is
 // queued like any other classification (after the response), forced past
 // the unchanged-text skip, and recorded in the record's activity with the

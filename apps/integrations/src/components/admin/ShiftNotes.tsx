@@ -16,17 +16,19 @@
 // admins flip, so a request or piece of feedback gets tracked to completion,
 // and an activity thread: comments, in which an admin responds in context and
 // the author replies back, and an entry for every action on the note — each
-// status change, each edit, each time Jev read it — so the note's history
+// status change, each edit, each time the classifier read it — so the note's history
 // reads in order. Entries show to whoever sees the note; an admin can mark a
-// comment private, which keeps it among the admins, and Jev's entries are
+// comment private, which keeps it among the admins, and the classifier's entries are
 // admins-only (the server never sends those to anyone else).
 //
-// For admins, each note also shows what Jev found in it — actions to take,
+// For admins, each note also shows what the classifier found in it — actions to take,
 // questions to answer, records to update, feedback, safety concerns
 // (Signals.tsx, lib/classify) — and the log can be filtered by them. The
 // read happens in the background after a note is saved, so the note appears
 // at once marked "Reading…" and its chips fill in a few seconds later; an
-// edit to its text is read again, and an admin can run Jev on any note.
+// edit to its text is read again, and an admin can run the classifier on any note.
+// The page never names the model behind it (lib/classify picks that), so
+// swapping models changes nothing here.
 import { readStoredSignals, type SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
@@ -203,7 +205,7 @@ export function ShiftNotes() {
   const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
   const [signalFilter, setSignalFilter] = useState<'all' | SignalType>('all');
 
-  /** Re-read one note's thread from the server (e.g. once Jev's answer is in it). */
+  /** Re-read one note's thread from the server (e.g. once the classifier's answer is in it). */
   const refreshThread = useCallback(async (noteId: string) => {
     try {
       const res = await fetch(`/api/admin/shift-note-replies?noteId=${encodeURIComponent(noteId)}`);
@@ -1097,7 +1099,7 @@ export function ShiftNotes() {
 
 /**
  * One recorded action in a note's thread: a single quiet line (who, what,
- * when), set apart from the comments. Jev's reads also show what it found.
+ * when), set apart from the comments. The classifier's reads also show what it found.
  */
 function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: PeopleNames }) {
   const stamp = <span className="text-white/30"> · {formatStamp(entry.created_at)}</span>;
@@ -1107,7 +1109,8 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
     return (
       <div className="flex flex-wrap items-center gap-2 px-3 py-1 font-mono text-[10px] text-white/40">
         <span>
-          ✦ Jev read this note{requestedBy ? ` for ${personName(requestedBy, names)}` : ''}
+          ✦ Classifier read this note
+          {requestedBy ? `, run by ${personName(requestedBy, names)}` : ''}
           {found.length === 0 && ' — nothing to act on'}
           {stamp}
         </span>

@@ -11,9 +11,9 @@
 // set, and an activity thread (shift_note_replies): comments, in which admins
 // respond and the author replies back (shift-note-replies.ts), and an event
 // for every action on the note — each status change and edit made here, and
-// each answer Jev gives (lib/classify) — so the note's history reads in order
+// each answer the classifier gives (lib/classify) — so the note's history reads in order
 // rather than as the latest stamp. GET returns the entries the viewer may
-// read (private comments and Jev's answers stay with the admins).
+// read (private comments and the classifier's answers stay with the admins).
 //
 // Photos/video backing a note are handled by shift-note-media.ts; GET here
 // returns each note's attachment rows so the log renders in one request. The
@@ -21,9 +21,9 @@
 // media route); POST claims them by id once the note exists, and GET sweeps
 // staged rows nobody claimed within a day.
 //
-// Every new note, and every edit that changes a note's text, is classified by
-// Jev (lib/classify), which reports what the note asks of
-// the team — actions, questions, updates, feedback, safety concerns. That runs
+// Every new note, and every edit that changes a note's text, is classified
+// (lib/classify, which picks the model), reporting what the note asks of the
+// team — actions, questions, updates, feedback, safety concerns. That runs
 // in the background after the response goes out, so saving a note never waits
 // on it. Admins, who triage the log, get the signals with each note (and a
 // pending marker right after a write); authors never do.
