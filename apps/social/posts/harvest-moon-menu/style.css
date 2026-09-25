@@ -93,9 +93,9 @@
 
 .menu__logo {
   position: absolute;
-  top: 120px;
+  top: 100px;
   left: 50%;
-  height: 150px;
+  height: 250px;
   width: auto;
   opacity: 0.9;
   transform: translateX(-50%);
