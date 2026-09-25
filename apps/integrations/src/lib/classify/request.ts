@@ -28,6 +28,11 @@ export interface ClassifyOptions {
   force?: boolean;
   /** The admin who asked for this run, recorded with its answer; absent when a write triggered it. */
   requestedBy?: string;
+  /**
+   * Once the answer is saved, have the suggestion agent look at the record
+   * too (an admin's AI button: read it, then propose what to do about it).
+   */
+  thenSuggest?: boolean;
 }
 
 /** What an admin's page shows right after scheduling: a read in progress. */
@@ -129,6 +134,7 @@ export async function runClassification(
         signals: row.signals,
         model: row.model,
         ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
+        ...(options.thenSuggest ? { thenSuggest: true } : {}),
       });
     }
     return toClassificationView(row);

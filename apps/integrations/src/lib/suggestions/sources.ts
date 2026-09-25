@@ -32,7 +32,7 @@ export interface SuggestionSource {
    * Whether a classification of this record should start a suggestion run on
    * its own: the record is still open and the classifier found one of
    * `autoSignals` in it (the suggestions.autoSignals setting). An admin's
-   * Suggest button ignores this.
+   * AI button ignores this.
    */
   autoEligible(record: SourceRecord, signals: unknown, autoSignals: readonly string[]): boolean;
 }

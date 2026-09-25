@@ -272,15 +272,20 @@ export function useClassifications(
     };
   }, [enabled, pendingIds, pollTick, subject]);
 
+  /**
+   * Read one record again. `extra` rides along in the request — the shift
+   * notes page passes { suggest: true } so the suggestion agent looks at the
+   * note once the read is saved.
+   */
   const rerun = useCallback(
-    async (id: string) => {
+    async (id: string, extra?: Record<string, unknown>) => {
       setRerunning(id);
       setError(null);
       try {
         const res = await fetch('/api/admin/classifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, id }),
+          body: JSON.stringify({ ...extra, subject, id }),
         });
         const data = (await res.json().catch(() => ({}))) as {
           classification?: ClassificationView;

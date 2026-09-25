@@ -104,7 +104,8 @@ interface ImportMetaEnv {
   readonly AGENTS_PROTECTION_BYPASS?: string;
   // 'on' lets a shift note's classification start a suggestion run on its own
   // (lib/suggestions/trigger.ts) when it finds an action or an update; unset,
-  // suggestions come only from an admin's Suggest button.
+  // suggestions come only from a note's AI button. Now a setting on
+  // /admin/settings; this is only its fallback.
   readonly SUGGESTIONS_AUTO?: string;
   // AI Gateway key for Jev (lib/jev.ts). Local dev only: deployed, the
   // Gateway authenticates with Vercel OIDC.

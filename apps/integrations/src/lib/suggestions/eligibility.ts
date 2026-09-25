@@ -2,7 +2,7 @@
 // looked at automatically at most once per version of its text (the runs
 // table's unique index), and not at all while that version has a dismissed
 // suggestion — an admin already said no to what it would propose. Editing
-// the text makes it eligible again. An admin's Suggest button skips all this.
+// the text makes it eligible again. A note's AI button skips all this.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSetting } from '@/lib/settings/store';
@@ -10,7 +10,7 @@ import { suggesterConfigured } from './session';
 import { SUGGESTION_SOURCES } from './sources';
 import type { SuggestionSourceType } from './types';
 
-/** Whether suggestions are on at all (the Suggest button, and anything automatic). */
+/** Whether suggestions are on at all (the AI button's, and anything automatic). */
 export async function suggestionsEnabled(): Promise<boolean> {
   return (await getSetting('suggestions.enabled')) && suggesterConfigured();
 }

@@ -50,7 +50,7 @@ export const SETTINGS = {
     section: 'suggestions',
     label: 'Suggestions',
     description:
-      'Admins can ask the agent for suggestions from a shift note (the Suggest button). Turning this off also stops automatic suggestions; suggestions already waiting stay in the inbox.',
+      'The AI button on a shift note also has the agent suggest tasks, task comments, and SOP edits after reading it. Turning this off leaves the button reading notes only, and stops automatic suggestions; suggestions already waiting stay in the inbox.',
     default: true,
   },
   'suggestions.auto': {
@@ -58,7 +58,7 @@ export const SETTINGS = {
     section: 'suggestions',
     label: 'Suggest automatically',
     description:
-      'After the classifier reads a note and finds one of the signals below, the agent looks at it without anyone pressing Suggest — once per version of the note, and not again after a suggestion from it was dismissed.',
+      'After the classifier reads a note and finds one of the signals below, the agent looks at it without anyone pressing the AI button — once per version of the note, and not again after a suggestion from it was dismissed.',
     default: false,
     env: 'SUGGESTIONS_AUTO',
   },

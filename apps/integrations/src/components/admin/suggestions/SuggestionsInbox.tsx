@@ -114,7 +114,7 @@ export function SuggestionsInbox() {
       {data && rows.length === 0 && (
         <p className="font-mono text-xs text-white/40">
           {status === 'pending'
-            ? 'Nothing waiting. Ask for suggestions from any shift note with its Suggest button.'
+            ? 'Nothing waiting. Press the AI button on any shift note to have the agent read it and suggest what to do.'
             : 'Nothing decided yet.'}
         </p>
       )}

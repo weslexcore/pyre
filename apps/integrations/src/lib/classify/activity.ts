@@ -13,13 +13,15 @@ import type { SubjectType } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordClassification } from '@/lib/shift-notes/activity';
 import { triageFromClassification } from '@/lib/shift-notes/triage';
-import { maybeSuggestAfterClassification } from '@/lib/suggestions/trigger';
+import { maybeSuggestAfterClassification, suggestForAdmin } from '@/lib/suggestions/trigger';
 
 export interface ClassifiedResult {
   signals: unknown;
   model: string | null;
   /** The admin who asked for the run; absent when a write triggered it. */
   requestedBy?: string;
+  /** The admin also asked for suggestions (the AI button), so start them now. */
+  thenSuggest?: boolean;
 }
 
 export const AFTER_CLASSIFIED: Record<
@@ -27,11 +29,16 @@ export const AFTER_CLASSIFIED: Record<
   (db: SupabaseClient, id: string, result: ClassifiedResult) => Promise<unknown>
 > = {
   // The answer first, then the status it led to, so the thread reads in
-  // order; then, if it found work to do, the suggester may look at the note
-  // (lib/suggestions/eligibility decides; off unless SUGGESTIONS_AUTO=on).
+  // order; then the suggester looks at the note — because the admin who ran
+  // the classifier asked it to, or because it found work to do and automatic
+  // suggestions are on (lib/suggestions/eligibility decides).
   async shift_note(db, id, result) {
     await recordClassification(db, id, result);
     await triageFromClassification(db, id, result.signals);
-    await maybeSuggestAfterClassification(db, 'shift_note', id, result.signals);
+    if (result.thenSuggest && result.requestedBy) {
+      await suggestForAdmin(db, 'shift_note', id, result.requestedBy);
+    } else {
+      await maybeSuggestAfterClassification(db, 'shift_note', id, result.signals);
+    }
   },
 };

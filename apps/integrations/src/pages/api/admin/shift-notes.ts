@@ -256,7 +256,7 @@ export const GET: APIRoute = async ({ cookies }) => {
             'shift_note',
             notes.map((n) => n.id)
           ),
-          // Whether to offer the Suggest button (the settings page's switch).
+          // Whether the AI button also asks for suggestions (the settings page's switch).
           suggestionsEnabled: await suggestionsEnabled(),
         }
       : {}),

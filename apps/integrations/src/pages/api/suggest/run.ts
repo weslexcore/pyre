@@ -1,6 +1,6 @@
 // The suggestion worker: QStash calls this for every job lib/suggestions/
 // dispatch publishes (a classification that found an action, an admin's
-// Suggest button) and retries it with backoff on any non-2xx. It files or
+// AI button) and retries it with backoff on any non-2xx. It files or
 // picks up the run and starts the pyre-agents suggester on it; the agent's
 // work then happens there, and ends with it posting to /api/agent/suggestions.
 //

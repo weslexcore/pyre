@@ -135,6 +135,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const text = await source.loadText(db, id);
   if (text === null) return json({ error: 'Not found' }, 404);
 
-  scheduleClassification(subject, id, text, options);
+  // The single-record run is an admin's AI button, which can also ask for
+  // suggestions once the read is saved (bulk runs never do).
+  scheduleClassification(subject, id, text, {
+    ...options,
+    ...(body.suggest === true ? { thenSuggest: true } : {}),
+  });
   return json({ classification: pendingView() }, 202);
 };

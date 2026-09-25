@@ -34,6 +34,8 @@ export interface ClassifyJob {
   force?: boolean;
   /** The admin who asked for the run, recorded with its answer. */
   requestedBy?: string;
+  /** Start the suggestion agent once the answer is saved. */
+  thenSuggest?: boolean;
 }
 
 export type DispatchOutcome =
@@ -86,6 +88,7 @@ function jobMessage(
     id: subjectId,
     ...(options.force ? { force: true } : {}),
     ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
+    ...(options.thenSuggest ? { thenSuggest: true } : {}),
   };
   // Preview deployments sit behind Vercel Deployment Protection, which
   // would 401 QStash at the edge; Vercel sets this secret when "Protection

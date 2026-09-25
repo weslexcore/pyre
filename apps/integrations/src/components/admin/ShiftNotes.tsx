@@ -39,8 +39,10 @@
 // Admins also see what the suggestion agent proposes for a note — new tasks,
 // comments on existing tasks, SOP edits (suggestions/, lib/suggestions) —
 // under the note, each an editor they can change before approving or
-// dismissing. The agent looks at a note when an admin presses Suggest, or on
+// dismissing. The agent looks at a note when an admin presses its AI button, or on
 // its own after the classifier finds an action (when that is switched on).
+// The note's AI button does both in one go: it reads the note, then has the
+// agent look at it.
 // Nothing it proposes happens until an admin approves it, and every decision
 // lands in the note's history with a link to what it made.
 import { readStoredSignals, type SignalType } from '@pyre/signals-core';
@@ -268,19 +270,21 @@ export function ShiftNotes() {
     void refreshThread(noteId);
   });
   const { refresh: refreshSuggestions, remove: removeSuggestions } = suggestions;
-  // Whether to offer Suggest: suggestions can be switched off in Settings.
+  // Whether the AI button also asks for suggestions: they can be switched off in Settings.
   const [canSuggest, setCanSuggest] = useState(false);
 
   // What the classifier found per note — admins only; the server sends
   // nothing to anyone else, and this fetches nothing for them. Each finished
   // read is also an entry in the note's thread, and may triage the note; the
   // worker does both just after the answer, so give it a moment before
-  // reading the note back. A read that found an action may also have started
-  // the suggestion agent on the note, so look for its run a little later.
+  // reading the note back. A finished read may also have started the
+  // suggestion agent on the note (the AI button asks for that, and automatic
+  // suggestions may), filed just after the answer, so look for its run.
   const signals = useClassifications('shift_note', viewer.isAdmin, (noteId, view) => {
     if (view.state === 'done') {
       window.setTimeout(() => void refreshThread(noteId), 1_000);
-      window.setTimeout(() => void refreshSuggestions([noteId]), 3_000);
+      window.setTimeout(() => void refreshSuggestions([noteId]), 2_000);
+      window.setTimeout(() => void refreshSuggestions([noteId]), 6_000);
     }
   });
   const { reset: resetSignals, merge: mergeSignals, remove: removeSignals } = signals;
@@ -838,18 +842,35 @@ export function ShiftNotes() {
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
                     {/* Reads the note and, if no admin has set its status,
-                        sorts it into To do or Resolved — so it sits with the
-                        note's other actions rather than the chips. */}
+                        sorts it into To do or Resolved; then, when
+                        suggestions are on, has the agent draft tasks,
+                        comments, or SOP edits from it for review. It sits
+                        with the note's other actions rather than the chips. */}
                     {viewer.isAdmin && (
                       <button
                         type="button"
                         className={`${buttonClass} flex items-center px-2`}
-                        disabled={busy || signals.rerunning === note.id}
-                        aria-label={
-                          signals.classifications[note.id] ? 'Reclassify note' : 'Classify note'
+                        disabled={
+                          busy ||
+                          signals.rerunning === note.id ||
+                          suggestions.runs[note.id]?.status === 'queued' ||
+                          suggestions.runs[note.id]?.status === 'running'
                         }
-                        title="Read this note for anything actionable and, unless an admin has set its status, mark it To do or Resolved"
-                        onClick={() => void signals.rerun(note.id)}
+                        aria-label={
+                          canSuggest
+                            ? 'Read this note and suggest tasks'
+                            : signals.classifications[note.id]
+                              ? 'Reclassify note'
+                              : 'Classify note'
+                        }
+                        title={
+                          canSuggest
+                            ? 'Read this note for anything actionable, mark it To do or Resolved unless an admin has set its status, and have the agent suggest tasks or SOP edits for you to review'
+                            : 'Read this note for anything actionable and, unless an admin has set its status, mark it To do or Resolved'
+                        }
+                        onClick={() =>
+                          void signals.rerun(note.id, canSuggest ? { suggest: true } : undefined)
+                        }
                       >
                         {/* Pulses while a read is under way. */}
                         <SparkleIcon
@@ -860,24 +881,6 @@ export function ShiftNotes() {
                               : undefined
                           }
                         />
-                      </button>
-                    )}
-                    {/* Asks the suggestion agent to draft tasks, comments,
-                        or SOP edits from this note for an admin to review. */}
-                    {viewer.isAdmin && canSuggest && (
-                      <button
-                        type="button"
-                        className={buttonClass}
-                        disabled={
-                          busy ||
-                          suggestions.requesting === note.id ||
-                          suggestions.runs[note.id]?.status === 'queued' ||
-                          suggestions.runs[note.id]?.status === 'running'
-                        }
-                        title="Ask the agent to draft tasks or SOP edits from this note for you to review"
-                        onClick={() => void suggestions.suggest(note.id)}
-                      >
-                        Suggest
                       </button>
                     )}
                     {canSetStatus(viewer) &&
