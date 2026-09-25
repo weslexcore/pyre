@@ -18,9 +18,9 @@ import { resolveRole } from './lib/role';
 // The suggester reads one record (a shift note) and proposes follow-up work
 // for an admin to review — structured judgment over a small context, like the
 // scheduler, and it runs once per flagged note, so it gets Sonnet too.
-const SCHEDULER_MODEL = 'anthropic/claude-sonnet-5';
-const KNOWLEDGE_MODEL = 'anthropic/claude-opus-5';
-const SUGGESTER_MODEL = 'anthropic/claude-sonnet-5';
+const SCHEDULER_MODEL = 'anthropic/claude-opus-5.5';
+const KNOWLEDGE_MODEL = 'anthropic/claude-opus-5.5';
+const SUGGESTER_MODEL = 'anthropic/claude-opus-5.5';
 
 export default defineAgent({
   // No role uses eve's optional built-in tools (shell, sandbox files, web,
