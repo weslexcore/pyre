@@ -62,6 +62,23 @@ export function sortInbox<T extends NotificationState>(rows: T[], nowIso?: strin
   });
 }
 
+/** What swiping an inbox row does: left clears it, right flips its read state. */
+export type InboxSwipe = 'dismiss' | 'read' | 'unread';
+
+/**
+ * The action a release at this finger delta would commit on a row, or null
+ * when that direction isn't offered where the row is drawn.
+ */
+export function inboxSwipeAction(
+  unread: boolean,
+  dx: number,
+  offered: { dismiss: boolean; toggleRead: boolean }
+): InboxSwipe | null {
+  if (dx < 0) return offered.dismiss ? 'dismiss' : null;
+  if (dx > 0) return offered.toggleRead ? (unread ? 'read' : 'unread') : null;
+  return null;
+}
+
 /**
  * The first line or so of a markdown body as plain text, for the row under
  * a message notification: headings, emphasis, links, and code marks are

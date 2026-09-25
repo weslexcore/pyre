@@ -8,15 +8,22 @@
 //   PATCH { ids?: uuid[], all?: true, read?: boolean, dismissed?: true }
 //                                                     → { ok, unreadCount }
 //
-// `all` marks every live row read (only with read: true). Dismissing a row
-// also reads it. The list is live rows only (not dismissed, not expired),
+// `all` marks every live row read (only with read: true); read: false puts
+// the given rows back to unread. Dismissing a row also reads it. The list is live rows only (not dismissed, not expired),
 // newest first; the island puts unread rows first. `sweep=1` (the inbox
 // page, not the bell's poll) also clears the caller's long-dead rows.
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
-import { countUnread, dismiss, listInbox, markRead, sweepInbox } from '@/lib/notifications/notify';
+import {
+  countUnread,
+  dismiss,
+  listInbox,
+  markRead,
+  markUnread,
+  sweepInbox,
+} from '@/lib/notifications/notify';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -98,8 +105,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   } else if (body.read === true) {
     const error = await markRead(db, email, all ? 'all' : (ids as string[]));
     if (error) return json({ error }, 500);
+  } else if (body.read === false) {
+    if (all) return json({ error: 'mark unread needs explicit ids' }, 400);
+    const error = await markUnread(db, email, ids as string[]);
+    if (error) return json({ error }, 500);
   } else {
-    return json({ error: 'Nothing to update: pass read: true or dismissed: true' }, 400);
+    return json({ error: 'Nothing to update: pass read or dismissed: true' }, 400);
   }
 
   return json({ ok: true, unreadCount: await countUnread(db, email) });

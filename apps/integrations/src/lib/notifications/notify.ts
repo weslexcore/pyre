@@ -150,6 +150,21 @@ export async function markRead(
   return error ? error.message : null;
 }
 
+/** Put read rows back in `email`'s unread count (live rows only). */
+export async function markUnread(
+  db: SupabaseClient,
+  email: string,
+  ids: string[]
+): Promise<string | null> {
+  const { error } = await db
+    .from('staff_notifications')
+    .update({ read_at: null })
+    .eq('recipient_email', email)
+    .in('id', ids)
+    .is('dismissed_at', null);
+  return error ? error.message : null;
+}
+
 /** Clear rows from `email`'s inbox; dismissing implies reading. */
 export async function dismiss(
   db: SupabaseClient,
