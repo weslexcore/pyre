@@ -1,22 +1,26 @@
-// Jev classification: the questions come from the shared registry, the
-// Gateway request is the evaluation protocol @ai-sdk/gateway speaks, and a
-// malformed answer fails the whole call rather than storing a partial one.
+// Jev classification: the questions come from the shared registry, one
+// boolean per signal type, and the answers come back as probabilities keyed
+// by type. The AI SDK's mock evaluation model stands in for Jev.
 
 import { SIGNAL_DEFINITIONS } from '@pyre/signals-core';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { classifyText } from '../agent/lib/classify/classify';
+import { Experimental_EvaluationMockModelV4 as MockEvaluationModel } from 'ai/test';
+import { describe, expect, it } from 'vitest';
+import { classifyText, JEV_MODEL } from '../agent/lib/classify/classify';
 import { classifyQuestions, classifyState } from '../agent/lib/classify/questions';
-import { JEV_MODEL } from '../agent/lib/jev';
 
 describe('classifyQuestions', () => {
   it('asks one boolean question per signal the subject looks for', () => {
     const questions = classifyQuestions('shift_note');
     expect(Object.keys(questions)).toEqual(SIGNAL_DEFINITIONS.map((d) => d.key));
     for (const d of SIGNAL_DEFINITIONS) {
-      const q = questions[d.key];
-      expect(q.type).toBe('boolean');
-      expect(q.instructions).toContain(d.definition);
-      expect(q.criteria?.true).toEqual({ means: d.definition, examples: d.examples });
+      expect(questions[d.key]).toEqual({
+        type: 'boolean',
+        instructions: expect.stringContaining(d.definition),
+        criteria: {
+          true: { means: d.definition, examples: d.examples },
+          false: expect.any(String),
+        },
+      });
     }
   });
 
@@ -29,44 +33,42 @@ describe('classifyQuestions', () => {
 });
 
 describe('classifyText', () => {
-  beforeEach(() => vi.stubEnv('AI_GATEWAY_API_KEY', 'gw-key'));
-  afterEach(() => vi.unstubAllEnvs());
-
   const answers = Object.fromEntries(
-    SIGNAL_DEFINITIONS.map((d, i) => [d.key, { type: 'boolean', probability: i / 10 }])
+    SIGNAL_DEFINITIONS.map((d, i) => [d.key, { type: 'boolean' as const, probability: i / 10 }])
   );
 
-  it('posts the evaluation protocol to AI Gateway and returns the probabilities', async () => {
-    const fetch = vi.fn(async () => Response.json({ answers }));
-    const result = await classifyText('shift_note', 'Heater is out', { fetch: fetch as never });
+  it('evaluates the questions against the note and returns the probabilities', async () => {
+    const calls: unknown[] = [];
+    const model = new MockEvaluationModel({
+      doEvaluate: async (options) => {
+        calls.push(options);
+        return { answers, warnings: [] };
+      },
+    });
+
+    const result = await classifyText('shift_note', 'Heater is out', { model });
 
     expect(result.model).toBe(JEV_MODEL);
     expect(result.probabilities).toEqual(
       Object.fromEntries(SIGNAL_DEFINITIONS.map((d, i) => [d.key, i / 10]))
     );
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('https://ai-gateway.vercel.sh/v4/ai/evaluation-model');
-    const headers = init.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer gw-key');
-    expect(headers['ai-gateway-auth-method']).toBe('api-key');
-    expect(headers['ai-model-id']).toBe('typesafe-ai/jev');
-    expect(headers['ai-evaluation-model-specification-version']).toBe('4');
-    const body = JSON.parse(init.body as string);
-    expect(body.state.text).toBe('Heater is out');
-    expect(Object.keys(body.questions)).toEqual(SIGNAL_DEFINITIONS.map((d) => d.key));
+    const call = calls[0] as { state: { text: string }; questions: Record<string, unknown> };
+    expect(call.state.text).toBe('Heater is out');
+    expect(Object.keys(call.questions)).toEqual(SIGNAL_DEFINITIONS.map((d) => d.key));
   });
 
-  it('fails on an HTTP error or a missing / out-of-range answer', async () => {
-    await expect(
-      classifyText('shift_note', 'x', {
-        fetch: (async () => new Response('nope', { status: 503 })) as never,
-      })
-    ).rejects.toThrow(/HTTP 503/);
-    await expect(
-      classifyText('shift_note', 'x', {
-        fetch: (async () =>
-          Response.json({ answers: { ...answers, action: { type: 'boolean', probability: 2 } } })) as never,
-      })
-    ).rejects.toThrow(/action/);
+  it('fails when Jev fails or leaves a question unanswered', async () => {
+    const down = new MockEvaluationModel({
+      doEvaluate: async () => {
+        throw new Error('Gateway 503');
+      },
+    });
+    await expect(classifyText('shift_note', 'x', { model: down })).rejects.toThrow(/503/);
+
+    const { action: _missing, ...partial } = answers;
+    const incomplete = new MockEvaluationModel({
+      doEvaluate: async () => ({ answers: partial, warnings: [] }),
+    });
+    await expect(classifyText('shift_note', 'x', { model: incomplete })).rejects.toThrow();
   });
 });

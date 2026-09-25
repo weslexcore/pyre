@@ -12,11 +12,11 @@ import {
   sanitizeClassifyText,
   subjectDefinition,
 } from '@pyre/signals-core';
-import type { BooleanQuestion } from '../jev';
+import type { Experimental_EvaluationQuestion as EvaluationQuestion } from 'ai';
 
-export function classifyQuestions(subject: SubjectType): Record<SignalType, BooleanQuestion> {
+export function classifyQuestions(subject: SubjectType): Record<SignalType, EvaluationQuestion> {
   const applies = new Set<string>(subjectDefinition(subject).signals);
-  const questions = {} as Record<SignalType, BooleanQuestion>;
+  const questions = {} as Record<SignalType, EvaluationQuestion>;
   for (const d of SIGNAL_DEFINITIONS) {
     if (!applies.has(d.key)) continue;
     questions[d.key] = {
@@ -32,7 +32,10 @@ export function classifyQuestions(subject: SubjectType): Record<SignalType, Bool
 }
 
 /** The state Jev reads: what kind of text this is, and the text itself. */
-export function classifyState(subject: SubjectType, text: string): Record<string, unknown> {
+export function classifyState(
+  subject: SubjectType,
+  text: string
+): { kind: string; context: string; text: string } {
   const d = subjectDefinition(subject);
   return {
     kind: d.label,
