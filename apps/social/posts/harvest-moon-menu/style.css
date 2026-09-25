@@ -87,17 +87,19 @@
   color: rgba(35, 34, 28, 0.8);
 }
 
-/* Footer */
-
-.menu__footer {
-  display: flex;
-  align-items: flex-end;
-}
+/* Pine logo — upright at the top of the sheet, upside down at the bottom. */
 
 .menu__logo {
+  flex: none;
   height: 150px;
   width: auto;
+  margin: 120px 0 0;
   opacity: 0.9;
+}
+
+.menu__logo--flipped {
+  margin: 0 0 120px;
+  transform: rotate(180deg);
 }
 
 /* Pages 2–3 — Instagram posts (portrait 1080×1350), one drink each on a creme background.
@@ -118,9 +120,9 @@
   text-align: center;
 }
 
-/* Top-aligned so both slides start their drink at the same height, whatever its length. */
+/* Vertically centered in the top half, balancing the moons centered in the bottom half. */
 .slide .drink {
-  align-self: start;
+  align-self: center;
   gap: 24px;
 }
 
