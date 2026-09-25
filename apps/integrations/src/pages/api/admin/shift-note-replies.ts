@@ -10,10 +10,11 @@
 // the app records for status changes, edits, and the classifier's answers (see
 // lib/shift-notes/activity). Events are history — they come back in reads
 // but can't be edited or deleted here. The page reads every thread on the
-// notes route (GET /api/admin/shift-notes); GET here refreshes one note's,
-// e.g. once the classifier's answer has landed in it.
+// notes route (GET /api/admin/shift-notes); GET here refreshes one note and
+// its thread, e.g. once the classifier's answer (and any triage it led to)
+// has landed.
 //
-//   GET    ?noteId=<uuid>               → { replies, people }
+//   GET    ?noteId=<uuid>               → { note, replies, people }
 //   POST   { noteId, body, isPrivate? } → { reply, people }
 //   PATCH  { id, body?, isPrivate? }    → { reply, people }
 //   DELETE ?id=<uuid>                   → { ok: true }
@@ -146,7 +147,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const viewer = viewerOf(gate);
   const replies = ((data ?? []) as ShiftNoteReplyRow[]).filter((r) => canSeeReply(r, viewer));
-  return json({ replies, people: await peopleFor(...replies) });
+  return json({ note, replies, people: await peopleFor(...replies) });
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {

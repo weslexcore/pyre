@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SIGNAL_THRESHOLD,
+  hasActionableSignal,
   isSignalType,
   isSubjectType,
   MAX_CLASSIFY_TEXT,
@@ -32,6 +33,14 @@ describe('registries', () => {
       expect(threshold).toBeLessThan(1);
     }
     expect(signalThreshold('action')).toBe(DEFAULT_SIGNAL_THRESHOLD);
+  });
+
+  it('treats work owed as actionable and feedback alone as informational', () => {
+    expect(hasActionableSignal([])).toBe(false);
+    expect(hasActionableSignal([{ type: 'feedback' }])).toBe(false);
+    for (const type of ['action', 'question', 'update', 'safety'] as const) {
+      expect(hasActionableSignal([{ type: 'feedback' }, { type }])).toBe(true);
+    }
   });
 
   it('only lets subjects look for known signals', () => {

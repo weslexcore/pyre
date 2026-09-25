@@ -10,8 +10,8 @@
 //   * the integrations app stores those and labels the chips it draws with
 //     the same labels.
 //
-// To detect something new, add an entry here (key, label, definition, and a
-// couple of examples). Nothing else has to change for it to be detected,
+// To detect something new, add an entry here (key, label, definition, a
+// couple of examples, and whether it means work is owed). Nothing else has to change for it to be detected,
 // stored, and shown; a filter or badge colour elsewhere is optional polish.
 // Removing or renaming a key orphans rows already stored under it — the
 // integrations app drops unknown keys when it reads them back, so prefer
@@ -26,6 +26,13 @@ export interface SignalDefinition {
   definition: string;
   /** A few short, realistic snippets that carry this signal. */
   examples: readonly string[];
+  /**
+   * Whether this signal means someone owes work on the text: an answer, a
+   * fix, a change, a follow-up. A record carrying any actionable signal goes
+   * on the to-do list; one carrying none is informational and can be closed
+   * out (the integrations app triages shift notes this way).
+   */
+  actionable: boolean;
   /**
    * The probability at or above which the text counts as carrying it.
    * Defaults to DEFAULT_SIGNAL_THRESHOLD; raise it for a signal that fires
@@ -48,6 +55,7 @@ export const SIGNAL_DEFINITIONS = [
       'The left cold tub filter needs replacing before Saturday.',
       'Guest left a voicemail about a refund — someone should call her back.',
     ],
+    actionable: true,
   },
   {
     key: 'question',
@@ -58,6 +66,7 @@ export const SIGNAL_DEFINITIONS = [
       'Are we still doing the Tuesday silent session next month?',
       'A guest asked whether memberships can be paused — can they?',
     ],
+    actionable: true,
   },
   {
     key: 'update',
@@ -68,6 +77,7 @@ export const SIGNAL_DEFINITIONS = [
       'The closing checklist still says to drain the right tub, but we stopped doing that.',
       'The website lists the wrong hours for Sunday.',
     ],
+    actionable: true,
   },
   {
     key: 'feedback',
@@ -78,6 +88,9 @@ export const SIGNAL_DEFINITIONS = [
       'Two guests said the music was too loud during the silent session.',
       'Regular said the new towels are great.',
     ],
+    // Worth reading, not a task by itself: feedback that needs a fix or a
+    // reply also reads as an action or a question.
+    actionable: false,
   },
   {
     key: 'safety',
@@ -88,6 +101,7 @@ export const SIGNAL_DEFINITIONS = [
       'Guest felt faint after the third round and sat out with water.',
       'The step into the plunge is cracked and a bit sharp.',
     ],
+    actionable: true,
     // A missed safety note costs more than a spurious chip.
     threshold: 0.35,
   },
@@ -114,6 +128,19 @@ export function signalLabel(type: SignalType): string {
 
 export function signalThreshold(type: SignalType): number {
   return signalDefinition(type).threshold ?? DEFAULT_SIGNAL_THRESHOLD;
+}
+
+export function isActionableSignal(type: SignalType): boolean {
+  return signalDefinition(type).actionable;
+}
+
+/**
+ * Whether a set of found signals leaves anyone work to do (any actionable
+ * signal), or the text is purely informational (none, or only ones like
+ * feedback that are worth reading but not a task).
+ */
+export function hasActionableSignal(signals: readonly Pick<Signal, 'type'>[]): boolean {
+  return signals.some((s) => isActionableSignal(s.type));
 }
 
 /** One kind of signal the classifier found in a piece of text. */

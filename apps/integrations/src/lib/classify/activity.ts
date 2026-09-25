@@ -1,8 +1,9 @@
-// Where each subject keeps its history of classifications. Every run that
-// saves an answer is also written to the record's own activity (for shift
-// notes, an entry in the note's thread), so the page shows what the classifier found
-// each time it read the record, not only the latest answer. The Record type
-// makes a new subject a type error here until it says where that goes.
+// What each subject does with a saved answer. Every run that saves one is
+// written to the record's own activity (for shift notes, an entry in the
+// note's thread), so the page shows what the classifier found each time it
+// read the record, not only the latest answer; a subject may also act on it
+// (shift notes triage themselves: lib/shift-notes/triage). The Record type
+// makes a new subject a type error here until it says what happens.
 //
 // Kept apart from ./subjects (auth, page gates) so the background run can
 // import it without pulling in the request-side modules.
@@ -10,6 +11,7 @@
 import type { SubjectType } from '@pyre/signals-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordClassification } from '@/lib/shift-notes/activity';
+import { triageFromClassification } from '@/lib/shift-notes/triage';
 
 export interface ClassifiedResult {
   signals: unknown;
@@ -18,9 +20,13 @@ export interface ClassifiedResult {
   requestedBy?: string;
 }
 
-export const CLASSIFICATION_RECORDERS: Record<
+export const AFTER_CLASSIFIED: Record<
   SubjectType,
   (db: SupabaseClient, id: string, result: ClassifiedResult) => Promise<unknown>
 > = {
-  shift_note: recordClassification,
+  // The answer first, then the status it led to, so the thread reads in order.
+  async shift_note(db, id, result) {
+    await recordClassification(db, id, result);
+    await triageFromClassification(db, id, result.signals);
+  },
 };

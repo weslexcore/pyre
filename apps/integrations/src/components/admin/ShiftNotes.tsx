@@ -27,6 +27,9 @@
 // read happens in the background after a note is saved, so the note appears
 // at once marked "Reading…" and its chips fill in a few seconds later; an
 // edit to its text is read again, and an admin can run the classifier on any note.
+// A note no admin has triaged yet follows what the classifier found: to do
+// when anything is actionable, resolved when it is purely informational
+// (lib/shift-notes/triage); an admin's status always wins.
 // The page never names the model behind it (lib/classify picks that), so
 // swapping models changes nothing here.
 import { readStoredSignals, type SignalType } from '@pyre/signals-core';
@@ -205,13 +208,22 @@ export function ShiftNotes() {
   const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
   const [signalFilter, setSignalFilter] = useState<'all' | SignalType>('all');
 
-  /** Re-read one note's thread from the server (e.g. once the classifier's answer is in it). */
+  /**
+   * Re-read one note and its thread from the server — once the classifier
+   * has answered, its reading is in the thread and the note may have moved
+   * to To do or Resolved.
+   */
   const refreshThread = useCallback(async (noteId: string) => {
     try {
       const res = await fetch(`/api/admin/shift-note-replies?noteId=${encodeURIComponent(noteId)}`);
       if (!res.ok) return;
-      const data = (await res.json()) as { replies: ShiftNoteReplyRow[]; people: PeopleNames };
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        replies: ShiftNoteReplyRow[];
+        people: PeopleNames;
+      };
       setNames((prev) => ({ ...prev, ...data.people }));
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? data.note : n)));
       setReplies((prev) => ({ ...prev, [noteId]: data.replies }));
     } catch {
       // The entry is saved; it shows on the next load.
@@ -220,8 +232,9 @@ export function ShiftNotes() {
 
   // What the classifier found per note — admins only; the server sends
   // nothing to anyone else, and this fetches nothing for them. Each finished
-  // read is also an entry in the note's thread; the worker writes it just
-  // after the answer, so give it a moment before reading the thread back.
+  // read is also an entry in the note's thread, and may triage the note; the
+  // worker does both just after the answer, so give it a moment before
+  // reading the note back.
   const signals = useClassifications('shift_note', viewer.isAdmin, (noteId, view) => {
     if (view.state === 'done') window.setTimeout(() => void refreshThread(noteId), 1_000);
   });
@@ -1120,7 +1133,10 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
   }
   return (
     <p className="px-3 py-1 font-mono text-[10px] text-white/40">
-      <span className="text-white/60">{personName(entry.author_email ?? '', names)}</span>{' '}
+      {/* Unsigned events are the classifier's (e.g. triaging an untriaged note). */}
+      <span className="text-white/60">
+        {entry.author_email ? personName(entry.author_email, names) : 'Classifier'}
+      </span>{' '}
       {describeEvent(entry)}
       {stamp}
     </p>

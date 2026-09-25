@@ -17,7 +17,7 @@ import { classifySignals, type SubjectType, sanitizeClassifyText } from '@pyre/s
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContentClassificationRow } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
-import { CLASSIFICATION_RECORDERS } from './activity';
+import { AFTER_CLASSIFIED } from './activity';
 import { type ClassificationView, toClassificationView } from './view';
 
 /** sha256 of the text as Jev would see it. Exported for tests. */
@@ -123,10 +123,11 @@ export async function runClassification(
     // or the record was deleted meanwhile; either way this answer is stale.
     if (!saved) return null;
     const row = saved as ContentClassificationRow;
-    // Each answer also lands in the record's history. Failures don't: QStash
-    // retries them, and the record's chips already show where the read stands.
+    // Each answer also lands in the record's history, and the subject may act
+    // on it (shift notes triage themselves). Failures don't: QStash retries
+    // them, and the record's chips already show where the read stands.
     if (row.status === 'done') {
-      await CLASSIFICATION_RECORDERS[subject](db, subjectId, {
+      await AFTER_CLASSIFIED[subject](db, subjectId, {
         signals: row.signals,
         model: row.model,
         ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),

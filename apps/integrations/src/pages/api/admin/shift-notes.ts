@@ -7,8 +7,9 @@
 // (lib/shift-notes/access). Author identity always comes from the session,
 // never the request body.
 //
-// Each note carries a triage status (open / todo / resolved) that only admins
-// set, and an activity thread (shift_note_replies): comments, in which admins
+// Each note carries a triage status (open / todo / resolved) that admins set
+// — or the classifier, on a note no admin has triaged yet, by whether it
+// found anything actionable (lib/shift-notes/triage) — and an activity thread (shift_note_replies): comments, in which admins
 // respond and the author replies back (shift-note-replies.ts), and an event
 // for every action on the note — each status change and edit made here, and
 // each answer the classifier gives (lib/classify) — so the note's history reads in order

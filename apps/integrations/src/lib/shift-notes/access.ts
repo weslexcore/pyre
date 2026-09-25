@@ -7,7 +7,9 @@
 //
 // On top of a note sit two things only the thread needs rules for:
 //
-//   * status — open / todo / resolved, set by admins only; the author sees it.
+//   * status — open / todo / resolved, set by admins only (the classifier
+//     also triages notes no admin has yet, server-side: ./triage); the
+//     author sees it.
 //   * activity — the note's thread. Anyone who can see the note may comment
 //     (an admin, or the author on their own note); an entry is visible to
 //     whoever sees the note, unless it is private, in which case only admins

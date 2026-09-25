@@ -52,6 +52,25 @@ export function recordStatusChange(
   });
 }
 
+/**
+ * The classifier triaged a note no admin has (./triage). Admins only, like
+ * everything else the classifier writes; the author still sees the badge.
+ */
+export function recordClassifierStatusChange(
+  db: SupabaseClient,
+  noteId: string,
+  from: ShiftNoteStatus,
+  to: ShiftNoteStatus
+): Promise<ShiftNoteReplyRow | null> {
+  return record(db, {
+    note_id: noteId,
+    kind: 'status',
+    author_email: null,
+    is_private: true,
+    data: { from, to, source: 'classifier' },
+  });
+}
+
 /** The note's text or date changed. Shared with the author, who may have made it. */
 export function recordEdit(
   db: SupabaseClient,

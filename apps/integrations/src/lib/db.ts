@@ -351,9 +351,12 @@ export interface ShiftNoteRow {
   author_email: string;
   /** Session email of the last editor (author or admin); null until edited. */
   updated_by: string | null;
-  /** Triage state, admin-set: open (untriaged), todo (follow-up owned), resolved. */
+  /**
+   * Triage state: open (untriaged), todo (follow-up owned), resolved. Set by
+   * an admin, or by the classifier while no admin has (lib/shift-notes/triage).
+   */
   status: ShiftNoteStatus;
-  /** Admin who last set the status, and when; null while never triaged. */
+  /** Admin who last set the status, and when; null while no admin has (the classifier leaves them null). */
   status_by: string | null;
   status_at: string | null;
   created_at: string;
@@ -373,7 +376,7 @@ export interface ShiftNoteReplyRow {
   kind: ShiftNoteActivityKind;
   /** The comment's text; '' on events. */
   body: string;
-  /** Who wrote it; null only on a classification (the classifier wrote it). */
+  /** Who wrote it; null on events the classifier wrote (never on a comment). */
   author_email: string | null;
   is_private: boolean;
   /** Event payload (see ShiftNoteActivityData); null on comments. */
@@ -391,6 +394,8 @@ export interface ShiftNoteActivityData {
   /** status: the status before (absent on backfilled rows) and after. */
   from?: ShiftNoteStatus;
   to?: ShiftNoteStatus;
+  /** status: set when the classifier triaged the note rather than an admin. */
+  source?: 'classifier';
   /** edit: which of the note's fields changed. */
   fields?: Array<'body' | 'note_date'>;
   /** classification: raw [{ type, probability }]; read it through readStoredSignals(). */
