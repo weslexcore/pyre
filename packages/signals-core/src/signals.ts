@@ -27,6 +27,13 @@ export interface SignalDefinition {
   /** A few short, realistic snippets that carry this signal. */
   examples: readonly string[];
   /**
+   * What the model must not mistake for it: when this signal does NOT hold,
+   * and a few look-alike snippets that don't carry it (the classifier's
+   * "false" criterion). Optional; without it the model only hears "nothing
+   * in the text is a <label>".
+   */
+  notThis?: { means: string; examples: readonly string[] };
+  /**
    * Whether this signal means someone owes work on the text: an answer, a
    * fix, a change, a follow-up. A record carrying any actionable signal goes
    * on the to-do list; one carrying none is informational and can be closed
@@ -49,12 +56,23 @@ export const SIGNAL_DEFINITIONS = [
     key: 'action',
     label: 'Action',
     definition:
-      'Something someone needs to do: a repair, a restock, a follow-up with a guest, a task handed to the next shift or to an admin.',
+      'Something someone still needs to do: a repair, a restock, a follow-up with a guest, a task handed to the next shift or to an admin. Only work that is still outstanding counts.',
     examples: [
       'We are down to the last box of eucalyptus oil.',
       'The left cold tub filter needs replacing before Saturday.',
       'Guest left a voicemail about a refund — someone should call her back.',
     ],
+    // A report of work already done is informational, not a task: without
+    // this the model reads "restocked the towels" as an action to take.
+    notThis: {
+      means:
+        'Nothing is left for anyone to do. A note saying something was already done — fixed, restocked, cleaned, called back, handled — is a report of completed work, not an action, unless it also says something still needs doing.',
+      examples: [
+        'Restocked the towels and eucalyptus oil before close.',
+        'Replaced the left cold tub filter this afternoon.',
+        'Called the guest back about her refund; it is sorted.',
+      ],
+    },
     actionable: true,
   },
   {
@@ -72,11 +90,19 @@ export const SIGNAL_DEFINITIONS = [
     key: 'update',
     label: 'Update',
     definition:
-      'A record or reference that is now wrong or out of date and should be changed: an SOP, the schedule, a price, the website, inventory counts, a guest profile.',
+      'A record or reference that is now wrong or out of date and still needs to be changed: an SOP, the schedule, a price, the website, inventory counts, a guest profile.',
     examples: [
       'The closing checklist still says to drain the right tub, but we stopped doing that.',
       'The website lists the wrong hours for Sunday.',
     ],
+    notThis: {
+      means:
+        'No record is left out of date. A note saying a record was already corrected is a report of completed work, not an update to make.',
+      examples: [
+        'Fixed the Sunday hours on the website.',
+        'Updated the closing checklist to drop the right tub drain.',
+      ],
+    },
     actionable: true,
   },
   {

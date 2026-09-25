@@ -7,7 +7,7 @@
 
 import { askJevBooleans, type EvaluationQuestion, JEV_MODEL, type JevOptions } from '@pyre/jev';
 import { MAX_CLASSIFY_TEXT, sanitizeClassifyText } from './message';
-import { SIGNAL_DEFINITIONS, type Signal, type SignalType } from './signals';
+import { SIGNAL_DEFINITIONS, type Signal, type SignalDefinition, type SignalType } from './signals';
 import { type SubjectType, subjectDefinition } from './subjects';
 import { parseSignals } from './validate';
 
@@ -16,14 +16,18 @@ type BooleanQuestion = EvaluationQuestion & { type: 'boolean' };
 export function classifyQuestions(subject: SubjectType): Record<SignalType, BooleanQuestion> {
   const applies = new Set<string>(subjectDefinition(subject).signals);
   const questions = {} as Record<SignalType, BooleanQuestion>;
-  for (const d of SIGNAL_DEFINITIONS) {
+  for (const d of SIGNAL_DEFINITIONS as readonly SignalDefinition[]) {
     if (!applies.has(d.key)) continue;
-    questions[d.key] = {
+    questions[d.key as SignalType] = {
       type: 'boolean',
       instructions: `Does the text carry this signal? ${d.label}: ${d.definition}`,
       criteria: {
         true: { means: d.definition, examples: d.examples },
-        false: `Nothing in the text is a "${d.label.toLowerCase()}" in this sense.`,
+        // Look-alikes the signal must not fire on (e.g. work already done
+        // for "action"), when the registry names them.
+        false: d.notThis
+          ? { means: d.notThis.means, examples: d.notThis.examples }
+          : `Nothing in the text is a "${d.label.toLowerCase()}" in this sense.`,
       },
     };
   }

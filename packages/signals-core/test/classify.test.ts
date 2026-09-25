@@ -17,10 +17,18 @@ describe('classifyQuestions', () => {
         instructions: expect.stringContaining(d.definition),
         criteria: {
           true: { means: d.definition, examples: d.examples },
-          false: expect.any(String),
+          false: expect.anything(),
         },
       });
     }
+  });
+
+  it('tells the model that work already done is not an action', () => {
+    const { criteria } = classifyQuestions('shift_note').action;
+    expect(criteria?.false).toEqual({
+      means: expect.stringContaining('already done'),
+      examples: expect.arrayContaining(['Restocked the towels and eucalyptus oil before close.']),
+    });
   });
 
   it('hands Jev the subject context and the cleaned text', () => {
