@@ -6,8 +6,9 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
-import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 export const PUT: APIRoute = async ({ cookies, request }) => {

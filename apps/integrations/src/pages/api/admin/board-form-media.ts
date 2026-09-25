@@ -21,6 +21,7 @@ import { checkBackgroundFile, defaultFormConfig } from '@/lib/boards/forms';
 import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { type APIRoute, beginDelete, dbError, json, storeError } from '@/lib/http/route';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -51,7 +52,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const problem = checkBackgroundFile(file);
   if (problem) return json({ error: problem }, 415);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
 
   try {
     const board = await loadBoardBySlug(db, slug);

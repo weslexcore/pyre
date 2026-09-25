@@ -22,6 +22,7 @@
 // no second round trip, the search and owner filters narrow both views, and
 // clicking a day opens the drawer that is already mounted.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
@@ -48,7 +49,6 @@ import {
   QuietChip,
   selectBaseClass,
   send,
-  todayEastern,
   toolbarButtonClass,
 } from '../goalsUi';
 import { readError } from '../incidentUi';

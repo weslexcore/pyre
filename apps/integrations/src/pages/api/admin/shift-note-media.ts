@@ -24,8 +24,9 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
-import { canSeeNote, normalizeEmail } from '@/lib/shift-notes/access';
+import { canSeeNote } from '@/lib/shift-notes/access';
 import {
   buildNoteStoragePath,
   buildStagedStoragePath,

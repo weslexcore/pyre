@@ -17,6 +17,7 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, json } from '@/lib/http/route';
 import { createAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
@@ -25,7 +26,6 @@ import {
   type HistoryRow,
 } from '@/lib/knowledge/history';
 import { trailFromJson } from '@/lib/knowledge/trail';
-import { normalizeEmail } from '@/lib/sops/levels';
 
 export const prerender = false;
 

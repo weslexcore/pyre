@@ -327,7 +327,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .from('schedule_proposals')
       .select('*')
       .eq('status', 'draft')
-      .gte('week_start', addDaysStr(start, -6))
+      .gte('week_start', addDays(start, -6))
       .lte('week_start', end)
       .order('created_at', { ascending: false });
     if (error) return dbError(error);
@@ -351,10 +351,3 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   return json(payload);
 };
-
-/** start minus N days without pulling in a date lib (weeks overlap ranges). */
-function addDaysStr(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}

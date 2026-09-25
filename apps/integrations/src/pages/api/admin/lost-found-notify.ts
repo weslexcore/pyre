@@ -18,6 +18,7 @@ import { hasLostFoundManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { attendeesForSession, sessionsInWindow } from '@/lib/lost-found/attendees';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
@@ -34,8 +35,7 @@ const PAGE = '/admin/lost-found';
  */
 const PHOTO_URL_TTL_SECONDS = 40 * 24 * 60 * 60;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);

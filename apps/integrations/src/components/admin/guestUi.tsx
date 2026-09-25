@@ -512,11 +512,6 @@ export async function send<T>(
   return (await res.json()) as T;
 }
 
-/** Today's date as the bathhouse sees it (ET), YYYY-MM-DD. */
-export function todayEastern(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
 /** YYYY-MM-DD plus or minus whole days, calendar-safe. */
 export function shiftDate(date: string, days: number): string {
   const ms = Date.parse(`${date}T12:00:00Z`) + days * 86_400_000;

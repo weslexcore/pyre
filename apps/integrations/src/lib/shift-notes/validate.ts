@@ -45,11 +45,3 @@ export function normalizeReplyBody(value: unknown): string | null {
  * Today's date in the shift wall-clock timezone (America/New_York), as the
  * composer's default. en-CA formats as YYYY-MM-DD.
  */
-export function todayEastern(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-}

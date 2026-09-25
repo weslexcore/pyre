@@ -13,6 +13,7 @@
 // '$title' / '$notes' / '$due_date' for a builtin. A field key cannot start
 // with '$' (KEY_RE), so the two can share one object without colliding.
 
+import { todayEastern } from '@pyre/schedule-core';
 import type {
   BoardFieldRow,
   BoardFieldValue,
@@ -676,14 +677,6 @@ export function isAnswered(question: ResolvedQuestion, raw: unknown): boolean {
  * same thing to the sender and to the board, so both read it in New York —
  * the same wall clock a card's due date is read against.
  */
-export function todayEastern(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-}
 
 /** The dates in an answer, however many the question takes. */
 function datesIn(raw: unknown): string[] {

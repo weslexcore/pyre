@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ShiftAssignmentRow, ShiftRow } from '@/lib/db';
-import {
-  formatChipDate,
-  formatChipTime,
-  isInSession,
-  isUpcoming,
-  pickWeekShifts,
-} from './next-shift';
+import { isInSession, isUpcoming, pickWeekShifts } from './next-shift';
 
 const now = { date: '2026-08-31', minutes: 14 * 60 }; // Mon 2pm ET
 
@@ -51,22 +45,6 @@ describe('isInSession', () => {
     expect(
       isInSession({ shift_date: '2026-09-01', starts_at: '12:00', ends_at: '16:00' }, now)
     ).toBe(false);
-  });
-});
-
-describe('formatChipTime', () => {
-  it('renders the calendar shorthand', () => {
-    expect(formatChipTime('16:00')).toBe('4p');
-    expect(formatChipTime('09:30')).toBe('9:30a');
-    expect(formatChipTime('12:00')).toBe('12p');
-    expect(formatChipTime('00:15')).toBe('12:15a');
-  });
-});
-
-describe('formatChipDate', () => {
-  it('renders weekday plus short date', () => {
-    expect(formatChipDate('2026-09-02')).toBe('Wed 9/2');
-    expect(formatChipDate('2026-12-25')).toBe('Fri 12/25');
   });
 });
 

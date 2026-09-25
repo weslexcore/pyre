@@ -17,6 +17,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { logLostFoundEvent } from '@/lib/lost-found/log';
 import {
@@ -35,8 +36,7 @@ const PAGE = '/admin/lost-found';
 /** Long enough to load a page of photos, short enough that a leaked link dies. */
 const SIGNED_URL_TTL_SECONDS = 600;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);

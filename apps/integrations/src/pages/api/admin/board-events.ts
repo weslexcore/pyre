@@ -20,6 +20,7 @@ import { mentionPeople } from '@/lib/boards/mentions';
 import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardEventRow, GoalRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   type APIRoute,
   beginMutation,
@@ -75,7 +76,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Opening the thing a notification points at is reading it, so the bell
   // clears without anyone having to visit the inbox as well.
-  const viewer = (gate.user.email ?? '').trim().toLowerCase();
+  const viewer = normalizeEmail(gate.user.email);
   if (viewer) {
     if (cardId) await markSourceRead(db, viewer, 'board_card', cardId);
     else if (goalId) await markSourceRead(db, viewer, 'goal', goalId);

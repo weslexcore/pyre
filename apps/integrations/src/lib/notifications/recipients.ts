@@ -14,6 +14,7 @@ import { canViewPage } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type { StaffRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   canUseDashboard,
   canViewSop,
@@ -27,7 +28,7 @@ export type RosterRow = Pick<
 >;
 
 function emailOf(row: RosterRow): string {
-  return (row.email ?? '').trim().toLowerCase();
+  return normalizeEmail(row.email);
 }
 
 /** Roster rows that can receive anything at all. */

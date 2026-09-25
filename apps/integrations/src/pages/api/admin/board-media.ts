@@ -31,6 +31,7 @@ import { loadCard, loadFields } from '@/lib/boards/store';
 import { KEY_RE } from '@/lib/boards/types';
 import type { BoardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   type APIRoute,
   beginDelete,
@@ -54,7 +55,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   let form: FormData;

@@ -132,8 +132,3 @@ export function rosterHighlights(
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((f) => ({ key: f.key, label: f.label, value: formatAnswer(f, values[f.key]) }));
 }
-
-/** "Alex Chen" -> "Alex". A chip has room for a first name, not a full one. */
-export function firstNameOf(name: string | null | undefined): string {
-  return (name ?? '').trim().split(/\s+/)[0] ?? '';
-}

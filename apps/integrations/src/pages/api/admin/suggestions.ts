@@ -22,6 +22,7 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, json } from '@/lib/http/route';
 import { getSetting } from '@/lib/settings/store';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -238,7 +239,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
   if (!isUuid(body.id)) return json({ error: 'id must be a UUID' }, 400);
-  const by = (gate.user.email ?? '').trim().toLowerCase();
+  const by = normalizeEmail(gate.user.email);
   return decision(await editSuggestion(db, body.id, { payload: body.payload, by }));
 };
 
@@ -259,7 +260,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
-  const by = (gate.user.email ?? '').trim().toLowerCase();
+  const by = normalizeEmail(gate.user.email);
   if (!by) return json({ error: 'Session has no email' }, 400);
 
   switch (body.action) {

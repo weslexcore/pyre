@@ -15,7 +15,7 @@
 // convenience — the board's Add-to-calendar button and the shift emails stay
 // the fast path for anything time-sensitive.
 
-import { lastConfirmedDate } from '@pyre/schedule-core';
+import { addDays, lastConfirmedDate, todayEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { generateIcsCalendar } from '@/lib/calendar/ics';
@@ -26,7 +26,6 @@ import {
   type ShiftWithAssignments,
 } from '@/lib/schedule/calendar-feed';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
-import { todayEastern } from '@/lib/schedule/sub';
 
 export const prerender = false;
 
@@ -47,13 +46,6 @@ function text(body: string, status: number): Response {
 function unavailable(stage: string, error: { message: string }): Response {
   console.error(`[calendar-feed] ${stage} failed:`, error.message);
   return text('Storage unavailable.', 503);
-}
-
-/** date minus N days, without pulling in a date lib (matches schedule-board). */
-function addDaysStr(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -80,7 +72,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   if (wantsTeam && !canManage) return text('Not permitted.', 403);
 
   const today = todayEastern();
-  const start = addDaysStr(today, -PAST_DAYS);
+  const start = addDays(today, -PAST_DAYS);
   const end = lastConfirmedDate(today);
 
   const [shiftsRes, allStaffRes] = await Promise.all([

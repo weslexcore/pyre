@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { shouldAutoSuggest } from './eligibility';
 import { isStale, runState } from './runs';
-import { hasAutoSuggestSignal, shortDate } from './sources';
+import { formatMonthDay, hasAutoSuggestSignal } from './sources';
 
 describe('shouldAutoSuggest', () => {
   const yes = { enabled: true, eligible: true, alreadyRun: false, dismissed: false };
@@ -65,8 +65,8 @@ describe('run staleness', () => {
   });
 });
 
-describe('shortDate', () => {
+describe('formatMonthDay', () => {
   it('reads a note date the way people say it', () => {
-    expect(shortDate('2026-09-24')).toBe('Sep 24');
+    expect(formatMonthDay('2026-09-24')).toBe('Sep 24');
   });
 });

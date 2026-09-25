@@ -18,6 +18,7 @@ import { hasGuestsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { GuestProfileRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { loadFields, loadNotes, loadProfileById, loadProfileByMemberId } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { mergeAnswers, normalizeMemberId, normalizeSummary } from '@/lib/guests/validate';
@@ -30,8 +31,7 @@ const LOCAL_SEARCH_LIMIT = 20;
 const MOMENCE_SEARCH_LIMIT = 8;
 const MIN_QUERY_LENGTH = 2;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 /** One row in the search results — a Momence member, with or without a profile. */
 export interface GuestSearchHit {
@@ -134,7 +134,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         results.push({
           memberId,
           name: [m.firstName, m.lastName].filter(Boolean).join(' ').trim() || m.email,
-          email: (m.email ?? '').trim().toLowerCase(),
+          email: normalizeEmail(m.email),
           phone: m.phoneNumber ?? '',
           hasProfile: profile !== null,
           summary: profile?.summary ?? null,
@@ -210,7 +210,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const member = await fetchHostMember(Number(memberId));
     identity = {
       name: [member.firstName, member.lastName].filter(Boolean).join(' ').trim() || identity.name,
-      email: (member.email ?? '').trim().toLowerCase() || identity.email,
+      email: normalizeEmail(member.email) || identity.email,
     };
   } catch (e) {
     console.error(`[guests] member ${memberId} lookup failed:`, e instanceof Error ? e.message : e);

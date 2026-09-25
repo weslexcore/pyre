@@ -15,6 +15,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopVersionRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { notifySopSaved } from '@/lib/notifications/sops';
 import { countTasks } from '@/lib/sops/checklist';
@@ -25,7 +26,6 @@ import {
   describeGrants,
   effectiveViewGrants,
   isSopRole,
-  normalizeEmail,
   SLUG_RE,
   SOP_ROLES,
   type SopRole,

@@ -10,7 +10,8 @@ import { getDb } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
 import { loadMessageForViewer, type MessageThreadPayload } from '@/lib/messages/store';
 import { markSourceRead } from '@/lib/notifications/notify';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import type { SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 const id = Astro.params.id ?? '';

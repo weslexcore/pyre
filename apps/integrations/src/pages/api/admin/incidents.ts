@@ -27,6 +27,7 @@ import { hasIncidentsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { IncidentAttachmentRow, IncidentRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { loadIncidentEvents, logIncidentEvent } from '@/lib/incidents/log';
 import { isUrgent, notifyIncident } from '@/lib/incidents/notify';
@@ -58,8 +59,7 @@ const AMEND_WINDOW_MINUTES = 60;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 const displayName = (user: { firstName?: string; lastName?: string; email: string }): string =>
   [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;

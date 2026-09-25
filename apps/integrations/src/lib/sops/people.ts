@@ -4,6 +4,7 @@
 // lib/auth/access); the rendering half lives in names.ts.
 
 import { listStaff } from '@/lib/auth/access';
+import { normalizeEmail } from '@/lib/email/address';
 import { canUseDashboard, roleForStaffRow, type SopRole } from './levels';
 import type { PeopleNames } from './names';
 
@@ -23,7 +24,7 @@ export async function getPeopleNames(emails: Iterable<string>): Promise<PeopleNa
   const rows = await listStaff();
   const names: PeopleNames = {};
   for (const row of rows ?? []) {
-    const email = (row.email ?? '').trim().toLowerCase();
+    const email = normalizeEmail(row.email);
     const name = (row.display_name ?? '').trim();
     if (email && name && wanted.has(email)) names[email] = name;
   }
@@ -56,7 +57,7 @@ export async function listGrantablePeople(): Promise<GrantablePerson[]> {
   return (rows ?? [])
     .filter((row) => canUseDashboard(row) && (row.email ?? '').trim())
     .map((row) => {
-      const email = (row.email ?? '').trim().toLowerCase();
+      const email = normalizeEmail(row.email);
       const role: SopRole = roleForStaffRow(row);
       return {
         email,

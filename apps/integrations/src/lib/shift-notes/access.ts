@@ -41,11 +41,6 @@ export interface ReplyLike {
   kind?: ShiftNoteActivityKind;
 }
 
-/** Normalize a session email the way author_email is stored. */
-export function normalizeEmail(email: string | null | undefined): string {
-  return (email ?? '').trim().toLowerCase();
-}
-
 /**
  * Whether `viewer` may read this note (and, identically, edit or delete it):
  * admins on the whole log, everyone else on their own notes only.

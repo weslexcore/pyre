@@ -18,15 +18,15 @@ import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
 import { getDb } from '@/lib/db';
 import {
-  formatChipDate,
-  formatChipTime,
   getNextUpcomingShift,
   getWeekShifts,
   type NextShift,
   type WeekShift,
 } from '@/lib/schedule/next-shift';
+import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
 import { getSetting } from '@/lib/settings/store';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import type { SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
@@ -110,7 +110,7 @@ const chipWhen = nextShift
     : formatChipDate(nextShift.shift.shift_date)
   : '';
 const chipWindow = nextShift
-  ? `${formatChipTime(nextShift.shift.starts_at)}–${formatChipTime(nextShift.shift.ends_at)} ${nextShift.shift.label}`
+  ? `${formatCompactTime(nextShift.shift.starts_at)}–${formatCompactTime(nextShift.shift.ends_at)} ${nextShift.shift.label}`
   : '';
 ---
 
@@ -155,7 +155,7 @@ const chipWindow = nextShift
                   </span>
                   <span class="text-[var(--pyre-creme)]">
                     {week.assignments
-                      .map((a) => `${formatChipTime(a.starts_at)}–${formatChipTime(a.ends_at)}`)
+                      .map((a) => `${formatCompactTime(a.starts_at)}–${formatCompactTime(a.ends_at)}`)
                       .join(', ')}{' '}
                     {week.shift.label}
                   </span>

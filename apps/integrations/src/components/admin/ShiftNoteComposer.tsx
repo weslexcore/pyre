@@ -10,6 +10,8 @@
 // A created note is announced on the document (SHIFT_NOTE_CREATED_EVENT), so
 // the log on /admin/shift-notes picks up a note written from the header modal
 // without a reload, the same way it picks up one written inline.
+
+import { todayEastern } from '@pyre/schedule-core';
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
@@ -20,7 +22,7 @@ import {
   formatBytes,
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
-import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
+import { NOTE_BODY_MAX } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 
 export const buttonClass =

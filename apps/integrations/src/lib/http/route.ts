@@ -5,6 +5,7 @@
 import type { APIRoute, AstroCookies } from 'astro';
 import { type AdminGate, assertSameOrigin, requireAnyPage, requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { json } from './json';
 
 export { dbError, isUniqueViolation, isUuid, isUuidParam, JSON_HEADERS, json } from './json';
@@ -24,7 +25,7 @@ function gateOn(cookies: AstroCookies, spec: GateSpec) {
 
 /** Lowercased session email — the actor on every row and every event. */
 export function sessionEmail(gate: AdminGate): string {
-  return (gate.user.email ?? '').trim().toLowerCase();
+  return normalizeEmail(gate.user.email);
 }
 
 /**

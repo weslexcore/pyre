@@ -16,6 +16,8 @@ import {
   addDays,
   assignmentHours,
   formatDuties,
+  formatShortDay,
+  todayEastern,
   utcToEastern,
   weekStartOf,
 } from '@pyre/schedule-core';
@@ -31,7 +33,7 @@ import {
 import { sendTemplate } from '@/lib/email/send';
 import { appOrigin } from '@/lib/origins';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
-import { formatWindowLabel, todayEastern } from '@/lib/schedule/sub';
+import { formatWindowLabel } from '@/lib/schedule/sub';
 
 /** ET hour from which Monday's roundup may go out. */
 const SEND_HOUR = 7;
@@ -50,15 +52,6 @@ export interface WeeklyShiftsSummary {
   skipped?: string;
   outOfTime?: boolean;
   wouldSend?: string[];
-}
-
-/** "Mon, Aug 17" — the compact per-row label (dates are ET wall-clock). */
-export function formatDayLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 /** "Aug 17–23", collapsing the month when the week doesn't straddle one. */
@@ -174,7 +167,7 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       );
 
     const shiftItems: WeeklyShiftItem[] = items.map(({ assignment, shift }) => ({
-      dayLabel: formatDayLabel(shift.shift_date),
+      dayLabel: formatShortDay(shift.shift_date),
       shiftLabel: shift.label,
       timeLabel: formatWindowLabel(assignment),
       shiftUrl: `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`,

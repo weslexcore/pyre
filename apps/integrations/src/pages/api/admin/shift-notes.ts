@@ -47,6 +47,7 @@ import {
   type ShiftNoteReplyRow,
   type ShiftNoteRow,
 } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { deleteBySource } from '@/lib/notifications/notify';
 import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
@@ -55,7 +56,6 @@ import {
   canSeeReply,
   canSetStatus,
   isShiftNoteStatus,
-  normalizeEmail,
   SHIFT_NOTE_STATUSES,
 } from '@/lib/shift-notes/access';
 import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';

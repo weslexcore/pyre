@@ -6,11 +6,12 @@
 // half hour before a session, on a phone, so the roster leads with the
 // people to greet by name.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { timeAgo } from '@/lib/client/relativeTime';
+import { firstNameOf } from '@/lib/email/address';
 import type { RosterSession, SessionRoster } from '@/lib/guests/roster';
-import { firstNameOf } from '@/lib/guests/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   AnswerPill,
@@ -21,7 +22,6 @@ import {
   QuietBadge,
   StandingBadge,
   shiftDate,
-  todayEastern,
 } from './guestUi';
 import { buttonClass, cardClass, inputClass } from './incidentUi';
 

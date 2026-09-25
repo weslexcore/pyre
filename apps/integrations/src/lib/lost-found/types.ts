@@ -1,3 +1,4 @@
+import { easternDate, easternToUtc } from '@pyre/schedule-core';
 // Lost & Found vocabulary: the fixed lists the form offers and the API
 // validates against. Client-bundle-safe (no db/env imports) — the React
 // islands import it directly, and the check constraints in the
@@ -80,45 +81,15 @@ export const DEFAULT_LOOKBACK_HOURS = 6;
 /** Widest window we will ask Momence about — a guard, not a policy. */
 export const MAX_WINDOW_HOURS = 72;
 
-/** The studio's clock. Day boundaries in the session picker are its days. */
-const STUDIO_TIME_ZONE = 'America/New_York';
 const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** "2026-09-21" for the studio's calendar day that `date` falls on. */
-export function studioDateOf(date: Date): string {
-  // en-CA formats as YYYY-MM-DD.
-  return date.toLocaleDateString('en-CA', { timeZone: STUDIO_TIME_ZONE });
-}
+export const studioDateOf = easternDate;
 
-/** How far the studio's wall clock is ahead of UTC at `ms` (negative here). */
-function studioOffsetMs(ms: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: STUDIO_TIME_ZONE,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(ms));
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  const wall = Date.UTC(
-    get('year'),
-    get('month') - 1,
-    get('day'),
-    get('hour'),
-    get('minute'),
-    get('second')
-  );
-  return wall - Math.floor(ms / 1000) * 1000;
-}
-
-/** The instant the studio's day `y-m-d` begins. Two passes settle DST days. */
+/** The instant the studio's day `y-m-d` begins; `d` may overflow the month. */
 function studioMidnight(y: number, m: number, d: number): number {
-  const wall = Date.UTC(y, m - 1, d);
-  const guess = wall - studioOffsetMs(wall);
-  return wall - studioOffsetMs(guess);
+  const ymd = new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
+  return Date.parse(easternToUtc(ymd, '00:00'));
 }
 
 /**

@@ -4,6 +4,7 @@ export * from "./duties";
 export * from "./horizon";
 export * from "./hours";
 export * from "./insights";
+export * from "./labels";
 export * from "./leads";
 export * from "./rest";
 export * from "./standing-instructions";

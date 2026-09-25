@@ -48,7 +48,7 @@ export function hasAutoSuggestSignal(signals: unknown, autoSignals: readonly str
 }
 
 /** Sep 24 — the date a note is about, as people refer to it. */
-export function shortDate(ymd: string): string {
+export function formatMonthDay(ymd: string): string {
   const [year, month, day] = ymd.split('-').map(Number);
   if (!year || !month || !day) return ymd;
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
@@ -67,7 +67,7 @@ function noteRecord(note: NoteFields, names: Map<string, string>): SourceRecord 
     id: note.id,
     text: note.body,
     hash: contentHash(note.body),
-    label: `${author ? `${author}'s shift note` : 'Shift note'} (${shortDate(note.note_date)})`,
+    label: `${author ? `${author}'s shift note` : 'Shift note'} (${formatMonthDay(note.note_date)})`,
     href: sourceHref('shift_note', note.id),
     closed: note.status === 'resolved',
   };

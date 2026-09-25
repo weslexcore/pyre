@@ -24,12 +24,13 @@
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireAdmin, requireStaff } from '@/lib/auth/admin';
 import { type AdminMessageRow, getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { listMessagesForViewer, loadMessageForViewer } from '@/lib/messages/store';
 import { BODY_MAX, normalizeBody, normalizeTitle, parseAudience } from '@/lib/messages/validate';
 import { notifyMessageAudienceWidened, notifyMessagePosted } from '@/lib/notifications/messages';
 import { deleteBySource, markSourceRead } from '@/lib/notifications/notify';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import type { SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 

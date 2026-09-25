@@ -12,14 +12,14 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { GuestProfileNoteRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { loadProfileById } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { normalizeNoteBody } from '@/lib/guests/validate';
 import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { sameActor } from '@/lib/sops/names';
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 async function loadNote(
   db: NonNullable<ReturnType<typeof getDb>>,

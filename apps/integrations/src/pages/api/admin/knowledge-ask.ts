@@ -22,6 +22,7 @@
 import type { APIRoute } from 'astro';
 import { agentsEveConfig } from '@/lib/agent/eve-config';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
@@ -45,7 +46,6 @@ import {
   sendEveFollowUp,
   startEveSession,
 } from '@/lib/schedule/eve-session';
-import { normalizeEmail } from '@/lib/sops/levels';
 
 export const prerender = false;
 

@@ -11,6 +11,7 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { isSettingKey, parseSettingValue, SETTINGS } from '@/lib/settings/registry';
 import { getAllSettings, resetSetting, saveSetting } from '@/lib/settings/store';
@@ -41,7 +42,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
   const parsed = parseSettingValue(body.key, body.value);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
 
-  const by = (gate.user.email ?? '').trim().toLowerCase() || null;
+  const by = normalizeEmail(gate.user.email) || null;
   const { error } = await saveSetting(body.key, parsed.value, by);
   if (error) return json({ error }, 500);
   console.info(`[settings] ${by ?? 'unknown'} set ${body.key} = ${JSON.stringify(parsed.value)}`);

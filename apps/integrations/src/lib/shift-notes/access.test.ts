@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   canReply,
   canSeeNote,
@@ -6,7 +7,6 @@ import {
   canSetStatus,
   canTouchReply,
   isShiftNoteStatus,
-  normalizeEmail,
   statusLabel,
 } from './access';
 

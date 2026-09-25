@@ -17,6 +17,7 @@
 // boards this way. The entry is still a link, so a modified click opens the
 // board in a new tab.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useMemo, useState } from 'react';
 import {
   buildCalendar,
@@ -31,7 +32,6 @@ import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { BackLink } from '../BackLink';
-import { todayEastern } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';

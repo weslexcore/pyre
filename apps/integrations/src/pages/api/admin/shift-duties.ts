@@ -20,6 +20,7 @@ import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { type AdminGate, requirePage, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import { invalidateDutyCatalog, loadDutyCatalog } from '@/lib/schedule/duties';
 import {
@@ -33,7 +34,7 @@ type Db = NonNullable<ReturnType<typeof getDb>>;
 
 const COLUMNS = 'key, label, detail, phase, side, session_default, sop_id, sort_order, archived';
 
-const emailOf = (gate: AdminGate): string => (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: AdminGate): string => normalizeEmail(gate.user.email);
 
 /** Every row, straight from the table — the editor needs sop_id, not just the slug. */
 async function loadRows(db: Db): Promise<ShiftDutyRow[] | Response> {

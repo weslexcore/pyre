@@ -41,9 +41,10 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow, type SopRunCheckRow, type SopRunRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { countTasks, forbiddenSkips, parseChecklist } from '@/lib/sops/checklist';
-import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 import {

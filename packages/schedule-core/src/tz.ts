@@ -1,8 +1,11 @@
 // UTC → America/New_York wall-clock conversion for Momence timestamps. Uses
 // Intl (no dependency); DST is handled by the timezone database.
 
+/** The studio's timezone — every wall-clock date and time in the app is here. */
+export const STUDIO_TZ = 'America/New_York';
+
 const ET_FORMAT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/New_York',
+  timeZone: STUDIO_TZ,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -28,6 +31,16 @@ export function utcToEastern(iso: string): LocalWallClock {
     date: `${get('year')}-${get('month')}-${get('day')}`,
     minutes: hour * 60 + Number.parseInt(get('minute'), 10),
   };
+}
+
+/** YYYY-MM-DD in America/New_York for an instant (default: now). */
+export function easternDate(at: Date = new Date()): string {
+  return utcToEastern(at.toISOString()).date;
+}
+
+/** Today's date on the studio's wall clock. */
+export function todayEastern(): string {
+  return easternDate();
 }
 
 /** The only two offsets America/New_York ever uses: EDT (-4) and EST (-5). */

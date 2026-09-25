@@ -15,6 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { LOST_FOUND_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
+import { firstNameOf } from '@/lib/email/address';
 import { sendTemplate } from '@/lib/email/send';
 import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { isUniqueViolation } from '@/lib/http/json';
@@ -56,10 +57,6 @@ function formatShortDay(iso: string): string {
     month: 'long',
     day: 'numeric',
   });
-}
-
-function firstNameOf(name: string | undefined): string {
-  return (name ?? '').trim().split(/\s+/)[0] ?? '';
 }
 
 /**

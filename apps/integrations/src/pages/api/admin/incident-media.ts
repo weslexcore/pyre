@@ -18,6 +18,7 @@ import { hasIncidentsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { IncidentAttachmentRow, IncidentRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { logIncidentEvent } from '@/lib/incidents/log';
 import {
@@ -40,8 +41,7 @@ const ATTACH_WINDOW_MINUTES = 60;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 /**
  * The incident this request is about, plus whether the caller may attach to

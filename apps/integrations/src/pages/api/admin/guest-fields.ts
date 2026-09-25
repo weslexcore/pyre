@@ -18,6 +18,7 @@ import { hasGuestsManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
 import type { GuestProfileFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { countAnswers, loadFields } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { normalizeFieldCreate, normalizeFieldPatch, normalizeOrder } from '@/lib/guests/validate';
@@ -25,8 +26,7 @@ import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 
 const KEY_RE = /^[a-z][a-z0-9_]{1,39}$/;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 async function gateFieldsManage(
   cookies: Parameters<APIRoute>[0]['cookies'],

@@ -11,14 +11,7 @@ vi.mock('@/lib/schedule/duties', async () => {
   return { loadDutyCatalog: async () => DEFAULT_DUTY_CATALOG };
 });
 
-const { formatDayLabel, formatWeekLabel, runWeeklyShiftEmails } = await import('./weekly-shifts');
-
-describe('formatDayLabel', () => {
-  it('renders the compact weekday label', () => {
-    expect(formatDayLabel('2026-08-17')).toBe('Mon, Aug 17');
-    expect(formatDayLabel('2026-08-20')).toBe('Thu, Aug 20');
-  });
-});
+const { formatWeekLabel, runWeeklyShiftEmails } = await import('./weekly-shifts');
 
 describe('formatWeekLabel', () => {
   it('collapses the month when the week stays inside one', () => {

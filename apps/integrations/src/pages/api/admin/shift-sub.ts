@@ -9,7 +9,7 @@
 // (lib/schedule/settings.ts). Claiming and cancelling are not — an open
 // request made before the switch flipped must still be resolvable.
 
-import { availabilityFor, timeToMinutes } from '@pyre/schedule-core';
+import { availabilityFor, timeToMinutes, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
@@ -32,7 +32,6 @@ import {
   formatDateLabel,
   formatWindowLabel,
   listAdminRecipients,
-  todayEastern,
 } from '@/lib/schedule/sub';
 import { createSubClaimToken } from '@/lib/schedule/sub-token';
 

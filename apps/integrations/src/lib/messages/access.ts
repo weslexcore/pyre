@@ -10,6 +10,7 @@
 // controls to draw, and every route re-checks it server-side.
 
 import type { AdminMessageReplyRow, AdminMessageRow, StaffRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { canUseDashboard, roleForStaffRow, type SopViewer } from '@/lib/sops/levels';
 
 /** The parts of a message row the access rules read. */
@@ -61,7 +62,7 @@ export function resolveAudience(
   const out = new Set<string>();
   for (const row of rows) {
     if (!canUseDashboard(row)) continue;
-    const email = (row.email ?? '').trim().toLowerCase();
+    const email = normalizeEmail(row.email);
     if (!email) continue;
     if (message.audience_roles.includes(roleForStaffRow(row)) || named.has(email)) out.add(email);
   }

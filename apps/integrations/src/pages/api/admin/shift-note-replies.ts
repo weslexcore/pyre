@@ -23,15 +23,10 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteReplyRow, type ShiftNoteRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
 import { notifyShiftNoteReply } from '@/lib/notifications/shift-notes';
-import {
-  canReply,
-  canSeeNote,
-  canSeeReply,
-  canTouchReply,
-  normalizeEmail,
-} from '@/lib/shift-notes/access';
+import { canReply, canSeeNote, canSeeReply, canTouchReply } from '@/lib/shift-notes/access';
 import { normalizeReplyBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
 

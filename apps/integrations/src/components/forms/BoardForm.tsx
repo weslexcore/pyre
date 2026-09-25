@@ -19,6 +19,7 @@
 // a hidden field nobody sees, and the time the page was opened, both sent
 // with the answers and checked on the server (lib/boards/form-guard.ts).
 
+import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { FilesField } from '@/components/admin/boards/FilesField';
 import {
@@ -38,7 +39,6 @@ import {
   formDoneLink,
   isBlankAnswer,
   type ResolvedQuestion,
-  todayEastern,
 } from '@/lib/boards/forms';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardFieldValue } from '@/lib/db';

@@ -47,6 +47,7 @@ import {
 import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { type APIRoute, dbError, json } from '@/lib/http/route';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
@@ -99,7 +100,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
       const crossOrigin = assertSameOrigin(request);
       if (crossOrigin) return crossOrigin;
       const { session } = await validateSession(cookies);
-      const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+      const email = session.isAuthenticated ? normalizeEmail(session.user?.email) : '';
       if (!email) return json({ error: 'Sign in to send this form' }, 401);
       const access = await getAccess(email);
       // Not-found and not-yours look the same, as on the board routes.

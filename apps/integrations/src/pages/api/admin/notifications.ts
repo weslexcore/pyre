@@ -16,6 +16,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { isUuid, json } from '@/lib/http/route';
 import {
   countUnread,
@@ -37,7 +38,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   const rawLimit = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
@@ -68,7 +69,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   let body: Record<string, unknown>;

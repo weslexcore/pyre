@@ -27,6 +27,7 @@
 import { useMemo, useState } from 'react';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
+import { firstNameOf } from '@/lib/email/address';
 import {
   CAMERA_ACCEPT,
   checkFile,
@@ -60,11 +61,6 @@ import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
 /** The log form has never emailed anyone yet, so nothing is "already asked". */
 const EMPTY_ASKED: Set<string> = new Set();
-
-/** "Alex Chen" -> "Alex", for the one place the form speaks about a person. */
-function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? '';
-}
 
 interface PendingFile {
   id: string;

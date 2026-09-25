@@ -15,7 +15,6 @@ import {
   assignmentHours,
   availabilityFor,
   DEFAULT_DUTY_CATALOG,
-  DOW_LABELS,
   type DutyCatalog,
   type DutyDef,
   dutyDef,
@@ -24,6 +23,8 @@ import {
   dutyTitle,
   findRestViolations,
   firstTentativeDate,
+  formatChipDate,
+  formatCompactTime,
   formatShiftNotes,
   isTentativeShift,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
@@ -110,8 +111,8 @@ interface RestEntry {
 /** "closes Sun 9/7 (to 8:30p), then opens Mon 9/8 (from 5a)" — the other side of the pair. */
 const restNoteFor = (side: 'evening' | 'opening', other: RestEntry): string =>
   side === 'evening'
-    ? `opens ${formatDay(other.date)} at ${formatTime(other.startsAt)} — no evening before an opening`
-    : `closed ${formatDay(other.date)} at ${formatTime(other.endsAt)} — no opening after an evening`;
+    ? `opens ${formatChipDate(other.date)} at ${formatCompactTime(other.startsAt)} — no evening before an opening`
+    : `closed ${formatChipDate(other.date)} at ${formatCompactTime(other.endsAt)} — no opening after an evening`;
 
 const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
   sessions_cancelled: 'Momence sessions cancelled',
@@ -164,20 +165,6 @@ const todayLocal = (): string => {
 };
 
 const hhmm = (t: string) => t.slice(0, 5);
-
-const formatTime = (t: string): string => {
-  const min = timeToMinutes(t);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-};
-
-const formatDay = (date: string): string => {
-  const [, m, d] = date.split('-');
-  return `${DOW_LABELS[new Date(`${date}T00:00:00`).getDay()]} ${Number(m)}/${Number(d)}`;
-};
 
 // The board's ways of slicing the same data: one week (the default), a whole
 // calendar month as the same day list, or — manage side only — every
@@ -888,7 +875,7 @@ export function ScheduleBoard() {
     setFormTarget(null);
   };
 
-  const weekLabel = `${formatDay(weekStart)} – ${formatDay(addDays(weekStart, 6))}`;
+  const weekLabel = `${formatChipDate(weekStart)} – ${formatChipDate(addDays(weekStart, 6))}`;
 
   if (loading && !data) {
     return <p className="font-mono text-sm text-white/40">Loading schedule…</p>;
@@ -1146,10 +1133,12 @@ export function ScheduleBoard() {
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
               Set in stone through{' '}
               <span className="font-bold text-[var(--pyre-creme)]">
-                {formatDay(addDays(firstTentative, -1))}
+                {formatChipDate(addDays(firstTentative, -1))}
               </span>{' '}
               ·{' '}
-              <span className="font-bold text-[var(--pyre-red)]">{formatDay(firstTentative)}</span>{' '}
+              <span className="font-bold text-[var(--pyre-red)]">
+                {formatChipDate(firstTentative)}
+              </span>{' '}
               onward is <span className="font-bold text-[var(--pyre-red)]">≈ tentative</span> — a
               working plan to keep requesting shifts and logging time off into, but times and
               assignments can still change until the week locks (every Monday locks the two weeks
@@ -1202,7 +1191,7 @@ export function ScheduleBoard() {
                   Guides the agent's judgment for{' '}
                   {draftTargetWeeks.length > 1
                     ? `all ${draftTargetWeeks.length} weeks in this run`
-                    : `the week of ${formatDay(draftTargetWeeks[0] ?? weekStart)}`}
+                    : `the week of ${formatChipDate(draftTargetWeeks[0] ?? weekStart)}`}
                   . Availability and staffing limits still win. ⌘⏎ to draft.
                 </span>
                 {draftNote.length > MAX_DRAFT_PROMPT_LENGTH - 100 && (
@@ -1395,7 +1384,7 @@ export function ScheduleBoard() {
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <h2 className="flex flex-wrap items-center gap-2 font-mono text-sm font-bold uppercase tracking-wide text-white/70">
-                      {formatDay(date)}
+                      {formatChipDate(date)}
                       {beyondHorizon && !dayConfirmed && (
                         <span
                           className="rounded bg-[var(--pyre-red)]/20 px-2 py-0.5 text-[10px] tracking-wide text-[var(--pyre-red)]"
@@ -1499,7 +1488,8 @@ export function ScheduleBoard() {
                                 {shift.label}
                               </span>
                               <span className="font-mono text-sm text-white/60">
-                                {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}
+                                {formatCompactTime(shift.starts_at)}–
+                                {formatCompactTime(shift.ends_at)}
                               </span>
                               {selfWorks && (
                                 <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
@@ -1956,7 +1946,7 @@ function ShiftDetail({
   const takeSub = (sub: SubRequestRow) => {
     if (
       !window.confirm(
-        `Take this shift (${formatTime(sub.starts_at)}–${formatTime(sub.ends_at)})? You replace ${
+        `Take this shift (${formatCompactTime(sub.starts_at)}–${formatCompactTime(sub.ends_at)})? You replace ${
           staffById.get(sub.requester_staff_id)?.display_name ?? 'the requester'
         } right away.`
       )
@@ -1992,7 +1982,7 @@ function ShiftDetail({
                     {person?.display_name ?? '?'}
                   </span>
                   <span className="font-mono text-xs text-white/60">
-                    {formatTime(a.starts_at)}–{formatTime(a.ends_at)} ·{' '}
+                    {formatCompactTime(a.starts_at)}–{formatCompactTime(a.ends_at)} ·{' '}
                     {assignmentHours(a.starts_at, a.ends_at)}h · {ASSIGNMENT_ROLE_LABELS[a.role]}
                   </span>
                   {a.is_draft && (
@@ -2182,7 +2172,7 @@ function ShiftDetail({
                       className="font-mono text-xs text-[var(--pyre-creme)]"
                       title="The hours they asked to work — approving assigns exactly these"
                     >
-                      {formatTime(window.startsAt)}–{formatTime(window.endsAt)} ·{' '}
+                      {formatCompactTime(window.startsAt)}–{formatCompactTime(window.endsAt)} ·{' '}
                       {assignmentHours(window.startsAt, window.endsAt)}h
                     </span>
                     <span className="font-mono text-xs text-white/50">
@@ -2286,7 +2276,8 @@ function ShiftDetail({
                   {staffById.get(sub.requester_staff_id)?.display_name ?? '?'}
                 </span>
                 <span className="font-mono text-xs text-[var(--pyre-gold)]">
-                  needs a sub for {formatTime(sub.starts_at)}–{formatTime(sub.ends_at)}
+                  needs a sub for {formatCompactTime(sub.starts_at)}–
+                  {formatCompactTime(sub.ends_at)}
                 </span>
                 <span className="font-mono text-xs text-white/50">
                   asked {new Date(sub.created_at).toLocaleDateString()}
@@ -2313,8 +2304,8 @@ function ShiftDetail({
         <div className="flex flex-wrap items-center gap-2 rounded bg-[var(--pyre-gold)]/10 px-2 py-1.5">
           <span className="font-mono text-xs text-[var(--pyre-gold)]">
             {staffById.get(takeableSub.requester_staff_id)?.display_name ?? 'Someone'} needs a sub
-            for {formatTime(takeableSub.starts_at)}–{formatTime(takeableSub.ends_at)} — first come,
-            first served.
+            for {formatCompactTime(takeableSub.starts_at)}–{formatCompactTime(takeableSub.ends_at)}{' '}
+            — first come, first served.
           </span>
           <button
             type="button"
@@ -2336,9 +2327,9 @@ function ShiftDetail({
               <>
                 <span className="font-mono text-xs text-[var(--pyre-creme)]">
                   Requested {ASSIGNMENT_ROLE_LABELS[selfRequest.role]},{' '}
-                  {formatTime(requestedWindow(selfRequest).startsAt)}–
-                  {formatTime(requestedWindow(selfRequest).endsAt)} — waiting for a manager to
-                  approve.
+                  {formatCompactTime(requestedWindow(selfRequest).startsAt)}–
+                  {formatCompactTime(requestedWindow(selfRequest).endsAt)} — waiting for a manager
+                  to approve.
                 </span>
                 <button
                   type="button"
@@ -2453,7 +2444,7 @@ function ShiftDetail({
                 .map((c) => {
                   const when = c.wholeDay
                     ? 'all day'
-                    : `${formatTime(minutesToTime(c.startMin))}–${formatTime(minutesToTime(c.endMin))}`;
+                    : `${formatCompactTime(minutesToTime(c.startMin))}–${formatCompactTime(minutesToTime(c.endMin))}`;
                   return c.note ? `${when}: ${c.note}` : when;
                 })
                 .join('; ');

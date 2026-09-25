@@ -25,6 +25,7 @@ import { hasLostFoundManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
 import { loadLostFoundEvents, logLostFoundEvent } from '@/lib/lost-found/log';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
@@ -48,8 +49,7 @@ const LIST_LIMIT = 300;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 const displayName = (user: { firstName?: string; lastName?: string; email: string }): string =>
   [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;

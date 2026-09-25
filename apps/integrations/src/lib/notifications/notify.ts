@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NotificationKind, StaffNotificationRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 
 /** Sanity bound far above the roster size. */
 const MAX_RECIPIENTS = 500;
@@ -50,7 +51,7 @@ export async function createNotifications(
   recipients: Iterable<string>,
   input: NotificationInput
 ): Promise<number> {
-  const actor = (input.actorEmail ?? '').trim().toLowerCase() || null;
+  const actor = normalizeEmail(input.actorEmail) || null;
   const emails = normalizeRecipients(recipients, actor);
   if (emails.length === 0) return 0;
 

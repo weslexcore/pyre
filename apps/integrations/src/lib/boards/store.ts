@@ -8,6 +8,7 @@
 // goals, those goals' KPIs, and a per-board card tally, which is what a
 // board card on the landing page draws its meters from.
 
+import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PageAccess } from '@/components/admin/adminTools';
 import type {
@@ -20,7 +21,6 @@ import type {
   GoalKpiRow,
   GoalRow,
 } from '@/lib/db';
-import { todayEastern } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard } from './access';

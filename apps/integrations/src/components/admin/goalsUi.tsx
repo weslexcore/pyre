@@ -311,11 +311,6 @@ export async function send<T>(
   return (await res.json()) as T;
 }
 
-/** Today in America/New_York, matching what the routes store on a card. */
-export function todayEastern(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
 /** A card the drawer and the rows both need to key and link. */
 export function cardAnchorId(card: Pick<BoardCardRow, 'id'>): string {
   return `card-${card.id}`;

@@ -14,11 +14,12 @@
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { type AdminMessageReplyRow, type AdminMessageRow, getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
 import { canReplyToMessage, canTouchReply, canViewMessage } from '@/lib/messages/access';
 import { normalizeBody, REPLY_MAX } from '@/lib/messages/validate';
 import { notifyMessageReply } from '@/lib/notifications/messages';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import type { SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
 

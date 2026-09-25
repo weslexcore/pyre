@@ -9,6 +9,7 @@
 // the list itself is filtered server-side, so the page never even tells them
 // what else exists.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
@@ -32,7 +33,6 @@ import {
   SectionTitle,
   selectClass,
   send,
-  todayEastern,
 } from '../goalsUi';
 import { readError } from '../incidentUi';
 import { BoardSections } from './BoardSections';

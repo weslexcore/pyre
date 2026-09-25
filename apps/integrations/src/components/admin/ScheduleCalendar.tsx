@@ -9,11 +9,11 @@ import {
   addDays,
   busyIntervalsFor,
   firstTentativeDate,
+  formatCompactTime,
   formatShiftNotes,
   isTentativeShift,
   minutesToTime,
   missingShiftLead,
-  timeToMinutes,
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useMemo, useState } from 'react';
@@ -93,15 +93,6 @@ const monthEndOf = (monthStart: string): string => addDays(addMonths(monthStart,
 const formatMonth = (monthStart: string): string => {
   const [y, m] = monthStart.split('-').map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
-};
-
-const formatTime = (t: string): string => {
-  const min = timeToMinutes(t);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
 };
 
 type CoverageTone = 'empty' | 'under' | 'covered' | 'cancelled';
@@ -408,14 +399,14 @@ export function ScheduleCalendar() {
                           <a
                             key={shift.id}
                             href={`/admin/schedule?view=month&date=${date}&shift=${shift.id}`}
-                            title={`${shift.label} ${formatTime(shift.starts_at)}–${formatTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}${tentative ? ' · tentative — may change' : ''}`}
+                            title={`${shift.label} ${formatCompactTime(shift.starts_at)}–${formatCompactTime(shift.ends_at)} · ${shift.assignments.length}/${shift.staff_needed}${names ? ` · ${names}` : ''}${noLead ? ' · ⚠ no shift lead' : ''}${notes ? ` · ${notes}` : ''}${tentative ? ' · tentative — may change' : ''}`}
                             className={`block overflow-hidden rounded border px-1.5 py-1 ${toneBlock[coverageTone(shift)]} ${tentative ? 'border-dashed' : ''} ${
                               selfWorks ? 'ring-2 ring-[var(--pyre-gold)]' : ''
                             }`}
                           >
                             <span className="block truncate text-[11px] font-semibold leading-tight">
-                              {formatTime(shift.starts_at)}–{formatTime(shift.ends_at)}{' '}
-                              {shift.label}
+                              {formatCompactTime(shift.starts_at)}–
+                              {formatCompactTime(shift.ends_at)} {shift.label}
                               {shift.status === 'cancelled' && ' ✕'}
                               {noLead && <span className="text-[var(--pyre-gold)]"> ⚠</span>}
                             </span>

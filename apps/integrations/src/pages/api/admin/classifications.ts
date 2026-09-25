@@ -26,9 +26,9 @@ import { dispatchClassifications, scheduleClassification } from '@/lib/classify/
 import { loadClassifications, markQueued, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { isUuid, json } from '@/lib/http/route';
 import { jevOptions } from '@/lib/jev';
-import { normalizeEmail } from '@/lib/shift-notes/access';
 
 export const prerender = false;
 
