@@ -6,7 +6,7 @@
 // reads the same record. A decided one collapses to a line with a link to
 // what it made.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PeopleNames } from '@/lib/sops/names';
 import { personName } from '@/lib/sops/names';
 import {
@@ -45,6 +45,16 @@ function samePayload(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * A stored payload in the shape its editor holds, or null when it can't be
+ * read as one. Parsed once, when the suggestion loads — never while the admin
+ * types, since parsing trims text and would eat a space the moment it's typed.
+ */
+function editable(kind: SuggestionKind, raw: unknown): Record<string, unknown> | null {
+  const parsed = parsePayload(kind, raw);
+  return parsed.ok ? (parsed.value as unknown as Record<string, unknown>) : null;
+}
+
 export function SuggestionCard({
   suggestion,
   result,
@@ -64,7 +74,11 @@ export function SuggestionCard({
 }) {
   const kind = suggestion.kind;
   const saved = currentPayload(suggestion);
-  const [draft, setDraft] = useState<unknown>(saved);
+  // The saved copy and the agent's original, in editor shape, to compare the
+  // draft against (the draft itself is exactly what the admin typed).
+  const baseline = useMemo(() => editable(kind, saved), [kind, saved]);
+  const original = useMemo(() => editable(kind, suggestion.payload), [kind, suggestion.payload]);
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(baseline);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -74,12 +88,13 @@ export function SuggestionCard({
   // A saved edit or a rebase from elsewhere replaces the draft.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the saved copy's identity
   useEffect(() => {
-    setDraft(currentPayload(suggestion));
+    setDraft(editable(kind, currentPayload(suggestion)));
   }, [suggestion.edited_at, suggestion.id]);
 
+  // Checked for the buttons and the error line only; the editor keeps the text as typed.
   const parsed = parsePayload(kind, draft);
-  const dirty = !samePayload(draft, saved);
-  const editedFromOriginal = !samePayload(draft, suggestion.payload);
+  const dirty = !samePayload(draft, baseline);
+  const editedFromOriginal = !samePayload(draft, original);
   const pending = suggestion.status === 'pending' || suggestion.status === 'applying';
 
   const run = async (action: () => Promise<api.Decided>, decides: boolean) => {
@@ -163,17 +178,28 @@ export function SuggestionCard({
         <p className="text-xs italic text-white/60">{suggestion.rationale}</p>
       )}
 
-      {parsed.ok ? (
-        <Editor
-          kind={kind}
-          value={parsed.value as PayloadByKind[typeof kind]}
-          onChange={(next) => setDraft(next)}
-          target={target}
-          disabled={busy}
-          idPrefix={`suggestion-${suggestion.id}`}
-        />
+      {draft ? (
+        <>
+          <Editor
+            kind={kind}
+            value={draft as unknown as PayloadByKind[typeof kind]}
+            onChange={(next) => setDraft(next as unknown as Record<string, unknown>)}
+            target={target}
+            disabled={busy}
+            idPrefix={`suggestion-${suggestion.id}`}
+          />
+          {!parsed.ok && (
+            <p className="font-mono text-[10px] text-[var(--pyre-red)]">{parsed.error}</p>
+          )}
+        </>
       ) : (
-        <p className="font-mono text-[10px] text-[var(--pyre-red)]">{parsed.error}</p>
+        <p className="font-mono text-[10px] text-[var(--pyre-red)]">
+          This suggestion’s saved form can’t be read, so it can’t be edited here.
+          {(() => {
+            const check = parsePayload(kind, saved);
+            return check.ok ? null : ` ${check.error}`;
+          })()}
+        </p>
       )}
 
       {(error || suggestion.error) && (
@@ -251,7 +277,7 @@ export function SuggestionCard({
               type="button"
               className="font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
               disabled={busy}
-              onClick={() => setDraft(suggestion.payload)}
+              onClick={() => setDraft(original)}
             >
               Reset to the AI’s version
             </button>
