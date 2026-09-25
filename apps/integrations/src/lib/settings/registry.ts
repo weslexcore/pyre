@@ -10,9 +10,17 @@
 // variable, else the default. Resetting a setting on the page removes the
 // saved value.
 
-export type SettingSection = 'suggestions';
+import { HIDEABLE_TOOLS } from '@/components/admin/adminTools';
+
+export type SettingSection = 'suggestions' | 'navigation';
 
 export const SETTING_SECTIONS: { key: SettingSection; label: string; description: string }[] = [
+  {
+    key: 'navigation',
+    label: 'Page visibility',
+    description:
+      'Choose which tools appear in the dashboard, menu, pinned listings, and page search for everyone, including admins. Hidden pages still open through direct links under existing permissions. Widgets and quick actions stay available.',
+  },
   {
     key: 'suggestions',
     label: 'Agent suggestions',
@@ -45,6 +53,15 @@ export interface MultiChoiceSetting extends Base {
 export type SettingDefinition = BooleanSetting | MultiChoiceSetting;
 
 export const SETTINGS = {
+  'navigation.hiddenTools': {
+    type: 'multi_choice',
+    section: 'navigation',
+    label: 'Hidden pages',
+    description:
+      'Open any tool here, even when hidden. Settings always stays visible. Changes appear on navigation or refresh within about 30 seconds.',
+    options: HIDEABLE_TOOLS.map((tool) => ({ value: tool.href, label: tool.title })),
+    default: [],
+  },
   'suggestions.enabled': {
     type: 'boolean',
     section: 'suggestions',

@@ -15,6 +15,8 @@ interface AdminToolsIndexProps {
   tools: AdminTool[];
   /** The caller's saved pin order, hrefs as stored (may hold stale entries). */
   initialPins: string[];
+  /** All permitted tools, including hidden ones, so editing visible pins preserves them. */
+  validPinHrefs?: string[];
 }
 
 const handleClass =
@@ -28,13 +30,12 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
-export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
-  const [pins, setPins] = useState<string[]>(() =>
-    normalizePins(
-      initialPins,
-      tools.map((tool) => tool.href)
-    )
-  );
+export function AdminToolsIndex({
+  tools,
+  initialPins,
+  validPinHrefs = tools.map((tool) => tool.href),
+}: AdminToolsIndexProps) {
+  const [pins, setPins] = useState<string[]>(() => normalizePins(initialPins, validPinHrefs));
   const [drag, setDrag] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +65,7 @@ export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
       });
       if (!res.ok) throw new Error(await readError(res));
       const saved = ((await res.json()) as { hrefs?: string[] }).hrefs ?? next;
-      const normalized = normalizePins(
-        saved,
-        tools.map((tool) => tool.href)
-      );
+      const normalized = normalizePins(saved, validPinHrefs);
       setPins(normalized);
       document.dispatchEvent(new CustomEvent(TOOL_PINS_EVENT, { detail: normalized }));
     } catch (e) {

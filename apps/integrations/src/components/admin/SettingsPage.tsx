@@ -14,6 +14,7 @@ import {
 } from '@/lib/settings/registry';
 import type { PeopleNames } from '@/lib/sops/names';
 import { personName } from '@/lib/sops/names';
+import { ADMIN_TOOL_SECTIONS, HIDEABLE_TOOLS } from './adminTools';
 import { readError } from './ShiftNoteComposer';
 
 /** Settings that still live on the page they belong to. */
@@ -122,7 +123,51 @@ function SettingRow({
           />
         )}
       </div>
-      {def.type === 'multi_choice' && (
+      {view.key === 'navigation.hiddenTools' && (
+        <div className="space-y-4">
+          {ADMIN_TOOL_SECTIONS.map((section) => (
+            <div key={section.key}>
+              <h3 className="mb-2 font-mono text-xs uppercase text-white/50">{section.label}</h3>
+              <ul className="space-y-3">
+                {HIDEABLE_TOOLS.filter((tool) => tool.section === section.key).map((tool) => {
+                  const hidden = (view.value as string[]).includes(tool.href);
+                  return (
+                    <li key={tool.href} className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-[var(--pyre-creme)]">{tool.title}</p>
+                        <a
+                          href={tool.href}
+                          className="text-xs text-white/60 underline hover:text-white"
+                          aria-label={`Open ${tool.title}`}
+                        >
+                          Open page
+                        </a>
+                        <span className="ml-2 text-xs text-white/40">
+                          {hidden ? 'Hidden' : 'Visible'}
+                        </span>
+                      </div>
+                      <Toggle
+                        checked={!hidden}
+                        disabled={busy}
+                        label={`Show ${tool.title} in dashboard`}
+                        onChange={(show) =>
+                          onSave(
+                            view.key,
+                            show
+                              ? (view.value as string[]).filter((href) => href !== tool.href)
+                              : [...(view.value as string[]), tool.href]
+                          )
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+      {def.type === 'multi_choice' && view.key !== 'navigation.hiddenTools' && (
         <div className="flex flex-wrap gap-2">
           {def.options.map((option) => {
             const chosen = (view.value as string[]).includes(option.value);

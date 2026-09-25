@@ -57,3 +57,24 @@ describe('the registry', () => {
     }
   });
 });
+
+describe('hidden tools setting', () => {
+  it('defaults to all tools visible and permits hiding registered tools', () => {
+    expect(SETTINGS['navigation.hiddenTools'].default).toEqual([]);
+    expect(parseSettingValue('navigation.hiddenTools', ['/admin/water', '/admin/water'])).toEqual({
+      ok: true,
+      value: ['/admin/water'],
+    });
+    expect(parseSettingValue('navigation.hiddenTools', []).ok).toBe(true);
+  });
+
+  it.each([
+    '/admin/settings',
+    '/admin',
+    '/admin/messages',
+    '/admin/notifications',
+    '/admin/unknown',
+  ])('refuses to hide %s', (href) => {
+    expect(parseSettingValue('navigation.hiddenTools', [href]).ok).toBe(false);
+  });
+});

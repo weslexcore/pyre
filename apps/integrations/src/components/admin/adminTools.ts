@@ -430,6 +430,17 @@ export function toolsForAccess(access: PageAccess): AdminTool[] {
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 
+/** Tools admins can hide from shared listings. Settings must remain reachable. */
+export const HIDEABLE_TOOLS = toolsForAccess({ isAdmin: true, pages: [] }).filter(
+  (tool) => tool.href !== SETTINGS_TOOL.href
+);
+
+/** Visibility is independent of authorization: direct links keep working. */
+export function visibleTools(tools: AdminTool[], hiddenHrefs: readonly string[]): AdminTool[] {
+  const hidden = new Set(hiddenHrefs);
+  return tools.filter((tool) => tool.href === SETTINGS_TOOL.href || !hidden.has(tool.href));
+}
+
 /** Whether this user may view the admin page at `pathname`. */
 export function canViewPath(access: PageAccess, pathname: string): boolean {
   if (access.isAdmin) return true;

@@ -10,7 +10,7 @@
 // checklist run still open on an SOP they may view, their own first, so what
 // they are on the hook to finish is the first thing they see.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
-import { canViewPage, toolsForAccess } from '@/components/admin/adminTools';
+import { canViewPage, toolsForAccess, visibleTools } from '@/components/admin/adminTools';
 import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
 import { formatWhen } from '@/components/admin/SopRunsList';
 import AdminLayout from '@/layouts/AdminLayout.astro';
@@ -25,6 +25,7 @@ import {
   type NextShift,
   type WeekShift,
 } from '@/lib/schedule/next-shift';
+import { getSetting } from '@/lib/settings/store';
 import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -33,7 +34,8 @@ import { type ActiveRun, loadActiveRuns } from '@/lib/sops/runs';
 import { loadShiftSops, type ShiftSops } from '@/lib/sops/shift-sops';
 
 const access = Astro.locals.adminAccess ?? null;
-const tools = access ? toolsForAccess(access) : [];
+const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
+const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 const email = (Astro.locals.adminUser?.email ?? '').toLowerCase();
 const pins = email ? await getToolPins(email) : [];
 // Memo for AdminLayout (its frontmatter runs after the page's), so the nav
@@ -244,6 +246,11 @@ const chipWindow = nextShift
         </section>
       )
     }
-    <AdminToolsIndex client:load tools={tools} initialPins={pins} />
+    <AdminToolsIndex
+      client:load
+      tools={tools}
+      initialPins={pins}
+      validPinHrefs={access ? toolsForAccess(access).map((tool) => tool.href) : []}
+    />
   </div>
 </AdminLayout>

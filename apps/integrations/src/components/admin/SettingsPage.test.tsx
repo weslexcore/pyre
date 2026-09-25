@@ -8,6 +8,14 @@ import { SettingsPage } from './SettingsPage';
 
 const settings: SettingView[] = [
   {
+    key: 'navigation.hiddenTools',
+    value: ['/admin/water'],
+    source: 'saved',
+    fallback: [],
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
     key: 'suggestions.enabled',
     value: true,
     source: 'default',
@@ -37,6 +45,17 @@ describe('SettingsPage', () => {
   const html = renderToStaticMarkup(
     <SettingsPage initial={settings} people={{ 'wes@pyresauna.com': 'Wes' }} />
   );
+
+  it('offers hidden tools with direct links and visibility controls', () => {
+    expect(html).toContain('Page visibility');
+    expect(html).toContain('href="/admin/water"');
+    expect(html).toContain('aria-label="Open Cold Tub Water Log"');
+    expect(html).toMatch(
+      /aria-checked="false"[^>]*aria-label="Show Cold Tub Water Log in dashboard"/
+    );
+    expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Show Staff Schedule in dashboard"/);
+    expect(html).not.toContain('aria-label="Show Settings in dashboard"');
+  });
 
   it('draws switches with their state', () => {
     expect(html).toContain('role="switch"');

@@ -15,6 +15,7 @@ import {
   SUGGESTIONS_HREF,
   searchablePages,
   toolsForAccess,
+  visibleTools,
 } from '@/components/admin/adminTools';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
@@ -22,6 +23,7 @@ import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
 import Favicon from '@/components/Favicon.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { getUnreadCount } from '@/lib/notifications/unread';
+import { getSetting } from '@/lib/settings/store';
 import { getPendingSuggestionCount } from '@/lib/suggestions/unread';
 import '@/styles/admin.css';
 
@@ -46,7 +48,8 @@ Astro.response.headers.set('Cache-Control', 'private, no-store');
 const user = Astro.locals.adminUser ?? null;
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!user && !!access && canViewPath(access, Astro.url.pathname);
-const tools = access ? toolsForAccess(access) : [];
+const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
+const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 // Pages the global search (cmd+K, or the magnifier in the header) can open:
 // the same tools plus their sub-pages, filtered the same way.
 const searchPages = access ? searchablePages(tools, access.isAdmin) : [];
@@ -62,7 +65,10 @@ const pinnedHrefs =
 const unreadCount = allowed && user?.email ? await getUnreadCount(user.email) : 0;
 // Agent suggestions waiting for an admin, beside the Suggestions entry in the
 // menu. Admins only; zero when storage is down.
-const pendingSuggestions = allowed && access?.isAdmin ? await getPendingSuggestionCount() : 0;
+const pendingSuggestions =
+  allowed && access?.isAdmin && tools.some((tool) => tool.href === SUGGESTIONS_HREF)
+    ? await getPendingSuggestionCount()
+    : 0;
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
 ---
 
