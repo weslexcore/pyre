@@ -37,21 +37,24 @@ function toneOf(type: SignalType): string {
   return SIGNAL_TONES[type] ?? NEUTRAL_TONE;
 }
 
+/**
+ * The box every badge in a row of them shares — signal chips here, and the
+ * pages' own status badges — so they come out the same height and centre on
+ * the same line. The fixed line height is what makes that hold: without it a
+ * chip takes whatever line height it inherits from where it sits.
+ */
+export const CHIP_CLASS =
+  'inline-flex shrink-0 items-center rounded border px-1.5 py-0.5 font-mono text-[10px] leading-4 uppercase tracking-wide';
+
 /** The label chip on its own, for filters and legends. */
 export function SignalTypeBadge({ type }: { type: SignalType }) {
-  return (
-    <span
-      className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${toneOf(type)}`}
-    >
-      {signalLabel(type)}
-    </span>
-  );
+  return <span className={`${CHIP_CLASS} ${toneOf(type)}`}>{signalLabel(type)}</span>;
 }
 
 function SignalChip({ signal }: { signal: Signal }) {
   const percent = Math.round(signal.probability * 100);
   return (
-    <li title={`${signalLabel(signal.type)} — ${percent}% likely`}>
+    <li className="flex" title={`${signalLabel(signal.type)} — ${percent}% likely`}>
       <SignalTypeBadge type={signal.type} />
       <span className="sr-only"> ({percent}% likely)</span>
     </li>
@@ -78,7 +81,7 @@ export function SparkleIcon({ className }: { className?: string }) {
 /** A set of signals as chips, e.g. what one run found. */
 export function SignalList({ signals }: { signals: readonly Signal[] }) {
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="Detected">
+    <ul className="flex flex-wrap items-center gap-1.5" aria-label="Detected">
       {signals.map((signal) => (
         <SignalChip key={signal.type} signal={signal} />
       ))}
@@ -97,7 +100,7 @@ export function SignalChips({
   classification: ClassificationView | undefined;
 }) {
   if (!classification) return null;
-  const note = 'font-mono text-[10px] text-white/40';
+  const note = 'font-mono text-[10px] leading-4 text-white/40';
   if (classification.state === 'pending') {
     return (
       <span className={note} aria-live="polite">

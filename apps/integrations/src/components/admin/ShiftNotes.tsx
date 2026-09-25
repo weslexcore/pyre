@@ -72,6 +72,7 @@ import {
 } from './ShiftNoteComposer';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
 import {
+  CHIP_CLASS,
   hasSignal,
   SignalChips,
   SignalFilter,
@@ -114,13 +115,7 @@ function describeEvent(entry: ShiftNoteReplyRow): string {
 }
 
 function StatusBadge({ status }: { status: ShiftNoteStatus }) {
-  return (
-    <span
-      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${statusBadgeClass[status]}`}
-    >
-      {statusLabel(status)}
-    </span>
-  );
+  return <span className={`${CHIP_CLASS} ${statusBadgeClass[status]}`}>{statusLabel(status)}</span>;
 }
 
 interface Viewer {
@@ -763,7 +758,10 @@ export function ShiftNotes() {
                   <StatusBadge status={note.status} />
                   {viewer.isAdmin && signals.classifications[note.id] && (
                     <>
-                      <span aria-hidden="true" className="font-mono text-[10px] text-white/20">
+                      <span
+                        aria-hidden="true"
+                        className="font-mono text-[10px] leading-4 text-white/20"
+                      >
                         |
                       </span>
                       <SignalChips classification={signals.classifications[note.id]} />
