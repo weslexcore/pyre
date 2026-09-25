@@ -16,8 +16,9 @@
 --          text or date changed), classification (the classifier read the
 --          note; data.model says which model answered).
 --   data — what the event carries: { from, to, source? } for status,
---          { fields } for edit, { signals, model, requested_by } for
---          classification.
+--          { fields, before, after } for edit (the changed fields' old and
+--          new values, so every version of a note is kept), { signals,
+--          model, requested_by } for classification.
 --
 -- Events are written by the app, never edited or deleted from the page
 -- (lib/shift-notes/access: canTouchReply is comments only). Visibility is
@@ -94,6 +95,6 @@ where c.subject_type = 'shift_note'
 comment on column public.shift_note_replies.kind is
   'comment (a person in the thread), status (admin triage), edit (note text/date changed), classification (the classifier read the note). Events are app-written and immutable.';
 comment on column public.shift_note_replies.data is
-  'Event payload: { from, to, source? } for status (source classifier when it triaged the note), { fields } for edit, { signals, model, requested_by } for classification; null for comments.';
+  'Event payload: { from, to, source? } for status (source classifier when it triaged the note), { fields, before, after } for edit, { signals, model, requested_by } for classification; null for comments.';
 comment on table public.shift_note_replies is
   'A shift note''s activity (/admin/shift-notes): comments from admins and the author, plus status changes, edits, and classifications as events. Visible to whoever can see the note, except is_private entries (private comments, classifications), which only admins read.';

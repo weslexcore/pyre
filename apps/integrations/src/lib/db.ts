@@ -389,6 +389,12 @@ export interface ShiftNoteReplyRow {
 
 export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classification';
 
+/** The edited fields of a note, as an edit event keeps them. */
+export interface ShiftNoteEditValues {
+  body?: string;
+  note_date?: string;
+}
+
 /** The payload of an activity event, by kind (the jsonb `data` column). */
 export interface ShiftNoteActivityData {
   /** status: the status before (absent on backfilled rows) and after. */
@@ -398,6 +404,9 @@ export interface ShiftNoteActivityData {
   source?: 'classifier';
   /** edit: which of the note's fields changed. */
   fields?: Array<'body' | 'note_date'>;
+  /** edit: those fields' values before and after (absent on edits recorded before this was kept). */
+  before?: ShiftNoteEditValues;
+  after?: ShiftNoteEditValues;
   /** classification: raw [{ type, probability }]; read it through readStoredSignals(). */
   signals?: unknown;
   model?: string | null;

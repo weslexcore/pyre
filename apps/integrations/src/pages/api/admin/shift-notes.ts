@@ -435,14 +435,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   // Every action lands in the note's activity, in the order it happened.
   const activity: ShiftNoteReplyRow[] = [];
-  const edited = [
-    ...(note.body !== existing.body ? (['body'] as const) : []),
-    ...(note.note_date !== existing.note_date ? (['note_date'] as const) : []),
-  ];
-  if (edited.length > 0) {
-    const entry = await recordEdit(db, note.id, edited, email);
-    if (entry) activity.push(entry);
-  }
+  // An edit keeps the old and new text/date, so no version of a note is lost.
+  const edit = await recordEdit(db, existing, note, email);
+  if (edit) activity.push(edit);
   if (patch.status !== undefined) {
     const entry = await recordStatusChange(db, note.id, existing.status, patch.status, email);
     if (entry) activity.push(entry);

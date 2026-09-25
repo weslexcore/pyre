@@ -10,7 +10,12 @@
 // never fail it. Each recorder returns the row it wrote, or null.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ShiftNoteActivityData, ShiftNoteReplyRow, ShiftNoteStatus } from '@/lib/db';
+import type {
+  ShiftNoteActivityData,
+  ShiftNoteReplyRow,
+  ShiftNoteRow,
+  ShiftNoteStatus,
+} from '@/lib/db';
 
 async function record(
   db: SupabaseClient,
@@ -71,19 +76,30 @@ export function recordClassifierStatusChange(
   });
 }
 
-/** The note's text or date changed. Shared with the author, who may have made it. */
+/**
+ * The note's text or date changed: what changed, from what, to what — so the
+ * history keeps every version of the note, not just the latest. Returns null
+ * (records nothing) when neither field actually changed. Shared with the
+ * author, who may have made it.
+ */
 export function recordEdit(
   db: SupabaseClient,
-  noteId: string,
-  fields: Array<'body' | 'note_date'>,
+  before: Pick<ShiftNoteRow, 'id' | 'body' | 'note_date'>,
+  after: Pick<ShiftNoteRow, 'body' | 'note_date'>,
   by: string
 ): Promise<ShiftNoteReplyRow | null> {
+  const fields = (['body', 'note_date'] as const).filter((f) => before[f] !== after[f]);
+  if (fields.length === 0) return Promise.resolve(null);
   return record(db, {
-    note_id: noteId,
+    note_id: before.id,
     kind: 'edit',
     author_email: by,
     is_private: false,
-    data: { fields },
+    data: {
+      fields,
+      before: Object.fromEntries(fields.map((f) => [f, before[f]])),
+      after: Object.fromEntries(fields.map((f) => [f, after[f]])),
+    },
   });
 }
 

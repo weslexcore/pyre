@@ -16,10 +16,12 @@
 // admins flip, so a request or piece of feedback gets tracked to completion,
 // and an activity thread: comments, in which an admin responds in context and
 // the author replies back, and an entry for every action on the note — each
-// status change, each edit, each time the classifier read it — so the note's history
-// reads in order. Entries show to whoever sees the note; an admin can mark a
-// comment private, which keeps it among the admins, and the classifier's entries are
-// admins-only (the server never sends those to anyone else).
+// status change, each edit (with what it changed), each time the classifier
+// read it — so the note's history reads in order. That history stays
+// collapsed under a toggle until opened; comments always show. Entries show
+// to whoever sees the note; an admin can mark a comment private, which keeps
+// it among the admins, and the classifier's entries are admins-only (the
+// server never sends those to anyone else).
 //
 // For admins, each note also shows what the classifier found in it — actions to take,
 // questions to answer, records to update, feedback, safety concerns
@@ -49,6 +51,7 @@ import {
   SHIFT_NOTE_STATUSES,
   statusLabel,
 } from '@/lib/shift-notes/access';
+import { diffWords } from '@/lib/shift-notes/diff';
 import {
   ACCEPT_ATTRIBUTE,
   checkFile,
@@ -106,7 +109,13 @@ function describeEvent(entry: ShiftNoteReplyRow): string {
         ? `moved this from ${statusLabel(data.from)} to ${statusLabel(data.to)}`
         : `marked this ${statusLabel(data.to)}`;
     case 'edit': {
-      const parts = (data.fields ?? []).map((f) => (f === 'body' ? 'the text' : 'the shift date'));
+      const parts = (data.fields ?? []).map((f) =>
+        f === 'body'
+          ? 'the text'
+          : data.before?.note_date && data.after?.note_date
+            ? `the shift date from ${formatDay(data.before.note_date)} to ${formatDay(data.after.note_date)}`
+            : 'the shift date'
+      );
       return parts.length > 0 ? `edited ${parts.join(' and ')}` : 'edited the note';
     }
     default:
@@ -204,6 +213,11 @@ export function ShiftNotes() {
   const [replyPrivate, setReplyPrivate] = useState<Record<string, boolean>>({});
   const [replyEditId, setReplyEditId] = useState<string | null>(null);
   const [replyEditBody, setReplyEditBody] = useState('');
+
+  // Which notes have their history (every entry but comments: status
+  // changes, edits, classifier reads) expanded. Closed by default so a
+  // note's card stays about the note and its conversation.
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
 
   // Filters.
   const [personFilter, setPersonFilter] = useState('all');
@@ -988,9 +1002,20 @@ export function ShiftNotes() {
                 )}
               {((replies[note.id]?.length ?? 0) > 0 || canReply(note, viewer)) && (
                 <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                  <HistoryToggle
+                    count={(replies[note.id] ?? []).filter((r) => r.kind !== 'comment').length}
+                    open={!!historyOpen[note.id]}
+                    onToggle={() =>
+                      setHistoryOpen((prev) => ({ ...prev, [note.id]: !prev[note.id] }))
+                    }
+                  />
                   {(replies[note.id] ?? []).map((reply) =>
                     reply.kind !== 'comment' ? (
-                      <ActivityEvent key={reply.id} entry={reply} names={names} />
+                      // Events sit in writing order among the comments, shown
+                      // only while the note's history is open.
+                      historyOpen[note.id] ? (
+                        <ActivityEvent key={reply.id} entry={reply} names={names} />
+                      ) : null
                     ) : (
                       <div
                         key={reply.id}
@@ -1164,14 +1189,92 @@ function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: Peop
       </div>
     );
   }
+  const before = entry.data?.before?.body;
+  const after = entry.data?.after?.body;
   return (
-    <p className="px-3 py-1 font-mono text-[10px] text-white/40">
-      {/* Unsigned events are the classifier's (e.g. triaging an untriaged note). */}
-      <span className="text-white/60">
-        {entry.author_email ? personName(entry.author_email, names) : 'Classifier'}
-      </span>{' '}
-      {describeEvent(entry)}
-      {stamp}
+    <div className="px-3 py-1">
+      <p className="font-mono text-[10px] text-white/40">
+        {/* Unsigned events are the classifier's (e.g. triaging an untriaged note). */}
+        <span className="text-white/60">
+          {entry.author_email ? personName(entry.author_email, names) : 'Classifier'}
+        </span>{' '}
+        {describeEvent(entry)}
+        {stamp}
+      </p>
+      {/* A text edit shows what it changed, the rest as context. */}
+      {entry.kind === 'edit' && before !== undefined && after !== undefined && (
+        <EditDiff before={before} after={after} />
+      )}
+    </div>
+  );
+}
+
+/** An edit's text change: removed words struck through, added ones highlighted. */
+function EditDiff({ before, after }: { before: string; after: string }) {
+  // Keyed by where each run starts in the old and new text, which is unique
+  // and stable (the same scheme as MarkedBody).
+  let inBefore = 0;
+  let inAfter = 0;
+  return (
+    <p className="mt-1 whitespace-pre-wrap rounded border border-white/10 px-2 py-1.5 text-xs text-white/50">
+      {diffWords(before, after).map((segment) => {
+        const key = `${inBefore}:${inAfter}`;
+        if (segment.op !== 'add') inBefore += segment.text.length;
+        if (segment.op !== 'del') inAfter += segment.text.length;
+        if (segment.op === 'del') {
+          return (
+            <del key={key} className="bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]/80">
+              {segment.text}
+            </del>
+          );
+        }
+        if (segment.op === 'add') {
+          return (
+            <ins
+              key={key}
+              className="bg-[var(--pyre-sage)]/15 text-[var(--pyre-sage)] no-underline"
+            >
+              {segment.text}
+            </ins>
+          );
+        }
+        return <span key={key}>{segment.text}</span>;
+      })}
     </p>
+  );
+}
+
+/**
+ * Opens and closes a note's history — the entries that record what happened
+ * to it, as opposed to the conversation. Draws nothing when there are none.
+ */
+function HistoryToggle({
+  count,
+  open,
+  onToggle,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <svg
+        width="8"
+        height="8"
+        viewBox="0 0 8 8"
+        aria-hidden="true"
+        className={`transition-transform ${open ? 'rotate-90' : ''}`}
+      >
+        <path d="M2 1l4 3-4 3z" fill="currentColor" />
+      </svg>
+      {open ? 'Hide history' : `History (${count})`}
+    </button>
   );
 }
