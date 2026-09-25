@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "npx -y turbo@^2 query affected --base=$VERCEL_GIT_PREVIOUS_SHA --packages pyre-agents --exit-code"
+}
