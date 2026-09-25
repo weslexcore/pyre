@@ -8,15 +8,17 @@
 // On top of a note sit two things only the thread needs rules for:
 //
 //   * status — open / todo / resolved, set by admins only; the author sees it.
-//   * replies — anyone who can see the note may reply (an admin, or the
-//     author on their own note); a reply is visible to whoever sees the note,
-//     unless an admin marked it private, in which case only admins read it.
-//     Editing or deleting a reply is its author or an admin.
+//   * activity — the note's thread. Anyone who can see the note may comment
+//     (an admin, or the author on their own note); an entry is visible to
+//     whoever sees the note, unless it is private, in which case only admins
+//     read it. Editing or deleting a comment is its author or an admin. The
+//     other entries are events the app recorded (status changes, edits, Jev
+//     classifications) and nobody edits or deletes them.
 //
 // Client-bundle-safe (no db/env imports): the island uses it to decide which
 // controls to draw, and every route re-checks it server-side.
 
-import type { ShiftNoteStatus } from '@/lib/db';
+import type { ShiftNoteActivityKind, ShiftNoteStatus } from '@/lib/db';
 
 export interface NoteViewer {
   /** Session email, already lowercased; '' when the session carries none. */
@@ -31,8 +33,10 @@ export interface AuthoredNote {
 
 /** The parts of a reply row the visibility and edit rules read. */
 export interface ReplyLike {
-  author_email: string;
+  author_email: string | null;
   is_private: boolean;
+  /** Absent reads as a comment. */
+  kind?: ShiftNoteActivityKind;
 }
 
 /** Normalize a session email the way author_email is stored. */
@@ -84,8 +88,9 @@ export function canSeeReply(reply: ReplyLike, viewer: NoteViewer): boolean {
   return viewer.isAdmin || !reply.is_private;
 }
 
-/** Editing or deleting a reply: its author, or an admin. */
+/** Editing or deleting a comment: its author, or an admin. Events are history and stay put. */
 export function canTouchReply(reply: ReplyLike, viewer: NoteViewer): boolean {
+  if (reply.kind !== undefined && reply.kind !== 'comment') return false;
   if (viewer.isAdmin) return true;
   return !!viewer.email && reply.author_email === viewer.email;
 }

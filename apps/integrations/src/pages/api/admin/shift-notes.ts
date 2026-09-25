@@ -8,9 +8,12 @@
 // never the request body.
 //
 // Each note carries a triage status (open / todo / resolved) that only admins
-// set, and a reply thread (shift-note-replies.ts) in which admins respond and
-// the author replies back; GET returns the replies the viewer may read (an
-// admin's private replies stay with the admins).
+// set, and an activity thread (shift_note_replies): comments, in which admins
+// respond and the author replies back (shift-note-replies.ts), and an event
+// for every action on the note — each status change and edit made here, and
+// each answer Jev gives (lib/classify) — so the note's history reads in order
+// rather than as the latest stamp. GET returns the entries the viewer may
+// read (private comments and Jev's answers stay with the admins).
 //
 // Photos/video backing a note are handled by shift-note-media.ts; GET here
 // returns each note's attachment rows so the log renders in one request. The
@@ -28,7 +31,7 @@
 //   GET                          → { notes, attachments, replies, people, viewer, scope,
 //                                    classifications (admins) }
 //   POST   { noteDate, body, attachmentIds? } → { note, attachments, people, classification? }
-//   PATCH  { id, noteDate?, body?, status? } → { note, people, classification? }
+//   PATCH  { id, noteDate?, body?, status? } → { note, activity, people, classification? }
 //   DELETE ?id=<uuid>            → { ok: true }
 
 import type { APIRoute } from 'astro';
@@ -52,6 +55,7 @@ import {
   normalizeEmail,
   SHIFT_NOTE_STATUSES,
 } from '@/lib/shift-notes/access';
+import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
@@ -118,7 +122,11 @@ async function sweepStagedAttachments(db: NonNullable<ReturnType<typeof getDb>>)
 function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
   return getPeopleNames([
     ...notes.flatMap((n) => [n.author_email, n.updated_by ?? '', n.status_by ?? '']),
-    ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
+    ...replies.flatMap((r) => [
+      r.author_email ?? '',
+      r.updated_by ?? '',
+      r.data?.requested_by ?? '',
+    ]),
   ]);
 }
 
@@ -406,7 +414,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (patch.status === existing.status) {
       delete patch.status;
       if (patch.note_date === undefined && patch.body === undefined) {
-        return json({ note: existing, people: await peopleFor([existing]) });
+        return json({ note: existing, activity: [], people: await peopleFor([existing]) });
       }
     } else {
       patch.status_by = email;
@@ -423,11 +431,27 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const note = data as ShiftNoteRow;
+
+  // Every action lands in the note's activity, in the order it happened.
+  const activity: ShiftNoteReplyRow[] = [];
+  const edited = [
+    ...(note.body !== existing.body ? (['body'] as const) : []),
+    ...(note.note_date !== existing.note_date ? (['note_date'] as const) : []),
+  ];
+  if (edited.length > 0) {
+    const entry = await recordEdit(db, note.id, edited, email);
+    if (entry) activity.push(entry);
+  }
+  if (patch.status !== undefined) {
+    const entry = await recordStatusChange(db, note.id, existing.status, patch.status, email);
+    if (entry) activity.push(entry);
+  }
+
   // Triage is news to the author; an edit of their own text is not.
   if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
   // New text gets read again; a date or status change leaves it alone.
   const classified = patch.body !== undefined ? classifyNote(note, gate) : {};
-  return json({ note, people: await peopleFor([note]), ...classified });
+  return json({ note, activity, people: await peopleFor([note], activity), ...classified });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

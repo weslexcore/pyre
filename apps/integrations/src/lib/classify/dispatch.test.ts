@@ -83,14 +83,22 @@ describe('dispatchClassification', () => {
     expect(runClassification).not.toHaveBeenCalled();
   });
 
-  it('carries force for a re-run and the preview bypass when Vercel sets one', async () => {
+  it('carries force and the requesting admin for a re-run, and the preview bypass', async () => {
     vi.stubEnv('VERCEL_AUTOMATION_BYPASS_SECRET', 'bypass');
-    await dispatchClassification('shift_note', NOTE_ID, 'Towels low', { force: true });
+    await dispatchClassification('shift_note', NOTE_ID, 'Towels low', {
+      force: true,
+      requestedBy: 'wes@pyresauna.com',
+    });
     const message = publishJSON.mock.calls[0]?.[0] as {
       body: unknown;
       headers: Record<string, string>;
     };
-    expect(message.body).toEqual({ subject: 'shift_note', id: NOTE_ID, force: true });
+    expect(message.body).toEqual({
+      subject: 'shift_note',
+      id: NOTE_ID,
+      force: true,
+      requestedBy: 'wes@pyresauna.com',
+    });
     expect(message.headers['x-vercel-protection-bypass']).toBe('bypass');
   });
 

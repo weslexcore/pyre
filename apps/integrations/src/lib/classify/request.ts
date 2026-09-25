@@ -17,6 +17,7 @@ import { classifySignals, type SubjectType, sanitizeClassifyText } from '@pyre/s
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ContentClassificationRow } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
+import { CLASSIFICATION_RECORDERS } from './activity';
 import { type ClassificationView, toClassificationView } from './view';
 
 /** sha256 of the text as Jev would see it. Exported for tests. */
@@ -27,6 +28,8 @@ export function contentHash(text: string): string {
 export interface ClassifyOptions {
   /** Re-run even when the text has not changed since the last run (an admin's retry). */
   force?: boolean;
+  /** The admin who asked for this run, recorded with its answer; absent when a write triggered it. */
+  requestedBy?: string;
 }
 
 /** What an admin's page shows right after scheduling: a read in progress. */
@@ -114,11 +117,22 @@ export async function runClassification(
       .from('content_classifications')
       .update(update)
       .eq('request_id', requestId)
-      .select('status, signals, requested_at, classified_at')
+      .select('status, signals, requested_at, classified_at, model')
       .maybeSingle();
     // Nothing saved means a newer run (an edit, a retry) replaced this one,
     // or the record was deleted meanwhile; either way this answer is stale.
-    return saved ? toClassificationView(saved as ContentClassificationRow) : null;
+    if (!saved) return null;
+    const row = saved as ContentClassificationRow;
+    // Each answer also lands in the record's history. Failures don't: QStash
+    // retries them, and the record's chips already show where the read stands.
+    if (row.status === 'done') {
+      await CLASSIFICATION_RECORDERS[subject](db, subjectId, {
+        signals: row.signals,
+        model: row.model,
+        ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
+      });
+    }
+    return toClassificationView(row);
   } catch (error) {
     console.error(`[classify] ${subject} ${subjectId}: run failed:`, error);
     return null;

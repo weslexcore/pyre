@@ -3,7 +3,7 @@
 // retries it with backoff on any non-2xx. It reads the record's current text
 // itself, so a job queued before a later edit classifies the latest text.
 //
-//   POST { subject, id, force? } → 200 { state } | 200 { skipped }
+//   POST { subject, id, force?, requestedBy? } → 200 { state } | 200 { skipped }
 //                                   503 when AI Gateway or Jev failed (QStash retries)
 //
 // Auth: Bearer CRON_SECRET, forwarded by QStash (same as the cron tick).
@@ -51,6 +51,7 @@ export const POST: APIRoute = async ({ request }) => {
   const retried = Number(request.headers.get('Upstash-Retried') ?? '0') > 0;
   const view = await runClassification(db, subject, id, text, {
     force: body.force === true || retried,
+    ...(typeof body.requestedBy === 'string' ? { requestedBy: body.requestedBy } : {}),
   });
 
   if (!view) return json({ skipped: 'classifier off or superseded' });

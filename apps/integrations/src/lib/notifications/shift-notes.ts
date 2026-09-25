@@ -23,7 +23,7 @@ export async function notifyShiftNoteReply(
   reply: Pick<ShiftNoteReplyRow, 'id' | 'body' | 'author_email' | 'is_private'>
 ): Promise<void> {
   const rows = (await listStaff()) ?? [];
-  const replier = reply.author_email.trim().toLowerCase();
+  const replier = (reply.author_email ?? '').trim().toLowerCase();
   const author = note.author_email.trim().toLowerCase();
   const replierName = nameFor(rows, replier);
   const base = {

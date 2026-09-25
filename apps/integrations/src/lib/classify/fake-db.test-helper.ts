@@ -1,27 +1,34 @@
 // A tiny in-memory stand-in for the one table lib/classify and the agent
 // route touch (content_classifications), supporting exactly the builder
 // calls they make: select/eq/in/maybeSingle, upsert(onConflict)/select/single,
-// update/eq/select/maybeSingle, and awaiting a bare update. Not a test file
-// itself; imported by the classify tests.
+// update/eq/select/maybeSingle, and awaiting a bare update. Inserts into any
+// other table (the activity a saved answer records) are kept in `inserted`.
+// Not a test file itself; imported by the classify tests.
 
 type Row = Record<string, unknown>;
 
 export function fakeClassificationsDb(initial: Row[] = []) {
   const rows: Row[] = initial.map((r) => ({ ...r }));
   const log: string[] = [];
+  const inserted: Array<{ table: string; row: Row }> = [];
 
   function builder(table: string) {
     const filters: Array<(row: Row) => boolean> = [];
     let action:
       | { kind: 'select' }
       | { kind: 'update'; patch: Row }
-      | { kind: 'upsert'; value: Row; conflict: string[] } = {
+      | { kind: 'upsert'; value: Row; conflict: string[] }
+      | { kind: 'insert'; value: Row } = {
       kind: 'select',
     };
 
     const matching = () => rows.filter((row) => filters.every((f) => f(row)));
 
     function run(): { data: Row[]; error: null } {
+      if (action.kind === 'insert') {
+        inserted.push({ table, row: action.value });
+        return { data: [action.value], error: null };
+      }
       if (table !== 'content_classifications') return { data: [], error: null };
       if (action.kind === 'update') {
         const hit = matching();
@@ -57,6 +64,10 @@ export function fakeClassificationsDb(initial: Row[] = []) {
         action = { kind: 'update', patch };
         return api;
       },
+      insert: (value: Row) => {
+        action = { kind: 'insert', value };
+        return api;
+      },
       upsert: (value: Row, options: { onConflict: string }) => {
         action = { kind: 'upsert', value, conflict: options.onConflict.split(',') };
         return api;
@@ -75,5 +86,5 @@ export function fakeClassificationsDb(initial: Row[] = []) {
     return api;
   }
 
-  return { db: { from: builder }, rows, log };
+  return { db: { from: builder }, rows, log, inserted };
 }

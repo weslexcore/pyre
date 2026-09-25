@@ -26,8 +26,10 @@ export const CLASSIFY_RETRIES = 3;
 export interface ClassifyJob {
   subject: SubjectType;
   id: string;
-  /** Re-run even when the text is unchanged (an admin's "Run again"). */
+  /** Re-run even when the text is unchanged (an admin's "Run Jev"). */
   force?: boolean;
+  /** The admin who asked for the run, recorded with its answer. */
+  requestedBy?: string;
 }
 
 export type DispatchOutcome =
@@ -71,6 +73,7 @@ export async function dispatchClassification(
         subject,
         id: subjectId,
         ...(options.force ? { force: true } : {}),
+        ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
       };
       // Preview deployments sit behind Vercel Deployment Protection, which
       // would 401 QStash at the edge; Vercel sets this secret when "Protection

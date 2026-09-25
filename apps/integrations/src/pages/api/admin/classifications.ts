@@ -1,9 +1,12 @@
 // What the classifier found in records a page is showing, and a way to run
-// it again. The page that lists the records normally carries their
+// it on demand. The page that lists the records normally carries their
 // classifications itself (see loadClassifications); this route serves the
 // follow-ups — polling notes that are still being read, and an admin's
-// "run again" on one that failed or read wrong. A re-run is queued like any
-// other classification (after the response), and the page polls for it.
+// "Run Jev" on any record: one never classified (written before the
+// classifier existed), one that failed, or one that read wrong. The run is
+// queued like any other classification (after the response), forced past
+// the unchanged-text skip, and recorded in the record's activity with the
+// admin who asked for it; the page polls for the answer.
 //
 //   GET  ?subject=shift_note&ids=<uuid>,<uuid>  → { classifications }
 //   POST { subject, id }                        → 202 { classification: pending }
@@ -18,6 +21,7 @@ import { loadClassifications, pendingView } from '@/lib/classify/request';
 import { SUBJECT_SOURCES } from '@/lib/classify/subjects';
 import { getDb } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
+import { normalizeEmail } from '@/lib/shift-notes/access';
 
 export const prerender = false;
 
@@ -80,6 +84,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (!jevOptions()) {
     return json({ error: 'Classifier unavailable (AI_GATEWAY_API_KEY not configured)' }, 503);
   }
-  scheduleClassification(subject, id, text, { force: true });
+  const requestedBy = normalizeEmail(gate.user.email);
+  scheduleClassification(subject, id, text, {
+    force: true,
+    ...(requestedBy ? { requestedBy } : {}),
+  });
   return json({ classification: pendingView() }, 202);
 };

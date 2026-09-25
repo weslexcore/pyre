@@ -6,9 +6,14 @@
 // private, which keeps it among the admins. Editing and deleting a reply is
 // its author or an admin. Author identity always comes from the session.
 //
-// Reads happen on the notes route (GET /api/admin/shift-notes returns each
-// note's visible replies); this route only mutates.
+// The thread is the note's whole activity: these comments, plus the events
+// the app records for status changes, edits, and Jev's answers (see
+// lib/shift-notes/activity). Events are history — they come back in reads
+// but can't be edited or deleted here. The page reads every thread on the
+// notes route (GET /api/admin/shift-notes); GET here refreshes one note's,
+// e.g. once Jev's answer has landed in it.
 //
+//   GET    ?noteId=<uuid>               → { replies, people }
 //   POST   { noteId, body, isPrivate? } → { reply, people }
 //   PATCH  { id, body?, isPrivate? }    → { reply, people }
 //   DELETE ?id=<uuid>                   → { ok: true }
@@ -42,8 +47,10 @@ function viewerOf(gate: AdminGate) {
   return { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
 }
 
-function peopleFor(reply: ShiftNoteReplyRow) {
-  return getPeopleNames([reply.author_email, reply.updated_by ?? '']);
+function peopleFor(...replies: ShiftNoteReplyRow[]) {
+  return getPeopleNames(
+    replies.flatMap((r) => [r.author_email ?? '', r.updated_by ?? '', r.data?.requested_by ?? ''])
+  );
 }
 
 /** Parse a JSON body after the shared gate / origin / content-type checks. */
@@ -108,11 +115,39 @@ async function loadOwnReply(
   if (note instanceof Response) return json({ error: 'Reply not found' }, 404);
   const viewer = viewerOf(gate);
   if (!canSeeReply(reply, viewer)) return json({ error: 'Reply not found' }, 404);
+  if (reply.kind !== 'comment') {
+    return json({ error: "A note's history can't be edited or deleted" }, 403);
+  }
   if (!canTouchReply(reply, viewer)) {
     return json({ error: "Only the reply's author or an admin can change it" }, 403);
   }
   return reply;
 }
+
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const gate = await requirePage(cookies, SHIFT_NOTES_HREF);
+  if (gate instanceof Response) return gate;
+
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const noteId = url.searchParams.get('noteId') ?? '';
+  if (!UUID_RE.test(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
+
+  const note = await loadVisibleNote(db, noteId, gate);
+  if (note instanceof Response) return note;
+
+  const { data, error } = await db
+    .from('shift_note_replies')
+    .select('*')
+    .eq('note_id', noteId)
+    .order('created_at', { ascending: true });
+  if (error) return json({ error: error.message }, 500);
+
+  const viewer = viewerOf(gate);
+  const replies = ((data ?? []) as ShiftNoteReplyRow[]).filter((r) => canSeeReply(r, viewer));
+  return json({ replies, people: await peopleFor(...replies) });
+};
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const ctx = await gated(cookies, request);

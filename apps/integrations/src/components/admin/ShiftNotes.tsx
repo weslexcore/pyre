@@ -14,18 +14,20 @@
 //
 // Each note also carries a triage status — open, to do, resolved — that only
 // admins flip, so a request or piece of feedback gets tracked to completion,
-// and a reply thread in which an admin responds in context and the author
-// replies back. Replies show to whoever sees the note; an admin can mark one
-// private, which keeps it among the admins (the server never sends those to
-// anyone else).
+// and an activity thread: comments, in which an admin responds in context and
+// the author replies back, and an entry for every action on the note — each
+// status change, each edit, each time Jev read it — so the note's history
+// reads in order. Entries show to whoever sees the note; an admin can mark a
+// comment private, which keeps it among the admins, and Jev's entries are
+// admins-only (the server never sends those to anyone else).
 //
 // For admins, each note also shows what Jev found in it — actions to take,
 // questions to answer, records to update, feedback, safety concerns
 // (Signals.tsx, lib/classify) — and the log can be filtered by them. The
 // read happens in the background after a note is saved, so the note appears
 // at once marked "Reading…" and its chips fill in a few seconds later; an
-// edit to its text is read again.
-import type { SignalType } from '@pyre/signals-core';
+// edit to its text is read again, and an admin can run Jev on any note.
+import { readStoredSignals, type SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
 import type {
@@ -64,7 +66,7 @@ import {
   uploadWithProgress,
 } from './ShiftNoteComposer';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
-import { hasSignal, SignalChips, SignalFilter, useClassifications } from './Signals';
+import { hasSignal, SignalChips, SignalFilter, SignalList, useClassifications } from './Signals';
 
 const selectClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
@@ -77,6 +79,27 @@ const statusBadgeClass: Record<ShiftNoteStatus, string> = {
   todo: 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
   resolved: 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]',
 };
+
+/**
+ * What an activity event says, after the actor's name: "moved this from Open
+ * to To do", "edited the text". Comments render as themselves, not here.
+ */
+function describeEvent(entry: ShiftNoteReplyRow): string {
+  const data = entry.data ?? {};
+  switch (entry.kind) {
+    case 'status':
+      if (!data.to) return 'changed the status';
+      return data.from
+        ? `moved this from ${statusLabel(data.from)} to ${statusLabel(data.to)}`
+        : `marked this ${statusLabel(data.to)}`;
+    case 'edit': {
+      const parts = (data.fields ?? []).map((f) => (f === 'body' ? 'the text' : 'the shift date'));
+      return parts.length > 0 ? `edited ${parts.join(' and ')}` : 'edited the note';
+    }
+    default:
+      return '';
+  }
+}
 
 function StatusBadge({ status }: { status: ShiftNoteStatus }) {
   return (
@@ -180,9 +203,26 @@ export function ShiftNotes() {
   const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
   const [signalFilter, setSignalFilter] = useState<'all' | SignalType>('all');
 
+  /** Re-read one note's thread from the server (e.g. once Jev's answer is in it). */
+  const refreshThread = useCallback(async (noteId: string) => {
+    try {
+      const res = await fetch(`/api/admin/shift-note-replies?noteId=${encodeURIComponent(noteId)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { replies: ShiftNoteReplyRow[]; people: PeopleNames };
+      setNames((prev) => ({ ...prev, ...data.people }));
+      setReplies((prev) => ({ ...prev, [noteId]: data.replies }));
+    } catch {
+      // The entry is saved; it shows on the next load.
+    }
+  }, []);
+
   // What the classifier found per note — admins only; the server sends
-  // nothing to anyone else, and this fetches nothing for them.
-  const signals = useClassifications('shift_note', viewer.isAdmin);
+  // nothing to anyone else, and this fetches nothing for them. Each finished
+  // read is also an entry in the note's thread; the worker writes it just
+  // after the answer, so give it a moment before reading the thread back.
+  const signals = useClassifications('shift_note', viewer.isAdmin, (noteId, view) => {
+    if (view.state === 'done') window.setTimeout(() => void refreshThread(noteId), 1_000);
+  });
   const { reset: resetSignals, merge: mergeSignals, remove: removeSignals } = signals;
   const [query, setQuery] = useState('');
 
@@ -358,10 +398,12 @@ export function ShiftNotes() {
       if (!res.ok) throw new Error(await readError(res));
       const data = (await res.json()) as {
         note: ShiftNoteRow;
+        activity?: ShiftNoteReplyRow[];
         people: PeopleNames;
         classification?: ClassificationView;
       };
       mergeNote(data.note, data.people);
+      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
       mergeSignals(data.note.id, data.classification);
       setEditId(null);
     } catch (e) {
@@ -416,8 +458,13 @@ export function ShiftNotes() {
         body: JSON.stringify({ id: note.id, status }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { note: ShiftNoteRow; people: PeopleNames };
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        activity?: ShiftNoteReplyRow[];
+        people: PeopleNames;
+      };
       mergeNote(data.note, data.people);
+      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update the status');
     } finally {
@@ -689,12 +736,6 @@ export function ShiftNotes() {
                   {note.updated_by && ` · edited by ${personName(note.updated_by, names)}`}
                 </span>
                 <StatusBadge status={note.status} />
-                {note.status_by && note.status_at && (
-                  <span className="font-mono text-[10px] text-white/40">
-                    {note.status === 'resolved' ? 'resolved' : 'marked'} by{' '}
-                    {personName(note.status_by, names)} · {formatStamp(note.status_at)}
-                  </span>
-                )}
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
                     {canSetStatus(viewer) &&
@@ -899,97 +940,101 @@ export function ShiftNotes() {
                 )}
               {((replies[note.id]?.length ?? 0) > 0 || canReply(note, viewer)) && (
                 <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-                  {(replies[note.id] ?? []).map((reply) => (
-                    <div
-                      key={reply.id}
-                      className={`rounded border px-3 py-2 ${
-                        reply.is_private
-                          ? 'border-dashed border-white/20 bg-transparent'
-                          : 'border-white/10 bg-white/5'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="text-xs font-semibold">
-                          {personName(reply.author_email, names)}
-                        </span>
-                        <span className="font-mono text-[10px] text-white/40">
-                          {formatStamp(reply.created_at)}
-                          {reply.updated_by &&
-                            ` · edited by ${personName(reply.updated_by, names)}`}
-                        </span>
-                        {reply.is_private && (
-                          <span className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                            admins only
+                  {(replies[note.id] ?? []).map((reply) =>
+                    reply.kind !== 'comment' ? (
+                      <ActivityEvent key={reply.id} entry={reply} names={names} />
+                    ) : (
+                      <div
+                        key={reply.id}
+                        className={`rounded border px-3 py-2 ${
+                          reply.is_private
+                            ? 'border-dashed border-white/20 bg-transparent'
+                            : 'border-white/10 bg-white/5'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="text-xs font-semibold">
+                            {personName(reply.author_email ?? '', names)}
                           </span>
-                        )}
-                        {canTouchReply(reply, viewer) && replyEditId !== reply.id && (
-                          <span className="ml-auto flex gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                            <button
-                              type="button"
-                              className="hover:text-white"
-                              disabled={busy}
-                              onClick={() => {
-                                setReplyEditId(reply.id);
-                                setReplyEditBody(reply.body);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            {viewer.isAdmin && (
+                          <span className="font-mono text-[10px] text-white/40">
+                            {formatStamp(reply.created_at)}
+                            {reply.updated_by &&
+                              ` · edited by ${personName(reply.updated_by, names)}`}
+                          </span>
+                          {reply.is_private && (
+                            <span className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                              admins only
+                            </span>
+                          )}
+                          {canTouchReply(reply, viewer) && replyEditId !== reply.id && (
+                            <span className="ml-auto flex gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
                               <button
                                 type="button"
                                 className="hover:text-white"
                                 disabled={busy}
-                                onClick={() => void toggleReplyPrivate(reply)}
+                                onClick={() => {
+                                  setReplyEditId(reply.id);
+                                  setReplyEditBody(reply.body);
+                                }}
                               >
-                                {reply.is_private ? 'Share with author' : 'Make private'}
+                                Edit
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="hover:text-[var(--pyre-red)]"
-                              disabled={busy}
-                              onClick={() => void deleteReply(reply)}
-                            >
-                              Delete
-                            </button>
-                          </span>
+                              {viewer.isAdmin && (
+                                <button
+                                  type="button"
+                                  className="hover:text-white"
+                                  disabled={busy}
+                                  onClick={() => void toggleReplyPrivate(reply)}
+                                >
+                                  {reply.is_private ? 'Share with author' : 'Make private'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="hover:text-[var(--pyre-red)]"
+                                disabled={busy}
+                                onClick={() => void deleteReply(reply)}
+                              >
+                                Delete
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                        {replyEditId === reply.id ? (
+                          <div className="mt-2 space-y-2">
+                            <textarea
+                              className={replyTextareaClass}
+                              maxLength={REPLY_BODY_MAX}
+                              value={replyEditBody}
+                              onChange={(e) => setReplyEditBody(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className={primaryButtonClass}
+                                disabled={busy || !replyEditBody.trim()}
+                                onClick={() => void saveReplyEdit()}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={buttonClass}
+                                disabled={busy}
+                                onClick={() => setReplyEditId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">
+                            {reply.body}
+                          </p>
                         )}
                       </div>
-                      {replyEditId === reply.id ? (
-                        <div className="mt-2 space-y-2">
-                          <textarea
-                            className={replyTextareaClass}
-                            maxLength={REPLY_BODY_MAX}
-                            value={replyEditBody}
-                            onChange={(e) => setReplyEditBody(e.target.value)}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              className={primaryButtonClass}
-                              disabled={busy || !replyEditBody.trim()}
-                              onClick={() => void saveReplyEdit()}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              disabled={busy}
-                              onClick={() => setReplyEditId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">
-                          {reply.body}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  )}
                   {canReply(note, viewer) && (
                     <div className="space-y-2">
                       <textarea
@@ -1047,5 +1092,34 @@ export function ShiftNotes() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * One recorded action in a note's thread: a single quiet line (who, what,
+ * when), set apart from the comments. Jev's reads also show what it found.
+ */
+function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: PeopleNames }) {
+  const stamp = <span className="text-white/30"> · {formatStamp(entry.created_at)}</span>;
+  if (entry.kind === 'classification') {
+    const found = readStoredSignals(entry.data?.signals);
+    const requestedBy = entry.data?.requested_by;
+    return (
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1 font-mono text-[10px] text-white/40">
+        <span>
+          ✦ Jev read this note{requestedBy ? ` for ${personName(requestedBy, names)}` : ''}
+          {found.length === 0 && ' — nothing to act on'}
+          {stamp}
+        </span>
+        {found.length > 0 && <SignalList signals={found} />}
+      </div>
+    );
+  }
+  return (
+    <p className="px-3 py-1 font-mono text-[10px] text-white/40">
+      <span className="text-white/60">{personName(entry.author_email ?? '', names)}</span>{' '}
+      {describeEvent(entry)}
+      {stamp}
+    </p>
   );
 }

@@ -4,7 +4,7 @@
 // its own GET returned, merges in what its writes return, and renders
 // <SignalChips> per record. Classification runs in the background after a
 // write, so records still being read are polled until they settle; "Run
-// again" queues a fresh read.
+// Jev" queues a fresh read of any record, classified before or not.
 //
 // Labels come from @pyre/signals-core, so a new signal type shows up here
 // with no change; SIGNAL_TONES only picks its colour (unknown → neutral).
@@ -16,7 +16,7 @@ import {
   type SubjectType,
   signalLabel,
 } from '@pyre/signals-core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClassificationView } from '@/lib/classify/view';
 
 const NEUTRAL_TONE = 'border-white/20 bg-white/5 text-white/70';
@@ -58,9 +58,23 @@ function SignalChip({ signal }: { signal: Signal }) {
 const quietButtonClass =
   'font-mono text-[10px] text-white/40 underline-offset-2 hover:text-white/70 hover:underline disabled:opacity-40';
 
+/** A set of signals as chips, e.g. what one run found. */
+export function SignalList({ signals }: { signals: readonly Signal[] }) {
+  return (
+    <ul className="flex flex-wrap gap-1.5" aria-label="Detected">
+      {signals.map((signal) => (
+        <SignalChip key={signal.type} signal={signal} />
+      ))}
+    </ul>
+  );
+}
+
 /**
- * One record's classification: its signals, or where the read stands. Draws
- * nothing for a record that was never classified.
+ * One record's classification: its signals, or where the read stands. With
+ * `onRerun`, always offers a run — "Run Jev" on a record never classified
+ * (written before the classifier, or while it was off), "Run again" on any
+ * other, including one still reading that may be stuck. Without it, draws
+ * nothing for a record never classified.
  */
 export function SignalChips({
   classification,
@@ -68,21 +82,30 @@ export function SignalChips({
   busy = false,
 }: {
   classification: ClassificationView | undefined;
-  /** Offer "Run again" (on failure, and quietly once settled). */
   onRerun?: () => void;
   busy?: boolean;
 }) {
-  if (!classification) return null;
   const rerun = onRerun && (
     <button type="button" className={quietButtonClass} disabled={busy} onClick={onRerun}>
-      Run again
+      {classification ? 'Run again' : 'Run Jev'}
     </button>
   );
 
+  if (!classification) {
+    if (!rerun) return null;
+    return (
+      <p className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40">
+        ✦ Not read by Jev yet. {rerun}
+      </p>
+    );
+  }
   if (classification.state === 'pending') {
     return (
-      <p className="mt-2 font-mono text-[10px] text-white/40" aria-live="polite">
-        ✦ Reading…
+      <p
+        className="mt-2 flex items-center gap-2 font-mono text-[10px] text-white/40"
+        aria-live="polite"
+      >
+        ✦ Reading… {rerun}
       </p>
     );
   }
@@ -103,11 +126,7 @@ export function SignalChips({
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <span className="font-mono text-[10px] text-white/40">✦</span>
-      <ul className="flex flex-wrap gap-1.5" aria-label="Detected">
-        {classification.signals.map((signal) => (
-          <SignalChip key={signal.type} signal={signal} />
-        ))}
-      </ul>
+      <SignalList signals={classification.signals} />
       {rerun}
     </div>
   );
@@ -157,9 +176,18 @@ const UNFILED_GRACE_MS = 60_000;
  * pending ones are polled (GET /api/admin/classifications) until they settle
  * or time out, and rerun() asks for a fresh read of one record. Pass
  * `enabled: false` for viewers who don't see signals — nothing is fetched.
+ * `onSettled` hears about each read the poll sees finish (done or failed),
+ * e.g. to refresh the record's activity, where the answer is recorded.
  */
-export function useClassifications(subject: SubjectType, enabled: boolean) {
+export function useClassifications(
+  subject: SubjectType,
+  enabled: boolean,
+  onSettled?: (id: string, view: ClassificationView) => void
+) {
   const [classifications, setClassifications] = useState<Record<string, ClassificationView>>({});
+  // Latest callback without re-arming the poll every render.
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
   const [rerunning, setRerunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Bumped after every poll so the next one arms even when nothing changed.
@@ -207,6 +235,10 @@ export function useClassifications(subject: SubjectType, enabled: boolean) {
             classifications: Record<string, ClassificationView>;
           };
           if (!cancelled) {
+            for (const id of pendingIds.split(',')) {
+              const fresh = data.classifications[id];
+              if (fresh && fresh.state !== 'pending') onSettledRef.current?.(id, fresh);
+            }
             setClassifications((prev) => {
               const next = { ...prev };
               const now = Date.now();

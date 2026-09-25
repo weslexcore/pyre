@@ -70,6 +70,18 @@ describe('POST /api/classify/run', () => {
     ]);
   });
 
+  it('passes on the admin who asked for the run', async () => {
+    await post({
+      subject: 'shift_note',
+      id: NOTE_ID,
+      force: true,
+      requestedBy: 'wes@pyresauna.com',
+    });
+    expect(runClassification.mock.calls[0]?.[4]).toMatchObject({
+      requestedBy: 'wes@pyresauna.com',
+    });
+  });
+
   it('acks jobs that can never succeed so QStash stops retrying', async () => {
     expect((await post({ subject: 'guest', id: NOTE_ID })).status).toBe(200);
     expect((await post({ subject: 'shift_note', id: 'nope' })).status).toBe(200);

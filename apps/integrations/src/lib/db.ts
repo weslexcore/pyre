@@ -362,19 +362,42 @@ export interface ShiftNoteRow {
 
 export type ShiftNoteStatus = 'open' | 'todo' | 'resolved';
 
-// One reply in a shift note's thread — an admin responding in context, or
-// the author replying back. Private replies are admin-only (see
-// lib/shift-notes/access).
+// One entry in a shift note's activity thread: a comment (an admin
+// responding in context, or the author replying back) or an event the app
+// recorded — a status change, an edit, a Jev classification. Private entries
+// are admin-only (see lib/shift-notes/access).
 export interface ShiftNoteReplyRow {
   id: string;
   note_id: string;
+  /** What this entry is: a comment, or an event the app recorded. */
+  kind: ShiftNoteActivityKind;
+  /** The comment's text; '' on events. */
   body: string;
-  author_email: string;
+  /** Who wrote it; null only on a classification (Jev wrote it). */
+  author_email: string | null;
   is_private: boolean;
+  /** Event payload (see ShiftNoteActivityData); null on comments. */
+  data: ShiftNoteActivityData | null;
   /** Session email of the last editor (reply author or admin); null until edited. */
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classification';
+
+/** The payload of an activity event, by kind (the jsonb `data` column). */
+export interface ShiftNoteActivityData {
+  /** status: the status before (absent on backfilled rows) and after. */
+  from?: ShiftNoteStatus;
+  to?: ShiftNoteStatus;
+  /** edit: which of the note's fields changed. */
+  fields?: Array<'body' | 'note_date'>;
+  /** classification: raw [{ type, probability }]; read it through readStoredSignals(). */
+  signals?: unknown;
+  model?: string | null;
+  /** classification: the admin who asked for the run; absent when a write triggered it. */
+  requested_by?: string;
 }
 
 // A photo/video/document backing a shift note (see the shift-note media

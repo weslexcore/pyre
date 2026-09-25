@@ -62,6 +62,31 @@ describe('runClassification', () => {
     expect(model.calls).toBe(1);
   });
 
+  it("records each saved answer in the note's activity, with who asked for it", async () => {
+    const { db, inserted } = fakeClassificationsDb();
+    await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', {
+      model: jev(),
+      requestedBy: 'wes@pyresauna.com',
+    });
+    expect(inserted).toEqual([
+      {
+        table: 'shift_note_replies',
+        row: {
+          note_id: NOTE_ID,
+          kind: 'classification',
+          author_email: null,
+          is_private: true,
+          body: '',
+          data: {
+            signals: [{ type: 'action', probability: 0.82 }],
+            model: 'typesafe-ai/jev',
+            requested_by: 'wes@pyresauna.com',
+          },
+        },
+      },
+    ]);
+  });
+
   it('does nothing when Jev cannot be reached', async () => {
     vi.stubEnv('AI_GATEWAY_API_KEY', '');
     vi.stubEnv('VERCEL', '');
@@ -137,7 +162,7 @@ describe('runClassification', () => {
   });
 
   it('writes nothing when a newer run replaced this one mid-flight', async () => {
-    const { db, rows } = fakeClassificationsDb();
+    const { db, rows, inserted } = fakeClassificationsDb();
     const model = jev(() => {
       // An edit lands while Jev is answering and rotates the request id.
       (rows[0] as Record<string, unknown>).request_id = 'newer';
@@ -148,12 +173,14 @@ describe('runClassification', () => {
     });
     expect(view).toBeNull();
     expect(rows[0]?.status).toBe('pending');
+    expect(inserted).toEqual([]);
   });
 
   it('marks an answer that fails validation as failed', async () => {
-    const { db, rows } = fakeClassificationsDb();
+    const { db, rows, inserted } = fakeClassificationsDb();
     const model = jev(() => ({ ...PROBABILITIES, action: 7 }));
     await runClassification(db as never, 'shift_note', NOTE_ID, 'Towels low', { model });
     expect(rows[0]).toMatchObject({ status: 'failed' });
+    expect(inserted).toEqual([]);
   });
 });
