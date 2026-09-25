@@ -100,34 +100,49 @@
   opacity: 0.9;
 }
 
-/* Page 2 — Instagram version (portrait 1080×1350). Same layout on a creme background,
-   with type sized for a phone screen instead of print. */
+/* Pages 2–3 — Instagram posts (portrait 1080×1350), one drink each on a creme background.
+   The drink fills the top half and the row of moons the bottom half; type is sized for a
+   phone screen instead of print. */
 
 .page.page--social {
   background: var(--pyre-creme);
 }
 
-.menu--social {
-  padding: 0 96px;
+.slide {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 100%;
+  padding: 110px 96px;
+  color: var(--pyre-black);
+  text-align: center;
 }
 
-.menu--social .menu__moon {
-  width: 560px;
-  height: 224px;
-}
-
-.menu--social .drink {
+/* Top-aligned so both slides start their drink at the same height, whatever its length. */
+.slide .drink {
+  align-self: start;
   gap: 24px;
 }
 
-.menu--social .drink__name {
-  font-size: 68px;
+.slide__moons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.menu--social .drink__notes {
-  font-size: 20px;
+.slide .menu__moon {
+  width: 840px;
+  height: 336px;
 }
 
-.menu--social .drink__description {
-  font-size: 26px;
+.slide .drink__name {
+  font-size: 80px;
+}
+
+.slide .drink__notes {
+  font-size: 24px;
+}
+
+.slide .drink__description {
+  font-size: 30px;
 }
