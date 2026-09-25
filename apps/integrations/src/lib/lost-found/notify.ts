@@ -16,7 +16,9 @@ import { LOST_FOUND_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { isUniqueViolation } from '@/lib/http/json';
+import { adminsPlus } from '@/lib/notifications/recipients';
 import { buildClaimUrl } from './claim-token';
 import { logLostFoundEvent } from './log';
 import { DONATION_PARTNER } from './types';
@@ -205,11 +207,7 @@ export async function notifyAboutItem(
 
 /** Admins plus anyone trusted with the lost-and-found queue. */
 async function listLostFoundManagers(): Promise<string[]> {
-  const rows = await listStaff();
-  if (!rows) return [];
-  return rows
-    .filter((r) => r.email && (r.is_admin || r.pages.includes(LOST_FOUND_MANAGE)))
-    .map((r) => r.email as string);
+  return adminsPlus((await listStaff()) ?? [], LOST_FOUND_MANAGE);
 }
 
 /**
@@ -243,24 +241,15 @@ export async function notifyStaffOfClaim(
     itemUrl: `${origin}/admin/lost-found/${item.id}`,
   };
 
-  let sent = 0;
-  for (const to of recipients) {
-    try {
-      const result = await sendTemplate({
-        to,
-        template: 'lost-found-claimed',
-        props,
-        kind: 'transactional',
-        sendKey: `lost-found-claimed:${notice.id}:${to}`,
-      });
-      if (result.status === 'sent') sent += 1;
-    } catch (e) {
-      console.error(
-        `[lost-found] claim alert to ${to} failed:`,
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
-
-  return sent;
+  const results = await sendToEach(
+    recipients,
+    (to) => ({
+      template: 'lost-found-claimed',
+      props,
+      kind: 'transactional',
+      sendKey: `lost-found-claimed:${notice.id}:${to}`,
+    }),
+    'lost-found'
+  );
+  return deliveredTo(results).length;
 }

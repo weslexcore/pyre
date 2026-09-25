@@ -12,7 +12,8 @@
 
 import { waitUntil } from '@vercel/functions';
 import { getDb } from '@/lib/db';
-import { appOrigin } from '@/lib/schedule-lint/labels';
+import { appOrigin } from '@/lib/origins';
+import { workerQueue } from '@/lib/qstash';
 import { runSuggestJob, type SuggestJob } from './worker';
 
 export const SUGGEST_RETRIES = 3;
@@ -35,29 +36,20 @@ export type SuggestDispatchOutcome =
 
 /** Publish the job, or run it here when QStash is not configured. Never throws. */
 export async function dispatchSuggestion(job: SuggestJob): Promise<SuggestDispatchOutcome> {
-  const token = import.meta.env.QSTASH_TOKEN;
-  const secret = import.meta.env.CRON_SECRET;
-
-  if (token && secret) {
-    try {
-      const { Client } = await import('@upstash/qstash');
-      // Preview deployments sit behind Vercel Deployment Protection, which
-      // would 401 QStash at the edge; the cron secret still authenticates.
-      const bypass = import.meta.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-      const { messageId } = await new Client({ token }).publishJSON({
+  try {
+    const queue = await workerQueue();
+    if (queue) {
+      const { messageId } = await queue.client.publishJSON({
         url: suggestRunUrl(),
         body: job,
         retries: SUGGEST_RETRIES,
         flowControl: { key: 'suggest', parallelism: SUGGEST_PARALLELISM },
-        headers: {
-          Authorization: `Bearer ${secret}`,
-          ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}),
-        },
+        headers: queue.headers,
       });
       return { via: 'qstash', messageId };
-    } catch (error) {
-      console.error('[suggestions] QStash publish failed; running inline:', error);
     }
+  } catch (error) {
+    console.error('[suggestions] QStash publish failed; running inline:', error);
   }
 
   const db = getDb();

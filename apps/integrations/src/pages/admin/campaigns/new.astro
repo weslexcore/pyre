@@ -5,8 +5,9 @@
 import { CampaignForm } from '@/components/admin/campaigns/CampaignForm';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { loadBlogPosts } from '@/lib/campaigns/blog';
+import { siteOrigin } from '@/lib/origins';
 
-const origin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const origin = siteOrigin();
 const blogPosts = await loadBlogPosts(origin);
 ---
 

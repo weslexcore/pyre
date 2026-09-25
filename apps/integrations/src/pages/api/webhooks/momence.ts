@@ -10,6 +10,7 @@ import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
 import { json } from '@/lib/http/route';
+import { fetchMomenceMember } from '@/lib/momence/members';
 import { resolveSession } from '@/lib/momence-events';
 import { handlePaymentTransaction } from '@/lib/purchases/capture';
 import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
@@ -17,7 +18,6 @@ import { requestLintRun } from '@/lib/schedule-lint/trigger';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
-  fetchMomenceMember,
   type MomenceAddressPayload,
   type MomenceEventType,
   type MomenceMemberPayload,

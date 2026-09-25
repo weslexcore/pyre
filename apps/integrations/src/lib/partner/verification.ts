@@ -12,6 +12,7 @@ import {
   getTagIdByName,
   updateMemberPhoneNumber,
 } from '@/lib/momence/host-api';
+import { appOrigin, siteOrigin } from '@/lib/origins';
 import { createDecisionToken, type DecisionAction } from './decision-token';
 import {
   getPartner,
@@ -45,15 +46,12 @@ function decisionUrl(requestId: string, action: DecisionAction, expiryDays: numb
   if (!token) return null;
   // Same origin convention as buildUnsubscribeUrl: PUBLIC_EMAIL_ASSET_BASE may
   // carry a path — only its origin is this app's deployment.
-  const origin = import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
+  const origin = appOrigin();
   return `${origin}/api/partner/decision?token=${token}`;
 }
 
 function bookUrl(partner: PartnerRow): string {
-  const site =
-    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = siteOrigin();
   return `${site}/events?utm_source=${partner.slug}&utm_medium=partner&utm_campaign=${partner.slug}-verified`;
 }
 

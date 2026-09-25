@@ -22,6 +22,7 @@ import {
   type TimeOffRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { deliveredTo, sendToEach } from '@/lib/email/send-each';
 import { dbError, json, readJsonBody } from '@/lib/http/route';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
@@ -224,23 +225,17 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
   }
 
-  let adminsNotified = 0;
-  for (const admin of await listAdminRecipients(db)) {
-    try {
-      const result = await sendTemplate({
-        to: admin.email as string,
+  const adminsNotified = deliveredTo(
+    await sendToEach(
+      await listAdminRecipients(),
+      () => ({
         template: 'sub-request-notice',
         props: { ...shared, staffName: self.display_name, notifiedCount: availableNotified },
         kind: 'transactional',
-      });
-      if (result.status === 'sent') adminsNotified += 1;
-    } catch (e) {
-      console.error(
-        `[shift-sub] notify ${admin.email} failed:`,
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
+      }),
+      'shift-sub'
+    )
+  ).length;
 
   await db.from('sub_requests').update({ notified_count: availableNotified }).eq('id', sub.id);
 

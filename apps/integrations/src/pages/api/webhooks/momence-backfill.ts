@@ -7,8 +7,8 @@ import {
 import { upsertResendContact } from '@/lib/email/audience';
 import { hasBearer } from '@/lib/http/bearer';
 import { json } from '@/lib/http/route';
+import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/momence/members';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
-import { fetchMomenceMembers, type MomenceMemberData } from '@/lib/webhooks/momence';
 
 export const prerender = false;
 

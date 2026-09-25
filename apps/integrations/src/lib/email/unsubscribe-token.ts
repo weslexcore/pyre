@@ -1,4 +1,5 @@
 import { emailLinkSecret, signString, verifyString } from '@/lib/http/signed-token';
+import { appOrigin } from '@/lib/origins';
 
 // Signed unsubscribe links. Every engine-sent marketing email carries
 // /api/unsubscribe?token=<base64url(email)>.<hmac> so the link works without
@@ -15,9 +16,7 @@ export function buildUnsubscribeUrl(email: string): string | undefined {
   if (!token) return undefined;
   // PUBLIC_EMAIL_ASSET_BASE may carry a /email path — we only want the origin
   // of this app's deployment (same convention as emails/components/assets.ts).
-  const origin = import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
+  const origin = appOrigin();
   return `${origin}/api/unsubscribe?token=${token}`;
 }
 

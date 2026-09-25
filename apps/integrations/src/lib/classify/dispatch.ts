@@ -20,7 +20,8 @@ import type { SubjectType } from '@pyre/signals-core';
 import { waitUntil } from '@vercel/functions';
 import { getDb } from '@/lib/db';
 import { jevOptions } from '@/lib/jev';
-import { appOrigin } from '@/lib/schedule-lint/labels';
+import { appOrigin } from '@/lib/origins';
+import { workerQueue } from '@/lib/qstash';
 import { type ClassifyOptions, runClassification } from './request';
 
 /** QStash retries a failed call this many times, with exponential backoff. */
@@ -81,7 +82,7 @@ function jobMessage(
   subject: SubjectType,
   subjectId: string,
   options: ClassifyOptions,
-  secret: string
+  headers: Record<string, string>
 ) {
   const job: ClassifyJob = {
     subject,
@@ -90,20 +91,12 @@ function jobMessage(
     ...(options.requestedBy ? { requestedBy: options.requestedBy } : {}),
     ...(options.thenSuggest ? { thenSuggest: true } : {}),
   };
-  // Preview deployments sit behind Vercel Deployment Protection, which
-  // would 401 QStash at the edge; Vercel sets this secret when "Protection
-  // Bypass for Automation" is on. The cron secret still authenticates.
-  const bypass = import.meta.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   return {
     url: classifyRunUrl(),
     body: job,
     retries: CLASSIFY_RETRIES,
     flowControl: { key: 'classify', parallelism: CLASSIFY_PARALLELISM },
-    // Forwarded to the worker, which checks it with isCronAuthorized.
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}),
-    },
+    headers,
   };
 }
 
@@ -114,20 +107,17 @@ export async function dispatchClassification(
   text: string,
   options: ClassifyOptions = {}
 ): Promise<DispatchOutcome> {
-  const token = import.meta.env.QSTASH_TOKEN;
-  const secret = import.meta.env.CRON_SECRET;
-
-  if (token && secret) {
-    try {
-      const { Client } = await import('@upstash/qstash');
-      const { messageId } = await new Client({ token }).publishJSON(
-        jobMessage(subject, subjectId, options, secret)
+  try {
+    const queue = await workerQueue();
+    if (queue) {
+      const { messageId } = await queue.client.publishJSON(
+        jobMessage(subject, subjectId, options, queue.headers)
       );
       return { via: 'qstash', messageId };
-    } catch (error) {
-      // A QStash outage should not cost the note its classification.
-      console.error('[classify] QStash publish failed; running inline:', error);
     }
+  } catch (error) {
+    // A QStash outage should not cost the note its classification.
+    console.error('[classify] QStash publish failed; running inline:', error);
   }
 
   const db = getDb();
@@ -153,26 +143,22 @@ export async function dispatchClassifications(
   options: ClassifyOptions = {}
 ): Promise<BulkDispatchOutcome> {
   if (items.length === 0) return { via: 'none', reason: 'nothing to classify' };
-  const token = import.meta.env.QSTASH_TOKEN;
-  const secret = import.meta.env.CRON_SECRET;
-
-  if (token && secret) {
-    try {
-      const { Client } = await import('@upstash/qstash');
-      const client = new Client({ token });
+  try {
+    const queue = await workerQueue();
+    if (queue) {
       for (let i = 0; i < items.length; i += PUBLISH_BATCH) {
-        await client.batchJSON(
+        await queue.client.batchJSON(
           items
             .slice(i, i + PUBLISH_BATCH)
-            .map((item) => jobMessage(subject, item.id, options, secret))
+            .map((item) => jobMessage(subject, item.id, options, queue.headers))
         );
       }
       return { via: 'qstash', queued: items.length };
-    } catch (error) {
-      // A batch that failed partway may have queued some; running those
-      // again inline is harmless (the last answer wins).
-      console.error('[classify] QStash batch publish failed; running inline:', error);
     }
+  } catch (error) {
+    // A batch that failed partway may have queued some; running those
+    // again inline is harmless (the last answer wins).
+    console.error('[classify] QStash batch publish failed; running inline:', error);
   }
 
   const db = getDb();

@@ -9,6 +9,7 @@
 // last good snapshot, when there is one), so a storage blip never flips a
 // feature to something nobody chose.
 
+import { cachedQuery } from '@/lib/cached-query';
 import { getDb } from '@/lib/db';
 import {
   parseEnvValue,
@@ -36,27 +37,25 @@ interface Row {
   updated_at: string;
 }
 
-const CACHE_TTL_MS = 30_000;
-let cache: { rows: Map<string, Row>; at: number } | null = null;
-
-export function invalidateSettingsCache(): void {
-  cache = null;
-}
-
-async function loadRows(): Promise<Map<string, Row>> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
+const settingsCache = cachedQuery(async () => {
   const db = getDb();
-  if (!db) return cache?.rows ?? new Map();
+  if (!db) return null;
   const { data, error } = await db
     .from('app_settings')
     .select('key, value, updated_by, updated_at');
   if (error) {
     console.error('[settings] fetch failed:', error.message);
-    return cache?.rows ?? new Map();
+    return null;
   }
-  const rows = new Map(((data ?? []) as Row[]).map((row) => [row.key, row]));
-  cache = { rows, at: Date.now() };
-  return rows;
+  return new Map(((data ?? []) as Row[]).map((row) => [row.key, row]));
+});
+
+export function invalidateSettingsCache(): void {
+  settingsCache.invalidate();
+}
+
+async function loadRows(): Promise<Map<string, Row>> {
+  return (await settingsCache.get()) ?? new Map();
 }
 
 function fallbackFor(key: SettingKey): { value: boolean | string[]; source: 'env' | 'default' } {

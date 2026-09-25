@@ -1,9 +1,7 @@
 import { createWebhookLogger, getRedis } from '@pyre/webhook-core';
-import { getHostAccessToken } from '@/lib/webhooks/momence';
+import { getHostAccessToken, MOMENCE_API_V2 } from './host-token';
 
 const log = createWebhookLogger('Momence Host API');
-
-const MOMENCE_API_V2 = 'https://api.momence.com/api/v2';
 
 // Host-token API surface used by the journey engine's sweeps. Momence is the
 // source of truth — none of this data is mirrored; sweeps read it live at

@@ -4,8 +4,8 @@ import { buildCalendarLinks } from '@/lib/calendar/links';
 import { buildArrivalLabel } from '@/lib/email/arrival';
 import { DIRECTIONS_URL, getConfirmationContent } from '@/lib/email/confirmation-content';
 import { FIRST_TIMER_FAQS } from '@/lib/email/faq-content';
+import { isMemberFirstBooking } from '@/lib/momence/members';
 import { type ResolvedSession, resolveSession } from '@/lib/momence-events';
-import { isMemberFirstBooking } from '@/lib/webhooks/momence';
 import { alreadySent, markSent } from '../idempotency';
 import { sendTemplate } from '../send';
 

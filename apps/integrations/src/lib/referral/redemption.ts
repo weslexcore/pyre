@@ -18,7 +18,8 @@ import {
   findMemberByEmail,
   getTagIdByName,
 } from '@/lib/momence/host-api';
-import { memberHasBookings } from '@/lib/webhooks/momence';
+import { memberHasBookings } from '@/lib/momence/members';
+import { siteOrigin } from '@/lib/origins';
 import { getTier, lookupReferrerByCode } from './registry';
 
 const log = createWebhookLogger('Referral Redemption');
@@ -35,8 +36,7 @@ export type RedeemResult =
   | { outcome: 'unavailable'; reason: string };
 
 function bookUrl(code: string): string {
-  const site =
-    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = siteOrigin();
   // utm_campaign carries the code so the existing campaign-performance report
   // and booking_link_clicked attribution pick referred bookings up unchanged.
   return `${site}/events?utm_source=referral&utm_medium=referral&utm_campaign=${code.toLowerCase()}`;

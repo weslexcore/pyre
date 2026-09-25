@@ -16,6 +16,7 @@
 import type { PageAccess } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { BoardCardRow, StaffRow } from '@/lib/db';
+import { accessOf } from '@/lib/notifications/recipients';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard, canWorkGoal } from './access';
@@ -39,11 +40,7 @@ export async function listAssignable(): Promise<Assignable[]> {
  */
 export async function listBoardWatchers(slug: string): Promise<Assignable[]> {
   const rows = await listStaff();
-  return byName(
-    (rows ?? []).filter((row) =>
-      canViewBoard({ isAdmin: row.is_admin, pages: row.pages ?? [] }, slug)
-    )
-  );
+  return byName((rows ?? []).filter((row) => canViewBoard(accessOf(row), slug)));
 }
 
 function byName(rows: StaffRow[]): Assignable[] {

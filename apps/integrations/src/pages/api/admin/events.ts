@@ -5,8 +5,9 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { JSON_HEADERS, json } from '@/lib/http/route';
+import { siteOrigin } from '@/lib/origins';
 
-const LANDING_ORIGIN = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const LANDING_ORIGIN = siteOrigin();
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');

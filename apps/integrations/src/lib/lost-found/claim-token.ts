@@ -1,4 +1,5 @@
 import { emailLinkSecret, signString, verifyString } from '@/lib/http/signed-token';
+import { appOrigin } from '@/lib/origins';
 
 // Signed claim links. Every "is this yours?" email carries
 // /api/lost-found/claim?token=<base64url(noticeId)>.<hmac>, so the link works
@@ -21,13 +22,6 @@ export function createClaimToken(noticeId: string): string | null {
 
 export function verifyClaimToken(token: string): string | null {
   return verifyString(token, SIGNING);
-}
-
-/** The app's own origin, matching how buildUnsubscribeUrl derives it. */
-export function appOrigin(): string {
-  return import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
 }
 
 export function buildClaimUrl(noticeId: string): string | undefined {

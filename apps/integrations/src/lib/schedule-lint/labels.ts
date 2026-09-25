@@ -65,10 +65,3 @@ export function bookingLabel(session: Pick<SessionRef, 'bookingCount'>): string 
 export function typeLabel(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
-
-/** Same origin convention as the other email links: this app's deployment. */
-export function appOrigin(): string {
-  return import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
-}

@@ -70,6 +70,15 @@ describe('requestLintRun', () => {
     expect(ids[2]).not.toBe(ids[0]);
   });
 
+  it('carries the deployment-protection bypass on preview deploys', async () => {
+    vi.stubEnv('VERCEL_AUTOMATION_BYPASS_SECRET', 'bypass_1');
+    await requestLintRun({ reason: 'session-created' }, NOW);
+    expect(publishJSON.mock.calls[0][0].headers).toEqual({
+      Authorization: 'Bearer cron_secret',
+      'x-vercel-protection-bypass': 'bypass_1',
+    });
+  });
+
   it('falls back to the dirty flag without a QStash token', async () => {
     vi.stubEnv('QSTASH_TOKEN', '');
     const outcome = await requestLintRun({ reason: 'session-created', sessionId: 7 }, NOW);

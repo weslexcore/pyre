@@ -14,7 +14,7 @@ export type SendResult =
 
 export type EmailKind = 'transactional' | 'marketing';
 
-interface SendTemplateArgs<K extends EmailTemplateKey> {
+export interface SendTemplateArgs<K extends EmailTemplateKey> {
   to: string;
   /**
    * CC recipients delivered on the same message (e.g. Pyre staff copied on

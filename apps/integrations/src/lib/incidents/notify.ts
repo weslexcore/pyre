@@ -11,7 +11,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { INCIDENTS_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { IncidentRow } from '@/lib/db';
-import { sendTemplate } from '@/lib/email/send';
+import { deliveredTo, sendToEach } from '@/lib/email/send-each';
+import { adminsPlus } from '@/lib/notifications/recipients';
 import { logIncidentEvent } from './log';
 import { areaLabel, categoryLabel, severityLabel, URGENT_SEVERITIES } from './types';
 
@@ -27,11 +28,7 @@ export function isUrgent(incident: IncidentRow): boolean {
 
 /** Admins plus anyone trusted with the incident log. */
 async function listIncidentRecipients(): Promise<string[]> {
-  const rows = await listStaff();
-  if (!rows) return [];
-  return rows
-    .filter((r) => r.email && (r.is_admin || r.pages.includes(INCIDENTS_MANAGE)))
-    .map((r) => r.email as string);
+  return adminsPlus((await listStaff()) ?? [], INCIDENTS_MANAGE);
 }
 
 /** "Tuesday, August 21 at 7:42 PM" in the bathhouse's wall-clock time. */
@@ -81,26 +78,19 @@ export async function notifyIncident(
     incidentUrl: `${origin}/admin/incidents/${incident.id}`,
   };
 
-  let sent = 0;
-  const delivered: string[] = [];
-  for (const to of recipients) {
-    try {
-      const result = await sendTemplate({
-        to,
+  const delivered = deliveredTo(
+    await sendToEach(
+      recipients,
+      (to) => ({
         template: 'incident-reported',
         props,
         kind: 'transactional',
         // One alert per incident per recipient, however the route retries.
         sendKey: `incident-reported:${incident.id}:${to}`,
-      });
-      if (result.status === 'sent') {
-        sent += 1;
-        delivered.push(to);
-      }
-    } catch (e) {
-      console.error(`[incidents] alert to ${to} failed:`, e instanceof Error ? e.message : e);
-    }
-  }
+      }),
+      'incidents'
+    )
+  );
 
   await logIncidentEvent(db, {
     incidentId: incident.id,
@@ -109,5 +99,5 @@ export async function notifyIncident(
     detail: { recipients: delivered, attempted: recipients.length, reason: 'urgent' },
   });
 
-  return sent;
+  return delivered.length;
 }

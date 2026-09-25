@@ -13,7 +13,8 @@
 // the same list from emailing again.
 
 import { getRedis } from '@pyre/webhook-core';
-import { appOrigin } from './labels';
+import { appOrigin } from '@/lib/origins';
+import { workerQueue } from '@/lib/qstash';
 
 export const DIRTY_KEY = 'schedule-lint:dirty';
 
@@ -42,23 +43,18 @@ export async function requestLintRun(
   now = new Date()
 ): Promise<TriggerOutcome> {
   const payload: LintTrigger = { ...trigger, at: now.toISOString() };
-  const token = import.meta.env.QSTASH_TOKEN;
-  const secret = import.meta.env.CRON_SECRET;
+  const queue = await workerQueue();
 
-  if (token && secret) {
-    // Lazy: the webhook route's cold start should not pay for the SDK unless
-    // a session event actually arrives.
-    const { Client } = await import('@upstash/qstash');
+  if (queue) {
     const bucket = Math.floor(now.getTime() / (DEBOUNCE_SECONDS * 1000));
-    const { messageId } = await new Client({ token }).publishJSON({
+    const { messageId } = await queue.client.publishJSON({
       url: lintRunUrl(),
       body: payload,
       delay: DEBOUNCE_SECONDS,
       // QStash drops a message whose id it has seen within its deduplication
       // window, so every event in the same ten-minute bucket becomes one run.
       deduplicationId: `schedule-lint:${bucket}`,
-      // Forwarded to the tick as Authorization, which is what isCronAuthorized checks.
-      headers: { Authorization: `Bearer ${secret}` },
+      headers: queue.headers,
     });
     return { via: 'qstash', messageId };
   }
@@ -69,5 +65,8 @@ export async function requestLintRun(
     return { via: 'dirty-flag' };
   }
 
-  return { via: 'none', reason: token ? 'cron-secret-missing' : 'qstash-and-redis-missing' };
+  return {
+    via: 'none',
+    reason: import.meta.env.QSTASH_TOKEN ? 'cron-secret-missing' : 'qstash-and-redis-missing',
+  };
 }

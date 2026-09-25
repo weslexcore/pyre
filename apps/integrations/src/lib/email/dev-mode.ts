@@ -13,6 +13,7 @@
 // env-only behavior when Supabase is unreachable — a fresh deployment or a DB
 // blip can never accidentally open the gate wider than the env says.
 
+import { cachedQuery } from '@/lib/cached-query';
 import { type EmailTemplateOverrideRow, type EmailWhitelistRow, getDb } from '../db';
 
 export interface WhitelistEntry {
@@ -56,44 +57,44 @@ export function getEnvWhitelist(): string[] {
 
 // Both tables together hold a few dozen rows at most; cache the snapshot
 // briefly rather than querying per send. Mutations invalidate it.
-const CACHE_TTL_MS = 30_000;
-let cache: { overrides: Record<string, boolean>; dbWhitelist: string[]; at: number } | null = null;
+// A stale snapshot beats silently reverting to env-only mid-flight.
+const gateCache = cachedQuery(
+  async (): Promise<{
+    overrides: Record<string, boolean>;
+    dbWhitelist: string[];
+  } | null> => {
+    const db = getDb();
+    if (!db) return null;
+
+    const [overridesRes, whitelistRes] = await Promise.all([
+      db.from('email_template_overrides').select('template, live'),
+      db.from('email_whitelist').select('email'),
+    ]);
+    if (overridesRes.error || whitelistRes.error) {
+      const message = overridesRes.error?.message ?? whitelistRes.error?.message;
+      console.error('[Email] gate fetch failed:', message);
+      return null;
+    }
+
+    const overrides = Object.fromEntries(
+      (overridesRes.data as Pick<EmailTemplateOverrideRow, 'template' | 'live'>[]).map((r) => [
+        r.template,
+        r.live,
+      ])
+    );
+    const dbWhitelist = (whitelistRes.data as Pick<EmailWhitelistRow, 'email'>[]).map(
+      (r) => r.email
+    );
+    return { overrides, dbWhitelist };
+  }
+);
 
 export function invalidateGateCache(): void {
-  cache = null;
+  gateCache.invalidate();
 }
 
-async function loadGateRows(): Promise<{
-  overrides: Record<string, boolean>;
-  dbWhitelist: string[];
-} | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return { overrides: cache.overrides, dbWhitelist: cache.dbWhitelist };
-  }
-
-  const [overridesRes, whitelistRes] = await Promise.all([
-    db.from('email_template_overrides').select('template, live'),
-    db.from('email_whitelist').select('email'),
-  ]);
-  if (overridesRes.error || whitelistRes.error) {
-    const message = overridesRes.error?.message ?? whitelistRes.error?.message;
-    console.error('[Email] gate fetch failed:', message);
-    // A stale snapshot beats silently reverting to env-only mid-flight.
-    return cache ? { overrides: cache.overrides, dbWhitelist: cache.dbWhitelist } : null;
-  }
-
-  const overrides = Object.fromEntries(
-    (overridesRes.data as Pick<EmailTemplateOverrideRow, 'template' | 'live'>[]).map((r) => [
-      r.template,
-      r.live,
-    ])
-  );
-  const dbWhitelist = (whitelistRes.data as Pick<EmailWhitelistRow, 'email'>[]).map((r) => r.email);
-  cache = { overrides, dbWhitelist, at: Date.now() };
-  return { overrides, dbWhitelist };
+function loadGateRows() {
+  return gateCache.get();
 }
 
 /** Snapshot of the effective delivery gate (env baseline + DB overrides). */

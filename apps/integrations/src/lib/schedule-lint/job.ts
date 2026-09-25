@@ -29,6 +29,7 @@ import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { fetchMomenceEvents } from '@/lib/momence-events';
+import { adminEmails } from '@/lib/notifications/recipients';
 import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 import { buildEmailProps } from './email';
 import { countFindings, runLint } from './lint';
@@ -113,9 +114,7 @@ export async function loadResolvedKeys(): Promise<Set<string>> {
 
 /** Everyone with the admin flag and an address — the notice audience. */
 export async function listAdminEmails(): Promise<string[]> {
-  const rows = await listStaff();
-  if (!rows) return [];
-  return rows.filter((r) => r.is_admin && r.email).map((r) => r.email as string);
+  return adminEmails((await listStaff()) ?? []);
 }
 
 export interface ScheduleLintOptions {

@@ -10,7 +10,8 @@ import { getDb, type ReferralRedemptionRow, type ReferrerRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { isUniqueViolation } from '@/lib/http/json';
 import { assignMemberTag, getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
-import { isMemberFirstBooking } from '@/lib/webhooks/momence';
+import { isMemberFirstBooking } from '@/lib/momence/members';
+import { siteOrigin } from '@/lib/origins';
 import { getReferrer, getReferrerByMemberId, getRewardTagName } from './registry';
 
 const log = createWebhookLogger('Referral Conversion');
@@ -25,8 +26,7 @@ const TABLE = 'referral_redemptions';
 const REWARD_GRACE_MS = 5 * 60 * 1000;
 
 function rewardBookUrl(): string {
-  const site =
-    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = siteOrigin();
   return `${site}/events?utm_source=referral-reward&utm_medium=referral&utm_campaign=referral-reward`;
 }
 

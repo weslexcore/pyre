@@ -29,6 +29,7 @@ import {
   type SubRequestRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { appOrigin } from '@/lib/origins';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { formatWindowLabel, todayEastern } from '@/lib/schedule/sub';
 
@@ -70,13 +71,6 @@ export function formatWeekLabel(start: string, end: string): string {
     day: 'numeric',
   });
   return `${startLabel}–${endLabel}`;
-}
-
-/** Same origin convention as the other email links: this app's deployment. */
-function appOrigin(): string {
-  return import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
 }
 
 const ROLE_LABELS: Record<ShiftAssignmentRow['role'], string | undefined> = {

@@ -1,13 +1,8 @@
-// Audit-trail writer for incident reports. Every mutation in
-// /api/admin/incidents goes through here, so "who changed what, when" is a
-// property of the system rather than something each route remembers to do.
-//
-// Server-only (takes a service-role client). Failures are logged and
-// swallowed: losing an audit line is bad, but failing the staff member's
-// report — or their status change — because the trail write failed would be
-// worse. The row itself is already saved by the time we get here.
+// Audit trail for incident reports: every mutation in /api/admin/incidents
+// writes an incident_events row (see lib/audit-log for the contract).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { auditLog } from '@/lib/audit-log';
 import type { IncidentEventRow } from '@/lib/db';
 
 export interface IncidentEventInput {
@@ -19,37 +14,23 @@ export interface IncidentEventInput {
   note?: string | null;
 }
 
-export async function logIncidentEvent(
-  db: SupabaseClient,
-  event: IncidentEventInput
-): Promise<void> {
-  const { error } = await db.from('incident_events').insert({
-    incident_id: event.incidentId,
-    action: event.action,
-    actor: event.actor,
-    detail: event.detail ?? {},
-    note: event.note ?? null,
-  });
+const trail = auditLog<IncidentEventRow>({
+  table: 'incident_events',
+  fkColumn: 'incident_id',
+  scope: 'incidents',
+});
 
-  if (error) {
-    console.error(`[incidents] audit write failed (${event.action}):`, error.message);
-  }
+export function logIncidentEvent(
+  db: SupabaseClient,
+  { incidentId, ...event }: IncidentEventInput
+): Promise<void> {
+  return trail.log(db, { subjectId: incidentId, ...event });
 }
 
 /** The full trail for one incident, oldest first — how a report reads as a story. */
-export async function loadIncidentEvents(
+export function loadIncidentEvents(
   db: SupabaseClient,
   incidentId: string
 ): Promise<IncidentEventRow[]> {
-  const { data, error } = await db
-    .from('incident_events')
-    .select('*')
-    .eq('incident_id', incidentId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('[incidents] audit read failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as IncidentEventRow[];
+  return trail.load(db, incidentId);
 }

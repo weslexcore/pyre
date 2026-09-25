@@ -6,8 +6,11 @@
 
 import { timeToMinutes, utcToEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { listStaff } from '@/lib/auth/access';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, SubRequestRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { sendToEach } from '@/lib/email/send-each';
+import { adminEmails } from '@/lib/notifications/recipients';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { type ChangeActor, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
 
@@ -37,9 +40,8 @@ export const formatWindowLabel = (row: { starts_at: string; ends_at: string }): 
 export const todayEastern = (): string => utcToEastern(new Date().toISOString()).date;
 
 /** Everyone with a dashboard admin flag and an email — the notice audience. */
-export async function listAdminRecipients(db: SupabaseClient): Promise<StaffRow[]> {
-  const { data } = await db.from('staff').select('*');
-  return ((data ?? []) as StaffRow[]).filter((s) => s.is_admin && s.email);
+export async function listAdminRecipients(): Promise<string[]> {
+  return adminEmails((await listStaff()) ?? []);
 }
 
 export type ClaimOutcome =
@@ -207,21 +209,11 @@ export async function claimSubRequest(
     timeLabel: formatWindowLabel(sub),
     scheduleUrl,
   };
-  for (const admin of await listAdminRecipients(db)) {
-    try {
-      await sendTemplate({
-        to: admin.email as string,
-        template: 'sub-claimed-notice',
-        props,
-        kind: 'transactional',
-      });
-    } catch (e) {
-      console.error(
-        `[shift-sub] claim notify ${admin.email} failed:`,
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
+  await sendToEach(
+    await listAdminRecipients(),
+    () => ({ template: 'sub-claimed-notice', props, kind: 'transactional' }),
+    'shift-sub'
+  );
 
   return { outcome: 'claimed', sub: claimed, shift };
 }
