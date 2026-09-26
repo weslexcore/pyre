@@ -33,7 +33,7 @@
     "@types/react-dom": "^19.2.3",
     "@upstash/redis": "^1.38.0",
     "@vercel/functions": "^3.4.3",
-    "astro": "^7.1.6",
+    "astro": "^7.2.8",
     "chart.js": "^4.5.1",
     "fuse.js": "^7.5.0",
     "react": "^19.2.8",
