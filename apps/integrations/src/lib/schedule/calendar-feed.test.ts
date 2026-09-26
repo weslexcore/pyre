@@ -24,7 +24,6 @@ const assignment = (over: Partial<ShiftAssignmentRow> = {}): ShiftAssignmentRow 
     staff_id: ME,
     starts_at: '14:00:00',
     ends_at: '20:30:00',
-    role: 'full',
     duties: [],
     notes: null,
     is_draft: false,
@@ -72,15 +71,15 @@ describe('buildPersonalEvents', () => {
   });
 
   it('uses the assignment window, not the shift window', () => {
-    // A Setup role covers the front of the shift only.
+    // Someone in for the front of the shift only.
     const [event] = personal(
       shift({
-        assignments: [assignment({ role: 'setup', starts_at: '14:00:00', ends_at: '16:00:00' })],
+        assignments: [assignment({ starts_at: '14:00:00', ends_at: '16:00:00' })],
       })
     );
     expect(event.startTime).toBe('14:00:00');
     expect(event.endTime).toBe('16:00:00');
-    expect(event.summary).toBe('Pyre — Evening (Setup)');
+    expect(event.summary).toBe('Pyre — Evening');
   });
 
   it('names coworkers, and says so when there are none', () => {

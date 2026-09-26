@@ -14,13 +14,6 @@ import { formatWindowLabel } from '@/lib/schedule/sub';
 
 export type ShiftWithAssignments = ShiftRow & { assignments: ShiftAssignmentRow[] };
 
-/** Suffix marking a partial-window role, so a Setup block reads as one. */
-const ROLE_SUFFIX: Record<ShiftAssignmentRow['role'], string> = {
-  full: '',
-  setup: ' (Setup)',
-  partial: ' (Partial)',
-};
-
 /** Deep link back to the shift on the board — same scheme the emails use. */
 function boardUrl(origin: string, shift: ShiftRow): string {
   return `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`;
@@ -68,10 +61,10 @@ export function buildPersonalEvents(args: {
     events.push({
       uid: `pyre-shift-${mine.id}@pyresauna.com`,
       date: shift.shift_date,
-      // The assignment's own window, not the shift's — a Setup role is short.
+      // The assignment's own hours, not the shift's — people come and go at different times.
       startTime: mine.starts_at,
       endTime: mine.ends_at,
-      summary: `Pyre — ${shift.label}${ROLE_SUFFIX[mine.role]}`,
+      summary: `Pyre — ${shift.label}`,
       location: VENUE_ADDRESS,
       description: describe([
         `${shift.label}, ${formatWindowLabel(mine)}`,

@@ -87,6 +87,15 @@ export interface ShiftRow {
 	/** Momence divergence the sync couldn't silently fix — needs admin eyes. */
 	sync_flag: "sessions_cancelled" | "times_changed" | null;
 	/**
+	 * Momence shifts: the first session's start and the last session's end
+	 * the window was padded around (null at a split cut, on manual shifts, and
+	 * until the sync first records them). A new assignment's default hours
+	 * count the arrive-before / leave-after settings from these — see
+	 * defaultAssignmentWindow.
+	 */
+	sessions_start_at: string | null;
+	sessions_end_at: string | null;
+	/**
 	 * Admin marked this shift set in stone ahead of the two-week horizon.
 	 * Null follows the date rule (see horizon.ts isTentativeShift).
 	 */
@@ -101,11 +110,10 @@ export interface ShiftAssignmentRow {
 	staff_id: string;
 	starts_at: string;
 	ends_at: string;
-	role: "full" | "setup" | "partial";
 	/**
 	 * The jobs this person holds within those hours — set-up, the in-session
-	 * roles (host, customer care), the break-down split. Orthogonal to `role`,
-	 * which is only the window; empty means nobody assigned any. See
+	 * roles (host, customer care), the break-down split. Empty means nobody
+	 * assigned any. See
 	 * DutyCatalog in duties.ts (the shift_duties table).
 	 */
 	duties: AssignmentDuty[];
@@ -126,11 +134,9 @@ export interface ShiftRequestRow {
 	shift_id: string;
 	staff_id: string;
 	status: "pending" | "approved" | "denied";
-	/** What they offered to work: the whole shift, or just its setup span. */
-	role: "full" | "setup";
 	/**
 	 * The hours they asked to work, entered with the request. Null (both) on
-	 * legacy rows — approval then falls back to the role-derived window.
+	 * legacy rows — approval then falls back to the default hours.
 	 */
 	requested_starts_at: string | null;
 	requested_ends_at: string | null;
@@ -149,7 +155,7 @@ export interface ShiftRequestRow {
  * An employee's ask for a sub on a shift they're assigned to. Creating one
  * logs their hours as time off (time_off_id) and emails admins plus everyone
  * available that day; the requester keeps the assignment until a claim swaps
- * it to the claimer. The window, role and duties are copied from the
+ * it to the claimer. The window and duties are copied from the
  * assignment at request time so the swap can recreate them.
  */
 export interface SubRequestRow {
@@ -158,7 +164,6 @@ export interface SubRequestRow {
 	requester_staff_id: string;
 	starts_at: string;
 	ends_at: string;
-	role: "full" | "setup" | "partial";
 	/** The assignment's duties, snapshotted so the claim can recreate them. */
 	duties: AssignmentDuty[];
 	/** The blackout entry created with the request; null if it was deleted. */

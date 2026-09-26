@@ -3,7 +3,7 @@ import { button, EmailLayout, heading, text } from '../components/EmailLayout';
 import type { ShiftRequestDecisionProps } from '../types';
 
 // To the employee when a manager decides their shift request. Approval means
-// they're on the schedule with the role and window they asked for; denial
+// they're on the schedule for the hours they asked for; denial
 // just closes the ask — the shift was likely covered another way.
 
 export function ShiftRequestDecision({
@@ -12,7 +12,6 @@ export function ShiftRequestDecision({
   shiftLabel,
   dateLabel,
   timeLabel,
-  roleLabel,
   reasonNote,
   scheduleUrl,
 }: ShiftRequestDecisionProps) {
@@ -28,8 +27,8 @@ export function ShiftRequestDecision({
       <Text style={heading}>{approved ? "You're on the schedule" : 'Shift request closed'}</Text>
       <Text style={text}>
         {approved
-          ? `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} was approved. You're on for ${timeLabel} (${roleLabel}).`
-          : `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} (${timeLabel}, ${roleLabel}) wasn't approved this time; the shift was likely covered another way. Keep an eye on the board for other open shifts.`}
+          ? `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} was approved. You're on for ${timeLabel}.`
+          : `Hi ${firstName} — your request to work ${shiftLabel} on ${dateLabel} (${timeLabel}) wasn't approved this time; the shift was likely covered another way. Keep an eye on the board for other open shifts.`}
       </Text>
       {reasonNote && (
         <Text style={text}>
@@ -49,7 +48,6 @@ ShiftRequestDecision.PreviewProps = {
   shiftLabel: 'Evening',
   dateLabel: 'Thursday, August 14',
   timeLabel: '2:30p–8:30p',
-  roleLabel: 'Full',
   scheduleUrl: 'https://pyre-integrations.vercel.app/admin/schedule',
 } satisfies ShiftRequestDecisionProps;
 

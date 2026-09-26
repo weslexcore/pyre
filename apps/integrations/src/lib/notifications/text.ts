@@ -46,22 +46,20 @@ export function assignmentChangeText(input: {
   change: AssignmentChange;
   shift: ShiftLike;
   /** The person's own window on the shift; falls back to the shift's. */
-  assignment?: { starts_at: string; ends_at: string; role?: string } | null;
+  assignment?: { starts_at: string; ends_at: string } | null;
   /** Extra detail for an update ("starts_at 09:00 → 10:00"). */
   detail?: string | null;
   actorName?: string | null;
 }): { title: string; body: string } {
   const window = shortWindow(input.assignment ?? input.shift);
-  const role =
-    input.assignment?.role && input.assignment.role !== 'full' ? ` · ${input.assignment.role}` : '';
   const by = input.actorName ? ` by ${input.actorName}` : '';
   switch (input.change) {
     case 'added':
-      return { title: `You're on ${shiftPhrase(input.shift)}`, body: `${window}${role}${by}` };
+      return { title: `You're on ${shiftPhrase(input.shift)}`, body: `${window}${by}` };
     case 'updated':
       return {
         title: `Your shift changed: ${shiftPhrase(input.shift)}`,
-        body: input.detail ? `${input.detail}${by}` : `Now ${window}${role}${by}`,
+        body: input.detail ? `${input.detail}${by}` : `Now ${window}${by}`,
       };
     case 'removed':
       return { title: `You were taken off ${shiftPhrase(input.shift)}`, body: `${window}${by}` };

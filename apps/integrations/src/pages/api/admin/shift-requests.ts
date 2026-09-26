@@ -1,19 +1,13 @@
 // Shift requests for /admin/schedule: an employee asks to work a shift
 // (POST), withdraws a pending ask (DELETE), and a schedule manager approves
 // or denies it (PATCH). Approval creates the shift_assignments row with the
-// shift's own window; the request row stays as the paper trail.
+// hours asked for; the request row stays as the paper trail.
 //
 // Requesting is gated by the admin 'shift_requests' toggle
 // (lib/schedule/settings.ts). Deciding is not — a pending request placed
 // before the feature was switched off must still be closable.
 
-import {
-  ASSIGNMENT_ROLE_LABELS,
-  minutesToTime,
-  SETUP_DURATION_MIN,
-  timeToMinutes,
-  utcToEastern,
-} from '@pyre/schedule-core';
+import { defaultAssignmentWindow, utcToEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
@@ -25,8 +19,9 @@ import {
   describeShift,
   logScheduleChange,
   staffNameOf,
+  timeWindow,
 } from '@/lib/schedule/change-log';
-import { getScheduleSettings } from '@/lib/schedule/settings';
+import { getScheduleSettings, getShiftBufferSettings } from '@/lib/schedule/settings';
 import { formatDateLabel, formatWindowLabel } from '@/lib/schedule/sub';
 import { TIME_RE } from '@/lib/schedule/validate';
 
@@ -97,14 +92,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const shiftId = body.shiftId;
   if (typeof shiftId !== 'string' || !shiftId) return json({ error: 'shiftId is required' }, 400);
-  const role = body.role ?? 'full';
-  if (role !== 'full' && role !== 'setup') {
-    return json({ error: "role must be 'full' or 'setup'" }, 400);
-  }
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
 
   // The hours they want to work — optional pair (legacy clients omit it;
-  // approval then derives the window from the role, as before).
+  // approval then gives them the default hours for the shift).
   const startsAt = body.startsAt;
   const endsAt = body.endsAt;
   if ((startsAt === undefined) !== (endsAt === undefined)) {
@@ -155,7 +146,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({
       shift_id: shiftId,
       staff_id: staffId,
-      role,
       requested_starts_at: (startsAt as string | undefined) ?? null,
       requested_ends_at: (endsAt as string | undefined) ?? null,
       note: note || null,
@@ -174,11 +164,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     entityType: 'request',
     entityId: request_.id,
     action: 'create',
-    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)} (${ASSIGNMENT_ROLE_LABELS[role]}${
+    summary: `${await staffNameOf(db, staffId)} requested ${describeShift(shift)}${
       request_.requested_starts_at && request_.requested_ends_at
-        ? `, ${request_.requested_starts_at.slice(0, 5)}–${request_.requested_ends_at.slice(0, 5)}`
+        ? ` (${request_.requested_starts_at.slice(0, 5)}–${request_.requested_ends_at.slice(0, 5)})`
         : ''
-    })`,
+    }`,
     details: { after: request_ },
   });
 
@@ -227,7 +217,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   // decision email describes it. Null (deleted) only blocks approval.
   const { data: shiftRow, error: shiftError } = await db
     .from('shifts')
-    .select('id, shift_date, label, starts_at, ends_at, status')
+    .select('id, shift_date, label, starts_at, ends_at, sessions_start_at, sessions_end_at, status')
     .eq('id', pending.shift_id)
     .maybeSingle();
   if (shiftError) return json({ error: shiftError.message }, 500);
@@ -237,28 +227,26 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     label: string;
     starts_at: string;
     ends_at: string;
+    sessions_start_at: string | null;
+    sessions_end_at: string | null;
     status: string;
   } | null;
 
   // The window the request asked for: the hours entered with the request, or
-  // — on legacy rows without them — the whole shift / its setup span (first
-  // 2h of the window, same snapping as the board's role buttons).
-  const requestedWindow = shift
-    ? pending.requested_starts_at && pending.requested_ends_at
-      ? { starts_at: pending.requested_starts_at, ends_at: pending.requested_ends_at }
-      : {
-          starts_at: shift.starts_at,
-          ends_at:
-            pending.role === 'setup'
-              ? minutesToTime(
-                  Math.min(
-                    timeToMinutes(shift.starts_at) + SETUP_DURATION_MIN,
-                    timeToMinutes(shift.ends_at)
-                  )
-                )
-              : shift.ends_at,
-        }
-    : null;
+  // — on legacy rows without them — the default hours a manager adding them
+  // by hand would get.
+  let requestedWindow: { starts_at: string; ends_at: string } | null = null;
+  if (shift) {
+    if (pending.requested_starts_at && pending.requested_ends_at) {
+      requestedWindow = {
+        starts_at: pending.requested_starts_at,
+        ends_at: pending.requested_ends_at,
+      };
+    } else {
+      const defaults = defaultAssignmentWindow(shift, await getShiftBufferSettings());
+      requestedWindow = { starts_at: defaults.startsAt, ends_at: defaults.endsAt };
+    }
+  }
 
   let assignment: ShiftAssignmentRow | null = null;
   if (action === 'approve') {
@@ -272,7 +260,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         staff_id: pending.staff_id,
         starts_at: requestedWindow.starts_at,
         ends_at: requestedWindow.ends_at,
-        role: pending.role,
         notes: null,
       })
       .select('*')
@@ -288,7 +275,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         entityType: 'assignment',
         entityId: assignment.id,
         action: 'create',
-        summary: `Assigned ${requesterName} to ${describeShift(shift)} (approved request, ${ASSIGNMENT_ROLE_LABELS[pending.role]})`,
+        summary: `Assigned ${requesterName} to ${describeShift(shift)} (approved request, ${timeWindow(assignment)})`,
         details: { after: assignment },
       });
     }
@@ -339,7 +326,6 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
             shiftLabel: shift.label,
             dateLabel: formatDateLabel(shift.shift_date),
             timeLabel: formatWindowLabel(requestedWindow),
-            roleLabel: ASSIGNMENT_ROLE_LABELS[pending.role],
             reasonNote: decisionNote || null,
             scheduleUrl: `${new URL(request.url).origin}/admin/schedule`,
           },

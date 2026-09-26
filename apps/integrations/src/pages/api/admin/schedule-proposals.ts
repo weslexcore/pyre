@@ -148,7 +148,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const columns: string =
       kind === 'shift'
         ? 'id, proposal_id, is_draft, label, shift_date'
-        : 'id, proposal_id, is_draft, shift_id, staff_id, starts_at, ends_at, role';
+        : 'id, proposal_id, is_draft, shift_id, staff_id, starts_at, ends_at';
     const { data, error: fetchError } = await db
       .from(table)
       .select(columns)
@@ -163,7 +163,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       staff_id?: string;
       starts_at?: string;
       ends_at?: string;
-      role?: string;
       label?: string;
       shift_date?: string;
     } | null;
@@ -210,7 +209,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           staffId: row.staff_id,
           assignment:
             row.starts_at && row.ends_at
-              ? { starts_at: row.starts_at, ends_at: row.ends_at, role: row.role }
+              ? { starts_at: row.starts_at, ends_at: row.ends_at }
               : null,
           actorEmail: actorFromGate(gate).email,
         });

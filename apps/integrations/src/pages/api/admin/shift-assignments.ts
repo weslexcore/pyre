@@ -1,11 +1,12 @@
 // Assignment mutations for /admin/schedule: put a person on a shift (times
-// default to the shift window), adjust their times/role/duties, or take them
-// off.
+// default to the arrive-before / leave-after settings counted from the
+// shift's sessions — see defaultAssignmentWindow), adjust their times/duties,
+// or take them off.
 // Admin-only, CSRF-guarded in-route. Availability is advisory — the UI warns
 // about time-off overlaps but the API doesn't block them (the admin may have
 // confirmed with the person, as the sheet's notes show).
 
-import type { AssignmentDuty, AssignmentRole } from '@pyre/schedule-core';
+import { type AssignmentDuty, defaultAssignmentWindow } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftAssignmentRow } from '@/lib/db';
@@ -21,6 +22,7 @@ import {
 } from '@/lib/schedule/change-log';
 import { acceptDraftRow } from '@/lib/schedule/draft-accept';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { getShiftBufferSettings } from '@/lib/schedule/settings';
 import { parseAssignmentFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
@@ -93,15 +95,20 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const { data: shift, error: shiftError } = await db
     .from('shifts')
-    .select('id, shift_date, label, starts_at, ends_at, status, is_draft')
+    .select(
+      'id, shift_date, label, starts_at, ends_at, sessions_start_at, sessions_end_at, status, is_draft'
+    )
     .eq('id', shiftId)
     .maybeSingle();
   if (shiftError) return json({ error: shiftError.message }, 500);
   if (!shift) return json({ error: 'Shift not found' }, 404);
   if (shift.status !== 'active') return json({ error: 'Shift is cancelled' }, 400);
 
-  const startsAt = (fields.starts_at as string) ?? shift.starts_at;
-  const endsAt = (fields.ends_at as string) ?? shift.ends_at;
+  // Read now, not when the shift was made: the settings decide the next
+  // person's hours and never move anyone already on.
+  const defaults = defaultAssignmentWindow(shift, await getShiftBufferSettings());
+  const startsAt = (fields.starts_at as string) ?? defaults.startsAt;
+  const endsAt = (fields.ends_at as string) ?? defaults.endsAt;
   if (endsAt.slice(0, 5) <= startsAt.slice(0, 5)) {
     return json({ error: 'endsAt must be after startsAt' }, 400);
   }
@@ -113,7 +120,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       staff_id: staffId,
       starts_at: startsAt,
       ends_at: endsAt,
-      role: (fields.role as AssignmentRole) ?? 'full',
       duties: (fields.duties as AssignmentDuty[]) ?? [],
       notes: (fields.notes as string | null) ?? null,
     })

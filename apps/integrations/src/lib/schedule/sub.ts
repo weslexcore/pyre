@@ -129,7 +129,7 @@ export async function claimSubRequest(
   const claimed = claimedRow as SubRequestRow;
 
   // Swap: requester off (their assignment may already be gone — fine), the
-  // claimer on with the window, role and duties captured at request time.
+  // claimer on with the window and duties captured at request time.
   const { data: removedRows, error: removeError } = await db
     .from('shift_assignments')
     .delete()
@@ -146,7 +146,6 @@ export async function claimSubRequest(
       staff_id: claimerId,
       starts_at: sub.starts_at,
       ends_at: sub.ends_at,
-      role: sub.role,
       duties: sub.duties,
       notes: null,
     })

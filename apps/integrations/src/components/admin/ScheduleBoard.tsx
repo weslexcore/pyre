@@ -6,18 +6,18 @@
 // picked out in gold, with their own name first in each shift's name list.
 
 import {
-  ASSIGNMENT_ROLE_LABELS,
-  ASSIGNMENT_ROLES,
   type AssignmentDuty,
-  type AssignmentRole,
   type Availability,
   addDays,
   assignmentHours,
   availabilityFor,
+  DEFAULT_ARRIVE_BEFORE_MIN,
   DEFAULT_DUTY_CATALOG,
+  DEFAULT_LEAVE_AFTER_MIN,
   DOW_LABELS,
   type DutyCatalog,
   type DutyDef,
+  defaultAssignmentWindow,
   dutyDef,
   dutyLabel,
   dutyPhases,
@@ -26,13 +26,13 @@ import {
   firstTentativeDate,
   formatShiftNotes,
   isTentativeShift,
+  MAX_SHIFT_BUFFER_MIN,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
   minutesToTime,
   mismatchedDutyPairs,
   missingShiftLead,
   normalizeDuties,
   pairedDutyFor,
-  SETUP_DURATION_MIN,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
   toggleDuty,
@@ -64,9 +64,18 @@ interface BoardShift extends ShiftRow {
 interface BoardSettings {
   shiftRequestsEnabled: boolean;
   subRequestsEnabled: boolean;
+  /** Minutes before the first session a person added to a shift starts. */
+  arriveBeforeMin: number;
+  /** Minutes after the last session a person added to a shift leaves. */
+  leaveAfterMin: number;
 }
 
-const DEFAULT_SETTINGS: BoardSettings = { shiftRequestsEnabled: true, subRequestsEnabled: true };
+const DEFAULT_SETTINGS: BoardSettings = {
+  shiftRequestsEnabled: true,
+  subRequestsEnabled: true,
+  arriveBeforeMin: DEFAULT_ARRIVE_BEFORE_MIN,
+  leaveAfterMin: DEFAULT_LEAVE_AFTER_MIN,
+};
 
 interface BoardData {
   staff: StaffRow[];
@@ -125,12 +134,12 @@ const buttonClass =
   'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 // Sage marks duties wherever they appear — chip and picker both — so they
-// read as their own axis next to the red role pills. The two answer different
-// questions about the same person: role is the hours, duties are the jobs.
+// read as their own axis, apart from the red pills elsewhere on the board.
+// A person's hours say when they're on; duties are the jobs.
 const dutyChipClass =
   'rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-sage)]';
 
-/** The role pills' shape in sage, for the duty picker. */
+/** The board's pill shape in sage, for the duty picker. */
 const dutyPillClass = (active: boolean) =>
   `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
     active
@@ -338,7 +347,7 @@ export function ScheduleBoard() {
   // clicking through (managers included); this tracks the ones the viewer
   // closed. Manage controls stay behind the per-shift Edit button below.
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
-  // The shift whose detail is in edit mode (every assignment's hours, role
+  // The shift whose detail is in edit mode (every assignment's hours
   // and duties open inline and autosave; add person).
   const [editShiftId, setEditShiftId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1264,6 +1273,44 @@ export function ScheduleBoard() {
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
+                  Shift hours
+                </p>
+                <p className="font-mono text-xs text-white/50">
+                  When someone added to a shift starts and finishes by default, counted from the
+                  shift's first and last session (manual shifts use their own start and end).
+                  Changing these only affects people added from now on — hours already on the
+                  schedule stay as they are.
+                </p>
+                <MinutesSetting
+                  label="Arrive before the first session"
+                  value={settings.arriveBeforeMin}
+                  disabled={busy}
+                  onSave={(minutes) =>
+                    run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'arrive_before_min',
+                        minutes,
+                      })
+                    )
+                  }
+                />
+                <MinutesSetting
+                  label="Leave after the last session"
+                  value={settings.leaveAfterMin}
+                  disabled={busy}
+                  onSave={(minutes) =>
+                    run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'leave_after_min',
+                        minutes,
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
                   Standing instructions for the AI drafter
                 </p>
                 <p className="font-mono text-xs text-white/50">
@@ -1880,15 +1927,18 @@ function ShiftDetail({
   restCheck: (staffId: string, date: string, startsAt: string, endsAt: string) => string | null;
 }) {
   const dutyCatalog = useDutyCatalog();
-  const startMin = timeToMinutes(shift.starts_at);
-  const endMin = timeToMinutes(shift.ends_at);
+  // The hours someone added now gets: the arrive-before / leave-after settings
+  // counted from the shift's sessions (the shift window on a manual shift).
+  // Same function the server applies, so what's checked here is what lands.
+  const defaultWindow = defaultAssignmentWindow(shift, settings);
+  const defaultStartMin = timeToMinutes(defaultWindow.startsAt);
+  const defaultEndMin = timeToMinutes(defaultWindow.endsAt);
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
   const candidates = data.staff.filter((s) => s.active && !assignedIds.has(s.id));
 
-  // Employee request composer: the Full/Setup buttons open it with the role's
-  // window prefilled, and the times are the hours they're offering to work.
+  // Employee request composer: Request opens it with the default hours
+  // prefilled, and the times are the hours they're offering to work.
   const [requestDraft, setRequestDraft] = useState<{
-    role: 'full' | 'setup';
     startsAt: string;
     endsAt: string;
   } | null>(null);
@@ -1897,21 +1947,12 @@ function ShiftDetail({
   const [deciding, setDeciding] = useState<{ id: string; action: 'approve' | 'deny' } | null>(null);
   const [decisionNote, setDecisionNote] = useState('');
 
-  // The window a role implies: the whole shift, or its setup span (first 2h).
-  const roleWindow = (role: 'full' | 'setup') => ({
-    startsAt: hhmm(shift.starts_at),
-    endsAt:
-      role === 'setup'
-        ? minutesToTime(Math.min(startMin + SETUP_DURATION_MIN, endMin))
-        : hhmm(shift.ends_at),
-  });
-
   // The hours a request asked for — entered with it, or (legacy rows) the
-  // role's window. Mirrors the approval fallback on the server.
+  // default hours. Mirrors the approval fallback on the server.
   const requestedWindow = (r: ShiftRequestRow): { startsAt: string; endsAt: string } =>
     r.requested_starts_at && r.requested_ends_at
       ? { startsAt: r.requested_starts_at, endsAt: r.requested_ends_at }
-      : roleWindow(r.role);
+      : defaultWindow;
 
   // Employee self-service: these actions only make sense on live, upcoming
   // shifts, and requesting sits behind its admin toggle.
@@ -1993,7 +2034,7 @@ function ShiftDetail({
                   </span>
                   <span className="font-mono text-xs text-white/60">
                     {formatTime(a.starts_at)}–{formatTime(a.ends_at)} ·{' '}
-                    {assignmentHours(a.starts_at, a.ends_at)}h · {ASSIGNMENT_ROLE_LABELS[a.role]}
+                    {assignmentHours(a.starts_at, a.ends_at)}h
                   </span>
                   {a.is_draft && (
                     <span className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]">
@@ -2129,7 +2170,6 @@ function ShiftDetail({
                 {editing && (
                   <AssignmentEditor
                     assignment={a}
-                    shift={shift}
                     onSave={(fields) =>
                       run(() =>
                         api('PATCH', '/api/admin/shift-assignments', { id: a.id, ...fields })
@@ -2167,16 +2207,6 @@ function ShiftDetail({
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-medium">
                       {staffById.get(r.staff_id)?.display_name ?? '?'}
-                    </span>
-                    <span
-                      className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/70"
-                      title={
-                        r.role === 'setup'
-                          ? 'Asked to work just the setup'
-                          : 'Asked to work the shift'
-                      }
-                    >
-                      {ASSIGNMENT_ROLE_LABELS[r.role]}
                     </span>
                     <span
                       className="font-mono text-xs text-[var(--pyre-creme)]"
@@ -2335,8 +2365,7 @@ function ShiftDetail({
             {selfRequest ? (
               <>
                 <span className="font-mono text-xs text-[var(--pyre-creme)]">
-                  Requested {ASSIGNMENT_ROLE_LABELS[selfRequest.role]},{' '}
-                  {formatTime(requestedWindow(selfRequest).startsAt)}–
+                  Requested {formatTime(requestedWindow(selfRequest).startsAt)}–
                   {formatTime(requestedWindow(selfRequest).endsAt)} — waiting for a manager to
                   approve.
                 </span>
@@ -2357,39 +2386,18 @@ function ShiftDetail({
                 <button
                   type="button"
                   className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-                  title="Ask to a shift"
+                  title="Ask to work this shift — choose your hours next"
                   disabled={busy}
-                  onClick={() =>
-                    setRequestDraft(
-                      requestDraft?.role === 'full' ? null : { role: 'full', ...roleWindow('full') }
-                    )
-                  }
+                  onClick={() => setRequestDraft(requestDraft ? null : { ...defaultWindow })}
                 >
                   Request
                 </button>
-                {/* <button
-                  type="button"
-                  className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
-                  title="Ask to work just the setup — the first 2 hours of the window"
-                  disabled={busy}
-                  onClick={() =>
-                    setRequestDraft(
-                      requestDraft?.role === 'setup'
-                        ? null
-                        : { role: 'setup', ...roleWindow('setup') }
-                    )
-                  }
-                >
-                  Setup only
-                </button> */}
               </>
             )}
           </div>
           {!selfRequest && requestDraft && (
             <div className="flex flex-wrap items-center gap-2 rounded bg-white/5 px-2 py-1.5">
-              <span className="font-mono text-xs text-white/50">
-                Hours you want to work ({ASSIGNMENT_ROLE_LABELS[requestDraft.role]}):
-              </span>
+              <span className="font-mono text-xs text-white/50">Hours you want to work:</span>
               <input
                 type="time"
                 step={1800}
@@ -2416,7 +2424,6 @@ function ShiftDetail({
                   void run(() =>
                     api('POST', '/api/admin/shift-requests', {
                       shiftId: shift.id,
-                      role: draft.role,
                       startsAt: draft.startsAt,
                       endsAt: draft.endsAt,
                     })
@@ -2436,7 +2443,11 @@ function ShiftDetail({
       {canManage && editMode && candidates.length > 0 && shift.status === 'active' && (
         <div>
           <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
-            Add person
+            Add person{' '}
+            <span className="normal-case tracking-normal text-white/30">
+              · on {formatTime(defaultWindow.startsAt)}–{formatTime(defaultWindow.endsAt)}, change
+              after adding
+            </span>
           </p>
           <div className="flex flex-wrap gap-2">
             {candidates.map((s) => {
@@ -2444,11 +2455,16 @@ function ShiftDetail({
                 data.timeOff,
                 s.id,
                 shift.shift_date,
-                startMin,
-                endMin
+                defaultStartMin,
+                defaultEndMin
               );
               const badge = availabilityBadge(availability);
-              const restNote = restCheck(s.id, shift.shift_date, shift.starts_at, shift.ends_at);
+              const restNote = restCheck(
+                s.id,
+                shift.shift_date,
+                defaultWindow.startsAt,
+                defaultWindow.endsAt
+              );
               const conflictNote = availability.conflicts
                 .map((c) => {
                   const when = c.wholeDay
@@ -2517,7 +2533,7 @@ function ShiftDetail({
             <button
               type="button"
               className={buttonClass}
-              title="Change anyone's hours, role or duties (changes save as you make them), or add people to this shift"
+              title="Change anyone's hours or duties (changes save as you make them), or add people to this shift"
               onClick={onToggleEditMode}
             >
               Edit
@@ -2546,6 +2562,56 @@ function ShiftDetail({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One minute-count schedule setting: a number field that saves when it loses
+ * focus or on Enter, and snaps back to the saved value if what's typed isn't
+ * a whole number of minutes in range.
+ */
+function MinutesSetting({
+  label,
+  value,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: number;
+  disabled: boolean;
+  onSave: (minutes: number) => Promise<string | null>;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = () => {
+    const minutes = Number(draft);
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > MAX_SHIFT_BUFFER_MIN) {
+      setDraft(String(value));
+      return;
+    }
+    if (minutes !== value) void onSave(minutes);
+  };
+
+  return (
+    <label className="flex flex-wrap items-center gap-2 font-mono text-xs text-white/70">
+      <input
+        type="number"
+        min={0}
+        max={MAX_SHIFT_BUFFER_MIN}
+        step={5}
+        inputMode="numeric"
+        className={`${inputClass} w-20`}
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+      />
+      minutes — {label.toLowerCase()}
+    </label>
   );
 }
 
@@ -2590,7 +2656,6 @@ function AddToCalendar({ shiftId }: { shiftId: string }) {
 type AssignmentFields = {
   startsAt: string;
   endsAt: string;
-  role: AssignmentRole;
   duties: AssignmentDuty[];
 };
 
@@ -2600,33 +2665,30 @@ type AssignmentFields = {
 const ASSIGNMENT_AUTOSAVE_MS = 800;
 
 const assignmentFieldsKey = (f: AssignmentFields) =>
-  JSON.stringify([f.startsAt, f.endsAt, f.role, [...f.duties].sort()]);
+  JSON.stringify([f.startsAt, f.endsAt, [...f.duties].sort()]);
 
 type AutosaveStatus =
   | { state: 'idle' | 'pending' | 'saving' | 'saved' }
   | { state: 'invalid' | 'error'; message: string };
 
 /**
- * One assignment's hours, role and duties, open for as long as the shift is
+ * One assignment's hours and duties, open for as long as the shift is
  * in edit mode. There's no Save button: each change saves itself after a
  * short pause, and a change still waiting when the editor closes (Done) is
  * saved on the way out.
  */
 function AssignmentEditor({
   assignment,
-  shift,
   onSave,
 }: {
   assignment: ShiftAssignmentRow;
-  shift: BoardShift;
   /** Resolves to the error message, or null once saved. */
   onSave: (fields: AssignmentFields) => Promise<string | null>;
 }) {
   const [startsAt, setStartsAt] = useState(hhmm(assignment.starts_at));
   const [endsAt, setEndsAt] = useState(hhmm(assignment.ends_at));
-  const [role, setRole] = useState<AssignmentRole>(assignment.role);
   // Duties are a set, independent of the hours above: someone can work the
-  // full window and still hold only Set Up (A), or hold Host and Break Down (B).
+  // whole window and still hold only Set Up (A), or hold Host and Break Down (B).
   // Taking a half fills in the same letter in the other phase and that side's
   // in-session duty (toggleDuty); every part of that stays editable.
   const dutyCatalog = useDutyCatalog();
@@ -2646,7 +2708,6 @@ function AssignmentEditor({
     assignmentFieldsKey({
       startsAt: hhmm(assignment.starts_at),
       endsAt: hhmm(assignment.ends_at),
-      role: assignment.role,
       duties: normalizeDuties(dutyCatalog, assignment.duties),
     })
   );
@@ -2668,7 +2729,7 @@ function AssignmentEditor({
   }, []);
 
   useEffect(() => {
-    const fields = { startsAt, endsAt, role, duties };
+    const fields = { startsAt, endsAt, duties };
     if (assignmentFieldsKey(fields) === savedKeyRef.current) {
       pendingRef.current = null;
       setStatus((s) => (s.state === 'pending' || s.state === 'invalid' ? { state: 'idle' } : s));
@@ -2683,7 +2744,7 @@ function AssignmentEditor({
     setStatus({ state: 'pending' });
     const timer = setTimeout(() => void save(fields), ASSIGNMENT_AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [startsAt, endsAt, role, duties, save]);
+  }, [startsAt, endsAt, duties, save]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -2692,24 +2753,6 @@ function AssignmentEditor({
       if (pendingRef.current) void save(pendingRef.current);
     };
   }, [save]);
-
-  // Full/Setup snap the times to the shift window. The window already carries
-  // the buffers (90min lead before the first session, 30min close after the
-  // last — schedule-core's DEFAULT_WINDOW_OPTIONS), so full = the whole
-  // window and setup = its first 2h, i.e. through 30min past session start.
-  // Partial only marks the role — its times stay hand-entered.
-  const applyRole = (r: AssignmentRole) => {
-    setRole(r);
-    if (r === 'full') {
-      setStartsAt(hhmm(shift.starts_at));
-      setEndsAt(hhmm(shift.ends_at));
-    } else if (r === 'setup') {
-      const startMin = timeToMinutes(shift.starts_at);
-      const endMin = timeToMinutes(shift.ends_at);
-      setStartsAt(hhmm(shift.starts_at));
-      setEndsAt(minutesToTime(Math.min(startMin + SETUP_DURATION_MIN, endMin)));
-    }
-  };
 
   return (
     <div className="mt-2 space-y-2">
@@ -2730,16 +2773,6 @@ function AssignmentEditor({
           onChange={(e) => setEndsAt(e.target.value)}
           aria-label="Assignment end"
         />
-        {ASSIGNMENT_ROLES.map((r) => (
-          <button
-            key={r}
-            type="button"
-            className={pillClass(role === r)}
-            onClick={() => applyRole(r)}
-          >
-            {ASSIGNMENT_ROLE_LABELS[r]}
-          </button>
-        ))}
       </div>
       {phases.map((phase) => (
         <div key={phase.key} className="flex flex-wrap items-center gap-2">

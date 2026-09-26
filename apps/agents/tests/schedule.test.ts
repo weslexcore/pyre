@@ -85,6 +85,8 @@ const shift = (overrides: Partial<ShiftRow>): ShiftRow => ({
   proposal_id: null,
   is_draft: false,
   sync_flag: null,
+  sessions_start_at: null,
+  sessions_end_at: null,
   confirmed_at: null,
   created_at: '',
   updated_at: '',
@@ -97,7 +99,6 @@ const assignment = (overrides: Partial<ShiftAssignmentRow>): ShiftAssignmentRow 
   staff_id: 'sam',
   starts_at: '07:30:00',
   ends_at: '13:00:00',
-  role: 'full',
   duties: [],
   notes: null,
   proposal_id: null,
@@ -115,7 +116,7 @@ describe('shapeShifts', () => {
         shift({ id: 's1' }),
       ],
       [
-        assignment({ id: 'a2', shift_id: 's1', staff_id: 'ari', starts_at: '07:30:00', ends_at: '09:30:00', role: 'setup', duties: ['setup_a'] }),
+        assignment({ id: 'a2', shift_id: 's1', staff_id: 'ari', starts_at: '07:30:00', ends_at: '09:30:00', duties: ['setup_a'] }),
         assignment({ id: 'a1', shift_id: 's1', staff_id: 'sam', duties: ['host', 'breakdown_b'] }),
         assignment({ id: 'a3', shift_id: 's2', staff_id: 'ari', starts_at: '16:00:00', ends_at: '21:00:00' }),
       ],
@@ -138,8 +139,8 @@ describe('shapeShifts', () => {
     expect(morning.url).toContain('/admin/schedule?view=week&date=2026-09-05');
     // Duties ride along with the crew so "who's hosting Saturday?" is answerable.
     expect(morning.crew).toEqual([
-      { name: 'Ari', role: 'setup', duties: ['setup_a'], startsAt: '07:30', endsAt: '09:30', hours: 2, isMe: false },
-      { name: 'Sam', role: 'full', duties: ['host', 'breakdown_b'], startsAt: '07:30', endsAt: '13:00', hours: 5.5, isMe: true },
+      { name: 'Ari', duties: ['setup_a'], startsAt: '07:30', endsAt: '09:30', hours: 2, isMe: false },
+      { name: 'Sam', duties: ['host', 'breakdown_b'], startsAt: '07:30', endsAt: '13:00', hours: 5.5, isMe: true },
     ]);
     expect(evening.openSpots).toBe(1);
     expect(evening.myHours).toBe(0);

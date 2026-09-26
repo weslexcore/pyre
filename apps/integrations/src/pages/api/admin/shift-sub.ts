@@ -149,7 +149,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       requester_staff_id: self.id,
       starts_at: assignment.starts_at,
       ends_at: assignment.ends_at,
-      role: assignment.role,
       duties: assignment.duties,
       time_off_id: timeOff.id,
     })
