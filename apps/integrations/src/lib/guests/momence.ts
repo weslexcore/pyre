@@ -8,6 +8,7 @@
 // packs readable, and `errors` tells the island which panel to caveat rather
 // than blanking the whole thing.
 
+import { normalizeEmail } from '@/lib/email/address';
 import {
   type BoughtMembership,
   fetchHostMember,
@@ -62,7 +63,7 @@ export function accountFromMember(member: HostMember): MomenceAccount {
   return {
     id: String(member.id),
     name: [member.firstName, member.lastName].filter(Boolean).join(' ').trim() || member.email,
-    email: (member.email ?? '').trim().toLowerCase(),
+    email: normalizeEmail(member.email),
     phone: member.phoneNumber ?? null,
     firstSeen: member.firstSeen ?? null,
     lastSeen: member.lastSeen ?? null,

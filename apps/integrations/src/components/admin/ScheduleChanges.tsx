@@ -4,10 +4,9 @@
 // before/after details.
 
 import { useCallback, useEffect, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass } from '@/components/admin/ui';
 import type { ScheduleChangeRow } from '@/lib/schedule/change-log';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const FILTERS: Array<{ value: string; label: string }> = [
   { value: '', label: 'Everything' },
@@ -102,11 +101,7 @@ export function ScheduleChanges() {
         {loading && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {entries.length === 0 && !loading ? (
         <p className="font-mono text-sm text-white/40">No changes logged yet.</p>

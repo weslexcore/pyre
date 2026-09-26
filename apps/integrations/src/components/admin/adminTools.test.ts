@@ -7,9 +7,12 @@ import {
   canViewPage,
   canViewPath,
   GOALS_HREF,
+  HIDEABLE_TOOLS,
+  SETTINGS_TOOL,
   STAFF_PAGES,
   searchablePages,
   toolsForAccess,
+  visibleTools,
 } from './adminTools';
 
 describe('legacy page grants', () => {
@@ -94,5 +97,40 @@ describe('staff pages', () => {
     const hrefs = searchablePages(toolsForAccess(rosterOnly), false).map((p) => p.href);
     expect(hrefs).toContain('/admin/messages');
     expect(hrefs).toContain('/admin/notifications');
+  });
+});
+
+describe('global tool visibility', () => {
+  it.each([true, false])(
+    'hides listings and subpage search without changing access (admin=%s)',
+    (isAdmin) => {
+      const access = { isAdmin, pages: ['/admin/schedule', '/admin/water'] };
+      const tools = visibleTools(toolsForAccess(access), ['/admin/schedule']);
+      expect(tools.map((tool) => tool.href)).not.toContain('/admin/schedule');
+      expect(tools.map((tool) => tool.href)).toContain('/admin/water');
+      expect(
+        searchablePages(tools, isAdmin).some(
+          (page) => page.href === '/admin/schedule' || page.href.startsWith('/admin/schedule/')
+        )
+      ).toBe(false);
+      expect(canViewPath(access, '/admin/schedule/hours')).toBe(true);
+    }
+  );
+
+  it('keeps Settings and staff pages reachable when every tool is hidden', () => {
+    expect(HIDEABLE_TOOLS).not.toContainEqual(SETTINGS_TOOL);
+    const tools = visibleTools(toolsForAccess({ isAdmin: true, pages: [] }), [
+      ...HIDEABLE_TOOLS.map((t) => t.href),
+      SETTINGS_TOOL.href,
+    ]);
+    expect(tools).toEqual([SETTINGS_TOOL]);
+    expect(searchablePages(tools, true).map((page) => page.href)).toEqual(
+      expect.arrayContaining(['/admin', '/admin/settings', ...STAFF_PAGES.map((p) => p.href)])
+    );
+  });
+
+  it('restores the original listing when nothing is hidden', () => {
+    const tools = toolsForAccess({ isAdmin: true, pages: [] });
+    expect(visibleTools(tools, [])).toEqual(tools);
   });
 });

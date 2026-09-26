@@ -13,16 +13,12 @@ import type { APIRoute } from 'astro';
 import { canViewPage, searchablePages, toolsForAccess } from '@/components/admin/adminTools';
 import { requireStaff } from '@/lib/auth/admin';
 import { getDb, type SopRow } from '@/lib/db';
-import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, json } from '@/lib/http/route';
+import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import type { LinkTarget } from '@/lib/sops/link-suggest';
 import { type CategoryRank, sortSops } from '@/lib/sops/order';
 import { getSopRole } from '@/lib/sops/role';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const SOPS_HREF = '/admin/sops';
 
@@ -53,8 +49,8 @@ export const GET: APIRoute = async ({ cookies }) => {
         ),
       db.from('sop_categories').select('name, sort_order'),
     ]);
-    if (error) return json({ error: error.message }, 500);
-    if (categoriesError) return json({ error: categoriesError.message }, 500);
+    if (error) return dbError(error);
+    if (categoriesError) return dbError(categoriesError);
 
     const role = await getSopRole(gate.user.email ?? null, gate.access);
     const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };

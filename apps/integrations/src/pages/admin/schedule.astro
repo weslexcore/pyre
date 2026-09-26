@@ -14,7 +14,7 @@ const canManage = !!access && hasScheduleManage(access);
 
 <AdminLayout
   title="Staff Schedule"
-  subtitle={`Red = nobody scheduled · Gold = under staffed · Green = covered.${canManage ? ' Click a shift to assign.' : ''}`}
+  subtitle={``}
 >
   <ScheduleTabs current="/admin/schedule" />
   <ScheduleBoard client:load />

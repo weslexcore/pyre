@@ -8,23 +8,24 @@
 //   PATCH { ids?: uuid[], all?: true, read?: boolean, dismissed?: true }
 //                                                     → { ok, unreadCount }
 //
-// `all` marks every live row read (only with read: true). Dismissing a row
-// also reads it. The list is live rows only (not dismissed, not expired),
+// `all` marks every live row read (only with read: true); read: false puts
+// the given rows back to unread. Dismissing a row also reads it. The list is live rows only (not dismissed, not expired),
 // newest first; the island puts unread rows first. `sweep=1` (the inbox
 // page, not the bell's poll) also clears the caller's long-dead rows.
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
-import { countUnread, dismiss, listInbox, markRead, sweepInbox } from '@/lib/notifications/notify';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { normalizeEmail } from '@/lib/email/address';
+import { isUuid, json } from '@/lib/http/route';
+import {
+  countUnread,
+  dismiss,
+  listInbox,
+  markRead,
+  markUnread,
+  sweepInbox,
+} from '@/lib/notifications/notify';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -37,7 +38,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   const rawLimit = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
@@ -68,7 +69,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
   if (!email) return json({ error: 'Session has no email' }, 400);
 
   let body: Record<string, unknown>;
@@ -85,7 +86,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       !Array.isArray(ids) ||
       ids.length === 0 ||
       ids.length > MAX_IDS ||
-      !ids.every((id): id is string => typeof id === 'string' && UUID_RE.test(id))
+      !ids.every((id): id is string => isUuid(id))
     ) {
       return json({ error: 'ids must be a non-empty list of UUIDs (or all: true)' }, 400);
     }
@@ -98,8 +99,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   } else if (body.read === true) {
     const error = await markRead(db, email, all ? 'all' : (ids as string[]));
     if (error) return json({ error }, 500);
+  } else if (body.read === false) {
+    if (all) return json({ error: 'mark unread needs explicit ids' }, 400);
+    const error = await markUnread(db, email, ids as string[]);
+    if (error) return json({ error }, 500);
   } else {
-    return json({ error: 'Nothing to update: pass read: true or dismissed: true' }, 400);
+    return json({ error: 'Nothing to update: pass read or dismissed: true' }, 400);
   }
 
   return json({ ok: true, unreadCount: await countUnread(db, email) });

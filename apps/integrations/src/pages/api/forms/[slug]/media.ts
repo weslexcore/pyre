@@ -23,11 +23,12 @@ import { loadAttachment, removeAttachments, storeAttachment } from '@/lib/boards
 import { summaryOf, UPLOAD_RATE } from '@/lib/boards/files';
 import { clientIp, isRateLimited } from '@/lib/boards/form-guard';
 import { formConfigOf, formQuestions } from '@/lib/boards/forms';
-import { type APIRoute, isUuidParam, json } from '@/lib/boards/route';
 import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
 import { isBoardSlug, KEY_RE } from '@/lib/boards/types';
 import type { BoardFormRow, BoardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { type APIRoute, isUuidParam, json } from '@/lib/http/route';
 
 /** The actor on a public upload. */
 const FORM_ACTOR = 'form';
@@ -66,7 +67,7 @@ async function openForm(
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
   const { session } = await validateSession(cookies);
-  const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+  const email = session.isAuthenticated ? normalizeEmail(session.user?.email) : '';
   if (!email) return json({ error: 'Sign in to send this form' }, 401);
   const access = await getAccess(email);
   if (!access || !canViewBoard(access, slug)) return json({ error: 'Form not found' }, 404);

@@ -9,6 +9,8 @@ import { inferBookingAttribution } from '@/lib/analytics/booking-attribution';
 import { trackBookingEvent } from '@/lib/analytics/track-booking';
 import { upsertResendContact } from '@/lib/email/audience';
 import { sendBookingConfirmationEmails } from '@/lib/email/triggers/booking-confirmation';
+import { json } from '@/lib/http/route';
+import { fetchMomenceMember } from '@/lib/momence/members';
 import { resolveSession } from '@/lib/momence-events';
 import { handlePaymentTransaction } from '@/lib/purchases/capture';
 import { handleReferralBooking, handleReferralCancellation } from '@/lib/referral/conversion';
@@ -16,7 +18,6 @@ import { requestLintRun } from '@/lib/schedule-lint/trigger';
 import { dispatchTrigger } from '@/lib/triggers/dispatch';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 import {
-  fetchMomenceMember,
   type MomenceAddressPayload,
   type MomenceEventType,
   type MomenceMemberPayload,
@@ -298,24 +299,15 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
       log.info(`Ignoring unhandled event: ${event}`);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ success: true });
   } catch (error) {
     if (error instanceof WebhookVerificationError) {
       log.error(`Verification failed: ${error.message}`);
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: error.statusCode,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Unauthorized' }, error.statusCode);
     }
 
     log.error('Webhook processing failed', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Internal server error' }, 500);
   }
 };
 

@@ -13,9 +13,12 @@
 //     rental pipeline — gets the name map instead, which is enough to read
 //     who owns a lead without handing over the staff list.
 
+import { todayEastern } from '@pyre/schedule-core';
 import type { PageAccess } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import type { BoardCardRow, StaffRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { accessOf } from '@/lib/notifications/recipients';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard, canWorkGoal } from './access';
@@ -39,18 +42,14 @@ export async function listAssignable(): Promise<Assignable[]> {
  */
 export async function listBoardWatchers(slug: string): Promise<Assignable[]> {
   const rows = await listStaff();
-  return byName(
-    (rows ?? []).filter((row) =>
-      canViewBoard({ isAdmin: row.is_admin, pages: row.pages ?? [] }, slug)
-    )
-  );
+  return byName((rows ?? []).filter((row) => canViewBoard(accessOf(row), slug)));
 }
 
 function byName(rows: StaffRow[]): Assignable[] {
   return rows
     .filter((row) => row.active && (row.email ?? '').trim())
     .map((row) => {
-      const email = (row.email ?? '').trim().toLowerCase();
+      const email = normalizeEmail(row.email);
       return { email, name: (row.display_name ?? '').trim() || email };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -64,16 +63,6 @@ export interface ViewerExtras {
   /** Measure the goal's KPIs and comment on its trail. */
   canWorkGoal: boolean;
   today: string;
-}
-
-/** Today in America/New_York — the wall clock a due date is read against. */
-export function todayEastern(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
 }
 
 /**

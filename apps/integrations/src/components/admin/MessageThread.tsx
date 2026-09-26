@@ -6,7 +6,12 @@
 // which re-check access; the predicates in lib/messages/access decide
 // which controls to draw.
 import { useEffect, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { goldButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { etStamp } from '@/lib/client/format';
 import type { AdminMessageReplyRow, AdminMessageRow } from '@/lib/db';
 import { canManageMessages, canReplyToMessage, canTouchReply } from '@/lib/messages/access';
 import type { MessageThreadPayload } from '@/lib/messages/store';
@@ -17,15 +22,7 @@ import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LinkTextarea } from './LinkTextarea';
 import { MessageComposer, type MessageDraft } from './MessageComposer';
-import {
-  buttonClass,
-  chipClass,
-  dangerButtonClass,
-  formatStamp,
-  primaryButtonClass,
-  readError,
-  replyTextareaClass,
-} from './messagesUi';
+import { buttonClass, chipClass, dangerButtonClass, replyTextareaClass } from './messagesUi';
 import type { GrantablePerson } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
 
@@ -127,7 +124,10 @@ export function MessageThread({
   };
 
   const deleteReply = async (reply: AdminMessageReplyRow) => {
-    if (!window.confirm('Delete this reply?')) return;
+    if (
+      !(await confirmAction({ title: 'Delete this reply?', confirmLabel: 'Delete', danger: true }))
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -208,14 +208,7 @@ export function MessageThread({
     <div className="space-y-6">
       <BackLink href="/admin/messages">All messages</BackLink>
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       <article className="rounded border border-white/10 bg-white/5 px-4 py-4">
         {editingMessage ? (
@@ -250,7 +243,7 @@ export function MessageThread({
                 <span className={`${chipClass} border-white/15 text-white/40`}>Archived</span>
               )}
               <span className="font-mono text-[10px] text-white/40">
-                {personName(message.author_email, people)} · {formatStamp(message.created_at)}
+                {personName(message.author_email, people)} · {etStamp(message.created_at)}
                 {message.updated_by && ` · edited by ${personName(message.updated_by, people)}`}
               </span>
               {isAdmin && (
@@ -315,7 +308,7 @@ export function MessageThread({
                 {personName(reply.author_email, people)}
               </span>
               <span className="font-mono text-[10px] text-white/40">
-                {formatStamp(reply.created_at)}
+                {etStamp(reply.created_at)}
                 {reply.updated_by && ` · edited by ${personName(reply.updated_by, people)}`}
               </span>
               {canTouchReply(reply, viewer) && editingReply?.id !== reply.id && (
@@ -350,7 +343,7 @@ export function MessageThread({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className={primaryButtonClass}
+                    className={goldButtonClass}
                     disabled={busy || !editingReply.body.trim()}
                     onClick={() => void saveReplyEdit()}
                   >
@@ -386,7 +379,7 @@ export function MessageThread({
             />
             <button
               type="button"
-              className={primaryButtonClass}
+              className={goldButtonClass}
               disabled={busy || !draft.trim()}
               onClick={() => void postReply()}
             >

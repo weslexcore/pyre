@@ -12,9 +12,9 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
-import { type APIRoute, beginRead, json, storeError } from '@/lib/boards/route';
 import { loadAllTasks } from '@/lib/goals/store';
 import { isYmd } from '@/lib/goals/validate';
+import { type APIRoute, beginRead, json, storeError } from '@/lib/http/route';
 
 /** How far back "Recently done" reaches unless the page asks for more. */
 const DEFAULT_DONE_DAYS = 28;

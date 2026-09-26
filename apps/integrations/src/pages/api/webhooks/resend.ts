@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { suppressEmail } from '@/lib/email/suppression';
+import { json } from '@/lib/http/route';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
 
 export const prerender = false;
@@ -95,10 +96,7 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
   const secret = import.meta.env.RESEND_WEBHOOK_SECRET;
   if (!secret) {
     log.error('RESEND_WEBHOOK_SECRET not configured');
-    return new Response(JSON.stringify({ error: 'Not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Not configured' }, 500);
   }
 
   const rawBody = await request.text();
@@ -110,10 +108,7 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
   );
   if (!verified) {
     log.error('Invalid svix signature');
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Unauthorized' }, 401);
   }
 
   const event = JSON.parse(rawBody) as ResendWebhookEvent;
@@ -171,10 +166,7 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
     }
   }
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ success: true });
 };
 
 export const POST = instrumentWebhook('resend', handler);

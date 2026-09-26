@@ -1,14 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { reduceStreamEvent } from './stream';
+import { createStreamReducerState, reduceStreamEvent } from './stream';
 
 describe('reduceStreamEvent', () => {
-  it('forwards cumulative answer text as it streams', () => {
+  it('accumulates delta-only appends into the text of the block so far', () => {
+    const state = createStreamReducerState();
+    const append = (messageDelta: string) =>
+      reduceStreamEvent({ type: 'message.appended', data: { messageDelta } }, 3, state);
+    expect(append('Left')).toEqual({ type: 'delta', text: 'Left' });
+    expect(append(' tub')).toEqual({ type: 'delta', text: 'Left tub' });
+    expect(append('')).toBeNull();
+  });
+
+  it('starts the next block fresh after a completed one', () => {
+    const state = createStreamReducerState();
+    reduceStreamEvent(
+      { type: 'message.appended', data: { messageDelta: 'Let me check.' } },
+      1,
+      state
+    );
+    reduceStreamEvent(
+      { type: 'message.completed', data: { message: 'Let me check.', finishReason: 'tool-calls' } },
+      2,
+      state
+    );
     expect(
-      reduceStreamEvent(
-        { type: 'message.appended', data: { messageDelta: ' tub', messageSoFar: 'Left tub' } },
-        3
-      )
-    ).toEqual({ type: 'delta', text: 'Left tub' });
+      reduceStreamEvent({ type: 'message.appended', data: { messageDelta: 'Yes' } }, 3, state)
+    ).toEqual({ type: 'delta', text: 'Yes' });
   });
 
   it('marks completed blocks with their finish reason', () => {

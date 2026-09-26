@@ -14,6 +14,12 @@ two roles, chosen per session:
   it drew on. Staff reach it from
   `/admin/sops/ask`.
 
+Jev (TypeSafe AI's evaluation model) is not hosted here: it is an AI
+Gateway model any app calls directly through `@pyre/jev`
+(`packages/jev`). Shift note classification runs in the integrations app
+(`@pyre/signals-core`). An agent tool that needs Jev imports `askJev` the
+same way.
+
 ## Two roles in one Eve app
 
 Eve builds one root agent per app, so the second agent is a *role* the same
@@ -29,8 +35,9 @@ scheduler. The initiator decides for the life of a session, so a follow-up
 can never flip a conversation to the other role, and a knowledge session
 never sees `save_proposal`.
 
-Both roles run with the sandbox, web, delegation, and question tools
-disabled (`agent/tools/{bash,read_file,...}.ts`): the scheduler works from
+Both roles run with eve's optional built-in tools off (`defaultTools: false`
+in `agent/agent.ts`: no sandbox, web, delegation, or question tools): the
+scheduler works from
 `get_week_context`, the assistant from the knowledge base, and document text
 never gets a shell.
 
@@ -148,6 +155,15 @@ dedicated Supabase secret key for this whole app (`SUPABASE_AGENTS_SECRET_KEY`
 integrations'), `AGENT_API_SECRET` for outbound writes to integrations,
 `EVE_CHANNEL_SECRET` for inbound session triggers. A future agent needing
 riskier access should graduate to its own Eve app + Vercel project.
+
+## Session protocol (eve ≥ 0.31)
+
+Sessions are addressed by id alone: follow-ups `POST /eve/v1/session/:id`
+with `{ message }` (no continuation token), an ended session answers `409
+session_not_active`, and the channel sets `turnPolicy: "queue"` so a
+follow-up waits for an active turn instead of steering it. Stream text
+appends are deltas (`messageDelta`); the integrations Ask proxy accumulates
+them. See `apps/integrations/src/lib/schedule/eve-session.ts`.
 
 ## Local dev (Node 24)
 

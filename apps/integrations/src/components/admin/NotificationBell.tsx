@@ -4,16 +4,19 @@
 // page costs no extra request; from there a slow poll while the tab is
 // visible keeps it fresh, opening the popover fetches the rows, and the
 // NOTIFICATIONS_EVENT the inbox and thread islands fire after they mark
-// rows read updates it in place. Header islands remount on every
+// rows read updates it in place. Rows in the popover can be dismissed (the
+// button, or a left swipe) or swiped read and unread; a row read here stays
+// in the list until the next fetch so the swipe can be taken back. Header islands remount on every
 // ClientRouter navigation, so the poll timer never outlives a page.
 // Popover mechanics follow AdminNav.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import type { StaffNotificationRow } from '@/lib/db';
 import { isUnread, NOTIFICATIONS_EVENT } from '@/lib/notifications/types';
 import { NOTIFICATIONS_HREF } from './adminTools';
-import { readError } from './messagesUi';
 import { NotificationList } from './NotificationList';
 
 const POLL_MS = 60_000;
@@ -23,6 +26,16 @@ const FEED_URL = `/api/admin/notifications?limit=${POPOVER_LIMIT}`;
 interface FeedResponse {
   notifications: StaffNotificationRow[];
   unreadCount: number;
+}
+
+async function patch(body: Record<string, unknown>): Promise<{ unreadCount: number }> {
+  const res = await fetch('/api/admin/notifications', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as { unreadCount: number };
 }
 
 function BellIcon() {
@@ -62,7 +75,9 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
       const res = await fetch(FEED_URL, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(await readError(res));
       const data = (await res.json()) as FeedResponse;
-      setFeed(data);
+      // The popover lists what was unread when it was fetched; rows read
+      // from it afterwards keep their place until the next fetch.
+      setFeed({ ...data, notifications: data.notifications.filter((n) => isUnread(n)) });
       setCount(data.unreadCount);
       setError(null);
     } catch (e) {
@@ -96,21 +111,8 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  const closePanel = useCallback(() => setOpen(false), []);
+  useDismiss(rootRef, open, closePanel);
 
   const toggle = useCallback(() => {
     setOpen((v) => {
@@ -123,13 +125,7 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true, read: true }),
-      });
-      if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { unreadCount: number };
+      const data = await patch({ all: true, read: true });
       setCount(data.unreadCount);
       setFeed((prev) =>
         prev ? { ...prev, unreadCount: data.unreadCount, notifications: [] } : prev
@@ -153,7 +149,43 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
     }).finally(() => invalidateJson('/api/admin/notifications'));
   };
 
-  const unread = (feed?.notifications ?? []).filter((n) => isUnread(n));
+  const setRow = (id: string, update: Partial<StaffNotificationRow> | null) =>
+    setFeed((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: update
+              ? prev.notifications.map((r) => (r.id === id ? { ...r, ...update } : r))
+              : prev.notifications.filter((r) => r.id !== id),
+          }
+        : prev
+    );
+
+  const settle = async (body: Record<string, unknown>, failure: string) => {
+    setError(null);
+    try {
+      const data = await patch(body);
+      setCount(data.unreadCount);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : failure);
+      await reload();
+    } finally {
+      invalidateJson('/api/admin/notifications');
+    }
+  };
+
+  const toggleRead = (n: StaffNotificationRow, read: boolean) => {
+    if (read === !isUnread(n)) return;
+    setRow(n.id, { read_at: read ? new Date().toISOString() : null });
+    setCount((c) => Math.max(0, c + (read ? -1 : 1)));
+    void settle({ ids: [n.id], read }, 'Failed to update');
+  };
+
+  const dismissRow = (n: StaffNotificationRow) => {
+    setRow(n.id, null);
+    if (isUnread(n)) setCount((c) => Math.max(0, c - 1));
+    void settle({ ids: [n.id], dismissed: true }, 'Failed to dismiss');
+  };
   const label = count > 0 ? `Notifications, ${count} unread` : 'Notifications';
 
   return (
@@ -209,10 +241,12 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
               <p className="px-3 py-4 text-center text-xs text-white/40">Loading…</p>
             ) : (
               <NotificationList
-                notifications={unread}
+                notifications={feed?.notifications ?? []}
                 compact
                 emptyText="No unread notifications."
                 onOpen={markOneRead}
+                onDismiss={dismissRow}
+                onToggleRead={toggleRead}
               />
             )}
           </div>

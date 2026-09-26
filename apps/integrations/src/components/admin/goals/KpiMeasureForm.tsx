@@ -4,8 +4,9 @@
 // page and anywhere else a meter wants a way to type in this week's figure.
 
 import { type FormEvent, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { GoalKpiRow } from '@/lib/db';
-import { buttonClass, inputBaseClass } from '../goalsUi';
+import { inputBaseClass } from '../goalsUi';
 
 export function KpiMeasureForm({
   kpi,
@@ -46,7 +47,7 @@ export function KpiMeasureForm({
         disabled={busy}
         onChange={(e) => setValue(e.target.value)}
       />
-      <button type="submit" className={buttonClass} disabled={busy || saving}>
+      <button type="submit" className={formButtonClass} disabled={busy || saving}>
         {saving ? 'Saving…' : 'Update value'}
       </button>
     </form>

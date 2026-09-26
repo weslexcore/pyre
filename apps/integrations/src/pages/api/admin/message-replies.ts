@@ -14,20 +14,14 @@
 import type { APIRoute } from 'astro';
 import { type AdminGate, assertSameOrigin, requireStaff } from '@/lib/auth/admin';
 import { type AdminMessageReplyRow, type AdminMessageRow, getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
 import { canReplyToMessage, canTouchReply, canViewMessage } from '@/lib/messages/access';
 import { normalizeBody, REPLY_MAX } from '@/lib/messages/validate';
 import { notifyMessageReply } from '@/lib/notifications/messages';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import type { SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -42,29 +36,14 @@ function peopleFor(reply: AdminMessageReplyRow) {
   return getPeopleNames([reply.author_email, reply.updated_by ?? '']);
 }
 
-/** Parse a JSON body after the shared gate / origin / content-type checks. */
+/** The shared mutation preamble, plus the SOP-role viewer the checks need. */
 async function gated(
   cookies: Parameters<typeof requireStaff>[0],
   request: Request
 ): Promise<{ viewer: SopViewer; db: Db; body: Record<string, unknown> } | Response> {
-  const gate = await requireStaff(cookies);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  const db = getDb();
-  if (!db) return json({ error: 'Storage unavailable' }, 503);
-  const viewer = await viewerOf(gate);
-  if (!viewer.email) return json({ error: 'Session has no email' }, 400);
-  let body: Record<string, unknown>;
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-  return { viewer, db, body };
+  const ready = await beginMutation(cookies, request, requireStaff);
+  if (ready instanceof Response) return ready;
+  return { viewer: await viewerOf(ready.gate), db: ready.db, body: ready.body };
 }
 
 /** The message a reply hangs off, for a caller who may see it; else 404. */
@@ -74,7 +53,7 @@ async function loadVisibleMessage(
   viewer: SopViewer
 ): Promise<AdminMessageRow | Response> {
   const { data, error } = await db.from('admin_messages').select('*').eq('id', id).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const message = (data as AdminMessageRow | null) ?? null;
   if (!message || !canViewMessage(viewer, message))
     return json({ error: 'Message not found' }, 404);
@@ -92,7 +71,7 @@ async function loadOwnReply(
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const reply = (data as AdminMessageReplyRow | null) ?? null;
   if (!reply) return json({ error: 'Reply not found' }, 404);
   const message = await loadVisibleMessage(db, reply.message_id, viewer);
@@ -109,7 +88,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const { viewer, db, body } = ctx;
 
   const messageId = typeof body.messageId === 'string' ? body.messageId : '';
-  if (!UUID_RE.test(messageId)) return json({ error: 'messageId must be a UUID' }, 400);
+  if (!isUuid(messageId)) return json({ error: 'messageId must be a UUID' }, 400);
   const bodyMd = normalizeBody(body.bodyMd, REPLY_MAX);
   if (!bodyMd)
     return json({ error: `bodyMd must be non-empty text (max ${REPLY_MAX} chars)` }, 400);
@@ -129,7 +108,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ message_id: messageId, body_md: bodyMd, author_email: viewer.email })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const reply = data as AdminMessageReplyRow;
 
   await notifyMessageReply(
@@ -147,7 +126,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   const { viewer, db, body } = ctx;
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
   const bodyMd = normalizeBody(body.bodyMd, REPLY_MAX);
   if (!bodyMd)
     return json({ error: `bodyMd must be non-empty text (max ${REPLY_MAX} chars)` }, 400);
@@ -161,7 +140,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const reply = data as AdminMessageReplyRow;
   return json({ reply, people: await peopleFor(reply) });
 };
@@ -177,12 +156,12 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const viewer = await viewerOf(gate);
 
   const id = url.searchParams.get('id') ?? '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const existing = await loadOwnReply(db, id, viewer);
   if (existing instanceof Response) return existing;
 
   const { error } = await db.from('admin_message_replies').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return json({ ok: true });
 };

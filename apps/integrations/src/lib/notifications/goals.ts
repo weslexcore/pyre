@@ -26,6 +26,7 @@ import { notifyRecipients } from '@/lib/boards/forms';
 import { mentionedEmails, mentionPeople } from '@/lib/boards/mentions';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalRow } from '@/lib/db';
 import { ALL_TASKS_HREF, goalOverviewHref } from '@/lib/goals/types';
+import { accessOf } from '@/lib/notifications/recipients';
 import { createNotifications } from './notify';
 import {
   boardRecipients,
@@ -64,7 +65,7 @@ function cardHrefFor(rows: RosterRow[], boardSlug: string, cardId: string) {
   return (recipient: string): string | null => {
     const row = byEmail.get(recipient);
     if (!row) return null;
-    const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
+    const access = accessOf(row);
     if (canViewBoard(access, boardSlug)) return `/admin/boards/${boardSlug}#card-${cardId}`;
     if (canOpenBoards(row)) return `${ALL_TASKS_HREF}#card-${cardId}`;
     return null;
@@ -81,7 +82,7 @@ function goalHrefFor(rows: RosterRow[], goalId: string, boards: Pick<BoardRow, '
   return (recipient: string): string | null => {
     const row = byEmail.get(recipient);
     if (!row) return null;
-    const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
+    const access = accessOf(row);
     const board = boards.find((item) => canViewBoard(access, item.slug));
     if (board) return `/admin/boards/${board.slug}`;
     return canManageBoards(access) ? goalOverviewHref(goalId) : null;

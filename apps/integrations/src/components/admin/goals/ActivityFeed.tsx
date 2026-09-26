@@ -2,12 +2,14 @@
 // Goals retain their combined feed. Posting a comment uses the existing API.
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { MentionPerson } from '@/lib/boards/mentions';
+import { readError, sendJson } from '@/lib/client/api';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { buttonClass, SectionTitle, send } from '../goalsUi';
-import { readError } from '../incidentUi';
+import { SectionTitle } from '../goalsUi';
+import { SopMarkdown } from '../SopMarkdown';
 import { MentionInput } from './MentionInput';
 
 interface EventsResponse {
@@ -74,7 +76,7 @@ export function ActivityFeed({
     setBusy(true);
     setError(null);
     try {
-      await send('/api/admin/board-events', 'POST', { cardId, goalId, note: body });
+      await sendJson('/api/admin/board-events', 'POST', { cardId, goalId, note: body });
       setNote('');
       await load();
     } catch (e) {
@@ -110,7 +112,7 @@ export function ActivityFeed({
           disabled={busy}
         />
         <div className="mt-2 flex justify-end">
-          <button type="submit" className={buttonClass} disabled={busy || !note.trim()}>
+          <button type="submit" className={formButtonClass} disabled={busy || !note.trim()}>
             {busy ? 'Posting…' : 'Comment'}
           </button>
         </div>
@@ -202,19 +204,27 @@ export function EventEntries({
           >
             {timeAgo(entry.created_at, nowIso)}
           </time>
-          <span className="min-w-0 flex-1 break-words">
-            <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
-            <span
-              className={
-                entry.action === 'comment' ? 'whitespace-pre-wrap text-white/80' : 'text-white/45'
-              }
-            >
-              {describeEvent(entry, subjectTitle, columnsById, people)}
+          {entry.action === 'comment' ? (
+            // Comments are markdown like every other body in the admin, so
+            // links and checklists render; the outer margins are trimmed to
+            // keep a one-line comment on one line's worth of space.
+            <div className="min-w-0 flex-1 break-words">
+              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>
+              <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
+                <SopMarkdown content={entry.note ?? ''} />
+              </div>
+            </div>
+          ) : (
+            <span className="min-w-0 flex-1 break-words">
+              <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>{' '}
+              <span className="text-white/45">
+                {describeEvent(entry, subjectTitle, columnsById, people)}
+              </span>
+              {entry.note && (
+                <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
+              )}
             </span>
-            {entry.action !== 'comment' && entry.note && (
-              <span className="mt-1 block whitespace-pre-wrap text-white/60">{entry.note}</span>
-            )}
-          </span>
+          )}
         </li>
       ))}
     </ol>

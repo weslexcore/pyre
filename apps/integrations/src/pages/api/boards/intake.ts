@@ -38,28 +38,22 @@
 
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
-import { type APIRoute, json } from '@/lib/boards/route';
 import { loadBoardBySlug, loadColumns, loadFields, nextColumnOrder } from '@/lib/boards/store';
 import { BOARD_LIMITS, isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { hasBearer } from '@/lib/http/bearer';
+import { type APIRoute, dbError, json } from '@/lib/http/route';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
 /** The actor on every row and every event this route writes. */
 const INTAKE_ACTOR = 'intake';
 
-function isAuthorized(request: Request): boolean {
-  const secret = import.meta.env.BOARD_INTAKE_SECRET;
-  if (!secret) {
-    console.error('[intake] BOARD_INTAKE_SECRET not configured — rejecting all intake requests');
-    return false;
-  }
-  return request.headers.get('Authorization') === `Bearer ${secret}`;
-}
-
 export const POST: APIRoute = async ({ request }) => {
-  if (!isAuthorized(request)) return json({ error: 'Unauthorized' }, 401);
+  if (!hasBearer(request, import.meta.env.BOARD_INTAKE_SECRET, 'intake')) {
+    return json({ error: 'Unauthorized' }, 401);
+  }
 
   if (!request.headers.get('content-type')?.includes('application/json')) {
     return json({ error: 'Content-Type must be application/json' }, 415);
@@ -123,7 +117,7 @@ export const POST: APIRoute = async ({ request }) => {
       .eq('board_id', board.id)
       .eq('external_ref', externalRef)
       .maybeSingle();
-    if (existingError) return json({ error: existingError.message }, 500);
+    if (existingError) return dbError(existingError);
 
     const existing = (existingRow as BoardCardRow) ?? null;
     if (existing) {
@@ -138,7 +132,7 @@ export const POST: APIRoute = async ({ request }) => {
         .eq('id', existing.id)
         .select('*')
         .single();
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
 
       await logBoardEvent(db, {
         cardId: existing.id,
@@ -170,7 +164,7 @@ export const POST: APIRoute = async ({ request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const card = data as BoardCardRow;
   await logBoardEvent(db, {

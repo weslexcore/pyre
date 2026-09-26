@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
+import { firstNameOf } from '@/lib/email/address';
 import { CLOSED_STATUSES, DONATION_PARTNER, daysUntilDonation } from '@/lib/lost-found/types';
 import type { PeopleNames } from '@/lib/sops/names';
 import { cardClass, formatDayAndTime, inputClass, primaryButtonClass } from './incidentUi';
@@ -39,11 +40,6 @@ const FILTERS = [
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]['key'];
-
-/** "Alex Chen" -> "Alex". A card has room for a first name, not a full one. */
-function firstNameOf(name: string | null): string {
-  return (name ?? '').trim().split(/\s+/)[0] ?? '';
-}
 
 /** How the deadline reads on a card, and whether it should shout. */
 function donationNote(item: LostFoundItemRow): { text: string; urgent: boolean } | null {
@@ -194,7 +190,8 @@ export function LostFoundIndex() {
       {data && (
         <p className="text-xs text-white/35">
           Unclaimed items are flagged for {DONATION_PARTNER} after 30 days. Nothing is donated
-          automatically — someone marks it done after the drop-off.
+          automatically — someone marks it done after the drop-off. Picked-up and donated items,
+          including their photos and history, are permanently deleted after 30 days.
         </p>
       )}
     </div>

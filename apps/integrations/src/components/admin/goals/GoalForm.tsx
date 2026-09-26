@@ -4,6 +4,7 @@
 // the goal is for.
 
 import { type FormEvent, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { Assignable } from '@/lib/boards/people';
 import type { GoalRow } from '@/lib/db';
 import type { GoalStatusValue } from '@/lib/goals/types';
@@ -15,7 +16,6 @@ import {
   GOAL_STATUSES,
 } from '@/lib/goals/types';
 import {
-  buttonClass,
   cardClass,
   inputClass,
   labelClass,
@@ -191,7 +191,7 @@ export function GoalForm({
       {error && <p className="mt-3 text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="mt-4 flex justify-end gap-2">
-        <button type="button" className={buttonClass} onClick={onCancel}>
+        <button type="button" className={formButtonClass} onClick={onCancel}>
           Cancel
         </button>
         <button

@@ -8,10 +8,12 @@
 // 12/12 tasks with a KPI short is a fine one to leave open. The system's job
 // is to put both in front of the person and keep what they wrote.
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { Modal } from '@/components/admin/Modal';
+import { formButtonClass } from '@/components/admin/ui';
 import type { CompletionPreview } from '@/lib/goals/access';
 import { GOAL_LIMITS } from '@/lib/goals/types';
-import { buttonClass, primaryButtonClass, textareaClass } from '../goalsUi';
+import { primaryButtonClass, textareaClass } from '../goalsUi';
 
 export function CompleteGoalDialog({
   goalTitle,
@@ -31,15 +33,6 @@ export function CompleteGoalDialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [note, setNote] = useState('');
 
-  useEffect(() => {
-    cancelRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onCancel]);
-
   const kpiLine =
     preview.kpisTotal === 0
       ? 'No KPIs on this goal — it is met when you say it is.'
@@ -50,67 +43,59 @@ export function CompleteGoalDialog({
       : `${preview.openCards} task${preview.openCards === 1 ? '' : 's'} still open.`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Cancel"
-        onClick={onCancel}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/70"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="relative w-full max-w-md rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
+    <Modal
+      labelledBy={titleId}
+      onClose={onCancel}
+      backdropLabel="Cancel"
+      initialFocus={cancelRef}
+      panelClassName="max-w-md rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
+    >
+      <h2 id={titleId} className="font-primary-semibold text-lg text-[var(--pyre-creme)]">
+        Mark “{goalTitle}” completed?
+      </h2>
+
+      <ul className="mt-3 space-y-1 text-sm text-white/70">
+        <li>{kpiLine}</li>
+        <li>{taskLine}</li>
+      </ul>
+
+      <label
+        className="mt-4 block font-mono text-xs uppercase tracking-wide text-white/50"
+        htmlFor={noteId}
       >
-        <h2 id={titleId} className="font-primary-semibold text-lg text-[var(--pyre-creme)]">
-          Mark “{goalTitle}” completed?
-        </h2>
+        What was true when you called it?
+      </label>
+      <textarea
+        id={noteId}
+        className={`${textareaClass} mt-1.5 min-h-[80px]`}
+        maxLength={GOAL_LIMITS.completionNote}
+        placeholder="Staff ran four consecutive weeks with no founder on site. The shift-lead number is short, and that's fine."
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <p className="mt-1 text-xs text-white/35">
+        Optional, and worth a sentence — the KPI numbers never tell the whole story.
+      </p>
 
-        <ul className="mt-3 space-y-1 text-sm text-white/70">
-          <li>{kpiLine}</li>
-          <li>{taskLine}</li>
-        </ul>
-
-        <label
-          className="mt-4 block font-mono text-xs uppercase tracking-wide text-white/50"
-          htmlFor={noteId}
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          ref={cancelRef}
+          type="button"
+          className={formButtonClass}
+          disabled={busy}
+          onClick={onCancel}
         >
-          What was true when you called it?
-        </label>
-        <textarea
-          id={noteId}
-          className={`${textareaClass} mt-1.5 min-h-[80px]`}
-          maxLength={GOAL_LIMITS.completionNote}
-          placeholder="Staff ran four consecutive weeks with no founder on site. The shift-lead number is short, and that's fine."
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-        <p className="mt-1 text-xs text-white/35">
-          Optional, and worth a sentence — the KPI numbers never tell the whole story.
-        </p>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            ref={cancelRef}
-            type="button"
-            className={buttonClass}
-            disabled={busy}
-            onClick={onCancel}
-          >
-            Not yet
-          </button>
-          <button
-            type="button"
-            className={primaryButtonClass}
-            disabled={busy}
-            onClick={() => onConfirm(note.trim())}
-          >
-            Mark completed
-          </button>
-        </div>
+          Not yet
+        </button>
+        <button
+          type="button"
+          className={primaryButtonClass}
+          disabled={busy}
+          onClick={() => onConfirm(note.trim())}
+        >
+          Mark completed
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

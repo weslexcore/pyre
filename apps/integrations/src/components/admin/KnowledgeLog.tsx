@@ -6,6 +6,9 @@
 // rows are written by the agent.
 
 import { useCallback, useEffect, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, selectClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { describeToolCall, type TrailStep } from '@/lib/knowledge/trail';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { AskTrail } from './AskTrail';
@@ -41,12 +44,6 @@ interface LogPayload {
   askers: string[];
 }
 
-const selectClass =
-  'px-2 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
 const STATUS_CLASS: Record<LogRow['status'], string> = {
   answered: 'text-[var(--pyre-sage)]',
   pending: 'text-white/50',
@@ -79,14 +76,6 @@ export function describeScope(scope: LogRow['viewer_scope']): string {
     `incidents: ${log(scope.incidents)}`,
     `water log: ${scope.water ? 'yes' : 'no'}`,
   ].join(' · ');
-}
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
 }
 
 export function KnowledgeLog() {
@@ -168,11 +157,7 @@ export function KnowledgeLog() {
         </span>
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {!loading && rows.length === 0 && !error && (
         <p className="text-sm text-white/50">No questions yet.</p>

@@ -8,12 +8,14 @@
 // on a board.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
 import type { BoardColumnRow, BoardRow } from '@/lib/db';
 import { completionPreview } from '@/lib/goals/access';
 import type { GoalOverviewRow } from '@/lib/goals/overview';
 import type { GoalsOverviewData } from '@/lib/goals/store';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { buttonClass, dangerButtonClass, primaryButtonClass, selectClass, send } from '../goalsUi';
+import { dangerButtonClass, primaryButtonClass, selectClass } from '../goalsUi';
 import { SopMarkdown } from '../SopMarkdown';
 import { ActivityFeed } from './ActivityFeed';
 import { CompleteGoalDialog } from './CompleteGoalDialog';
@@ -75,7 +77,7 @@ export function GoalPanel({
         busy={busy}
         onCancel={() => setEditing(false)}
         onSave={async (values) => {
-          await mutate(() => send('/api/admin/goals', 'PATCH', { id: goal.id, ...values }));
+          await mutate(() => sendJson('/api/admin/goals', 'PATCH', { id: goal.id, ...values }));
           setEditing(false);
         }}
       />
@@ -85,7 +87,7 @@ export function GoalPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={buttonClass} onClick={() => setEditing(true)}>
+        <button type="button" className={formButtonClass} onClick={() => setEditing(true)}>
           Edit
         </button>
         {goal.status !== 'completed' && (
@@ -111,7 +113,7 @@ export function GoalPanel({
         onPick={setBoardSlug}
         onAttach={() =>
           quietly(async () => {
-            await send('/api/admin/boards', 'PATCH', { slug: boardSlug, goalId: goal.id });
+            await sendJson('/api/admin/boards', 'PATCH', { slug: boardSlug, goalId: goal.id });
             setBoardSlug('');
           })
         }
@@ -152,7 +154,7 @@ export function GoalPanel({
           onConfirm={(note) => {
             setCompleting(false);
             quietly(() =>
-              send('/api/admin/goals', 'PATCH', {
+              sendJson('/api/admin/goals', 'PATCH', {
                 id: goal.id,
                 status: 'completed',
                 completionNote: note || null,
@@ -171,7 +173,9 @@ export function GoalPanel({
           onCancel={() => setDetaching(false)}
           onConfirm={() => {
             setDetaching(false);
-            quietly(() => send('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: null }));
+            quietly(() =>
+              sendJson('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: null })
+            );
           }}
         />
       )}
@@ -189,7 +193,7 @@ export function GoalPanel({
           onConfirm={() => {
             const id = goal.id;
             setDeleting(false);
-            quietly(() => send(`/api/admin/goals?id=${id}`, 'DELETE'));
+            quietly(() => sendJson(`/api/admin/goals?id=${id}`, 'DELETE'));
           }}
         />
       )}
@@ -226,7 +230,7 @@ function BoardLink({
           {board.name}
           {board.archived && ' (archived)'}
         </a>
-        <button type="button" className={buttonClass} disabled={busy} onClick={onDetach}>
+        <button type="button" className={formButtonClass} disabled={busy} onClick={onDetach}>
           Detach
         </button>
       </div>
@@ -260,7 +264,7 @@ function BoardLink({
           </select>
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={busy || !boardSlug}
             onClick={onAttach}
           >

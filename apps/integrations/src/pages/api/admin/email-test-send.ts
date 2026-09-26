@@ -13,12 +13,7 @@ import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailTemplateKey } from '@/emails/types';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getResend } from '@/lib/email/resend';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { json } from '@/lib/http/route';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

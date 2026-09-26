@@ -21,15 +21,8 @@ export const inputBaseClass =
 
 export const inputClass = `w-full ${inputBaseClass}`;
 
-export const labelClass = 'block mb-1.5 font-mono text-xs uppercase tracking-wide text-white/50';
-
-export const buttonClass =
-  'px-3 py-2 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
 export const primaryButtonClass =
   'px-5 py-3 rounded bg-[var(--pyre-red)] text-sm font-mono-bold uppercase tracking-wide text-[var(--pyre-creme)] hover:brightness-110 transition disabled:opacity-40 disabled:hover:brightness-100';
-
-export const cardClass = 'rounded border border-white/10 bg-white/[0.03] p-4';
 
 /** Big tappable option used by the category/severity/area pickers. */
 export function TileButton({
@@ -200,10 +193,4 @@ export function formatDayAndTime(iso: string | null | undefined): string {
   });
 }
 
-export async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
+export { cardClass, labelClass } from '@/components/admin/ui';

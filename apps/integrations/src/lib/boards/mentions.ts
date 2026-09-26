@@ -1,4 +1,5 @@
 import type { RosterRow } from '@/lib/notifications/recipients';
+import { accessOf } from '@/lib/notifications/recipients';
 import { canManageBoards, canViewBoard } from './access';
 
 export interface MentionPerson {
@@ -10,7 +11,7 @@ export interface MentionPerson {
 export function mentionPeople(rows: RosterRow[], slugs: string[]): MentionPerson[] {
   return rows
     .filter((row) => {
-      const access = { isAdmin: row.is_admin, pages: row.pages ?? [] };
+      const access = accessOf(row);
       return (
         row.email?.trim() &&
         (canManageBoards(access) || slugs.some((slug) => canViewBoard(access, slug)))

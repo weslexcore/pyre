@@ -28,22 +28,23 @@ import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
 import { eventsForGoalPatch } from '@/lib/boards/diff';
 import { type BoardEventInput, logBoardEvent, logBoardEvents } from '@/lib/boards/events';
-import {
-  type APIRoute,
-  beginDelete,
-  beginMutation,
-  beginRead,
-  type Db,
-  isUuidParam,
-  json,
-  storeError,
-} from '@/lib/boards/route';
 import { attachGoalToBoard, boardsForGoal, loadBoardBySlug, loadGoal } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { completionPreview, goalStatusPatch } from '@/lib/goals/access';
 import { loadGoalsOverview } from '@/lib/goals/store';
 import { parseGoalCreate, parseGoalPatch } from '@/lib/goals/validate';
+import {
+  type APIRoute,
+  beginDelete,
+  beginMutation,
+  beginRead,
+  type Db,
+  dbError,
+  isUuidParam,
+  json,
+  storeError,
+} from '@/lib/http/route';
 import { notifyGoalCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
 
@@ -89,7 +90,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const goal = data as GoalRow;
   await logBoardEvent(db, { goalId: goal.id, action: 'created', actor: email });
@@ -138,7 +139,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const goal = data as GoalRow;
 
@@ -188,13 +189,13 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .from('goals')
     .select('id', { count: 'exact', head: true })
     .eq('parent_id', id);
-  if (childError) return json({ error: childError.message }, 500);
+  if (childError) return dbError(childError);
   if ((childCount ?? 0) > 0) {
     return json({ error: 'This goal has sub-goals under it. Delete or move those first.' }, 409);
   }
 
   const { error } = await db.from('goals').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // Nothing left for a bell row to open.
   await deleteBySource(db, 'goal', id);

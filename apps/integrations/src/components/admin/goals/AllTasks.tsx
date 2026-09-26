@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
 import { BOARDS_HREF, GOALS_BOARD_SLUG } from '@/lib/boards/types';
+import { readError, sendJson } from '@/lib/client/api';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
@@ -25,8 +26,7 @@ import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
-import { cardClass, inputBaseClass, SectionTitle, selectClass, send } from '../goalsUi';
-import { readError } from '../incidentUi';
+import { cardClass, inputBaseClass, SectionTitle, selectClass } from '../goalsUi';
 
 type TasksData = AllTasksData & { owners?: Assignable[] };
 
@@ -256,7 +256,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
               busy={busy}
               onAdd={(title) =>
                 mutate(() =>
-                  send('/api/admin/board-cards', 'POST', { board: tasksBoard.slug, title })
+                  sendJson('/api/admin/board-cards', 'POST', { board: tasksBoard.slug, title })
                 )
               }
             />
@@ -311,7 +311,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
-            await mutate(() => send(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
+            await mutate(() => sendJson(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
             setOpenCardId(null);
           }}
         />

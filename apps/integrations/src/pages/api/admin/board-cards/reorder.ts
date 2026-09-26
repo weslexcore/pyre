@@ -10,9 +10,9 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
 import { sortOrdersFor } from '@/lib/boards/reorder';
-import { type APIRoute, beginMutation, isUuidParam, json } from '@/lib/boards/route';
 import { loadBoardBySlug, loadColumn } from '@/lib/boards/store';
 import { BOARD_LIMITS, isBoardSlug } from '@/lib/boards/types';
+import { type APIRoute, beginMutation, dbError, isUuidParam, json } from '@/lib/http/route';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const ready = await beginMutation(cookies, request, BOARDS_HREF);
@@ -46,14 +46,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .eq('board_id', board.id)
     .eq('column_id', column.id)
     .in('id', ids);
-  if (loadError) return json({ error: loadError.message }, 500);
+  if (loadError) return dbError(loadError);
   if (((data ?? []) as { id: string }[]).length !== ids.length) {
     return json({ error: 'Some of those cards are not in this column' }, 409);
   }
 
   for (const [id, sortOrder] of sortOrdersFor(ids)) {
     const { error } = await db.from('board_cards').update({ sort_order: sortOrder }).eq('id', id);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
   return json({ ok: true });
 };

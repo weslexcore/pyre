@@ -6,9 +6,8 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import type { PartnerRef } from '@/lib/campaigns/types';
+import { json } from '@/lib/http/route';
 import { listPartners } from '@/lib/partner/registry';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');
@@ -19,5 +18,5 @@ export const GET: APIRoute = async ({ cookies }) => {
     .filter((p) => p.enabled)
     .map((p) => ({ slug: p.slug, name: p.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  return new Response(JSON.stringify({ partners }), { status: 200, headers: JSON_HEADERS });
+  return json({ partners });
 };

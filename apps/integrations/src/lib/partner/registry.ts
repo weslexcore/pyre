@@ -8,38 +8,31 @@
 // Adding a partner is now: create the Momence tag + tag-keyed price rule, then
 // add the row on /admin/partners. No deploy.
 
+import { cachedQuery } from '@/lib/cached-query';
 import { getDb, type PartnerRow } from '@/lib/db';
 
 // The registry is tiny (single-digit rows), so cache the whole table briefly
 // rather than querying per request. Mutations in /api/admin/partners
-// invalidate it. Note this only clears the lambda instance that handled the
-// mutation — other warm instances serve stale rows for up to CACHE_TTL_MS,
-// exactly as invalidateAccessCache behaves.
-const CACHE_TTL_MS = 30_000;
-let cache: { rows: PartnerRow[]; at: number } | null = null;
+// invalidate it. A stale registry beats treating a query error as "no
+// partners" — that would silently reject every verification request.
+const partnerCache = cachedQuery(async () => {
+  const db = getDb();
+  if (!db) return null;
+  const { data, error } = await db.from('partners').select('*').order('name');
+  if (error) {
+    console.error('[partners] registry fetch failed:', error.message);
+    return null;
+  }
+  return data as PartnerRow[];
+});
 
 export function invalidatePartnerCache(): void {
-  cache = null;
+  partnerCache.invalidate();
 }
 
 /** All partner rows (cached ~30s), or null when Supabase is down. */
-export async function listPartners(force = false): Promise<PartnerRow[] | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
-
-  const { data, error } = await db.from('partners').select('*').order('name');
-
-  if (error) {
-    console.error('[partners] registry fetch failed:', error.message);
-    // A stale registry beats treating a query error as "no partners" — that
-    // would silently reject every verification request.
-    return cache?.rows ?? null;
-  }
-
-  cache = { rows: data as PartnerRow[], at: Date.now() };
-  return cache.rows;
+export function listPartners(force = false): Promise<PartnerRow[] | null> {
+  return partnerCache.get(force);
 }
 
 /**

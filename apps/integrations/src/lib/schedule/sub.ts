@@ -4,10 +4,12 @@
 // with the status transition as the first-come-first-served gate. Also the
 // home of the small formatting helpers the sub emails use.
 
-import { timeToMinutes, utcToEastern } from '@pyre/schedule-core';
+import { formatCompactTime, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ShiftAssignmentRow, ShiftRow, StaffRow, SubRequestRow } from '@/lib/db';
-import { sendTemplate } from '@/lib/email/send';
+import { listStaff } from '@/lib/auth/access';
+import type { ShiftAssignmentRow, ShiftRow, SubRequestRow } from '@/lib/db';
+import { sendToEach } from '@/lib/email/send-each';
+import { adminEmails } from '@/lib/notifications/recipients';
 import { notifySubEvent } from '@/lib/notifications/schedule';
 import { type ChangeActor, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
 
@@ -19,27 +21,13 @@ export const formatDateLabel = (date: string): string =>
     day: 'numeric',
   });
 
-/** "2:30p" from HH:MM[:SS], matching the boards' compact time style. */
-export const formatTimeLabel = (t: string): string => {
-  const min = timeToMinutes(t);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-};
-
 /** "2:30p–8:30p" */
 export const formatWindowLabel = (row: { starts_at: string; ends_at: string }): string =>
-  `${formatTimeLabel(row.starts_at)}–${formatTimeLabel(row.ends_at)}`;
-
-/** Today's date in the schedule's wall-clock timezone (America/New_York). */
-export const todayEastern = (): string => utcToEastern(new Date().toISOString()).date;
+  `${formatCompactTime(row.starts_at)}–${formatCompactTime(row.ends_at)}`;
 
 /** Everyone with a dashboard admin flag and an email — the notice audience. */
-export async function listAdminRecipients(db: SupabaseClient): Promise<StaffRow[]> {
-  const { data } = await db.from('staff').select('*');
-  return ((data ?? []) as StaffRow[]).filter((s) => s.is_admin && s.email);
+export async function listAdminRecipients(): Promise<string[]> {
+  return adminEmails((await listStaff()) ?? []);
 }
 
 export type ClaimOutcome =
@@ -129,7 +117,7 @@ export async function claimSubRequest(
   const claimed = claimedRow as SubRequestRow;
 
   // Swap: requester off (their assignment may already be gone — fine), the
-  // claimer on with the window, role and duties captured at request time.
+  // claimer on with the window and duties captured at request time.
   const { data: removedRows, error: removeError } = await db
     .from('shift_assignments')
     .delete()
@@ -146,7 +134,6 @@ export async function claimSubRequest(
       staff_id: claimerId,
       starts_at: sub.starts_at,
       ends_at: sub.ends_at,
-      role: sub.role,
       duties: sub.duties,
       notes: null,
     })
@@ -207,21 +194,11 @@ export async function claimSubRequest(
     timeLabel: formatWindowLabel(sub),
     scheduleUrl,
   };
-  for (const admin of await listAdminRecipients(db)) {
-    try {
-      await sendTemplate({
-        to: admin.email as string,
-        template: 'sub-claimed-notice',
-        props,
-        kind: 'transactional',
-      });
-    } catch (e) {
-      console.error(
-        `[shift-sub] claim notify ${admin.email} failed:`,
-        e instanceof Error ? e.message : e
-      );
-    }
-  }
+  await sendToEach(
+    await listAdminRecipients(),
+    () => ({ template: 'sub-claimed-notice', props, kind: 'transactional' }),
+    'shift-sub'
+  );
 
   return { outcome: 'claimed', sub: claimed, shift };
 }

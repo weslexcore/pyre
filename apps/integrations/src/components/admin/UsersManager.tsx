@@ -7,6 +7,10 @@
 // this island just mirrors them in the UI.
 import { weekStartOf } from '@pyre/schedule-core';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, inputClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow, StaffStipendRow } from '@/lib/db';
 import {
@@ -44,12 +48,6 @@ interface UsersResponse {
   self: string;
   source: 'db' | 'env';
 }
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const checkClass = 'flex items-center gap-1.5 font-mono text-xs text-white/60';
 
@@ -105,14 +103,6 @@ const MANAGE_CAPABILITIES: Record<string, { key: string; hint: string }> = {
   },
 };
 
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
 /**
  * A person's recurring weekly stipends (extra paid hours for off-schedule
  * work like inventory or ordering), managed next to their pay rate. Weeks
@@ -166,11 +156,7 @@ function PersonStipends({
 
   return (
     <div className="space-y-1.5">
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {stipends.map((stipend) => {
         const draft = drafts[stipend.id] ?? {
@@ -263,11 +249,14 @@ function PersonStipends({
               type="button"
               className={buttonClass}
               disabled={off}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
-                    `Delete ${person.display_name}'s "${stipend.label}" stipend? It disappears from every week on the hours report, including ones already paid. To stop it going forward, set its last week instead.`
-                  )
+                  await confirmAction({
+                    title: `Delete ${person.display_name}'s "${stipend.label}" stipend?`,
+                    body: 'It disappears from every week on the hours report, including ones already paid. To stop it going forward, set its last week instead.',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                  })
                 )
                   void call('DELETE', undefined, `?id=${encodeURIComponent(stipend.id)}`);
               }}
@@ -679,7 +668,15 @@ export function UsersManager() {
   };
 
   const remove = async (person: StaffRow) => {
-    if (!window.confirm(`Remove ${person.display_name}? Their schedule history is kept.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Remove ${person.display_name}?`,
+        body: 'Their schedule history is kept.',
+        confirmLabel: 'Remove',
+        danger: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);

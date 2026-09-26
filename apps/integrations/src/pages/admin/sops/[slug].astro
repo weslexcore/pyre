@@ -9,7 +9,7 @@ import { SopDocument } from '@/components/admin/SopDocument';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getDb } from '@/lib/db';
 import { loadSopDocument, type SopDocumentPayload } from '@/lib/sops/document';
-import { normalizeEmail } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
 import { getSopRole } from '@/lib/sops/role';
 
 const slug = Astro.params.slug ?? '';

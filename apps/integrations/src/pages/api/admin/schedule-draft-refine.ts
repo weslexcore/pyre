@@ -14,6 +14,7 @@ import { type ScheduleDraftMessageRow, weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { actorFromGate, logScheduleChange } from '@/lib/schedule/change-log';
 import {
   buildRefineFallbackMessage,
@@ -24,12 +25,6 @@ import {
 import { readEveSessionTail, sendEveFollowUp, startEveSession } from '@/lib/schedule/eve-session';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -93,14 +88,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (proposalError) return json({ error: proposalError.message }, 500);
+  if (proposalError) return dbError(proposalError);
   if (!proposal) return json({ error: 'No open draft for that week' }, 404);
 
   const priorSessionId = proposal.agent_session_id as string | null;
 
   // Try to resume the drafting session; fall back to a fresh one when it's
   // gone. The tail read doubles as the concurrency guard: a session mid-turn
-  // (or a continuation someone else just took) means one refine at a time.
+  // means one refine at a time.
   let sessionId = priorSessionId;
   let resumed = false;
   if (priorSessionId) {
@@ -110,12 +105,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       const sent = await sendEveFollowUp(
         eveConfig,
         priorSessionId,
-        tail.continuationToken,
         buildRefineMessage(weekStart, prompt)
       );
       if (!sent.ok && sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
-      if (!sent.ok) return json({ error: `Agent follow-up failed: ${sent.detail}` }, 502);
-      resumed = true;
+      if (!sent.ok && sent.reason === 'error') {
+        return json({ error: `Agent follow-up failed: ${sent.detail}` }, 502);
+      }
+      // 'gone' (ended between the tail read and the send) falls back below.
+      resumed = sent.ok;
     }
   }
 

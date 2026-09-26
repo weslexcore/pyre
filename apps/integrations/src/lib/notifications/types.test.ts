@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   excerpt,
+  inboxSwipeAction,
   inCurrentWeek,
   isLive,
   isUnread,
@@ -121,5 +122,21 @@ describe('inCurrentWeek', () => {
     expect(inCurrentWeek('2026-09-20', '2026-09-20')).toBe(true);
     expect(inCurrentWeek('2026-09-21', '2026-09-20')).toBe(false);
     expect(inCurrentWeek('2026-09-27', '2026-09-21')).toBe(true);
+  });
+});
+
+describe('inboxSwipeAction', () => {
+  const both = { dismiss: true, toggleRead: true };
+
+  it('dismisses on a left swipe and flips read state on a right one', () => {
+    expect(inboxSwipeAction(true, -80, both)).toBe('dismiss');
+    expect(inboxSwipeAction(true, 80, both)).toBe('read');
+    expect(inboxSwipeAction(false, 80, both)).toBe('unread');
+  });
+
+  it('does nothing without movement or in a direction not offered', () => {
+    expect(inboxSwipeAction(true, 0, both)).toBeNull();
+    expect(inboxSwipeAction(true, -80, { dismiss: false, toggleRead: true })).toBeNull();
+    expect(inboxSwipeAction(false, 80, { dismiss: true, toggleRead: false })).toBeNull();
   });
 });

@@ -12,6 +12,8 @@
 // somebody reopens it or the lint stops raising it altogether.
 
 import { Fragment, useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import {
   DAY_KEYS,
@@ -28,15 +30,8 @@ import {
   type Severity,
 } from '@/lib/schedule-lint/types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { QuietBadge, send } from './guestUi';
-import {
-  buttonClass,
-  cardClass,
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  SectionTitle,
-} from './incidentUi';
+import { QuietBadge } from './guestUi';
+import { cardClass, inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 
 const API = '/api/admin/schedule-lint';
 
@@ -389,7 +384,7 @@ function ResolvedRow({
           {entry.resolvedBy ?? 'an admin'} · {when(entry.resolvedAt)}
         </span>
       </div>
-      <button type="button" className={buttonClass} disabled={disabled} onClick={onReopen}>
+      <button type="button" className={formButtonClass} disabled={disabled} onClick={onReopen}>
         Reopen
       </button>
     </li>
@@ -435,7 +430,7 @@ export function ScheduleLintRules() {
     setBusy(key);
     setMessage(null);
     try {
-      const result = await send<StateResponse & Record<string, unknown>>(API, 'POST', body);
+      const result = await sendJson<StateResponse & Record<string, unknown>>(API, 'POST', body);
       if (result.rules) {
         setData((prev) =>
           prev
@@ -653,7 +648,7 @@ export function ScheduleLintRules() {
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              className={buttonClass}
+              className={formButtonClass}
               disabled={busy !== null}
               onClick={() => toggle(rule)}
             >
@@ -662,7 +657,7 @@ export function ScheduleLintRules() {
             {!isEditing && (info?.fields.length || !rule.builtIn) ? (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => startEdit(rule)}
               >
@@ -672,7 +667,7 @@ export function ScheduleLintRules() {
             {!rule.builtIn && (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => setDeleting(rule)}
               >
@@ -716,7 +711,7 @@ export function ScheduleLintRules() {
               </button>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => {
                   setEditing(null);
@@ -738,7 +733,7 @@ export function ScheduleLintRules() {
                   action={
                     <button
                       type="button"
-                      className={buttonClass}
+                      className={formButtonClass}
                       disabled={busy !== null}
                       onClick={() => setResolving({ finding: f, note: '' })}
                     >
@@ -765,7 +760,7 @@ export function ScheduleLintRules() {
                     </button>
                     <button
                       type="button"
-                      className={buttonClass}
+                      className={formButtonClass}
                       disabled={busy !== null}
                       onClick={() => setResolving(null)}
                     >
@@ -797,7 +792,7 @@ export function ScheduleLintRules() {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          className={buttonClass}
+          className={formButtonClass}
           disabled={busy !== null}
           onClick={() => void runPreview()}
         >
@@ -881,7 +876,7 @@ export function ScheduleLintRules() {
                 </button>
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy !== null}
                   onClick={() => setAdding(null)}
                 >
@@ -896,7 +891,7 @@ export function ScheduleLintRules() {
                 <button
                   key={k.kind}
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy !== null}
                   title={k.description}
                   onClick={() => startAdd(k.kind)}

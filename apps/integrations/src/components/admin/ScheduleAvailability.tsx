@@ -10,8 +10,9 @@ import {
   busyIntervalsFor,
   canLeadShift,
   coverageStatus,
-  DOW_LABELS,
   firstTentativeDate,
+  formatChipDate,
+  formatCompactTime,
   founderIdsOf,
   labelForWindow,
   minutesToTime,
@@ -21,15 +22,10 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
+import { buttonClass, compactInputClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { ScheduleBoardPayload } from '@/pages/api/admin/schedule-board';
 import { StaffMultiSelect } from './StaffMultiSelect';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -37,20 +33,6 @@ const todayLocal = (): string => {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-};
-
-const formatTime = (t: string): string => {
-  const min = timeToMinutes(t);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-};
-
-const formatDay = (date: string): string => {
-  const [, m, d] = date.split('-');
-  return `${DOW_LABELS[new Date(`${date}T00:00:00`).getDay()]} ${Number(m)}/${Number(d)}`;
 };
 
 /** Longest range one scan will cover — plenty of horizon, still instant. */
@@ -196,7 +178,7 @@ export function ScheduleAvailability() {
         list.push({
           startMin: timeToMinutes(a.starts_at),
           endMin: timeToMinutes(a.ends_at),
-          text: `on '${shift.label}' ${formatTime(a.starts_at)}–${formatTime(a.ends_at)}`,
+          text: `on '${shift.label}' ${formatCompactTime(a.starts_at)}–${formatCompactTime(a.ends_at)}`,
         });
         byDate.set(shift.shift_date, list);
       }
@@ -229,7 +211,7 @@ export function ScheduleAvailability() {
           ...off.filter(overlapsWindow).map((b) => {
             const when = b.wholeDay
               ? 'all day'
-              : `${formatTime(minutesToTime(b.startMin))}–${formatTime(minutesToTime(b.endMin))}`;
+              : `${formatCompactTime(minutesToTime(b.startMin))}–${formatCompactTime(minutesToTime(b.endMin))}`;
             return b.note ? `time off ${when}: ${b.note}` : `time off ${when}`;
           }),
           ...assigned.filter(overlapsWindow).map((b) => b.text),
@@ -342,7 +324,7 @@ export function ScheduleAvailability() {
       failed.length === 0
         ? {
             kind: 'success',
-            message: `Shift created on ${formatDay(openDate)} with ${effectiveSelected.length} ${
+            message: `Shift created on ${formatChipDate(openDate)} with ${effectiveSelected.length} ${
               effectiveSelected.length === 1 ? 'person' : 'people'
             } assigned.`,
             boardHref,
@@ -366,7 +348,7 @@ export function ScheduleAvailability() {
     <div key={day.date} className="rounded border border-white/10 bg-white/[0.03] px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="min-w-[90px] font-mono text-sm font-semibold text-[var(--pyre-creme)]">
-          {formatDay(day.date)}
+          {formatChipDate(day.date)}
         </span>
         {day.tentative && (
           <span className="rounded bg-[var(--pyre-gold)]/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80">
@@ -416,8 +398,8 @@ export function ScheduleAvailability() {
       {openDate === day.date && data?.canManage && (
         <div className="mt-3 space-y-2 rounded border border-white/10 bg-white/[0.03] p-3">
           <p className="font-mono text-xs text-white/60">
-            {formatDay(day.date)} · {formatTime(startTime)}–{formatTime(endTime)} ·{' '}
-            {effectiveSelected.length} {effectiveSelected.length === 1 ? 'person' : 'people'} will
+            {formatChipDate(day.date)} · {formatCompactTime(startTime)}–{formatCompactTime(endTime)}{' '}
+            · {effectiveSelected.length} {effectiveSelected.length === 1 ? 'person' : 'people'} will
             be assigned
           </p>
           {day.overlappingShiftCount > 0 && (
@@ -429,7 +411,7 @@ export function ScheduleAvailability() {
           )}
           <div className="flex flex-wrap items-center gap-2">
             <input
-              className={`${inputClass} w-36`}
+              className={`${compactInputClass} w-36`}
               value={form.label}
               maxLength={40}
               placeholder="Label"
@@ -439,7 +421,7 @@ export function ScheduleAvailability() {
             <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
               needed
               <input
-                className={`${inputClass} w-16`}
+                className={`${compactInputClass} w-16`}
                 type="number"
                 min={0}
                 max={20}
@@ -449,7 +431,7 @@ export function ScheduleAvailability() {
               />
             </label>
             <input
-              className={`${inputClass} min-w-[180px] flex-1`}
+              className={`${compactInputClass} min-w-[180px] flex-1`}
               value={form.notes}
               maxLength={500}
               placeholder="Notes (optional)"
@@ -488,7 +470,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             from
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="time"
               step={60 * 30}
               value={startTime}
@@ -499,7 +481,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             to
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="time"
               step={60 * 30}
               value={endTime}
@@ -510,7 +492,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             between
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="date"
               min={today}
               value={searchStart}
@@ -521,7 +503,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             and
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="date"
               min={today}
               value={searchEnd}

@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { hasBearer } from '@/lib/http/bearer';
+import { json } from '@/lib/http/route';
 import { createVerificationRequest } from '@/lib/partner/verification';
 
 export const prerender = false;
@@ -21,31 +23,23 @@ function normalizePhone(raw: string): string | null {
 function isAuthorized(request: Request): boolean {
   // process.env fallback: import.meta.env inlines at build time; vars added
   // after the cached build only exist at runtime.
-  const secret = import.meta.env.PARTNER_API_SECRET ?? process.env.PARTNER_API_SECRET;
-  if (!secret) {
-    console.error('[Partner] PARTNER_API_SECRET not configured — rejecting all requests');
-    return false;
-  }
-  return request.headers.get('Authorization') === `Bearer ${secret}`;
-}
-
-function json(status: number, body: Record<string, unknown>): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return hasBearer(
+    request,
+    import.meta.env.PARTNER_API_SECRET ?? process.env.PARTNER_API_SECRET,
+    'Partner'
+  );
 }
 
 export const POST: APIRoute = async ({ request }) => {
   if (!isAuthorized(request)) {
-    return json(401, { error: 'Unauthorized' });
+    return json({ error: 'Unauthorized' }, 401);
   }
 
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return json(400, { error: 'Invalid JSON' });
+    return json({ error: 'Invalid JSON' }, 400);
   }
 
   const partner = typeof body.partner === 'string' ? body.partner.trim() : '';
@@ -63,16 +57,16 @@ export const POST: APIRoute = async ({ request }) => {
     !lastName ||
     lastName.length > MAX_NAME_LENGTH
   ) {
-    return json(400, { error: 'Invalid name' });
+    return json({ error: 'Invalid name' }, 400);
   }
   if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
-    return json(400, { error: 'Invalid email' });
+    return json({ error: 'Invalid email' }, 400);
   }
   if (!phone) {
-    return json(400, { error: 'Invalid phone' });
+    return json({ error: 'Invalid phone' }, 400);
   }
   if (partnerEmail && (!EMAIL_RE.test(partnerEmail) || partnerEmail.length > MAX_EMAIL_LENGTH)) {
-    return json(400, { error: 'Invalid partner email' });
+    return json({ error: 'Invalid partner email' }, 400);
   }
 
   try {
@@ -96,14 +90,14 @@ export const POST: APIRoute = async ({ request }) => {
           : result.reason === 'partner-disabled'
             ? 403
             : 503;
-      return json(status, { error: result.reason });
+      return json({ error: result.reason }, status);
     }
 
     // 'duplicate' is deliberately indistinguishable from 'created' — repeat
     // submissions can't probe request state or re-email the partner.
-    return json(200, { ok: true });
+    return json({ ok: true }, 200);
   } catch (error) {
     console.error('[Partner] Verification request failed', error);
-    return json(502, { error: 'Request failed' });
+    return json({ error: 'Request failed' }, 502);
   }
 };

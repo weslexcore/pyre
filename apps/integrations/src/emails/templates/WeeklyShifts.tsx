@@ -50,10 +50,7 @@ function ShiftRow({ shift }: { shift: WeeklyShiftItem }) {
           {shift.dayLabel} — {shift.timeLabel}
         </Link>
       </Text>
-      <Text style={shiftDetail}>
-        {shift.shiftLabel}
-        {shift.roleLabel ? ` (${shift.roleLabel})` : ''}
-      </Text>
+      <Text style={shiftDetail}>{shift.shiftLabel}</Text>
       {shift.dutiesLabel ? <Text style={shiftDuties}>{shift.dutiesLabel}</Text> : null}
       {shift.notes ? <Text style={shiftNote}>{shift.notes}</Text> : null}
       {shift.subRequested ? (
@@ -116,7 +113,6 @@ WeeklyShifts.PreviewProps = {
       dayLabel: 'Thu, Aug 20',
       shiftLabel: 'Morning',
       timeLabel: '8a–10a',
-      roleLabel: 'setup',
       dutiesLabel: 'Setup · Break Down (A)',
       notes: 'Private event — 20 guests',
       shiftUrl:

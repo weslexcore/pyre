@@ -8,7 +8,7 @@
 
 import { canViewPage, hasIncidentsManage, SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import type { AdminGate } from '@/lib/auth/admin';
-import { normalizeEmail, type SopRole } from '@/lib/sops/levels';
+import type { SopRole } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
 
 /** Mirror of KnowledgeScope in apps/agents/agent/lib/role.ts. */
@@ -60,6 +60,7 @@ export function knowledgeHeaders(scope: KnowledgeScope): Record<string, string> 
   };
 }
 
+import { normalizeEmail } from '@/lib/email/address';
 import { MAX_QUESTION_LENGTH } from './question';
 
 export { MAX_QUESTION_LENGTH };

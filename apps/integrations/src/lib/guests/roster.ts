@@ -11,6 +11,7 @@
 import { utcToEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GuestProfileFieldRow, GuestProfileNoteRow, GuestProfileRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   bookingMember,
   fetchHostMember,
@@ -206,7 +207,7 @@ async function enrich(memberId: string): Promise<Enrichment> {
     standing: membershipStanding(packs.map(summarizePack)),
     tags: (member.customerTags ?? []).map((t) => t.name),
     name: [member.firstName, member.lastName].filter(Boolean).join(' ').trim(),
-    email: (member.email ?? '').trim().toLowerCase(),
+    email: normalizeEmail(member.email),
   };
 }
 

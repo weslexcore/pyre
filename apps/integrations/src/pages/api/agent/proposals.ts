@@ -13,9 +13,11 @@
 // validates and returns the conflict report without writing — used by evals.
 
 import {
+  addDays,
   availabilityFor,
   DOW_LABELS,
   dayOfWeek,
+  defaultAssignmentWindow,
   findRestViolations,
   type StaffRow,
   type TimeOffRow,
@@ -25,17 +27,13 @@ import {
 import type { APIRoute } from 'astro';
 import { agentUnauthorizedResponse, isAgentAuthorized } from '@/lib/agent/auth';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { getShiftBufferSettings } from '@/lib/schedule/settings';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const MAX_SHIFTS = 40;
 const MAX_ASSIGNMENTS = 120;
@@ -122,13 +120,15 @@ export const POST: APIRoute = async ({ request }) => {
     db.from('staff').select('*'),
     db
       .from('shifts')
-      .select('id, shift_date, label, starts_at, ends_at, status, is_draft, staff_needed')
+      .select(
+        'id, shift_date, label, starts_at, ends_at, sessions_start_at, sessions_end_at, status, is_draft, staff_needed'
+      )
       .gte('shift_date', addDays(weekStart, -1))
       .lte('shift_date', addDays(weekEnd, 1)),
     db.from('time_off').select('*'),
   ]);
   const refError = staffRes.error ?? liveShiftsRes.error ?? timeOffRes.error;
-  if (refError) return json({ error: refError.message }, 500);
+  if (refError) return dbError(refError);
 
   const staff = (staffRes.data ?? []) as StaffRow[];
   const staffById = new Map(staff.map((s) => [s.id, s]));
@@ -139,6 +139,8 @@ export const POST: APIRoute = async ({ request }) => {
     label: string;
     starts_at: string;
     ends_at: string;
+    sessions_start_at: string | null;
+    sessions_end_at: string | null;
     status: 'active' | 'cancelled';
     is_draft: boolean;
     staff_needed: number;
@@ -164,6 +166,8 @@ export const POST: APIRoute = async ({ request }) => {
   const draftAssignments: DraftAssignment[] = [];
   const seenPairs = new Set<string>();
   const dutyCatalog = await loadDutyCatalog(db);
+  // Hours the agent leaves out default the same way a manager's add does.
+  const buffers = await getShiftBufferSettings();
 
   for (const [i, raw] of rawAssignments.entries()) {
     const a = raw as Record<string, unknown>;
@@ -192,8 +196,9 @@ export const POST: APIRoute = async ({ request }) => {
       }
       shiftId = a.shiftId;
       date = live.shift_date as string;
-      windowStart = live.starts_at as string;
-      windowEnd = live.ends_at as string;
+      const defaults = defaultAssignmentWindow(live, buffers);
+      windowStart = defaults.startsAt;
+      windowEnd = defaults.endsAt;
     } else if (typeof a.shiftKey === 'string' && shiftKeys.has(a.shiftKey)) {
       shiftKey = a.shiftKey;
       const draft = draftShifts.find((s) => s.key === a.shiftKey);
@@ -270,7 +275,7 @@ export const POST: APIRoute = async ({ request }) => {
         activeNearby.map((s) => s.id)
       )
       .eq('is_draft', false);
-    if (liveError) return json({ error: liveError.message }, 500);
+    if (liveError) return dbError(liveError);
     liveAssignments = (data ?? []) as LiveAssignment[];
   }
 
@@ -410,7 +415,7 @@ export const POST: APIRoute = async ({ request }) => {
     .select('id')
     .eq('week_start', weekStart)
     .eq('status', 'draft');
-  if (openError) return json({ error: openError.message }, 500);
+  if (openError) return dbError(openError);
   for (const prior of openProposals ?? []) {
     // Remaining draft rows die with the supersede; accepted rows (is_draft
     // already false) keep their proposal_id for provenance and are untouched.
@@ -424,7 +429,7 @@ export const POST: APIRoute = async ({ request }) => {
     ];
     for (const op of deletes) {
       const { error } = await op;
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 
@@ -441,7 +446,7 @@ export const POST: APIRoute = async ({ request }) => {
     })
     .select('id')
     .single();
-  if (proposalError) return json({ error: proposalError.message }, 500);
+  if (proposalError) return dbError(proposalError);
   const proposalId = proposal.id as string;
 
   const shiftIdByKey = new Map<string, string>();
@@ -456,7 +461,7 @@ export const POST: APIRoute = async ({ request }) => {
       })
       .select('id')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     shiftIdByKey.set(draft.key, data.id as string);
   }
 
@@ -467,14 +472,13 @@ export const POST: APIRoute = async ({ request }) => {
         staff_id: a.staffId,
         starts_at: a.startsAt,
         ends_at: a.endsAt,
-        role: (a.columns.role as string) ?? 'full',
         duties: (a.columns.duties as string[]) ?? [],
         notes: (a.columns.notes as string | null) ?? null,
         proposal_id: proposalId,
         is_draft: true,
       }))
     );
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   // The rationale doubles as the agent's reply in the draft conversation
@@ -514,9 +518,3 @@ export const POST: APIRoute = async ({ request }) => {
     201
   );
 };
-
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}

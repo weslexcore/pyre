@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
+import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import { ADMIN_TOOL_SECTIONS, type AdminTool, STAFF_PAGES } from './adminTools';
 
@@ -10,6 +11,8 @@ interface AdminNavProps {
   tools: AdminTool[];
   /** The user's ordered pinned tool hrefs (the menu's Pinned group). */
   pinnedHrefs: string[];
+  /** Counts to show beside a tool, by href (e.g. suggestions waiting for a decision). */
+  badges?: Record<string, number>;
 }
 
 interface NavItem {
@@ -45,7 +48,13 @@ const LINK_IDLE =
  * as the cards on the /admin dashboard, so the menu reads as that same
  * directory in a narrower shape.
  */
-export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNavProps) {
+export function AdminNav({
+  currentPath,
+  userEmail,
+  tools,
+  pinnedHrefs,
+  badges = {},
+}: AdminNavProps) {
   const [open, setOpen] = useState(false);
   const { mounted, closing } = usePresence(open);
   // Server-rendered pins, kept live by the dashboard island's CustomEvent so
@@ -91,28 +100,14 @@ export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNa
         .map((tool) => ({ href: tool.href, label: tool.title })),
     })).filter((group) => group.items.length > 0),
   ];
+  const waiting = Object.values(badges).some((count) => count > 0);
   // Label the button with where you are, since there is no active chip now.
   const currentLabel =
     groups.flatMap((group) => group.items).find((item) => isActive(currentPath, item.href))
       ?.label ?? 'Menu';
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!navRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useDismiss(navRef, open, closeMenu);
 
   return (
     <nav ref={navRef} aria-label="Admin tools">
@@ -122,8 +117,15 @@ export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNa
         aria-controls="admin-menu"
         aria-label={open ? 'Close admin menu' : 'Open admin menu'}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 w-10 items-center justify-center gap-2 rounded-md border border-white/20 text-[var(--pyre-creme)] transition-colors hover:border-white/40 hover:bg-white/10 md:w-auto md:px-3"
+        className="relative flex h-10 w-10 items-center justify-center gap-2 rounded-md border border-white/20 text-[var(--pyre-creme)] transition-colors hover:border-white/40 hover:bg-white/10 md:w-auto md:px-3"
       >
+        {/* Something in the menu is waiting on this person (a badge below). */}
+        {waiting && !open && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-[var(--pyre-gold)]"
+          />
+        )}
         {open ? (
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
@@ -191,6 +193,11 @@ export function AdminNav({ currentPath, userEmail, tools, pinnedHrefs }: AdminNa
                         }`}
                       >
                         {item.label}
+                        {(badges[item.href] ?? 0) > 0 && (
+                          <span className="ml-2 rounded-full bg-[var(--pyre-gold)]/20 px-1.5 py-0.5 text-[10px] text-[var(--pyre-gold)]">
+                            {badges[item.href]}
+                          </span>
+                        )}
                       </a>
                     </li>
                   ))}

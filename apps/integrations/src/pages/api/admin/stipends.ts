@@ -13,14 +13,9 @@ import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb, type StaffStipendRow, type StipendOverrideRow } from '@/lib/db';
+import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -49,23 +44,18 @@ function parseLabel(value: unknown): string | Response {
   return label;
 }
 
-async function gateMutation(
+/** Admin gate, same-origin check, then the JSON body. */
+async function gatedBody(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<Record<string, unknown> | Response> {
-  const gate = await requireAdmin(cookies);
+  const gate = await gateMutation(cookies, request, requireAdmin);
   if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
+  return readJsonBody(request);
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const body = await gateMutation(cookies, request);
+  const body = await gatedBody(cookies, request);
   if (body instanceof Response) return body;
 
   const db = getDb();
@@ -106,13 +96,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (error) {
     // 23503 = staffId doesn't reference a staff row.
     if (error.code === '23503') return json({ error: 'No such person' }, 404);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
   return json({ stipend: data as StaffStipendRow }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const body = await gateMutation(cookies, request);
+  const body = await gatedBody(cookies, request);
   if (body instanceof Response) return body;
 
   const db = getDb();
@@ -126,7 +116,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (readError) return json({ error: readError.message }, 500);
+  if (readError) return dbError(readError);
   if (!existing) return json({ error: 'No such stipend' }, 404);
   const row = existing as StaffStipendRow;
 
@@ -173,7 +163,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return json({ stipend: data as StaffStipendRow });
 };
 
@@ -191,7 +181,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   // Overrides cascade with the stipend.
   const { error } = await db.from('staff_stipends').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return json({ ok: true });
 };
 
@@ -200,7 +190,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
  * null clears the override, putting the week back on the stipend's default.
  */
 export const PUT: APIRoute = async ({ cookies, request }) => {
-  const body = await gateMutation(cookies, request);
+  const body = await gatedBody(cookies, request);
   if (body instanceof Response) return body;
 
   const db = getDb();
@@ -217,7 +207,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
       .delete()
       .eq('stipend_id', stipendId)
       .eq('week_start', weekStart);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     return json({ ok: true, override: null });
   }
 
@@ -236,7 +226,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) {
     if (error.code === '23503') return json({ error: 'No such stipend' }, 404);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
   return json({ ok: true, override: data as StipendOverrideRow });
 };

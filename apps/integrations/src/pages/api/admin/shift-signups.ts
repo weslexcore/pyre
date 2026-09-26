@@ -5,6 +5,7 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import {
   countSignups,
   fetchScheduleFeed,
@@ -13,12 +14,6 @@ import {
 } from '@/lib/schedule/signups';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -45,7 +40,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .select('id, shift_date, starts_at, ends_at, status')
     .gte('shift_date', start)
     .lte('shift_date', end);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const shifts = (data ?? []) as SignupShift[];
   if (shifts.length === 0) return json({ signups: {} } satisfies ShiftSignupsPayload);

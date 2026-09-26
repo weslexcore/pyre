@@ -2,7 +2,7 @@
 // next morning. Advisory on the boards (they flag it, like the shift-lead
 // rule) and a hard rule for the agent's drafts (the proposals route rejects
 // them). The evening/opening cut-offs are wall-clock thresholds on the
-// person's own hours, not the shift's label — a setup-only hour on the
+// person's own hours, not the shift's label — someone in only for set-up on the
 // evening shift ends long before close and doesn't count.
 
 import { timeToMinutes } from './availability';

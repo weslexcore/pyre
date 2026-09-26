@@ -7,6 +7,8 @@
 // glance. Runs the viewer started themselves carry a "yours" tag and a gold
 // edge, so their own responsibilities stand out from everyone else's.
 import { useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { etStamp } from '@/lib/client/format';
 import type { SopRunRow } from '@/lib/db';
 import { actorLabel, type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import type { UncheckedItem } from '@/lib/sops/runs';
@@ -43,18 +45,6 @@ export const STATUS_META: Record<SopRunRow['status'], { label: string; className
   abandoned: { label: 'Abandoned', className: 'text-white/40' },
 };
 
-// Pinned locale + venue time zone so server and client renders agree (the
-// SOP page hydrates from server-rendered markup).
-export function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 function formatDuration(startIso: string, endIso: string): string {
   const minutes = Math.max(0, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 60_000));
   if (minutes < 60) return `${minutes}m`;
@@ -68,7 +58,7 @@ function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames })
         <span className="text-white/40">–</span>
         <span className="text-white/50 italic">{check.item_text}</span>
         <span className="ml-auto font-mono text-[10px] text-white/40">
-          skipped by {personName(check.checked_by, people)} · {formatWhen(check.checked_at)}
+          skipped by {personName(check.checked_by, people)} · {etStamp(check.checked_at)}
         </span>
       </li>
     );
@@ -78,7 +68,7 @@ function CheckLine({ check, people }: { check: RunCheck; people?: PeopleNames })
       <span className="text-[var(--pyre-sage)]">✓</span>
       <span className="text-white/70">{check.item_text}</span>
       <span className="ml-auto font-mono text-[10px] text-white/40">
-        {personName(check.checked_by, people)} · {formatWhen(check.checked_at)}
+        {personName(check.checked_by, people)} · {etStamp(check.checked_at)}
       </span>
     </li>
   );
@@ -161,11 +151,14 @@ export function RunRecord({
           <button
             type="button"
             className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-[var(--pyre-red)] transition-colors hover:border-[var(--pyre-red)]"
-            onClick={() => {
+            onClick={async () => {
               if (
-                window.confirm(
-                  `Delete this run of "${run.sops?.title ?? 'this SOP'}" and its ${checks.length} check record${checks.length === 1 ? '' : 's'}? This cannot be undone.`
-                )
+                await confirmAction({
+                  title: `Delete this run of "${run.sops?.title ?? 'this SOP'}" and its ${checks.length} check record${checks.length === 1 ? '' : 's'}?`,
+                  body: 'This cannot be undone.',
+                  confirmLabel: 'Delete run',
+                  danger: true,
+                })
               ) {
                 onDelete(run);
               }
@@ -258,12 +251,12 @@ export function RunsList({
               </span>
               <span className="ml-auto text-right font-mono text-[10px] text-white/40">
                 started by {actorLabel(run.started_by, viewerEmail, people)} ·{' '}
-                {formatWhen(run.started_at)}
+                {etStamp(run.started_at)}
                 {run.ended_at && run.ended_by && (
                   <>
                     <br />
                     ended by {actorLabel(run.ended_by, viewerEmail, people)} ·{' '}
-                    {formatWhen(run.ended_at)} ({formatDuration(run.started_at, run.ended_at)})
+                    {etStamp(run.ended_at)} ({formatDuration(run.started_at, run.ended_at)})
                   </>
                 )}
               </span>

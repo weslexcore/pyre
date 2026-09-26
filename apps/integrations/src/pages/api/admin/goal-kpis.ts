@@ -21,17 +21,18 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards } from '@/lib/boards/access';
 import { logBoardEvent } from '@/lib/boards/events';
+import { canReachGoal } from '@/lib/boards/store';
+import type { GoalKpiRow } from '@/lib/db';
+import { parseKpiCreate, parseKpiMeasure, parseKpiPatch } from '@/lib/goals/validate';
 import {
   type APIRoute,
   beginDelete,
   beginMutation,
   type Db,
+  dbError,
   isUuidParam,
   json,
-} from '@/lib/boards/route';
-import { canReachGoal } from '@/lib/boards/store';
-import type { GoalKpiRow } from '@/lib/db';
-import { parseKpiCreate, parseKpiMeasure, parseKpiPatch } from '@/lib/goals/validate';
+} from '@/lib/http/route';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const ready = await beginMutation(cookies, request, BOARDS_HREF);
@@ -47,7 +48,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .select('id')
     .eq('id', parsed.value.goal_id)
     .maybeSingle();
-  if (goalError) return json({ error: goalError.message }, 500);
+  if (goalError) return dbError(goalError);
   if (!goal) return json({ error: 'Goal not found' }, 404);
 
   const { data, error } = await db
@@ -59,7 +60,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const kpi = data as GoalKpiRow;
   await logBoardEvent(db, {
@@ -88,7 +89,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (beforeError) return json({ error: beforeError.message }, 500);
+  if (beforeError) return dbError(beforeError);
   const before = (beforeRow as GoalKpiRow) ?? null;
   if (!before) return json({ error: 'KPI not found' }, 404);
 
@@ -120,7 +121,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const kpi = data as GoalKpiRow;
   if (measured) {
@@ -153,7 +154,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!kpi) return json({ error: 'KPI not found' }, 404);
 
   const { error } = await db.from('goal_kpis').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   await logBoardEvent(db, {
     goalId: kpi.goal_id,

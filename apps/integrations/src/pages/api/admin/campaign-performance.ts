@@ -59,8 +59,7 @@ import {
   tagsFromUrl,
 } from '@/lib/campaigns/link-performance';
 import { linkRollupBranches } from '@/lib/campaigns/link-performance-query';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { json } from '@/lib/http/route';
 
 // v5 adds per-link traffic and conversion breakdowns.
 const CACHE_PREFIX = 'cache:campaign-perf:v5:';
@@ -483,11 +482,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const days = ALLOWED_DAYS.includes(daysRaw) ? daysRaw : 30;
   const campaignSlug = url.searchParams.get('campaign');
 
-  const respond = (report: PerformanceResponse) =>
-    new Response(JSON.stringify(onlyCampaign(report, campaignSlug)), {
-      status: 200,
-      headers: JSON_HEADERS,
-    });
+  const respond = (report: PerformanceResponse) => json(onlyCampaign(report, campaignSlug));
 
   try {
     const redis = getRedis();
@@ -527,9 +522,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     return respond(report);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: message }, 500);
   }
 };

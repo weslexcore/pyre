@@ -13,7 +13,7 @@ export interface AskToolCall {
 }
 
 export type AskStreamEvent =
-  /** Cumulative text of the assistant block being written. */
+  /** The text so far of the assistant block being written (accumulated from deltas). */
   | { type: 'delta'; text: string }
   /** One assistant block finished; 'stop' marks the answer, anything else is narration before a tool call. */
   | { type: 'message'; text: string; finishReason: string }
@@ -54,15 +54,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Per-stream state: the text of the assistant block being written. Eve's
+ * `message.appended` carries only the new text (`messageDelta`, eve ≥ 0.50),
+ * while the island renders the block so far, so the proxy keeps one of these
+ * per stream and the reducer accumulates into it. A stream picked up mid-block
+ * starts from the resume point; the block's `message.completed` then carries
+ * the authoritative text.
+ */
+export interface StreamReducerState {
+  blockText: string;
+}
+
+export function createStreamReducerState(): StreamReducerState {
+  return { blockText: '' };
+}
+
 /** Reduce one upstream Eve event to what the island needs, or null to skip it. */
-export function reduceStreamEvent(event: UpstreamEvent, nextIndex: number): AskStreamEvent | null {
+export function reduceStreamEvent(
+  event: UpstreamEvent,
+  nextIndex: number,
+  state: StreamReducerState = createStreamReducerState()
+): AskStreamEvent | null {
   const data = event.data ?? {};
   switch (event.type) {
-    case 'message.appended':
-      return typeof data.messageSoFar === 'string'
-        ? { type: 'delta', text: data.messageSoFar }
-        : null;
+    case 'message.appended': {
+      if (typeof data.messageDelta !== 'string' || !data.messageDelta) return null;
+      state.blockText += data.messageDelta;
+      return { type: 'delta', text: state.blockText };
+    }
     case 'message.completed':
+      state.blockText = '';
       return {
         type: 'message',
         text: typeof data.message === 'string' ? data.message : '',
@@ -85,8 +107,7 @@ export function reduceStreamEvent(event: UpstreamEvent, nextIndex: number): AskS
     }
     case 'action.result': {
       const result = isRecord(data.result) ? data.result : null;
-      if (result?.kind !== 'tool-result' || typeof result.callId !== 'string')
-        return null;
+      if (result?.kind !== 'tool-result' || typeof result.callId !== 'string') return null;
       const error = isRecord(data.error) ? data.error : null;
       const failed =
         data.status === 'failed' || data.status === 'rejected' || result.isError === true;

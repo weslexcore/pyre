@@ -14,12 +14,7 @@ import {
 } from '@/lib/campaigns/server';
 import type { CampaignDetailResponse } from '@/lib/campaigns/types';
 import { normalizeCampaignPatch } from '@/lib/campaigns/validate';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
+import { json } from '@/lib/http/route';
 
 export const GET: APIRoute = async ({ cookies, params }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');

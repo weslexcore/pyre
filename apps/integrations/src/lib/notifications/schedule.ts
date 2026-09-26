@@ -10,9 +10,10 @@
 // the person who made the change never hears about it from themselves; and
 // a newer notice about the same shift replaces the stale unread one.
 
+import { addDays, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
-import { todayEastern } from '@/lib/shift-notes/validate';
+import { normalizeEmail } from '@/lib/email/address';
 import { createNotifications } from './notify';
 import {
   adminEmails,
@@ -64,7 +65,7 @@ export async function notifyAssignmentChange(
     change: AssignmentChange;
     shift: ShiftForNotice;
     staffId: string;
-    assignment?: { starts_at: string; ends_at: string; role?: string; is_draft?: boolean } | null;
+    assignment?: { starts_at: string; ends_at: string; is_draft?: boolean } | null;
     detail?: string | null;
     actorEmail: string | null;
   }
@@ -79,7 +80,7 @@ export async function notifyAssignmentChange(
   }
   const rows = (await listStaff()) ?? [];
   const person = rosterById(rows).get(input.staffId);
-  const email = (person?.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(person?.email);
   if (!email) return;
 
   const text = assignmentChangeText({
@@ -199,12 +200,6 @@ export async function notifyProposalApproved(
   }
 }
 
-function addDays(date: string, days: number): string {
-  return new Date(new Date(`${date}T00:00:00Z`).getTime() + days * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-}
-
 /**
  * Sub-request activity. `requested` reaches the people who could claim it
  * (the same list the emails go to) and the admins; `claimed` reaches the
@@ -232,7 +227,7 @@ export async function notifySubEvent(
   const claimer = input.claimerStaffId ? byId.get(input.claimerStaffId) : null;
   const requesterName = requester?.display_name?.trim() || 'Someone';
   const claimerName = claimer?.display_name?.trim() || null;
-  const requesterEmail = (requester?.email ?? '').trim().toLowerCase();
+  const requesterEmail = normalizeEmail(requester?.email);
   const common = {
     event: input.event,
     shift: input.shift,

@@ -1,5 +1,6 @@
 import { recordExecution, type WebhookExecution, WebhookTracer } from '@pyre/webhook-core';
 import type { APIContext, APIRoute } from 'astro';
+import { json } from '@/lib/http/json';
 
 export type TracedAPIRoute = (context: APIContext, tracer: WebhookTracer) => Promise<Response>;
 
@@ -78,10 +79,7 @@ export function instrumentWebhook(source: string, handler: TracedAPIRoute): APIR
     } catch (err) {
       status = 'error';
       errorMessage = (err instanceof Error ? err.message : String(err)).slice(0, 500);
-      response = new Response(JSON.stringify({ error: 'Internal server error' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      response = json({ error: 'Internal server error' }, 500);
     }
 
     const record: WebhookExecution = {

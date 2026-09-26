@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { listStaff } from '@/lib/auth/access';
 import type { ShiftNoteReplyRow, ShiftNoteRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { createNotifications } from './notify';
 import { adminEmails, nameFor } from './recipients';
 import { shiftNoteReplyText, shiftNoteStatusText } from './text';
@@ -23,7 +24,7 @@ export async function notifyShiftNoteReply(
   reply: Pick<ShiftNoteReplyRow, 'id' | 'body' | 'author_email' | 'is_private'>
 ): Promise<void> {
   const rows = (await listStaff()) ?? [];
-  const replier = reply.author_email.trim().toLowerCase();
+  const replier = normalizeEmail(reply.author_email);
   const author = note.author_email.trim().toLowerCase();
   const replierName = nameFor(rows, replier);
   const base = {

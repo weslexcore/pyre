@@ -3,18 +3,14 @@
 // ${AGENT_API_SECRET}`. These routes are never cookie-authed and never called
 // from a browser.
 
+import { hasBearer, unauthorized } from '@/lib/http/bearer';
+
 export function isAgentAuthorized(request: Request): boolean {
-  const secret = import.meta.env.AGENT_API_SECRET;
-  if (!secret) {
-    console.error('[Agent] AGENT_API_SECRET not configured — rejecting all agent requests');
-    return false;
-  }
-  return request.headers.get('Authorization') === `Bearer ${secret}`;
+  return hasBearer(
+    request,
+    import.meta.env.AGENT_API_SECRET ?? process.env.AGENT_API_SECRET,
+    'Agent'
+  );
 }
 
-export function agentUnauthorizedResponse(): Response {
-  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+export const agentUnauthorizedResponse = unauthorized;

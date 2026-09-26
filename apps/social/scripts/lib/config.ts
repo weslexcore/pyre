@@ -15,6 +15,11 @@ export interface ExportEntry {
   filename?: string;
   /** PNG only: skip the default white canvas so the export has an alpha channel. */
   transparent?: boolean;
+  /**
+   * Only render these pages (1-based) for this entry. Default: every page. Lets one post hold
+   * different artboards per page, e.g. a print menu on page 1 and an Instagram version on page 2.
+   */
+  pages?: number[];
 }
 
 export interface TransitionConfig {

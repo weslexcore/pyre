@@ -14,20 +14,23 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
+import { addCardComment } from '@/lib/boards/comment';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
 import { mentionPeople } from '@/lib/boards/mentions';
+import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
+import { BOARD_LIMITS } from '@/lib/boards/types';
+import type { BoardEventRow, GoalRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   type APIRoute,
   beginMutation,
   beginRead,
   type Db,
+  dbError,
   isUuidParam,
   json,
-} from '@/lib/boards/route';
-import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
-import { BOARD_LIMITS } from '@/lib/boards/types';
-import type { BoardEventRow, BoardRow, GoalRow } from '@/lib/db';
-import { notifyCardComment, notifyGoalComment } from '@/lib/notifications/goals';
+} from '@/lib/http/route';
+import { notifyGoalComment } from '@/lib/notifications/goals';
 import { markSourceRead } from '@/lib/notifications/notify';
 import { getPeopleNames } from '@/lib/sops/people';
 
@@ -73,7 +76,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   // Opening the thing a notification points at is reading it, so the bell
   // clears without anyone having to visit the inbox as well.
-  const viewer = (gate.user.email ?? '').trim().toLowerCase();
+  const viewer = normalizeEmail(gate.user.email);
   if (viewer) {
     if (cardId) await markSourceRead(db, viewer, 'board_card', cardId);
     else if (goalId) await markSourceRead(db, viewer, 'goal', goalId);
@@ -133,12 +136,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   // Unlike every other write here, a comment is the payload rather than a
-  // side effect, so this one is inserted directly: a swallowed failure would
-  // lose what somebody typed.
+  // side effect: a card comment goes through addCardComment, which returns
+  // its failure, and a goal comment is inserted directly for the same reason.
+  if (cardId) {
+    const added = await addCardComment(db, { cardId, note, actor: email });
+    if (!added.ok) return json({ error: added.error }, 500);
+    return json({ event: added.event }, 201);
+  }
+
   const { data, error } = await db
     .from('board_events')
     .insert({
-      card_id: cardId,
+      card_id: null,
       goal_id: goalId,
       action: 'comment',
       actor: email,
@@ -147,21 +156,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
-  // Notify the owner and explicitly mentioned users who can read the subject.
-  if (cardId) {
-    const card = await loadCard(db, cardId);
-    if (card) {
-      const { data: boardRow } = await db
-        .from('boards')
-        .select('*')
-        .eq('id', card.board_id)
-        .maybeSingle();
-      const board = (boardRow as BoardRow) ?? null;
-      if (board) await notifyCardComment(db, card, board, note, email);
-    }
-  } else if (goalId) {
+  // Notify the owner and explicitly mentioned users who can read the goal.
+  if (goalId) {
     const { data: goalRow } = await db.from('goals').select('*').eq('id', goalId).maybeSingle();
     const goal = (goalRow as GoalRow) ?? null;
     if (goal) {

@@ -8,41 +8,26 @@ import type { APIRoute } from 'astro';
 import { type ComponentType, createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { EmailTemplateKey } from '@/emails/types';
-import { requirePage } from '@/lib/auth/admin';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+import { gateMutation, json, readJsonBody } from '@/lib/http/route';
 
 function isTemplateKey(value: unknown): value is EmailTemplateKey {
   return typeof value === 'string' && value in EMAIL_TEMPLATES;
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requirePage(cookies, '/admin/email-templates');
+  const gate = await gateMutation(cookies, request, '/admin/email-templates');
   if (gate instanceof Response) return gate;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
-  }
+  const body = await readJsonBody(request);
+  if (body instanceof Response) return body;
 
-  const { template, props } = (body ?? {}) as { template?: unknown; props?: unknown };
+  const { template, props } = body as { template?: unknown; props?: unknown };
 
   if (!isTemplateKey(template)) {
-    return new Response(JSON.stringify({ error: `Unknown template: ${String(template)}` }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: `Unknown template: ${String(template)}` }, 400);
   }
   if (typeof props !== 'object' || props === null || Array.isArray(props)) {
-    return new Response(JSON.stringify({ error: 'props must be a JSON object' }), {
-      status: 400,
-      headers: JSON_HEADERS,
-    });
+    return json({ error: 'props must be a JSON object' }, 400);
   }
 
   // The admin editor sends free-form JSON, so the per-template prop typing is
@@ -57,13 +42,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   try {
     const html = await render(createElement(entry.Component, renderProps));
     const subject = entry.subject(renderProps);
-    return new Response(JSON.stringify({ html, subject }), { status: 200, headers: JSON_HEADERS });
+    return json({ html, subject });
   } catch (error) {
-    return new Response(
-      JSON.stringify({
+    return json(
+      {
         error: `Render failed: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-      { status: 400, headers: JSON_HEADERS }
+      },
+      400
     );
   }
 };

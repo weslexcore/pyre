@@ -13,7 +13,7 @@ import { captureEvent } from '@/lib/analytics/posthog';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb, type ReferralRedemptionRow, type ReferralRewardRow } from '@/lib/db';
 import { getTagIdByName, removeMemberTag } from '@/lib/momence/host-api';
-import { memberHasBookings } from '@/lib/webhooks/momence';
+import { memberHasBookings } from '@/lib/momence/members';
 import { convertRedemption } from './conversion';
 import { getRedemptionExpiryDays, REWARD_EXPIRY_DAYS } from './registry';
 

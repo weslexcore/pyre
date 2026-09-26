@@ -4,8 +4,9 @@
 // security boundary.
 import { WebhookDashboard } from '@/components/admin/WebhookDashboard';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { siteOrigin as landingOrigin } from '@/lib/origins';
 
-const siteOrigin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const siteOrigin = landingOrigin();
 ---
 
 <AdminLayout

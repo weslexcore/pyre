@@ -20,9 +20,9 @@ import {
   type DutySide,
   type ShiftDutyRow,
 } from '@pyre/schedule-core';
+import { isUuid } from '@/lib/http/json';
 
 export const DUTY_KEY_RE = /^[a-z][a-z0-9_]{1,39}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The editable columns of a shift_duties row. */
 export interface DutyColumns {
@@ -89,7 +89,7 @@ function readFields(body: Record<string, unknown>, base: DutyColumns): DutyColum
     next.session_default = (body.sessionDefault as string | null) || null;
   }
   if (body.sopId !== undefined) {
-    if (body.sopId !== null && (typeof body.sopId !== 'string' || !UUID_RE.test(body.sopId))) {
+    if (body.sopId !== null && !isUuid(body.sopId)) {
       return 'sopId must be an SOP id or null';
     }
     next.sop_id = (body.sopId as string | null) || null;

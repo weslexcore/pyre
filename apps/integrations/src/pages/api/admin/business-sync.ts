@@ -17,16 +17,11 @@
 import { getRedis } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { type ActivitySyncSummary, runActivityMetricsSync } from '@/lib/reports/activity';
 import { type ReportSyncSummary, runBusinessReportSync } from '@/lib/reports/sync';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /** Leave headroom under the function's 60s maxDuration (astro.config.mjs), the
  * same way the cron tick does — whatever doesn't finish parks in the cursor. */

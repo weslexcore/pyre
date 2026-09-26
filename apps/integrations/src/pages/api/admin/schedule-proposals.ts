@@ -10,6 +10,7 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import {
   notifyAssignmentChange,
   notifyProposalApproved,
@@ -24,12 +25,6 @@ import {
 import { acceptDraftRow, resolveProposalIfDone } from '@/lib/schedule/draft-accept';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requireScheduleManage(cookies);
@@ -66,7 +61,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       .select('id, status, week_start')
       .eq('id', proposalId)
       .maybeSingle();
-    if (fetchError) return json({ error: fetchError.message }, 500);
+    if (fetchError) return dbError(fetchError);
     if (!proposal) return json({ error: 'Proposal not found' }, 404);
     if (proposal.status !== 'draft') return json({ error: 'Proposal is not open' }, 409);
 
@@ -113,7 +108,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           ];
     for (const op of ops) {
       const { error } = await op;
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
 
     await logScheduleChange(db, {
@@ -148,13 +143,13 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const columns: string =
       kind === 'shift'
         ? 'id, proposal_id, is_draft, label, shift_date'
-        : 'id, proposal_id, is_draft, shift_id, staff_id, starts_at, ends_at, role';
+        : 'id, proposal_id, is_draft, shift_id, staff_id, starts_at, ends_at';
     const { data, error: fetchError } = await db
       .from(table)
       .select(columns)
       .eq('id', id)
       .maybeSingle();
-    if (fetchError) return json({ error: fetchError.message }, 500);
+    if (fetchError) return dbError(fetchError);
     const row = data as {
       id: string;
       proposal_id: string | null;
@@ -163,7 +158,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       staff_id?: string;
       starts_at?: string;
       ends_at?: string;
-      role?: string;
       label?: string;
       shift_date?: string;
     } | null;
@@ -179,7 +173,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       if (acceptError) return json({ error: acceptError }, 500);
     } else {
       const { error } = await db.from(table).delete().eq('id', id);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
 
     const accepted = action === 'accept-item';
@@ -210,7 +204,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           staffId: row.staff_id,
           assignment:
             row.starts_at && row.ends_at
-              ? { starts_at: row.starts_at, ends_at: row.ends_at, role: row.role }
+              ? { starts_at: row.starts_at, ends_at: row.ends_at }
               : null,
           actorEmail: actorFromGate(gate).email,
         });

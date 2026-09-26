@@ -200,6 +200,13 @@ flowchart TD
     end
 ```
 
+The `lost-found-cleanup` job permanently removes items 30 days after their
+recorded pickup or donation, including their stored photos, attachment records,
+notices, and audit events. It runs on the existing hourly tick, processes up to
+100 items per status per run, and retains database records for retry if storage
+deletion fails. Preview candidates with
+`/api/cron/tick?job=lost-found-cleanup&dryRun=1` using the cron authorization header.
+
 Useful manual invocations:
 
 ```bash

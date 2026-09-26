@@ -12,6 +12,7 @@
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import {
   groupBySection,
   moveBoardToSectionEnd,
@@ -20,9 +21,10 @@ import {
   sectionsInOrder,
 } from '@/lib/boards/sections';
 import { BOARD_LIMITS } from '@/lib/boards/types';
+import { sendJson } from '@/lib/client/api';
 import type { BoardRow, BoardSectionRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { buttonClass, inputBaseClass, send } from '../goalsUi';
+import { inputBaseClass } from '../goalsUi';
 import { boardCollisions, useBoardSensors } from './dnd';
 
 type Kind = 'section' | 'board';
@@ -134,7 +136,7 @@ export function BoardSections({
     if (!from) return;
     if (from.kind === 'section') {
       void write(() =>
-        send('/api/admin/board-order', 'PUT', { sectionIds: liveSections.map((s) => s.id) })
+        sendJson('/api/admin/board-order', 'PUT', { sectionIds: liveSections.map((s) => s.id) })
       );
       return;
     }
@@ -142,7 +144,7 @@ export function BoardSections({
     if (!moved) return;
     const sectionId = moved.section_id;
     void write(() =>
-      send('/api/admin/board-order', 'PUT', {
+      sendJson('/api/admin/board-order', 'PUT', {
         sectionId,
         boardIds: liveBoards.filter((board) => board.section_id === sectionId).map((b) => b.id),
       })
@@ -153,7 +155,7 @@ export function BoardSections({
     event.preventDefault();
     const name = sectionDraft.trim();
     if (!name) return;
-    await write(() => send('/api/admin/board-sections', 'POST', { name }));
+    await write(() => sendJson('/api/admin/board-sections', 'POST', { name }));
     setSectionDraft('');
     setAddingSection(false);
   };
@@ -197,7 +199,7 @@ export function BoardSections({
                 setRenaming(null);
                 if (!current || !name || name === current.name) return;
                 await write(() =>
-                  send('/api/admin/board-sections', 'PATCH', { id: current.id, name })
+                  sendJson('/api/admin/board-sections', 'PATCH', { id: current.id, name })
                 );
               }}
               onDelete={() => section && setDeleting(section)}
@@ -238,15 +240,23 @@ export function BoardSections({
                 if (e.key === 'Escape') setAddingSection(false);
               }}
             />
-            <button type="submit" className={buttonClass} disabled={saving || !sectionDraft.trim()}>
+            <button
+              type="submit"
+              className={formButtonClass}
+              disabled={saving || !sectionDraft.trim()}
+            >
               Add
             </button>
-            <button type="button" className={buttonClass} onClick={() => setAddingSection(false)}>
+            <button
+              type="button"
+              className={formButtonClass}
+              onClick={() => setAddingSection(false)}
+            >
               Cancel
             </button>
           </form>
         ) : (
-          <button type="button" className={buttonClass} onClick={() => setAddingSection(true)}>
+          <button type="button" className={formButtonClass} onClick={() => setAddingSection(true)}>
             Add section
           </button>
         ))}
@@ -262,7 +272,7 @@ export function BoardSections({
           onConfirm={() => {
             const id = deleting.id;
             setDeleting(null);
-            void write(() => send(`/api/admin/board-sections?id=${id}`, 'DELETE'));
+            void write(() => sendJson(`/api/admin/board-sections?id=${id}`, 'DELETE'));
           }}
         />
       )}

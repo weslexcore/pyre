@@ -18,26 +18,20 @@ import { hasGuestsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { GuestProfileRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { loadFields, loadNotes, loadProfileById, loadProfileByMemberId } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { mergeAnswers, normalizeMemberId, normalizeSummary } from '@/lib/guests/validate';
+import { dbError, isUniqueViolation, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { fetchHostMember, fetchMembersFiltered } from '@/lib/momence/host-api';
 import { getPeopleNames } from '@/lib/sops/people';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RECENT_LIMIT = 40;
 const LOCAL_SEARCH_LIMIT = 20;
 const MOMENCE_SEARCH_LIMIT = 8;
 const MIN_QUERY_LENGTH = 2;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 /** One row in the search results — a Momence member, with or without a profile. */
 export interface GuestSearchHit {
@@ -140,7 +134,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         results.push({
           memberId,
           name: [m.firstName, m.lastName].filter(Boolean).join(' ').trim() || m.email,
-          email: (m.email ?? '').trim().toLowerCase(),
+          email: normalizeEmail(m.email),
           phone: m.phoneNumber ?? '',
           hasProfile: profile !== null,
           summary: profile?.summary ?? null,
@@ -166,7 +160,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     .select('*')
     .order('updated_at', { ascending: false })
     .limit(RECENT_LIMIT);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const { count } = await db.from('guest_profiles').select('id', { count: 'exact', head: true });
 
@@ -177,17 +171,6 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     self,
   });
 };
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
 
 /** Trimmed display name / email from a body, for when Momence can't be asked. */
 function fallbackIdentity(body: Record<string, unknown>): {
@@ -227,7 +210,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const member = await fetchHostMember(Number(memberId));
     identity = {
       name: [member.firstName, member.lastName].filter(Boolean).join(' ').trim() || identity.name,
-      email: (member.email ?? '').trim().toLowerCase() || identity.email,
+      email: normalizeEmail(member.email) || identity.email,
     };
   } catch (e) {
     console.error(`[guests] member ${memberId} lookup failed:`, e instanceof Error ? e.message : e);
@@ -254,11 +237,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) {
     // Lost the race to another tab: hand back theirs.
-    if (error.code === '23505') {
+    if (isUniqueViolation(error)) {
       const theirs = await loadProfileByMemberId(db, memberId);
       if (theirs) return json({ profile: theirs, created: false });
     }
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
 
   return json({ profile: data as GuestProfileRow, created: true }, 201);
@@ -278,7 +261,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body instanceof Response) return body;
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const profile = await loadProfileById(db, id);
   if (!profile) return json({ error: 'Profile not found' }, 404);
@@ -304,7 +287,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ profile: data as GuestProfileRow });
 };
@@ -320,11 +303,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   // Notes cascade in the database.
   const { error } = await db.from('guest_profiles').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

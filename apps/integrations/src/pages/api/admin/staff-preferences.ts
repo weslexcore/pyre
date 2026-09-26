@@ -9,6 +9,7 @@ import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, redactCalendarToken, type StaffRow } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import {
   actorFromGate,
   changedFields,
@@ -18,12 +19,6 @@ import {
 import { parseShiftPrefs } from '@/lib/schedule/shift-prefs';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, '/admin/schedule');
@@ -49,7 +44,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (rowError) return json({ error: rowError.message }, 500);
+  if (rowError) return dbError(rowError);
   const row = rowData as StaffRow | null;
   if (!row) return json({ error: 'No such person' }, 404);
 
@@ -65,7 +60,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (Object.keys(fields).length === 0) return json({ error: 'Nothing to update' }, 400);
 
   const { data, error } = await db.from('staff').update(fields).eq('id', id).select('*').single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const diff = changedFields(row as unknown as Record<string, unknown>, fields);
   if (diff) {

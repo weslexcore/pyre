@@ -5,11 +5,11 @@
 // A single goal is read through its board (lib/boards/store), since the
 // merge; what lives here is what needs every goal at once.
 
+import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type Assignable, listAssignable } from '@/lib/boards/people';
 import { loadAllColumns, loadBoards } from '@/lib/boards/store';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalKpiRow, GoalRow } from '@/lib/db';
-import { todayEastern } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 

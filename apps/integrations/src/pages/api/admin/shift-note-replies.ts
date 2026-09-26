@@ -6,9 +6,15 @@
 // private, which keeps it among the admins. Editing and deleting a reply is
 // its author or an admin. Author identity always comes from the session.
 //
-// Reads happen on the notes route (GET /api/admin/shift-notes returns each
-// note's visible replies); this route only mutates.
+// The thread is the note's whole activity: these comments, plus the events
+// the app records for status changes, edits, and the classifier's answers (see
+// lib/shift-notes/activity). Events are history — they come back in reads
+// but can't be edited or deleted here. The page reads every thread on the
+// notes route (GET /api/admin/shift-notes); GET here refreshes one note and
+// its thread, e.g. once the classifier's answer (and any triage it led to)
+// has landed.
 //
+//   GET    ?noteId=<uuid>               → { note, replies, people }
 //   POST   { noteId, body, isPrivate? } → { reply, people }
 //   PATCH  { id, body?, isPrivate? }    → { reply, people }
 //   DELETE ?id=<uuid>                   → { ok: true }
@@ -17,24 +23,12 @@ import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type ShiftNoteReplyRow, type ShiftNoteRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
 import { notifyShiftNoteReply } from '@/lib/notifications/shift-notes';
-import {
-  canReply,
-  canSeeNote,
-  canSeeReply,
-  canTouchReply,
-  normalizeEmail,
-} from '@/lib/shift-notes/access';
+import { canReply, canSeeNote, canSeeReply, canTouchReply } from '@/lib/shift-notes/access';
 import { normalizeReplyBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -42,33 +36,10 @@ function viewerOf(gate: AdminGate) {
   return { email: normalizeEmail(gate.user.email), isAdmin: gate.access.isAdmin };
 }
 
-function peopleFor(reply: ShiftNoteReplyRow) {
-  return getPeopleNames([reply.author_email, reply.updated_by ?? '']);
-}
-
-/** Parse a JSON body after the shared gate / origin / content-type checks. */
-async function gated(
-  cookies: Parameters<typeof requirePage>[0],
-  request: Request
-): Promise<{ gate: AdminGate; db: Db; email: string; body: Record<string, unknown> } | Response> {
-  const gate = await requirePage(cookies, SHIFT_NOTES_HREF);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  const db = getDb();
-  if (!db) return json({ error: 'Storage unavailable' }, 503);
-  const email = normalizeEmail(gate.user.email);
-  if (!email) return json({ error: 'Session has no email' }, 400);
-  let body: Record<string, unknown>;
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-  return { gate, db, email, body };
+function peopleFor(...replies: ShiftNoteReplyRow[]) {
+  return getPeopleNames(
+    replies.flatMap((r) => [r.author_email ?? '', r.updated_by ?? '', r.data?.requested_by ?? ''])
+  );
 }
 
 /**
@@ -81,7 +52,7 @@ async function loadVisibleNote(
   gate: AdminGate
 ): Promise<ShiftNoteRow | Response> {
   const { data, error } = await db.from('shift_notes').select('*').eq('id', noteId).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const note = (data as ShiftNoteRow) ?? null;
   if (!note || !canSeeNote(note, viewerOf(gate))) return json({ error: 'Note not found' }, 404);
   return note;
@@ -101,26 +72,54 @@ async function loadOwnReply(
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   const reply = (data as ShiftNoteReplyRow) ?? null;
   if (!reply) return json({ error: 'Reply not found' }, 404);
   const note = await loadVisibleNote(db, reply.note_id, gate);
   if (note instanceof Response) return json({ error: 'Reply not found' }, 404);
   const viewer = viewerOf(gate);
   if (!canSeeReply(reply, viewer)) return json({ error: 'Reply not found' }, 404);
+  if (reply.kind !== 'comment') {
+    return json({ error: "A note's history can't be edited or deleted" }, 403);
+  }
   if (!canTouchReply(reply, viewer)) {
     return json({ error: "Only the reply's author or an admin can change it" }, 403);
   }
   return reply;
 }
 
+export const GET: APIRoute = async ({ cookies, url }) => {
+  const gate = await requirePage(cookies, SHIFT_NOTES_HREF);
+  if (gate instanceof Response) return gate;
+
+  const db = getDb();
+  if (!db) return json({ error: 'Storage unavailable' }, 503);
+
+  const noteId = url.searchParams.get('noteId') ?? '';
+  if (!isUuid(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
+
+  const note = await loadVisibleNote(db, noteId, gate);
+  if (note instanceof Response) return note;
+
+  const { data, error } = await db
+    .from('shift_note_replies')
+    .select('*')
+    .eq('note_id', noteId)
+    .order('created_at', { ascending: true });
+  if (error) return dbError(error);
+
+  const viewer = viewerOf(gate);
+  const replies = ((data ?? []) as ShiftNoteReplyRow[]).filter((r) => canSeeReply(r, viewer));
+  return json({ note, replies, people: await peopleFor(...replies) });
+};
+
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const ctx = await gated(cookies, request);
+  const ctx = await beginMutation(cookies, request, SHIFT_NOTES_HREF);
   if (ctx instanceof Response) return ctx;
   const { gate, db, email, body } = ctx;
 
   const noteId = typeof body.noteId === 'string' ? body.noteId : '';
-  if (!UUID_RE.test(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
+  if (!isUuid(noteId)) return json({ error: 'noteId must be a UUID' }, 400);
   const replyBody = normalizeReplyBody(body.body);
   if (!replyBody) return json({ error: 'body must be non-empty text' }, 400);
   if (body.isPrivate !== undefined && typeof body.isPrivate !== 'boolean') {
@@ -140,7 +139,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ note_id: noteId, body: replyBody, author_email: email, is_private: isPrivate })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const reply = data as ShiftNoteReplyRow;
   await notifyShiftNoteReply(db, note, reply);
@@ -148,12 +147,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const ctx = await gated(cookies, request);
+  const ctx = await beginMutation(cookies, request, SHIFT_NOTES_HREF);
   if (ctx instanceof Response) return ctx;
   const { gate, db, email, body } = ctx;
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const patch: Partial<Pick<ShiftNoteReplyRow, 'body' | 'is_private' | 'updated_by'>> = {};
   if (body.body !== undefined) {
@@ -181,7 +180,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const reply = data as ShiftNoteReplyRow;
   return json({ reply, people: await peopleFor(reply) });
@@ -197,13 +196,13 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id') ?? '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const existing = await loadOwnReply(db, id, gate);
   if (existing instanceof Response) return existing;
 
   const { error } = await db.from('shift_note_replies').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

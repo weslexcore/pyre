@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BOARDS_HREF } from '@/lib/boards/types';
+import { readError, sendJson } from '@/lib/client/api';
 import type { GoalRow } from '@/lib/db';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
 import {
@@ -41,10 +42,8 @@ import {
   QuietChip,
   SectionTitle,
   selectClass,
-  send,
   TaskBar,
 } from '../goalsUi';
-import { readError } from '../incidentUi';
 import { GoalForm } from './GoalForm';
 import { GoalPanel } from './GoalPanel';
 
@@ -195,7 +194,11 @@ export function GoalsOverview() {
           onSave={async (values) => {
             const created: { id?: string } = {};
             await mutate(async () => {
-              const { goal } = await send<{ goal: GoalRow }>('/api/admin/goals', 'POST', values);
+              const { goal } = await sendJson<{ goal: GoalRow }>(
+                '/api/admin/goals',
+                'POST',
+                values
+              );
               created.id = goal.id;
             });
             setCreating(false);

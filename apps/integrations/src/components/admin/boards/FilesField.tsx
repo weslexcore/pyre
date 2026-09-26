@@ -13,6 +13,7 @@
 // sizes, kinds — arrive with the card (`known`) or with each upload.
 
 import { useEffect, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import {
   ACCEPT_ATTRIBUTE,
   type AttachmentSummary,
@@ -23,7 +24,6 @@ import {
   MAX_FILE_BYTES,
   MAX_FILES_PER_FIELD,
 } from '@/lib/boards/files';
-import { buttonClass } from '../goalsUi';
 import { ShiftNoteViewer } from '../ShiftNoteViewer';
 
 interface PendingFile {
@@ -379,7 +379,9 @@ export function FilesField({
         </ul>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <label className={`${buttonClass} cursor-pointer ${full || disabled ? 'opacity-50' : ''}`}>
+        <label
+          className={`${formButtonClass} cursor-pointer ${full || disabled ? 'opacity-50' : ''}`}
+        >
           {listed.length > 0 || pending.length > 0 ? 'Add more files' : 'Add files'}
           <input
             id={id}

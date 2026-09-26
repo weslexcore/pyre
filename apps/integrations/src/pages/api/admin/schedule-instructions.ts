@@ -8,6 +8,7 @@ import { MAX_STANDING_INSTRUCTIONS_LENGTH } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import {
   getScheduleAgentInstructions,
   setScheduleAgentInstructions,
@@ -15,12 +16,6 @@ import {
 import { actorFromGate, logScheduleChange } from '@/lib/schedule/change-log';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requireAdmin(cookies);

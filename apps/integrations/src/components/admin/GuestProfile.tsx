@@ -10,6 +10,8 @@
 // a guest to have a look never leaves an empty row behind.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { timeAgo } from '@/lib/client/relativeTime';
 import type {
@@ -24,9 +26,8 @@ import { FIELD_LIMITS, groupFields, hasAnswer } from '@/lib/guests/types';
 import { actorLabel, type PeopleNames, sameActor } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
-import { FieldRow, formatMonth, QuietBadge, StandingBadge, send } from './guestUi';
+import { FieldRow, formatMonth, QuietBadge, StandingBadge } from './guestUi';
 import {
-  buttonClass,
   cardClass,
   formatDateTime,
   formatDayAndTime,
@@ -127,14 +128,14 @@ export function GuestProfile({
         values[field.key] = hasAnswer(draft.values[field.key]) ? draft.values[field.key] : null;
       }
       if (profile) {
-        const { profile: next } = await send<{ profile: GuestProfileRow }>(
+        const { profile: next } = await sendJson<{ profile: GuestProfileRow }>(
           '/api/admin/guests',
           'PATCH',
           { id: profile.id, summary: draft.summary, values }
         );
         ours.setData((prev) => (prev ? { ...prev, profile: next } : prev));
       } else {
-        const { profile: next } = await send<{ profile: GuestProfileRow }>(
+        const { profile: next } = await sendJson<{ profile: GuestProfileRow }>(
           '/api/admin/guests',
           'POST',
           {
@@ -171,17 +172,21 @@ export function GuestProfile({
       // A note on a guest with no profile yet starts one — that is often
       // the first thing anyone writes down.
       if (!target) {
-        const { profile: created } = await send<{ profile: GuestProfileRow }>(
+        const { profile: created } = await sendJson<{ profile: GuestProfileRow }>(
           '/api/admin/guests',
           'POST',
           { memberId, name: displayName, email: displayEmail }
         );
         target = created;
       }
-      const { note } = await send<{ note: GuestProfileNoteRow }>('/api/admin/guest-notes', 'POST', {
-        profileId: target.id,
-        body: noteBody.trim(),
-      });
+      const { note } = await sendJson<{ note: GuestProfileNoteRow }>(
+        '/api/admin/guest-notes',
+        'POST',
+        {
+          profileId: target.id,
+          body: noteBody.trim(),
+        }
+      );
       const owner = target;
       ours.setData((prev) =>
         prev ? { ...prev, profile: prev.profile ?? owner, notes: [note, ...prev.notes] } : prev
@@ -199,7 +204,7 @@ export function GuestProfile({
     if (!deleting) return;
     setNoteBusy(true);
     try {
-      await send(`/api/admin/guest-notes?id=${deleting.id}`, 'DELETE');
+      await sendJson(`/api/admin/guest-notes?id=${deleting.id}`, 'DELETE');
       const gone = deleting.id;
       ours.setData((prev) =>
         prev ? { ...prev, notes: prev.notes.filter((n) => n.id !== gone) } : prev
@@ -339,7 +344,7 @@ export function GuestProfile({
             {dirty && !saving && (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 onClick={() => setDraft(draftFrom(profile))}
               >
                 Discard
@@ -371,7 +376,7 @@ export function GuestProfile({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={noteBusy || !noteBody.trim() || !ours.data}
                   onClick={() => void addNote()}
                 >
@@ -425,7 +430,7 @@ export function GuestProfile({
               </SectionTitle>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={momence.loading || momence.refreshing}
                 onClick={() => {
                   setFresh(true);

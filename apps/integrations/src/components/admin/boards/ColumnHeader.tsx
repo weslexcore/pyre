@@ -13,9 +13,10 @@
 // they do not reshape the board.
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardColumnRow } from '@/lib/db';
-import { buttonClass, inputBaseClass, SectionTitle } from '../goalsUi';
+import { inputBaseClass, SectionTitle } from '../goalsUi';
 import { QuickAdd } from './QuickAdd';
 
 export function ColumnHeader({
@@ -143,10 +144,14 @@ export function AddColumn({
         }}
       />
       <div className="flex gap-2">
-        <button type="submit" className={buttonClass} disabled={busy || saving || !label.trim()}>
+        <button
+          type="submit"
+          className={formButtonClass}
+          disabled={busy || saving || !label.trim()}
+        >
           {saving ? 'Adding…' : 'Add'}
         </button>
-        <button type="button" className={buttonClass} onClick={() => setOpen(false)}>
+        <button type="button" className={formButtonClass} onClick={() => setOpen(false)}>
           Cancel
         </button>
       </div>

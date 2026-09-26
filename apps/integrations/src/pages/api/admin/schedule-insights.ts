@@ -37,14 +37,9 @@ import {
   type StipendOverrideRow,
   type SubRequestRow,
 } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 /** Default history window; overridable via ?weeks= within [MIN, MAX]. */
 const HISTORY_WEEKS = 8;
@@ -201,7 +196,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   ]);
   const queryError =
     staffRes.error ?? shiftsRes.error ?? stipendsRes.error ?? stipendOverridesRes.error;
-  if (queryError) return json({ error: queryError.message }, 500);
+  if (queryError) return dbError(queryError);
 
   const staff = (staffRes.data ?? []) as StaffRow[];
   const stipends = (stipendsRes.data ?? []) as StaffStipendRow[];
@@ -221,7 +216,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       db.from('sub_requests').select('*').in('shift_id', shiftIds),
     ]);
     const subError = assignmentsRes.error ?? requestsRes.error ?? subsRes.error;
-    if (subError) return json({ error: subError.message }, 500);
+    if (subError) return dbError(subError);
     assignments = (assignmentsRes.data ?? []) as ShiftAssignmentRow[];
     shiftRequests = (requestsRes.data ?? []) as ShiftRequestRow[];
     subRequests = (subsRes.data ?? []) as SubRequestRow[];

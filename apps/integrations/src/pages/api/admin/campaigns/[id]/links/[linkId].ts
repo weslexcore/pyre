@@ -14,13 +14,8 @@ import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { shortUrlFor } from '@/lib/campaigns/server';
 import type { LinkRow } from '@/lib/campaigns/types';
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
+import { json } from '@/lib/http/route';
 import { parseQrStyle, serializeQrStyle } from '@/lib/qr/style';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 export const PATCH: APIRoute = async ({ cookies, params, request }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');

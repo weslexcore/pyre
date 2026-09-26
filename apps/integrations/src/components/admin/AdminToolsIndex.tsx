@@ -6,8 +6,12 @@
 // complete pinned list to /api/admin/tool-pins and announces the saved list
 // on a CustomEvent so the AdminNav menu on the same page stays in step. The
 // API enforces the real guards — this island just mirrors them.
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { dragHandleClass } from '@/components/admin/ui';
 import { normalizePins, repositionPin, TOOL_PINS_EVENT, togglePin } from '@/lib/admin/pinOrder';
+import { readError } from '@/lib/client/api';
+import { useLiveReorder } from '@/lib/client/useLiveReorder';
 import { ADMIN_TOOL_SECTIONS, type AdminTool } from './adminTools';
 
 interface AdminToolsIndexProps {
@@ -15,35 +19,18 @@ interface AdminToolsIndexProps {
   tools: AdminTool[];
   /** The caller's saved pin order, hrefs as stored (may hold stale entries). */
   initialPins: string[];
+  /** All permitted tools, including hidden ones, so editing visible pins preserves them. */
+  validPinHrefs?: string[];
 }
 
-const handleClass =
-  'cursor-grab touch-none rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/50 transition-colors hover:border-white/30 hover:text-white active:cursor-grabbing disabled:opacity-30';
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
-  const [pins, setPins] = useState<string[]>(() =>
-    normalizePins(
-      initialPins,
-      tools.map((tool) => tool.href)
-    )
-  );
-  const [drag, setDrag] = useState<string | null>(null);
+export function AdminToolsIndex({
+  tools,
+  initialPins,
+  validPinHrefs = tools.map((tool) => tool.href),
+}: AdminToolsIndexProps) {
+  const [pins, setPins] = useState<string[]>(() => normalizePins(initialPins, validPinHrefs));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Pin order at drag start, restored when the drag is cancelled. */
-  const snapshotRef = useRef<string[] | null>(null);
-  /** Whether the drag ended on a valid drop (vs Escape / released outside). */
-  const droppedRef = useRef(false);
-  /** Last dragenter target, so re-entering the same card doesn't re-splice. */
-  const lastEnterRef = useRef<string | null>(null);
 
   const toolByHref = new Map(tools.map((tool) => [tool.href, tool]));
   const pinnedSet = new Set(pins);
@@ -64,10 +51,7 @@ export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
       });
       if (!res.ok) throw new Error(await readError(res));
       const saved = ((await res.json()) as { hrefs?: string[] }).hrefs ?? next;
-      const normalized = normalizePins(
-        saved,
-        tools.map((tool) => tool.href)
-      );
+      const normalized = normalizePins(saved, validPinHrefs);
       setPins(normalized);
       document.dispatchEvent(new CustomEvent(TOOL_PINS_EVENT, { detail: normalized }));
     } catch (e) {
@@ -85,41 +69,26 @@ export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
 
   // ---- drag and drop -------------------------------------------------------
 
-  const startDrag = (e: React.DragEvent, href: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    // Some browsers need data set for a drag to start at all.
-    e.dataTransfer.setData('text/plain', href);
-    // Drag image = the whole card, not the tiny handle the drag started on.
-    const card = (e.currentTarget as HTMLElement).closest('[data-pin-card]');
-    if (card instanceof HTMLElement) e.dataTransfer.setDragImage(card, 24, 24);
-    snapshotRef.current = pins;
-    droppedRef.current = false;
-    lastEnterRef.current = null;
-    setDrag(href);
-  };
+  const reorder = useLiveReorder<string, string[]>({
+    // The live-drag arrangement on screen is the order to store; skip the
+    // network round-trip when the drop changed nothing.
+    onDrop: (_href, before) => {
+      if (before && before.join('\n') !== pins.join('\n')) void save(pins, before);
+    },
+    onCancel: setPins,
+  });
+  const drag = reorder.drag;
+
+  const startDrag = (e: React.DragEvent, href: string) =>
+    reorder.begin(e, href, pins, href, '[data-pin-card]');
 
   const enterPin = (targetHref: string) => {
     if (busy || !drag || drag === targetHref) return;
-    if (lastEnterRef.current === targetHref) return;
-    lastEnterRef.current = targetHref;
+    if (!reorder.enterOnce(targetHref)) return;
     setPins((prev) => repositionPin(prev, drag, targetHref));
   };
 
-  const endDrag = () => {
-    const finished = drag;
-    setDrag(null);
-    if (!finished) return;
-    const before = snapshotRef.current;
-    snapshotRef.current = null;
-    if (droppedRef.current) {
-      // The live-drag arrangement on screen is the order to store; skip the
-      // network round-trip when the drop changed nothing.
-      if (before && before.join('\n') !== pins.join('\n')) void save(pins, before);
-    } else if (before) {
-      // Cancelled (Escape, or released outside) — put everything back.
-      setPins(before);
-    }
-  };
+  const endDrag = reorder.end;
 
   // One card, used by both the Pinned grid (draggable, unpin star) and the
   // section grids (pin/unpin star only).
@@ -165,7 +134,7 @@ export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
           {inPinned && (
             <button
               type="button"
-              className={handleClass}
+              className={dragHandleClass}
               title="Drag to reorder"
               aria-label={`Drag to reorder ${tool.title}`}
               draggable={!busy}
@@ -181,26 +150,13 @@ export function AdminToolsIndex({ tools, initialPins }: AdminToolsIndexProps) {
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: passive drop surface; drags start from keyboard-focusable button handles
     <div
       className="space-y-8"
       // The whole directory is one drop surface: dragover/drop bubble up here,
       // so releasing anywhere inside commits the live arrangement.
-      onDragOver={(e) => {
-        if (drag) e.preventDefault();
-      }}
-      onDrop={(e) => {
-        if (drag) {
-          e.preventDefault();
-          droppedRef.current = true;
-        }
-      }}
+      {...reorder.surface}
     >
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {pinnedTools.length > 0 && (
         <section>

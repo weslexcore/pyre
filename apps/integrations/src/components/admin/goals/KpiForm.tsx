@@ -4,6 +4,7 @@
 // flattering the goal on day one.
 
 import { type FormEvent, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { GoalKpiRow } from '@/lib/db';
 import type { KpiDirectionValue } from '@/lib/goals/types';
 import {
@@ -13,7 +14,6 @@ import {
   KPI_DIRECTIONS,
 } from '@/lib/goals/types';
 import {
-  buttonClass,
   cardClass,
   inputClass,
   labelClass,
@@ -153,7 +153,7 @@ export function KpiForm({
       {error && <p className="mt-3 text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="mt-4 flex justify-end gap-2">
-        <button type="button" className={buttonClass} onClick={onCancel}>
+        <button type="button" className={formButtonClass} onClick={onCancel}>
           Cancel
         </button>
         <button

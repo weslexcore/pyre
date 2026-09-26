@@ -7,16 +7,11 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { dbError, json } from '@/lib/http/route';
 import { trailFromJson } from '@/lib/knowledge/trail';
 import { getPeopleNames } from '@/lib/sops/people';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 200;
@@ -69,7 +64,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   if (asker) query = query.eq('asked_by', asker);
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const rows = (data ?? []) as KnowledgeQueryRow[];
   const page = rows.slice(0, limit).map((row) => ({ ...row, trail: trailFromJson(row.trail) }));
@@ -81,7 +76,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     .select('asked_by')
     .neq('asked_by', '')
     .order('asked_by');
-  if (askersError) return json({ error: askersError.message }, 500);
+  if (askersError) return dbError(askersError);
   const askerEmails = [...new Set((askers ?? []).map((r) => (r as { asked_by: string }).asked_by))];
   const askerNames = await getPeopleNames(askerEmails);
 

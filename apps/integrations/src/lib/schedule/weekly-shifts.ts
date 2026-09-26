@@ -16,6 +16,8 @@ import {
   addDays,
   assignmentHours,
   formatDuties,
+  formatShortDay,
+  todayEastern,
   utcToEastern,
   weekStartOf,
 } from '@pyre/schedule-core';
@@ -29,8 +31,9 @@ import {
   type SubRequestRow,
 } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { appOrigin } from '@/lib/origins';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
-import { formatWindowLabel, todayEastern } from '@/lib/schedule/sub';
+import { formatWindowLabel } from '@/lib/schedule/sub';
 
 /** ET hour from which Monday's roundup may go out. */
 const SEND_HOUR = 7;
@@ -51,15 +54,6 @@ export interface WeeklyShiftsSummary {
   wouldSend?: string[];
 }
 
-/** "Mon, Aug 17" — the compact per-row label (dates are ET wall-clock). */
-export function formatDayLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 /** "Aug 17–23", collapsing the month when the week doesn't straddle one. */
 export function formatWeekLabel(start: string, end: string): string {
   const startDate = new Date(`${start}T00:00:00`);
@@ -71,19 +65,6 @@ export function formatWeekLabel(start: string, end: string): string {
   });
   return `${startLabel}–${endLabel}`;
 }
-
-/** Same origin convention as the other email links: this app's deployment. */
-function appOrigin(): string {
-  return import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-    ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-    : 'https://pyre-integrations.vercel.app';
-}
-
-const ROLE_LABELS: Record<ShiftAssignmentRow['role'], string | undefined> = {
-  full: undefined,
-  setup: 'setup',
-  partial: 'partial hours',
-};
 
 export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyShiftsSummary> {
   const today = todayEastern();
@@ -180,11 +161,10 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       );
 
     const shiftItems: WeeklyShiftItem[] = items.map(({ assignment, shift }) => ({
-      dayLabel: formatDayLabel(shift.shift_date),
+      dayLabel: formatShortDay(shift.shift_date),
       shiftLabel: shift.label,
       timeLabel: formatWindowLabel(assignment),
       shiftUrl: `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`,
-      ...(ROLE_LABELS[assignment.role] && { roleLabel: ROLE_LABELS[assignment.role] }),
       // "Setup · Host" — what they're on the hook for, not just when.
       ...(formatDuties(dutyCatalog, assignment.duties) && {
         dutiesLabel: formatDuties(dutyCatalog, assignment.duties) as string,

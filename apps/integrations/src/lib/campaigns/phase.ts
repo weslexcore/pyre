@@ -2,6 +2,7 @@
 // business's timezone. Archived wins over everything; an unset start or end
 // is open-ended.
 
+import { easternDate } from '@pyre/schedule-core';
 import type { UtmCampaign } from './types';
 
 export type CampaignPhase = 'live' | 'upcoming' | 'ended' | 'archived';
@@ -17,10 +18,8 @@ export function campaignPhase(
 }
 
 /** Today as YYYY-MM-DD on the bathhouse clock (New York). */
-export function todayYmd(now: Date = new Date()): string {
-  // en-CA formats as YYYY-MM-DD.
-  return now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
+
+export const todayYmd = easternDate;
 
 export const PHASE_LABEL: Record<CampaignPhase, string> = {
   live: 'Live',

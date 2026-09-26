@@ -10,9 +10,11 @@
 // anything: an item logged without an owner still goes through the session
 // blast, which is the common path anyway.
 
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { buttonClass, inputClass, labelClass } from './incidentUi';
+import { useDebounced } from '@/lib/client/useDebounced';
+import { inputClass, labelClass } from './incidentUi';
 
 export interface PersonResult {
   memberId: string;
@@ -31,15 +33,6 @@ interface LookupResponse {
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return settled;
-}
 
 export function useGuestSearch({
   selected,
@@ -67,7 +60,7 @@ export function useGuestSearch({
           </span>
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             onClick={() => {
               onSelect(null);
               setQuery('');

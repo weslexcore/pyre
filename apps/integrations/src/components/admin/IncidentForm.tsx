@@ -20,6 +20,8 @@
 // every request; this island only mirrors the rules.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { IncidentRow } from '@/lib/db';
 import {
@@ -54,13 +56,11 @@ import {
   useStaffRoster,
 } from './IncidentPersonPicker';
 import {
-  buttonClass,
   Chip,
   cardClass,
   inputClass,
   labelClass,
   primaryButtonClass,
-  readError,
   SectionTitle,
   TileButton,
   YesNo,
@@ -424,7 +424,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
             Picked up an unfinished report from this device. Photos aren't saved in a draft — add
             them again on step 5.
           </p>
-          <button type="button" className={buttonClass} onClick={discardDraft}>
+          <button type="button" className={formButtonClass} onClick={discardDraft}>
             Start over
           </button>
         </div>
@@ -641,7 +641,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
             </SectionTitle>
 
             <div className="flex flex-wrap gap-2">
-              <label className={`${buttonClass} cursor-pointer`}>
+              <label className={`${formButtonClass} cursor-pointer`}>
                 📷 Take a photo
                 <input
                   type="file"
@@ -654,7 +654,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
                   }}
                 />
               </label>
-              <label className={`${buttonClass} cursor-pointer`}>
+              <label className={`${formButtonClass} cursor-pointer`}>
                 🎬 Add from library
                 <input
                   type="file"
@@ -815,7 +815,7 @@ export function IncidentForm({ reporterName }: { reporterName: string }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={step === 0 || submitting}
             onClick={() => goTo(step - 1)}
           >
@@ -1022,7 +1022,7 @@ function PeopleStep({
 
         <button
           type="button"
-          className={`${buttonClass} mt-3`}
+          className={`${formButtonClass} mt-3`}
           onClick={() => onPeople([...people, emptyAffectedPerson()])}
         >
           + Add person
@@ -1063,7 +1063,7 @@ function PeopleStep({
 
         <button
           type="button"
-          className={`${buttonClass} mt-3`}
+          className={`${formButtonClass} mt-3`}
           onClick={() => onWitnesses([...witnesses, emptyWitness()])}
         >
           + Add witness

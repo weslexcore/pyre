@@ -4,10 +4,10 @@
 
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
+import { JSON_HEADERS, json } from '@/lib/http/route';
+import { siteOrigin } from '@/lib/origins';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-const LANDING_ORIGIN = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const LANDING_ORIGIN = siteOrigin();
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requirePage(cookies, '/admin/campaigns');
@@ -16,18 +16,12 @@ export const GET: APIRoute = async ({ cookies }) => {
   try {
     const res = await fetch(`${LANDING_ORIGIN}/api/events?all=1`);
     if (!res.ok) {
-      return new Response(
-        JSON.stringify({ error: `Upstream events fetch failed (${res.status})` }),
-        {
-          status: 502,
-          headers: JSON_HEADERS,
-        }
-      );
+      return json({ error: `Upstream events fetch failed (${res.status})` }, 502);
     }
     const body = await res.text();
     return new Response(body, { status: 200, headers: JSON_HEADERS });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), { status: 502, headers: JSON_HEADERS });
+    return json({ error: message }, 502);
   }
 };

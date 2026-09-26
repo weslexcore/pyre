@@ -7,12 +7,12 @@
 import { MessageThread } from '@/components/admin/MessageThread';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getDb } from '@/lib/db';
+import { isUuid } from '@/lib/http/json';
 import { loadMessageForViewer, type MessageThreadPayload } from '@/lib/messages/store';
 import { markSourceRead } from '@/lib/notifications/notify';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import type { SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const id = Astro.params.id ?? '';
 const access = Astro.locals.adminAccess ?? null;
@@ -24,7 +24,7 @@ let initialError: string | null = null;
 let viewer: SopViewer = { role: 'staff', email: normalizeEmail(email) };
 
 const db = getDb();
-if (!UUID_RE.test(id)) {
+if (!isUuid(id)) {
   initialError = 'Message not found';
   Astro.response.status = 404;
 } else if (db && access) {

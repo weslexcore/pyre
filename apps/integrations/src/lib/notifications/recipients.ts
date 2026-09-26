@@ -14,6 +14,7 @@ import { canViewPage } from '@/components/admin/adminTools';
 import { canViewBoard } from '@/lib/boards/access';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import type { StaffRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   canUseDashboard,
   canViewSop,
@@ -27,7 +28,7 @@ export type RosterRow = Pick<
 >;
 
 function emailOf(row: RosterRow): string {
-  return (row.email ?? '').trim().toLowerCase();
+  return normalizeEmail(row.email);
 }
 
 /** Roster rows that can receive anything at all. */
@@ -36,9 +37,7 @@ export function dashboardRecipients(rows: RosterRow[]): RosterRow[] {
 }
 
 export function adminEmails(rows: RosterRow[]): string[] {
-  return dashboardRecipients(rows)
-    .filter((row) => row.is_admin)
-    .map(emailOf);
+  return adminsPlus(rows);
 }
 
 /**
@@ -49,7 +48,7 @@ export function sopUpdateRecipients(rows: RosterRow[], sop: SopAccessFields): st
   return dashboardRecipients(rows)
     .filter(
       (row) =>
-        canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, '/admin/sops') &&
+        canViewPage(accessOf(row), '/admin/sops') &&
         canViewSop({ role: roleForStaffRow(row), email: emailOf(row) }, sop)
     )
     .map(emailOf);
@@ -63,18 +62,18 @@ export function sopUpdateRecipients(rows: RosterRow[], sop: SopAccessFields): st
  */
 export function boardRecipients(rows: RosterRow[], slug: string): string[] {
   return dashboardRecipients(rows)
-    .filter((row) => canViewBoard({ isAdmin: row.is_admin, pages: row.pages ?? [] }, slug))
+    .filter((row) => canViewBoard(accessOf(row), slug))
     .map(emailOf);
 }
 
 /** Whether this person can open the boards tool at all (for a notice's link). */
 export function canOpenBoards(row: RosterRow): boolean {
-  return canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, BOARDS_HREF);
+  return canViewPage(accessOf(row), BOARDS_HREF);
 }
 
 /** Whether this person can open the schedule board (for the notice's link). */
 export function canOpenSchedule(row: RosterRow): boolean {
-  return canViewPage({ isAdmin: row.is_admin, pages: row.pages ?? [] }, '/admin/schedule');
+  return canViewPage(accessOf(row), '/admin/schedule');
 }
 
 /** Roster row by staff id, for turning an assignment's staff_id into a person. */
@@ -100,4 +99,22 @@ export function nameFor(rows: RosterRow[], email: string | null | undefined): st
   const name = (row?.display_name ?? '').trim();
   if (name) return name;
   return normalized.includes('@') ? normalized.slice(0, normalized.indexOf('@')) : normalized;
+}
+
+/** The page-access shape canViewPage and friends take, from a roster row. */
+export function accessOf(row: Pick<RosterRow, 'is_admin' | 'pages'>): {
+  isAdmin: boolean;
+  pages: string[];
+} {
+  return { isAdmin: row.is_admin, pages: row.pages ?? [] };
+}
+
+/**
+ * Admins, plus anyone granted `grant` (a manage permission like
+ * incidents:manage) — who a management-level alert reaches.
+ */
+export function adminsPlus(rows: RosterRow[], grant?: string): string[] {
+  return dashboardRecipients(rows)
+    .filter((row) => row.is_admin || (!!grant && (row.pages ?? []).includes(grant)))
+    .map(emailOf);
 }

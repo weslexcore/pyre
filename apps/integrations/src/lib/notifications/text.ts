@@ -2,30 +2,11 @@
 // the titles and bodies can be tested against fixtures and read the same
 // wherever they are produced.
 
-import { timeToMinutes } from '@pyre/schedule-core';
-
-/** "Sat, Sep 20" from YYYY-MM-DD (schedule dates are ET wall-clock already). */
-export function shortDate(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-/** "2:30p" from HH:MM[:SS], the boards' compact time style. */
-export function shortTime(t: string): string {
-  const min = timeToMinutes(t);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-}
+import { formatCompactTime, formatShortDay } from '@pyre/schedule-core';
 
 /** "9a–1p" */
 export function shortWindow(row: { starts_at: string; ends_at: string }): string {
-  return `${shortTime(row.starts_at)}–${shortTime(row.ends_at)}`;
+  return `${formatCompactTime(row.starts_at)}–${formatCompactTime(row.ends_at)}`;
 }
 
 export interface ShiftLike {
@@ -39,29 +20,27 @@ export type AssignmentChange = 'added' | 'updated' | 'removed';
 
 /** "'Morning' on Sat, Sep 20" */
 function shiftPhrase(shift: ShiftLike): string {
-  return `'${shift.label}' on ${shortDate(shift.shift_date)}`;
+  return `'${shift.label}' on ${formatShortDay(shift.shift_date)}`;
 }
 
 export function assignmentChangeText(input: {
   change: AssignmentChange;
   shift: ShiftLike;
   /** The person's own window on the shift; falls back to the shift's. */
-  assignment?: { starts_at: string; ends_at: string; role?: string } | null;
+  assignment?: { starts_at: string; ends_at: string } | null;
   /** Extra detail for an update ("starts_at 09:00 → 10:00"). */
   detail?: string | null;
   actorName?: string | null;
 }): { title: string; body: string } {
   const window = shortWindow(input.assignment ?? input.shift);
-  const role =
-    input.assignment?.role && input.assignment.role !== 'full' ? ` · ${input.assignment.role}` : '';
   const by = input.actorName ? ` by ${input.actorName}` : '';
   switch (input.change) {
     case 'added':
-      return { title: `You're on ${shiftPhrase(input.shift)}`, body: `${window}${role}${by}` };
+      return { title: `You're on ${shiftPhrase(input.shift)}`, body: `${window}${by}` };
     case 'updated':
       return {
         title: `Your shift changed: ${shiftPhrase(input.shift)}`,
-        body: input.detail ? `${input.detail}${by}` : `Now ${window}${role}${by}`,
+        body: input.detail ? `${input.detail}${by}` : `Now ${window}${by}`,
       };
     case 'removed':
       return { title: `You were taken off ${shiftPhrase(input.shift)}`, body: `${window}${by}` };
@@ -103,7 +82,7 @@ export function proposalApprovedText(input: {
 }): { title: string; body: string } {
   const n = input.shiftCount;
   return {
-    title: `${n} shift${n === 1 ? '' : 's'} published for the week of ${shortDate(input.weekStart)}`,
+    title: `${n} shift${n === 1 ? '' : 's'} published for the week of ${formatShortDay(input.weekStart)}`,
     body: input.actorName ? `Schedule approved by ${input.actorName}` : 'Schedule approved',
   };
 }
@@ -164,8 +143,8 @@ export function shiftNoteReplyText(input: {
 }): { title: string; body: string } {
   return {
     title: input.forAuthor
-      ? `${input.replierName} replied to your shift note for ${shortDate(input.noteDate)}`
-      : `${input.replierName} replied on ${input.authorName ?? 'a'} shift note for ${shortDate(input.noteDate)}`,
+      ? `${input.replierName} replied to your shift note for ${formatShortDay(input.noteDate)}`
+      : `${input.replierName} replied on ${input.authorName ?? 'a'} shift note for ${formatShortDay(input.noteDate)}`,
     body: input.excerpt,
   };
 }
@@ -177,7 +156,7 @@ export function shiftNoteStatusText(input: {
 }): { title: string; body: string } {
   const label = input.status === 'todo' ? 'to-do' : input.status;
   return {
-    title: `Your shift note for ${shortDate(input.noteDate)} was marked ${label}`,
+    title: `Your shift note for ${formatShortDay(input.noteDate)} was marked ${label}`,
     body: `by ${input.adminName}`,
   };
 }
@@ -196,7 +175,7 @@ export function cardAssignedText(input: {
   dueDate?: string | null;
 }): { title: string; body: string } {
   const where = input.goalTitle ? `under ${shortTitle(input.goalTitle)}` : '';
-  const due = input.dueDate ? `due ${shortDate(input.dueDate)}` : '';
+  const due = input.dueDate ? `due ${formatShortDay(input.dueDate)}` : '';
   return {
     title: `${input.assignerName} put a ${input.noun} on you: ${shortTitle(input.cardTitle)}`,
     body: [where, due].filter(Boolean).join(' · '),

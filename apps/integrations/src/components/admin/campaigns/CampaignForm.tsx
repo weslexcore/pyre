@@ -3,6 +3,8 @@
 // every link will carry, and once the campaign exists that slug is locked.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SessionExpired } from '@/components/admin/SessionExpired';
+import { formButtonClass } from '@/components/admin/ui';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
 import { campaignSessionIds } from '@/lib/campaigns/event-bookings';
 import { GOAL_METRICS, MAX_GOAL_TARGET, MAX_GOALS } from '@/lib/campaigns/goals';
@@ -20,7 +22,6 @@ import { FIELD_LIMITS } from '@/lib/campaigns/validate';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { BackLink } from '../BackLink';
 import {
-  buttonClass,
   inputBaseClass,
   inputClass,
   labelClass,
@@ -28,7 +29,7 @@ import {
   TileButton,
 } from '../incidentUi';
 import { SearchSelect } from '../SearchSelect';
-import { SessionExpired, smallLabelClass } from './campaignUi';
+import { smallLabelClass } from './campaignUi';
 import {
   DestinationPicker,
   type DestinationValue,
@@ -437,11 +438,11 @@ export function CampaignForm({
           {saving ? 'Saving…' : editing ? 'Save changes' : 'Create campaign'}
         </button>
         {editing ? (
-          <button type="button" onClick={onCancel} className={buttonClass}>
+          <button type="button" onClick={onCancel} className={formButtonClass}>
             Cancel
           </button>
         ) : (
-          <a href="/admin/campaigns" className={buttonClass}>
+          <a href="/admin/campaigns" className={formButtonClass}>
             Cancel
           </a>
         )}

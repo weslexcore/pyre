@@ -18,10 +18,15 @@
 // fetched on mount. The run itself — optimistic taps, the serialized queue,
 // Discard — lives in useSopRun, shared with the peek modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, compactSelectClass, inputClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { etStampWithYear } from '@/lib/client/format';
 import type { SopRow, SopVersionRow } from '@/lib/db';
 import { countTasks } from '@/lib/sops/checklist';
-import { diffLines, diffSummary } from '@/lib/sops/diff';
+import { diffSummary } from '@/lib/sops/diff';
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import { EVERYONE_LABEL } from '@/lib/sops/levels';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
@@ -33,73 +38,29 @@ import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
+import { SopDiff } from './SopDiff';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
 import { type RunEntry, RunsList } from './SopRunsList';
-import { readError, useSopRun } from './useSopRun';
+import { useSopRun } from './useSopRun';
 
 type DocResponse = SopDocumentPayload;
 
 interface VersionsResponse {
   versions: SopVersionRow[];
   people?: PeopleNames;
+  /**
+   * For versions saved by approving an agent suggestion: the shift note it
+   * came from, by version id (admins only; others read it in the change note).
+   */
+  origins?: Record<string, { label: string; href: string | null }>;
 }
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const primaryButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 
-const selectClass =
-  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
-
-// Pinned locale + venue time zone: this renders on the server and again on
-// the phone, and the two have to agree or React throws the server tree away.
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 function editorLabel(email: string, people?: PeopleNames): string {
   return email === 'seed' ? 'initial import' : personName(email, people);
-}
-
-/** Line diff of one version against its predecessor (empty for v1). */
-function VersionDiff({ version, previous }: { version: SopVersionRow; previous?: SopVersionRow }) {
-  const lines = useMemo(
-    () => diffLines(previous?.content_md ?? '', version.content_md),
-    [version, previous]
-  );
-  return (
-    <pre className="mt-2 max-h-96 overflow-auto rounded border border-white/10 bg-black/30 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-      {lines.map((line, i) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff lines are positional
-          key={i}
-          className={
-            line.kind === 'added'
-              ? 'bg-[var(--pyre-sage)]/15 text-[var(--pyre-sage)]'
-              : line.kind === 'removed'
-                ? 'bg-[var(--pyre-red)]/15 text-[var(--pyre-red)] line-through decoration-[var(--pyre-red)]/40'
-                : 'text-white/50'
-          }
-        >
-          {line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}
-          {line.text || ' '}
-        </div>
-      ))}
-    </pre>
-  );
 }
 
 export function SopDocument({
@@ -356,9 +317,12 @@ export function SopDocument({
   const remove = async () => {
     if (!data) return;
     if (
-      !window.confirm(
-        `Permanently delete "${data.sop.title}" and its entire version history? This cannot be undone.`
-      )
+      !(await confirmAction({
+        title: `Permanently delete "${data.sop.title}" and its entire version history?`,
+        body: 'This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
     ) {
       return;
     }
@@ -379,9 +343,7 @@ export function SopDocument({
   if (!data) {
     return (
       <div className="space-y-4">
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error ?? 'SOP not found'}
-        </p>
+        <ErrorBanner>{error ?? 'SOP not found'}</ErrorBanner>
         <div className="flex gap-2">
           <BackLink href="/admin/sops">All SOPs</BackLink>
           <button type="button" className={buttonClass} onClick={() => void load()}>
@@ -423,7 +385,7 @@ export function SopDocument({
           </button>
         )}
         <span className="ml-auto font-mono text-[10px] text-white/40">
-          v{sop.current_version} · {sop.category} · updated {formatWhen(sop.updated_at)}
+          v{sop.current_version} · {sop.category} · updated {etStampWithYear(sop.updated_at)}
           {sop.updated_by ? ` by ${editorLabel(sop.updated_by, people)}` : ''}
           {/* Who else is reading this. Only worth saying when the document is
               narrower than the whole team. */}
@@ -444,11 +406,7 @@ export function SopDocument({
         </p>
       )}
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {notice && (
         <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 text-sm text-[var(--pyre-sage)]">
           {notice}
@@ -490,7 +448,7 @@ export function SopDocument({
                   name — a typo here used to fork a one-document section. New
                   sections are added on the library page. */}
               <select
-                className={selectClass}
+                className={compactSelectClass}
                 value={sop.category}
                 disabled={busy}
                 onChange={(e) => {
@@ -586,6 +544,8 @@ export function SopDocument({
               const previous = versions[i + 1];
               const summary = diffSummary(previous?.content_md ?? '', v.content_md);
               const expanded = expandedVersion === v.version;
+              // The shift note an approved suggestion made this version from.
+              const origin = versionsQuery.data?.origins?.[v.id];
               return (
                 <li key={v.id} className="py-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -594,13 +554,28 @@ export function SopDocument({
                       {editorLabel(v.edited_by, people)}
                     </span>
                     <span className="font-mono text-[10px] text-white/40">
-                      {formatWhen(v.created_at)}
+                      {etStampWithYear(v.created_at)}
                     </span>
                     {summary && (
                       <span className="font-mono text-[10px] text-white/40">{summary}</span>
                     )}
                     {v.change_note && (
                       <span className="text-xs text-white/60 italic">“{v.change_note}”</span>
+                    )}
+                    {origin && (
+                      <span className="text-xs text-white/50">
+                        from{' '}
+                        {origin.href ? (
+                          <a
+                            href={origin.href}
+                            className="text-[var(--pyre-gold)] underline hover:text-white"
+                          >
+                            {origin.label}
+                          </a>
+                        ) : (
+                          origin.label
+                        )}
+                      </span>
                     )}
                     <span className="ml-auto flex gap-2">
                       <button
@@ -615,11 +590,13 @@ export function SopDocument({
                           type="button"
                           className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)] underline hover:text-white disabled:opacity-40"
                           disabled={busy}
-                          onClick={() => {
+                          onClick={async () => {
                             if (
-                              window.confirm(
-                                `Restore v${v.version}? The current version stays in history.`
-                              )
+                              await confirmAction({
+                                title: `Restore v${v.version}?`,
+                                body: 'The current version stays in history.',
+                                confirmLabel: 'Restore',
+                              })
                             ) {
                               void save(v.content_md, v.title, `Restored from v${v.version}`);
                             }
@@ -630,7 +607,7 @@ export function SopDocument({
                       )}
                     </span>
                   </div>
-                  {expanded && <VersionDiff version={v} previous={previous} />}
+                  {expanded && <SopDiff before={previous?.content_md ?? ''} after={v.content_md} />}
                 </li>
               );
             })}

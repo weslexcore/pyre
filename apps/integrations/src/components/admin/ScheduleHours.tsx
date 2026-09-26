@@ -19,7 +19,11 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { fmtHours, fmtMoney } from '@/lib/client/format';
 import type {
   ShiftAssignmentRow,
   ShiftRow,
@@ -44,13 +48,8 @@ interface BoardData {
   selfStaffId?: string | null;
 }
 
-const fmtCost = (cost: number): string => `$${Number.isInteger(cost) ? cost : cost.toFixed(2)}`;
-
 const inputClass =
   'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -58,8 +57,6 @@ const todayLocal = (): string => {
     now.getDate()
   ).padStart(2, '0')}`;
 };
-
-const fmt = (hours: number): string => (Number.isInteger(hours) ? String(hours) : hours.toFixed(1));
 
 export function ScheduleHours() {
   // Default: four weeks back through two weeks ahead.
@@ -180,13 +177,13 @@ export function ScheduleHours() {
     const csvRows = rows.map((row) => [
       rowLabel(row),
       ...staffColumns.flatMap((s) => {
-        const hours = fmt(row.byStaff[s.id] ?? 0);
-        return paid(s) ? [hours, fmtCost(rowAmounts[row.key]?.byStaff[s.id] ?? 0)] : [hours];
+        const hours = fmtHours(row.byStaff[s.id] ?? 0);
+        return paid(s) ? [hours, fmtMoney(rowAmounts[row.key]?.byStaff[s.id] ?? 0)] : [hours];
       }),
       ...(canManage
         ? [
-            fmt(row.total),
-            ...(isAdmin ? [fmtCost(rowAmounts[row.key]?.total ?? 0)] : []),
+            fmtHours(row.total),
+            ...(isAdmin ? [fmtMoney(rowAmounts[row.key]?.total ?? 0)] : []),
             row.founderShare == null ? '' : `${(row.founderShare * 100).toFixed(1)}%`,
           ]
         : []),
@@ -194,11 +191,11 @@ export function ScheduleHours() {
     csvRows.push([
       'Total',
       ...staffColumns.flatMap((s) => {
-        const hours = fmt(totals.byStaff[s.id] ?? 0);
-        return paid(s) ? [hours, fmtCost(totalAmounts.byStaff[s.id] ?? 0)] : [hours];
+        const hours = fmtHours(totals.byStaff[s.id] ?? 0);
+        return paid(s) ? [hours, fmtMoney(totalAmounts.byStaff[s.id] ?? 0)] : [hours];
       }),
       ...(canManage
-        ? [fmt(totals.total), ...(isAdmin ? [fmtCost(totalAmounts.total)] : []), '']
+        ? [fmtHours(totals.total), ...(isAdmin ? [fmtMoney(totalAmounts.total)] : []), '']
         : []),
     ]);
     const csv = [header, ...csvRows].map((r) => r.join(',')).join('\n');
@@ -264,11 +261,7 @@ export function ScheduleHours() {
         {busy && <span className="font-mono text-xs text-white/40">Loading…</span>}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {!canManage && !selfId && !busy && (
         <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
@@ -332,17 +325,17 @@ export function ScheduleHours() {
                           key={s.id}
                           className={`whitespace-nowrap py-2 pr-3 text-right font-mono ${hours === 0 ? 'text-white/25' : ''}`}
                         >
-                          {fmt(hours)}
+                          {fmtHours(hours)}
                           {stipend > 0 && (
                             <div
                               className="text-xs text-[var(--pyre-gold)]/70"
                               title="Stipend hours included in this cell (recurring weekly, adjustable per week below)"
                             >
-                              incl. {fmt(stipend)} stipend
+                              incl. {fmtHours(stipend)} stipend
                             </div>
                           )}
                           {amount !== undefined && hours > 0 && (
-                            <div className="text-xs text-white/40">{fmtCost(amount)}</div>
+                            <div className="text-xs text-white/40">{fmtMoney(amount)}</div>
                           )}
                         </td>
                       );
@@ -350,11 +343,11 @@ export function ScheduleHours() {
                     {canManage && (
                       <>
                         <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
-                          {fmt(row.total)}
+                          {fmtHours(row.total)}
                         </td>
                         {isAdmin && (
                           <td className="whitespace-nowrap py-2 pr-3 text-right font-mono text-white/60">
-                            {fmtCost(rowAmounts[row.key]?.total ?? 0)}
+                            {fmtMoney(rowAmounts[row.key]?.total ?? 0)}
                           </td>
                         )}
                         <td className="whitespace-nowrap py-2 text-right font-mono text-white/60">
@@ -379,9 +372,11 @@ export function ScheduleHours() {
                         key={s.id}
                         className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold"
                       >
-                        {fmt(totals.byStaff[s.id] ?? 0)}
+                        {fmtHours(totals.byStaff[s.id] ?? 0)}
                         {amount !== undefined && (
-                          <div className="text-xs font-normal text-white/40">{fmtCost(amount)}</div>
+                          <div className="text-xs font-normal text-white/40">
+                            {fmtMoney(amount)}
+                          </div>
                         )}
                       </td>
                     );
@@ -389,11 +384,11 @@ export function ScheduleHours() {
                   {canManage && (
                     <>
                       <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
-                        {fmt(totals.total)}
+                        {fmtHours(totals.total)}
                       </td>
                       {isAdmin && (
                         <td className="whitespace-nowrap py-2 pr-3 text-right font-mono font-bold">
-                          {fmtCost(totalAmounts.total)}
+                          {fmtMoney(totalAmounts.total)}
                         </td>
                       )}
                       <td />
@@ -424,14 +419,6 @@ export function ScheduleHours() {
       )}
     </div>
   );
-}
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
 }
 
 /**
@@ -505,11 +492,7 @@ function StipendsPanel({
         ; adjust a single week here.
       </p>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {stipends.length === 0 ? (
         <p className="font-mono text-xs text-white/40">No stipends yet.</p>
@@ -593,7 +576,8 @@ function StipendsPanel({
                       {stipend?.label ?? 'deleted stipend'}
                     </span>
                     <span className="text-white/70">
-                      {fmt(o.hours)}h{stipend ? ` (usually ${fmt(stipend.hours_per_week)})` : ''}
+                      {fmtHours(o.hours)}h
+                      {stipend ? ` (usually ${fmtHours(stipend.hours_per_week)})` : ''}
                     </span>
                     {o.note && <span className="text-white/40">{o.note}</span>}
                     <button

@@ -299,6 +299,8 @@ export interface SopVersionRow {
   content_md: string;
   edited_by: string;
   change_note: string | null;
+  /** The agent suggestion an admin approved to save this version, if any. */
+  suggestion_id: string | null;
   created_at: string;
 }
 
@@ -351,9 +353,12 @@ export interface ShiftNoteRow {
   author_email: string;
   /** Session email of the last editor (author or admin); null until edited. */
   updated_by: string | null;
-  /** Triage state, admin-set: open (untriaged), todo (follow-up owned), resolved. */
+  /**
+   * Triage state: open (untriaged), todo (follow-up owned), resolved. Set by
+   * an admin, or by the classifier while no admin has (lib/shift-notes/triage).
+   */
   status: ShiftNoteStatus;
-  /** Admin who last set the status, and when; null while never triaged. */
+  /** Admin who last set the status, and when; null while no admin has (the classifier leaves them null). */
   status_by: string | null;
   status_at: string | null;
   created_at: string;
@@ -362,19 +367,59 @@ export interface ShiftNoteRow {
 
 export type ShiftNoteStatus = 'open' | 'todo' | 'resolved';
 
-// One reply in a shift note's thread — an admin responding in context, or
-// the author replying back. Private replies are admin-only (see
-// lib/shift-notes/access).
+// One entry in a shift note's activity thread: a comment (an admin
+// responding in context, or the author replying back) or an event the app
+// recorded — a status change, an edit, a classification. Private entries
+// are admin-only (see lib/shift-notes/access).
 export interface ShiftNoteReplyRow {
   id: string;
   note_id: string;
+  /** What this entry is: a comment, or an event the app recorded. */
+  kind: ShiftNoteActivityKind;
+  /** The comment's text; '' on events. */
   body: string;
-  author_email: string;
+  /** Who wrote it; null on events the classifier wrote (never on a comment). */
+  author_email: string | null;
   is_private: boolean;
+  /** Event payload (see ShiftNoteActivityData); null on comments. */
+  data: ShiftNoteActivityData | null;
   /** Session email of the last editor (reply author or admin); null until edited. */
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ShiftNoteActivityKind = 'comment' | 'status' | 'edit' | 'classification' | 'suggestion';
+
+/** The edited fields of a note, as an edit event keeps them. */
+export interface ShiftNoteEditValues {
+  body?: string;
+  note_date?: string;
+}
+
+/** The payload of an activity event, by kind (the jsonb `data` column). */
+export interface ShiftNoteActivityData {
+  /** status: the status before (absent on backfilled rows) and after. */
+  from?: ShiftNoteStatus;
+  to?: ShiftNoteStatus;
+  /** status: set when the classifier triaged the note rather than an admin. */
+  source?: 'classifier';
+  /** edit: which of the note's fields changed. */
+  fields?: Array<'body' | 'note_date'>;
+  /** edit: those fields' values before and after (absent on edits recorded before this was kept). */
+  before?: ShiftNoteEditValues;
+  after?: ShiftNoteEditValues;
+  /** classification: raw [{ type, probability }]; read it through readStoredSignals(). */
+  signals?: unknown;
+  model?: string | null;
+  /** classification: the admin who asked for the run; absent when a write triggered it. */
+  requested_by?: string;
+  /** suggestion: which suggestion was decided, and how. */
+  suggestion_id?: string;
+  suggestion_kind?: string;
+  action?: 'approved' | 'dismissed';
+  /** suggestion: what approving it made, to link to. */
+  result?: { type: string; id: string; href: string | null; label: string };
 }
 
 // A photo/video/document backing a shift note (see the shift-note media
@@ -392,6 +437,92 @@ export interface ShiftNoteAttachmentRow {
   uploaded_by: string;
   created_at: string;
 }
+
+// Agent suggestions (see the agent_suggestions migration and
+// src/lib/suggestions): an AI agent's proposed action from a source record,
+// applied only when an admin approves it.
+export type AgentSuggestionKind = 'board_card.create' | 'board_card.comment' | 'sop.edit';
+export type AgentSuggestionStatus =
+  | 'pending'
+  | 'applying'
+  | 'approved'
+  | 'dismissed'
+  | 'superseded';
+export type AgentSuggestionSourceType = 'shift_note';
+export type AgentSuggestionRunStatus = 'queued' | 'running' | 'done' | 'failed';
+
+/** One pass of an agent over a source record. */
+export interface AgentSuggestionRunRow {
+  id: string;
+  source_type: AgentSuggestionSourceType;
+  source_id: string;
+  source_hash: string;
+  trigger: 'auto' | 'manual';
+  requested_by: string | null;
+  status: AgentSuggestionRunStatus;
+  suggestion_count: number;
+  agent_session_id: string | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One proposed action. `payload` is the agent's original and never changes. */
+export interface AgentSuggestionRow {
+  id: string;
+  run_id: string;
+  position: number;
+  kind: AgentSuggestionKind;
+  status: AgentSuggestionStatus;
+  source_type: AgentSuggestionSourceType;
+  source_id: string;
+  source_hash: string;
+  payload: Record<string, unknown>;
+  edited_payload: Record<string, unknown> | null;
+  edited_by: string | null;
+  edited_at: string | null;
+  rationale: string;
+  confidence: number | null;
+  target_type: 'board_card' | 'sop' | null;
+  target_id: string | null;
+  result_type: 'board_card' | 'board_event' | 'sop_version' | null;
+  result_id: string | null;
+  applied_payload: Record<string, unknown> | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  error: string | null;
+  agent_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// What Jev (via pyre-agents) found in a record's text (see the
+// content_classifications migration and src/lib/classify). One row per
+// classified record; `signals` is validated against @pyre/signals-core.
+export interface ContentClassificationRow {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  status: ContentClassificationStatus;
+  /** Raw jsonb [{ type, probability }]; read it through readStoredSignals(). */
+  signals: unknown;
+  request_id: string;
+  content_hash: string;
+  /** Runs for this text so far (QStash retries and admin re-runs count). */
+  attempts: number;
+  /** The evaluation model that answered, e.g. typesafe-ai/jev. */
+  model: string | null;
+  error: string | null;
+  requested_at: string;
+  classified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ContentClassificationStatus = 'pending' | 'done' | 'failed';
 
 // An admin-authored markdown message to staff (see the staff notifications
 // migration). Audience semantics — roles as a set plus named people, admins
@@ -434,7 +565,8 @@ export type NotificationKind =
   | 'schedule_change'
   | 'shift_note_reply'
   | 'sub_request'
-  | 'goal_activity';
+  | 'goal_activity'
+  | 'agent_suggestion';
 
 // One row in one person's inbox (see the staff notifications migration).
 // Written by the API routes that record the event; read/dismissed/expires
@@ -961,9 +1093,14 @@ export interface BoardCardRow {
   area: string | null;
   sort_order: number;
   properties: Record<string, BoardFieldValue>;
-  /** manual: made in the admin. intake: the intake endpoint. form: the board's own form. */
-  source: 'manual' | 'intake' | 'form';
+  /**
+   * manual: made in the admin. intake: the intake endpoint. form: the board's
+   * own form. suggestion: an admin approved an agent's suggestion.
+   */
+  source: 'manual' | 'intake' | 'form' | 'suggestion';
   external_ref: string | null;
+  /** The agent suggestion this card was approved from (source = suggestion). */
+  suggestion_id: string | null;
   completed_at: string | null;
   completed_by: string | null;
   created_by: string;

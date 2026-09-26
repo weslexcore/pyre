@@ -18,13 +18,10 @@
 import type { ShiftDutyRow } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
-import {
-  type AdminGate,
-  assertSameOrigin,
-  requirePage,
-  requireScheduleManage,
-} from '@/lib/auth/admin';
+import { type AdminGate, requirePage, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import { invalidateDutyCatalog, loadDutyCatalog } from '@/lib/schedule/duties';
 import {
   DUTY_KEY_RE,
@@ -33,44 +30,16 @@ import {
   normalizeDutyPatch,
 } from '@/lib/schedule/duty-validate';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
 const COLUMNS = 'key, label, detail, phase, side, session_default, sop_id, sort_order, archived';
 
-const emailOf = (gate: AdminGate): string => (gate.user.email ?? '').trim().toLowerCase();
-
-async function gateMutation(
-  cookies: Parameters<APIRoute>[0]['cookies'],
-  request: Request
-): Promise<AdminGate | Response> {
-  const gate = await requireScheduleManage(cookies);
-  if (gate instanceof Response) return gate;
-  const crossOrigin = assertSameOrigin(request);
-  if (crossOrigin) return crossOrigin;
-  return gate;
-}
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
+const emailOf = (gate: AdminGate): string => normalizeEmail(gate.user.email);
 
 /** Every row, straight from the table — the editor needs sop_id, not just the slug. */
 async function loadRows(db: Db): Promise<ShiftDutyRow[] | Response> {
   const { data, error } = await db.from('shift_duties').select(COLUMNS);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return (data ?? []) as ShiftDutyRow[];
 }
 
@@ -95,7 +64,7 @@ async function countUses(db: Db, key: string): Promise<number> {
 async function checkSop(db: Db, sopId: string | null | undefined): Promise<Response | null> {
   if (!sopId) return null;
   const { data, error } = await db.from('sops').select('id').eq('id', sopId).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   return data ? null : json({ error: 'That SOP does not exist' }, 400);
 }
 
@@ -141,7 +110,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -165,18 +134,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     created_by: email,
     updated_by: email,
   });
-  if (error) {
-    // Two admins adding the same label at once, or racing a side.
-    if (error.code === '23505') return json({ error: 'That duty or side already exists' }, 409);
-    return json({ error: error.message }, 500);
-  }
+  // Two admins adding the same label at once, or racing a side.
+  if (error) return dbError(error, 'That duty or side already exists');
 
   invalidateDutyCatalog();
   return json({ key: normalized.value.key }, 201);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -202,7 +168,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         .from('shift_duties')
         .update({ sort_order: (index + 1) * 10, updated_by: email, updated_at: now })
         .eq('key', key);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
     invalidateDutyCatalog();
     return json({ ok: true });
@@ -225,17 +191,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .from('shift_duties')
     .update({ ...normalized.value, updated_by: email, updated_at: now })
     .eq('key', key);
-  if (error) {
-    if (error.code === '23505') return json({ error: 'Another duty already holds that side' }, 409);
-    return json({ error: error.message }, 500);
-  }
+  if (error) return dbError(error, 'Another duty already holds that side');
 
   invalidateDutyCatalog();
   return json({ ok: true });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await gateMutation(cookies, request);
+  const gate = await gateMutation(cookies, request, requireScheduleManage);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -257,7 +220,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('shift_duties').delete().eq('key', key);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   invalidateDutyCatalog();
   return json({ ok: true });

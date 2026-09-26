@@ -56,9 +56,14 @@ interface ImportMetaEnv {
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
   // QStash publish token. Lets a Momence session webhook schedule a debounced
-  // schedule-lint run (lib/schedule-lint/trigger.ts); unset = the next hourly
-  // tick runs it instead.
+  // schedule-lint run (lib/schedule-lint/trigger.ts; unset = the next hourly
+  // tick runs it instead), and queues shift-note classification to
+  // /api/classify/run with retries (lib/classify/dispatch.ts; unset = it runs
+  // best-effort in the saving request's background).
   readonly QSTASH_TOKEN?: string;
+  // Set by Vercel when Protection Bypass for Automation is enabled; forwarded
+  // on QStash classify jobs so they get past Deployment Protection on previews.
+  readonly VERCEL_AUTOMATION_BYPASS_SECRET?: string;
   // HMAC secret for signed unsubscribe links (defaults to CRON_SECRET if unset)
   readonly UNSUBSCRIBE_SECRET?: string;
   // Partner verification: shared secret the landing page sends on /api/partner/request
@@ -97,6 +102,14 @@ interface ImportMetaEnv {
   // AGENTS_BASE_URL is a protected (preview/staging) deployment, which 401s at
   // the edge before EVE_CHANNEL_SECRET is checked.
   readonly AGENTS_PROTECTION_BYPASS?: string;
+  // 'on' lets a shift note's classification start a suggestion run on its own
+  // (lib/suggestions/trigger.ts) when it finds an action or an update; unset,
+  // suggestions come only from a note's AI button. Now a setting on
+  // /admin/settings; this is only its fallback.
+  readonly SUGGESTIONS_AUTO?: string;
+  // AI Gateway key for Jev (lib/jev.ts). Local dev only: deployed, the
+  // Gateway authenticates with Vercel OIDC.
+  readonly AI_GATEWAY_API_KEY?: string;
   // Vercel system env: the git branch a deployment was built from. 'staging'
   // switches the favicon to brand sage (components/Favicon.astro).
   readonly VERCEL_GIT_COMMIT_REF?: string;

@@ -11,13 +11,15 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferralRedemptionRow } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
+import { isUniqueViolation } from '@/lib/http/json';
 import {
   assignMemberTag,
   createMember,
   findMemberByEmail,
   getTagIdByName,
 } from '@/lib/momence/host-api';
-import { memberHasBookings } from '@/lib/webhooks/momence';
+import { memberHasBookings } from '@/lib/momence/members';
+import { siteOrigin } from '@/lib/origins';
 import { getTier, lookupReferrerByCode } from './registry';
 
 const log = createWebhookLogger('Referral Redemption');
@@ -34,8 +36,7 @@ export type RedeemResult =
   | { outcome: 'unavailable'; reason: string };
 
 function bookUrl(code: string): string {
-  const site =
-    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = siteOrigin();
   // utm_campaign carries the code so the existing campaign-performance report
   // and booking_link_clicked attribution pick referred bookings up unchanged.
   return `${site}/events?utm_source=referral&utm_medium=referral&utm_campaign=${code.toLowerCase()}`;
@@ -118,7 +119,7 @@ export async function redeemReferral(params: {
     .select('id')
     .single();
   if (error || !inserted) {
-    if (error?.code === '23505') return { outcome: 'already-redeemed', status: 'pending' };
+    if (isUniqueViolation(error)) return { outcome: 'already-redeemed', status: 'pending' };
     log.error('Redemption insert failed', error);
     return { outcome: 'unavailable', reason: 'db-insert-failed' };
   }

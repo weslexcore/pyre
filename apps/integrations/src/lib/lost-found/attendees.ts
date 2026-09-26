@@ -18,6 +18,7 @@
 // do that lookup only for the sessions staff actually picked, and cache it per
 // request, because it is one HTTP call per person.
 
+import { normalizeEmail } from '@/lib/email/address';
 import {
   bookingMember,
   fetchHostMember,
@@ -135,7 +136,7 @@ export async function attendeesForSession(
       } else {
         try {
           const member = await fetchHostMember(Number(person.memberId));
-          email = (member.email ?? '').trim().toLowerCase();
+          email = normalizeEmail(member.email);
           name = name || [member.firstName, member.lastName].filter(Boolean).join(' ').trim();
           emailCache.set(person.memberId, email);
         } catch (e) {

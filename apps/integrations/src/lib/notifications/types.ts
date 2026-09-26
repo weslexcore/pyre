@@ -17,6 +17,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   'shift_note_reply',
   'sub_request',
   'goal_activity',
+  'agent_suggestion',
 ];
 
 export function isNotificationKind(value: unknown): value is NotificationKind {
@@ -32,6 +33,7 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   shift_note_reply: 'Shift note',
   sub_request: 'Sub',
   goal_activity: 'Goals',
+  agent_suggestion: 'Suggestion',
 };
 
 /** The subset of a row the rules below read. */
@@ -60,6 +62,23 @@ export function sortInbox<T extends NotificationState>(rows: T[], nowIso?: strin
     if (ua !== ub) return ua - ub;
     return b.created_at.localeCompare(a.created_at);
   });
+}
+
+/** What swiping an inbox row does: left clears it, right flips its read state. */
+export type InboxSwipe = 'dismiss' | 'read' | 'unread';
+
+/**
+ * The action a release at this finger delta would commit on a row, or null
+ * when that direction isn't offered where the row is drawn.
+ */
+export function inboxSwipeAction(
+  unread: boolean,
+  dx: number,
+  offered: { dismiss: boolean; toggleRead: boolean }
+): InboxSwipe | null {
+  if (dx < 0) return offered.dismiss ? 'dismiss' : null;
+  if (dx > 0) return offered.toggleRead ? (unread ? 'read' : 'unread') : null;
+  return null;
 }
 
 /**

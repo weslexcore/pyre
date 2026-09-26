@@ -1,13 +1,9 @@
-// Audit-trail writer for lost-and-found items. Every mutation goes through
-// here, so "who emailed whom, who handed it back, who drove it to Furbish" is
-// a property of the system rather than something each route remembers to do.
-//
-// Server-only (takes a service-role client). Failures are logged and
-// swallowed: losing an audit line is bad, but failing a staff member's status
-// change because the trail write failed would be worse. The row itself is
-// already saved by the time we get here.
+// Audit trail for lost-and-found items: every mutation writes a
+// lost_found_events row, so "who emailed whom, who handed it back, who drove
+// it to Furbish" is on record (see lib/audit-log for the contract).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { auditLog } from '@/lib/audit-log';
 import type { LostFoundEventRow } from '@/lib/db';
 
 export interface LostFoundEventInput {
@@ -19,37 +15,23 @@ export interface LostFoundEventInput {
   note?: string | null;
 }
 
-export async function logLostFoundEvent(
-  db: SupabaseClient,
-  event: LostFoundEventInput
-): Promise<void> {
-  const { error } = await db.from('lost_found_events').insert({
-    item_id: event.itemId,
-    action: event.action,
-    actor: event.actor,
-    detail: event.detail ?? {},
-    note: event.note ?? null,
-  });
+const trail = auditLog<LostFoundEventRow>({
+  table: 'lost_found_events',
+  fkColumn: 'item_id',
+  scope: 'lost-found',
+});
 
-  if (error) {
-    console.error(`[lost-found] audit write failed (${event.action}):`, error.message);
-  }
+export function logLostFoundEvent(
+  db: SupabaseClient,
+  { itemId, ...event }: LostFoundEventInput
+): Promise<void> {
+  return trail.log(db, { subjectId: itemId, ...event });
 }
 
 /** The full trail for one item, oldest first. */
-export async function loadLostFoundEvents(
+export function loadLostFoundEvents(
   db: SupabaseClient,
   itemId: string
 ): Promise<LostFoundEventRow[]> {
-  const { data, error } = await db
-    .from('lost_found_events')
-    .select('*')
-    .eq('item_id', itemId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('[lost-found] audit read failed:', error.message);
-    return [];
-  }
-  return (data ?? []) as LostFoundEventRow[];
+  return trail.load(db, itemId);
 }

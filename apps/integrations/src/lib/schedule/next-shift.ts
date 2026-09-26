@@ -6,14 +6,7 @@
 // surfacing an error on the admin home.
 
 import type { LocalWallClock } from '@pyre/schedule-core';
-import {
-  addDays,
-  DOW_LABELS,
-  dayOfWeek,
-  timeToMinutes,
-  utcToEastern,
-  weekStartOf,
-} from '@pyre/schedule-core';
+import { addDays, timeToMinutes, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ShiftAssignmentRow, ShiftRow } from '@/lib/db';
 
@@ -204,19 +197,4 @@ export async function getWeekShifts(
   if (mError) return null;
 
   return pickWeekShifts(shifts, (mine ?? []) as ShiftAssignmentRow[], now);
-}
-
-/** '16:00' → '4p', '09:30' → '9:30a' — same shorthand the calendar uses. */
-export function formatChipTime(time: string): string {
-  const min = timeToMinutes(time);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const suffix = h < 12 ? 'a' : 'p';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-}
-
-/** '2026-09-02' → 'Wed 9/2'. */
-export function formatChipDate(date: string): string {
-  return `${DOW_LABELS[dayOfWeek(date)]} ${Number(date.slice(5, 7))}/${Number(date.slice(8))}`;
 }

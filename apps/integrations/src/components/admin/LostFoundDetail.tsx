@@ -10,6 +10,8 @@
 // when things are going right.
 
 import { useEffect, useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
   LostFoundAttachmentRow,
@@ -30,14 +32,12 @@ import { type PeopleNames, personName } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
-  buttonClass,
   cardClass,
   formatDateTime,
   formatDayAndTime,
   inputClass,
   labelClass,
   primaryButtonClass,
-  readError,
   SectionTitle,
 } from './incidentUi';
 import { LostFoundSessionPicker } from './LostFoundSessionPicker';
@@ -381,7 +381,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
           {data?.canManage && (
             <button
               type="button"
-              className={buttonClass}
+              className={formButtonClass}
               disabled={busy}
               onClick={() =>
                 setPending({
@@ -399,7 +399,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
 
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={busy}
             onClick={() =>
               setPending({
@@ -544,7 +544,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
             </button>
             <button
               type="button"
-              className={buttonClass}
+              className={formButtonClass}
               disabled={busy}
               onClick={() => setEditing('none')}
             >
@@ -557,7 +557,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
           <div className="mb-3 flex justify-end">
             <button
               type="button"
-              className={buttonClass}
+              className={formButtonClass}
               disabled={busy}
               onClick={() => startEditing('details')}
             >
@@ -602,7 +602,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
                     </button>
                     <button
                       type="button"
-                      className={buttonClass}
+                      className={formButtonClass}
                       disabled={busy}
                       onClick={() => setEditing('none')}
                     >
@@ -675,7 +675,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
               <p className="mb-3 font-mono text-xs text-white/45">{item.owner_email}</p>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy}
                 onClick={() => void setOwnerConfirmed(false)}
               >
@@ -701,7 +701,7 @@ export function LostFoundDetail({ itemId }: { itemId: string }) {
                 )}
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy}
                   onClick={() => void setOwnerConfirmed(true)}
                 >

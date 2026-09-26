@@ -27,6 +27,8 @@ import { hasIncidentsManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { IncidentAttachmentRow, IncidentRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { loadIncidentEvents, logIncidentEvent } from '@/lib/incidents/log';
 import { isUrgent, notifyIncident } from '@/lib/incidents/notify';
 import {
@@ -49,23 +51,15 @@ import {
 // settles.
 import { getPeopleNames } from '@/lib/sops/people';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/incidents';
 const LIST_LIMIT = 200;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** How long after filing the reporter may still correct their own report. */
 const AMEND_WINDOW_MINUTES = 60;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 const displayName = (user: { firstName?: string; lastName?: string; email: string }): string =>
   [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
@@ -101,12 +95,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const id = url.searchParams.get('id');
   const reference = url.searchParams.get('reference');
   if (id || reference) {
-    if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    if (id && !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
     let query = db.from('incidents').select('*');
     query = id ? query.eq('id', id) : query.eq('reference', (reference as string).toUpperCase());
     const { data, error } = await query.maybeSingle();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     const incident = (data as IncidentRow) ?? null;
     // Same 404 whether it doesn't exist or isn't theirs: a reporter shouldn't
@@ -201,7 +195,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const incidents = (data ?? []) as IncidentRow[];
 
@@ -268,7 +262,7 @@ export const POST: APIRoute = async ({ cookies, request, url }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const incident = data as IncidentRow;
 
@@ -318,7 +312,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const action = typeof body.action === 'string' ? body.action : 'update';
   if (!['update', 'status', 'note'].includes(action)) {
@@ -326,7 +320,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const { data, error } = await db.from('incidents').select('*').eq('id', id).maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const incident = (data as IncidentRow) ?? null;
   const canManage = hasIncidentsManage(gate.access);
@@ -377,7 +371,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('id', id)
       .select('*')
       .single();
-    if (updateError) return json({ error: updateError.message }, 500);
+    if (updateError) return dbError(updateError);
 
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, FIELD_LIMITS.note) : '';
     await logIncidentEvent(db, {
@@ -428,7 +422,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (updateError) return json({ error: updateError.message }, 500);
+  if (updateError) return dbError(updateError);
 
   await logIncidentEvent(db, {
     incidentId: id,
@@ -456,7 +450,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   // Storage objects are not covered by the row cascade, so clear them first;
   // a failure here means orphaned media, not a failed delete.
@@ -476,7 +470,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .eq('id', id)
     .select('id')
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
   if (!data) return json({ error: 'Incident not found' }, 404);
 
   return json({ ok: true });

@@ -3,7 +3,8 @@
 // a readable message before the insert ever runs. Client-bundle-safe: the
 // composer uses the limits for maxLength.
 
-import { isSopRole, normalizeEmail, type SopRole } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import { isSopRole, type SopRole } from '@/lib/sops/levels';
 
 export const TITLE_MAX = 200;
 export const BODY_MAX = 20000;

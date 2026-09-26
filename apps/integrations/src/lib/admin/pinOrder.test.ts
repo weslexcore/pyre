@@ -76,3 +76,18 @@ describe('togglePin', () => {
     ]);
   });
 });
+
+it('retains hidden pins through visible pin edits and restores their order', () => {
+  const permitted = ['/admin/water', '/admin/schedule', '/admin/sops'];
+  const pins = normalizePins(['/admin/water', '/admin/schedule'], permitted);
+  const edited = repositionPin(togglePin(pins, '/admin/sops'), '/admin/sops', '/admin/schedule');
+  expect(normalizePins(edited, ['/admin/schedule', '/admin/sops'])).toEqual([
+    '/admin/sops',
+    '/admin/schedule',
+  ]);
+  expect(normalizePins(edited, permitted)).toEqual([
+    '/admin/water',
+    '/admin/sops',
+    '/admin/schedule',
+  ]);
+});

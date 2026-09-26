@@ -5,32 +5,30 @@
 // directly because referrers, unlike partners, are unbounded (every /account
 // visitor becomes one).
 
+import { cachedQuery } from '@/lib/cached-query';
 import { getDb, type ReferralTierRow, type ReferrerRow } from '@/lib/db';
+import { siteOrigin } from '@/lib/origins';
 
-const CACHE_TTL_MS = 30_000;
-let tierCache: { rows: ReferralTierRow[]; at: number } | null = null;
-
-export function invalidateTierCache(): void {
-  tierCache = null;
-}
-
-/** All tier rows (cached ~30s), or null when Supabase is down. */
-export async function listTiers(force = false): Promise<ReferralTierRow[] | null> {
+// A stale tier map beats treating a query error as "no tiers" — that would
+// reject every redemption.
+const tierCache = cachedQuery(async () => {
   const db = getDb();
   if (!db) return null;
-
-  if (!force && tierCache && Date.now() - tierCache.at < CACHE_TTL_MS) return tierCache.rows;
-
   const { data, error } = await db.from('referral_tiers').select('*').order('percent');
   if (error) {
     console.error('[referrals] tier fetch failed:', error.message);
-    // A stale tier map beats treating a query error as "no tiers" — that
-    // would reject every redemption.
-    return tierCache?.rows ?? null;
+    return null;
   }
+  return data as ReferralTierRow[];
+});
 
-  tierCache = { rows: data as ReferralTierRow[], at: Date.now() };
-  return tierCache.rows;
+export function invalidateTierCache(): void {
+  tierCache.invalidate();
+}
+
+/** All tier rows (cached ~30s), or null when Supabase is down. */
+export function listTiers(force = false): Promise<ReferralTierRow[] | null> {
+  return tierCache.get(force);
 }
 
 /** The tier a referrer's friends get, or null when unknown/unavailable. */
@@ -129,7 +127,6 @@ export const REWARD_EXPIRY_DAYS = 90;
 
 /** Where a code's shareable link points. */
 export function referralUrl(code: string): string {
-  const site =
-    import.meta.env.PUBLIC_SITE_URL ?? process.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+  const site = siteOrigin();
   return `${site}/r/${code}`;
 }

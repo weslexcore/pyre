@@ -27,7 +27,7 @@ import {
   type HostPaymentTransaction,
   type SaleMember,
 } from '@/lib/momence/host-api';
-import { fetchMomenceMember } from '@/lib/webhooks/momence';
+import { fetchMomenceMember } from '@/lib/momence/members';
 import {
   COUNTED_PURCHASE_KINDS,
   classifyPurchase,

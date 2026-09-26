@@ -18,10 +18,11 @@ import {
   removeBackgroundObject,
 } from '@/lib/boards/form-media';
 import { checkBackgroundFile, defaultFormConfig } from '@/lib/boards/forms';
-import { type APIRoute, beginDelete, json, storeError } from '@/lib/boards/route';
 import { loadBoardBySlug, loadFields, loadForm } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { type APIRoute, beginDelete, dbError, json, storeError } from '@/lib/http/route';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, BOARDS_HREF);
@@ -51,7 +52,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const problem = checkBackgroundFile(file);
   if (problem) return json({ error: problem }, 415);
 
-  const email = (gate.user.email ?? '').trim().toLowerCase();
+  const email = normalizeEmail(gate.user.email);
 
   try {
     const board = await loadBoardBySlug(db, slug);
@@ -79,7 +80,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const { error } = await write;
     if (error) {
       await removeBackgroundObject(db, path);
-      return json({ error: error.message }, 500);
+      return dbError(error);
     }
     if (row?.background_path) await removeBackgroundObject(db, row.background_path);
 
@@ -108,7 +109,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .from('board_forms')
       .update({ background_path: null, updated_by: email })
       .eq('id', row.id);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     await removeBackgroundObject(db, row.background_path);
 
     return json({ background: null });

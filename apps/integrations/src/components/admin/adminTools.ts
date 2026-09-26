@@ -288,6 +288,30 @@ export const USERS_TOOL: AdminTool = {
   keywords: ['users', 'staff', 'roster', 'permissions', 'access'],
 };
 
+// Admin-only, like People: what the suggestion agent proposes is for the
+// admins to decide, so the inbox is never a grantable page.
+export const SUGGESTIONS_HREF = '/admin/suggestions';
+export const SUGGESTIONS_TOOL: AdminTool = {
+  href: SUGGESTIONS_HREF,
+  title: 'Suggestions',
+  navLabel: 'Suggestions',
+  description:
+    'Tasks, task comments, and SOP edits the agent proposes from shift notes — edit and approve or dismiss each one.',
+  section: 'operations',
+  keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox'],
+};
+
+// Admin-only: settings change what the whole app does.
+export const SETTINGS_TOOL: AdminTool = {
+  href: '/admin/settings',
+  title: 'Settings',
+  navLabel: 'Settings',
+  description:
+    'Turn features on and off and adjust how they behave, without changing environment variables or redeploying.',
+  section: 'admin',
+  keywords: ['features', 'toggles', 'flags', 'configuration', 'preferences'],
+};
+
 /** The isAdmin/pages half of DashboardAccess (kept client-bundle-safe here). */
 export interface PageAccess {
   isAdmin: boolean;
@@ -400,8 +424,21 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL];
+  if (access.isAdmin) {
+    return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL, SUGGESTIONS_TOOL, SETTINGS_TOOL];
+  }
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
+}
+
+/** Tools admins can hide from shared listings. Settings must remain reachable. */
+export const HIDEABLE_TOOLS = toolsForAccess({ isAdmin: true, pages: [] }).filter(
+  (tool) => tool.href !== SETTINGS_TOOL.href
+);
+
+/** Visibility is independent of authorization: direct links keep working. */
+export function visibleTools(tools: AdminTool[], hiddenHrefs: readonly string[]): AdminTool[] {
+  const hidden = new Set(hiddenHrefs);
+  return tools.filter((tool) => tool.href === SETTINGS_TOOL.href || !hidden.has(tool.href));
 }
 
 /** Whether this user may view the admin page at `pathname`. */

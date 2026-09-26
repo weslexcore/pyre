@@ -8,7 +8,10 @@
 import { addDays, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { useEffect, useRef, useState } from 'react';
 import { BusinessCosts } from '@/components/admin/BusinessCosts';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, tinyInputClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { fmtMoney } from '@/lib/client/format';
 import { fmtDateTime, timeAgo } from '@/lib/client/relativeTime';
 import type {
   BucketGroup,
@@ -21,12 +24,6 @@ import type { BusinessSyncResponse } from '@/pages/api/admin/business-sync';
 const GOLD = '#b58d35';
 const GRID = 'rgba(255, 255, 255, 0.08)';
 const CREME = 'rgba(255, 255, 255, 0.65)';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -107,9 +104,6 @@ function presetRange(
 }
 
 // --- Formatting ---
-
-const fmtMoney = (n: number): string =>
-  `$${Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(2)}`;
 
 const fmtCount = (n: number): string =>
   Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(1);
@@ -896,7 +890,7 @@ export function BusinessOverview() {
           <>
             <input
               type="date"
-              className={inputClass}
+              className={tinyInputClass}
               value={customStart}
               max={customEnd}
               aria-label="Range start"
@@ -905,7 +899,7 @@ export function BusinessOverview() {
             <span className="font-mono text-xs text-white/40">to</span>
             <input
               type="date"
-              className={inputClass}
+              className={tinyInputClass}
               value={customEnd}
               min={customStart}
               aria-label="Range end"
@@ -940,9 +934,7 @@ export function BusinessOverview() {
     return (
       <div className="space-y-8">
         {controls}
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error ?? 'Failed to load'}
-        </p>
+        <ErrorBanner mono>{error ?? 'Failed to load'}</ErrorBanner>
       </div>
     );
   }

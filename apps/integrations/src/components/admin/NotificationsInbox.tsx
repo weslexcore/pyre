@@ -1,13 +1,15 @@
 // /admin/notifications: everything live in the viewer's inbox, unread
-// first. Rows can be opened (which reads them), marked read all at once, or
-// dismissed one by one; each change is applied to the list immediately and
+// first. Rows can be opened (which reads them), marked read all at once,
+// swiped read or unread one by one, or dismissed; each change is applied to the list immediately and
 // written through, and the header bell hears about the new count via the
 // NOTIFICATIONS_EVENT so it updates without a navigation.
 import { useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { StaffNotificationRow } from '@/lib/db';
 import { emitUnreadCount, isUnread, sortInbox } from '@/lib/notifications/types';
-import { buttonClass, readError } from './messagesUi';
+import { buttonClass } from './messagesUi';
 import { NotificationList } from './NotificationList';
 
 // The full inbox is the one reader that also asks for the dead-row sweep.
@@ -91,6 +93,28 @@ export function NotificationsInbox() {
     emitUnreadCount(Math.max(0, unreadCount - 1));
   };
 
+  const toggleRead = async (n: StaffNotificationRow, read: boolean) => {
+    setError(null);
+    const readAt = read ? new Date().toISOString() : null;
+    feed.setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: prev.notifications.map((r) =>
+              r.id === n.id ? { ...r, read_at: readAt } : r
+            ),
+          }
+        : prev
+    );
+    try {
+      const { unreadCount } = await patch({ ids: [n.id], read });
+      settle(unreadCount);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update');
+      await feed.reload();
+    }
+  };
+
   const dismissRow = async (n: StaffNotificationRow) => {
     setError(null);
     feed.setData((prev) =>
@@ -136,14 +160,7 @@ export function NotificationsInbox() {
         </div>
       </div>
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {feed.error && !feed.data && (
         <p role="alert" className="text-sm text-[var(--pyre-red)]">
           Couldn't load notifications: {feed.error}
@@ -158,6 +175,7 @@ export function NotificationsInbox() {
           emptyText={filter === 'unread' ? 'No unread notifications.' : 'No notifications yet.'}
           onOpen={open}
           onDismiss={(n) => void dismissRow(n)}
+          onToggleRead={(n, read) => void toggleRead(n, read)}
         />
       )}
     </div>

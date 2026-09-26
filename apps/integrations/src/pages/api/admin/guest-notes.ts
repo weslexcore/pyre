@@ -12,32 +12,14 @@ import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { GuestProfileNoteRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { loadProfileById } from '@/lib/guests/store';
 import { GUESTS_PAGE } from '@/lib/guests/types';
 import { normalizeNoteBody } from '@/lib/guests/validate';
+import { dbError, isUuid, json, readJsonBody } from '@/lib/http/route';
 import { sameActor } from '@/lib/sops/names';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
-  if (!request.headers.get('content-type')?.includes('application/json')) {
-    return json({ error: 'Content-Type must be application/json' }, 415);
-  }
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-}
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 async function loadNote(
   db: NonNullable<ReturnType<typeof getDb>>,
@@ -73,7 +55,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (body instanceof Response) return body;
 
   const profileId = typeof body.profileId === 'string' ? body.profileId : '';
-  if (!UUID_RE.test(profileId)) return json({ error: 'profileId must be a UUID' }, 400);
+  if (!isUuid(profileId)) return json({ error: 'profileId must be a UUID' }, 400);
 
   const note = normalizeNoteBody(body.body);
   if (!note.ok) return json({ error: note.error }, 400);
@@ -87,7 +69,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .insert({ profile_id: profileId, body: note.value, author_email: email })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   await touchProfile(db, profileId, email);
 
@@ -108,7 +90,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body instanceof Response) return body;
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const note = normalizeNoteBody(body.body);
   if (!note.ok) return json({ error: note.error }, 400);
@@ -127,7 +109,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ note: data as GuestProfileNoteRow });
 };
@@ -143,7 +125,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id') ?? '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const existing = await loadNote(db, id);
   if (!existing) return json({ ok: true });
@@ -154,7 +136,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('guest_profile_notes').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

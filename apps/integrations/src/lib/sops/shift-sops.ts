@@ -11,10 +11,11 @@ import type { AssignmentDuty, DutyCatalog } from '@pyre/schedule-core';
 import { dutyDef, normalizeDuties } from '@pyre/schedule-core';
 import { listStaff } from '@/lib/auth/access';
 import type { getDb, SopRow } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
 import { getNextUpcomingShift } from '@/lib/schedule/next-shift';
 import { countTasks } from './checklist';
-import { canViewSop, normalizeEmail, type SopViewer } from './levels';
+import { canViewSop, type SopViewer } from './levels';
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 

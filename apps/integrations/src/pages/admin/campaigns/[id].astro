@@ -5,9 +5,10 @@
 import { CampaignDetail } from '@/components/admin/campaigns/CampaignDetail';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { loadBlogPosts } from '@/lib/campaigns/blog';
+import { siteOrigin } from '@/lib/origins';
 
 const { id } = Astro.params;
-const origin = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+const origin = siteOrigin();
 const blogPosts = await loadBlogPosts(origin);
 ---
 

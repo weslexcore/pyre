@@ -18,7 +18,6 @@ import type {
 import { formatKpiValue, kpiFreshness, kpiProgress } from '@/lib/goals/kpis';
 import { PACE_LABELS, type PaceState, type TaskProgress } from '@/lib/goals/progress';
 import { GOAL_STATUS_LABELS } from '@/lib/goals/types';
-import { readError } from './incidentUi';
 
 // min-w-0 lets a date or time input, which carries its own intrinsic width,
 // shrink with a flex row or a grid cell on a phone instead of widening it.
@@ -36,27 +35,18 @@ export const selectClass = `w-full ${selectBaseClass}`;
 
 export const textareaClass = `${inputClass} min-h-[110px]`;
 
-export const labelClass = 'block mb-1.5 font-mono text-xs uppercase tracking-wide text-white/50';
-
-export const buttonClass =
-  'px-3 py-2 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
 /**
  * The compact version, for a toolbar rather than a form: the back links and
  * the calendar's month controls. Same button as the SOPs pages use above a
  * document, and the shorter padding is what lines it up with the view pills
  * (scheduleUi.pillClass) it sits beside on a board.
  */
-export const toolbarButtonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 export const primaryButtonClass =
   'px-3 py-2 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 
 export const dangerButtonClass =
   'px-3 py-2 rounded border border-[var(--pyre-red)]/50 bg-[var(--pyre-red)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-red)] hover:border-[var(--pyre-red)] transition-colors disabled:opacity-40';
-
-export const cardClass = 'rounded border border-white/10 bg-white/[0.03] p-4';
 
 // A card sitting above the others — the goal at the top of a board, which
 // the columns beneath serve. A brighter surface, a firmer edge, and a
@@ -296,27 +286,9 @@ export function SectionTitle({ children, note }: { children: ReactNode; note?: R
  */
 export { formatYmd };
 
-/** JSON mutation against the goals/boards routes; throws with the API's message. */
-export async function send<T>(
-  url: string,
-  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-  body?: unknown
-): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  return (await res.json()) as T;
-}
-
-/** Today in America/New_York, matching what the routes store on a card. */
-export function todayEastern(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
 /** A card the drawer and the rows both need to key and link. */
 export function cardAnchorId(card: Pick<BoardCardRow, 'id'>): string {
   return `card-${card.id}`;
 }
+
+export { cardClass, labelClass } from '@/components/admin/ui';

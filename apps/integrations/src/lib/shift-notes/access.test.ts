@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeEmail } from '@/lib/email/address';
 import {
   canReply,
   canSeeNote,
@@ -6,7 +7,6 @@ import {
   canSetStatus,
   canTouchReply,
   isShiftNoteStatus,
-  normalizeEmail,
   statusLabel,
 } from './access';
 
@@ -83,5 +83,14 @@ describe('replies', () => {
     expect(canTouchReply(reply('wes@pyresauna.com'), maya)).toBe(false);
     expect(canTouchReply(reply('maya@pyresauna.com'), admin)).toBe(true);
     expect(canTouchReply(reply('maya@pyresauna.com'), { email: '', isAdmin: false })).toBe(false);
+  });
+
+  it('never lets anyone edit or delete an event', () => {
+    const event = { ...reply('wes@pyresauna.com'), kind: 'status' as const };
+    expect(canTouchReply(event, admin)).toBe(false);
+    expect(
+      canTouchReply({ author_email: null, is_private: true, kind: 'classification' }, admin)
+    ).toBe(false);
+    expect(canTouchReply({ ...reply('wes@pyresauna.com'), kind: 'comment' }, admin)).toBe(true);
   });
 });

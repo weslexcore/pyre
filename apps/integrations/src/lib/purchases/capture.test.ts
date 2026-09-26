@@ -21,7 +21,7 @@ vi.mock('@/lib/momence/host-api', () => ({
   fetchMemberActivePacks: (id: number, opts: unknown) => fetchMemberActivePacks(id, opts),
   getIntroOfferMembershipIds: () => getIntroOfferMembershipIds(),
 }));
-vi.mock('@/lib/webhooks/momence', () => ({
+vi.mock('@/lib/momence/members', () => ({
   fetchMomenceMember: (id: string) => fetchMomenceMember(id),
 }));
 vi.mock('@/lib/analytics/posthog', () => ({

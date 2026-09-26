@@ -70,6 +70,14 @@ html {
   touch-action: pan-x pan-y;
 }
 
+/* Pull-to-refresh is ours (components/PullToRefresh.astro), on every page
+ * and in the installed app too. Chrome on Android has its own in a browser
+ * tab; turning overscroll off at the root stops it, so a pull never reloads
+ * twice, and stops iOS rubber-banding the page under our indicator. */
+html {
+  overscroll-behavior-y: none;
+}
+
 /* Page transitions. AdminLayout mounts Astro's <ClientRouter />, so every
  * same-origin navigation runs through the View Transition API in browsers
  * that have it. The root snapshot crossfades with the browser's default

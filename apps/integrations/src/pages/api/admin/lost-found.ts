@@ -25,6 +25,8 @@ import { hasLostFoundManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requireAdmin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow, LostFoundNoticeRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { loadLostFoundEvents, logLostFoundEvent } from '@/lib/lost-found/log';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import {
@@ -42,20 +44,12 @@ import {
 } from '@/lib/lost-found/validate';
 import { getPeopleNames } from '@/lib/sops/people';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/lost-found';
 const LIST_LIMIT = 300;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 const displayName = (user: { firstName?: string; lastName?: string; email: string }): string =>
   [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
@@ -92,12 +86,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const id = url.searchParams.get('id');
   const reference = url.searchParams.get('reference');
   if (id || reference) {
-    if (id && !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+    if (id && !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
     let query = db.from('lost_found_items').select('*');
     query = id ? query.eq('id', id) : query.eq('reference', (reference as string).toUpperCase());
     const { data, error } = await query.maybeSingle();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     const item = (data as LostFoundItemRow) ?? null;
     if (!item) return json({ error: 'Item not found' }, 404);
@@ -147,7 +141,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   }
 
   const { data, error } = await query;
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const items = (data ?? []) as LostFoundItemRow[];
 
@@ -226,7 +220,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     })
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const item = data as LostFoundItemRow;
 
@@ -319,14 +313,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   const id = typeof body.id === 'string' ? body.id : '';
-  if (!UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   const { data: current, error: readError } = await db
     .from('lost_found_items')
     .select('*')
     .eq('id', id)
     .maybeSingle();
-  if (readError) return json({ error: readError.message }, 500);
+  if (readError) return dbError(readError);
 
   const item = (current as LostFoundItemRow) ?? null;
   if (!item) return json({ error: 'Item not found' }, 404);
@@ -371,7 +365,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('id', id)
       .select('*')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     await logLostFoundEvent(db, {
       itemId: id,
@@ -409,7 +403,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .eq('id', id)
       .select('*')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
 
     const action =
       body.status === 'picked_up'
@@ -454,7 +448,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .eq('id', id)
     .select('*')
     .single();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   await logLostFoundEvent(db, {
     itemId: id,
@@ -478,7 +472,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const id = url.searchParams.get('id');
-  if (!id || !UUID_RE.test(id)) return json({ error: 'id must be a UUID' }, 400);
+  if (!id || !isUuid(id)) return json({ error: 'id must be a UUID' }, 400);
 
   // Attachments cascade in the database; their objects would not, so they go
   // first and explicitly.
@@ -488,7 +482,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   }
 
   const { error } = await db.from('lost_found_items').delete().eq('id', id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   return json({ ok: true });
 };

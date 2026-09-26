@@ -4,19 +4,14 @@
 // immediately and revalidates behind it.
 
 import { useMemo, useState } from 'react';
+import { isSessionExpired, SessionExpired } from '@/components/admin/SessionExpired';
+import { formButtonClass } from '@/components/admin/ui';
 import { goalMetricLabel } from '@/lib/campaigns/goals';
 import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type { CampaignListResponse } from '@/lib/campaigns/types';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import { buttonClass, cardClass, inputClass, primaryButtonClass } from '../incidentUi';
-import {
-  dateRangeLabel,
-  formatCreated,
-  isSessionExpired,
-  PhaseChip,
-  SessionExpired,
-  TypeBadge,
-} from './campaignUi';
+import { cardClass, inputClass, primaryButtonClass } from '../incidentUi';
+import { dateRangeLabel, formatCreated, PhaseChip, TypeBadge } from './campaignUi';
 
 export function CampaignsIndex() {
   const [showArchived, setShowArchived] = useState(false);
@@ -43,10 +38,10 @@ export function CampaignsIndex() {
         <a href="/admin/campaigns/new" className={primaryButtonClass}>
           New campaign
         </a>
-        <a href="/admin/campaigns/performance" className={buttonClass}>
+        <a href="/admin/campaigns/performance" className={formButtonClass}>
           Performance report
         </a>
-        <a href="/admin/campaigns/shortlinks" className={buttonClass}>
+        <a href="/admin/campaigns/shortlinks" className={formButtonClass}>
           Short links
         </a>
         <label className="ml-auto flex items-center gap-2 font-mono text-xs text-white/50">

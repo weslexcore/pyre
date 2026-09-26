@@ -2,13 +2,11 @@
 
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 
 export const GET: APIRoute = async ({ cookies }) => {
   const gate = await requireAdmin(cookies);
   if (gate instanceof Response) return gate;
 
-  return new Response(JSON.stringify({ ok: true, email: gate.user.email }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-  });
+  return json({ ok: true, email: gate.user.email });
 };

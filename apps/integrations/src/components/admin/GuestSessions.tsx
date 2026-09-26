@@ -6,11 +6,13 @@
 // half hour before a session, on a phone, so the roster leads with the
 // people to greet by name.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { timeAgo } from '@/lib/client/relativeTime';
+import { firstNameOf } from '@/lib/email/address';
 import type { RosterSession, SessionRoster } from '@/lib/guests/roster';
-import { firstNameOf } from '@/lib/guests/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
   AnswerPill,
@@ -21,9 +23,8 @@ import {
   QuietBadge,
   StandingBadge,
   shiftDate,
-  todayEastern,
 } from './guestUi';
-import { buttonClass, cardClass, inputClass } from './incidentUi';
+import { cardClass, inputClass } from './incidentUi';
 
 interface DayResponse {
   available: boolean;
@@ -72,18 +73,18 @@ export function GuestSessions() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={buttonClass} onClick={() => move(shiftDate(date, -1))}>
+        <button type="button" className={formButtonClass} onClick={() => move(shiftDate(date, -1))}>
           ← Prev
         </button>
         <button
           type="button"
-          className={buttonClass}
+          className={formButtonClass}
           disabled={date === today}
           onClick={() => move(today)}
         >
           Today
         </button>
-        <button type="button" className={buttonClass} onClick={() => move(shiftDate(date, 1))}>
+        <button type="button" className={formButtonClass} onClick={() => move(shiftDate(date, 1))}>
           Next →
         </button>
         <label className="sr-only" htmlFor="roster-date">

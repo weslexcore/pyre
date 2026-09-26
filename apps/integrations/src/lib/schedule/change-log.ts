@@ -6,6 +6,7 @@
 // Logging is best-effort by design: a failed log insert must never fail the
 // mutation it describes, so errors are warned and swallowed.
 
+import { DOW_LABELS } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdminGate } from '@/lib/auth/admin';
 
@@ -158,8 +159,6 @@ export async function staffNameOf(db: SupabaseClient, staffId: string): Promise<
   return (data?.display_name as string | undefined) ?? 'Unknown staff';
 }
 
-const DAY_ABBREV = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 /** "Sunny: 2026-08-14–2026-08-18" / "Sunny: weekly on Mon, Wed (09:00–12:00)" */
 export function describeTimeOff(
   name: string,
@@ -174,7 +173,7 @@ export function describeTimeOff(
 ): string {
   const when =
     entry.kind === 'recurring'
-      ? `weekly on ${entry.days_of_week.map((d) => DAY_ABBREV[d] ?? d).join(', ')}`
+      ? `weekly on ${entry.days_of_week.map((d) => DOW_LABELS[d] ?? d).join(', ')}`
       : `${entry.start_date}–${entry.end_date}`;
   const times =
     entry.starts_at && entry.ends_at

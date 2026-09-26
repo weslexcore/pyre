@@ -6,6 +6,7 @@
 // deployment can never lock every admin out.
 
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
+import { cachedQuery } from '@/lib/cached-query';
 import { canUseDashboard } from '@/lib/sops/levels';
 import { getDb, type StaffRow } from '../db';
 
@@ -22,31 +23,26 @@ export interface DashboardAccess {
 const ENV_STAFF_PAGES = ['/admin/schedule', '/admin/water'];
 
 // The roster is tiny (a dozen rows), so cache the whole table briefly rather
-// than querying per request. Mutations in /api/admin/users invalidate it.
-const CACHE_TTL_MS = 30_000;
-let cache: { rows: StaffRow[]; at: number } | null = null;
+// than querying per request. Mutations in /api/admin/users invalidate it. A
+// stale roster beats falling back to env vars mid-flight.
+const staffCache = cachedQuery(async () => {
+  const db = getDb();
+  if (!db) return null;
+  const { data, error } = await db.from('staff').select('*').order('display_name');
+  if (error) {
+    console.error('[access] staff fetch failed:', error.message);
+    return null;
+  }
+  return data as StaffRow[];
+});
 
 export function invalidateAccessCache(): void {
-  cache = null;
+  staffCache.invalidate();
 }
 
 /** All staff rows (cached ~30s), or null when Supabase is down. */
-export async function listStaff(force = false): Promise<StaffRow[] | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.rows;
-
-  const { data, error } = await db.from('staff').select('*').order('display_name');
-
-  if (error) {
-    console.error('[access] staff fetch failed:', error.message);
-    // A stale roster beats falling back to env vars mid-flight.
-    return cache?.rows ?? null;
-  }
-
-  cache = { rows: data as StaffRow[], at: Date.now() };
-  return cache.rows;
+export function listStaff(force = false): Promise<StaffRow[] | null> {
+  return staffCache.get(force);
 }
 
 /** Whether this row grants any dashboard access at all (vs roster-only). */

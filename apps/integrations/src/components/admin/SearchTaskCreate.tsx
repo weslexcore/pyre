@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { BOARD_LIMITS, GOALS_BOARD_SLUG } from '@/lib/boards/types';
+import { sendJson } from '@/lib/client/api';
 import type { BoardCardRow, BoardRow } from '@/lib/db';
-import { buttonClass, inputClass, primaryButtonClass, selectClass, send } from './goalsUi';
+import { inputClass, primaryButtonClass, selectClass } from './goalsUi';
 
 /** A quick capture inside global search; the API limits the board list to this viewer. */
 export function SearchTaskCreate({
@@ -37,7 +39,7 @@ export function SearchTaskCreate({
         setSaving(true);
         setError(null);
         try {
-          const result = await send<{ card: BoardCardRow }>('/api/admin/board-cards', 'POST', {
+          const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'POST', {
             board,
             title: title.trim(),
           });
@@ -107,7 +109,12 @@ export function SearchTaskCreate({
           </button>
         </>
       )}
-      <button type="button" className={`${buttonClass} ml-2`} onClick={onBack} disabled={saving}>
+      <button
+        type="button"
+        className={`${formButtonClass} ml-2`}
+        onClick={onBack}
+        disabled={saving}
+      >
         Back to search
       </button>
     </form>

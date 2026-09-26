@@ -25,8 +25,11 @@
 // same question.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
+import { firstNameOf } from '@/lib/email/address';
 import {
   CAMERA_ACCEPT,
   checkFile,
@@ -48,23 +51,11 @@ import {
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { BackLink } from './BackLink';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
-import {
-  buttonClass,
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  readError,
-  SectionTitle,
-} from './incidentUi';
+import { inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
 /** The log form has never emailed anyone yet, so nothing is "already asked". */
 const EMPTY_ASKED: Set<string> = new Set();
-
-/** "Alex Chen" -> "Alex", for the one place the form speaks about a person. */
-function firstNameOf(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? '';
-}
 
 interface PendingFile {
   id: string;
@@ -492,7 +483,7 @@ export function LostFoundForm() {
             {!dayWindow && nextLookback && (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 onClick={() => setLookbackHours(nextLookback)}
               >
                 Look further back
@@ -510,7 +501,7 @@ export function LostFoundForm() {
               />
             </label>
             {dayWindow && (
-              <button type="button" className={buttonClass} onClick={() => showDay('')}>
+              <button type="button" className={formButtonClass} onClick={() => showDay('')}>
                 Back to recent
               </button>
             )}
@@ -560,7 +551,7 @@ export function LostFoundForm() {
         {owner && (
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={submitting}
             onClick={() => void submit({ ask: false })}
           >

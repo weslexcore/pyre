@@ -6,16 +6,10 @@
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { getDb, type SopRow } from '@/lib/db';
-import { canViewSop, normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, isUuid, json } from '@/lib/http/route';
+import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const PUT: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, '/admin/sops');
@@ -41,7 +35,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
   }
 
   const sopId = typeof body.sopId === 'string' ? body.sopId : '';
-  if (!UUID_RE.test(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
+  if (!isUuid(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
   if (typeof body.pinned !== 'boolean') return json({ error: 'pinned must be a boolean' }, 400);
 
   if (body.pinned) {
@@ -50,7 +44,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
       .select('*')
       .eq('id', sopId)
       .maybeSingle();
-    if (sopError) return json({ error: sopError.message }, 500);
+    if (sopError) return dbError(sopError);
     const sop = (sopData as SopRow) ?? null;
     const role = await getSopRole(gate.user.email ?? null, gate.access);
     const viewer: SopViewer = { role, email: normalizeEmail(gate.user.email) };
@@ -59,21 +53,21 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
     const { error } = await db
       .from('sop_pins')
       .upsert({ user_email: email, sop_id: sopId }, { ignoreDuplicates: true });
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   } else {
     const { error } = await db
       .from('sop_pins')
       .delete()
       .eq('user_email', email)
       .eq('sop_id', sopId);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   const { data: pins, error: pinsError } = await db
     .from('sop_pins')
     .select('sop_id')
     .eq('user_email', email);
-  if (pinsError) return json({ error: pinsError.message }, 500);
+  if (pinsError) return dbError(pinsError);
 
   return json({ ok: true, pins: (pins ?? []).map((p) => p.sop_id as string) });
 };

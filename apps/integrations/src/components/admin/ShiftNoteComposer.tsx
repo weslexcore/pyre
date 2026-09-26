@@ -10,7 +10,18 @@
 // A created note is announced on the document (SHIFT_NOTE_CREATED_EVENT), so
 // the log on /admin/shift-notes picks up a note written from the header modal
 // without a reload, the same way it picks up one written inline.
+
+import { todayEastern } from '@pyre/schedule-core';
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import {
+  buttonClass,
+  compactInputClass,
+  goldButtonClass,
+  microLabelClass,
+} from '@/components/admin/ui';
+import type { ClassificationView } from '@/lib/classify/view';
+import { readError } from '@/lib/client/api';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
 import {
   ACCEPT_ATTRIBUTE,
@@ -19,39 +30,22 @@ import {
   formatBytes,
   MAX_ATTACHMENTS_PER_NOTE,
 } from '@/lib/shift-notes/media';
-import { NOTE_BODY_MAX, todayEastern } from '@/lib/shift-notes/validate';
+import { NOTE_BODY_MAX } from '@/lib/shift-notes/validate';
 import type { PeopleNames } from '@/lib/sops/names';
 
-export const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-export const primaryButtonClass =
-  'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
-
-export const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-export const textareaClass = `${inputClass} min-h-[100px] w-full`;
-
-const fieldLabelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
+export const textareaClass = `${compactInputClass} min-h-[100px] w-full`;
 
 /** What POST /api/admin/shift-notes hands back for a new note. */
 export interface CreatedShiftNote {
   note: ShiftNoteRow;
   attachments: ShiftNoteAttachmentRow[];
   people: PeopleNames;
+  /** The classifier's read of the note, for admins (it starts out pending). */
+  classification?: ClassificationView;
 }
 
 /** Fired on `document` with a CreatedShiftNote detail after every new note. */
 export const SHIFT_NOTE_CREATED_EVENT = 'pyre:shift-note-created';
-
-export async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
 
 /** One composer file and where its eager upload stands. */
 interface StagedFile {
@@ -315,20 +309,20 @@ export function ShiftNoteComposer({
       )}
 
       <div className="space-y-1.5">
-        <label htmlFor={`${fieldId}-date`} className={fieldLabelClass}>
+        <label htmlFor={`${fieldId}-date`} className={microLabelClass}>
           Shift date
         </label>
         <input
           id={`${fieldId}-date`}
           type="date"
-          className={`${inputClass} block w-full py-2 sm:w-56`}
+          className={`${compactInputClass} block w-full py-2 sm:w-56`}
           value={draftDate}
           onChange={(e) => setDraftDate(e.target.value)}
         />
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor={`${fieldId}-body`} className={fieldLabelClass}>
+        <label htmlFor={`${fieldId}-body`} className={microLabelClass}>
           What's worth noting
         </label>
         <textarea
@@ -336,7 +330,7 @@ export function ShiftNoteComposer({
           ref={textareaRef}
           aria-describedby={`${fieldId}-hint`}
           rows={6}
-          className={`${inputClass} block min-h-40 w-full px-3.5 py-3 text-base leading-relaxed sm:text-sm`}
+          className={`${compactInputClass} block min-h-40 w-full px-3.5 py-3 text-base leading-relaxed sm:text-sm`}
           placeholder="Cold plunge is warming up // running low on towels // etc. "
           maxLength={NOTE_BODY_MAX}
           value={draftBody}
@@ -345,7 +339,7 @@ export function ShiftNoteComposer({
       </div>
 
       <div className="space-y-2">
-        <p className={fieldLabelClass}>
+        <p className={microLabelClass}>
           Photos &amp; video{' '}
           <span className="normal-case tracking-normal text-white/30">
             (optional, up to {MAX_ATTACHMENTS_PER_NOTE})
@@ -429,16 +423,12 @@ export function ShiftNoteComposer({
         )}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       <div className="flex justify-end border-t border-white/10 pt-4">
         <button
           type="button"
-          className={`${primaryButtonClass} w-full py-2.5 sm:w-auto sm:px-5`}
+          className={`${goldButtonClass} w-full py-2.5 sm:w-auto sm:px-5`}
           disabled={busy || !draftBody.trim() || !draftDate}
           onClick={() => void addNote()}
         >
@@ -448,3 +438,5 @@ export function ShiftNoteComposer({
     </div>
   );
 }
+
+export { buttonClass } from '@/components/admin/ui';

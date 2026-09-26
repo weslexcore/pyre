@@ -37,7 +37,6 @@ import {
   tooFast,
 } from '@/lib/boards/form-guard';
 import { formConfigOf, parseSubmission } from '@/lib/boards/forms';
-import { type APIRoute, json } from '@/lib/boards/route';
 import {
   loadBoardBySlug,
   loadColumns,
@@ -48,6 +47,8 @@ import {
 import { isBoardSlug } from '@/lib/boards/types';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { type APIRoute, dbError, json } from '@/lib/http/route';
 import { notifyIntakeCard } from '@/lib/notifications/goals';
 
 /** The actor on a public submission's card and trail. */
@@ -99,7 +100,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
       const crossOrigin = assertSameOrigin(request);
       if (crossOrigin) return crossOrigin;
       const { session } = await validateSession(cookies);
-      const email = session.isAuthenticated ? (session.user?.email ?? '').trim().toLowerCase() : '';
+      const email = session.isAuthenticated ? normalizeEmail(session.user?.email) : '';
       if (!email) return json({ error: 'Sign in to send this form' }, 401);
       const access = await getAccess(email);
       // Not-found and not-yours look the same, as on the board routes.
@@ -139,7 +140,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
     if (error) {
       // Our failure should not count against the sender.
       if (limitKey) await refundRateLimit(limitKey);
-      return json({ error: error.message }, 500);
+      return dbError(error);
     }
 
     const card = data as BoardCardRow;

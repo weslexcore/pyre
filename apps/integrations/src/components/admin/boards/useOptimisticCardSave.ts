@@ -1,7 +1,7 @@
 import { type Dispatch, type SetStateAction, useRef } from 'react';
 import { columnPatch } from '@/lib/boards/cards';
+import { sendJson } from '@/lib/client/api';
 import type { BoardCardRow, BoardColumnRow } from '@/lib/db';
-import { send } from '../goalsUi';
 
 export function optimisticCardPatch(
   card: BoardCardRow,
@@ -54,7 +54,7 @@ export function useOptimisticCardSave<
     };
     replace(optimisticCardPatch(before, patch, current.current.columns));
     try {
-      const result = await send<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
+      const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
         id,
         ...patch,
       });

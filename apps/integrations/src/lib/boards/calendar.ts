@@ -19,7 +19,7 @@
 // The calendar is the last place a stale configuration should show up as an
 // error page.
 
-import { addDays } from '@pyre/schedule-core';
+import { addDays, formatCompactTime } from '@pyre/schedule-core';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { goalOverviewHref, isClosedStatus } from '@/lib/goals/types';
 import { isYmd } from '@/lib/goals/validate';
@@ -328,22 +328,13 @@ export function entriesByDate(entries: CalendarEntry[]): Map<string, CalendarEnt
 /** '6:30p', '6–9p', '' — the compact label a month cell has room for. */
 export function formatEntryTime(entry: CalendarEntry): string {
   if (entry.time === null) return '';
-  const start = shortTime(entry.time);
+  const start = formatCompactTime(entry.time);
   if (entry.endTime === null) return start;
   // The suffix is dropped from the start when both ends share it: 6–9p, but
   // 11a–1p.
-  const end = shortTime(entry.endTime);
+  const end = formatCompactTime(entry.endTime);
   const sameHalf = start.slice(-1) === end.slice(-1);
   return `${sameHalf ? start.slice(0, -1) : start}–${end}`;
-}
-
-/** '18:30' as '6:30p'; '18:00' as '6p'. */
-export function shortTime(value: string): string {
-  const [hour, minute] = value.split(':');
-  const hours = Number(hour);
-  const suffix = hours < 12 ? 'a' : 'p';
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  return minute === '00' ? `${hour12}${suffix}` : `${hour12}:${minute}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------

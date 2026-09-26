@@ -53,15 +53,6 @@ import { deleteBoardAttachments } from '@/lib/boards/card-media';
 import { logBoardEvent } from '@/lib/boards/events';
 import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
 import {
-  type APIRoute,
-  beginDelete,
-  beginMutation,
-  beginRead,
-  type Db,
-  json,
-  storeError,
-} from '@/lib/boards/route';
-import {
   attachGoalToBoard,
   goalExists,
   loadBoardBundle,
@@ -80,6 +71,16 @@ import {
   parseBoardPatch,
 } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
+import {
+  type APIRoute,
+  beginDelete,
+  beginMutation,
+  beginRead,
+  type Db,
+  dbError,
+  json,
+  storeError,
+} from '@/lib/http/route';
 import { deleteBySourceIds } from '@/lib/notifications/notify';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -150,7 +151,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       })
       .select('*')
       .single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
     createdGoal = data as GoalRow;
     board.goal_id = createdGoal.id;
   }
@@ -162,7 +163,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) {
     if (createdGoal) await db.from('goals').delete().eq('id', createdGoal.id);
-    return json({ error: error.message }, 500);
+    return dbError(error);
   }
 
   const created = data as BoardRow;
@@ -174,7 +175,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     // does not get to exist: undo the inserts rather than leave a husk.
     await db.from('boards').delete().eq('id', created.id);
     if (createdGoal) await db.from('goals').delete().eq('id', createdGoal.id);
-    return json({ error: columnError.message }, 500);
+    return dbError(columnError);
   }
 
   if (createdGoal) {
@@ -202,7 +203,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('slug', slug)
     .maybeSingle();
-  if (loadError) return json({ error: loadError.message }, 500);
+  if (loadError) return dbError(loadError);
   const board = (existing as BoardRow) ?? null;
   if (!board) return json({ error: 'Board not found' }, 404);
 
@@ -215,7 +216,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       .from('boards')
       .update({ ...patch, updated_by: email })
       .eq('id', board.id);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   if (goalId !== undefined && goalId !== board.goal_id) {
@@ -244,7 +245,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .select('*')
     .eq('id', board.id)
     .single();
-  if (afterError) return json({ error: afterError.message }, 500);
+  if (afterError) return dbError(afterError);
 
   return json({
     board: after as BoardRow,
@@ -273,7 +274,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .eq('slug', slug)
     .maybeSingle();
-  if (loadError) return json({ error: loadError.message }, 500);
+  if (loadError) return dbError(loadError);
   const board = (row as BoardRow) ?? null;
   if (!board) return json({ error: 'Board not found' }, 404);
 
@@ -281,7 +282,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     .from('board_cards')
     .select('id')
     .eq('board_id', board.id);
-  if (cardsError) return json({ error: cardsError.message }, 500);
+  if (cardsError) return dbError(cardsError);
   const cardIds = ((cardRows ?? []) as { id: string }[]).map((card) => card.id);
 
   // Columns, fields, cards, the cards' trails, and the attachment rows
@@ -290,7 +291,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   // it goes back to being a goal nobody serves yet.
   await deleteBoardAttachments(db, board.id);
   const { error } = await db.from('boards').delete().eq('id', board.id);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   // A bell row pointing at a card that no longer exists is a dead end.
   await deleteBySourceIds(db, 'board_card', cardIds);
@@ -326,10 +327,10 @@ async function applyColumns(
           archived: column.archived,
         })
         .eq('id', current.id);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     } else {
       const { error } = await db.from('board_columns').insert({ ...column, board_id: boardId });
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 
@@ -343,7 +344,7 @@ async function applyColumns(
       'column_id',
       dropped.map((column) => column.id)
     );
-  if (heldError) return json({ error: heldError.message }, 500);
+  if (heldError) return dbError(heldError);
   const occupied = new Set(((held ?? []) as { column_id: string }[]).map((row) => row.column_id));
 
   const toArchive = dropped.filter((column) => occupied.has(column.id)).map((c) => c.id);
@@ -351,11 +352,11 @@ async function applyColumns(
 
   if (toArchive.length > 0) {
     const { error } = await db.from('board_columns').update({ archived: true }).in('id', toArchive);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
   if (toDelete.length > 0) {
     const { error } = await db.from('board_columns').delete().in('id', toDelete);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
   return null;
 }
@@ -389,7 +390,7 @@ async function convertAnswers(
     .select('id, properties')
     .eq('board_id', boardId)
     .not(`properties->${field.key}`, 'is', null);
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   for (const card of (data ?? []) as Pick<BoardCardRow, 'id' | 'properties'>[]) {
     const properties = { ...card.properties };
@@ -400,7 +401,7 @@ async function convertAnswers(
       .from('board_cards')
       .update({ properties })
       .eq('id', card.id);
-    if (writeError) return json({ error: writeError.message }, 500);
+    if (writeError) return dbError(writeError);
   }
   return null;
 }
@@ -454,10 +455,10 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           archived: field.archived,
         })
         .eq('id', current.id);
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     } else {
       const { error } = await db.from('board_fields').insert({ ...field, board_id: boardId });
-      if (error) return json({ error: error.message }, 500);
+      if (error) return dbError(error);
     }
   }
 
@@ -477,13 +478,13 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
       .select('id', { count: 'exact', head: true })
       .eq('board_id', boardId)
       .not(`properties->${field.key}`, 'is', null);
-    if (countError) return json({ error: countError.message }, 500);
+    if (countError) return dbError(countError);
 
     const { error } =
       (count ?? 0) > 0
         ? await db.from('board_fields').update({ archived: true }).eq('id', field.id)
         : await db.from('board_fields').delete().eq('id', field.id);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   // parseFields refuses a date field timed by something that is not a live
@@ -504,7 +505,7 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
       .from('board_fields')
       .update({ calendar_time_key: null })
       .in('id', stale);
-    if (error) return json({ error: error.message }, 500);
+    if (error) return dbError(error);
   }
 
   return null;

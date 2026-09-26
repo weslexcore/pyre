@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { suppressEmail } from '@/lib/email/suppression';
 import { verifyUnsubscribeToken } from '@/lib/email/unsubscribe-token';
+import { escapeHtml, htmlPage } from '@/lib/http/page';
 
 export const prerender = false;
 
@@ -27,14 +28,7 @@ function confirmationPage(ok: boolean, email?: string): Response {
     ? `<p>You've been unsubscribed${email ? ` (${escapeHtml(email)})` : ''}. You'll no longer receive marketing email from Pyre. Booking confirmations are unaffected.</p>`
     : `<p>This unsubscribe link is invalid or has expired. Please use the link from a recent email, or contact <a href="mailto:hello@pyresauna.com">hello@pyresauna.com</a>.</p>`;
 
-  return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Pyre — Unsubscribe</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1a1a1a}h1{font-size:1.25rem}</style></head><body><h1>Pyre Sauna</h1>${body}</body></html>`,
-    { status: ok ? 200 : 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-  );
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  return htmlPage({ title: 'Unsubscribe', body, status: ok ? 200 : 400 });
 }
 
 export const GET: APIRoute = async ({ url }) => {

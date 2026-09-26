@@ -68,10 +68,6 @@ export interface SopAccessFields {
   archived: boolean;
 }
 
-export function normalizeEmail(email: string | null | undefined): string {
-  return (email ?? '').trim().toLowerCase();
-}
-
 /** Whether one grant pair (roles + named emails) covers this viewer. */
 function granted(viewer: SopViewer, roles: SopRole[], emails: string[]): boolean {
   if (roles.includes(viewer.role)) return true;

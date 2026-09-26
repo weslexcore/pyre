@@ -18,19 +18,14 @@ import { hasLostFoundManage } from '@/components/admin/adminTools';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import type { LostFoundAttachmentRow, LostFoundItemRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
+import { normalizeEmail } from '@/lib/email/address';
+import { dbError, isUuid, json } from '@/lib/http/route';
 import { attendeesForSession, sessionsInWindow } from '@/lib/lost-found/attendees';
 import { LOST_FOUND_BUCKET } from '@/lib/lost-found/media';
 import { type NotifyRecipient, notifyAboutItem } from '@/lib/lost-found/notify';
 import { CLOSED_STATUSES } from '@/lib/lost-found/types';
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 const PAGE = '/admin/lost-found';
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The photo link has to survive in an inbox, not a dashboard tab, so it is
@@ -40,8 +35,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 const PHOTO_URL_TTL_SECONDS = 40 * 24 * 60 * 60;
 
-const emailOf = (gate: { user: { email: string } }): string =>
-  (gate.user.email ?? '').trim().toLowerCase();
+const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
 export const POST: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);
@@ -67,14 +61,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const itemId = typeof body.itemId === 'string' ? body.itemId : '';
-  if (!UUID_RE.test(itemId)) return json({ error: 'itemId must be a UUID' }, 400);
+  if (!isUuid(itemId)) return json({ error: 'itemId must be a UUID' }, 400);
 
   const { data, error } = await db
     .from('lost_found_items')
     .select('*')
     .eq('id', itemId)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+  if (error) return dbError(error);
 
   const item = (data as LostFoundItemRow) ?? null;
   if (!item) return json({ error: 'Item not found' }, 404);

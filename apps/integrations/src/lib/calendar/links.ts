@@ -1,5 +1,6 @@
 import { emailLink } from '@/emails/components/utm';
 import type { CalendarLinks } from '@/emails/types';
+import { appOrigin } from '@/lib/origins';
 import { createCalendarToken } from './event-token';
 import { toIcsUtc } from './ics';
 
@@ -81,9 +82,7 @@ export function buildCalendarLinks(args: {
   // provider links above still work.
   const token = createCalendarToken({ v: 1, title, start: startIso, end: endIso });
   if (token) {
-    const origin = import.meta.env.PUBLIC_EMAIL_ASSET_BASE
-      ? new URL(import.meta.env.PUBLIC_EMAIL_ASSET_BASE).origin
-      : 'https://pyre-integrations.vercel.app';
+    const origin = appOrigin();
     links.ics = `${origin}/api/calendar/event.ics?d=${token}`;
   }
 

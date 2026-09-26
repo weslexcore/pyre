@@ -9,6 +9,7 @@
 // naming it, which is the monthly "what's going on" email's whole job.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { placementUtm } from '@/lib/campaigns/links';
 import {
   PLACEMENT_GROUPS,
@@ -20,7 +21,7 @@ import {
 import { slugifyPart } from '@/lib/campaigns/slug';
 import type { BlogPostRef, LinkRow } from '@/lib/campaigns/types';
 import { FIELD_LIMITS } from '@/lib/campaigns/validate';
-import { buttonClass, inputClass, primaryButtonClass } from '../incidentUi';
+import { inputClass, primaryButtonClass } from '../incidentUi';
 import { smallLabelClass, UtmChip } from './campaignUi';
 import { DestinationPicker, type DestinationValue, type EventsState } from './DestinationPicker';
 
@@ -226,7 +227,7 @@ export function PlacementGrid({
                     : open.hint}
               </p>
             </div>
-            <button type="button" onClick={reset} className={buttonClass}>
+            <button type="button" onClick={reset} className={formButtonClass}>
               Close
             </button>
           </div>

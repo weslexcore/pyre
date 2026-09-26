@@ -3,6 +3,7 @@
 
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
+import { json } from '@/lib/http/route';
 import { getCompanyInfo, toErrorResponse } from '@/lib/quickbooks/client';
 
 export const GET: APIRoute = async ({ cookies }) => {
@@ -11,10 +12,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 
   try {
     const companyInfo = await getCompanyInfo();
-    return new Response(JSON.stringify(companyInfo), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
+    return json(companyInfo);
   } catch (error) {
     return toErrorResponse(error);
   }

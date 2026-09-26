@@ -12,6 +12,7 @@ import { weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireScheduleManage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
+import { json } from '@/lib/http/route';
 import { actorFromGate } from '@/lib/schedule/change-log';
 import {
   buildDraftMessage,
@@ -22,12 +23,6 @@ import { startEveSession } from '@/lib/schedule/eve-session';
 import { type SyncShiftsSummary, syncShifts } from '@/lib/schedule/sync';
 
 export const prerender = false;
-
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

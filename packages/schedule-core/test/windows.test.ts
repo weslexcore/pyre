@@ -64,6 +64,9 @@ describe('deriveCoverageWindows', () => {
     expect(windows[0].startMin).toBe(min('14:30'));
     expect(windows[0].endMin).toBe(min('20:30'));
     expect(windows[0].sessionRefs).toHaveLength(2);
+    // The unpadded session span, for the default hours of people added later.
+    expect(windows[0].sessionsStartMin).toBe(min('16:00'));
+    expect(windows[0].sessionsEndMin).toBe(min('20:00'));
   });
 
   it('drops duplicate events (same kind + id) instead of double-counting', () => {
@@ -125,6 +128,11 @@ describe('deriveCoverageWindows', () => {
     // Each session sits in exactly one half — the one it starts in.
     expect(windows[0].sessionRefs.map((r) => r.id)).toEqual([1, 2, 3]);
     expect(windows[1].sessionRefs.map((r) => r.id)).toEqual([4, 5]);
+    // The cut is neither half's arrival nor departure.
+    expect(windows.map((w) => [w.sessionsStartMin, w.sessionsEndMin])).toEqual([
+      [min('06:30'), null],
+      [null, min('20:00')],
+    ]);
     expect(DEFAULT_WINDOW_OPTIONS.maxShiftMin).toBe(MAX_SHIFT_MIN);
   });
 
@@ -145,6 +153,8 @@ describe('deriveCoverageWindows', () => {
         label: '',
         staffNeeded: 2,
         sessionRefs: [{ type: 'session', id: 1 }],
+        sessionsStartMin: min('09:30'),
+        sessionsEndMin: min('16:00'),
         titles: ['Open Hours'],
       },
       [event({ id: 1, title: 'Open Hours', startMin: min('09:30'), endMin: min('16:00') })],
@@ -222,6 +232,8 @@ describe('planShiftSync', () => {
     label: 'Evening',
     staffNeeded: 2,
     sessionRefs: [{ type: 'session' as const, id: 1 }],
+    sessionsStartMin: min('16:30') as number | null,
+    sessionsEndMin: min('20:00') as number | null,
     titles: ['Social Sauna'],
     ...over,
   });
@@ -239,6 +251,8 @@ describe('planShiftSync', () => {
     is_draft: false,
     assignmentCount: 0,
     notes: 'Social Sauna',
+    sessions_start_at: '16:30:00',
+    sessions_end_at: '20:00:00',
     ...over,
   });
 
@@ -262,6 +276,8 @@ describe('planShiftSync', () => {
         endsAt: '20:30',
         sessionRefs: [{ type: 'session', id: 1 }],
         notes: 'Social Sauna',
+        sessionsStartAt: '16:30',
+        sessionsEndAt: '20:00',
       },
     ]);
   });
@@ -280,6 +296,8 @@ describe('planShiftSync', () => {
         endsAt: '20:30',
         sessionRefs: [{ type: 'session', id: 1 }],
         notes: 'Open Hours, Harvest Moon Sauna Party',
+        sessionsStartAt: '16:30',
+        sessionsEndAt: '20:00',
       },
     ]);
   });
@@ -301,6 +319,24 @@ describe('planShiftSync', () => {
     );
     expect(plan.update).toEqual([]);
     expect(plan.flag).toEqual([]);
+  });
+
+  it('records session edges a matching shift is missing, without touching its window', () => {
+    // Staffed and locked alike: the edges only feed the default hours of
+    // people added later.
+    const plan = planShiftSync(
+      [window()],
+      [shift({ sessions_start_at: null, sessions_end_at: null, assignmentCount: 2, sync_locked: true })]
+    );
+    expect(plan.update).toEqual([]);
+    expect(plan.flag).toEqual([]);
+    expect(plan.edges).toEqual([
+      { shiftId: 'shift-1', sessionsStartAt: '16:30', sessionsEndAt: '20:00' },
+    ]);
+  });
+
+  it('leaves edges alone when they already match', () => {
+    expect(planShiftSync([window()], [shift()]).edges).toEqual([]);
   });
 
   it('flags instead of updating when the shift is sync_locked', () => {
@@ -361,7 +397,7 @@ describe('planShiftSync', () => {
         shift({ id: 'gone', status: 'cancelled' }),
       ]
     );
-    expect(plan).toEqual({ create: [], update: [], cancel: [], flag: [], clearFlag: [] });
+    expect(plan).toEqual({ create: [], update: [], cancel: [], flag: [], clearFlag: [], edges: [] });
   });
 });
 

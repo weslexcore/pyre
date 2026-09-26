@@ -10,22 +10,23 @@
 // checklist run still open on an SOP they may view, their own first, so what
 // they are on the hook to finish is the first thing they see.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
-import { canViewPage, toolsForAccess } from '@/components/admin/adminTools';
+import { canViewPage, toolsForAccess, visibleTools } from '@/components/admin/adminTools';
 import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
-import { formatWhen } from '@/components/admin/SopRunsList';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
 import { getDb } from '@/lib/db';
 import {
-  formatChipDate,
-  formatChipTime,
   getNextUpcomingShift,
   getWeekShifts,
   type NextShift,
   type WeekShift,
 } from '@/lib/schedule/next-shift';
-import { normalizeEmail, type SopViewer } from '@/lib/sops/levels';
+import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
+import { getSetting } from '@/lib/settings/store';
+import { etStamp } from '@/lib/client/format';
+import { normalizeEmail } from '@/lib/email/address';
+import type { SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
@@ -33,7 +34,8 @@ import { type ActiveRun, loadActiveRuns } from '@/lib/sops/runs';
 import { loadShiftSops, type ShiftSops } from '@/lib/sops/shift-sops';
 
 const access = Astro.locals.adminAccess ?? null;
-const tools = access ? toolsForAccess(access) : [];
+const hiddenTools = access ? await getSetting('navigation.hiddenTools') : [];
+const tools = access ? visibleTools(toolsForAccess(access), hiddenTools) : [];
 const email = (Astro.locals.adminUser?.email ?? '').toLowerCase();
 const pins = email ? await getToolPins(email) : [];
 // Memo for AdminLayout (its frontmatter runs after the page's), so the nav
@@ -108,7 +110,7 @@ const chipWhen = nextShift
     : formatChipDate(nextShift.shift.shift_date)
   : '';
 const chipWindow = nextShift
-  ? `${formatChipTime(nextShift.shift.starts_at)}–${formatChipTime(nextShift.shift.ends_at)} ${nextShift.shift.label}`
+  ? `${formatCompactTime(nextShift.shift.starts_at)}–${formatCompactTime(nextShift.shift.ends_at)} ${nextShift.shift.label}`
   : '';
 ---
 
@@ -153,7 +155,7 @@ const chipWindow = nextShift
                   </span>
                   <span class="text-[var(--pyre-creme)]">
                     {week.assignments
-                      .map((a) => `${formatChipTime(a.starts_at)}–${formatChipTime(a.ends_at)}`)
+                      .map((a) => `${formatCompactTime(a.starts_at)}–${formatCompactTime(a.ends_at)}`)
                       .join(', ')}{' '}
                     {week.shift.label}
                   </span>
@@ -235,7 +237,7 @@ const chipWindow = nextShift
                   </div>
                   <p class="mt-2 font-mono text-[10px] text-white/40">
                     {run.checked_count}/{run.task_count} done · started by{' '}
-                    {actorLabel(run.started_by, email, runPeople)} · {formatWhen(run.started_at)}
+                    {actorLabel(run.started_by, email, runPeople)} · {etStamp(run.started_at)}
                   </p>
                 </a>
               );
@@ -244,6 +246,11 @@ const chipWindow = nextShift
         </section>
       )
     }
-    <AdminToolsIndex client:load tools={tools} initialPins={pins} />
+    <AdminToolsIndex
+      client:load
+      tools={tools}
+      initialPins={pins}
+      validPinHrefs={access ? toolsForAccess(access).map((tool) => tool.href) : []}
+    />
   </div>
 </AdminLayout>

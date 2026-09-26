@@ -6,6 +6,7 @@
 import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import { getDb, type ReferrerRow } from '@/lib/db';
+import { isUniqueViolation } from '@/lib/http/json';
 import { getPartner } from '@/lib/partner/registry';
 import { codeCandidates, isValidCode, normalizeCode } from './codes';
 import { getReferrerByMemberId } from './registry';
@@ -58,7 +59,7 @@ export async function getOrCreateMemberReferrer(params: {
       return { outcome: 'created', referrer: data };
     }
 
-    if (error?.code === '23505') {
+    if (isUniqueViolation(error)) {
       // Either the code collided (try the next candidate) or a concurrent
       // request already created this member's row (return it).
       const raced = await getReferrerByMemberId(params.momenceMemberId);
@@ -120,7 +121,7 @@ export async function createPartnerReferrer(params: {
     return { outcome: 'created', referrer: data };
   }
 
-  if (error?.code === '23505') {
+  if (isUniqueViolation(error)) {
     // Distinguish "this partner already has a code" from "that code is taken".
     const { data: existing } = await db
       .from('referrers')

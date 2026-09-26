@@ -1,5 +1,5 @@
 import { getIntroOfferMembershipIds } from '@/lib/momence/host-api';
-import { isMemberFirstBooking } from '@/lib/webhooks/momence';
+import { isMemberFirstBooking } from '@/lib/momence/members';
 import { defineStep, type Journey } from '../types';
 
 // After someone starts with the intro offer, nudge them toward a credit pack

@@ -13,11 +13,13 @@
 // Used for both the people an incident happened to and the witnesses to it —
 // same identity fields, same three sources.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { useDebounced } from '@/lib/client/useDebounced';
 import { PERSON_ROLE_LABELS, PERSON_ROLES, type PersonIdentity } from '@/lib/incidents/types';
 import { FIELD_LIMITS } from '@/lib/incidents/validate';
-import { buttonClass, Chip, inputClass, labelClass } from './incidentUi';
+import { Chip, inputClass, labelClass } from './incidentUi';
 
 /** One row the lookup can drop into a report (mirrors the API's shape). */
 export interface PersonResult {
@@ -39,15 +41,6 @@ export interface PeopleLookupResponse {
 /** Momence search fires on a pause in typing, not on every keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return settled;
-}
 
 /**
  * The roster, fetched once per page and shared by every picker on it. Goes
@@ -300,7 +293,7 @@ export function RowHeader({ label, onRemove }: { label: string; onRemove: () => 
       <span className="font-mono text-xs uppercase tracking-wide text-white/40">{label}</span>
       <button
         type="button"
-        className={buttonClass}
+        className={formButtonClass}
         onClick={onRemove}
         aria-label={`Remove ${label}`}
       >

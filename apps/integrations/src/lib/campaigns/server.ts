@@ -12,11 +12,12 @@ import {
   updateLink,
   utmCampaignOfUrl,
 } from '@pyre/webhook-core';
+import { siteOrigin } from '@/lib/origins';
 import type { LinkRow, OrphanShortlink } from './types';
 
 // The public /s/<code> redirect lives on the landing site, so short URLs are
 // minted against that origin, not this app's.
-export const LANDING_ORIGIN = import.meta.env.PUBLIC_SITE_URL ?? 'https://pyresauna.com';
+export const LANDING_ORIGIN = siteOrigin();
 
 export function shortUrlFor(code: string): string {
   return `${LANDING_ORIGIN}/s/${code}`;

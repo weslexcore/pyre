@@ -1,8 +1,8 @@
-// Swipe-to-resolve for a checklist row: the pointer half of the gesture, with
-// the arithmetic in lib/sops/swipe. A row tracks the finger horizontally,
-// shows what a release would do, and commits on lift — right completes an
-// item, left skips it, and the opposite direction un-resolves one already
-// resolved.
+// Swipe a row to act on it: the pointer half of the gesture, with the
+// arithmetic in lib/sops/swipe. A row tracks the finger horizontally, shows
+// what a release would do, and commits on lift. Which action a direction
+// means is the caller's (actionAt) — a checklist row completes or skips, an
+// inbox row dismisses or flips read.
 //
 // Two things this has to get right on a phone. It must not steal vertical
 // scrolling: the gesture stays unclaimed until the finger has moved further
@@ -16,16 +16,9 @@
 // State lives per row, so a drag re-renders the row under the finger and
 // nothing else.
 import { type MouseEvent, type PointerEvent, useCallback, useRef, useState } from 'react';
-import {
-  SWIPE_SLOP,
-  type SwipeAction,
-  type SwipeRow,
-  swipeAction,
-  swipeArmed,
-  swipeOffset,
-} from '@/lib/sops/swipe';
+import { SWIPE_SLOP, swipeArmed, swipeOffset } from '@/lib/sops/swipe';
 
-export interface RowSwipe {
+export interface RowSwipe<A extends string> {
   /** Spread onto the row element that hosts the gesture. */
   handlers: {
     onPointerDown: (e: PointerEvent) => void;
@@ -39,28 +32,29 @@ export interface RowSwipe {
   /** A claimed gesture is in progress: no transition, and the row is opaque. */
   dragging: boolean;
   /** What a release right now would do, or null in a direction that does nothing. */
-  action: SwipeAction | null;
+  action: A | null;
   /** The drag has passed the commit point. */
   armed: boolean;
 }
 
-export function useRowSwipe({
+export function useRowSwipe<A extends string>({
   enabled,
-  state,
+  actionAt,
   onAction,
 }: {
-  /** False on a finished run, where the row takes no input at all. */
+  /** False where the row takes no input at all (a finished run). */
   enabled: boolean;
-  state: SwipeRow;
-  onAction: (action: SwipeAction) => void;
-}): RowSwipe {
+  /** The action a release at this delta would commit; null in a dead direction. */
+  actionAt: (dx: number) => A | null;
+  onAction: (action: A) => void;
+}): RowSwipe<A> {
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
 
   // The gesture reads the latest row state and callback at pointer time, not
   // the render the handler was created in.
-  const latest = useRef({ enabled, state, onAction });
-  latest.current = { enabled, state, onAction };
+  const latest = useRef({ enabled, actionAt, onAction });
+  latest.current = { enabled, actionAt, onAction };
 
   // Live gesture bookkeeping: nothing here should re-render on its own.
   const gesture = useRef({
@@ -119,7 +113,7 @@ export function useRowSwipe({
     // Claiming the gesture consumes the slop, so the row starts moving from
     // where the finger already is rather than jumping to meet it.
     g.raw = acrossRaw - Math.sign(acrossRaw) * SWIPE_SLOP;
-    setDx(swipeOffset(g.raw, swipeAction(latest.current.state, g.raw) !== null));
+    setDx(swipeOffset(g.raw, latest.current.actionAt(g.raw) !== null));
   }, []);
 
   const onPointerUp = useCallback(
@@ -129,7 +123,7 @@ export function useRowSwipe({
       if (g.claimed) {
         // Whatever happens next, the click that follows a drag is not a tap.
         suppressClick.current = true;
-        const action = swipeAction(latest.current.state, g.raw);
+        const action = latest.current.actionAt(g.raw);
         if (action && swipeArmed(g.raw)) latest.current.onAction(action);
       }
       reset();
@@ -158,7 +152,7 @@ export function useRowSwipe({
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onClickCapture },
     dx,
     dragging,
-    action: dragging ? swipeAction(state, dx) : null,
+    action: dragging ? actionAt(dx) : null,
     armed: dragging && swipeArmed(dx),
   };
 }

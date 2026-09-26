@@ -66,4 +66,12 @@ describe('NotificationList', () => {
       renderToStaticMarkup(<NotificationList notifications={rows} onDismiss={() => undefined} />)
     ).toContain('aria-label="Dismiss: T"');
   });
+
+  it('lets rows take a vertical scroll so the swipe never steals it', () => {
+    const html = renderToStaticMarkup(
+      <NotificationList notifications={[row({ id: 'a' })]} compact onDismiss={() => undefined} />
+    );
+    expect(html).toContain('touch-pan-y');
+    expect(html).toContain('aria-label="Dismiss: Title"');
+  });
 });
