@@ -125,7 +125,7 @@ export async function syncShifts(
   const { data: shiftRows, error: shiftsError } = await db
     .from('shifts')
     .select(
-      'id, shift_date, label, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes'
+      'id, shift_date, label, starts_at, ends_at, source, momence_session_ids, sync_locked, status, sync_flag, is_draft, notes, sessions_start_at, sessions_end_at'
     )
     .eq('is_draft', false)
     .gte('shift_date', rangeStart)
@@ -179,6 +179,9 @@ export async function syncShifts(
         source: 'momence',
         momence_session_ids: w.sessionRefs,
         notes: notesForTitles(w.titles),
+        sessions_start_at: w.sessionsStartMin === null ? null : minutesToTime(w.sessionsStartMin),
+        sessions_end_at:
+          w.sessionsEndMin === null ? null : minutesToTime(Math.min(w.sessionsEndMin, DAY_MIN - 1)),
       }))
     );
     if (error) throw new Error(error.message);
@@ -195,6 +198,8 @@ export async function syncShifts(
         // (a special event dropped into an evening of Open Hours) has to
         // reach the notes, or the board keeps reading "Open Hours".
         notes: update.notes,
+        sessions_start_at: update.sessionsStartAt,
+        sessions_end_at: update.sessionsEndAt,
         sync_flag: null,
       })
       .eq('id', update.shiftId);
@@ -252,6 +257,17 @@ export async function syncShifts(
       .from('shifts')
       .update({ sync_flag: flag.flag })
       .eq('id', flag.shiftId);
+    if (error) throw new Error(error.message);
+  }
+
+  // Session edges only: the window and everyone's hours stay as they are —
+  // the edges just set the default hours for whoever is added next. Not
+  // counted in the summary; nothing on the board moves.
+  for (const edges of plan.edges) {
+    const { error } = await db
+      .from('shifts')
+      .update({ sessions_start_at: edges.sessionsStartAt, sessions_end_at: edges.sessionsEndAt })
+      .eq('id', edges.shiftId);
     if (error) throw new Error(error.message);
   }
 

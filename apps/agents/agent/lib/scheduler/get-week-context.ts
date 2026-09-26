@@ -13,7 +13,10 @@ import {
   availabilityFor,
   addDays,
   canLeadShift,
+  DEFAULT_ARRIVE_BEFORE_MIN,
   DEFAULT_DUTY_CATALOG,
+  DEFAULT_LEAVE_AFTER_MIN,
+  defaultAssignmentWindow,
   type DutyDef,
   dutyDefFromRow,
   type ShiftDutyRow,
@@ -58,7 +61,7 @@ export const getWeekContextTool = defineTool({
     const dayBefore = addDays(weekStart, -1);
     const dayAfter = addDays(weekEnd, 1);
 
-    const [staffRes, shiftsRes, timeOffRes, dutiesRes] = await Promise.all([
+    const [staffRes, shiftsRes, timeOffRes, dutiesRes, bufferRes] = await Promise.all([
       db.from('staff').select('*').eq('active', true).order('display_name'),
       db
         .from('shifts')
@@ -73,6 +76,12 @@ export const getWeekContextTool = defineTool({
         .from('shift_duties')
         .select('key, label, detail, phase, side, session_default, sop_id, sort_order, archived')
         .eq('archived', false),
+      // When people arrive before the first session and leave after the last
+      // (the board's schedule settings) — what an assignment without hours gets.
+      db
+        .from('schedule_settings')
+        .select('key, minutes')
+        .in('key', ['arrive_before_min', 'leave_after_min']),
     ]);
     for (const res of [staffRes, shiftsRes, timeOffRes]) {
       if (res.error) throw new Error(res.error.message);
@@ -135,6 +144,18 @@ export const getWeekContextTool = defineTool({
       pendingRequests = (data ?? []) as ShiftRequestRow[];
     }
 
+    // A missing row (or a failed read) is the built-in default, as on the board.
+    const bufferMinutes = new Map(
+      ((bufferRes.data ?? []) as Array<{ key: string; minutes: number | null }>).map((r) => [
+        r.key,
+        r.minutes,
+      ])
+    );
+    const buffers = {
+      arriveBeforeMin: bufferMinutes.get('arrive_before_min') ?? DEFAULT_ARRIVE_BEFORE_MIN,
+      leaveAfterMin: bufferMinutes.get('leave_after_min') ?? DEFAULT_LEAVE_AFTER_MIN,
+    };
+
     // Availability matrix: person × week shift.
     const shiftsOut = weekShifts.map((shift) => ({
       shiftId: shift.id,
@@ -142,6 +163,8 @@ export const getWeekContextTool = defineTool({
       label: shift.label,
       startsAt: shift.starts_at.slice(0, 5),
       endsAt: shift.ends_at.slice(0, 5),
+      // The hours someone gets when an assignment leaves startsAt/endsAt out.
+      defaultHours: defaultAssignmentWindow(shift, buffers),
       staffNeeded: shift.staff_needed,
       notes: shift.notes,
       syncFlag: shift.sync_flag,
@@ -194,24 +217,22 @@ export const getWeekContextTool = defineTool({
       })),
     }));
 
-    // History patterns: per person, how often they worked each label/weekday,
-    // how often their assignments were setup vs full, and how often they held
-    // each duty — the basis for proposing who does what on the draft.
+    // History patterns: per person, how often they worked each label/weekday
+    // and how often they held each duty — the basis for proposing who does
+    // what on the draft.
     const historyPatterns = staff.map((person) => {
       const theirs = historyAssignments.filter((a) => a.staff_id === person.id);
       const byLabel: Record<string, number> = {};
       const byWeekday: Record<string, number> = {};
-      const byRole: Record<string, number> = {};
       const byDuty: Record<string, number> = {};
       for (const a of theirs) {
         const shift = shiftById.get(a.shift_id) as ShiftRow;
         byLabel[shift.label] = (byLabel[shift.label] ?? 0) + 1;
         const weekday = new Date(`${shift.shift_date}T00:00:00Z`).getUTCDay();
         byWeekday[String(weekday)] = (byWeekday[String(weekday)] ?? 0) + 1;
-        byRole[a.role] = (byRole[a.role] ?? 0) + 1;
         for (const duty of a.duties ?? []) byDuty[duty] = (byDuty[duty] ?? 0) + 1;
       }
-      return { staffId: person.id, name: person.display_name, byLabel, byWeekday, byRole, byDuty };
+      return { staffId: person.id, name: person.display_name, byLabel, byWeekday, byDuty };
     });
 
     return {
@@ -233,9 +254,8 @@ export const getWeekContextTool = defineTool({
       pendingShiftRequests: pendingRequests.map((r) => ({
         shiftId: r.shift_id,
         staffId: r.staff_id,
-        role: r.role,
         // The hours they asked to work; null on legacy requests (then the
-        // role implies the window: full shift, or its setup span).
+        // shift's defaultHours).
         requestedStartsAt: r.requested_starts_at?.slice(0, 5) ?? null,
         requestedEndsAt: r.requested_ends_at?.slice(0, 5) ?? null,
         note: r.note,
@@ -245,7 +265,6 @@ export const getWeekContextTool = defineTool({
         staffId: a.staff_id,
         startsAt: a.starts_at.slice(0, 5),
         endsAt: a.ends_at.slice(0, 5),
-        role: a.role,
         // Jobs already spoken for on this shift, so a draft doesn't hand the
         // same one to two people.
         duties: a.duties,

@@ -19,9 +19,14 @@ export interface CoverageEvent {
 }
 
 export interface WindowOptions {
-  /** Staff arrive this many minutes before the first session. */
+  /**
+   * The window opens this many minutes before the first session. Fixed on
+   * purpose: when staff actually arrive is a schedule setting applied as each
+   * person is added (see defaultAssignmentWindow), so changing it never moves
+   * a shift that's already on the board.
+   */
   leadMin: number;
-  /** Staff stay this many minutes after the last session. */
+  /** The window closes this many minutes after the last session. */
   closeMin: number;
   /** Sessions closer together than this share one window. */
   mergeGapMin: number;
@@ -53,6 +58,17 @@ export interface CoverageWindow {
   label: string;
   staffNeeded: number;
   sessionRefs: Array<{ type: 'session' | 'appointment'; id: number }>;
+  /**
+   * The first session's start, when the window opens for it (the lead before
+   * the day's sessions). Null when the window opens at a split cut instead —
+   * nobody arrives early for the second half of a long day.
+   */
+  sessionsStartMin: number | null;
+  /**
+   * The last session's end, when the window closes after it (the shutdown
+   * buffer). Null when the window ends at a split cut.
+   */
+  sessionsEndMin: number | null;
   /**
    * Distinct titles of the covered events in first-seen order, for shift
    * notes/debugging. A day of hourly Open Hours slots is one session type, not
@@ -104,6 +120,7 @@ export function deriveCoverageWindows(
     const eventsOf = new Map<CoverageWindow, CoverageEvent[]>();
     let current: CoverageWindow | null = null;
     let currentPaddedEnd = 0;
+    let currentSessionsEnd = 0;
 
     for (const event of sorted) {
       const paddedStart = Math.max(0, event.startMin - options.leadMin);
@@ -111,7 +128,9 @@ export function deriveCoverageWindows(
 
       if (current && paddedStart <= currentPaddedEnd + options.mergeGapMin) {
         currentPaddedEnd = Math.max(currentPaddedEnd, paddedEnd);
+        currentSessionsEnd = Math.max(currentSessionsEnd, event.endMin);
         current.endMin = ceilHalfHour(currentPaddedEnd);
+        current.sessionsEndMin = currentSessionsEnd;
         current.sessionRefs.push({ type: event.kind, id: event.id });
         if (!current.titles.includes(event.title)) current.titles.push(event.title);
         eventsOf.get(current)?.push(event);
@@ -123,9 +142,12 @@ export function deriveCoverageWindows(
           label: '',
           staffNeeded: options.defaultStaffNeeded,
           sessionRefs: [{ type: event.kind, id: event.id }],
+          sessionsStartMin: event.startMin,
+          sessionsEndMin: event.endMin,
           titles: [event.title],
         };
         currentPaddedEnd = paddedEnd;
+        currentSessionsEnd = event.endMin;
         dayWindows.push(current);
         eventsOf.set(current, [event]);
       }
@@ -158,20 +180,42 @@ export function splitLongWindow(
   if (length <= maxShiftMin) return [window];
 
   const splitMin = window.startMin + floorHalfHour(length / 2);
-  const piece = (startMin: number, endMin: number, own: CoverageEvent[]): CoverageWindow => ({
+  // The cut is nobody's arrival or departure: the first piece keeps the
+  // window's opening edge, the second its closing one.
+  const piece = (
+    startMin: number,
+    endMin: number,
+    own: CoverageEvent[],
+    edges: Pick<CoverageWindow, 'sessionsStartMin' | 'sessionsEndMin'>
+  ): CoverageWindow => ({
     date: window.date,
     startMin,
     endMin,
     label: '',
     staffNeeded: window.staffNeeded,
     sessionRefs: own.map((e) => ({ type: e.kind, id: e.id })),
+    ...edges,
     titles: [...new Set(own.map((e) => e.title))],
   });
   const first = events.filter((e) => e.startMin < splitMin);
   const second = events.filter((e) => e.startMin >= splitMin);
   return [
-    ...splitLongWindow(piece(window.startMin, splitMin, first), first, maxShiftMin),
-    ...splitLongWindow(piece(splitMin, window.endMin, second), second, maxShiftMin),
+    ...splitLongWindow(
+      piece(window.startMin, splitMin, first, {
+        sessionsStartMin: window.sessionsStartMin,
+        sessionsEndMin: null,
+      }),
+      first,
+      maxShiftMin
+    ),
+    ...splitLongWindow(
+      piece(splitMin, window.endMin, second, {
+        sessionsStartMin: null,
+        sessionsEndMin: window.sessionsEndMin,
+      }),
+      second,
+      maxShiftMin
+    ),
   ];
 }
 
@@ -276,6 +320,9 @@ export interface SyncShiftInput {
   assignmentCount: number;
   /** Current notes, so the planner can spot a session list that changed name. */
   notes: string | null;
+  /** The session edges last recorded (CoverageWindow.sessionsStartMin/EndMin as times). */
+  sessions_start_at: string | null;
+  sessions_end_at: string | null;
 }
 
 export interface SyncPlan {
@@ -287,7 +334,15 @@ export interface SyncPlan {
     endsAt: string;
     sessionRefs: CoverageWindow['sessionRefs'];
     notes: string | null;
+    sessionsStartAt: string | null;
+    sessionsEndAt: string | null;
   }>;
+  /**
+   * Matched shifts whose window stands but whose session edges moved or were
+   * never recorded (staffed and locked shifts included — the edges only feed
+   * the default hours of people added later, never anyone's current times).
+   */
+  edges: Array<{ shiftId: string; sessionsStartAt: string | null; sessionsEndAt: string | null }>;
   /** Unassigned, unlocked momence shifts whose sessions all disappeared. */
   cancel: Array<{ shiftId: string; reason: string }>;
   /** Divergence on staffed/locked shifts — admin decides, nothing auto-changes. */
@@ -298,6 +353,14 @@ export interface SyncPlan {
 
 const refKey = (ref: { type: string; id: number }) => `${ref.type}:${ref.id}`;
 
+// Midnight as 23:59, like the window columns — minutesToTime would wrap it to 00:00.
+const minutesOrNull = (min: number | null) =>
+  min === null ? null : minutesToTime(Math.min(min, DAY_MIN - 1));
+
+/** Same wall-clock time, whether or not either side carries seconds. */
+const sameTime = (a: string | null, b: string | null) =>
+  a === null || b === null ? a === b : timeToMinutes(a) === timeToMinutes(b);
+
 /**
  * Plan the sync for one horizon: match derived windows to existing
  * momence-sourced shifts (session-ref overlap first, then time overlap),
@@ -306,7 +369,7 @@ const refKey = (ref: { type: string; id: number }) => `${ref.type}:${ref.id}`;
  * or time overlap) suppresses creating a momence duplicate alongside it.
  */
 export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInput[]): SyncPlan {
-  const plan: SyncPlan = { create: [], update: [], cancel: [], flag: [], clearFlag: [] };
+  const plan: SyncPlan = { create: [], update: [], cancel: [], flag: [], clearFlag: [], edges: [] };
   const candidates = existing.filter((s) => s.source === 'momence' && !s.is_draft);
   const manualCover = existing.filter(
     (s) => s.source === 'manual' && !s.is_draft && s.status === 'active'
@@ -352,15 +415,23 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
     // had already shifted keeps the window and (once matched) the refs, so
     // without this the shift would read "Open Hours" all the way to the day.
     const notesMatch = sameShiftNotes(match.notes, notes);
+    const sessionsStartAt = minutesOrNull(window.sessionsStartMin);
+    const sessionsEndAt = minutesOrNull(window.sessionsEndMin);
+    const edgesMatch =
+      sameTime(match.sessions_start_at, sessionsStartAt) &&
+      sameTime(match.sessions_end_at, sessionsEndAt);
+    const edges = { shiftId: match.id, sessionsStartAt, sessionsEndAt };
 
     if (timesMatch && refsMatch && notesMatch) {
       if (match.sync_flag) plan.clearFlag.push(match.id);
+      if (!edgesMatch) plan.edges.push(edges);
       continue;
     }
     if (match.sync_locked) {
       if (!timesMatch && match.sync_flag !== 'times_changed') {
         plan.flag.push({ shiftId: match.id, flag: 'times_changed' });
       }
+      if (!edgesMatch) plan.edges.push(edges);
       continue;
     }
     plan.update.push({
@@ -369,6 +440,8 @@ export function planShiftSync(windows: CoverageWindow[], existing: SyncShiftInpu
       endsAt,
       sessionRefs: window.sessionRefs,
       notes,
+      sessionsStartAt,
+      sessionsEndAt,
     });
   }
 

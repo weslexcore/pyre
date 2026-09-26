@@ -23,18 +23,18 @@ const shift = {
 };
 
 describe('assignmentChangeText', () => {
-  it('describes being added, with the personal window and role', () => {
+  it('describes being added, with the personal window', () => {
     expect(
       assignmentChangeText({
         change: 'added',
         shift,
-        assignment: { starts_at: '10:00:00', ends_at: '13:30:00', role: 'setup' },
+        assignment: { starts_at: '10:00:00', ends_at: '13:30:00' },
         actorName: 'Wes',
       })
-    ).toEqual({ title: "You're on 'Morning' on Sun, Sep 20", body: '10a–1:30p · setup by Wes' });
+    ).toEqual({ title: "You're on 'Morning' on Sun, Sep 20", body: '10a–1:30p by Wes' });
   });
 
-  it('falls back to the shift window and omits a full role', () => {
+  it('falls back to the shift window', () => {
     expect(assignmentChangeText({ change: 'removed', shift, assignment: null })).toEqual({
       title: "You were taken off 'Morning' on Sun, Sep 20",
       body: '9a–1:30p',
