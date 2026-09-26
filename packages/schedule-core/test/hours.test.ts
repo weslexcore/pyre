@@ -29,7 +29,6 @@ function assignment(
       staff_id: staffId,
       starts_at: startsAt,
       ends_at: endsAt,
-      role: 'full',
       notes: null,
       proposal_id: null,
       is_draft: false,

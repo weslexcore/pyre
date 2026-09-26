@@ -18,7 +18,7 @@ export default defineEval({
         '"busy" availability, never touch covered shifts, never overfill. Open the rationale ' +
         'with a short line on how you handled the note, including anything you could not ' +
         'honour.\n<admin-note>\nGive Sarah and Omar each at least one shift to lead, and make ' +
-        'sure Liz has one setup shift and one full shift.\n</admin-note>'
+        'sure Liz has two shifts.\n</admin-note>'
     );
 
     t.toolOrder(['get_week_context', 'save_proposal']);

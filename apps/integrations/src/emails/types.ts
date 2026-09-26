@@ -175,8 +175,6 @@ export interface WeeklyShiftItem {
   timeLabel: string;
   /** Deep link straight to this shift on the board. */
   shiftUrl: string;
-  /** Set for 'setup'/'partial' assignments — omitted for a full window. */
-  roleLabel?: string;
   /** The jobs they hold, e.g. "Setup · Host"; omitted when none are assigned. */
   dutiesLabel?: string;
   /** The shift's notes, if any (e.g. "Private event — 20 guests"). */
@@ -202,10 +200,8 @@ export interface ShiftRequestDecisionProps {
   decision: 'approved' | 'denied';
   shiftLabel: string;
   dateLabel: string;
-  /** The window the request covered — the shift's, or its setup span. */
+  /** The hours the request covered. */
   timeLabel: string;
-  /** "Full" | "Setup" */
-  roleLabel: string;
   /** Optional reason the manager attached to the decision. */
   reasonNote?: string | null;
   scheduleUrl: string;

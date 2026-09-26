@@ -65,7 +65,7 @@ export async function notifyAssignmentChange(
     change: AssignmentChange;
     shift: ShiftForNotice;
     staffId: string;
-    assignment?: { starts_at: string; ends_at: string; role?: string; is_draft?: boolean } | null;
+    assignment?: { starts_at: string; ends_at: string; is_draft?: boolean } | null;
     detail?: string | null;
     actorEmail: string | null;
   }

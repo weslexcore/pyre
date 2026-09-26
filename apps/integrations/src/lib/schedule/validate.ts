@@ -3,8 +3,6 @@
 // AI-drafted shift passes exactly the same rules as a hand-entered one.
 
 import {
-  ASSIGNMENT_ROLES,
-  type AssignmentRole,
   type DutyCatalog,
   MAX_SHIFT_MIN,
   normalizeDuties,
@@ -84,7 +82,7 @@ export function checkShiftWindow(startsAt: string, endsAt: string): string | nul
 }
 
 /**
- * Validate assignment time/role/duties/notes fields. Same contract as
+ * Validate assignment time/duties/notes fields. Same contract as
  * parseShiftFields. Duties are checked against the admin-edited catalog
  * (loadDutyCatalog): a live duty is always accepted, an archived one only if
  * the assignment already `held` it — retiring a duty stops new assignments
@@ -105,12 +103,6 @@ export function parseAssignmentFields(
       if (typeof value !== 'string' || !TIME_RE.test(value)) return `${key} must be HH:MM`;
       fields[column] = value;
     }
-  }
-  if (body.role !== undefined) {
-    if (typeof body.role !== 'string' || !ASSIGNMENT_ROLES.includes(body.role as AssignmentRole)) {
-      return `role must be one of: ${ASSIGNMENT_ROLES.join(', ')}`;
-    }
-    fields.role = body.role;
   }
   // Duties are a set, not a scalar: sending them at all replaces the whole
   // set (an empty array clears them). Normalising here — dedupe and canonical

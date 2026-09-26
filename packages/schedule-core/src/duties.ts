@@ -1,6 +1,6 @@
 // --- Duties: which jobs a person holds within their hours ---
 //
-// Orthogonal to AssignmentRole (which is the hours). Each duty deep-links to
+// Independent of the hours (starts_at / ends_at). Each duty deep-links to
 // the SOP that defines it, and belongs to one of the three phases of a shift:
 // set up, work the session, break down. Set-up and break-down duties can be
 // split into an (A) and a (B) side, one per person, and a person keeps their

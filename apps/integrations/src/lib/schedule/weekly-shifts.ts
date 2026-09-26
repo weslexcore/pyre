@@ -66,12 +66,6 @@ export function formatWeekLabel(start: string, end: string): string {
   return `${startLabel}–${endLabel}`;
 }
 
-const ROLE_LABELS: Record<ShiftAssignmentRow['role'], string | undefined> = {
-  full: undefined,
-  setup: 'setup',
-  partial: 'partial hours',
-};
-
 export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyShiftsSummary> {
   const today = todayEastern();
   const weekStart = weekStartOf(today);
@@ -171,7 +165,6 @@ export async function runWeeklyShiftEmails(ctx: CronJobContext): Promise<WeeklyS
       shiftLabel: shift.label,
       timeLabel: formatWindowLabel(assignment),
       shiftUrl: `${origin}/admin/schedule?view=week&date=${shift.shift_date}&shift=${shift.id}`,
-      ...(ROLE_LABELS[assignment.role] && { roleLabel: ROLE_LABELS[assignment.role] }),
       // "Setup · Host" — what they're on the hook for, not just when.
       ...(formatDuties(dutyCatalog, assignment.duties) && {
         dutiesLabel: formatDuties(dutyCatalog, assignment.duties) as string,

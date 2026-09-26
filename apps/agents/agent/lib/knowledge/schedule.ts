@@ -108,7 +108,6 @@ export interface ShapedShift {
   url: string;
   crew: Array<{
     name: string;
-    role: ShiftAssignmentRow['role'];
     /** The jobs they hold on the shift; empty when none were assigned. */
     duties: ShiftAssignmentRow['duties'];
     startsAt: string;
@@ -148,7 +147,6 @@ export function shapeShifts(
         .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         .map((a) => ({
           name: nameOf.get(a.staff_id) ?? 'Unknown',
-          role: a.role,
           duties: a.duties,
           startsAt: clock(a.starts_at),
           endsAt: clock(a.ends_at),
@@ -297,7 +295,6 @@ export async function getShifts(scope: KnowledgeScope, input: ShiftsInput) {
         date: shift?.date ?? null,
         weekday: shift ? shift.weekday : null,
         label: shift?.label ?? null,
-        role: r.role,
         requestedStartsAt: r.requested_starts_at ? clock(r.requested_starts_at) : null,
         requestedEndsAt: r.requested_ends_at ? clock(r.requested_ends_at) : null,
         note: r.note,
@@ -314,7 +311,6 @@ export async function getShifts(scope: KnowledgeScope, input: ShiftsInput) {
         label: shift?.label ?? null,
         requestedBy: nameOf.get(r.requester_staff_id) ?? 'Unknown',
         isMine: self !== null && r.requester_staff_id === self.id,
-        role: r.role,
         startsAt: clock(r.starts_at),
         endsAt: clock(r.ends_at),
         url: shift?.url ?? scheduleUrl(),

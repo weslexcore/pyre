@@ -48,14 +48,15 @@ export const saveProposalTool = defineTool({
           shiftId: z.string().nullish().describe('Existing shift id (from get_week_context)'),
           shiftKey: z.string().nullish().describe("A new shift's key from this payload"),
           staffId: z.string().min(1),
-          startsAt: timeString.nullish().describe('Defaults to the shift window'),
+          startsAt: timeString
+            .nullish()
+            .describe("Defaults to the shift's defaultHours (from get_week_context)"),
           endsAt: timeString.nullish(),
-          role: z.enum(['full', 'setup', 'partial']).default('full'),
           duties: z
             .array(z.string())
             .default([])
             .describe(
-              "Jobs this person holds within their hours, independent of role (the hours). Only keys from get_week_context's `duties` list are accepted (admins edit that list). Halves with the same `side` pair across set-up and break down — whoever takes A at set-up takes A at break down — and each half's `sessionDefault` is the in-session duty it usually comes with. Propose them on every assignment, only for phases the person is on the shift for, and never duplicate a duty another person on the same shift already holds."
+              "Jobs this person holds within their hours. Only keys from get_week_context's `duties` list are accepted (admins edit that list). Halves with the same `side` pair across set-up and break down — whoever takes A at set-up takes A at break down — and each half's `sessionDefault` is the in-session duty it usually comes with. Propose them on every assignment, only for phases the person is on the shift for, and never duplicate a duty another person on the same shift already holds."
             ),
           notes: z.string().max(500).nullish(),
         })
