@@ -215,7 +215,6 @@ describe('findAssignmentConflicts', () => {
         staff_id: STAFF,
         starts_at: '14:30:00',
         ends_at: '20:30:00',
-        role: 'full' as const,
         notes: null,
         proposal_id: null,
         is_draft: false,

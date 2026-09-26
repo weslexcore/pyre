@@ -62,7 +62,6 @@ const assignment = (over: Record<string, unknown> = {}) => ({
   staff_id: 'staff-1',
   starts_at: '14:30',
   ends_at: '20:30',
-  role: 'full',
   duties: [],
   is_draft: false,
   ...over,
@@ -138,7 +137,6 @@ describe('runWeeklyShiftEmails', () => {
             shift_id: 'shift-2',
             starts_at: '08:00',
             ends_at: '10:00',
-            role: 'setup',
           }),
         ],
         staff: [person()],
@@ -171,7 +169,6 @@ describe('runWeeklyShiftEmails', () => {
         dayLabel: 'Thu, Aug 20',
         shiftLabel: 'Morning',
         timeLabel: '8a–10a',
-        roleLabel: 'setup',
         shiftUrl:
           'https://pyre-integrations.vercel.app/admin/schedule?view=week&date=2026-08-20&shift=shift-2',
       },

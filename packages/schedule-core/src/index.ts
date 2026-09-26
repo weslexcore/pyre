@@ -1,3 +1,4 @@
+export * from "./assignment-window";
 export * from "./availability";
 export * from "./constants";
 export * from "./duties";

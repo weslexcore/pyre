@@ -21,7 +21,7 @@ describe('parseAssignmentFields duties', () => {
   });
 
   it('leaves duties alone when the caller does not mention them', () => {
-    expect(parseAssignmentFields({ role: 'setup' })).toEqual({ role: 'setup' });
+    expect(parseAssignmentFields({ startsAt: '09:00' })).toEqual({ starts_at: '09:00' });
   });
 
   it('rejects unknown duties instead of silently dropping them', () => {
