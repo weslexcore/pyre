@@ -39,7 +39,7 @@ import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/che
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import type { CheckItems, RunState } from '@/lib/sops/optimistic';
-import type { SwipeAction } from '@/lib/sops/swipe';
+import { type SwipeAction, swipeAction } from '@/lib/sops/swipe';
 import { Confetti } from './Confetti';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SopMarkdown } from './SopMarkdown';
@@ -209,7 +209,7 @@ const TaskRow = memo(function TaskRow({
   // complete swipe only, matching their missing Skip control.
   const swipe = useRowSwipe({
     enabled: !locked,
-    state: { checked, skipped, skippable: !task.required },
+    actionAt: (dx) => swipeAction({ checked, skipped, skippable: !task.required }, dx),
     onAction: (action) => {
       if (action === 'complete') onToggle(task, true);
       else if (action === 'skip') onSkip(task, true);

@@ -1,6 +1,6 @@
 // /admin/notifications: everything live in the viewer's inbox, unread
-// first. Rows can be opened (which reads them), marked read all at once, or
-// dismissed one by one; each change is applied to the list immediately and
+// first. Rows can be opened (which reads them), marked read all at once,
+// swiped read or unread one by one, or dismissed; each change is applied to the list immediately and
 // written through, and the header bell hears about the new count via the
 // NOTIFICATIONS_EVENT so it updates without a navigation.
 import { useMemo, useState } from 'react';
@@ -91,6 +91,28 @@ export function NotificationsInbox() {
     emitUnreadCount(Math.max(0, unreadCount - 1));
   };
 
+  const toggleRead = async (n: StaffNotificationRow, read: boolean) => {
+    setError(null);
+    const readAt = read ? new Date().toISOString() : null;
+    feed.setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: prev.notifications.map((r) =>
+              r.id === n.id ? { ...r, read_at: readAt } : r
+            ),
+          }
+        : prev
+    );
+    try {
+      const { unreadCount } = await patch({ ids: [n.id], read });
+      settle(unreadCount);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update');
+      await feed.reload();
+    }
+  };
+
   const dismissRow = async (n: StaffNotificationRow) => {
     setError(null);
     feed.setData((prev) =>
@@ -158,6 +180,7 @@ export function NotificationsInbox() {
           emptyText={filter === 'unread' ? 'No unread notifications.' : 'No notifications yet.'}
           onOpen={open}
           onDismiss={(n) => void dismissRow(n)}
+          onToggleRead={(n, read) => void toggleRead(n, read)}
         />
       )}
     </div>

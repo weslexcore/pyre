@@ -11,6 +11,7 @@
 // the log on /admin/shift-notes picks up a note written from the header modal
 // without a reload, the same way it picks up one written inline.
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { ClassificationView } from '@/lib/classify/view';
 import type { ShiftNoteAttachmentRow, ShiftNoteRow } from '@/lib/db';
 import {
   ACCEPT_ATTRIBUTE,
@@ -33,6 +34,9 @@ export const inputClass =
 
 export const textareaClass = `${inputClass} min-h-[100px] w-full`;
 
+export const selectClass =
+  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
+
 const fieldLabelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
 
 /** What POST /api/admin/shift-notes hands back for a new note. */
@@ -40,6 +44,8 @@ export interface CreatedShiftNote {
   note: ShiftNoteRow;
   attachments: ShiftNoteAttachmentRow[];
   people: PeopleNames;
+  /** The classifier's read of the note, for admins (it starts out pending). */
+  classification?: ClassificationView;
 }
 
 /** Fired on `document` with a CreatedShiftNote detail after every new note. */

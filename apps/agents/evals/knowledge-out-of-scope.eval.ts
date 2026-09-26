@@ -48,10 +48,11 @@ export default defineEval({
       )
     );
 
-    t.judge.autoevals.closedQA(
+    t.judge(
       'The reply says the knowledge base does not cover pet parrots (it may point to the guest ' +
         'policies document as the closest match without inventing a parrot rule), and declines ' +
-        'to draft a schedule because it is a read-only knowledge assistant.'
-    );
+        'to draft a schedule because it is a read-only knowledge assistant.',
+      { on: turn.message ?? '' }
+    ).atLeast(0.7);
   },
 });

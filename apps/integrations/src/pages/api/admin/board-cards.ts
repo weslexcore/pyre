@@ -33,9 +33,10 @@ import {
   filterFileAnswers,
   syncCardAttachments,
 } from '@/lib/boards/card-media';
-import { columnPatch, defaultColumn, nextSortOrder } from '@/lib/boards/cards';
+import { columnPatch } from '@/lib/boards/cards';
+import { createCard, goalTitle, loadBoardFields } from '@/lib/boards/create-card';
 import { eventsForCardPatch } from '@/lib/boards/diff';
-import { logBoardEvent, logBoardEvents } from '@/lib/boards/events';
+import { logBoardEvents } from '@/lib/boards/events';
 import { boardViewerExtras } from '@/lib/boards/people';
 import {
   type APIRoute,
@@ -47,16 +48,10 @@ import {
   json,
   storeError,
 } from '@/lib/boards/route';
-import {
-  loadBoardBundle,
-  loadCard,
-  loadColumn,
-  loadColumns,
-  unattachedGoals,
-} from '@/lib/boards/store';
+import { loadBoardBundle, loadCard, loadColumn, unattachedGoals } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
-import type { BoardCardRow, BoardFieldRow, BoardRow } from '@/lib/db';
+import type { BoardCardRow, BoardRow } from '@/lib/db';
 import { notifyCardAssigned, notifyCardCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
 
@@ -95,66 +90,14 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const parsed = parseCardCreate(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
 
-  const { data: boardRow, error: boardError } = await db
-    .from('boards')
-    .select('id, goal_id')
-    .eq('slug', slug)
-    .maybeSingle();
-  if (boardError) return json({ error: boardError.message }, 500);
-  const board = (boardRow as Pick<BoardRow, 'id' | 'goal_id'>) ?? null;
-  if (!board) return json({ error: 'Board not found' }, 404);
-
-  const columns = await loadColumns(db, board.id);
-  // A quick-add from a goal page names no column; it goes in the first open
-  // one, which is what "add a task" means on a board with a To do list.
-  const column = parsed.value.column_id
-    ? columns.find((c) => c.id === parsed.value.column_id)
-    : defaultColumn(columns);
-  if (!column) return json({ error: 'That column is not on this board' }, 400);
-
-  const fields = await loadFields(db, board.id);
-  const { data: siblings } = await db
-    .from('board_cards')
-    .select('column_id, sort_order')
-    .eq('board_id', board.id);
-
-  const properties = await filterFileAnswers(
-    db,
-    board.id,
-    null,
-    fields,
-    normalizeProperties(fields, body.properties)
-  );
-
-  const { data, error } = await db
-    .from('board_cards')
-    .insert({
-      ...parsed.value,
-      board_id: board.id,
-      column_id: column.id,
-      // Filed under the board's goal, whatever the board's goal is today.
-      goal_id: board.goal_id,
-      properties,
-      sort_order: nextSortOrder(
-        (siblings ?? []) as Pick<BoardCardRow, 'column_id' | 'sort_order'>[],
-        column.id
-      ),
-      created_by: email,
-    })
-    .select('*')
-    .single();
-  if (error) return json({ error: error.message }, 500);
-
-  const card = data as BoardCardRow;
-  await syncCardAttachments(db, card.id, fields, {}, card.properties);
-  await logBoardEvent(db, { cardId: card.id, action: 'created', actor: email });
-
-  if (card.owner_email) {
-    const full = await loadBoard(db, card.board_id);
-    if (full) {
-      await notifyCardAssigned(db, card, full, await goalTitle(db, card.goal_id), email);
-    }
-  }
+  const created = await createCard(db, {
+    boardSlug: slug,
+    card: parsed.value,
+    properties: body.properties,
+    actor: email,
+  });
+  if (!created.ok) return json({ error: created.error }, created.status);
+  const { card } = created;
 
   return json({ card }, 201);
 };
@@ -187,7 +130,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     completion = columnPatch(before, column, email, new Date().toISOString());
   }
 
-  const fields = body.properties === undefined ? [] : await loadFields(db, before.board_id);
+  const fields = body.properties === undefined ? [] : await loadBoardFields(db, before.board_id);
   const properties =
     body.properties === undefined
       ? {}
@@ -274,15 +217,6 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   return json({ ok: true });
 };
 
-async function loadFields(db: Db, boardId: string): Promise<BoardFieldRow[]> {
-  const { data } = await db
-    .from('board_fields')
-    .select('*')
-    .eq('board_id', boardId)
-    .order('sort_order', { ascending: true });
-  return (data ?? []) as BoardFieldRow[];
-}
-
 /** 404 unless this access opens the board the card is on. */
 async function refuseUnlessOnAViewableBoard(
   db: Db,
@@ -298,11 +232,4 @@ async function refuseUnlessOnAViewableBoard(
 async function loadBoard(db: Db, boardId: string): Promise<BoardRow | null> {
   const { data } = await db.from('boards').select('*').eq('id', boardId).maybeSingle();
   return (data as BoardRow) ?? null;
-}
-
-/** The goal a card is filed under, by title — for the notification's detail line. */
-async function goalTitle(db: Db, goalId: string | null): Promise<string | null> {
-  if (!goalId) return null;
-  const { data } = await db.from('goals').select('title').eq('id', goalId).maybeSingle();
-  return (data as { title: string } | null)?.title ?? null;
 }

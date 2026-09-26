@@ -20,6 +20,7 @@
 // checkbox on /admin/users — so the assistant is opt-in per person.
 
 import type { APIRoute } from 'astro';
+import { agentsEveConfig } from '@/lib/agent/eve-config';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { createAskSessionToken, verifyAskSessionToken } from '@/lib/knowledge/ask-token';
 import {
@@ -29,7 +30,12 @@ import {
   MAX_QUESTION_LENGTH,
   sanitizeQuestion,
 } from '@/lib/knowledge/scope';
-import { type AskStreamEvent, reduceStreamEvent, type UpstreamEvent } from '@/lib/knowledge/stream';
+import {
+  type AskStreamEvent,
+  createStreamReducerState,
+  reduceStreamEvent,
+  type UpstreamEvent,
+} from '@/lib/knowledge/stream';
 import type { EveConfig } from '@/lib/schedule/eve-session';
 import {
   countEveSessionEvents,
@@ -50,17 +56,6 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-function eveConfig(): EveConfig | null {
-  const baseUrl = import.meta.env.AGENTS_BASE_URL;
-  const channelSecret = import.meta.env.EVE_CHANNEL_SECRET;
-  if (!baseUrl || !channelSecret) return null;
-  return {
-    baseUrl,
-    channelSecret,
-    bypassSecret: import.meta.env.AGENTS_PROTECTION_BYPASS,
-  };
-}
-
 const AGENT_BUSY_ERROR = 'The assistant is still answering your last question — give it a moment';
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -70,7 +65,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
 
-  const config = eveConfig();
+  const config = agentsEveConfig();
   if (!config) {
     return json({ error: 'Assistant not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
   }
@@ -111,7 +106,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (tail.state === 'waiting') {
       const nextIndex =
         session.resume === true
-          ? await countEveSessionEvents(sessionConfig, session.id, tail.continuationToken)
+          ? await countEveSessionEvents(sessionConfig, session.id)
           : undefined;
       // A resume whose log could not be measured is treated as gone: a
       // fresh session beats streaming the new answer from a guessed index.
@@ -119,7 +114,6 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         const sent = await sendEveFollowUp(
           sessionConfig,
           session.id,
-          tail.continuationToken,
           buildAskMessage(question, true)
         );
         if (sent.ok) {
@@ -135,7 +129,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           );
         }
         if (sent.reason === 'running') return json({ error: AGENT_BUSY_ERROR }, 409);
-        return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
+        if (sent.reason === 'error') {
+          return json({ error: `Assistant follow-up failed: ${sent.detail}` }, 502);
+        }
+        // 'gone': the session ended between the tail read and the send.
       }
     }
     // 'gone' — fall through to a fresh session; the island tells the reader.
@@ -167,7 +164,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
   const gate = await requirePage(cookies, PAGE);
   if (gate instanceof Response) return gate;
 
-  const config = eveConfig();
+  const config = agentsEveConfig();
   if (!config) {
     return json({ error: 'Assistant not configured (AGENTS_BASE_URL / EVE_CHANNEL_SECRET)' }, 503);
   }
@@ -201,6 +198,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
     async start(controller) {
       let index = startIndex;
       let buffer = '';
+      const reducerState = createStreamReducerState();
       let closed = false;
       const emit = (event: AskStreamEvent) => {
         if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
@@ -229,7 +227,7 @@ export const GET: APIRoute = async ({ cookies, request }) => {
               continue;
             }
             index += 1;
-            const reduced = reduceStreamEvent(event, index);
+            const reduced = reduceStreamEvent(event, index, reducerState);
             if (!reduced) continue;
             emit(reduced);
             if (reduced.type === 'done') {

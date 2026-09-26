@@ -1,0 +1,24 @@
+{
+  "name": "@pyre/jev",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Ask Jev (TypeSafe AI's System One evaluation model) typed questions through Vercel AI Gateway, from any Pyre app or agent.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ai": "7.0.105",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,149 @@
+/* Harvest moon party menu — 4.25×11" tall cocktail menu (1275×3300 at 300dpi).
+   Transparent background for printing onto creme paper: dark ink type, with a single
+   row of hand-stamped moons (SVG ink filter in index.html) between the two drinks.
+   Small gold text uses a deeper gold so it holds contrast on creme stock.
+   Type follows the landing page: Fraktion Mono labels, Neue Montreal Mono body copy.
+   Sized in px for the tall-menu canvas. Type stays readable at print size (~7pt labels,
+   ~10pt body), so long names wrap onto balanced lines rather than shrinking. */
+
+:root {
+  --menu-gold-ink: #9c7428;
+  --font-body-mono: "PPNeueMontrealMono", ui-monospace, monospace;
+}
+
+.page,
+.page.is-active {
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+}
+
+.menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 150px;
+  color: var(--pyre-black);
+  text-align: center;
+}
+
+/* Drink, moon, drink — spread down the full sheet with equal space above, between,
+   and below each element. */
+.menu__drinks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Three overlapping circles in a horizontal row (viewBox 1000×400). */
+.menu__moon {
+  display: block;
+  width: 900px;
+  height: 360px;
+}
+
+.drink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+.drink__name {
+  margin: 0;
+  /* font-family: var(--font-logo); */
+  text-transform: uppercase;
+  font-weight: 400;
+  font-size: 100px;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.drink__notes {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 28px;
+  letter-spacing: 0.16em;
+  line-height: 1.6;
+  text-wrap: balance;
+  text-transform: uppercase;
+  color: var(--menu-gold-ink);
+}
+
+.drink__description {
+  max-width: 30ch;
+  margin: 0;
+  font-family: var(--font-body-mono);
+  font-size: 40px;
+  line-height: 1.55;
+  text-wrap: balance;
+  color: rgba(35, 34, 28, 0.8);
+}
+
+/* Pine logo — pinned to the top of the sheet, out of the flow so the drinks and moons
+   still spread across the full height. */
+
+.menu__logo {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  height: 250px;
+  width: auto;
+  opacity: 0.9;
+  transform: translateX(-50%);
+}
+
+/* Pages 2–3 — Instagram posts (portrait 1080×1350), one drink each on a creme background.
+   The drink fills the top half and the row of moons the bottom half; type is sized for a
+   phone screen instead of print. */
+
+.page.page--social {
+  background: var(--pyre-creme);
+}
+
+.slide {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 100%;
+  padding: 110px 96px;
+  color: var(--pyre-black);
+  text-align: center;
+}
+
+/* Vertically centered in the top half, balancing the moons centered in the bottom half. */
+.slide .drink {
+  align-self: center;
+  gap: 24px;
+}
+
+.slide__moons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slide .menu__moon {
+  width: 840px;
+  height: 336px;
+}
+
+.slide .drink__name {
+  font-size: 80px;
+}
+
+.slide .drink__notes {
+  font-size: 24px;
+}
+
+.slide .drink__description {
+  font-size: 30px;
+}

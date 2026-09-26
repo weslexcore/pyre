@@ -7,8 +7,10 @@
 // Which role a session runs as is decided here too: a request carrying
 // `x-pyre-agent: knowledge` (plus the asking staff member's access as JSON in
 // `x-pyre-knowledge-scope`) has both stamped onto the session's auth
-// attributes, and the instructions and tools resolve from them per session
-// (lib/role.ts). Anything else is the scheduler. Only an authenticated
+// attributes, and so does `x-pyre-agent: suggester` with the suggestion run
+// and the record it is about (`x-pyre-suggest-run`, `x-pyre-suggest-source`);
+// the instructions and tools resolve from them per session (lib/role.ts).
+// Anything else is the scheduler. Only an authenticated
 // caller reaches this point, so the headers are trusted as far as the
 // caller is — and the scope only ever narrows what the knowledge tools read.
 //
@@ -30,12 +32,17 @@ import {
   auditTrailResult,
   auditTurnStarted,
 } from '../lib/knowledge/audit';
+import { reportTurnEnded } from '../lib/suggester/report';
 import {
   AGENT_HEADER,
   type KnowledgeScope,
   parseKnowledgeScope,
+  parseSuggestRun,
+  parseSuggestSource,
   resolveRole,
   SCOPE_HEADER,
+  SUGGEST_RUN_HEADER,
+  SUGGEST_SOURCE_HEADER,
 } from '../lib/role';
 
 function channelSecretAuth(): AuthFn<Request> {
@@ -55,6 +62,14 @@ function channelSecretAuth(): AuthFn<Request> {
   };
 }
 
+/** The suggestion run a suggester session saves into, or undefined for other roles. */
+function suggestRunOf(ctx: {
+  session: { auth: Parameters<typeof resolveRole>[0] };
+}): string | null | undefined {
+  const { role, suggest } = resolveRole(ctx.session.auth);
+  return role === 'suggester' ? (suggest?.runId ?? null) : undefined;
+}
+
 /** The knowledge scope of a session, or null for scheduler sessions. */
 function knowledgeScopeOf(ctx: { session: { auth: Parameters<typeof resolveRole>[0] } }): KnowledgeScope | null {
   const { role, scope } = resolveRole(ctx.session.auth);
@@ -63,11 +78,33 @@ function knowledgeScopeOf(ctx: { session: { auth: Parameters<typeof resolveRole>
 
 export default eveChannel({
   auth: [channelSecretAuth(), vercelOidc(), localDev()],
+  // A follow-up that lands mid-turn waits for the turn to finish instead of
+  // steering it (eve's default since 0.33). A refinement or a second question
+  // is a new request, not a correction to the answer being written.
+  turnPolicy: 'queue',
   onMessage(ctx) {
     const caller = defaultEveAuth(ctx);
     if (!caller) return { auth: caller };
 
     const agent = ctx.eve.request.headers.get(AGENT_HEADER)?.trim().toLowerCase();
+    if (agent === 'suggester') {
+      // Normalised through the parsers, so the stored attributes are either
+      // well-formed or empty — and an empty source leaves the tools refusing
+      // to run rather than guessing.
+      const run = parseSuggestRun(ctx.eve.request.headers.get(SUGGEST_RUN_HEADER));
+      const source = parseSuggestSource(ctx.eve.request.headers.get(SUGGEST_SOURCE_HEADER));
+      return {
+        auth: {
+          ...caller,
+          attributes: {
+            ...caller.attributes,
+            agent: 'suggester',
+            ...(run ? { run } : {}),
+            ...(source ? { source: `${source.type}:${source.id}` } : {}),
+          },
+        },
+      };
+    }
     if (agent !== 'knowledge') return { auth: caller };
 
     // Normalise through the parser so the stored attribute is always a
@@ -136,15 +173,32 @@ export default eveChannel({
         await auditAnswer(ctx.session.id, data.turnId, data.message);
       }
     },
+    // A suggester turn's end is reported to the integrations app, which
+    // fails the run if the agent never saved (lib/suggester/report.ts).
     async 'turn.completed'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id);
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'answered');
     },
     async 'turn.failed'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id, `${data.code}: ${data.message}`);
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'failed', `${data.code}: ${data.message}`);
     },
     async 'turn.cancelled'(data, _channel, ctx) {
+      const run = suggestRunOf(ctx);
+      if (run !== undefined) {
+        await reportTurnEnded(run, ctx.session.id, 'The agent was cancelled');
+        return;
+      }
       if (!knowledgeScopeOf(ctx)) return;
       await auditOutcome(ctx.session.id, data.turnId, 'cancelled');
     },

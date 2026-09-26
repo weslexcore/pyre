@@ -14,11 +14,40 @@
 //
 // Each note also carries a triage status — open, to do, resolved — that only
 // admins flip, so a request or piece of feedback gets tracked to completion,
-// and a reply thread in which an admin responds in context and the author
-// replies back. Replies show to whoever sees the note; an admin can mark one
-// private, which keeps it among the admins (the server never sends those to
-// anyone else).
+// and an activity thread: comments, in which an admin responds in context and
+// the author replies back, and an entry for every action on the note — each
+// status change, each edit (with what it changed), each time the classifier
+// read it — so the note's history reads in order. That history stays
+// collapsed under a toggle until opened; comments always show. Entries show
+// to whoever sees the note; an admin can mark a comment private, which keeps
+// it among the admins, and the classifier's entries are admins-only (the
+// server never sends those to anyone else).
+//
+// For admins, each note also shows what the classifier found in it — actions to take,
+// questions to answer, records to update, feedback, safety concerns
+// (Signals.tsx, lib/classify) — and the log can be filtered by them. The
+// read happens in the background after a note is saved, so the note appears
+// at once marked "Reading…" and its chips fill in a few seconds later; an
+// edit to its text is read again, and an admin can run the classifier on any
+// note, or on many at once from the bulk panel (BulkClassify).
+// A note no admin has triaged yet follows what the classifier found: to do
+// when anything is actionable, resolved when it is purely informational
+// (lib/shift-notes/triage); an admin's status always wins.
+// The page never names the model behind it (lib/classify picks that), so
+// swapping models changes nothing here.
+//
+// Admins also see what the suggestion agent proposes for a note — new tasks,
+// comments on existing tasks, SOP edits (suggestions/, lib/suggestions) —
+// under the note, each an editor they can change before approving or
+// dismissing. The agent looks at a note when an admin presses its AI button, or on
+// its own after the classifier finds an action (when that is switched on).
+// The note's AI button does both in one go: it reads the note, then has the
+// agent look at it.
+// Nothing it proposes happens until an admin approves it, and every decision
+// lands in the note's history with a link to what it made.
+import { readStoredSignals, type SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClassificationView } from '@/lib/classify/view';
 import type {
   ShiftNoteAttachmentRow,
   ShiftNoteReplyRow,
@@ -33,6 +62,7 @@ import {
   SHIFT_NOTE_STATUSES,
   statusLabel,
 } from '@/lib/shift-notes/access';
+import { diffWords } from '@/lib/shift-notes/diff';
 import {
   ACCEPT_ATTRIBUTE,
   checkFile,
@@ -41,7 +71,9 @@ import {
 } from '@/lib/shift-notes/media';
 import { NOTE_BODY_MAX, REPLY_BODY_MAX } from '@/lib/shift-notes/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { highlightSegments, matchesTerm } from '@/lib/sops/search';
+import { matchesTerm } from '@/lib/sops/search';
+import { BulkClassify } from './BulkClassify';
+import { FilterMultiSelect } from './FilterMultiSelect';
 import {
   buttonClass,
   type CreatedShiftNote,
@@ -51,15 +83,37 @@ import {
   readError,
   SHIFT_NOTE_CREATED_EVENT,
   ShiftNoteComposer,
+  selectClass,
   textareaClass,
   uploadWithProgress,
 } from './ShiftNoteComposer';
 import { attachmentSrc, ShiftNoteViewer } from './ShiftNoteViewer';
-
-const selectClass =
-  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
+import {
+  CHIP_CLASS,
+  hasSignal,
+  SignalChips,
+  SignalFilter,
+  SignalList,
+  SparkleIcon,
+  useClassifications,
+} from './Signals';
+import { SopMarkdown } from './SopMarkdown';
+import { SuggestionPanel } from './suggestions/SuggestionPanel';
+import { useSuggestions } from './suggestions/useSuggestions';
 
 const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
+
+// Notes and replies are written as markdown (links, lists, checklists) but
+// sit in a card, so the renderer's paragraph margins are trimmed at the edges
+// and a note's headings are kept to text size.
+const NOTE_MARKDOWN_CLASS =
+  'mt-2 break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h2]:mt-3 [&_h2]:text-base [&_h3]:mt-3 [&_h3]:text-sm [&_h4]:mt-3 [&_h4]:text-sm [&_p]:my-2';
+const REPLY_MARKDOWN_CLASS = NOTE_MARKDOWN_CLASS.replace('mt-2 ', 'mt-1 ');
+
+const STATUS_OPTIONS = SHIFT_NOTE_STATUSES.map((status) => ({
+  value: status,
+  label: statusLabel(status),
+}));
 
 /** Badge colours per status: quiet while open, gold while owed, sage once done. */
 const statusBadgeClass: Record<ShiftNoteStatus, string> = {
@@ -68,14 +122,41 @@ const statusBadgeClass: Record<ShiftNoteStatus, string> = {
   resolved: 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]',
 };
 
+/**
+ * What an activity event says, after the actor's name: "moved this from Open
+ * to To do", "edited the text". Comments render as themselves, not here.
+ */
+function describeEvent(entry: ShiftNoteReplyRow): string {
+  const data = entry.data ?? {};
+  switch (entry.kind) {
+    case 'status':
+      if (!data.to) return 'changed the status';
+      return data.from
+        ? `moved this from ${statusLabel(data.from)} to ${statusLabel(data.to)}`
+        : `marked this ${statusLabel(data.to)}`;
+    case 'edit': {
+      const parts = (data.fields ?? []).map((f) =>
+        f === 'body'
+          ? 'the text'
+          : data.before?.note_date && data.after?.note_date
+            ? `the shift date from ${formatDay(data.before.note_date)} to ${formatDay(data.after.note_date)}`
+            : 'the shift date'
+      );
+      return parts.length > 0 ? `edited ${parts.join(' and ')}` : 'edited the note';
+    }
+    case 'suggestion':
+      return data.action === 'approved'
+        ? 'approved a suggestion'
+        : data.action === 'dismissed'
+          ? 'dismissed a suggestion'
+          : 'decided a suggestion';
+    default:
+      return '';
+  }
+}
+
 function StatusBadge({ status }: { status: ShiftNoteStatus }) {
-  return (
-    <span
-      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${statusBadgeClass[status]}`}
-    >
-      {statusLabel(status)}
-    </span>
-  );
+  return <span className={`${CHIP_CLASS} ${statusBadgeClass[status]}`}>{statusLabel(status)}</span>;
 }
 
 interface Viewer {
@@ -85,34 +166,6 @@ interface Viewer {
 
 /** Whose notes came back: the whole log, or only this person's. */
 type Scope = 'all' | 'mine';
-
-/**
- * Note body with every occurrence of `term` wrapped in <mark>, so a search hit
- * is visible at a glance instead of having to be re-read for. Same styling as
- * the SOP search so the two feel like one feature.
- */
-function MarkedBody({ text, term }: { text: string; term: string }) {
-  if (!term) return <>{text}</>;
-  let offset = 0;
-  return (
-    <>
-      {highlightSegments(text, term).map((segment) => {
-        const key = offset;
-        offset += segment.text.length;
-        return segment.match ? (
-          <mark
-            key={key}
-            className="rounded-sm bg-[var(--pyre-gold)] px-0.5 text-[var(--pyre-black)]"
-          >
-            {segment.text}
-          </mark>
-        ) : (
-          segment.text
-        );
-      })}
-    </>
-  );
-}
 
 /** "Aug 21, 9:42 PM" in shift wall-clock time, for replies and status changes. */
 function formatStamp(timestamp: string): string {
@@ -165,9 +218,63 @@ export function ShiftNotes() {
   const [replyEditId, setReplyEditId] = useState<string | null>(null);
   const [replyEditBody, setReplyEditBody] = useState('');
 
+  // Which notes have their history (every entry but comments: status
+  // changes, edits, classifier reads) expanded. Closed by default so a
+  // note's card stays about the note and its conversation.
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({});
+
   // Filters.
-  const [personFilter, setPersonFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | ShiftNoteStatus>('all');
+  // Each is a multi-select; an empty set means no filtering.
+  const [personFilter, setPersonFilter] = useState<ReadonlySet<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<ReadonlySet<ShiftNoteStatus>>(new Set());
+  const [signalFilter, setSignalFilter] = useState<ReadonlySet<SignalType>>(new Set());
+
+  /**
+   * Re-read one note and its thread from the server — once the classifier
+   * has answered, its reading is in the thread and the note may have moved
+   * to To do or Resolved.
+   */
+  const refreshThread = useCallback(async (noteId: string) => {
+    try {
+      const res = await fetch(`/api/admin/shift-note-replies?noteId=${encodeURIComponent(noteId)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        replies: ShiftNoteReplyRow[];
+        people: PeopleNames;
+      };
+      setNames((prev) => ({ ...prev, ...data.people }));
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? data.note : n)));
+      setReplies((prev) => ({ ...prev, [noteId]: data.replies }));
+    } catch {
+      // The entry is saved; it shows on the next load.
+    }
+  }, []);
+
+  // What the suggestion agent proposes per note — admins only, like the
+  // signals. A decision is recorded in the note's history, so re-read it.
+  const suggestions = useSuggestions('shift_note', viewer.isAdmin, (noteId) => {
+    void refreshThread(noteId);
+  });
+  const { refresh: refreshSuggestions, remove: removeSuggestions } = suggestions;
+  // Whether the AI button also asks for suggestions: they can be switched off in Settings.
+  const [canSuggest, setCanSuggest] = useState(false);
+
+  // What the classifier found per note — admins only; the server sends
+  // nothing to anyone else, and this fetches nothing for them. Each finished
+  // read is also an entry in the note's thread, and may triage the note; the
+  // worker does both just after the answer, so give it a moment before
+  // reading the note back. A finished read may also have started the
+  // suggestion agent on the note (the AI button asks for that, and automatic
+  // suggestions may), filed just after the answer, so look for its run.
+  const signals = useClassifications('shift_note', viewer.isAdmin, (noteId, view) => {
+    if (view.state === 'done') {
+      window.setTimeout(() => void refreshThread(noteId), 1_000);
+      window.setTimeout(() => void refreshSuggestions([noteId]), 2_000);
+      window.setTimeout(() => void refreshSuggestions([noteId]), 6_000);
+    }
+  });
+  const { reset: resetSignals, merge: mergeSignals, remove: removeSignals } = signals;
   const [query, setQuery] = useState('');
 
   // Arriving from the global search: ?q= seeds the filter and #note-<id>
@@ -193,19 +300,24 @@ export function ShiftNotes() {
         people?: PeopleNames;
         viewer?: Viewer;
         scope?: Scope;
+        classifications?: Record<string, ClassificationView>;
+        suggestionsEnabled?: boolean;
       };
       setNotes(data.notes);
+      resetSignals(data.classifications);
       setAttachments(data.attachments ?? {});
       setReplies(data.replies ?? {});
       setNames(data.people ?? {});
       if (data.viewer) setViewer(data.viewer);
       if (data.scope) setScope(data.scope);
+      setCanSuggest(data.suggestionsEnabled === true);
+      if (data.viewer?.isAdmin) void refreshSuggestions(data.notes.map((n) => n.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load shift notes');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resetSignals, refreshSuggestions]);
 
   useEffect(() => {
     void load();
@@ -234,13 +346,19 @@ export function ShiftNotes() {
   // modal — is announced on the document; fold it into the log.
   useEffect(() => {
     const onCreated = (event: Event) => {
-      const { note, attachments: added, people } = (event as CustomEvent<CreatedShiftNote>).detail;
+      const {
+        note,
+        attachments: added,
+        people,
+        classification,
+      } = (event as CustomEvent<CreatedShiftNote>).detail;
       mergeNote(note, people);
+      mergeSignals(note.id, classification);
       if (added.length > 0) setAttachments((prev) => ({ ...prev, [note.id]: added }));
     };
     document.addEventListener(SHIFT_NOTE_CREATED_EVENT, onCreated);
     return () => document.removeEventListener(SHIFT_NOTE_CREATED_EVENT, onCreated);
-  }, [mergeNote]);
+  }, [mergeNote, mergeSignals]);
 
   /** Add media to an existing note (author-or-admin, re-checked server-side). */
   const attachTo = async (noteId: string, list: FileList | null) => {
@@ -332,8 +450,15 @@ export function ShiftNotes() {
         body: JSON.stringify({ id: editId, noteDate: editDate, body: editBody }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { note: ShiftNoteRow; people: PeopleNames };
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        activity?: ShiftNoteReplyRow[];
+        people: PeopleNames;
+        classification?: ClassificationView;
+      };
       mergeNote(data.note, data.people);
+      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
+      mergeSignals(data.note.id, data.classification);
       setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the note');
@@ -363,6 +488,8 @@ export function ShiftNotes() {
         const { [note.id]: _gone, ...rest } = prev;
         return rest;
       });
+      removeSignals(note.id);
+      removeSuggestions(note.id);
       if (editId === note.id) setEditId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete the note');
@@ -386,8 +513,13 @@ export function ShiftNotes() {
         body: JSON.stringify({ id: note.id, status }),
       });
       if (!res.ok) throw new Error(await readError(res));
-      const data = (await res.json()) as { note: ShiftNoteRow; people: PeopleNames };
+      const data = (await res.json()) as {
+        note: ShiftNoteRow;
+        activity?: ShiftNoteReplyRow[];
+        people: PeopleNames;
+      };
       mergeNote(data.note, data.people);
+      for (const entry of data.activity ?? []) mergeReply(entry, data.people);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update the status');
     } finally {
@@ -501,7 +633,9 @@ export function ShiftNotes() {
   // Author options for the filter, ordered by display name.
   const authorOptions = useMemo(() => {
     const set = new Set(notes.map((n) => n.author_email));
-    return [...set].sort((a, b) => personName(a, names).localeCompare(personName(b, names)));
+    return [...set]
+      .map((email) => ({ value: email, label: personName(email, names) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [notes, names]);
 
   // The trimmed term drives both the filter and the highlight, so what marks
@@ -510,15 +644,21 @@ export function ShiftNotes() {
 
   const visible = useMemo(() => {
     return notes.filter((note) => {
-      if (scope === 'all' && personFilter !== 'all' && note.author_email !== personFilter) {
+      if (scope === 'all' && personFilter.size > 0 && !personFilter.has(note.author_email)) {
         return false;
       }
-      if (statusFilter !== 'all' && note.status !== statusFilter) return false;
+      if (statusFilter.size > 0 && !statusFilter.has(note.status)) return false;
+      if (
+        signalFilter.size > 0 &&
+        ![...signalFilter].some((type) => hasSignal(signals.classifications[note.id], type))
+      ) {
+        return false;
+      }
       // Same matcher as the highlight, so what filters is what marks.
       if (term && !matchesTerm(note.body, term)) return false;
       return true;
     });
-  }, [notes, personFilter, statusFilter, term, scope]);
+  }, [notes, personFilter, statusFilter, signalFilter, signals.classifications, term, scope]);
 
   // The lightbox browses one note's photos and videos (PDFs open in a tab).
   const viewable = useCallback(
@@ -563,46 +703,33 @@ export function ShiftNotes() {
           {notice}
         </p>
       )}
-      {error && (
+      {(error ?? signals.error ?? suggestions.error) && (
         <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
+          {error ?? signals.error ?? suggestions.error}
         </p>
       )}
 
       {notes.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           {scope === 'all' && (
-            <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-              person
-              <select
-                className={selectClass}
-                value={personFilter}
-                onChange={(e) => setPersonFilter(e.target.value)}
-              >
-                <option value="all">Anyone</option>
-                {authorOptions.map((email) => (
-                  <option key={email} value={email}>
-                    {personName(email, names)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="flex items-center gap-2 font-mono text-xs text-white/60">
-            status
-            <select
+            <FilterMultiSelect
+              placeholder="Person"
+              options={authorOptions}
+              selected={personFilter}
+              onChange={setPersonFilter}
               className={selectClass}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | ShiftNoteStatus)}
-            >
-              <option value="all">Any status</option>
-              {SHIFT_NOTE_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {statusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          )}
+          <FilterMultiSelect
+            placeholder="Status"
+            options={STATUS_OPTIONS}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            className={selectClass}
+          />
+          {viewer.isAdmin && (
+            <SignalFilter className={selectClass} value={signalFilter} onChange={setSignalFilter} />
+          )}
           <input
             type="search"
             className={`${inputClass} min-w-48 flex-1`}
@@ -617,6 +744,21 @@ export function ShiftNotes() {
             </span>
           )}
         </div>
+      )}
+
+      {/* Admins can read old notes again — with its own filters, since what
+          to reclassify is a different question from what to read. */}
+      {viewer.isAdmin && notes.length > 0 && (
+        <BulkClassify
+          notes={notes}
+          classifications={signals.classifications}
+          names={names}
+          authors={authorOptions.map((o) => o.value)}
+          onRun={(ids, { suggest }) =>
+            signals.rerunMany(ids, suggest ? { suggest: true } : undefined)
+          }
+          canSuggest={canSuggest}
+        />
       )}
 
       {/* Whose log this is, so a non-admin isn't left wondering where the
@@ -652,15 +794,74 @@ export function ShiftNotes() {
                   {formatTime(note.created_at)}
                   {note.updated_by && ` · edited by ${personName(note.updated_by, names)}`}
                 </span>
-                <StatusBadge status={note.status} />
-                {note.status_by && note.status_at && (
-                  <span className="font-mono text-[10px] text-white/40">
-                    {note.status === 'resolved' ? 'resolved' : 'marked'} by{' '}
-                    {personName(note.status_by, names)} · {formatStamp(note.status_at)}
-                  </span>
-                )}
+                {/* Status, then what the classifier found (admins only), on
+                    one line: the status is often the classifier's call. */}
+                <span className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={note.status} />
+                  {viewer.isAdmin && signals.classifications[note.id] && (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="font-mono text-[10px] leading-4 text-white/20"
+                      >
+                        |
+                      </span>
+                      <SignalChips classification={signals.classifications[note.id]} />
+                    </>
+                  )}
+                  {viewer.isAdmin && suggestions.pendingCount(note.id) > 0 && (
+                    <a
+                      href={`#note-${note.id}-suggestions`}
+                      className={`${CHIP_CLASS} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)] hover:bg-[var(--pyre-gold)]/10`}
+                    >
+                      {suggestions.pendingCount(note.id)} suggested
+                    </a>
+                  )}
+                </span>
                 {canTouch(note) && editId !== note.id && (
                   <span className="ml-auto flex flex-wrap gap-2">
+                    {/* Reads the note and, if no admin has set its status,
+                        sorts it into To do or Resolved; then, when
+                        suggestions are on, has the agent draft tasks,
+                        comments, or SOP edits from it for review. It sits
+                        with the note's other actions rather than the chips. */}
+                    {viewer.isAdmin && (
+                      <button
+                        type="button"
+                        className={`${buttonClass} flex items-center px-2`}
+                        disabled={
+                          busy ||
+                          signals.rerunning === note.id ||
+                          suggestions.runs[note.id]?.status === 'queued' ||
+                          suggestions.runs[note.id]?.status === 'running'
+                        }
+                        aria-label={
+                          canSuggest
+                            ? 'Read this note and suggest tasks'
+                            : signals.classifications[note.id]
+                              ? 'Reclassify note'
+                              : 'Classify note'
+                        }
+                        title={
+                          canSuggest
+                            ? 'Read this note for anything actionable, mark it To do or Resolved unless an admin has set its status, and have the agent suggest tasks or SOP edits for you to review'
+                            : 'Read this note for anything actionable and, unless an admin has set its status, mark it To do or Resolved'
+                        }
+                        onClick={() =>
+                          void signals.rerun(note.id, canSuggest ? { suggest: true } : undefined)
+                        }
+                      >
+                        {/* Pulses while a read is under way. */}
+                        <SparkleIcon
+                          className={
+                            signals.rerunning === note.id ||
+                            signals.classifications[note.id]?.state === 'pending'
+                              ? 'animate-pulse'
+                              : undefined
+                          }
+                        />
+                      </button>
+                    )}
                     {canSetStatus(viewer) &&
                       SHIFT_NOTE_STATUSES.map((status) => (
                         <button
@@ -738,9 +939,12 @@ export function ShiftNotes() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                  <MarkedBody text={note.body} term={term} />
-                </p>
+                <SopMarkdown
+                  content={note.body}
+                  highlight={term}
+                  lineBreaks
+                  className={NOTE_MARKDOWN_CLASS}
+                />
               )}
               {(attachments[note.id]?.length ?? 0) > 0 && (
                 <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -852,99 +1056,130 @@ export function ShiftNotes() {
                     )}
                   </div>
                 )}
+              {viewer.isAdmin && (
+                <div id={`note-${note.id}-suggestions`} className="scroll-mt-20">
+                  <SuggestionPanel
+                    suggestions={suggestions.suggestions[note.id] ?? []}
+                    run={suggestions.runs[note.id]}
+                    results={suggestions.results}
+                    targets={suggestions.targets}
+                    names={names}
+                    onRetry={() => void suggestions.suggest(note.id)}
+                    onChange={suggestions.replace}
+                    onDecided={(next) => suggestions.decided(next.source_id)}
+                  />
+                </div>
+              )}
               {((replies[note.id]?.length ?? 0) > 0 || canReply(note, viewer)) && (
                 <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-                  {(replies[note.id] ?? []).map((reply) => (
-                    <div
-                      key={reply.id}
-                      className={`rounded border px-3 py-2 ${
-                        reply.is_private
-                          ? 'border-dashed border-white/20 bg-transparent'
-                          : 'border-white/10 bg-white/5'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="text-xs font-semibold">
-                          {personName(reply.author_email, names)}
-                        </span>
-                        <span className="font-mono text-[10px] text-white/40">
-                          {formatStamp(reply.created_at)}
-                          {reply.updated_by &&
-                            ` · edited by ${personName(reply.updated_by, names)}`}
-                        </span>
-                        {reply.is_private && (
-                          <span className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                            admins only
+                  <HistoryToggle
+                    count={(replies[note.id] ?? []).filter((r) => r.kind !== 'comment').length}
+                    open={!!historyOpen[note.id]}
+                    onToggle={() =>
+                      setHistoryOpen((prev) => ({ ...prev, [note.id]: !prev[note.id] }))
+                    }
+                  />
+                  {(replies[note.id] ?? []).map((reply) =>
+                    reply.kind !== 'comment' ? (
+                      // Events sit in writing order among the comments, shown
+                      // only while the note's history is open.
+                      historyOpen[note.id] ? (
+                        <ActivityEvent key={reply.id} entry={reply} names={names} />
+                      ) : null
+                    ) : (
+                      <div
+                        key={reply.id}
+                        className={`rounded border px-3 py-2 ${
+                          reply.is_private
+                            ? 'border-dashed border-white/20 bg-transparent'
+                            : 'border-white/10 bg-white/5'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <span className="text-xs font-semibold">
+                            {personName(reply.author_email ?? '', names)}
                           </span>
-                        )}
-                        {canTouchReply(reply, viewer) && replyEditId !== reply.id && (
-                          <span className="ml-auto flex gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                            <button
-                              type="button"
-                              className="hover:text-white"
-                              disabled={busy}
-                              onClick={() => {
-                                setReplyEditId(reply.id);
-                                setReplyEditBody(reply.body);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            {viewer.isAdmin && (
+                          <span className="font-mono text-[10px] text-white/40">
+                            {formatStamp(reply.created_at)}
+                            {reply.updated_by &&
+                              ` · edited by ${personName(reply.updated_by, names)}`}
+                          </span>
+                          {reply.is_private && (
+                            <span className="rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                              admins only
+                            </span>
+                          )}
+                          {canTouchReply(reply, viewer) && replyEditId !== reply.id && (
+                            <span className="ml-auto flex gap-2 font-mono text-[10px] uppercase tracking-wide text-white/40">
                               <button
                                 type="button"
                                 className="hover:text-white"
                                 disabled={busy}
-                                onClick={() => void toggleReplyPrivate(reply)}
+                                onClick={() => {
+                                  setReplyEditId(reply.id);
+                                  setReplyEditBody(reply.body);
+                                }}
                               >
-                                {reply.is_private ? 'Share with author' : 'Make private'}
+                                Edit
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="hover:text-[var(--pyre-red)]"
-                              disabled={busy}
-                              onClick={() => void deleteReply(reply)}
-                            >
-                              Delete
-                            </button>
-                          </span>
+                              {viewer.isAdmin && (
+                                <button
+                                  type="button"
+                                  className="hover:text-white"
+                                  disabled={busy}
+                                  onClick={() => void toggleReplyPrivate(reply)}
+                                >
+                                  {reply.is_private ? 'Share with author' : 'Make private'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="hover:text-[var(--pyre-red)]"
+                                disabled={busy}
+                                onClick={() => void deleteReply(reply)}
+                              >
+                                Delete
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                        {replyEditId === reply.id ? (
+                          <div className="mt-2 space-y-2">
+                            <textarea
+                              className={replyTextareaClass}
+                              maxLength={REPLY_BODY_MAX}
+                              value={replyEditBody}
+                              onChange={(e) => setReplyEditBody(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className={primaryButtonClass}
+                                disabled={busy || !replyEditBody.trim()}
+                                onClick={() => void saveReplyEdit()}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className={buttonClass}
+                                disabled={busy}
+                                onClick={() => setReplyEditId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <SopMarkdown
+                            content={reply.body}
+                            lineBreaks
+                            className={REPLY_MARKDOWN_CLASS}
+                          />
                         )}
                       </div>
-                      {replyEditId === reply.id ? (
-                        <div className="mt-2 space-y-2">
-                          <textarea
-                            className={replyTextareaClass}
-                            maxLength={REPLY_BODY_MAX}
-                            value={replyEditBody}
-                            onChange={(e) => setReplyEditBody(e.target.value)}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              className={primaryButtonClass}
-                              disabled={busy || !replyEditBody.trim()}
-                              onClick={() => void saveReplyEdit()}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              disabled={busy}
-                              onClick={() => setReplyEditId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">
-                          {reply.body}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  )}
                   {canReply(note, viewer) && (
                     <div className="space-y-2">
                       <textarea
@@ -1002,5 +1237,129 @@ export function ShiftNotes() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * One recorded action in a note's thread: a single quiet line (who, what,
+ * when), set apart from the comments. The classifier's reads also show what it found.
+ */
+function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: PeopleNames }) {
+  const stamp = <span className="text-white/30"> · {formatStamp(entry.created_at)}</span>;
+  if (entry.kind === 'classification') {
+    const found = readStoredSignals(entry.data?.signals);
+    const requestedBy = entry.data?.requested_by;
+    return (
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1 font-mono text-[10px] text-white/40">
+        <span>
+          ✦ Classifier read this note
+          {requestedBy ? `, run by ${personName(requestedBy, names)}` : ''}
+          {found.length === 0 && ' — nothing to act on'}
+          {stamp}
+        </span>
+        {found.length > 0 && <SignalList signals={found} />}
+      </div>
+    );
+  }
+  const before = entry.data?.before?.body;
+  const after = entry.data?.after?.body;
+  const made = entry.kind === 'suggestion' ? entry.data?.result : undefined;
+  return (
+    <div className="px-3 py-1">
+      <p className="font-mono text-[10px] text-white/40">
+        {/* Unsigned events are the classifier's (e.g. triaging an untriaged note). */}
+        <span className="text-white/60">
+          {entry.author_email ? personName(entry.author_email, names) : 'Classifier'}
+        </span>{' '}
+        {describeEvent(entry)}
+        {made && (
+          <>
+            {' → '}
+            {made.href ? (
+              <a href={made.href} className="text-[var(--pyre-gold)] underline hover:text-white">
+                {made.label}
+              </a>
+            ) : (
+              made.label
+            )}
+          </>
+        )}
+        {stamp}
+      </p>
+      {/* A text edit shows what it changed, the rest as context. */}
+      {entry.kind === 'edit' && before !== undefined && after !== undefined && (
+        <EditDiff before={before} after={after} />
+      )}
+    </div>
+  );
+}
+
+/** An edit's text change: removed words struck through, added ones highlighted. */
+function EditDiff({ before, after }: { before: string; after: string }) {
+  // Keyed by where each run starts in the old and new text, which is unique
+  // and stable.
+  let inBefore = 0;
+  let inAfter = 0;
+  return (
+    <p className="mt-1 whitespace-pre-wrap rounded border border-white/10 px-2 py-1.5 text-xs text-white/50">
+      {diffWords(before, after).map((segment) => {
+        const key = `${inBefore}:${inAfter}`;
+        if (segment.op !== 'add') inBefore += segment.text.length;
+        if (segment.op !== 'del') inAfter += segment.text.length;
+        if (segment.op === 'del') {
+          return (
+            <del key={key} className="bg-[var(--pyre-red)]/10 text-[var(--pyre-red)]/80">
+              {segment.text}
+            </del>
+          );
+        }
+        if (segment.op === 'add') {
+          return (
+            <ins
+              key={key}
+              className="bg-[var(--pyre-sage)]/15 text-[var(--pyre-sage)] no-underline"
+            >
+              {segment.text}
+            </ins>
+          );
+        }
+        return <span key={key}>{segment.text}</span>;
+      })}
+    </p>
+  );
+}
+
+/**
+ * Opens and closes a note's history — the entries that record what happened
+ * to it, as opposed to the conversation. Draws nothing when there are none.
+ */
+function HistoryToggle({
+  count,
+  open,
+  onToggle,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white"
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <svg
+        width="8"
+        height="8"
+        viewBox="0 0 8 8"
+        aria-hidden="true"
+        className={`transition-transform ${open ? 'rotate-90' : ''}`}
+      >
+        <path d="M2 1l4 3-4 3z" fill="currentColor" />
+      </svg>
+      {open ? 'Hide history' : `History (${count})`}
+    </button>
   );
 }

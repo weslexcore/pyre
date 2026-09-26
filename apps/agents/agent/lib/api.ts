@@ -1,7 +1,19 @@
 // Server-to-server client for the integrations app's agent API (the write
-// path). Bearer AGENT_API_SECRET; see apps/integrations/src/lib/agent/auth.ts.
+// path: schedule proposals, suggestions). Bearer AGENT_API_SECRET; see
+// apps/integrations/src/lib/agent/auth.ts.
 
-export async function postProposal(body: Record<string, unknown>): Promise<{
+export function postProposal(body: Record<string, unknown>): Promise<{
+  status: number;
+  body: Record<string, unknown>;
+}> {
+  return postAgentApi('/api/agent/proposals', body);
+}
+
+/** POST to one of the integrations app's /api/agent/* routes. */
+export async function postAgentApi(
+  path: string,
+  body: Record<string, unknown>
+): Promise<{
   status: number;
   body: Record<string, unknown>;
 }> {
@@ -17,7 +29,7 @@ export async function postProposal(body: Record<string, unknown>): Promise<{
   // is still what authenticates the write.
   const bypass = process.env.INTEGRATIONS_PROTECTION_BYPASS;
 
-  const response = await fetch(`${baseUrl}/api/agent/proposals`, {
+  const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${secret}`,

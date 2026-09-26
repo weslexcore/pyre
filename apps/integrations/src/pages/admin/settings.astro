@@ -1,0 +1,23 @@
+---
+// App settings: feature switches and choices admins change here instead of
+// in environment variables (lib/settings). Admin-only — the page is not
+// grantable, and /api/admin/settings re-checks on every change. Rendered with
+// the current values so the switches are right on first paint.
+import { SettingsPage } from '@/components/admin/SettingsPage';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { getAllSettings } from '@/lib/settings/store';
+import { getPeopleNames } from '@/lib/sops/people';
+
+const isAdmin = Astro.locals.adminAccess?.isAdmin === true;
+const settings = isAdmin ? await getAllSettings() : [];
+const people = isAdmin
+  ? await getPeopleNames(settings.map((s) => s.updatedBy).filter((e): e is string => !!e))
+  : {};
+---
+
+<AdminLayout
+  title="Settings"
+  subtitle="Turn features on and off and adjust how they behave. Changes take effect within about 30 seconds, with no redeploy."
+>
+  <SettingsPage client:load initial={settings} people={people} />
+</AdminLayout>

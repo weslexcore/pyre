@@ -150,6 +150,21 @@ export async function markRead(
   return error ? error.message : null;
 }
 
+/** Put read rows back in `email`'s unread count (live rows only). */
+export async function markUnread(
+  db: SupabaseClient,
+  email: string,
+  ids: string[]
+): Promise<string | null> {
+  const { error } = await db
+    .from('staff_notifications')
+    .update({ read_at: null })
+    .eq('recipient_email', email)
+    .in('id', ids)
+    .is('dismissed_at', null);
+  return error ? error.message : null;
+}
+
 /** Clear rows from `email`'s inbox; dismissing implies reading. */
 export async function dismiss(
   db: SupabaseClient,
@@ -263,5 +278,28 @@ export async function sweepInbox(db: SupabaseClient, email: string): Promise<voi
     if (b) console.warn('[notifications] sweep (expired) failed:', b.message);
   } catch (error) {
     console.warn('[notifications] sweep failed:', error);
+  }
+}
+
+/**
+ * Mark every recipient's unread rows about a source read — for when the thing
+ * they announce has been dealt with by somebody (a suggestion an admin
+ * decided), so the rest of the team's bells stop pointing at it. Best-effort.
+ */
+export async function resolveSourceForAll(
+  db: SupabaseClient,
+  sourceType: string,
+  sourceId: string
+): Promise<void> {
+  try {
+    const { error } = await db
+      .from('staff_notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('source_type', sourceType)
+      .eq('source_id', sourceId)
+      .is('read_at', null);
+    if (error) console.warn('[notifications] source resolve failed:', error.message);
+  } catch (error) {
+    console.warn('[notifications] source resolve failed:', error);
   }
 }

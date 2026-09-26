@@ -7,10 +7,14 @@
 // (lib/shift-notes/access). Author identity always comes from the session,
 // never the request body.
 //
-// Each note carries a triage status (open / todo / resolved) that only admins
-// set, and a reply thread (shift-note-replies.ts) in which admins respond and
-// the author replies back; GET returns the replies the viewer may read (an
-// admin's private replies stay with the admins).
+// Each note carries a triage status (open / todo / resolved) that admins set
+// — or the classifier, on a note no admin has triaged yet, by whether it
+// found anything actionable (lib/shift-notes/triage) — and an activity thread (shift_note_replies): comments, in which admins
+// respond and the author replies back (shift-note-replies.ts), and an event
+// for every action on the note — each status change and edit made here, and
+// each answer the classifier gives (lib/classify) — so the note's history reads in order
+// rather than as the latest stamp. GET returns the entries the viewer may
+// read (private comments and the classifier's answers stay with the admins).
 //
 // Photos/video backing a note are handled by shift-note-media.ts; GET here
 // returns each note's attachment rows so the log renders in one request. The
@@ -18,20 +22,32 @@
 // media route); POST claims them by id once the note exists, and GET sweeps
 // staged rows nobody claimed within a day.
 //
-//   GET                          → { notes, attachments, replies, people, viewer, scope }
-//   POST   { noteDate, body, attachmentIds? } → { note, attachments, people }
-//   PATCH  { id, noteDate?, body?, status? } → { note, people }
+// Every new note, and every edit that changes a note's text, is classified
+// (lib/classify, which picks the model), reporting what the note asks of the
+// team — actions, questions, updates, feedback, safety concerns. That runs
+// in the background after the response goes out, so saving a note never waits
+// on it. Admins, who triage the log, get the signals with each note (and a
+// pending marker right after a write); authors never do.
+//
+//   GET                          → { notes, attachments, replies, people, viewer, scope,
+//                                    classifications (admins) }
+//   POST   { noteDate, body, attachmentIds? } → { note, attachments, people, classification? }
+//   PATCH  { id, noteDate?, body?, status? } → { note, activity, people, classification? }
 //   DELETE ?id=<uuid>            → { ok: true }
 
 import type { APIRoute } from 'astro';
 import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
 import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { scheduleClassification } from '@/lib/classify/dispatch';
+import { loadClassifications, pendingView } from '@/lib/classify/request';
+import type { ClassificationView } from '@/lib/classify/view';
 import {
   getDb,
   type ShiftNoteAttachmentRow,
   type ShiftNoteReplyRow,
   type ShiftNoteRow,
 } from '@/lib/db';
+import { deleteBySource } from '@/lib/notifications/notify';
 import { notifyShiftNoteStatus } from '@/lib/notifications/shift-notes';
 import {
   canSeeNote,
@@ -41,9 +57,12 @@ import {
   normalizeEmail,
   SHIFT_NOTE_STATUSES,
 } from '@/lib/shift-notes/access';
+import { recordEdit, recordStatusChange } from '@/lib/shift-notes/activity';
 import { MAX_ATTACHMENTS_PER_NOTE } from '@/lib/shift-notes/media';
 import { isNoteDate, normalizeBody } from '@/lib/shift-notes/validate';
 import { getPeopleNames } from '@/lib/sops/people';
+import { suggestionsEnabled } from '@/lib/suggestions/eligibility';
+import { suggestionNoticeSource } from '@/lib/suggestions/notify';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
@@ -107,8 +126,26 @@ async function sweepStagedAttachments(db: NonNullable<ReturnType<typeof getDb>>)
 function peopleFor(notes: ShiftNoteRow[], replies: ShiftNoteReplyRow[] = []) {
   return getPeopleNames([
     ...notes.flatMap((n) => [n.author_email, n.updated_by ?? '', n.status_by ?? '']),
-    ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
+    ...replies.flatMap((r) => [
+      r.author_email ?? '',
+      r.updated_by ?? '',
+      r.data?.requested_by ?? '',
+    ]),
   ]);
+}
+
+/**
+ * Queue a classification of the note's current text for after the response
+ * (skipped in the background when that text is already classified). Admins
+ * get a pending marker to render until their page's poll picks up the
+ * result; everyone else gets nothing, since signals are triage material.
+ */
+function classifyNote(
+  note: ShiftNoteRow,
+  gate: AdminGate
+): { classification?: ClassificationView } {
+  scheduleClassification('shift_note', note.id, note.body);
+  return gate.access.isAdmin ? { classification: pendingView() } : {};
 }
 
 /** The viewer this gate represents, in the shape the access rule reads. */
@@ -211,6 +248,18 @@ export const GET: APIRoute = async ({ cookies }) => {
     attachments,
     replies,
     people: await peopleFor(notes, visibleReplies),
+    // What the classifier found in each note, keyed by note id — admins only.
+    ...(viewer.isAdmin
+      ? {
+          classifications: await loadClassifications(
+            db,
+            'shift_note',
+            notes.map((n) => n.id)
+          ),
+          // Whether the AI button also asks for suggestions (the settings page's switch).
+          suggestionsEnabled: await suggestionsEnabled(),
+        }
+      : {}),
     // So the island knows whether it is showing the whole log or just this
     // person's, and which notes to offer edit/delete on. Both are UX only —
     // every read and every mutation re-checks the same rule here.
@@ -298,7 +347,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     }
   }
 
-  return json({ note, attachments: claimed, people: await peopleFor([note]) }, 201);
+  return json(
+    {
+      note,
+      attachments: claimed,
+      people: await peopleFor([note]),
+      ...classifyNote(note, gate),
+    },
+    201
+  );
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -363,7 +420,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (patch.status === existing.status) {
       delete patch.status;
       if (patch.note_date === undefined && patch.body === undefined) {
-        return json({ note: existing, people: await peopleFor([existing]) });
+        return json({ note: existing, activity: [], people: await peopleFor([existing]) });
       }
     } else {
       patch.status_by = email;
@@ -380,9 +437,22 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (error) return json({ error: error.message }, 500);
 
   const note = data as ShiftNoteRow;
+
+  // Every action lands in the note's activity, in the order it happened.
+  const activity: ShiftNoteReplyRow[] = [];
+  // An edit keeps the old and new text/date, so no version of a note is lost.
+  const edit = await recordEdit(db, existing, note, email);
+  if (edit) activity.push(edit);
+  if (patch.status !== undefined) {
+    const entry = await recordStatusChange(db, note.id, existing.status, patch.status, email);
+    if (entry) activity.push(entry);
+  }
+
   // Triage is news to the author; an edit of their own text is not.
   if (patch.status !== undefined) await notifyShiftNoteStatus(db, note, patch.status, email);
-  return json({ note, people: await peopleFor([note]) });
+  // New text gets read again; a date or status change leaves it alone.
+  const classified = patch.body !== undefined ? classifyNote(note, gate) : {};
+  return json({ note, activity, people: await peopleFor([note], activity), ...classified });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -418,6 +488,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 
   const { error } = await db.from('shift_notes').delete().eq('id', id);
   if (error) return json({ error: error.message }, 500);
+
+  // Its undecided agent suggestions went with it (a trigger); the admins'
+  // bell rows about them would point at nothing.
+  const notice = suggestionNoticeSource('shift_note', id);
+  await deleteBySource(db, notice.type, notice.id);
 
   return json({ ok: true });
 };

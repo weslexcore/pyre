@@ -1,15 +1,15 @@
 // Server-side helpers for the pyre-agents Eve HTTP channel (/eve/v1/session*),
-// shared by the draft trigger and the refine route. Auth is the channel
-// secret; AGENTS_PROTECTION_BYPASS gets requests past Vercel Deployment
-// Protection on preview deployments (edge layer only — the channel secret is
-// still what authenticates us to the agent).
+// shared by the draft trigger, the refine route, and the Ask box. Auth is the
+// channel secret; AGENTS_PROTECTION_BYPASS gets requests past Vercel
+// Deployment Protection on preview deployments (edge layer only — the channel
+// secret is still what authenticates us to the agent).
 //
-// The continuation token is deliberately never persisted: it rotates on every
-// turn, cron sessions never pass through this app, and Eve's stream tail
-// (?startIndex=-1) hands the current token back to anyone holding just the
-// session id — the last event of a resumable session is `session.waiting`
-// carrying data.continuationToken. The same read doubles as a state probe:
-// any other tail event means the session is mid-turn or gone for good.
+// Sessions are addressed by id alone (eve ≥ 0.31): a follow-up is a POST to
+// /eve/v1/session/:id, with no continuation token to carry or persist. The
+// stream's tail (?startIndex=-1) doubles as a state probe — `session.waiting`
+// means parked and resumable, a terminal event means gone, anything else
+// means mid-turn — and ?includeTailIndex=1 reports how many events the log
+// holds, which is where a caller streams from to see only its follow-up.
 
 export interface EveConfig {
   baseUrl: string;
@@ -25,9 +25,9 @@ export interface EveConfig {
 }
 
 export type EveSessionTail =
-  /** Parked and resumable; the token to send the next follow-up with. */
-  | { state: 'waiting'; continuationToken: string }
-  /** A turn is in flight (or another caller just took the continuation). */
+  /** Parked and resumable: the next follow-up starts a new turn. */
+  | { state: 'waiting' }
+  /** A turn is in flight. */
   | { state: 'running' }
   /** Completed, failed, or unknown — start a fresh session instead. */
   | { state: 'gone' };
@@ -94,15 +94,9 @@ const TAIL_READ_TIMEOUT_MS = 10_000;
  * ?startIndex=-1 read). Exported for tests.
  */
 export function classifyTailEvent(event: unknown): EveSessionTail {
-  const e = event as { type?: string; data?: { continuationToken?: string } } | null;
+  const e = event as { type?: string } | null;
   if (!e?.type) return { state: 'gone' };
-  if (e.type === 'session.waiting') {
-    // A waiting event always carries the token; one without it can't be
-    // resumed, and the fresh-session fallback is the useful recovery.
-    return typeof e.data?.continuationToken === 'string'
-      ? { state: 'waiting', continuationToken: e.data.continuationToken }
-      : { state: 'gone' };
-  }
+  if (e.type === 'session.waiting') return { state: 'waiting' };
   if (e.type === 'session.completed' || e.type === 'session.failed') {
     return { state: 'gone' };
   }
@@ -110,8 +104,7 @@ export function classifyTailEvent(event: unknown): EveSessionTail {
 }
 
 /**
- * Classify a session's tail event: waiting (with the current continuation
- * token), running, or gone. The stream endpoint holds its connection open,
+ * Classify a session's tail event: waiting, running, or gone. The stream endpoint holds its connection open,
  * so this reads only the first NDJSON line (the current latest event with
  * startIndex=-1) and aborts. Network/parse failures classify as 'gone' —
  * the caller's fallback (fresh session) is the safe recovery either way.
@@ -151,100 +144,77 @@ export async function readEveSessionTail(
   }
 }
 
-/** Give the whole-log scan this long; a parked session's log is short and arrives at once. */
-const SCAN_TIMEOUT_MS = 15_000;
-
 /**
- * Whether `line` is the `session.waiting` event carrying `continuationToken`.
- * Exported for tests.
- */
-export function isWaitingEventFor(line: string, continuationToken: string): boolean {
-  try {
-    const event = JSON.parse(line) as { type?: string; data?: { continuationToken?: string } };
-    return event?.type === 'session.waiting' && event.data?.continuationToken === continuationToken;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * How many events a parked session has written so far — the index a caller
- * streams from to see only what its next follow-up produces. Events carry
- * no index of their own and every turn ends in a look-alike
- * `session.waiting`, so the scan reads the log from the start and stops at
- * the waiting event carrying the session's current continuation token (from
- * readEveSessionTail — the token rotates each turn, so it names the latest
- * one). Null when the scan times out or the token never appears; the
- * caller's fallback is a fresh session.
+ * How many events a session has written so far — the index a caller streams
+ * from to see only what its next follow-up produces. Read from the stream's
+ * x-eve-stream-tail-index header (the zero-based index of the last recorded
+ * event), without reading any events. Null when the session cannot be read;
+ * the caller's fallback is a fresh session.
  */
 export async function countEveSessionEvents(
   config: EveConfig,
-  sessionId: string,
-  continuationToken: string
+  sessionId: string
 ): Promise<number | null> {
   const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), SCAN_TIMEOUT_MS);
+  const timeout = setTimeout(() => abort.abort(), TAIL_READ_TIMEOUT_MS);
   try {
-    const response = await fetch(sessionUrl(config, `/${sessionId}/stream?startIndex=0`), {
-      headers: headers(config, false),
-      signal: abort.signal,
-    });
-    if (!response.ok || !response.body) return null;
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let count = 0;
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (value) buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = done ? '' : (lines.pop() ?? '');
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          count += 1;
-          if (isWaitingEventFor(trimmed, continuationToken)) return count;
-        }
-        if (done) return null;
-      }
-    } finally {
-      abort.abort(); // release the held-open stream
-    }
+    const response = await fetch(
+      sessionUrl(config, `/${sessionId}/stream?startIndex=-1&includeTailIndex=1`),
+      { headers: headers(config, false), signal: abort.signal }
+    );
+    const tail = Number.parseInt(response.headers.get('x-eve-stream-tail-index') ?? '', 10);
+    return response.ok && Number.isFinite(tail) ? tail + 1 : null;
   } catch {
     return null;
   } finally {
+    abort.abort(); // release the held-open stream
     clearTimeout(timeout);
   }
 }
 
 export type FollowUpResult =
   | { ok: true }
-  /** The continuation was taken by another turn between probe and send. */
+  /** Another turn is still running and did not take this one. */
   | { ok: false; reason: 'running' }
+  /** The session ended (409 session_not_active); start a fresh one. */
+  | { ok: false; reason: 'gone' }
   | { ok: false; reason: 'error'; detail: string };
 
+/** A just-created session's inbox can take a moment to open (409 session_not_ready). */
+const NOT_READY_RETRIES = 4;
+const NOT_READY_DELAY_MS = 500;
+
 /**
- * Send a follow-up message into an existing session. A stale-token rejection
- * means someone else's turn slipped in between the tail read and this send —
- * reported as 'running' so the caller can 409 the same way.
+ * Send a follow-up message into an existing session. pyre-agents queues
+ * follow-ups behind an active turn (turnPolicy "queue" on its channel), so a
+ * send that races another only waits its turn; callers still check the tail
+ * first so a person is told the assistant is busy rather than left queued.
  */
 export async function sendEveFollowUp(
   config: EveConfig,
   sessionId: string,
-  continuationToken: string,
   message: string
 ): Promise<FollowUpResult> {
-  const response = await fetch(sessionUrl(config, `/${sessionId}`), {
-    method: 'POST',
-    headers: headers(config),
-    body: JSON.stringify({ continuationToken, message }),
-  });
-  if (response.ok) return { ok: true };
-  const detail = (await response.text()).slice(0, 300);
-  if (response.status === 409 || response.status === 422 || /continuation/i.test(detail)) {
-    return { ok: false, reason: 'running' };
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(sessionUrl(config, `/${sessionId}`), {
+      method: 'POST',
+      headers: headers(config),
+      body: JSON.stringify({ message }),
+    });
+    if (response.ok) return { ok: true };
+    const detail = (await response.text()).slice(0, 300);
+    let code: unknown;
+    try {
+      code = (JSON.parse(detail) as { code?: unknown }).code;
+    } catch {
+      code = undefined;
+    }
+    if (code === 'session_not_active') return { ok: false, reason: 'gone' };
+    if (code === 'session_not_ready' && attempt < NOT_READY_RETRIES) {
+      await new Promise((resolve) => setTimeout(resolve, NOT_READY_DELAY_MS * (attempt + 1)));
+      continue;
+    }
+    if (response.status === 409) return { ok: false, reason: 'running' };
+    return { ok: false, reason: 'error', detail: `HTTP ${response.status}: ${detail}` };
   }
-  return { ok: false, reason: 'error', detail: `HTTP ${response.status}: ${detail}` };
 }
