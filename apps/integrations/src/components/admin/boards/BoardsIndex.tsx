@@ -5,6 +5,9 @@
 // called met leaves its section for Completed, at the bottom, so the
 // sections only ever hold work still in flight.
 //
+// A board with its form switched on carries the form's link on its card,
+// with a Copy button beside it, so handing the form out is one click.
+//
 // A single-board grantee sees exactly one card here and no New board form —
 // the list itself is filtered server-side, so the page never even tells them
 // what else exists.
@@ -12,6 +15,7 @@
 import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
+import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally } from '@/lib/boards/store';
@@ -42,6 +46,7 @@ interface BoardsResponse {
   goals: GoalRow[];
   kpis: GoalKpiRow[];
   tallies: BoardTally[];
+  formBoardIds: string[];
   canManage?: boolean;
   owners?: Assignable[];
   unattachedGoals?: GoalRow[];
@@ -151,6 +156,7 @@ export function BoardsIndex() {
   const unattached = data.unattachedGoals ?? [];
   const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
   const talliesByBoard = new Map(tallies.map((tally) => [tally.board_id, tally]));
+  const formBoardIds = new Set(data.formBoardIds ?? []);
   const today = todayEastern();
   const nowIso = new Date().toISOString();
 
@@ -170,6 +176,7 @@ export function BoardsIndex() {
       goal={board.goal_id ? (goalsById.get(board.goal_id) ?? null) : null}
       kpis={board.goal_id ? kpis.filter((kpi) => kpi.goal_id === board.goal_id) : []}
       tally={talliesByBoard.get(board.id) ?? { board_id: board.id, open: 0, total: 0 }}
+      hasForm={formBoardIds.has(board.id)}
       today={today}
       nowIso={nowIso}
       handle={handle}
@@ -419,6 +426,7 @@ function BoardCard({
   goal,
   kpis,
   tally,
+  hasForm,
   today,
   nowIso,
   handle = null,
@@ -427,6 +435,8 @@ function BoardCard({
   goal: GoalRow | null;
   kpis: GoalKpiRow[];
   tally: BoardTally;
+  /** The board's form is switched on, so its link belongs on the card. */
+  hasForm: boolean;
   today: string;
   nowIso: string;
   /** The drag grip, placed beside the name; null for a viewer who cannot arrange. */
@@ -486,6 +496,46 @@ function BoardCard({
           {board.include_in_all_tasks ? ' · on All Tasks' : ' · its own queue'}
         </p>
       </a>
+      {hasForm && <FormLinkRow slug={board.slug} />}
+    </div>
+  );
+}
+
+/** The board's public form: a link to open it and, apart from it, a button that copies it. */
+function FormLinkRow({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const href = formHref(slug);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${href}`);
+      setFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
+      <span className="font-mono text-[10px] uppercase tracking-wide text-white/35">Form</span>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--pyre-gold)] hover:underline"
+      >
+        {href}
+      </a>
+      <button
+        type="button"
+        className="shrink-0 rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/70 transition-colors hover:border-white/30 hover:text-white"
+        onClick={() => void copy()}
+      >
+        {copied ? 'Copied' : failed ? 'Copy failed' : 'Copy link'}
+      </button>
     </div>
   );
 }

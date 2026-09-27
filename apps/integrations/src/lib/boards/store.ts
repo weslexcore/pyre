@@ -215,6 +215,8 @@ export interface BoardsIndexData {
   /** Those goals' KPIs. */
   kpis: GoalKpiRow[];
   tallies: BoardTally[];
+  /** The listed boards whose form is switched on, so the card can hand out its link. */
+  formBoardIds: string[];
 }
 
 /**
@@ -227,10 +229,13 @@ export async function loadBoardsIndex(
   boards: BoardRow[]
 ): Promise<BoardsIndexData> {
   const sections = await loadSections(db);
-  if (boards.length === 0) return { boards, sections, goals: [], kpis: [], tallies: [] };
+  if (boards.length === 0) {
+    return { boards, sections, goals: [], kpis: [], tallies: [], formBoardIds: [] };
+  }
 
   const goalIds = [...new Set(boards.flatMap((board) => (board.goal_id ? [board.goal_id] : [])))];
-  const [goalsResult, kpisResult, cardsResult] = await Promise.all([
+  const boardIds = boards.map((board) => board.id);
+  const [goalsResult, kpisResult, cardsResult, formsResult] = await Promise.all([
     goalIds.length > 0
       ? db.from('goals').select('*').in('id', goalIds)
       : Promise.resolve({ data: [] as GoalRow[], error: null }),
@@ -244,15 +249,14 @@ export async function loadBoardsIndex(
     db
       .from('board_cards')
       .select('board_id, completed_at')
-      .in(
-        'board_id',
-        boards.map((board) => board.id)
-      )
+      .in('board_id', boardIds)
       .limit(BOARD_LIMITS.cardsPerBoard * boards.length),
+    db.from('board_forms').select('board_id').in('board_id', boardIds).eq('enabled', true),
   ]);
   if (goalsResult.error) throw new Error(goalsResult.error.message);
   if (kpisResult.error) throw new Error(kpisResult.error.message);
   if (cardsResult.error) throw new Error(cardsResult.error.message);
+  if (formsResult.error) throw new Error(formsResult.error.message);
 
   const tallies = new Map(boards.map((board) => [board.id, { open: 0, total: 0 }]));
   for (const row of (cardsResult.data ?? []) as Pick<BoardCardRow, 'board_id' | 'completed_at'>[]) {
@@ -268,6 +272,9 @@ export async function loadBoardsIndex(
     goals: (goalsResult.data ?? []) as GoalRow[],
     kpis: (kpisResult.data ?? []) as GoalKpiRow[],
     tallies: [...tallies.entries()].map(([board_id, tally]) => ({ board_id, ...tally })),
+    formBoardIds: ((formsResult.data ?? []) as Pick<BoardFormRow, 'board_id'>[]).map(
+      (row) => row.board_id
+    ),
   };
 }
 
