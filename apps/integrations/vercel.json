@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && yarn turbo run build --filter=@pyre/integrations",
-  "ignoreCommand": "bash ../../scripts/vercel-ignore.sh @pyre/integrations",
   "installCommand": "yarn install",
   "outputDirectory": "dist",
   "framework": "astro",
