@@ -23,18 +23,19 @@ import { logLostFoundEvent } from '@/lib/lost-found/log';
 import {
   LOST_FOUND_BUCKET as BUCKET,
   buildItemStoragePath,
-  formatBytes,
-  kindForMime,
   MAX_ATTACHMENTS_PER_ITEM,
-  MAX_FILE_BYTES,
 } from '@/lib/lost-found/media';
 import { CLOSED_STATUSES } from '@/lib/lost-found/types';
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
+import {
+  checkUpload,
+  readUpload,
+  removeStoredFile,
+  signedAttachmentResponse,
+  storeUpload,
+} from '@/lib/media/route';
 
 const PAGE = '/admin/lost-found';
-
-/** Long enough to load a page of photos, short enough that a leaked link dies. */
-const SIGNED_URL_TTL_SECONDS = 600;
 
 const emailOf = (gate: { user: { email: string } }): string => normalizeEmail(gate.user.email);
 
@@ -44,19 +45,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-  if (!request.headers.get('content-type')?.includes('multipart/form-data')) {
-    return json({ error: 'Content-Type must be multipart/form-data' }, 415);
-  }
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return json({ error: 'Could not read the upload' }, 400);
-  }
+  const form = await readUpload(request);
+  if (form instanceof Response) return form;
 
   const itemId = String(form.get('itemId') ?? '');
   if (!isUuid(itemId)) return json({ error: 'itemId must be a UUID' }, 400);
@@ -75,17 +69,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'That item has already left our hands' }, 409);
   }
 
-  const kind = kindForMime(file.type);
-  if (!kind) return json({ error: `Unsupported file type: ${file.type || 'unknown'}` }, 415);
-  if (file.size === 0) return json({ error: 'That file is empty' }, 400);
-  if (file.size > MAX_FILE_BYTES) {
-    return json(
-      {
-        error: `That file is ${formatBytes(file.size)} — the limit is ${formatBytes(MAX_FILE_BYTES)}`,
-      },
-      413
-    );
-  }
+  const kind = checkUpload(file);
+  if (kind instanceof Response) return kind;
 
   const { count, error: countError } = await db
     .from('lost_found_attachments')
@@ -100,35 +85,25 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const fileName = (file.name || `${kind}.bin`).slice(0, FIELD_LIMITS.title);
   const storagePath = buildItemStoragePath(itemId, fileName, file.type);
 
-  const { error: uploadError } = await db.storage
-    .from(BUCKET)
-    .upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadError) {
-    console.error('[lost-found] upload failed:', uploadError.message);
-    return json({ error: `Upload failed: ${uploadError.message}` }, 502);
-  }
-
-  const { data, error } = await db
-    .from('lost_found_attachments')
-    .insert({
-      item_id: itemId,
-      storage_path: storagePath,
-      file_name: fileName,
-      mime_type: file.type,
-      size_bytes: file.size,
-      kind,
-      uploaded_by: email,
-    })
-    .select('*')
-    .single();
-
-  if (error) {
-    // Don't leave an orphan object behind when the row fails.
-    await db.storage.from(BUCKET).remove([storagePath]);
-    return dbError(error);
-  }
-
-  const attachment = data as LostFoundAttachmentRow;
+  const attachment = await storeUpload<LostFoundAttachmentRow>(
+    db,
+    { bucket: BUCKET, path: storagePath, file, scope: 'lost-found' },
+    () =>
+      db
+        .from('lost_found_attachments')
+        .insert({
+          item_id: itemId,
+          storage_path: storagePath,
+          file_name: fileName,
+          mime_type: file.type,
+          size_bytes: file.size,
+          kind,
+          uploaded_by: email,
+        })
+        .select('*')
+        .single()
+  );
+  if (attachment instanceof Response) return attachment;
   await logLostFoundEvent(db, {
     itemId,
     action: 'attachment_added',
@@ -159,23 +134,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const row = (data as LostFoundAttachmentRow) ?? null;
   if (!row) return json({ error: 'Photo not found' }, 404);
 
-  const { data: signed, error: signError } = await db.storage
-    .from(BUCKET)
-    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS, {
-      download: url.searchParams.get('download') === '1' ? row.file_name : undefined,
-    });
-  if (signError || !signed?.signedUrl) {
-    return json({ error: signError?.message ?? 'Could not sign that file' }, 502);
-  }
-
-  if (url.searchParams.get('format') === 'json') {
-    return json({ url: signed.signedUrl, expiresIn: SIGNED_URL_TTL_SECONDS, attachment: row });
-  }
-
-  return new Response(null, {
-    status: 302,
-    headers: { Location: signed.signedUrl, 'Cache-Control': 'private, no-store' },
-  });
+  return signedAttachmentResponse(db, BUCKET, row, url);
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -201,10 +160,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const attachment = (data as LostFoundAttachmentRow) ?? null;
   if (!attachment) return json({ error: 'Photo not found' }, 404);
 
-  const { error: storageError } = await db.storage.from(BUCKET).remove([attachment.storage_path]);
-  if (storageError) {
-    console.error('[lost-found] media delete failed:', storageError.message);
-  }
+  await removeStoredFile(db, BUCKET, attachment.storage_path, 'lost-found');
 
   const { error: deleteError } = await db.from('lost_found_attachments').delete().eq('id', id);
   if (deleteError) return dbError(deleteError);

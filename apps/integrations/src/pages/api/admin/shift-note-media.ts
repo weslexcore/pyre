@@ -26,21 +26,22 @@ import { type AdminGate, assertSameOrigin, requirePage } from '@/lib/auth/admin'
 import { getDb, type ShiftNoteAttachmentRow, type ShiftNoteRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { dbError, isUuid, json } from '@/lib/http/route';
+import {
+  checkUpload,
+  readUpload,
+  removeStoredFile,
+  signedAttachmentResponse,
+  storeUpload,
+} from '@/lib/media/route';
 import { canSeeNote } from '@/lib/shift-notes/access';
 import {
   buildNoteStoragePath,
   buildStagedStoragePath,
-  formatBytes,
-  kindForMime,
   MAX_ATTACHMENTS_PER_NOTE,
-  MAX_FILE_BYTES,
   MAX_STAGED_PER_UPLOADER,
 } from '@/lib/shift-notes/media';
 
 const BUCKET = 'shift-note-media';
-
-/** Long enough to load a page of media, short enough that a leaked link dies. */
-const SIGNED_URL_TTL_SECONDS = 600;
 
 /** Original names come from phone cameras and can be anything; keep them sane. */
 const FILE_NAME_MAX = 200;
@@ -91,19 +92,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
-  if (!request.headers.get('content-type')?.includes('multipart/form-data')) {
-    return json({ error: 'Content-Type must be multipart/form-data' }, 415);
-  }
 
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return json({ error: 'Could not read the upload' }, 400);
-  }
+  const form = await readUpload(request);
+  if (form instanceof Response) return form;
 
   // No noteId means a staged upload: the composer sends files as soon as
   // they're picked, before the note exists to attach them to.
@@ -121,17 +115,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (note instanceof Response) return note;
   }
 
-  const kind = kindForMime(file.type);
-  if (!kind) return json({ error: `Unsupported file type: ${file.type || 'unknown'}` }, 415);
-  if (file.size === 0) return json({ error: 'That file is empty' }, 400);
-  if (file.size > MAX_FILE_BYTES) {
-    return json(
-      {
-        error: `That file is ${formatBytes(file.size)} — the limit is ${formatBytes(MAX_FILE_BYTES)}`,
-      },
-      413
-    );
-  }
+  const kind = checkUpload(file);
+  if (kind instanceof Response) return kind;
 
   if (noteId) {
     const { count, error: countError } = await db
@@ -165,35 +150,27 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     ? buildNoteStoragePath(noteId, fileName, file.type)
     : buildStagedStoragePath(fileName, file.type);
 
-  const { error: uploadError } = await db.storage
-    .from(BUCKET)
-    .upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadError) {
-    console.error('[shift-notes] upload failed:', uploadError.message);
-    return json({ error: `Upload failed: ${uploadError.message}` }, 502);
-  }
+  const attachment = await storeUpload<ShiftNoteAttachmentRow>(
+    db,
+    { bucket: BUCKET, path: storagePath, file, scope: 'shift-notes' },
+    () =>
+      db
+        .from('shift_note_attachments')
+        .insert({
+          note_id: noteId || null,
+          storage_path: storagePath,
+          file_name: fileName,
+          mime_type: file.type,
+          size_bytes: file.size,
+          kind,
+          uploaded_by: email,
+        })
+        .select('*')
+        .single()
+  );
+  if (attachment instanceof Response) return attachment;
 
-  const { data, error } = await db
-    .from('shift_note_attachments')
-    .insert({
-      note_id: noteId || null,
-      storage_path: storagePath,
-      file_name: fileName,
-      mime_type: file.type,
-      size_bytes: file.size,
-      kind,
-      uploaded_by: email,
-    })
-    .select('*')
-    .single();
-
-  if (error) {
-    // Don't leave an orphan object behind when the row fails.
-    await db.storage.from(BUCKET).remove([storagePath]);
-    return dbError(error);
-  }
-
-  return json({ attachment: data as ShiftNoteAttachmentRow }, 201);
+  return json({ attachment }, 201);
 };
 
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -221,25 +198,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const denied = await assertCanReachAttachment(db, row, gate);
   if (denied) return denied;
 
-  const { data: signed, error: signError } = await db.storage
-    .from(BUCKET)
-    .createSignedUrl(row.storage_path, SIGNED_URL_TTL_SECONDS, {
-      download: url.searchParams.get('download') === '1' ? row.file_name : undefined,
-    });
-  if (signError || !signed?.signedUrl) {
-    return json({ error: signError?.message ?? 'Could not sign that file' }, 502);
-  }
-
-  if (url.searchParams.get('format') === 'json') {
-    return json({ url: signed.signedUrl, expiresIn: SIGNED_URL_TTL_SECONDS, attachment: row });
-  }
-
-  // Default: bounce straight to the object, so an <img>/<video> src can be
-  // this route and never hold a stale signature.
-  return new Response(null, {
-    status: 302,
-    headers: { Location: signed.signedUrl, 'Cache-Control': 'private, no-store' },
-  });
+  return signedAttachmentResponse(db, BUCKET, row, url);
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
@@ -268,10 +227,7 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
   const denied = await assertCanReachAttachment(db, attachment, gate);
   if (denied) return denied;
 
-  const { error: storageError } = await db.storage.from(BUCKET).remove([attachment.storage_path]);
-  if (storageError) {
-    console.error('[shift-notes] media delete failed:', storageError.message);
-  }
+  await removeStoredFile(db, BUCKET, attachment.storage_path, 'shift-notes');
 
   const { error: deleteError } = await db.from('shift_note_attachments').delete().eq('id', id);
   if (deleteError) return dbError(deleteError);
