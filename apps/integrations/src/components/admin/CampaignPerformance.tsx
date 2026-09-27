@@ -11,6 +11,8 @@
 // which is how the automated journeys become proper rows.
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
+import { SessionExpired } from '@/components/admin/SessionExpired';
+import { formButtonClass } from '@/components/admin/ui';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
 import { goalMetricLabel, measurementsOf } from '@/lib/campaigns/goals';
 import { PLACEMENTS } from '@/lib/campaigns/placements';
@@ -18,7 +20,6 @@ import { slugToName } from '@/lib/campaigns/slug';
 import type { CampaignGoal } from '@/lib/campaigns/types';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import { BackLink } from './BackLink';
-import { buttonClass } from './incidentUi';
 
 interface CampaignRow {
   id: string;
@@ -185,20 +186,7 @@ export function CampaignPerformance() {
   );
 
   if (error === 'session_expired') {
-    return (
-      <div className="max-w-md mx-auto text-center py-16 px-4">
-        <h2 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
-          Session expired
-        </h2>
-        <p className="text-white/60 mb-6">Log in again to continue.</p>
-        <a
-          href="/api/auth/login?returnUrl=%2Fadmin%2Fcampaigns%2Fperformance"
-          className="inline-block px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
-        >
-          Log In
-        </a>
-      </div>
-    );
+    return <SessionExpired returnTo="/admin/campaigns/performance" />;
   }
 
   const posthogIssue = data
@@ -445,7 +433,7 @@ export function CampaignPerformance() {
                   type="button"
                   disabled={adding !== null}
                   onClick={() => void addAsCampaign(row.slug)}
-                  className={`${buttonClass} !py-1 !text-[10px]`}
+                  className={`${formButtonClass} !py-1 !text-[10px]`}
                 >
                   {adding === row.slug ? 'Adding…' : 'Add as campaign'}
                 </button>

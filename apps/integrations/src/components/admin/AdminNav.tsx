@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { normalizePins, TOOL_PINS_EVENT } from '@/lib/admin/pinOrder';
+import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import { ADMIN_TOOL_SECTIONS, type AdminTool, STAFF_PAGES } from './adminTools';
 
@@ -105,23 +106,8 @@ export function AdminNav({
     groups.flatMap((group) => group.items).find((item) => isActive(currentPath, item.href))
       ?.label ?? 'Menu';
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!navRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+  const closeMenu = useCallback(() => setOpen(false), []);
+  useDismiss(navRef, open, closeMenu);
 
   return (
     <nav ref={navRef} aria-label="Admin tools">

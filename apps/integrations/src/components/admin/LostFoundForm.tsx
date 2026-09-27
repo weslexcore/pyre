@@ -25,6 +25,8 @@
 // same question.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { LostFoundItemRow } from '@/lib/db';
 import { firstNameOf } from '@/lib/email/address';
@@ -49,14 +51,7 @@ import {
 import { FIELD_LIMITS } from '@/lib/lost-found/validate';
 import { BackLink } from './BackLink';
 import { type PersonResult, useGuestSearch } from './GuestSearch';
-import {
-  buttonClass,
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  readError,
-  SectionTitle,
-} from './incidentUi';
+import { inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 import { SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
 /** The log form has never emailed anyone yet, so nothing is "already asked". */
@@ -488,7 +483,7 @@ export function LostFoundForm() {
             {!dayWindow && nextLookback && (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 onClick={() => setLookbackHours(nextLookback)}
               >
                 Look further back
@@ -506,7 +501,7 @@ export function LostFoundForm() {
               />
             </label>
             {dayWindow && (
-              <button type="button" className={buttonClass} onClick={() => showDay('')}>
+              <button type="button" className={formButtonClass} onClick={() => showDay('')}>
                 Back to recent
               </button>
             )}
@@ -556,7 +551,7 @@ export function LostFoundForm() {
         {owner && (
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={submitting}
             onClick={() => void submit({ ask: false })}
           >

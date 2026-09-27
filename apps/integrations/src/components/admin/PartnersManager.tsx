@@ -4,13 +4,12 @@
 // every mutation, so a read-only grant still gets the full picture.
 
 import { useCallback, useEffect, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, inputClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
+import { fmtShortDate } from '@/lib/client/format';
 import type { PartnerRow, PartnerVerificationRow } from '@/lib/db';
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const pillClass = (active: boolean) =>
   `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
@@ -44,17 +43,6 @@ interface RequestsPayload {
   counts: Record<string, number>;
   canManage: boolean;
 }
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-const fmtDate = (iso: string | null): string =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
 
 // --- Registry ---
 
@@ -426,8 +414,8 @@ function RequestRow({
         </span>
       )}
       <span className="font-mono text-xs text-white/30">
-        {fmtDate(request.created_at)}
-        {request.decided_at && ` → ${fmtDate(request.decided_at)}`}
+        {fmtShortDate(request.created_at)}
+        {request.decided_at && ` → ${fmtShortDate(request.decided_at)}`}
         {request.decided_by && ` by ${request.decided_by}`}
       </span>
       {canManage && request.status === 'pending' && (
@@ -548,7 +536,15 @@ export function PartnersManager() {
   };
 
   const deletePartner = async (partner: PartnerRow) => {
-    if (!window.confirm(`Delete ${partner.name}? This can't be undone.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Delete ${partner.name}?`,
+        body: "This can't be undone.",
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/admin/partners?id=${encodeURIComponent(partner.id)}`, {
@@ -566,7 +562,16 @@ export function PartnersManager() {
   };
 
   const requestAction = async (id: string, action: string) => {
-    if (action === 'deny' && !window.confirm('Deny this request? The customer is emailed.')) return;
+    if (
+      action === 'deny' &&
+      !(await confirmAction({
+        title: 'Deny this request?',
+        body: 'The customer is emailed.',
+        confirmLabel: 'Deny',
+        danger: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -596,11 +601,7 @@ export function PartnersManager() {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
       {notice && (
         <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
           {notice}

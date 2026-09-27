@@ -3,6 +3,7 @@
 // with its own saved style.
 
 import { useEffect, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { qrFilename } from '@/lib/campaigns/links';
 import { placementByKey } from '@/lib/campaigns/placements';
 import type { LinkRow as LinkRowData, UtmCampaign } from '@/lib/campaigns/types';
@@ -10,7 +11,7 @@ import { FIELD_LIMITS } from '@/lib/campaigns/validate';
 import { type QrStyle, qrStyleOf } from '@/lib/qr/style';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CopyButton } from '../CopyButton';
-import { buttonClass, inputClass } from '../incidentUi';
+import { inputClass } from '../incidentUi';
 import { QrCode } from '../qr/QrCode';
 import { QrStyleControls } from '../qr/QrStyleControls';
 import { linkTitle, UtmChip } from './campaignUi';
@@ -123,7 +124,7 @@ export function LinkRow({
             type="button"
             disabled={busy}
             onClick={() => void onMintShort()}
-            className={buttonClass}
+            className={formButtonClass}
           >
             Create short link
           </button>
@@ -139,7 +140,7 @@ export function LinkRow({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setShowQr((v) => !v)} className={buttonClass}>
+        <button type="button" onClick={() => setShowQr((v) => !v)} className={formButtonClass}>
           {showQr ? 'Hide QR' : 'QR code'}
         </button>
         {editing ? (
@@ -158,7 +159,7 @@ export function LinkRow({
               onChange={(e) => setLabel(e.target.value)}
               autoComplete="off"
             />
-            <button type="submit" disabled={busy} className={buttonClass}>
+            <button type="submit" disabled={busy} className={formButtonClass}>
               Save
             </button>
             <button
@@ -167,20 +168,20 @@ export function LinkRow({
                 setLabel(link.label);
                 setEditing(false);
               }}
-              className={buttonClass}
+              className={formButtonClass}
             >
               Cancel
             </button>
           </form>
         ) : (
-          <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+          <button type="button" onClick={() => setEditing(true)} className={formButtonClass}>
             {link.label ? 'Edit note' : 'Add note'}
           </button>
         )}
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className={`${buttonClass} ml-auto text-[var(--pyre-red)]/80 hover:text-[var(--pyre-red)]`}
+          className={`${formButtonClass} ml-auto text-[var(--pyre-red)]/80 hover:text-[var(--pyre-red)]`}
         >
           Delete
         </button>

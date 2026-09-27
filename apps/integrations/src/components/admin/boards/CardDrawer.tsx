@@ -6,6 +6,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref, fileIdsOf } from '@/lib/boards/files';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
@@ -13,14 +14,7 @@ import { AREAS } from '@/lib/goals/types';
 import type { PeopleNames } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import {
-  buttonClass,
-  dangerButtonClass,
-  inputClass,
-  labelClass,
-  selectClass,
-  textareaClass,
-} from '../goalsUi';
+import { dangerButtonClass, inputClass, labelClass, selectClass, textareaClass } from '../goalsUi';
 import { FieldRow } from '../guestUi';
 import { LinkTextarea } from '../LinkTextarea';
 import { SopMarkdown } from '../SopMarkdown';
@@ -188,7 +182,12 @@ export function CardDrawer({
           <h2 id={titleId} className="font-mono text-xs uppercase tracking-wide text-white/50">
             {finished ? 'Finished card' : 'Card'}
           </h2>
-          <button ref={closeRef} type="button" className={buttonClass} onClick={() => void close()}>
+          <button
+            ref={closeRef}
+            type="button"
+            className={formButtonClass}
+            onClick={() => void close()}
+          >
             Close
           </button>
         </div>
@@ -375,7 +374,11 @@ export function CardDrawer({
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <span className={`${labelClass} mb-0`}>Notes</span>
-              <button type="button" className={buttonClass} onClick={() => setPreview((on) => !on)}>
+              <button
+                type="button"
+                className={formButtonClass}
+                onClick={() => setPreview((on) => !on)}
+              >
                 {preview ? 'Edit' : 'Preview'}
               </button>
             </div>
@@ -417,7 +420,11 @@ export function CardDrawer({
                 {error ? 'Changes not saved' : saving ? 'Saving…' : 'All changes saved'}
               </span>
               {autosave.error && (
-                <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+                <button
+                  type="button"
+                  className={formButtonClass}
+                  onClick={() => void autosave.flush()}
+                >
                   Retry
                 </button>
               )}

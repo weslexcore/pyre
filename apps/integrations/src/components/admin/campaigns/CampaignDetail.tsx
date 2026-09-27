@@ -3,6 +3,8 @@
 // themselves, and how the campaign is doing.
 
 import { useCallback, useId, useMemo, useState } from 'react';
+import { isSessionExpired, SessionExpired } from '@/components/admin/SessionExpired';
+import { formButtonClass } from '@/components/admin/ui';
 import { campaignErrorMessage } from '@/lib/campaigns/errors';
 import { campaignPhase, todayYmd } from '@/lib/campaigns/phase';
 import type {
@@ -11,22 +13,16 @@ import type {
   LinkRow as LinkRowData,
   UtmCampaign,
 } from '@/lib/campaigns/types';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { QrStyle } from '@/lib/qr/style';
 import { BackLink } from '../BackLink';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CopyButton } from '../CopyButton';
-import { buttonClass, cardClass, readError, SectionTitle } from '../incidentUi';
+import { cardClass, SectionTitle } from '../incidentUi';
 import { CampaignForm } from './CampaignForm';
 import { CampaignStats } from './CampaignStats';
-import {
-  dateRangeLabel,
-  formatCreated,
-  isSessionExpired,
-  PhaseChip,
-  SessionExpired,
-  TypeBadge,
-} from './campaignUi';
+import { dateRangeLabel, formatCreated, PhaseChip, TypeBadge } from './campaignUi';
 import { useEvents } from './DestinationPicker';
 import { LinkRow } from './LinkRow';
 import { type GenerateRequest, PlacementGrid } from './PlacementGrid';
@@ -263,20 +259,20 @@ export function CampaignDetail({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+                <button type="button" onClick={() => setEditing(true)} className={formButtonClass}>
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => void patchCampaign({ status: archived ? 'active' : 'archived' })}
-                  className={buttonClass}
+                  className={formButtonClass}
                 >
                   {archived ? 'Unarchive' : 'Archive'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className={`${buttonClass} text-[var(--pyre-red)]/80 hover:text-[var(--pyre-red)]`}
+                  className={`${formButtonClass} text-[var(--pyre-red)]/80 hover:text-[var(--pyre-red)]`}
                 >
                   Delete
                 </button>
@@ -306,7 +302,7 @@ export function CampaignDetail({
               Generate a link
             </SectionTitle>
           </div>
-          <span className={`${buttonClass} shrink-0`}>{showGenerate ? 'Hide' : 'Show'}</span>
+          <span className={`${formButtonClass} shrink-0`}>{showGenerate ? 'Hide' : 'Show'}</span>
         </button>
         {showGenerate && (
           <div id={generatePanelId} className="mt-4">

@@ -11,16 +11,17 @@
 
 import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally } from '@/lib/boards/store';
 import { BOARD_LIMITS, BOARDS_CALENDAR_HREF, slugOf } from '@/lib/boards/types';
+import { readError, sendJson } from '@/lib/client/api';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
 import { ALL_GOALS_HREF, ALL_TASKS_HREF } from '@/lib/goals/types';
 import {
-  buttonClass,
   cardClass,
   formatYmd,
   GoalStatusBadge,
@@ -32,9 +33,7 @@ import {
   QuietChip,
   SectionTitle,
   selectClass,
-  send,
 } from '../goalsUi';
-import { readError } from '../incidentUi';
 import { BoardSections } from './BoardSections';
 
 interface BoardsResponse {
@@ -114,7 +113,7 @@ export function BoardsIndex() {
           : goalChoice === NO_GOAL
             ? {}
             : { goalId: goalChoice };
-      await send('/api/admin/boards', 'POST', {
+      await sendJson('/api/admin/boards', 'POST', {
         name,
         slug: slug || slugOf(name),
         cardNoun,
@@ -184,22 +183,22 @@ export function BoardsIndex() {
       {(canManage || boards.length > 0) && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           {canManage && (
-            <a className={buttonClass} href={BOARDS_CALENDAR_HREF}>
+            <a className={formButtonClass} href={BOARDS_CALENDAR_HREF}>
               Calendar
             </a>
           )}
           {canManage && (
-            <a className={buttonClass} href={ALL_GOALS_HREF}>
+            <a className={formButtonClass} href={ALL_GOALS_HREF}>
               All goals
             </a>
           )}
           {canManage && (
-            <a className={buttonClass} href={ALL_TASKS_HREF}>
+            <a className={formButtonClass} href={ALL_TASKS_HREF}>
               All tasks
             </a>
           )}
           {canManage && !creating && (
-            <button type="button" className={buttonClass} onClick={() => setCreating(true)}>
+            <button type="button" className={formButtonClass} onClick={() => setCreating(true)}>
               New board
             </button>
           )}
@@ -357,7 +356,7 @@ export function BoardsIndex() {
           </label>
 
           <div className="mt-4 flex justify-end gap-2">
-            <button type="button" className={buttonClass} onClick={() => setCreating(false)}>
+            <button type="button" className={formButtonClass} onClick={() => setCreating(false)}>
               Cancel
             </button>
             <button

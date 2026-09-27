@@ -10,12 +10,13 @@
 // ClientRouter navigation, so the poll timer never outlives a page.
 // Popover mechanics follow AdminNav.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
+import { useDismiss } from '@/lib/client/useDismiss';
 import { DROPDOWN_CLOSED, DROPDOWN_MOTION, usePresence } from '@/lib/client/usePresence';
 import type { StaffNotificationRow } from '@/lib/db';
 import { isUnread, NOTIFICATIONS_EVENT } from '@/lib/notifications/types';
 import { NOTIFICATIONS_HREF } from './adminTools';
-import { readError } from './messagesUi';
 import { NotificationList } from './NotificationList';
 
 const POLL_MS = 60_000;
@@ -110,21 +111,8 @@ export function NotificationBell({ initialCount }: { initialCount: number }) {
     };
   }, [reload]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  const closePanel = useCallback(() => setOpen(false), []);
+  useDismiss(rootRef, open, closePanel);
 
   const toggle = useCallback(() => {
     setOpen((v) => {

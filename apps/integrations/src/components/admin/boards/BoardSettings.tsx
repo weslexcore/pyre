@@ -22,6 +22,7 @@
 // has, so nothing typed is ever lost.
 
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { columnKeyOf, isLastOpenColumn } from '@/lib/boards/columns';
 import { formBuilderHref } from '@/lib/boards/forms';
 import type { ColumnKind, FieldKind } from '@/lib/boards/types';
@@ -36,10 +37,10 @@ import {
   kindHasOptions,
   kindIsTime,
 } from '@/lib/boards/types';
+import { sendJson } from '@/lib/client/api';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
-  buttonClass,
   cardClass,
   dangerButtonClass,
   inputBaseClass,
@@ -47,9 +48,7 @@ import {
   labelClass,
   SectionTitle,
   selectBaseClass,
-  send,
 } from '../goalsUi';
-
 import { ColumnOrder } from './ColumnOrder';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -197,7 +196,7 @@ export function BoardSettings({
     ]);
 
   const autosave = useCardAutosave(async (patch) => {
-    const result = await send<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
+    const result = await sendJson<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
       slug: board.slug,
       ...patch,
     });
@@ -242,7 +241,7 @@ export function BoardSettings({
     setSaving(true);
     setError(null);
     try {
-      const result = await send<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
+      const result = await sendJson<BoardSettingsResult>('/api/admin/boards', 'PATCH', {
         slug: board.slug,
         archived: !board.archived,
       });
@@ -259,7 +258,7 @@ export function BoardSettings({
     setSaving(true);
     setError(null);
     try {
-      await send(`/api/admin/boards?slug=${encodeURIComponent(board.slug)}`, 'DELETE');
+      await sendJson(`/api/admin/boards?slug=${encodeURIComponent(board.slug)}`, 'DELETE');
       window.location.assign(BOARDS_HREF);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete the board');
@@ -389,7 +388,7 @@ export function BoardSettings({
             </div>
           )}
         </ColumnOrder>
-        <button type="button" className={`${buttonClass} mt-2`} onClick={addColumn}>
+        <button type="button" className={`${formButtonClass} mt-2`} onClick={addColumn}>
           Add column
         </button>
         <p className="mt-2 text-xs text-white/35">
@@ -537,7 +536,7 @@ export function BoardSettings({
               </option>
             ))}
           </select>
-          <button type="button" className={buttonClass} onClick={addField}>
+          <button type="button" className={formButtonClass} onClick={addField}>
             Add field
           </button>
         </div>
@@ -555,7 +554,7 @@ export function BoardSettings({
           A board can put a form in front of people — anyone with the link, or signed-in staff — and
           each submission becomes a {cardNoun} in the first open column.
         </p>
-        <a className={`${buttonClass} mt-2 inline-block`} href={formBuilderHref(board.slug)}>
+        <a className={`${formButtonClass} mt-2 inline-block`} href={formBuilderHref(board.slug)}>
           Open the form builder
         </a>
       </div>
@@ -574,7 +573,7 @@ export function BoardSettings({
               : 'All changes saved'}
         </p>
         {autosave.error && (
-          <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+          <button type="button" className={formButtonClass} onClick={() => void autosave.flush()}>
             Retry
           </button>
         )}
@@ -585,7 +584,7 @@ export function BoardSettings({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={busy || saving}
             onClick={() => setConfirming('archive')}
           >

@@ -1,5 +1,6 @@
+import { formButtonClass } from '@/components/admin/ui';
 import { useCopy } from '@/lib/client/useCopy';
-import { buttonClass, primaryButtonClass } from './incidentUi';
+import { primaryButtonClass } from './incidentUi';
 
 /**
  * A button that copies `value` and reads "Copied" for a moment. Self-contained
@@ -18,7 +19,7 @@ export function CopyButton({
   className?: string;
 }) {
   const { copied, copy } = useCopy();
-  const base = primary ? `${primaryButtonClass} !px-3 !py-2 !text-xs` : buttonClass;
+  const base = primary ? `${primaryButtonClass} !px-3 !py-2 !text-xs` : formButtonClass;
   return (
     <button
       type="button"

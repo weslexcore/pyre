@@ -12,7 +12,9 @@
 // the button still has to be read before the press.
 
 import { useEffect, useMemo, useState } from 'react';
-import { buttonClass, primaryButtonClass, readError } from './incidentUi';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
+import { primaryButtonClass } from './incidentUi';
 import { countReachable, SessionChoices, useSessionChoices } from './LostFoundSessionChoices';
 
 export function LostFoundSessionPicker({
@@ -123,7 +125,7 @@ export function LostFoundSessionPicker({
                 : `Ask ${reachable} ${reachable === 1 ? 'person' : 'people'}`}
           </button>
           {picked.size > 0 && (
-            <button type="button" className={buttonClass} onClick={() => setPicked(new Set())}>
+            <button type="button" className={formButtonClass} onClick={() => setPicked(new Set())}>
               Clear
             </button>
           )}

@@ -23,15 +23,14 @@ import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { FilesField } from '@/components/admin/boards/FilesField';
 import {
-  buttonClass,
   inputClass,
   labelClass,
   primaryButtonClass,
   textareaClass,
 } from '@/components/admin/goalsUi';
 import { FieldInput } from '@/components/admin/guestUi';
-import { readError } from '@/components/admin/incidentUi';
 import { SopMarkdown } from '@/components/admin/SopMarkdown';
+import { formButtonClass } from '@/components/admin/ui';
 import { fileIdsOf, formMediaHref } from '@/lib/boards/files';
 import {
   answerProblem,
@@ -41,6 +40,7 @@ import {
   type ResolvedQuestion,
 } from '@/lib/boards/forms';
 import { BOARD_LIMITS } from '@/lib/boards/types';
+import { readError } from '@/lib/client/api';
 import type { BoardFieldValue } from '@/lib/db';
 import { Confetti } from './Confetti';
 
@@ -314,7 +314,7 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
           </button>
         ) : stepped ? (
           <>
-            <button type="button" className={buttonClass} onClick={back} disabled={step === 0}>
+            <button type="button" className={formButtonClass} onClick={back} disabled={step === 0}>
               Back
             </button>
             <p role="status" className="font-mono text-xs text-white/50">
@@ -324,7 +324,7 @@ export function BoardForm({ slug, config, questions, noun, preview = false }: Bo
               {!questions[step].required && (
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={sending}
                   onClick={() => skip(questions[step])}
                 >

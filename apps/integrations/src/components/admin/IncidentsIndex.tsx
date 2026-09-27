@@ -16,6 +16,7 @@
 // there can't leave a stale row here.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { IncidentRow } from '@/lib/db';
 import {
@@ -30,7 +31,6 @@ import {
 } from '@/lib/incidents/types';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
-  buttonClass,
   cardClass,
   formatDayAndTime,
   inputClass,
@@ -199,7 +199,7 @@ export function IncidentsIndex() {
             <button
               key={r.key}
               type="button"
-              className={`${buttonClass} ${range === r.key ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
+              className={`${formButtonClass} ${range === r.key ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
               onClick={() => setRange(r.key)}
             >
               {r.label}

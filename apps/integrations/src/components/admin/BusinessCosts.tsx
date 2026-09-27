@@ -7,15 +7,13 @@
 // and pokes the parent island so the profit numbers above repaint.
 
 import { useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, tinyInputClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { fmtMoney } from '@/lib/client/format';
 import type { BusinessCostRow } from '@/lib/db';
 import type { BusinessCostsPayload } from '@/pages/api/admin/business-costs';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
 
 const COSTS_URL = '/api/admin/business-costs';
 
@@ -105,9 +103,6 @@ const PRESETS: Array<{ label: string; fill: Partial<FormState> }> = [
     fill: { name: '', category: 'software', kind: 'recurring', amount: '', cadence: 'monthly' },
   },
 ];
-
-const fmtMoney = (n: number): string =>
-  `$${Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(2)}`;
 
 const fmtDay = (d: string): string =>
   new Date(`${d}T00:00:00`).toLocaleDateString('en-US', {
@@ -245,7 +240,15 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
   };
 
   const remove = async (cost: BusinessCostRow) => {
-    if (!window.confirm(`Delete "${cost.name}"? Past periods will stop counting it.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Delete "${cost.name}"?`,
+        body: 'Past periods will stop counting it.',
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     try {
       const res = await fetch(`${COSTS_URL}?id=${cost.id}`, { method: 'DELETE' });
       const body = (await res.json()) as { error?: string };
@@ -269,11 +272,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
         their cut of each day's revenue.
       </p>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
       {loading && <p className="font-mono text-sm text-white/40">Loading…</p>}
 
       {!loading && costs.length === 0 && (
@@ -332,14 +331,14 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
-              className={`${inputClass} w-56`}
+              className={`${tinyInputClass} w-56`}
               placeholder="Name"
               aria-label="Cost name"
               value={form.name}
               onChange={(e) => set({ name: e.target.value })}
             />
             <select
-              className={inputClass}
+              className={tinyInputClass}
               aria-label="Category"
               value={form.category}
               onChange={(e) => set({ category: e.target.value })}
@@ -351,7 +350,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
               ))}
             </select>
             <select
-              className={inputClass}
+              className={tinyInputClass}
               aria-label="Cost kind"
               value={form.kind}
               onChange={(e) => set({ kind: e.target.value as Kind })}
@@ -376,14 +375,14 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
               type="number"
               min="0"
               step="0.01"
-              className={`${inputClass} w-28`}
+              className={`${tinyInputClass} w-28`}
               aria-label="Amount"
               value={form.amount}
               onChange={(e) => set({ amount: e.target.value })}
             />
             {form.kind === 'recurring' && (
               <select
-                className={inputClass}
+                className={tinyInputClass}
                 aria-label="Cadence"
                 value={form.cadence}
                 onChange={(e) => set({ cadence: e.target.value })}
@@ -402,7 +401,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
                   type="number"
                   min="0"
                   step="0.01"
-                  className={`${inputClass} w-28`}
+                  className={`${tinyInputClass} w-28`}
                   aria-label="Monthly cap"
                   value={form.monthlyCap}
                   onChange={(e) => set({ monthlyCap: e.target.value })}
@@ -414,7 +413,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
                 <span className="font-mono text-xs text-white/40">Purchased on</span>
                 <input
                   type="date"
-                  className={inputClass}
+                  className={tinyInputClass}
                   aria-label="Purchase date"
                   value={form.incurredOn}
                   onChange={(e) => set({ incurredOn: e.target.value })}
@@ -428,7 +427,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
               <span className="font-mono text-xs text-white/40">Active from</span>
               <input
                 type="date"
-                className={inputClass}
+                className={tinyInputClass}
                 aria-label="Effective from"
                 value={form.effectiveFrom}
                 onChange={(e) => set({ effectiveFrom: e.target.value })}
@@ -436,7 +435,7 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
               <span className="font-mono text-xs text-white/40">until</span>
               <input
                 type="date"
-                className={inputClass}
+                className={tinyInputClass}
                 aria-label="Effective to"
                 value={form.effectiveTo}
                 onChange={(e) => set({ effectiveTo: e.target.value })}
@@ -449,18 +448,14 @@ export function BusinessCosts({ today, onChanged }: { today: string; onChanged: 
 
           <input
             type="text"
-            className={`${inputClass} w-full`}
+            className={`${tinyInputClass} w-full`}
             placeholder="Notes (optional)"
             aria-label="Notes"
             value={form.notes}
             onChange={(e) => set({ notes: e.target.value })}
           />
 
-          {formError && (
-            <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-              {formError}
-            </p>
-          )}
+          {formError && <ErrorBanner mono>{formError}</ErrorBanner>}
 
           <div className="flex items-center gap-2">
             <button

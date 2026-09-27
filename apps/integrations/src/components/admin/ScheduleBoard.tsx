@@ -40,6 +40,9 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
   ScheduleDraftMessageRow,
@@ -121,9 +124,6 @@ const SYNC_FLAG_LABELS: Record<NonNullable<ShiftRow['sync_flag']>, string> = {
 
 const inputClass =
   'w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 // Sage marks duties wherever they appear — chip and picker both — so they
 // read as their own axis next to the red role pills. The two answer different
@@ -1123,11 +1123,7 @@ export function ScheduleBoard() {
           />
         )}
         <div className="min-w-0 space-y-6">
-          {error && (
-            <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-              {error}
-            </p>
-          )}
+          {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
           {range.end >= firstTentative && (
             <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">
@@ -1807,8 +1803,15 @@ function ShiftForm({
               type="button"
               className={`${buttonClass} text-[var(--pyre-red)]`}
               disabled={busy}
-              onClick={() => {
-                if (!window.confirm('Delete this shift and its assignments?')) return;
+              onClick={async () => {
+                if (
+                  !(await confirmAction({
+                    title: 'Delete this shift and its assignments?',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                  }))
+                )
+                  return;
                 onCancel();
                 void run(() => api('DELETE', `/api/admin/shifts?id=${shift.id}`));
               }}
@@ -1921,35 +1924,42 @@ function ShiftDetail({
       ? (subs.find((s) => s.requester_staff_id !== selfId) ?? null)
       : null;
 
-  const requestSub = () => {
+  const requestSub = async () => {
     if (
-      !window.confirm(
-        'Request a sub for this shift? Your hours are logged as time off, the admins are emailed, and everyone available that day gets a one-click link to take the shift. You stay on the shift until someone takes it.'
-      )
+      !(await confirmAction({
+        title: 'Request a sub for this shift?',
+        body: 'Your hours are logged as time off, the admins are emailed, and everyone available that day gets a one-click link to take the shift. You stay on the shift until someone takes it.',
+        confirmLabel: 'Request sub',
+      }))
     ) {
       return;
     }
     void run(() => api('POST', '/api/admin/shift-sub', { shiftId: shift.id }));
   };
 
-  const cancelSub = (sub: SubRequestRow) => {
+  const cancelSub = async (sub: SubRequestRow) => {
     if (
-      !window.confirm(
-        'Cancel this sub request? The time off it logged is removed and the shift stays as-is.'
-      )
+      !(await confirmAction({
+        title: 'Cancel this sub request?',
+        body: 'The time off it logged is removed and the shift stays as-is.',
+        confirmLabel: 'Cancel request',
+        danger: true,
+      }))
     ) {
       return;
     }
     void run(() => api('DELETE', `/api/admin/shift-sub?id=${sub.id}`));
   };
 
-  const takeSub = (sub: SubRequestRow) => {
+  const takeSub = async (sub: SubRequestRow) => {
     if (
-      !window.confirm(
-        `Take this shift (${formatCompactTime(sub.starts_at)}–${formatCompactTime(sub.ends_at)})? You replace ${
+      !(await confirmAction({
+        title: `Take this shift (${formatCompactTime(sub.starts_at)}–${formatCompactTime(sub.ends_at)})?`,
+        body: `You replace ${
           staffById.get(sub.requester_staff_id)?.display_name ?? 'the requester'
-        } right away.`
-      )
+        } right away.`,
+        confirmLabel: 'Take shift',
+      }))
     ) {
       return;
     }
@@ -2520,11 +2530,14 @@ function ShiftDetail({
               className={`${buttonClass} text-[var(--pyre-red)]`}
               title="Remove everyone from this shift so it can be set up from scratch"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  !window.confirm(
-                    'Remove everyone from this shift? All assignments are deleted (the shift itself stays), so it can be set up from scratch.'
-                  )
+                  !(await confirmAction({
+                    title: 'Remove everyone from this shift?',
+                    body: 'All assignments are deleted (the shift itself stays), so it can be set up from scratch.',
+                    confirmLabel: 'Clear',
+                    danger: true,
+                  }))
                 ) {
                   return;
                 }
@@ -2863,11 +2876,14 @@ function ProposalBanner({
             type="button"
             className={`${buttonClass} text-[var(--pyre-red)]`}
             disabled={busy}
-            onClick={() => {
+            onClick={async () => {
               if (
-                window.confirm(
-                  'Discard the whole draft? Individual ✓/✗ is also available on each item.'
-                )
+                await confirmAction({
+                  title: 'Discard the whole draft?',
+                  body: 'Individual ✓/✗ is also available on each item.',
+                  confirmLabel: 'Discard',
+                  danger: true,
+                })
               ) {
                 void onAction({ action: 'discard', proposalId: proposal.id });
               }

@@ -8,18 +8,12 @@
 // scoping is enforced by the API, and this island just renders what it's
 // given. isAdmin decides one thing here: whether a run can be deleted.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, compactInputClass, compactSelectClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { type RunEntry, RunsList } from './SopRunsList';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const selectClass =
-  'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
 
 // 'Abandoned' only turns up runs from before ending early became a discard
 // (which deletes the run); kept so that history stays reachable.
@@ -29,14 +23,6 @@ const STATUS_FILTERS = [
   { key: 'completed', label: 'Completed' },
   { key: 'abandoned', label: 'Abandoned' },
 ] as const;
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
 
 /** Everyone who touched this run: started, ended, or checked an item. */
 function participants(run: RunEntry): string[] {
@@ -176,7 +162,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
         <label className="flex items-center gap-2 font-mono text-xs text-white/60">
           SOP
           <select
-            className={selectClass}
+            className={compactSelectClass}
             value={sopFilter}
             onChange={(e) => setSopFilter(e.target.value)}
           >
@@ -191,7 +177,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
         <label className="flex items-center gap-2 font-mono text-xs text-white/60">
           person
           <select
-            className={selectClass}
+            className={compactSelectClass}
             value={personFilter}
             onChange={(e) => setPersonFilter(e.target.value)}
           >
@@ -207,7 +193,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
           from
           <input
             type="date"
-            className={inputClass}
+            className={compactInputClass}
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
           />
@@ -216,14 +202,14 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
           to
           <input
             type="date"
-            className={inputClass}
+            className={compactInputClass}
             value={toDate}
             onChange={(e) => setToDate(e.target.value)}
           />
         </label>
         <input
           type="search"
-          className={`${inputClass} min-w-48 flex-1`}
+          className={`${compactInputClass} min-w-48 flex-1`}
           placeholder="Filter by checked item (e.g. “light fire”)…"
           value={itemQuery}
           onChange={(e) => setItemQuery(e.target.value)}
@@ -254,11 +240,7 @@ export function SopRunsBoard({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {!isAdmin && (
         <p className="font-mono text-[10px] text-white/40">

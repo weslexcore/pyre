@@ -7,6 +7,7 @@
 // the field loses focus.
 
 import { useEffect, useRef, useState } from 'react';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow } from '@/lib/db';
 
@@ -104,14 +105,6 @@ const sameDraft = (a: PrefsDraft, b: PrefsDraft): boolean =>
   FIELDS.every(({ key }) => sameValue(a[key], b[key]));
 
 type RowStatus = { state: 'saving' } | { state: 'saved' } | { state: 'error'; message: string };
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
 
 export function ScheduleShiftPrefs({
   staff,

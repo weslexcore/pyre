@@ -47,7 +47,12 @@
 // lands in the note's history with a link to what it made.
 import { readStoredSignals, type SignalType } from '@pyre/signals-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { compactInputClass, compactSelectClass, goldButtonClass } from '@/components/admin/ui';
 import type { ClassificationView } from '@/lib/classify/view';
+import { readError } from '@/lib/client/api';
+import { etStamp, etTime } from '@/lib/client/format';
 import type {
   ShiftNoteAttachmentRow,
   ShiftNoteReplyRow,
@@ -78,12 +83,8 @@ import {
   buttonClass,
   type CreatedShiftNote,
   formatDay,
-  inputClass,
-  primaryButtonClass,
-  readError,
   SHIFT_NOTE_CREATED_EVENT,
   ShiftNoteComposer,
-  selectClass,
   textareaClass,
   uploadWithProgress,
 } from './ShiftNoteComposer';
@@ -101,7 +102,7 @@ import { SopMarkdown } from './SopMarkdown';
 import { SuggestionPanel } from './suggestions/SuggestionPanel';
 import { useSuggestions } from './suggestions/useSuggestions';
 
-const replyTextareaClass = `${inputClass} min-h-[60px] w-full`;
+const replyTextareaClass = `${compactInputClass} min-h-[60px] w-full`;
 
 // Notes and replies are written as markdown (links, lists, checklists) but
 // sit in a card, so the renderer's paragraph margins are trimmed at the edges
@@ -166,26 +167,6 @@ interface Viewer {
 
 /** Whose notes came back: the whole log, or only this person's. */
 type Scope = 'all' | 'mine';
-
-/** "Aug 21, 9:42 PM" in shift wall-clock time, for replies and status changes. */
-function formatStamp(timestamp: string): string {
-  return new Date(timestamp).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/New_York',
-  });
-}
-
-/** "9:42 PM" in shift wall-clock time, for when the note was written. */
-function formatTime(timestamp: string): string {
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'America/New_York',
-  });
-}
 
 export function ShiftNotes() {
   const [notes, setNotes] = useState<ShiftNoteRow[]>([]);
@@ -416,7 +397,15 @@ export function ShiftNotes() {
   }, [uploadsInFlight]);
 
   const removeAttachment = async (attachment: ShiftNoteAttachmentRow) => {
-    if (!window.confirm(`Remove ${attachment.file_name}? This cannot be undone.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Remove ${attachment.file_name}?`,
+        body: 'This cannot be undone.',
+        confirmLabel: 'Remove',
+        danger: true,
+      }))
+    )
+      return;
     setError(null);
     const res = await fetch(`/api/admin/shift-note-media?id=${encodeURIComponent(attachment.id)}`, {
       method: 'DELETE',
@@ -472,7 +461,7 @@ export function ShiftNotes() {
     const warning = hasMedia
       ? 'Delete this note? Its photos and video go with it. This cannot be undone.'
       : 'Delete this note? This cannot be undone.';
-    if (!window.confirm(warning)) return;
+    if (!(await confirmAction({ title: warning, confirmLabel: 'Delete', danger: true }))) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -610,7 +599,15 @@ export function ShiftNotes() {
   };
 
   const deleteReply = async (reply: ShiftNoteReplyRow) => {
-    if (!window.confirm('Delete this reply? This cannot be undone.')) return;
+    if (
+      !(await confirmAction({
+        title: 'Delete this reply?',
+        body: 'This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -704,9 +701,7 @@ export function ShiftNotes() {
         </p>
       )}
       {(error ?? signals.error ?? suggestions.error) && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error ?? signals.error ?? suggestions.error}
-        </p>
+        <ErrorBanner>{error ?? signals.error ?? suggestions.error}</ErrorBanner>
       )}
 
       {notes.length > 0 && (
@@ -717,7 +712,7 @@ export function ShiftNotes() {
               options={authorOptions}
               selected={personFilter}
               onChange={setPersonFilter}
-              className={selectClass}
+              className={compactSelectClass}
             />
           )}
           <FilterMultiSelect
@@ -725,14 +720,18 @@ export function ShiftNotes() {
             options={STATUS_OPTIONS}
             selected={statusFilter}
             onChange={setStatusFilter}
-            className={selectClass}
+            className={compactSelectClass}
           />
           {viewer.isAdmin && (
-            <SignalFilter className={selectClass} value={signalFilter} onChange={setSignalFilter} />
+            <SignalFilter
+              className={compactSelectClass}
+              value={signalFilter}
+              onChange={setSignalFilter}
+            />
           )}
           <input
             type="search"
-            className={`${inputClass} min-w-48 flex-1`}
+            className={`${compactInputClass} min-w-48 flex-1`}
             placeholder="Search notes…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -791,7 +790,7 @@ export function ShiftNotes() {
                   {personName(note.author_email, names)}
                 </span>
                 <span className="font-mono text-[10px] text-white/40">
-                  {formatTime(note.created_at)}
+                  {etTime(note.created_at)}
                   {note.updated_by && ` · edited by ${personName(note.updated_by, names)}`}
                 </span>
                 {/* Status, then what the classifier found (admins only), on
@@ -908,7 +907,7 @@ export function ShiftNotes() {
                     shift date
                     <input
                       type="date"
-                      className={inputClass}
+                      className={compactInputClass}
                       value={editDate}
                       onChange={(e) => setEditDate(e.target.value)}
                     />
@@ -922,7 +921,7 @@ export function ShiftNotes() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className={primaryButtonClass}
+                      className={goldButtonClass}
                       disabled={busy || !editBody.trim() || !editDate}
                       onClick={() => void saveEdit()}
                     >
@@ -1100,7 +1099,7 @@ export function ShiftNotes() {
                             {personName(reply.author_email ?? '', names)}
                           </span>
                           <span className="font-mono text-[10px] text-white/40">
-                            {formatStamp(reply.created_at)}
+                            {etStamp(reply.created_at)}
                             {reply.updated_by &&
                               ` · edited by ${personName(reply.updated_by, names)}`}
                           </span>
@@ -1154,7 +1153,7 @@ export function ShiftNotes() {
                             <div className="flex gap-2">
                               <button
                                 type="button"
-                                className={primaryButtonClass}
+                                className={goldButtonClass}
                                 disabled={busy || !replyEditBody.trim()}
                                 onClick={() => void saveReplyEdit()}
                               >
@@ -1245,7 +1244,7 @@ export function ShiftNotes() {
  * when), set apart from the comments. The classifier's reads also show what it found.
  */
 function ActivityEvent({ entry, names }: { entry: ShiftNoteReplyRow; names: PeopleNames }) {
-  const stamp = <span className="text-white/30"> · {formatStamp(entry.created_at)}</span>;
+  const stamp = <span className="text-white/30"> · {etStamp(entry.created_at)}</span>;
   if (entry.kind === 'classification') {
     const found = readStoredSignals(entry.data?.signals);
     const requestedBy = entry.data?.requested_by;

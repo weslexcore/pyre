@@ -17,6 +17,8 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { Fragment, useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
@@ -36,9 +38,6 @@ interface BoardData {
   canManage?: boolean;
   selfStaffId?: string | null;
 }
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 // Distinct per-person hues for the time-off markers, assigned by roster order.
 const PERSON_COLORS = [
@@ -305,11 +304,7 @@ export function ScheduleCalendar() {
         )}
       </div>
 
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {gridEnd >= firstTentative && (
         <p className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-white/60">

@@ -13,6 +13,7 @@
 
 import { assignmentHours, weekStartOf } from '@pyre/schedule-core';
 import { useEffect, useMemo, useState } from 'react';
+import { fmtHours } from '@/lib/client/format';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
 
 export interface WeekHoursRow {
@@ -83,8 +84,6 @@ export function weekHoursRows(
   };
   return { rows, totals };
 }
-
-const fmt = (hours: number): string => (Number.isInteger(hours) ? String(hours) : hours.toFixed(1));
 
 /**
  * How a person's total reads against their target: over it in red, within
@@ -177,7 +176,7 @@ export function WeekHoursList({
                 aria-pressed={active}
                 title={
                   over > 0
-                    ? `${fmt(over)}h over target — click to show only their shifts`
+                    ? `${fmtHours(over)}h over target — click to show only their shifts`
                     : 'Click to show only their shifts'
                 }
                 onClick={() => onToggle(staff.id)}
@@ -199,16 +198,16 @@ export function WeekHoursList({
                   <span
                     className={`shrink-0 font-mono text-xs tabular-nums ${toneFor(total, target)}`}
                   >
-                    {fmt(live)}
+                    {fmtHours(live)}
                     {draft > 0 && (
                       <>
                         {' '}
                         <span className="rounded bg-[var(--pyre-blue)]/40 px-1 text-[var(--pyre-creme)]">
-                          +{fmt(draft)}
+                          +{fmtHours(draft)}
                         </span>
                       </>
                     )}
-                    {target !== null ? ` / ${fmt(target)}h` : 'h'}
+                    {target !== null ? ` / ${fmtHours(target)}h` : 'h'}
                   </span>
                 </span>
                 <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">
@@ -235,12 +234,12 @@ export function WeekHoursList({
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-white/10 pt-3 font-mono text-xs">
         <dt className="text-white/40">Team hours</dt>
         <dd className="text-right tabular-nums text-[var(--pyre-creme)]">
-          {fmt(totals.live)}
+          {fmtHours(totals.live)}
           {totals.draft > 0 && (
             <>
               {' '}
               <span className="rounded bg-[var(--pyre-blue)]/40 px-1 text-[var(--pyre-creme)]">
-                +{fmt(totals.draft)}
+                +{fmtHours(totals.draft)}
               </span>
             </>
           )}
@@ -329,7 +328,7 @@ export function WeekHoursSheet({
     };
   }, [open]);
 
-  const summary = useMemo(() => `${fmt(list.totals.live)}h`, [list.totals.live]);
+  const summary = useMemo(() => `${fmtHours(list.totals.live)}h`, [list.totals.live]);
 
   return (
     <div className="lg:hidden">

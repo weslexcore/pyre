@@ -18,6 +18,7 @@
 
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
+import { buttonClass } from '@/components/admin/ui';
 import {
   addMonths,
   type CalendarEntry,
@@ -31,7 +32,7 @@ import {
   movePatch,
   weeksOf,
 } from '@/lib/boards/calendar';
-import { formatYmd, toolbarButtonClass } from '../goalsUi';
+import { formatYmd } from '../goalsUi';
 import { filterChipClass, toolbarCaptionClass } from '../scheduleUi';
 import {
   DndContext,
@@ -180,21 +181,21 @@ export function CalendarMonth({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            className={toolbarButtonClass}
+            className={buttonClass}
             onClick={() => onMonthChange(addMonths(monthStart, -1))}
           >
             ‹ Prev
           </button>
           <button
             type="button"
-            className={toolbarButtonClass}
+            className={buttonClass}
             onClick={() => onMonthChange(monthStartOf(today))}
           >
             This month
           </button>
           <button
             type="button"
-            className={toolbarButtonClass}
+            className={buttonClass}
             onClick={() => onMonthChange(addMonths(monthStart, 1))}
           >
             Next ›

@@ -7,6 +7,7 @@
 // what it made.
 
 import { useEffect, useMemo, useState } from 'react';
+import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
 import type { PeopleNames } from '@/lib/sops/names';
 import { personName } from '@/lib/sops/names';
 import {
@@ -19,7 +20,7 @@ import {
   type SuggestionResultLink,
   type SuggestionView,
 } from '@/lib/suggestions/types';
-import { buttonClass, inputClass, primaryButtonClass } from '../ShiftNoteComposer';
+import { buttonClass } from '../ShiftNoteComposer';
 import { CHIP_CLASS, SparkleIcon } from '../Signals';
 import * as api from './client';
 import { type EditorProps, SUGGESTION_EDITORS } from './editors';
@@ -265,7 +266,7 @@ export function SuggestionCard({
       {dismissing ? (
         <div className="flex flex-wrap items-center gap-2">
           <input
-            className={`${inputClass} min-w-48 flex-1`}
+            className={`${compactInputClass} min-w-48 flex-1`}
             placeholder="Why not? (optional — the agent reads this next time)"
             value={dismissNote}
             maxLength={1000}
@@ -292,7 +293,7 @@ export function SuggestionCard({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className={primaryButtonClass}
+            className={goldButtonClass}
             disabled={busy || !parsed.ok || suggestion.status === 'applying'}
             onClick={() => void run(() => api.approve(suggestion.id, draft), true)}
           >

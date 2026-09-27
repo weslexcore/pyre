@@ -5,9 +5,10 @@
 // turns up) and "who have we written about lately?" (the recent list, which
 // doubles as the way back to a profile you were just on).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { timeAgo } from '@/lib/client/relativeTime';
+import { useDebounced } from '@/lib/client/useDebounced';
 import type { GuestProfileRow } from '@/lib/db';
 import type { GuestSearchHit } from '@/pages/api/admin/guests';
 import { QuietBadge } from './guestUi';
@@ -27,15 +28,6 @@ interface SearchResponse {
 
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
-
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return settled;
-}
 
 function profileHref(memberId: string, name: string, email: string): string {
   const params = new URLSearchParams();

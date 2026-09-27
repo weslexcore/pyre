@@ -34,6 +34,7 @@
 // flight. Each task row is memoized — a tap re-renders the rows it changed,
 // not the whole document.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { etTime } from '@/lib/client/format';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { type ChecklistTask, parseChecklist, subtreeTasks } from '@/lib/sops/checklist';
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
@@ -70,16 +71,6 @@ const skipButtonClass =
 // column always says what this item's options are.
 const requiredTagClass =
   'mt-2 shrink-0 rounded border border-[var(--pyre-gold)]/40 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80';
-
-// Pinned locale + venue time zone: this renders on the server and again on
-// the phone, and the two have to agree or React throws the server tree away.
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    timeZone: 'America/New_York',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 /** The bar under an item that links to a sub-checklist. */
 function SubProgress({ progress }: { progress: LinkedProgress }) {
@@ -475,8 +466,8 @@ export function ChecklistView({
               </span>
               <span className="font-mono text-[10px] text-white/40">
                 {finished && run.ended_by && run.ended_at
-                  ? `finished by ${personName(run.ended_by, people)} at ${formatTime(run.ended_at)}`
-                  : `started by ${personName(run.started_by, people)} at ${formatTime(run.started_at)}`}
+                  ? `finished by ${personName(run.ended_by, people)} at ${etTime(run.ended_at)}`
+                  : `started by ${personName(run.started_by, people)} at ${etTime(run.started_at)}`}
               </span>
               <span className="ml-auto flex gap-2">
                 {finished ? (
@@ -563,7 +554,7 @@ export function ChecklistView({
                 linked={linkedByTask.get(task.index) ?? NO_LINKED}
                 resolvedLabel={
                   check
-                    ? `${skipped ? 'skipped by ' : ''}${personName(check.checked_by, people)} · ${formatTime(check.checked_at)}`
+                    ? `${skipped ? 'skipped by ' : ''}${personName(check.checked_by, people)} · ${etTime(check.checked_at)}`
                     : null
                 }
                 highlight={highlight}

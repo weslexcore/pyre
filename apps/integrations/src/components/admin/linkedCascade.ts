@@ -5,9 +5,11 @@
 // Skipping such an item cascades nothing — the linked checklist wasn't done
 // either, and its own record should say so. The pure half — which linked
 // checklists a tap reaches — is separate so it can be tested without fetch.
+
+import { readError } from '@/lib/client/api';
 import { type LinkedProgress, type LinkedProgressMap, linkedSopSlugs } from '@/lib/sops/links';
 import type { CheckItems } from '@/lib/sops/optimistic';
-import { type RunResponse, readError } from './useSopRun';
+import type { RunResponse } from './useSopRun';
 
 /**
  * The linked checklists a check of `items` should complete: every one a

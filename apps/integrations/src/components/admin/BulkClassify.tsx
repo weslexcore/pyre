@@ -14,11 +14,18 @@
 // (lib/shift-notes/triage).
 
 import { useMemo, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import {
+  compactInputClass,
+  compactSelectClass,
+  goldButtonClass,
+  microLabelClass,
+} from '@/components/admin/ui';
 import type { ClassificationView } from '@/lib/classify/view';
 import type { ShiftNoteRow, ShiftNoteStatus } from '@/lib/db';
 import { SHIFT_NOTE_STATUSES, statusLabel } from '@/lib/shift-notes/access';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { buttonClass, inputClass, primaryButtonClass, selectClass } from './ShiftNoteComposer';
+import { buttonClass } from './ShiftNoteComposer';
 import { SparkleIcon } from './Signals';
 
 /** Where a note's last read stands, for picking which to read again. */
@@ -43,8 +50,6 @@ function matchesRead(view: ClassificationView | undefined, filter: ReadFilter): 
       return true;
   }
 }
-
-const labelClass = 'block font-mono text-[10px] uppercase tracking-wide text-white/50';
 
 /** Notes per run that may also ask for suggestions (the route holds to the same). */
 export const MAX_BULK_SUGGEST = 100;
@@ -111,13 +116,15 @@ export function BulkClassify({
     if (count === 0 || overSuggestLimit) return;
     const noun = count === 1 ? 'note' : 'notes';
     if (
-      !window.confirm(
-        `Classify ${count} ${noun}? Notes nobody has set a status on will move to To do or Resolved by what is found.${
+      !(await confirmAction({
+        title: `Classify ${count} ${noun}?`,
+        body: `Notes nobody has set a status on will move to To do or Resolved by what is found.${
           suggesting
             ? ` The agent will then read each one and suggest tasks or SOP edits for you to review — ${count} agent ${count === 1 ? 'run' : 'runs'}, two at a time.`
             : ''
-        }`
-      )
+        }`,
+        confirmLabel: 'Classify',
+      }))
     ) {
       return;
     }
@@ -189,7 +196,7 @@ export function BulkClassify({
 
       <div className="flex flex-wrap gap-x-6 gap-y-4">
         <fieldset className="space-y-1.5">
-          <legend className={labelClass}>Status</legend>
+          <legend className={microLabelClass}>Status</legend>
           <div className="flex flex-wrap gap-3 pt-1">
             {SHIFT_NOTE_STATUSES.map((status) => (
               <label key={status} className="flex items-center gap-1.5 text-sm text-white/80">
@@ -205,9 +212,9 @@ export function BulkClassify({
         </fieldset>
 
         <label className="space-y-1.5">
-          <span className={labelClass}>Last read</span>
+          <span className={microLabelClass}>Last read</span>
           <select
-            className={`${selectClass} block`}
+            className={`${compactSelectClass} block`}
             value={read}
             onChange={(e) => setRead(e.target.value as ReadFilter)}
           >
@@ -220,9 +227,9 @@ export function BulkClassify({
         </label>
 
         <label className="space-y-1.5">
-          <span className={labelClass}>Person</span>
+          <span className={microLabelClass}>Person</span>
           <select
-            className={`${selectClass} block`}
+            className={`${compactSelectClass} block`}
             value={person}
             onChange={(e) => setPerson(e.target.value)}
           >
@@ -236,11 +243,11 @@ export function BulkClassify({
         </label>
 
         <div className="space-y-1.5">
-          <span className={labelClass}>Shift dates</span>
+          <span className={microLabelClass}>Shift dates</span>
           <div className="flex items-center gap-2">
             <input
               type="date"
-              className={inputClass}
+              className={compactInputClass}
               aria-label="From shift date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
@@ -248,7 +255,7 @@ export function BulkClassify({
             <span className="text-xs text-white/40">to</span>
             <input
               type="date"
-              className={inputClass}
+              className={compactInputClass}
               aria-label="To shift date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
@@ -278,7 +285,7 @@ export function BulkClassify({
       <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
         <button
           type="button"
-          className={primaryButtonClass}
+          className={goldButtonClass}
           disabled={running || matching.length === 0 || overSuggestLimit}
           onClick={() => void run()}
         >

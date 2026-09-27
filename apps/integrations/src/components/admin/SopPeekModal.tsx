@@ -15,6 +15,8 @@
 // its ticks rather than a blank list. Modal mechanics follow the MeasurementInfo pattern
 // (backdrop button, Escape, focus on Close, bottom sheet on mobile).
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { Modal } from '@/components/admin/Modal';
 import type { SopDocumentPayload } from '@/lib/sops/document';
 import type { LinkedProgress, LinkedProgressMap } from '@/lib/sops/links';
 import type { CheckItems } from '@/lib/sops/optimistic';
@@ -105,11 +107,7 @@ export function PeekChecklist({
 
   return (
     <div className="space-y-4">
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {notice && (
         <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 text-sm text-[var(--pyre-sage)]">
           {notice}
@@ -173,15 +171,6 @@ export function SopPeekModal({
   const current = stack[stack.length - 1];
 
   useEffect(() => {
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !confirmOpenRef.current) onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
     const cached = cache.current.get(current);
     if (cached) {
       setDoc(cached);
@@ -214,6 +203,8 @@ export function SopPeekModal({
     closeRef.current?.focus();
   };
 
+  const escapeAllowed = useCallback(() => !confirmOpenRef.current, []);
+
   const onConfirmOpenChange = useCallback((open: boolean) => {
     confirmOpenRef.current = open;
   }, []);
@@ -221,73 +212,66 @@ export function SopPeekModal({
   const openLink = (next: string) => navigate([...stack, next]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/70"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="relative flex max-h-[85vh] w-full max-w-2xl flex-col whitespace-normal rounded-t-lg border border-white/15 bg-[var(--pyre-black)] shadow-xl sm:rounded-lg"
-      >
-        <div className="flex items-center gap-3 border-b border-white/10 p-4">
-          {stack.length > 1 && (
-            <button
-              type="button"
-              onClick={() => navigate(stack.slice(0, -1))}
-              className={backLinkClass}
-            >
-              <span aria-hidden="true">←</span>
-              Back
-            </button>
-          )}
-          <h2
-            id={titleId}
-            className="font-primary-semibold min-w-0 flex-1 truncate text-lg text-[var(--pyre-creme)]"
-          >
-            {doc && doc !== 'error' ? doc.sop.title : 'SOP'}
-          </h2>
-          <a
-            href={`/admin/sops/${current}`}
-            className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/50 underline hover:text-white"
-          >
-            Open full page
-          </a>
+    <Modal
+      labelledBy={titleId}
+      onClose={onClose}
+      backdropLabel="Close"
+      initialFocus={closeRef}
+      closeOnEscape={escapeAllowed}
+      panelClassName="flex max-h-[85vh] max-w-2xl flex-col whitespace-normal rounded-t-lg border border-white/15 bg-[var(--pyre-black)] shadow-xl sm:rounded-lg"
+    >
+      <div className="flex items-center gap-3 border-b border-white/10 p-4">
+        {stack.length > 1 && (
           <button
-            ref={closeRef}
             type="button"
-            onClick={onClose}
-            className="shrink-0 rounded border border-white/20 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+            onClick={() => navigate(stack.slice(0, -1))}
+            className={backLinkClass}
           >
-            Close
+            <span aria-hidden="true">←</span>
+            Back
           </button>
-        </div>
-        <div ref={bodyRef} className="overflow-y-auto p-5">
-          {doc === null ? (
-            <p className="font-mono text-xs text-white/40">Loading…</p>
-          ) : doc === 'error' ? (
-            <p className="text-sm text-white/70">
-              This SOP isn't available — it may have been removed, or it isn't shared with you.
-            </p>
-          ) : isChecklistPayload(doc) ? (
-            <PeekChecklist
-              key={current}
-              payload={doc}
-              linked={linked}
-              onProgress={onProgress}
-              onSopLink={openLink}
-              onConfirmOpenChange={onConfirmOpenChange}
-            />
-          ) : (
-            <SopMarkdown content={doc.sop.content_md} onSopLink={openLink} />
-          )}
-        </div>
+        )}
+        <h2
+          id={titleId}
+          className="font-primary-semibold min-w-0 flex-1 truncate text-lg text-[var(--pyre-creme)]"
+        >
+          {doc && doc !== 'error' ? doc.sop.title : 'SOP'}
+        </h2>
+        <a
+          href={`/admin/sops/${current}`}
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-white/50 underline hover:text-white"
+        >
+          Open full page
+        </a>
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded border border-white/20 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        >
+          Close
+        </button>
       </div>
-    </div>
+      <div ref={bodyRef} className="overflow-y-auto p-5">
+        {doc === null ? (
+          <p className="font-mono text-xs text-white/40">Loading…</p>
+        ) : doc === 'error' ? (
+          <p className="text-sm text-white/70">
+            This SOP isn't available — it may have been removed, or it isn't shared with you.
+          </p>
+        ) : isChecklistPayload(doc) ? (
+          <PeekChecklist
+            key={current}
+            payload={doc}
+            linked={linked}
+            onProgress={onProgress}
+            onSopLink={openLink}
+            onConfirmOpenChange={onConfirmOpenChange}
+          />
+        ) : (
+          <SopMarkdown content={doc.sop.content_md} onSopLink={openLink} />
+        )}
+      </div>
+    </Modal>
   );
 }

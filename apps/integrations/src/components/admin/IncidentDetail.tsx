@@ -17,6 +17,9 @@
 // entries, so the log can never repaint a pre-edit snapshot of this report.
 
 import { useCallback, useEffect, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { formButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { IncidentAttachmentRow, IncidentEventRow, IncidentRow } from '@/lib/db';
 import {
@@ -43,13 +46,11 @@ import {
 import { FIELD_LIMITS } from '@/lib/incidents/validate';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import {
-  buttonClass,
   cardClass,
   formatDateTime,
   inputClass,
   labelClass,
   primaryButtonClass,
-  readError,
   SectionTitle,
   SeverityBadge,
   StatusBadge,
@@ -205,7 +206,7 @@ export function IncidentDetail({
                 key={s.value}
                 type="button"
                 disabled={busy || incident.status === s.value}
-                className={`${buttonClass} ${incident.status === s.value ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
+                className={`${formButtonClass} ${incident.status === s.value ? 'border-[var(--pyre-gold)]/60 text-[var(--pyre-gold)]' : ''}`}
                 onClick={() => void mutate({ action: 'status', status: s.value })}
               >
                 {s.label}
@@ -214,10 +215,17 @@ export function IncidentDetail({
             <button
               type="button"
               disabled={busy || incident.status === 'voided'}
-              className={`${buttonClass} ml-auto`}
+              className={`${formButtonClass} ml-auto`}
               title="Retire a duplicate or mistaken report. The text stays readable in the record."
-              onClick={() => {
-                if (window.confirm('Void this report? It stays in the log, marked as voided.')) {
+              onClick={async () => {
+                if (
+                  await confirmAction({
+                    title: 'Void this report?',
+                    body: 'It stays in the log, marked as voided.',
+                    confirmLabel: 'Void',
+                    danger: true,
+                  })
+                ) {
                   void mutate({ action: 'status', status: 'voided' });
                 }
               }}
@@ -245,7 +253,7 @@ export function IncidentDetail({
             <div className="mb-3 flex items-start justify-between gap-3">
               <SectionTitle>What happened</SectionTitle>
               {(canManage || canAmend) && (
-                <button type="button" className={buttonClass} onClick={() => setEditing(true)}>
+                <button type="button" className={formButtonClass} onClick={() => setEditing(true)}>
                   Edit
                 </button>
               )}
@@ -761,7 +769,7 @@ function EditPanel({
         >
           Save corrections
         </button>
-        <button type="button" className={buttonClass} disabled={busy} onClick={onCancel}>
+        <button type="button" className={formButtonClass} disabled={busy} onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -823,7 +831,15 @@ function AttachmentPanel({
   };
 
   const remove = async (attachment: IncidentAttachmentRow) => {
-    if (!window.confirm(`Remove ${attachment.file_name}? This is recorded in the trail.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Remove ${attachment.file_name}?`,
+        body: 'This is recorded in the trail.',
+        confirmLabel: 'Remove',
+        danger: true,
+      }))
+    )
+      return;
     setError(null);
     const res = await fetch(`/api/admin/incident-media?id=${encodeURIComponent(attachment.id)}`, {
       method: 'DELETE',
@@ -902,7 +918,7 @@ function AttachmentPanel({
 
       {canAdd && attachments.length < MAX_ATTACHMENTS_PER_INCIDENT && (
         <div className="mt-4 flex flex-wrap gap-2">
-          <label className={`${buttonClass} cursor-pointer`}>
+          <label className={`${formButtonClass} cursor-pointer`}>
             📷 Take a photo
             <input
               type="file"
@@ -916,7 +932,7 @@ function AttachmentPanel({
               }}
             />
           </label>
-          <label className={`${buttonClass} cursor-pointer`}>
+          <label className={`${formButtonClass} cursor-pointer`}>
             🎬 Add files
             <input
               type="file"

@@ -5,6 +5,9 @@
 // variable, or the default), and a saved one can be reset back to that.
 
 import { useEffect, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { readError } from '@/lib/client/api';
+import { etStamp } from '@/lib/client/format';
 import {
   SETTING_SECTIONS,
   SETTINGS,
@@ -15,7 +18,6 @@ import {
 import type { PeopleNames } from '@/lib/sops/names';
 import { personName } from '@/lib/sops/names';
 import { ADMIN_TOOL_SECTIONS, HIDEABLE_TOOLS } from './adminTools';
-import { readError } from './ShiftNoteComposer';
 
 /** Settings that still live on the page they belong to. */
 const ELSEWHERE: { href: string; label: string; description: string }[] = [
@@ -30,16 +32,6 @@ const ELSEWHERE: { href: string; label: string; description: string }[] = [
     description: 'Which emails send to everyone, the test whitelist, and paused journeys.',
   },
 ];
-
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function describeValue(def: SettingDefinition, value: boolean | string[]): string {
   if (def.type === 'boolean') return value ? 'on' : 'off';
@@ -101,7 +93,7 @@ function SettingRow({
   const source =
     view.source === 'saved'
       ? `Set here${view.updatedBy ? ` by ${personName(view.updatedBy, people)}` : ''}${
-          view.updatedAt ? ` · ${formatWhen(view.updatedAt)}` : ''
+          view.updatedAt ? ` · ${etStamp(view.updatedAt)}` : ''
         }`
       : view.source === 'env'
         ? `From the ${def.env} environment variable`
@@ -272,11 +264,7 @@ export function SettingsPage({ initial, people }: { initial: SettingView[]; peop
           {notice}
         </p>
       )}
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {SETTING_SECTIONS.map((section) => {
         const rows = settings.filter((view) => SETTINGS[view.key].section === section.key);

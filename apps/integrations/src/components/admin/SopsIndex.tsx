@@ -12,6 +12,12 @@
 // (or pressing Escape) restores the previous order. The API enforces the real
 // guards — this island just mirrors them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, dragHandleClass, inputClass, selectClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
+import { etStamp } from '@/lib/client/format';
+import { useLiveReorder } from '@/lib/client/useLiveReorder';
 import type { SopRow } from '@/lib/db';
 import { EVERYONE_LABEL, ROLE_LABELS, type SopRole, slugify } from '@/lib/sops/levels';
 import {
@@ -37,7 +43,6 @@ import {
   type SopGrant,
   withAdmins,
 } from './SopAccessPicker';
-import { formatWhen } from './SopRunsList';
 
 type SopSummary = Omit<SopRow, 'content_md'> & {
   task_count: number;
@@ -61,6 +66,9 @@ interface ListResponse {
 
 type Drag = { kind: 'sop'; id: string } | { kind: 'category'; name: string };
 
+/** The order as of drag start, restored when the drag is cancelled. */
+type DragSnapshot = { sops: SopSummary[]; categories: string[] };
+
 interface SearchResult {
   id: string;
   slug: string;
@@ -74,26 +82,6 @@ interface SearchResult {
 
 /** `newCategory` value standing for "a section that doesn't exist yet". */
 const NEW_SECTION = '\u0000new';
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const selectClass =
-  'px-2 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] focus:outline-none focus:border-white/30 [&>option]:bg-[var(--pyre-black)]';
-
-const handleClass =
-  'cursor-grab touch-none rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white/50 transition-colors hover:border-white/30 hover:text-white active:cursor-grabbing disabled:opacity-30';
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
 
 /** Text with every occurrence of `term` wrapped in <mark>. */
 function Marked({ text, term }: { text: string; term: string }) {
@@ -228,15 +216,6 @@ export function SopsIndex() {
       await load({ silent: true });
     }
   };
-
-  const [drag, setDrag] = useState<Drag | null>(null);
-  // The order as of drag start, restored when the drag is cancelled.
-  const snapshotRef = useRef<{ sops: SopSummary[]; categories: string[] } | null>(null);
-  // Whether the drag ended on a valid drop target (vs Escape / outside).
-  const droppedRef = useRef(false);
-  // Last live-reorder target — dragenter refires for a target's children, and
-  // replaying the same move would make adjacent items flicker.
-  const lastEnterRef = useRef<string | null>(null);
 
   // silent = refresh the data without blanking the list (used to resync after
   // a failed reorder; the initial load shows the loading state).
@@ -413,7 +392,15 @@ export function SopsIndex() {
   };
 
   const deleteSection = async (name: string) => {
-    if (!window.confirm(`Remove the "${name}" section? It has no SOPs in it.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Remove the "${name}" section?`,
+        body: 'It has no SOPs in it.',
+        confirmLabel: 'Remove',
+        danger: true,
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -431,46 +418,48 @@ export function SopsIndex() {
 
   // ---- drag and drop -------------------------------------------------------
 
-  const beginDrag = (e: React.DragEvent, next: Drag) => {
-    e.dataTransfer.effectAllowed = 'move';
-    // Some browsers need data set for a drag to start at all.
-    e.dataTransfer.setData('text/plain', next.kind === 'sop' ? next.id : next.name);
-    snapshotRef.current = { sops, categories };
-    droppedRef.current = false;
-    lastEnterRef.current = null;
-    setDrag(next);
-  };
+  const reorder = useLiveReorder<Drag, DragSnapshot>({
+    onDrop: (finished, before) => void commit(finished, before),
+    // Cancelled (Escape, or released outside) — put everything back.
+    onCancel: (before) => {
+      setSops(before.sops);
+      setCategories(before.categories);
+    },
+  });
+  const drag = reorder.drag;
 
-  const startSopDrag = (e: React.DragEvent, sop: SopSummary) => {
-    // Drag image = the whole card, not the tiny handle the drag started on.
-    const card = (e.currentTarget as HTMLElement).closest('[data-sop-card]');
-    if (card instanceof HTMLElement) e.dataTransfer.setDragImage(card, 24, 24);
-    beginDrag(e, { kind: 'sop', id: sop.id });
-  };
+  const beginDrag = (e: React.DragEvent, next: Drag, cardSelector?: string) =>
+    reorder.begin(
+      e,
+      next,
+      { sops, categories },
+      next.kind === 'sop' ? next.id : next.name,
+      cardSelector
+    );
+
+  const startSopDrag = (e: React.DragEvent, sop: SopSummary) =>
+    beginDrag(e, { kind: 'sop', id: sop.id }, '[data-sop-card]');
 
   const enterSop = (targetId: string) => {
     if (busy || drag?.kind !== 'sop' || drag.id === targetId) return;
-    if (lastEnterRef.current === `sop:${targetId}`) return;
-    lastEnterRef.current = `sop:${targetId}`;
+    if (!reorder.enterOnce(`sop:${targetId}`)) return;
     setSops((prev) => repositionSop(prev, drag.id, targetId));
   };
 
   const enterCategory = (name: string) => {
     if (busy || !drag) return;
     if (drag.kind === 'category') {
-      if (drag.name === name || lastEnterRef.current === `cat:${name}`) return;
-      lastEnterRef.current = `cat:${name}`;
+      if (drag.name === name || !reorder.enterOnce(`cat:${name}`)) return;
       setCategories((prev) => repositionCategory(prev, drag.name, name));
     } else {
       // A document dragged onto a section header (or empty section) goes to
       // that section's end.
-      if (lastEnterRef.current === `end:${name}`) return;
-      lastEnterRef.current = `end:${name}`;
+      if (!reorder.enterOnce(`end:${name}`)) return;
       setSops((prev) => moveSopToCategoryEnd(prev, drag.id, name));
     }
   };
 
-  const commit = async (finished: Drag) => {
+  const commit = async (finished: Drag, before: DragSnapshot | null) => {
     setBusy(true);
     setError(null);
     try {
@@ -486,7 +475,7 @@ export function SopsIndex() {
         if (!moved) return;
         // A cross-section drop changes the document's category first (the
         // settings PATCH), then the order within the new section.
-        const original = snapshotRef.current?.sops.find((s) => s.id === finished.id);
+        const original = before?.sops.find((s) => s.id === finished.id);
         if (original && original.category !== moved.category) {
           const res = await fetch('/api/admin/sops', {
             method: 'PATCH',
@@ -517,18 +506,7 @@ export function SopsIndex() {
     // screen is exactly the order the server just stored.
   };
 
-  const endDrag = () => {
-    const finished = drag;
-    setDrag(null);
-    if (!finished) return;
-    if (droppedRef.current) {
-      void commit(finished);
-    } else if (snapshotRef.current) {
-      // Cancelled (Escape, or released outside) — put everything back.
-      setSops(snapshotRef.current.sops);
-      setCategories(snapshotRef.current.categories);
-    }
-  };
+  const endDrag = reorder.end;
 
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
 
@@ -617,7 +595,7 @@ export function SopsIndex() {
           {draggable && isAdmin && (
             <button
               type="button"
-              className={handleClass}
+              className={dragHandleClass}
               title="Drag to reorder (drop on another section to move it there)"
               aria-label={`Drag to reorder ${sop.title}`}
               draggable={!busy}
@@ -633,26 +611,13 @@ export function SopsIndex() {
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: passive drop surface; drags start from keyboard-focusable button handles
     <div
       className="space-y-8"
       // The whole library is one drop surface: dragover/drop bubble up here,
       // so releasing anywhere inside commits the live arrangement.
-      onDragOver={(e) => {
-        if (drag) e.preventDefault();
-      }}
-      onDrop={(e) => {
-        if (drag) {
-          e.preventDefault();
-          droppedRef.current = true;
-        }
-      }}
+      {...reorder.surface}
     >
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       <input
         type="search"
@@ -707,7 +672,7 @@ export function SopsIndex() {
                   </div>
                   <p className="mt-2 font-mono text-[10px] text-white/40">
                     {run.checked_count}/{run.task_count} done · started by{' '}
-                    {actorLabel(run.started_by, viewerEmail, people)} · {formatWhen(run.started_at)}
+                    {actorLabel(run.started_by, viewerEmail, people)} · {etStamp(run.started_at)}
                   </p>
                 </a>
               );
@@ -971,7 +936,7 @@ export function SopsIndex() {
                   <>
                     <button
                       type="button"
-                      className={handleClass}
+                      className={dragHandleClass}
                       title="Drag to reorder sections"
                       aria-label={`Drag to reorder the ${category} section`}
                       draggable={!busy}
@@ -982,7 +947,7 @@ export function SopsIndex() {
                     </button>
                     <button
                       type="button"
-                      className={handleClass}
+                      className={dragHandleClass}
                       title="Rename this section"
                       aria-label={`Rename the ${category} section`}
                       disabled={busy}
@@ -998,7 +963,7 @@ export function SopsIndex() {
                     {inCategory.length === 0 && (
                       <button
                         type="button"
-                        className={handleClass}
+                        className={dragHandleClass}
                         title="Remove this empty section"
                         aria-label={`Remove the ${category} section`}
                         disabled={busy}

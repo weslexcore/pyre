@@ -27,6 +27,7 @@ import {
   type SearchResponse,
 } from '@/lib/admin/globalSearch';
 import { BOARDS_HREF } from '@/lib/boards/types';
+import { readError } from '@/lib/client/api';
 import { usePresence } from '@/lib/client/usePresence';
 import type { BoardRow } from '@/lib/db';
 import type { SearchPage } from './adminTools';
@@ -122,14 +123,6 @@ function SearchIcon() {
       <path d="M12 12l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
-}
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
 }
 
 /** The rows of the palette, grouped under headings, with one flat index. */

@@ -12,7 +12,6 @@
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
 import { canViewPage, toolsForAccess, visibleTools } from '@/components/admin/adminTools';
 import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
-import { formatWhen } from '@/components/admin/SopRunsList';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { listStaff } from '@/lib/auth/access';
@@ -25,6 +24,7 @@ import {
 } from '@/lib/schedule/next-shift';
 import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
 import { getSetting } from '@/lib/settings/store';
+import { etStamp } from '@/lib/client/format';
 import { normalizeEmail } from '@/lib/email/address';
 import type { SopViewer } from '@/lib/sops/levels';
 import { actorLabel, ownRunsFirst, type PeopleNames, sameActor } from '@/lib/sops/names';
@@ -237,7 +237,7 @@ const chipWindow = nextShift
                   </div>
                   <p class="mt-2 font-mono text-[10px] text-white/40">
                     {run.checked_count}/{run.task_count} done · started by{' '}
-                    {actorLabel(run.started_by, email, runPeople)} · {formatWhen(run.started_at)}
+                    {actorLabel(run.started_by, email, runPeople)} · {etStamp(run.started_at)}
                   </p>
                 </a>
               );

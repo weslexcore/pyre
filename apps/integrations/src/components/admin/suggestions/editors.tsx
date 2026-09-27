@@ -5,6 +5,7 @@
 // lib/suggestions/types a type error here until it has an editor.
 
 import { useEffect, useState } from 'react';
+import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
 import type { BoardFieldValue } from '@/lib/db';
 import type {
   CardCommentPayload,
@@ -16,7 +17,7 @@ import type {
 } from '@/lib/suggestions/types';
 import { SUGGESTION_LIMITS } from '@/lib/suggestions/types';
 import { FieldRow } from '../guestUi';
-import { inputClass, selectClass, textareaClass } from '../ShiftNoteComposer';
+import { textareaClass } from '../ShiftNoteComposer';
 import { SopDiff } from '../SopDiff';
 import { type BoardOption, type CurrentSop, loadBoardOptions, loadCurrentSop } from './client';
 
@@ -63,7 +64,7 @@ function CardCreateEditor({
         <label className="block">
           <span className={labelClass}>Board</span>
           <select
-            className={`${selectClass} w-full`}
+            className={`${compactSelectClass} w-full`}
             value={value.board}
             disabled={disabled || !boards}
             onChange={(e) => {
@@ -90,7 +91,7 @@ function CardCreateEditor({
         <label className="block">
           <span className={labelClass}>Column</span>
           <select
-            className={`${selectClass} w-full`}
+            className={`${compactSelectClass} w-full`}
             value={value.columnKey ?? ''}
             disabled={disabled || !board}
             onChange={(e) => set({ columnKey: e.target.value || null })}
@@ -127,7 +128,7 @@ function CardCreateEditor({
       <label className="block">
         <span className={labelClass}>Title</span>
         <input
-          className={`${inputClass} w-full`}
+          className={`${compactInputClass} w-full`}
           value={value.title}
           maxLength={SUGGESTION_LIMITS.title}
           disabled={disabled}
@@ -151,7 +152,7 @@ function CardCreateEditor({
         <span className={labelClass}>Due date</span>
         <input
           type="date"
-          className={inputClass}
+          className={compactInputClass}
           value={value.dueDate ?? ''}
           disabled={disabled}
           onChange={(e) => set({ dueDate: e.target.value || null })}
@@ -280,7 +281,7 @@ function SopEditEditor({ value, onChange, target, disabled }: EditorProps<'sop.e
       <label className="block">
         <span className={labelClass}>Change note</span>
         <input
-          className={`${inputClass} w-full`}
+          className={`${compactInputClass} w-full`}
           value={value.changeNote}
           maxLength={SUGGESTION_LIMITS.changeNote}
           disabled={disabled}

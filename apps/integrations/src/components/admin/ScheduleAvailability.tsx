@@ -22,15 +22,10 @@ import {
   weekStartOf,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
+import { buttonClass, compactInputClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { ScheduleBoardPayload } from '@/pages/api/admin/schedule-board';
 import { StaffMultiSelect } from './StaffMultiSelect';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
 
 const todayLocal = (): string => {
   const now = new Date();
@@ -416,7 +411,7 @@ export function ScheduleAvailability() {
           )}
           <div className="flex flex-wrap items-center gap-2">
             <input
-              className={`${inputClass} w-36`}
+              className={`${compactInputClass} w-36`}
               value={form.label}
               maxLength={40}
               placeholder="Label"
@@ -426,7 +421,7 @@ export function ScheduleAvailability() {
             <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
               needed
               <input
-                className={`${inputClass} w-16`}
+                className={`${compactInputClass} w-16`}
                 type="number"
                 min={0}
                 max={20}
@@ -436,7 +431,7 @@ export function ScheduleAvailability() {
               />
             </label>
             <input
-              className={`${inputClass} min-w-[180px] flex-1`}
+              className={`${compactInputClass} min-w-[180px] flex-1`}
               value={form.notes}
               maxLength={500}
               placeholder="Notes (optional)"
@@ -475,7 +470,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             from
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="time"
               step={60 * 30}
               value={startTime}
@@ -486,7 +481,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             to
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="time"
               step={60 * 30}
               value={endTime}
@@ -497,7 +492,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             between
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="date"
               min={today}
               value={searchStart}
@@ -508,7 +503,7 @@ export function ScheduleAvailability() {
           <label className="flex items-center gap-1.5 font-mono text-xs text-white/50">
             and
             <input
-              className={inputClass}
+              className={compactInputClass}
               type="date"
               min={today}
               value={searchEnd}

@@ -16,7 +16,9 @@
 // whole tool (canManage).
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { Assignable } from '@/lib/boards/people';
+import { sendJson } from '@/lib/client/api';
 import type { BoardCardRow, BoardColumnRow, BoardRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { completionPreview } from '@/lib/goals/access';
 import { formatDaysLeft, goalRollup } from '@/lib/goals/progress';
@@ -26,7 +28,6 @@ import { CompleteGoalDialog } from '../goals/CompleteGoalDialog';
 import { GoalForm } from '../goals/GoalForm';
 import { GoalKpis } from '../goals/GoalKpis';
 import {
-  buttonClass,
   dangerButtonClass,
   formatYmd,
   GoalStatusBadge,
@@ -36,7 +37,6 @@ import {
   raisedCardClass,
   SectionTitle,
   selectClass,
-  send,
   TaskBar,
 } from '../goalsUi';
 import { SopMarkdown } from '../SopMarkdown';
@@ -106,7 +106,7 @@ export function BoardGoal({
             onCancel={() => setSettingGoal(false)}
             onSave={async (values) => {
               await mutate(() =>
-                send('/api/admin/goals', 'POST', { ...values, boardSlug: board.slug })
+                sendJson('/api/admin/goals', 'POST', { ...values, boardSlug: board.slug })
               );
               setSettingGoal(false);
             }}
@@ -149,11 +149,14 @@ export function BoardGoal({
                   </select>
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={formButtonClass}
                     disabled={busy || !existingId}
                     onClick={() =>
                       void mutate(() =>
-                        send('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: existingId })
+                        sendJson('/api/admin/boards', 'PATCH', {
+                          slug: board.slug,
+                          goalId: existingId,
+                        })
                       ).then(() => setExistingId(''))
                     }
                   >
@@ -179,7 +182,7 @@ export function BoardGoal({
           busy={busy}
           onCancel={() => setEditing(false)}
           onSave={async (values) => {
-            await mutate(() => send('/api/admin/goals', 'PATCH', { id: goal.id, ...values }));
+            await mutate(() => sendJson('/api/admin/goals', 'PATCH', { id: goal.id, ...values }));
             setEditing(false);
           }}
         />
@@ -200,10 +203,14 @@ export function BoardGoal({
             </h2>
             {canManage && (
               <div className="flex flex-wrap gap-2">
-                <button type="button" className={buttonClass} onClick={() => setEditing(true)}>
+                <button type="button" className={formButtonClass} onClick={() => setEditing(true)}>
                   Edit
                 </button>
-                <button type="button" className={buttonClass} onClick={() => setDetaching(true)}>
+                <button
+                  type="button"
+                  className={formButtonClass}
+                  onClick={() => setDetaching(true)}
+                >
                   Detach
                 </button>
                 <button
@@ -287,7 +294,7 @@ export function BoardGoal({
           onConfirm={(note) => {
             setCompleting(false);
             void mutate(async () => {
-              const saved = await send('/api/admin/goals', 'PATCH', {
+              const saved = await sendJson('/api/admin/goals', 'PATCH', {
                 id: goal.id,
                 status: 'completed',
                 completionNote: note || null,
@@ -311,7 +318,7 @@ export function BoardGoal({
           onConfirm={() => {
             setDetaching(false);
             void mutate(() =>
-              send('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: null })
+              sendJson('/api/admin/boards', 'PATCH', { slug: board.slug, goalId: null })
             );
           }}
         />
@@ -328,7 +335,7 @@ export function BoardGoal({
           onConfirm={() => {
             const id = goal.id;
             setDeleting(false);
-            void mutate(() => send(`/api/admin/goals?id=${id}`, 'DELETE'));
+            void mutate(() => sendJson(`/api/admin/goals?id=${id}`, 'DELETE'));
           }}
         />
       )}

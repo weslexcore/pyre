@@ -2,6 +2,7 @@
 // server-side by AdminLayout; a 401/403 from the API mid-session renders a
 // re-login prompt instead of a client-side gate.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { SessionExpired } from '@/components/admin/SessionExpired';
 import { WebhookHealthPanel } from './WebhookHealthPanel';
 
 interface TraceStep {
@@ -352,20 +353,7 @@ export function WebhookDashboard({
   }, [autoRefresh, offset, fetchLogs]);
 
   if (error === 'session_expired') {
-    return (
-      <div className="max-w-md mx-auto text-center py-16 px-4">
-        <h2 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
-          Session expired
-        </h2>
-        <p className="text-white/60 mb-6">Log in again to continue.</p>
-        <a
-          href="/api/auth/login?returnUrl=%2Fadmin%2Fwebhooks"
-          className="inline-block px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
-        >
-          Log In
-        </a>
-      </div>
-    );
+    return <SessionExpired returnTo="/admin/webhooks" />;
   }
 
   const lowerSearch = search.toLowerCase();

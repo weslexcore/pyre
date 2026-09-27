@@ -19,6 +19,7 @@
 
 import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import {
   buildCalendar,
   type CalendarEntry,
@@ -28,11 +29,11 @@ import {
 } from '@/lib/boards/calendar';
 import type { Assignable } from '@/lib/boards/people';
 import { BOARDS_HREF } from '@/lib/boards/types';
+import { readError } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { BackLink } from '../BackLink';
-import { readError } from '../incidentUi';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
 import { CardDrawer } from './CardDrawer';
@@ -155,11 +156,7 @@ export function BoardsCalendar() {
         <BackLink href={BOARDS_HREF}>All boards</BackLink>
       </div>
 
-      {(error || saveError) && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {saveError ?? error}
-        </p>
-      )}
+      {(error || saveError) && <ErrorBanner mono>{saveError ?? error}</ErrorBanner>}
 
       <CalendarMonth
         entries={shown}

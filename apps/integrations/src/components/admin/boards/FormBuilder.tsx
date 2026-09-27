@@ -11,6 +11,7 @@
 // The preview on the right is the real form island, told not to post.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { BoardForm } from '@/components/forms/BoardForm';
 import { FormHeader } from '@/components/forms/FormHeader';
 import {
@@ -38,7 +39,9 @@ import {
 } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { FIELD_KIND_LABELS } from '@/lib/boards/types';
+import { readError, sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { useCopy } from '@/lib/client/useCopy';
 import type {
   BoardFieldRow,
   BoardFieldValue,
@@ -49,17 +52,15 @@ import type {
 import { downscaleImage } from '@/lib/media/attachments';
 import { BackLink } from '../BackLink';
 import {
-  buttonClass,
   cardClass,
   inputBaseClass,
   inputClass,
   labelClass,
   SectionTitle,
   selectBaseClass,
-  send,
   textareaClass,
 } from '../goalsUi';
-import { Chip, readError } from '../incidentUi';
+import { Chip } from '../incidentUi';
 import { ColumnOrder } from './ColumnOrder';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -103,7 +104,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
     ),
   }));
   const [origin, setOrigin] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied: copiedKey, copy: copyValue } = useCopy();
   const [previewKey, setPreviewKey] = useState(0);
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -139,7 +140,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
     setUploadError(null);
     setUploading(true);
     try {
-      await send(`/api/admin/board-form-media?slug=${encodeURIComponent(slug)}`, 'DELETE');
+      await sendJson(`/api/admin/board-form-media?slug=${encodeURIComponent(slug)}`, 'DELETE');
       setBackground(null);
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : 'Could not remove the image');
@@ -159,7 +160,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
     });
 
   const autosave = useCardAutosave(async (patch) => {
-    await send<FormResponse>('/api/admin/board-forms', 'PATCH', { slug, ...patch });
+    await sendJson<FormResponse>('/api/admin/board-forms', 'PATCH', { slug, ...patch });
   });
 
   // Compare setting by setting so a label edit never resends the list.
@@ -240,15 +241,8 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
   };
 
   const shareUrl = `${origin}${formHref(slug)}`;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // The link is on screen to select by hand.
-    }
-  };
+  const copied = copiedKey === 'share';
+  const copy = () => copyValue('share', shareUrl);
 
   const example = renderTitle(
     config.titleTemplate,
@@ -305,10 +299,10 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
               aria-label="Link to the form"
               onFocus={(e) => e.target.select()}
             />
-            <button type="button" className={buttonClass} onClick={copy}>
+            <button type="button" className={formButtonClass} onClick={copy}>
               {copied ? 'Copied' : 'Copy link'}
             </button>
-            <a className={buttonClass} href={formHref(slug)} target="_blank" rel="noreferrer">
+            <a className={formButtonClass} href={formHref(slug)} target="_blank" rel="noreferrer">
               Open
             </a>
           </div>
@@ -381,7 +375,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
           {config.notify.length > 0 && (
             <button
               type="button"
-              className={`${buttonClass} mt-2`}
+              className={`${formButtonClass} mt-2`}
               onClick={() => update({ notify: [] })}
             >
               Tell everyone instead
@@ -578,7 +572,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                   </option>
                 ))}
               </select>
-              <button type="button" className={buttonClass} onClick={addQuestion}>
+              <button type="button" className={formButtonClass} onClick={addQuestion}>
                 Add question
               </button>
             </div>
@@ -615,13 +609,13 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                 if (file) void uploadBackground(file);
               }}
             />
-            <label htmlFor="form-background-file" className={`${buttonClass} cursor-pointer`}>
+            <label htmlFor="form-background-file" className={`${formButtonClass} cursor-pointer`}>
               {uploading ? 'Working…' : background ? 'Replace image' : 'Choose an image'}
             </label>
             {background && (
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={uploading}
                 onClick={() => void removeBackground()}
               >
@@ -750,7 +744,7 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                 : 'All changes saved'}
           </p>
           {autosave.error && (
-            <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+            <button type="button" className={formButtonClass} onClick={() => void autosave.flush()}>
               Retry
             </button>
           )}

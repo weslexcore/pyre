@@ -6,10 +6,11 @@
 // knows how many rentals were booked. Editing the definition or removing the
 // KPI is reshaping the goal, which is the whole tool's (canManage).
 
+import { formButtonClass } from '@/components/admin/ui';
 import type { GoalKpiRow } from '@/lib/db';
 import { formatKpiValue } from '@/lib/goals/kpis';
 import { KPI_DIRECTION_LABELS } from '@/lib/goals/types';
-import { buttonClass, KpiMeter } from '../goalsUi';
+import { KpiMeter } from '../goalsUi';
 import { KpiMeasureForm } from './KpiMeasureForm';
 
 export function KpiRow({
@@ -42,10 +43,10 @@ export function KpiRow({
         </span>
         {canManage && (
           <span className="flex gap-2">
-            <button type="button" className={buttonClass} disabled={busy} onClick={onEdit}>
+            <button type="button" className={formButtonClass} disabled={busy} onClick={onEdit}>
               Edit
             </button>
-            <button type="button" className={buttonClass} disabled={busy} onClick={onRemove}>
+            <button type="button" className={formButtonClass} disabled={busy} onClick={onRemove}>
               Remove
             </button>
           </span>

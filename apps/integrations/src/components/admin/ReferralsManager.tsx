@@ -4,18 +4,16 @@
 // still gets the full picture.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { buttonClass, inputClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
+import { fmtShortDate } from '@/lib/client/format';
 import type {
   ReferralRedemptionRow,
   ReferralRewardRow,
   ReferralTierRow,
   ReferrerRow,
 } from '@/lib/db';
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const pillClass = (active: boolean) =>
   `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
@@ -37,17 +35,6 @@ interface ReferralsPayload {
   counts: Record<string, number>;
   canManage: boolean;
 }
-
-async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
-
-const fmtDate = (iso: string | null): string =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'text-yellow-300/80',
@@ -442,7 +429,7 @@ function ReferrersSection({
               <span className="font-mono text-xs text-[var(--pyre-red)]">disabled</span>
             )}
             <span className="ml-auto font-mono text-xs text-white/30">
-              {fmtDate(referrer.created_at)}
+              {fmtShortDate(referrer.created_at)}
             </span>
             {canManage && (
               <button
@@ -519,23 +506,29 @@ function RedemptionsSection({
               </span>
               {row.cancelled_at && (
                 <span className="font-mono text-xs text-[var(--pyre-red)]">
-                  converting booking cancelled {fmtDate(row.cancelled_at)}
+                  converting booking cancelled {fmtShortDate(row.cancelled_at)}
                 </span>
               )}
               {row.status === 'revoked' && row.revoke_reason && (
                 <span className="font-mono text-xs text-white/40">({row.revoke_reason})</span>
               )}
               <span className="ml-auto font-mono text-xs text-white/30">
-                {fmtDate(row.created_at)}
-                {row.converted_at && ` → booked ${fmtDate(row.converted_at)}`}
+                {fmtShortDate(row.created_at)}
+                {row.converted_at && ` → booked ${fmtShortDate(row.converted_at)}`}
               </span>
               {canManage && (row.status === 'redeemed' || row.status === 'pending') && (
                 <button
                   type="button"
                   className={buttonClass}
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm(`Revoke ${row.friend_email}'s discount?`)) {
+                  onClick={async () => {
+                    if (
+                      await confirmAction({
+                        title: `Revoke ${row.friend_email}'s discount?`,
+                        confirmLabel: 'Revoke',
+                        danger: true,
+                      })
+                    ) {
                       act({ action: 'revoke-redemption', id: row.id }, 'Redemption revoked');
                     }
                   }}
@@ -583,16 +576,22 @@ function RewardsSection({
               </span>
               {referrer && <span className="font-mono text-xs text-white/40">{referrer.code}</span>}
               <span className="ml-auto font-mono text-xs text-white/30">
-                granted {fmtDate(row.granted_at)}
-                {row.consumed_at && ` → used ${fmtDate(row.consumed_at)}`}
+                granted {fmtShortDate(row.granted_at)}
+                {row.consumed_at && ` → used ${fmtShortDate(row.consumed_at)}`}
               </span>
               {canManage && row.status === 'granted' && (
                 <button
                   type="button"
                   className={buttonClass}
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm('Revoke this reward?')) {
+                  onClick={async () => {
+                    if (
+                      await confirmAction({
+                        title: 'Revoke this reward?',
+                        confirmLabel: 'Revoke',
+                        danger: true,
+                      })
+                    ) {
                       act({ action: 'revoke-reward', id: row.id }, 'Reward revoked');
                     }
                   }}

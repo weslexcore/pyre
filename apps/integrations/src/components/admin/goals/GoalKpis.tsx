@@ -4,9 +4,9 @@
 // goals overview, so a KPI behaves the same wherever it is touched.
 
 import { useState } from 'react';
+import { sendJson } from '@/lib/client/api';
 import type { GoalKpiRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { send } from '../goalsUi';
 import { KpiForm } from './KpiForm';
 import { KpiRow } from './KpiRow';
 
@@ -65,7 +65,7 @@ export function GoalKpis({
             onRemove={() => setRemovingKpi(kpi)}
             onMeasure={(value) =>
               mutate(() =>
-                send('/api/admin/goal-kpis', 'PATCH', { id: kpi.id, currentValue: value })
+                sendJson('/api/admin/goal-kpis', 'PATCH', { id: kpi.id, currentValue: value })
               )
             }
           />
@@ -79,10 +79,10 @@ export function GoalKpis({
             onCancel={() => setKpiFormFor(null)}
             onSave={async (values) => {
               if (kpiFormFor === 'new') {
-                await mutate(() => send('/api/admin/goal-kpis', 'POST', { goalId, ...values }));
+                await mutate(() => sendJson('/api/admin/goal-kpis', 'POST', { goalId, ...values }));
               } else {
                 await mutate(() =>
-                  send('/api/admin/goal-kpis', 'PATCH', { id: kpiFormFor.id, ...values })
+                  sendJson('/api/admin/goal-kpis', 'PATCH', { id: kpiFormFor.id, ...values })
                 );
               }
               setKpiFormFor(null);
@@ -102,7 +102,7 @@ export function GoalKpis({
           onConfirm={() => {
             const id = removingKpi.id;
             setRemovingKpi(null);
-            void mutate(() => send(`/api/admin/goal-kpis?id=${id}`, 'DELETE'));
+            void mutate(() => sendJson(`/api/admin/goal-kpis?id=${id}`, 'DELETE'));
           }}
         />
       )}

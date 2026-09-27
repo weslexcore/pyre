@@ -24,6 +24,7 @@
 
 import { todayEastern } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { buttonClass } from '@/components/admin/ui';
 import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import { formBuilderHref } from '@/lib/boards/forms';
@@ -31,6 +32,7 @@ import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { BOARDS_HREF } from '@/lib/boards/types';
+import { readError, sendJson } from '@/lib/client/api';
 import type {
   BoardCardRow,
   BoardColumnRow,
@@ -43,15 +45,7 @@ import type { PeopleNames } from '@/lib/sops/names';
 import { BackLink } from '../BackLink';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import {
-  cardClass,
-  inputBaseClass,
-  QuietChip,
-  selectBaseClass,
-  send,
-  toolbarButtonClass,
-} from '../goalsUi';
-import { readError } from '../incidentUi';
+import { cardClass, inputBaseClass, QuietChip, selectBaseClass } from '../goalsUi';
 import { pillClass } from '../scheduleUi';
 import { BoardCalendar, boardHasCalendar } from './BoardCalendar';
 import { BoardGoal } from './BoardGoal';
@@ -191,7 +185,9 @@ export function BoardView({ slug }: { slug: string }) {
   };
 
   const addCard = async (title: string, columnId?: string) => {
-    await mutate(() => send('/api/admin/board-cards', 'POST', { board: slug, title, columnId }));
+    await mutate(() =>
+      sendJson('/api/admin/board-cards', 'POST', { board: slug, title, columnId })
+    );
   };
 
   // A drop is a column and the order it should hold afterwards. The order
@@ -224,7 +220,7 @@ export function BoardView({ slug }: { slug: string }) {
     setError(null);
     try {
       if (plan.moved) {
-        const result = await send<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
+        const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
           id: plan.card.id,
           columnId: plan.columnId,
         });
@@ -239,7 +235,7 @@ export function BoardView({ slug }: { slug: string }) {
             : current
         );
       }
-      await send('/api/admin/board-cards/reorder', 'POST', {
+      await sendJson('/api/admin/board-cards/reorder', 'POST', {
         board: slug,
         columnId: plan.columnId,
         cardIds: plan.orderedIds,
@@ -300,7 +296,7 @@ export function BoardView({ slug }: { slug: string }) {
   const ownerOptions = owners.length > 0 ? owners : namesAsOwners(people);
 
   const saveColumns = (next: ReturnType<typeof renameColumn>) =>
-    mutate(() => send('/api/admin/boards', 'PATCH', { slug, columns: next }));
+    mutate(() => sendJson('/api/admin/boards', 'PATCH', { slug, columns: next }));
 
   const draggingCard = bundle.cards.find((card) => card.id === draggingId) ?? null;
 
@@ -333,7 +329,7 @@ export function BoardView({ slug }: { slug: string }) {
             </span>
           )}
           {canManage && (
-            <a className={toolbarButtonClass} href={formBuilderHref(slug)}>
+            <a className={buttonClass} href={formBuilderHref(slug)}>
               Form
             </a>
           )}
@@ -555,7 +551,7 @@ export function BoardView({ slug }: { slug: string }) {
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}
           onDelete={async () => {
-            await mutate(() => send(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
+            await mutate(() => sendJson(`/api/admin/board-cards?id=${openCard.id}`, 'DELETE'));
             setOpenCardId(null);
           }}
         />

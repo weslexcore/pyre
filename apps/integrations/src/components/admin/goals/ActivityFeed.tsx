@@ -2,12 +2,13 @@
 // Goals retain their combined feed. Posting a comment uses the existing API.
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import type { MentionPerson } from '@/lib/boards/mentions';
+import { readError, sendJson } from '@/lib/client/api';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { buttonClass, SectionTitle, send } from '../goalsUi';
-import { readError } from '../incidentUi';
+import { SectionTitle } from '../goalsUi';
 import { SopMarkdown } from '../SopMarkdown';
 import { MentionInput } from './MentionInput';
 
@@ -75,7 +76,7 @@ export function ActivityFeed({
     setBusy(true);
     setError(null);
     try {
-      await send('/api/admin/board-events', 'POST', { cardId, goalId, note: body });
+      await sendJson('/api/admin/board-events', 'POST', { cardId, goalId, note: body });
       setNote('');
       await load();
     } catch (e) {
@@ -111,7 +112,7 @@ export function ActivityFeed({
           disabled={busy}
         />
         <div className="mt-2 flex justify-end">
-          <button type="submit" className={buttonClass} disabled={busy || !note.trim()}>
+          <button type="submit" className={formButtonClass} disabled={busy || !note.trim()}>
             {busy ? 'Posting…' : 'Comment'}
           </button>
         </div>

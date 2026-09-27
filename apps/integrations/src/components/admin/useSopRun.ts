@@ -18,6 +18,7 @@
 // time, never the render it was created in — an op must see the state the
 // taps before it left, and the document as it is when the op runs.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { readError } from '@/lib/client/api';
 import type { SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import {
@@ -86,14 +87,6 @@ export function isLiveRun(state: RunState | null): boolean {
 const FRESH_MS = 15_000;
 
 const COMPLETED_NOTICE = 'Checklist completed — nice work.';
-
-export async function readError(res: Response): Promise<string> {
-  try {
-    return ((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
-}
 
 async function postStart(sopId: string, items: CheckItems): Promise<RunResponse> {
   const res = await fetch('/api/admin/sop-runs', {

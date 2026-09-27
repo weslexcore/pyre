@@ -8,7 +8,7 @@ import { formatPhone, KIND_PROBLEMS, normalizeAnswer, phoneOf } from '@/lib/boar
 import type { BoardFieldKind, GuestFieldValue, GuestProfileFieldRow } from '@/lib/db';
 import { type MembershipStanding, STANDING_LABELS } from '@/lib/guests/insights';
 import { textareaClass } from './goalsUi';
-import { Chip, inputClass, labelClass, readError, YesNo } from './incidentUi';
+import { Chip, inputClass, labelClass, YesNo } from './incidentUi';
 
 const badgeBase =
   'inline-block rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide';
@@ -495,21 +495,6 @@ export function FieldRow({
       )}
     </div>
   );
-}
-
-/** JSON mutation against the /api/admin/guest* routes; throws with the API's message. */
-export async function send<T>(
-  url: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
-  body?: unknown
-): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  return (await res.json()) as T;
 }
 
 /** YYYY-MM-DD plus or minus whole days, calendar-safe. */

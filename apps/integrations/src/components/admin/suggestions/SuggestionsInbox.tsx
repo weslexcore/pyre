@@ -3,6 +3,9 @@
 // link back to it; and, one filter away, what was decided and by whom.
 
 import { useCallback, useEffect, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { compactSelectClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import type { PeopleNames } from '@/lib/sops/names';
 import {
   KIND_LABELS,
@@ -12,7 +15,6 @@ import {
   type SuggestionResultLink,
   type SuggestionView,
 } from '@/lib/suggestions/types';
-import { readError, selectClass } from '../ShiftNoteComposer';
 import { SuggestionCard } from './SuggestionCard';
 
 type StatusFilter = 'pending' | 'decided';
@@ -74,7 +76,7 @@ export function SuggestionsInbox() {
         <label className="flex items-center gap-2 font-mono text-xs text-white/60">
           show
           <select
-            className={selectClass}
+            className={compactSelectClass}
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
           >
@@ -85,7 +87,7 @@ export function SuggestionsInbox() {
         <label className="flex items-center gap-2 font-mono text-xs text-white/60">
           kind
           <select
-            className={selectClass}
+            className={compactSelectClass}
             value={kind}
             onChange={(e) => setKind(e.target.value as 'all' | SuggestionKind)}
           >
@@ -105,11 +107,7 @@ export function SuggestionsInbox() {
           suggestions will arrive.
         </p>
       )}
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {loading && !data && <p className="font-mono text-xs text-white/40">Loading…</p>}
       {data && rows.length === 0 && (
         <p className="font-mono text-xs text-white/40">

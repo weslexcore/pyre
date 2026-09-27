@@ -7,6 +7,8 @@
 // retiring and adding is the honest edit.
 
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { GuestProfileFieldRow } from '@/lib/db';
 import {
@@ -20,15 +22,8 @@ import {
   kindHasOptions,
 } from '@/lib/guests/types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { QuietBadge, send } from './guestUi';
-import {
-  buttonClass,
-  cardClass,
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  SectionTitle,
-} from './incidentUi';
+import { QuietBadge } from './guestUi';
+import { cardClass, inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 
 interface FieldsResponse {
   fields: GuestProfileFieldRow[];
@@ -92,7 +87,7 @@ export function GuestFieldsManager() {
     setBusy(key);
     setMessage(null);
     try {
-      const { field } = await send<{ field: GuestProfileFieldRow }>(
+      const { field } = await sendJson<{ field: GuestProfileFieldRow }>(
         '/api/admin/guest-fields',
         'PATCH',
         {
@@ -134,7 +129,7 @@ export function GuestFieldsManager() {
     setBusy(key);
     setMessage(null);
     try {
-      const { fields: next } = await send<{ fields: GuestProfileFieldRow[] }>(
+      const { fields: next } = await sendJson<{ fields: GuestProfileFieldRow[] }>(
         '/api/admin/guest-fields',
         'PATCH',
         { order: [...order, ...archived.map((f) => f.key)] }
@@ -169,7 +164,7 @@ export function GuestFieldsManager() {
     setBusy(deleting.key);
     setMessage(null);
     try {
-      await send(`/api/admin/guest-fields?key=${encodeURIComponent(deleting.key)}`, 'DELETE');
+      await sendJson(`/api/admin/guest-fields?key=${encodeURIComponent(deleting.key)}`, 'DELETE');
       const gone = deleting.key;
       setData((prev) =>
         prev ? { ...prev, fields: prev.fields.filter((f) => f.key !== gone) } : prev
@@ -215,7 +210,7 @@ export function GuestFieldsManager() {
                 <>
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={formButtonClass}
                     disabled={busy !== null || position <= 0}
                     aria-label={`Move ${field.label} up`}
                     onClick={() => void nudge(field.key, -1)}
@@ -224,7 +219,7 @@ export function GuestFieldsManager() {
                   </button>
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={formButtonClass}
                     disabled={busy !== null || position < 0 || position >= siblings.length - 1}
                     aria-label={`Move ${field.label} down`}
                     onClick={() => void nudge(field.key, 1)}
@@ -235,7 +230,7 @@ export function GuestFieldsManager() {
               )}
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => {
                   setEditing(field.key);
@@ -246,7 +241,7 @@ export function GuestFieldsManager() {
               </button>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => void patch(field.key, { archived: !field.archived })}
               >
@@ -255,7 +250,7 @@ export function GuestFieldsManager() {
               {count === 0 && (
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy !== null}
                   onClick={() => setDeleting(field)}
                 >
@@ -341,7 +336,7 @@ export function GuestFieldsManager() {
               </button>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => {
                   setEditing(null);
@@ -457,7 +452,7 @@ function AddFieldForm({
     setBusy(true);
     setError(null);
     try {
-      const { field } = await send<{ field: GuestProfileFieldRow }>(
+      const { field } = await sendJson<{ field: GuestProfileFieldRow }>(
         '/api/admin/guest-fields',
         'POST',
         {
@@ -592,7 +587,7 @@ function AddFieldForm({
           </button>
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={busy}
             onClick={() => {
               reset();

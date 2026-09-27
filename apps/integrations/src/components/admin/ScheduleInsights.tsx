@@ -5,7 +5,10 @@
 // pre-computed from /api/admin/schedule-insights; this island only renders.
 import { addDays, weekStartOf } from '@pyre/schedule-core';
 import { useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, tinyInputClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { fmtHours, fmtMoney } from '@/lib/client/format';
 import type { ScheduleInsightsPayload } from '@/pages/api/admin/schedule-insights';
 
 const GOLD = '#b58d35';
@@ -15,24 +18,12 @@ const GRID = 'rgba(255, 255, 255, 0.08)';
 const WINDOW_OPTIONS = [4, 8, 13, 26] as const;
 const DEFAULT_WINDOW = 8;
 
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
-
-const inputClass =
-  'px-3 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-[var(--pyre-creme)] focus:outline-none focus:border-white/30';
-
 const todayLocal = (): string => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
     now.getDate()
   ).padStart(2, '0')}`;
 };
-
-const fmtCost = (cost: number): string =>
-  `$${Number.isInteger(cost) ? cost.toLocaleString('en-US') : cost.toFixed(2)}`;
-
-const fmtHours = (hours: number): string =>
-  Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 
 /** "Aug 3 – Aug 16" from two YYYY-MM-DD dates. */
 const fmtRange = (start: string, end: string): string => {
@@ -154,7 +145,7 @@ function CostChart({ weeks }: { weeks: ScheduleInsightsPayload['weeks'] }) {
               opacity={week.future ? 0.35 : 0.85}
             >
               <title>
-                {`Week of ${week.weekStart}${week.future ? ' (in progress)' : ''}: ${fmtCost(week.cost)} · ${fmtHours(week.paidHours)} paid h · ${fmtHours(week.openHours)} open h`}
+                {`Week of ${week.weekStart}${week.future ? ' (in progress)' : ''}: ${fmtMoney(week.cost)} · ${fmtHours(week.paidHours)} paid h · ${fmtHours(week.openHours)} open h`}
               </title>
             </rect>
             {(i % labelEvery === 0 || i === weeks.length - 1) && (
@@ -226,7 +217,7 @@ export function ScheduleInsights() {
         <>
           <input
             type="date"
-            className={inputClass}
+            className={tinyInputClass}
             value={customStart}
             onChange={(e) => e.target.value && setCustomStart(e.target.value)}
             aria-label="Custom range start"
@@ -234,7 +225,7 @@ export function ScheduleInsights() {
           <span className="font-mono text-xs text-white/40">to</span>
           <input
             type="date"
-            className={inputClass}
+            className={tinyInputClass}
             value={customEnd}
             onChange={(e) => e.target.value && setCustomEnd(e.target.value)}
             aria-label="Custom range end"
@@ -252,11 +243,7 @@ export function ScheduleInsights() {
 
   if (loading) return <p className="font-mono text-sm text-white/40">Loading…</p>;
   if (error || !data) {
-    return (
-      <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-        {error ?? 'Failed to load'}
-      </p>
-    );
+    return <ErrorBanner mono>{error ?? 'Failed to load'}</ErrorBanner>;
   }
 
   const current = data.periods.find((p) => p.status === 'current');
@@ -285,7 +272,7 @@ export function ScheduleInsights() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label="Current pay period"
-          value={current ? fmtCost(current.cost) : '—'}
+          value={current ? fmtMoney(current.cost) : '—'}
           sub={
             current
               ? `${fmtRange(current.periodStart, current.periodEnd)} · paid ${current.payday}`
@@ -294,18 +281,18 @@ export function ScheduleInsights() {
         />
         <StatTile
           label="Next period forecast"
-          value={next ? fmtCost(next.cost) : '—'}
+          value={next ? fmtMoney(next.cost) : '—'}
           sub={`scheduled through ${data.scheduledThrough} — partial`}
         />
         <StatTile
           label="Avg weekly cost"
-          value={fmtCost(Math.round(avgWeeklyCost))}
+          value={fmtMoney(Math.round(avgWeeklyCost))}
           sub={`${completed.length} completed weeks in window`}
         />
         <StatTile
           label="Cost per open hour"
           value={
-            avgCostPerOpenHour == null ? '—' : fmtCost(Math.round(avgCostPerOpenHour * 100) / 100)
+            avgCostPerOpenHour == null ? '—' : fmtMoney(Math.round(avgCostPerOpenHour * 100) / 100)
           }
           sub="labor ÷ customer-facing hours — revenue/hr to break even"
         />

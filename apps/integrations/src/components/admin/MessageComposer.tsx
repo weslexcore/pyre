@@ -3,10 +3,11 @@
 // picker the SOP access settings use, and a pin toggle. Admin-only by the
 // routes; the parent decides what "save" means (create or update).
 import { useState } from 'react';
+import { compactInputClass, goldButtonClass } from '@/components/admin/ui';
 import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
 import { LinkTextarea } from './LinkTextarea';
-import { buttonClass, inputClass, primaryButtonClass, textareaClass } from './messagesUi';
+import { buttonClass, textareaClass } from './messagesUi';
 import {
   type GrantablePerson,
   SopAccessPicker,
@@ -67,7 +68,7 @@ export function MessageComposer({
     >
       <input
         type="text"
-        className={`${inputClass} w-full`}
+        className={`${compactInputClass} w-full`}
         placeholder="Title"
         maxLength={TITLE_MAX}
         value={draft.title}
@@ -126,7 +127,7 @@ export function MessageComposer({
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className={primaryButtonClass} disabled={!canSubmit}>
+        <button type="submit" className={goldButtonClass} disabled={!canSubmit}>
           {submitLabel}
         </button>
         {onCancel && (

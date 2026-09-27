@@ -4,8 +4,9 @@
 // the drawer, and most of it never will be, which is fine.
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
 import { BOARD_LIMITS } from '@/lib/boards/types';
-import { buttonClass, inputBaseClass } from '../goalsUi';
+import { inputBaseClass } from '../goalsUi';
 
 export function QuickAdd({
   noun,
@@ -63,7 +64,7 @@ export function QuickAdd({
         }}
         aria-label={`Add a ${noun}`}
       />
-      <button type="submit" className={buttonClass} disabled={busy || saving || !title.trim()}>
+      <button type="submit" className={formButtonClass} disabled={busy || saving || !title.trim()}>
         {saving ? 'Adding…' : 'Add'}
       </button>
     </form>

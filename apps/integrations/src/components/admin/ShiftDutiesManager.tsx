@@ -17,17 +17,12 @@ import {
   dutyPhases,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
+import { formButtonClass } from '@/components/admin/ui';
+import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { ConfirmDialog } from './ConfirmDialog';
-import { QuietBadge, send } from './guestUi';
-import {
-  buttonClass,
-  cardClass,
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  SectionTitle,
-} from './incidentUi';
+import { QuietBadge } from './guestUi';
+import { cardClass, inputClass, labelClass, primaryButtonClass, SectionTitle } from './incidentUi';
 
 const ENDPOINT = '/api/admin/shift-duties';
 
@@ -130,7 +125,7 @@ export function ShiftDutiesManager() {
   };
 
   const patch = (key: string, body: Record<string, unknown>) =>
-    mutate(key, () => send(ENDPOINT, 'PATCH', { key, ...body }));
+    mutate(key, () => sendJson(ENDPOINT, 'PATCH', { key, ...body }));
 
   /** Swap `key` with its neighbour inside its phase, then send the full order. */
   const nudge = (key: string, direction: -1 | 1) => {
@@ -145,7 +140,7 @@ export function ShiftDutiesManager() {
     const b = order.indexOf(other);
     [order[a], order[b]] = [order[b], order[a]];
     void mutate(key, () =>
-      send(ENDPOINT, 'PATCH', { order: [...order, ...archived.map((d) => d.key)] })
+      sendJson(ENDPOINT, 'PATCH', { order: [...order, ...archived.map((d) => d.key)] })
     );
   };
 
@@ -172,7 +167,7 @@ export function ShiftDutiesManager() {
     if (!deleting) return;
     const key = deleting.key;
     const ok = await mutate(key, () =>
-      send(`${ENDPOINT}?key=${encodeURIComponent(key)}`, 'DELETE')
+      sendJson(`${ENDPOINT}?key=${encodeURIComponent(key)}`, 'DELETE')
     );
     if (ok) setDeleting(null);
   };
@@ -224,7 +219,7 @@ export function ShiftDutiesManager() {
                   <>
                     <button
                       type="button"
-                      className={buttonClass}
+                      className={formButtonClass}
                       disabled={busy !== null || position <= 0}
                       aria-label={`Move ${duty.label} up`}
                       onClick={() => nudge(duty.key, -1)}
@@ -233,7 +228,7 @@ export function ShiftDutiesManager() {
                     </button>
                     <button
                       type="button"
-                      className={buttonClass}
+                      className={formButtonClass}
                       disabled={busy !== null || position < 0 || position >= siblings.length - 1}
                       aria-label={`Move ${duty.label} down`}
                       onClick={() => nudge(duty.key, 1)}
@@ -244,7 +239,7 @@ export function ShiftDutiesManager() {
                 )}
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy !== null}
                   onClick={() => {
                     setEditing(duty.key);
@@ -255,7 +250,7 @@ export function ShiftDutiesManager() {
                 </button>
                 <button
                   type="button"
-                  className={buttonClass}
+                  className={formButtonClass}
                   disabled={busy !== null}
                   onClick={() => void patch(duty.key, { archived: !duty.archived })}
                 >
@@ -264,7 +259,7 @@ export function ShiftDutiesManager() {
                 {count === 0 && (
                   <button
                     type="button"
-                    className={buttonClass}
+                    className={formButtonClass}
                     disabled={busy !== null}
                     onClick={() => setDeleting(duty)}
                   >
@@ -294,7 +289,7 @@ export function ShiftDutiesManager() {
               </button>
               <button
                 type="button"
-                className={buttonClass}
+                className={formButtonClass}
                 disabled={busy !== null}
                 onClick={() => {
                   setEditing(null);
@@ -317,7 +312,7 @@ export function ShiftDutiesManager() {
           sops={sops}
           sessionDuties={sessionDuties}
           busy={busy !== null}
-          onAdd={(body) => mutate('new', () => send(ENDPOINT, 'POST', body))}
+          onAdd={(body) => mutate('new', () => sendJson(ENDPOINT, 'POST', body))}
         />
       )}
 
@@ -556,7 +551,7 @@ function AddDutyForm({
           </button>
           <button
             type="button"
-            className={buttonClass}
+            className={formButtonClass}
             disabled={busy}
             onClick={() => {
               setForm(BLANK_FORM);

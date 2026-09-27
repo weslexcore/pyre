@@ -6,6 +6,8 @@
 // readings" opens the review step. Auth is handled server-side by
 // AdminLayout; a 401/403 from the API mid-session renders a re-login prompt.
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { SessionExpired } from '@/components/admin/SessionExpired';
 import type { DoseRecord, WaterTestRow } from '@/lib/db';
 import {
   DEFAULT_FILTER_ACTION,
@@ -975,7 +977,15 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   };
 
   const deleteEntry = async (record: WaterTestRow) => {
-    if (!window.confirm(`Delete this ${record.tub} tub entry? This can't be undone.`)) return;
+    if (
+      !(await confirmAction({
+        title: `Delete this ${record.tub} tub entry?`,
+        body: "This can't be undone.",
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     setDeletingId(record.id);
     setLogError('');
     try {
@@ -1001,20 +1011,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   };
 
   if (sessionExpired) {
-    return (
-      <div className="max-w-md mx-auto text-center py-16 px-4">
-        <h2 className="font-primary-semibold text-2xl mb-4 text-[var(--pyre-creme)]">
-          Session expired
-        </h2>
-        <p className="text-white/60 mb-6">Log in again to continue.</p>
-        <a
-          href="/api/auth/login?returnUrl=%2Fadmin%2Fwater"
-          className="inline-block px-6 py-3 rounded-md font-mono-bold text-sm uppercase tracking-wide bg-[var(--pyre-red)] text-[var(--pyre-creme)] hover:opacity-90 transition-opacity"
-        >
-          Log In
-        </a>
-      </div>
-    );
+    return <SessionExpired returnTo="/admin/water" />;
   }
 
   const criticals = recommendations.filter((r) => r.severity === 'critical');

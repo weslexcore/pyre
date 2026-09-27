@@ -3,7 +3,8 @@
 // entered without being understood — so each measurement carries its own
 // "what is this, why does it matter, how does it move the rest" panel,
 // sourced from lib/water/glossary.
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { Modal } from '@/components/admin/Modal';
 import type { Parameter } from '@/lib/water/charts';
 import { GLOSSARY } from '@/lib/water/glossary';
 
@@ -22,79 +23,57 @@ function MeasurementDialog({ parameter, onClose }: { parameter: Parameter; onClo
   const entry = GLOSSARY[parameter];
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    // Focus starts on Close: it is the one control in here, and it gives the
-    // keyboard a defined place to be inside the dialog.
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
+  // whitespace-normal: the dialog mounts inline under the ⓘ, which sits inside
+  // the log's whitespace-nowrap reading chips — white-space inherits straight
+  // through fixed positioning, so without the reset every paragraph in here
+  // renders as one unwrapped line off the page.
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-0 sm:items-center sm:p-4">
-      {/* The backdrop is a real button rather than a div with a click handler:
-       * click-outside-to-dismiss then costs no a11y compromise, and it stays
-       * out of the tab order because Close and Escape are the keyboard paths. */}
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/70"
-      />
-      {/* whitespace-normal: the dialog mounts inline under the ⓘ, which sits
-       * inside the log's whitespace-nowrap reading chips — white-space inherits
-       * straight through fixed positioning, so without the reset every
-       * paragraph in here renders as one unwrapped line off the page. */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`measurement-info-${parameter}`}
-        className="relative w-full max-w-lg whitespace-normal rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
-      >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h2
-              id={`measurement-info-${parameter}`}
-              className="font-primary-semibold text-xl text-[var(--pyre-creme)]"
-            >
-              {entry.name}
-            </h2>
-            <div className="mt-1 font-mono text-xs text-white/50">
-              Target {entry.target}
-              {entry.limit && (
-                <>
-                  {' · '}
-                  <span className="text-[var(--pyre-red)]">Hard limit {entry.limit}</span>
-                </>
-              )}
-            </div>
-          </div>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            className="rounded border border-white/20 px-3 py-1.5 font-mono-bold text-xs uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+    <Modal
+      labelledBy={`measurement-info-${parameter}`}
+      onClose={onClose}
+      backdropLabel="Close"
+      initialFocus={closeRef}
+      panelClassName="max-w-lg whitespace-normal rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-5 shadow-xl sm:rounded-lg"
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2
+            id={`measurement-info-${parameter}`}
+            className="font-primary-semibold text-xl text-[var(--pyre-creme)]"
           >
-            Close
-          </button>
+            {entry.name}
+          </h2>
+          <div className="mt-1 font-mono text-xs text-white/50">
+            Target {entry.target}
+            {entry.limit && (
+              <>
+                {' · '}
+                <span className="text-[var(--pyre-red)]">Hard limit {entry.limit}</span>
+              </>
+            )}
+          </div>
         </div>
-
-        <div className="space-y-3">
-          {SECTIONS.map(([heading, key]) => (
-            <div key={key}>
-              <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-white/40">
-                {heading}
-              </div>
-              <p className="text-sm leading-relaxed text-white/70">{entry[key]}</p>
-            </div>
-          ))}
-        </div>
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          className="rounded border border-white/20 px-3 py-1.5 font-mono-bold text-xs uppercase tracking-wide text-white/60 transition-colors hover:border-white/40 hover:text-white"
+        >
+          Close
+        </button>
       </div>
-    </div>
+
+      <div className="space-y-3">
+        {SECTIONS.map(([heading, key]) => (
+          <div key={key}>
+            <div className="mb-1 font-mono-bold text-xs uppercase tracking-wide text-white/40">
+              {heading}
+            </div>
+            <p className="text-sm leading-relaxed text-white/70">{entry[key]}</p>
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 

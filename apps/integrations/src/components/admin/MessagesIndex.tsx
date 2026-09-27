@@ -2,14 +2,18 @@
 // may read, pinned first, each linking to its thread. Admins also get the
 // composer for a new message and can peek at the archive.
 import { useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { goldButtonClass } from '@/components/admin/ui';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { etStamp } from '@/lib/client/format';
 import type { AdminMessageRow } from '@/lib/db';
 import type { MessageSummary } from '@/lib/messages/store';
 import { excerpt } from '@/lib/notifications/types';
 import { describeGrants, type SopViewer } from '@/lib/sops/levels';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { emptyDraft, MessageComposer, type MessageDraft } from './MessageComposer';
-import { buttonClass, chipClass, formatStamp, primaryButtonClass, readError } from './messagesUi';
+import { buttonClass, chipClass } from './messagesUi';
 import type { GrantablePerson } from './SopAccessPicker';
 
 interface ListResponse {
@@ -60,7 +64,7 @@ export function MessagesIndex() {
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2">
           {!composing && (
-            <button type="button" className={primaryButtonClass} onClick={() => setComposing(true)}>
+            <button type="button" className={goldButtonClass} onClick={() => setComposing(true)}>
               New message
             </button>
           )}
@@ -91,14 +95,7 @@ export function MessagesIndex() {
         </section>
       )}
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {feed.error && !feed.data && (
         <p role="alert" className="text-sm text-[var(--pyre-red)]">
           Couldn't load messages: {feed.error}
@@ -140,11 +137,11 @@ export function MessagesIndex() {
                 <p className="mt-1 line-clamp-2 text-sm text-white/60">{excerpt(m.body_md, 220)}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/40">
                   <span>{personName(m.author_email, people)}</span>
-                  <span title={formatStamp(m.created_at)}>{formatStamp(m.created_at)}</span>
+                  <span title={etStamp(m.created_at)}>{etStamp(m.created_at)}</span>
                   <span>
                     {m.reply_count === 0
                       ? 'no replies'
-                      : `${m.reply_count} ${m.reply_count === 1 ? 'reply' : 'replies'} · last ${formatStamp(m.last_activity_at)}`}
+                      : `${m.reply_count} ${m.reply_count === 1 ? 'reply' : 'replies'} · last ${etStamp(m.last_activity_at)}`}
                   </span>
                   {isAdmin && (
                     <span className="ml-auto">

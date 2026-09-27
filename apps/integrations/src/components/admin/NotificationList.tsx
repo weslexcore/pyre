@@ -5,6 +5,7 @@
 // it read or unread. Reading and dismissing are the parent's to persist —
 // this component only says which row was touched.
 
+import { etStamp } from '@/lib/client/format';
 import { timeAgo } from '@/lib/client/relativeTime';
 import type { StaffNotificationRow } from '@/lib/db';
 import {
@@ -13,7 +14,6 @@ import {
   isUnread,
   KIND_LABELS,
 } from '@/lib/notifications/types';
-import { formatStamp } from './messagesUi';
 import { useRowSwipe } from './useRowSwipe';
 
 const KIND_STYLE: Record<StaffNotificationRow['kind'], string> = {
@@ -142,10 +142,7 @@ function NotificationRow({
           </div>
           {n.body && !compact && <p className="mt-0.5 text-sm text-white/60">{n.body}</p>}
           {n.body && compact && <p className="mt-0.5 truncate text-xs text-white/50">{n.body}</p>}
-          <div
-            className="mt-1 font-mono text-[10px] text-white/30"
-            title={formatStamp(n.created_at)}
-          >
+          <div className="mt-1 font-mono text-[10px] text-white/30" title={etStamp(n.created_at)}>
             {timeAgo(n.created_at)}
           </div>
         </div>

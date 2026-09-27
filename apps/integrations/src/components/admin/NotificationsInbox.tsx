@@ -4,10 +4,12 @@
 // written through, and the header bell hears about the new count via the
 // NOTIFICATIONS_EVENT so it updates without a navigation.
 import { useMemo, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { readError } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type { StaffNotificationRow } from '@/lib/db';
 import { emitUnreadCount, isUnread, sortInbox } from '@/lib/notifications/types';
-import { buttonClass, readError } from './messagesUi';
+import { buttonClass } from './messagesUi';
 import { NotificationList } from './NotificationList';
 
 // The full inbox is the one reader that also asks for the dead-row sweep.
@@ -158,14 +160,7 @@ export function NotificationsInbox() {
         </div>
       </div>
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 text-sm text-[var(--pyre-red)]"
-        >
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       {feed.error && !feed.data && (
         <p role="alert" className="text-sm text-[var(--pyre-red)]">
           Couldn't load notifications: {feed.error}

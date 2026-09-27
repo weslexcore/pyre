@@ -6,6 +6,8 @@
 // front, and Reset link is the revoke when one leaks or a phone is lost.
 
 import { useEffect, useState } from 'react';
+import { confirmAction } from '@/components/admin/ConfirmDialog';
+import { buttonClass } from '@/components/admin/ui';
 
 interface FeedUrls {
   feedUrl: string;
@@ -14,9 +16,6 @@ interface FeedUrls {
   teamWebcalUrl: string | null;
   canManage: boolean;
 }
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 export function CalendarSubscribe() {
   const [urls, setUrls] = useState<FeedUrls | null>(null);
@@ -44,9 +43,12 @@ export function CalendarSubscribe() {
 
   const rotate = async () => {
     if (
-      !window.confirm(
-        'Reset your calendar link? Any calendar already subscribed to the old link stops updating, and you have to subscribe again with the new one.'
-      )
+      !(await confirmAction({
+        title: 'Reset your calendar link?',
+        body: 'Any calendar already subscribed to the old link stops updating, and you have to subscribe again with the new one.',
+        confirmLabel: 'Reset link',
+        danger: true,
+      }))
     ) {
       return;
     }

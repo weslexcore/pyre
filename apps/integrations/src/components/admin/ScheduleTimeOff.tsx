@@ -10,6 +10,8 @@ import {
   type TimeOffKind,
 } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { buttonClass, inputClass } from '@/components/admin/ui';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { StaffMultiSelect } from './StaffMultiSelect';
@@ -22,12 +24,6 @@ interface BoardData {
   canManage?: boolean;
   selfStaffId?: string | null;
 }
-
-const inputClass =
-  'px-3 py-2 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
-
-const buttonClass =
-  'px-3 py-1.5 rounded border border-white/10 bg-white/5 text-xs font-mono uppercase tracking-wide text-white/70 hover:border-white/30 hover:text-white transition-colors disabled:opacity-40';
 
 const pillClass = (active: boolean) =>
   `px-2.5 py-1.5 rounded text-xs font-mono uppercase tracking-wide border transition-colors ${
@@ -263,11 +259,7 @@ export function ScheduleTimeOff() {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <p className="rounded border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-red)]">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner mono>{error}</ErrorBanner>}
 
       {canManage && conflicts.length > 0 && (
         <section className="rounded-lg border border-[var(--pyre-red)]/40 bg-[var(--pyre-red)]/5 p-3">
