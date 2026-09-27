@@ -205,7 +205,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (since && Number.isNaN(Date.parse(since))) {
       return json({ error: 'since must be an ISO date-time' }, 400);
     }
-    const result = await loadSopDocument(db, viewer, { id, slug }, { since });
+    const result = await loadSopDocument(db, viewer, { id, slug }, { since, access: gate.access });
     if (!result.ok) return json({ error: result.error }, result.status);
     return json(result.doc);
   }

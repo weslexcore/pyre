@@ -23,7 +23,7 @@ let initialError: string | null = null;
 const db = getDb();
 if (db && access) {
   const viewer = { role: await getSopRole(email, access), email: normalizeEmail(email) };
-  const result = await loadSopDocument(db, viewer, { slug });
+  const result = await loadSopDocument(db, viewer, { slug }, { access });
   if (result.ok) {
     initial = result.doc;
     title = result.doc.sop.title;

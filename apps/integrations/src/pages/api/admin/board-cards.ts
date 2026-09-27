@@ -38,6 +38,7 @@ import { createCard, goalTitle, loadBoardFields } from '@/lib/boards/create-card
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvents } from '@/lib/boards/events';
 import { boardViewerExtras } from '@/lib/boards/people';
+import { loadBoardSops, sopsForViewer } from '@/lib/boards/sops';
 import { loadBoardBundle, loadCard, loadColumn, unattachedGoals } from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
@@ -51,10 +52,12 @@ import {
   dbError,
   isUuidParam,
   json,
+  sessionEmail,
   storeError,
 } from '@/lib/http/route';
 import { notifyCardAssigned, notifyCardCompleted } from '@/lib/notifications/goals';
 import { deleteBySource } from '@/lib/notifications/notify';
+import { getSopRole } from '@/lib/sops/role';
 
 export const GET: APIRoute = async ({ cookies, url }) => {
   const ready = await beginRead(cookies, BOARDS_HREF);
@@ -68,12 +71,20 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const bundle = await loadBoardBundle(ready.db, slug);
     if (!bundle) return json({ error: 'Board not found' }, 404);
     // A manager on a board with no goal is offered the goals nobody serves.
-    const extras = await boardViewerExtras(bundle.cards, ready.gate.access, slug);
+    const { access } = ready.gate;
+    const email = sessionEmail(ready.gate);
+    const [extras, linkedSops, role] = await Promise.all([
+      boardViewerExtras(bundle.cards, access, slug),
+      loadBoardSops(ready.db, bundle.board.id),
+      getSopRole(email, access),
+    ]);
+    // The SOPs linked to this board that this viewer may open (lib/boards/sops).
+    const sops = sopsForViewer(linkedSops, access, { role, email });
     const offered =
-      !bundle.goal && canManageBoards(ready.gate.access)
+      !bundle.goal && canManageBoards(access)
         ? { unattachedGoals: await unattachedGoals(ready.db) }
         : {};
-    return json({ ...bundle, ...extras, ...offered });
+    return json({ ...bundle, ...extras, ...offered, sops });
   } catch (e) {
     return storeError('board-cards', e);
   }

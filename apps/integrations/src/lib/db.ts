@@ -1133,6 +1133,15 @@ export interface BoardFormQuestion {
 }
 
 /** The one form a board puts in front of people. Mirrors the board_forms migration. */
+/** One SOP linked to one board (board_sops); many-to-many both ways. */
+export interface BoardSopRow {
+  board_id: string;
+  sop_id: string;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface BoardFormRow {
   id: string;
   board_id: string;

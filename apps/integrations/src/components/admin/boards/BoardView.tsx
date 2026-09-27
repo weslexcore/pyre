@@ -31,6 +31,7 @@ import { formBuilderHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
+import type { LinkedSop } from '@/lib/boards/sops';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type {
@@ -46,6 +47,7 @@ import { BackLink } from '../BackLink';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
 import { cardClass, inputBaseClass, QuietChip, selectBaseClass } from '../goalsUi';
+import { LinkedRow, linkedChipClass } from '../LinkedRow';
 import { pillClass } from '../scheduleUi';
 import { BoardCalendar, boardHasCalendar } from './BoardCalendar';
 import { BoardGoal } from './BoardGoal';
@@ -80,6 +82,8 @@ interface BundleResponse {
   canManage?: boolean;
   canWorkGoal?: boolean;
   today?: string;
+  /** The linked SOPs this viewer may open. */
+  sops?: LinkedSop[];
   error?: string;
 }
 
@@ -274,6 +278,7 @@ export function BoardView({ slug }: { slug: string }) {
     goal,
     kpis,
     unattachedGoals = [],
+    sops = [],
     people = {},
     owners = [],
     canManage = false,
@@ -416,8 +421,19 @@ export function BoardView({ slug }: { slug: string }) {
             onSaved={(result) =>
               setBundle((current) => (current ? { ...current, ...result } : current))
             }
+            onSopsSaved={() => void load()}
           />
         </div>
+      )}
+
+      {sops.length > 0 && (
+        <LinkedRow label={sops.length === 1 ? 'SOP' : 'SOPs'}>
+          {sops.map((sop) => (
+            <a key={sop.id} className={linkedChipClass} href={`/admin/sops/${sop.slug}`}>
+              {sop.title}
+            </a>
+          ))}
+        </LinkedRow>
       )}
 
       <BoardGoal

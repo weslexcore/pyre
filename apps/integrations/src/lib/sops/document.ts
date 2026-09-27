@@ -6,6 +6,8 @@
 // the first response instead of fetching the document and then the run.
 // Server-only.
 
+import type { PageAccess } from '@/components/admin/adminTools';
+import { type LinkedBoard, loadSopBoards } from '@/lib/boards/sops';
 import type { getDb, SopRow } from '@/lib/db';
 import { countTasks } from './checklist';
 import {
@@ -38,6 +40,8 @@ export interface SopDocumentPayload {
   run: SopRunState | null;
   /** Progress of the checklists this document links to, by slug (empty for prose). */
   linked: LinkedProgressMap;
+  /** The boards this document is linked to that the reader may open. */
+  boards: LinkedBoard[];
   /** Every section name, in library order — admins only (they alone refile). */
   categories?: string[];
   /** Roster an admin can grant this document to; admins only. */
@@ -88,6 +92,8 @@ export async function loadSopDocument(
     /** ISO time: with no run open, show the newest one completed since then
      * (the peek modal passes the parent run's start). */
     since?: string | null;
+    /** The reader's page grants, which decide the linked boards they are shown. */
+    access?: PageAccess;
   } = {}
 ): Promise<LoadDocumentResult> {
   const { sop, error } = await loadSop(db, ref);
@@ -101,17 +107,24 @@ export async function loadSopDocument(
   // The settings panel is admin-only and lets the document be refiled and
   // re-granted, so only admins need the sections and the roster to choose
   // from — the roster especially, since it's the whole staff address book.
-  const [runResult, ranks, used, staff] = await Promise.all([
+  const [runResult, ranks, used, staff, boards] = await Promise.all([
     taskCount > 0
       ? loadRunState(db, sop, { since: opts.since })
       : Promise.resolve({ state: null, error: null }),
     isAdmin ? db.from('sop_categories').select('name, sort_order') : Promise.resolve(null),
     isAdmin ? db.from('sops').select('category') : Promise.resolve(null),
     isAdmin ? listGrantablePeople() : Promise.resolve(undefined),
+    opts.access
+      ? loadSopBoards(db, sop.id, opts.access).then(
+          (list) => ({ list, error: null }),
+          (e: unknown) => ({ list: [] as LinkedBoard[], error: String(e) })
+        )
+      : Promise.resolve({ list: [] as LinkedBoard[], error: null }),
   ]);
   if (runResult.error) return { ok: false, status: 500, error: runResult.error };
   if (ranks?.error) return { ok: false, status: 500, error: ranks.error.message };
   if (used?.error) return { ok: false, status: 500, error: used.error.message };
+  if (boards.error) return { ok: false, status: 500, error: boards.error };
 
   const categories =
     ranks && used
@@ -149,6 +162,7 @@ export async function loadSopDocument(
       taskCount,
       run,
       linked: linkedResult.linked,
+      boards: boards.list,
       categories,
       staff,
       people,

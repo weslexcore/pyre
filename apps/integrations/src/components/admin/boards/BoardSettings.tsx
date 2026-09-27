@@ -9,6 +9,9 @@
 // the server decides whether the row can actually go. A new column's key is
 // minted from its first label and kept through edits.
 //
+// The SOPs linked to the board sit under the form (BoardSopLinks), saved
+// on their own as each is linked or removed.
+//
 // The goal is not here: it is edited where it is shown, at the top of the
 // board (BoardGoal).
 //
@@ -49,6 +52,7 @@ import {
   SectionTitle,
   selectBaseClass,
 } from '../goalsUi';
+import { BoardSopLinks } from './BoardSopLinks';
 import { ColumnOrder } from './ColumnOrder';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -94,6 +98,7 @@ export function BoardSettings({
   cardCount,
   busy = false,
   onSaved,
+  onSopsSaved,
   ref,
 }: {
   board: BoardRow;
@@ -103,6 +108,8 @@ export function BoardSettings({
   cardCount: number;
   busy?: boolean;
   onSaved: (result: BoardSettingsResult) => void;
+  /** The linked SOPs changed; the board refetches what its viewer may see. */
+  onSopsSaved: () => void;
   ref?: Ref<BoardSettingsHandle>;
 }) {
   const [name, setName] = useState(board.name);
@@ -558,6 +565,8 @@ export function BoardSettings({
           Open the form builder
         </a>
       </div>
+
+      <BoardSopLinks slug={board.slug} onSaved={onSopsSaved} />
 
       {(error || autosave.error) && (
         <p role="alert" className="mt-3 text-sm text-[var(--pyre-red)]">

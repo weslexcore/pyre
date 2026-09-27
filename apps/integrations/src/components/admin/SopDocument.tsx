@@ -35,6 +35,7 @@ import type { CheckItems } from '@/lib/sops/optimistic';
 import { MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
 import { BackLink } from './BackLink';
 import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
+import { LinkedRow, linkedChipClass } from './LinkedRow';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
@@ -399,6 +400,16 @@ export function SopDocument({
           )}
         </span>
       </div>
+
+      {data.boards.length > 0 && (
+        <LinkedRow label={data.boards.length === 1 ? 'Board' : 'Boards'}>
+          {data.boards.map((board) => (
+            <a key={board.slug} className={linkedChipClass} href={`/admin/boards/${board.slug}`}>
+              {board.name}
+            </a>
+          ))}
+        </LinkedRow>
+      )}
 
       {sop.archived && (
         <p className="rounded border border-white/20 bg-white/5 px-3 py-2 font-mono text-xs uppercase tracking-wide text-white/60">
