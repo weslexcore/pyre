@@ -1,0 +1,191 @@
+---
+// Pull-to-refresh for every page: at the top of the page, drag down and let
+// go past the threshold and the page reloads from the server, so what is on
+// screen is always the latest. The installed admin app runs standalone with
+// no browser chrome — and so no native pull-to-refresh or reload button —
+// which is what this is for; styles/admin.css switches the browser's own
+// version off so the two never both fire in a mobile browser tab.
+//
+// A full reload rather than a ClientRouter navigation on purpose: it drops
+// the islands' in-memory cache (lib/client/cachedJson) along with the
+// server-rendered badges, so nothing stale can paint first. The arithmetic
+// lives in lib/client/pullToRefresh; this owns the touch plumbing and the
+// indicator.
+---
+
+<div
+  id="pull-to-refresh"
+  aria-hidden="true"
+  class="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center"
+  style="transform: translateY(-100%); opacity: 0"
+>
+  <div
+    class="mt-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[var(--pyre-black)] text-[var(--pyre-gold)] shadow-lg"
+  >
+    <svg
+      data-ptr-icon
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path>
+      <path d="M21 3v5h-5"></path>
+    </svg>
+  </div>
+</div>
+
+<script>
+  import {
+    PULL_THRESHOLD,
+    pullClaim,
+    pullDistance,
+    pullProgress,
+    pullShouldRefresh,
+  } from '@/lib/client/pullToRefresh';
+
+  // A dnd-kit card (boards) is picked up by holding it still for 220ms
+  // (components/admin/boards/dnd.tsx). A pull that only starts moving after
+  // a hold like that is a card being carried, not a refresh.
+  const DRAGGABLE = '[aria-roledescription="draggable"], [aria-roledescription="sortable"]';
+  const DRAG_HOLD_MS = 200;
+
+  /**
+   * Whether a touch landing on `target` must be left alone: anything inside
+   * an overlay (the nav, search, a drawer — all position: fixed, with their
+   * own scrolling and gestures), anything inside a scroller that is not at
+   * its top (pulling there scrolls it back up), or anything opted out.
+   */
+  function blocked(target: EventTarget | null): boolean {
+    let el = target instanceof Element ? target : null;
+    while (el && el !== document.documentElement && el !== document.body) {
+      if (el.hasAttribute('data-no-pull-refresh')) return true;
+      const style = getComputedStyle(el);
+      if (style.position === 'fixed') return true;
+      if (/(auto|scroll)/.test(style.overflowY) && el.scrollTop > 0) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  type Gesture = {
+    x: number;
+    y: number;
+    t: number;
+    inDraggable: boolean;
+    claim: 'wait' | 'pull' | 'scroll';
+    distance: number;
+  };
+
+  let gesture: Gesture | null = null;
+  let refreshing = false;
+  let spin: Animation | null = null;
+
+  // Looked up per gesture: the ClientRouter swaps <body> on every
+  // navigation, so the indicator is a new element on each page.
+  function indicator() {
+    const root = document.getElementById('pull-to-refresh');
+    const icon = root?.querySelector<SVGElement>('[data-ptr-icon]') ?? null;
+    return root && icon ? { root, icon } : null;
+  }
+
+  function paint(distance: number, animate: boolean) {
+    const ui = indicator();
+    if (!ui) return;
+    const progress = pullProgress(distance);
+    ui.root.style.transition = animate ? 'transform 200ms ease-out, opacity 200ms ease-out' : 'none';
+    ui.root.style.transform =
+      distance > 0 ? `translateY(${distance - 44}px)` : 'translateY(-100%)';
+    ui.root.style.opacity = distance > 0 ? String(Math.min(1, 0.3 + progress)) : '0';
+    ui.icon.style.transform = `rotate(${progress * 270}deg)`;
+    ui.icon.style.opacity = progress >= 1 ? '1' : '0.6';
+  }
+
+  function refresh() {
+    refreshing = true;
+    paint(PULL_THRESHOLD, true);
+    const ui = indicator();
+    spin = ui?.icon.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], {
+      duration: 700,
+      iterations: Number.POSITIVE_INFINITY,
+    }) ?? null;
+    window.location.reload();
+  }
+
+  document.addEventListener(
+    'touchstart',
+    (event) => {
+      gesture = null;
+      if (refreshing || event.touches.length !== 1 || window.scrollY > 0) return;
+      if (blocked(event.target)) return;
+      const touch = event.touches[0];
+      gesture = {
+        x: touch.clientX,
+        y: touch.clientY,
+        t: event.timeStamp,
+        inDraggable: event.target instanceof Element && !!event.target.closest(DRAGGABLE),
+        claim: 'wait',
+        distance: 0,
+      };
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    'touchmove',
+    (event) => {
+      if (!gesture || gesture.claim === 'scroll') return;
+      // Another gesture (a sheet's swipe-to-close, a card drag) got here
+      // first and claimed this touch.
+      if (event.defaultPrevented || event.touches.length !== 1) {
+        if (gesture.claim === 'pull') paint(0, true);
+        gesture.claim = 'scroll';
+        return;
+      }
+      const touch = event.touches[0];
+      const dy = touch.clientY - gesture.y;
+      if (gesture.claim === 'wait') {
+        let claim = pullClaim(touch.clientX - gesture.x, dy, window.scrollY);
+        if (claim === 'pull' && gesture.inDraggable && event.timeStamp - gesture.t >= DRAG_HOLD_MS) {
+          claim = 'scroll';
+        }
+        gesture.claim = claim;
+        if (claim !== 'pull') return;
+      }
+      // Ours now: keep the page from scrolling or bouncing under the finger.
+      if (event.cancelable) event.preventDefault();
+      gesture.distance = pullDistance(dy);
+      paint(gesture.distance, false);
+    },
+    { passive: false }
+  );
+
+  function end() {
+    const done = gesture;
+    gesture = null;
+    if (!done || done.claim !== 'pull') return;
+    if (pullShouldRefresh(done.distance)) refresh();
+    else paint(0, true);
+  }
+
+  document.addEventListener('touchend', end, { passive: true });
+  document.addEventListener('touchcancel', () => {
+    if (gesture?.claim === 'pull') paint(0, true);
+    gesture = null;
+  });
+
+  // Coming back to a page from the back/forward cache: the reload never
+  // happened on that copy, so put the indicator away and allow pulling again.
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    refreshing = false;
+    spin?.cancel();
+    spin = null;
+    paint(0, false);
+  });
+</script>
