@@ -1263,8 +1263,6 @@ export function ScheduleBoard() {
                 <p className="font-mono text-xs text-white/50">
                   When someone added to a shift starts and finishes by default, counted from the
                   shift's first and last session (manual shifts use their own start and end).
-                  Changing these only affects people added from now on — hours already on the
-                  schedule stay as they are.
                 </p>
                 <MinutesSetting
                   label="Arrive before the first session"
@@ -1299,10 +1297,7 @@ export function ScheduleBoard() {
                   Standing instructions for the AI drafter
                 </p>
                 <p className="font-mono text-xs text-white/50">
-                  The requirements that hold every week — they go into every draft the agent makes,
-                  including the Monday cron run. The note you type when you hit Draft is for that
-                  run only, and wins where the two disagree. Availability and staffing limits still
-                  beat both.
+                  The requirements that hold every week — they go into every draft the agent makes.
                 </p>
                 <textarea
                   id="standing-instructions"
@@ -2447,7 +2442,7 @@ function ShiftDetail({
             Add person{' '}
             <span className="normal-case tracking-normal text-white/30">
               · on {formatCompactTime(defaultWindow.startsAt)}–
-              {formatCompactTime(defaultWindow.endsAt)}, change after adding
+              {formatCompactTime(defaultWindow.endsAt)}
             </span>
           </p>
           <div className="flex flex-wrap gap-2">
@@ -2534,7 +2529,7 @@ function ShiftDetail({
             <button
               type="button"
               className={buttonClass}
-              title="Change anyone's hours or duties (changes save as you make them), or add people to this shift"
+              title="Change anyone's hours or duties or add people to this shift"
               onClick={onToggleEditMode}
             >
               Edit
@@ -2804,16 +2799,6 @@ function AssignmentEditor({
           ))}
         </div>
       ))}
-      <p className="font-mono text-[10px] text-white/35">
-        Taking a half fills in its pair and that side's usual in-session duty (set on the Duties
-        tab). Change any of it.
-      </p>
-      {mismatches.length > 0 && (
-        <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
-          ⚠ {mismatches.map(([setup]) => pairingAdvice(dutyCatalog, setup)).join('; ')} — whoever
-          set a side up is the one who knows its state at close.
-        </p>
-      )}
       <p
         className={`font-mono text-[10px] ${
           status.state === 'error' || status.state === 'invalid'
@@ -2831,8 +2816,8 @@ function AssignmentEditor({
               : status.state === 'invalid'
                 ? status.message
                 : assignment.is_draft
-                  ? 'Changes save automatically — changing this AI draft accepts it onto the live schedule.'
-                  : 'Changes save automatically.'}
+                  ? 'Changing this AI draft accepts it onto the live schedule.'
+                  : ''}
       </p>
     </div>
   );
