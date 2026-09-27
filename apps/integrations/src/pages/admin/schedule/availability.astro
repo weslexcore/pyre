@@ -1,16 +1,23 @@
 ---
-// Availability finder: intersect selected people's availability (time off +
-// existing assignments) across a date range, then turn a chosen day into a
-// shift with everyone assigned.
-import { ScheduleAvailability } from '@/components/admin/ScheduleAvailability';
+// Availability: when each person wants to work (shift preferences — shifts
+// per week and notes in their own words) and when they can't (time off:
+// trips and recurring weekly unavailability). Time off auto-approves;
+// conflicts with existing assignments are flagged, never auto-fixed.
+import { hasScheduleManage } from '@/components/admin/adminTools';
 import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import { ScheduleTimeOff } from '@/components/admin/ScheduleTimeOff';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const access = Astro.locals.adminAccess ?? null;
+const canManage = !!access && hasScheduleManage(access);
 ---
 
 <AdminLayout
   title="Availability"
-  subtitle="Pick people and a time window — find the dates everyone can work, then turn one into a shift."
+  subtitle={canManage
+    ? "Everyone's shift preferences and time off. Trips use dates; standing patterns use weekly days. No times = whole day."
+    : "How many shifts you want and when you can't work. Trips use dates; standing patterns use weekly days. No times = whole day. Log time off as far ahead as you like — it shapes the schedule before it's set in stone."}
 >
   <ScheduleTabs current="/admin/schedule/availability" />
-  <ScheduleAvailability client:load />
+  <ScheduleTimeOff client:load />
 </AdminLayout>

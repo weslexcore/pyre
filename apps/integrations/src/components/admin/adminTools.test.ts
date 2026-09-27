@@ -113,7 +113,7 @@ describe('global tool visibility', () => {
           (page) => page.href === '/admin/schedule' || page.href.startsWith('/admin/schedule/')
         )
       ).toBe(false);
-      expect(canViewPath(access, '/admin/schedule/hours')).toBe(true);
+      expect(canViewPath(access, '/admin/schedule/timesheet')).toBe(true);
     }
   );
 

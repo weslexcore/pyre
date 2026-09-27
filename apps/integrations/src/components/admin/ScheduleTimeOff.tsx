@@ -1,7 +1,9 @@
-// Time-off management (the sheet's "Blackouts"): recurring weekly rules and
-// trip date-ranges, both optionally time-bounded. Entries auto-approve; the
-// panel at the top surfaces any that collide with existing assignments over
-// the coming weeks so the admin can re-staff.
+// The Availability tab: shift preferences (ScheduleShiftPrefs — own row, or
+// everyone's on the manage side) above time-off management (the sheet's
+// "Blackouts"): recurring weekly rules and trip date-ranges, both optionally
+// time-bounded. Entries auto-approve; the panel at the top surfaces any that
+// collide with existing assignments over the coming weeks so the admin can
+// re-staff.
 
 import {
   addDays,
@@ -14,6 +16,7 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, inputClass } from '@/components/admin/ui';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
+import { ScheduleShiftPrefs } from './ScheduleShiftPrefs';
 import { StaffMultiSelect } from './StaffMultiSelect';
 
 interface BoardData {
@@ -203,7 +206,7 @@ export function ScheduleTimeOff() {
       }
     } else {
       // Time off rides along in the schedule-board payload the Calendar and
-      // Hours tabs cache, so their entries have to go with it.
+      // Timesheet tabs cache, so their entries have to go with it.
       invalidateJson('/api/admin/schedule-board');
       resetForm();
       await load();
@@ -287,9 +290,18 @@ export function ScheduleTimeOff() {
 
       {!canManage && !selfId && (
         <p className="rounded border border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-gold)]">
-          Your login isn't linked to a roster entry yet, so you can't add blackout dates — ask an
-          admin to set your Momence email on the roster.
+          Your login isn't linked to a roster entry yet, so you can't set shift preferences or add
+          time off — ask an admin to set your Momence email on the roster.
         </p>
+      )}
+
+      {data && (
+        <ScheduleShiftPrefs
+          staff={data.staff}
+          canManage={canManage}
+          selfId={selfId}
+          onSaved={() => void load()}
+        />
       )}
 
       {(canManage || selfId) && (

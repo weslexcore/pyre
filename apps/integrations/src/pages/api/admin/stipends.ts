@@ -1,6 +1,6 @@
 // Stipend management: recurring weekly stipend hours (staff_stipends, edited
 // next to pay rates on /admin/users) and their per-week overrides
-// (stipend_overrides, adjusted on /admin/schedule/hours).
+// (stipend_overrides, adjusted on /admin/schedule/timesheet).
 // Admin-only on every method — a stipend is a pay commitment, so it's gated
 // like pay rates, not like schedule managing. CSRF-guarded like users.ts.
 //

@@ -25,13 +25,13 @@ describe('searchablePages', () => {
     const hrefs = pages.map((page) => page.href);
     expect(hrefs[0]).toBe('/admin');
     expect(hrefs).toContain('/admin/water');
-    expect(hrefs).toContain('/admin/schedule/hours');
+    expect(hrefs).toContain('/admin/schedule/timesheet');
     expect(hrefs).toContain('/admin/sops/runs');
     expect(hrefs).toContain('/admin/ask/log');
     expect(hrefs).toContain('/admin/campaigns/new');
     expect(hrefs).toContain('/admin/campaigns/performance');
     expect(hrefs).toContain('/admin/campaigns/shortlinks');
-    expect(pages.find((page) => page.href === '/admin/schedule/hours')?.hint).toBe(
+    expect(pages.find((page) => page.href === '/admin/schedule/timesheet')?.hint).toBe(
       'Staff Schedule'
     );
   });
@@ -43,7 +43,7 @@ describe('searchablePages', () => {
 
     const schedule = ADMIN_TOOLS.filter((tool) => tool.href === '/admin/schedule');
     const staffHrefs = searchablePages(schedule, false).map((page) => page.href);
-    expect(staffHrefs).toContain('/admin/schedule/hours');
+    expect(staffHrefs).toContain('/admin/schedule/timesheet');
     expect(staffHrefs).not.toContain('/admin/schedule/insights');
   });
 });

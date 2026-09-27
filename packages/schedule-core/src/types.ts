@@ -51,7 +51,7 @@ export interface StaffRow {
 	pay_rate: number | null;
 	/**
 	 * Desired scheduled hours per week; null = no target set. Set on the
-	 * schedule's Hours tab by the person or a schedule manager, and redacted
+	 * schedule's Availability tab by the person or a schedule manager, and redacted
 	 * (nulled) for viewers who are neither a schedule manager nor the owner.
 	 */
 	target_hours_per_week: number | null;

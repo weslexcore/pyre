@@ -2,7 +2,7 @@
 // (admin, founder, shift lead, available to schedule), and dashboard access
 // (per-page grants). Each person is a one-line summary that expands into an
 // editor, one at a time. Scheduling preferences (hours target, shifts per
-// week) live on the schedule's Hours tab, not here. The API enforces the real
+// week) live on the schedule's Availability tab, not here. The API enforces the real
 // guards (admin-only, last-admin/self protection, access needs an email);
 // this island just mirrors them in the UI.
 import { weekStartOf } from '@pyre/schedule-core';
@@ -661,7 +661,7 @@ export function UsersManager() {
       }
     }
     // Staff rows ride along in the schedule-board payload that the Calendar
-    // and Hours tabs cache, so every roster edit drops their entries too.
+    // and Timesheet tabs cache, so every roster edit drops their entries too.
     invalidateJson('/api/admin/schedule-board');
     await load();
     setBusy(false);
@@ -1035,10 +1035,10 @@ export function UsersManager() {
                     <p className="font-mono text-xs text-white/40">
                       Shift preferences (hours target, shifts per week) are set on{' '}
                       <a
-                        href="/admin/schedule/hours"
+                        href="/admin/schedule/availability"
                         className="underline decoration-white/20 hover:text-white"
                       >
-                        Schedule → Hours
+                        Schedule → Availability
                       </a>
                       .
                     </p>

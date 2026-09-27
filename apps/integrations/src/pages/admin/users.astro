@@ -1,6 +1,6 @@
 ---
 // People: pay, roles, and dashboard access in one list (shift preferences
-// live on /admin/schedule/hours). Admin-only
+// live on /admin/schedule/availability). Admin-only
 // (canViewPath never grants /admin/users to non-admins); the /api/admin/users
 // routes re-check requireAdmin on every request — this page gate is UX, the
 // API gate is the security boundary.
@@ -10,7 +10,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 
 <AdminLayout
   title="People"
-  subtitle="Pay, roles, and page access for everyone at Pyre. Emails must match the person's Momence login, since that's how they sign in. Shift preferences are on Schedule → Hours."
+  subtitle="Pay, roles, and page access for everyone at Pyre. Emails must match the person's Momence login, since that's how they sign in. Shift preferences are on Schedule → Availability."
 >
   <UsersManager client:load />
 </AdminLayout>

@@ -1,5 +1,5 @@
 // A person's scheduling preferences: the h/wk target, the shifts-per-week
-// range (min / preferred / max), and free-text notes on their staff row. Edited from the Hours tab
+// range (min / preferred / max), and free-text notes on their staff row. Edited from the Availability tab
 // (/api/admin/staff-preferences) by the person themselves or by a schedule
 // manager. Parsing lives here so the rules are the same wherever they're set.
 

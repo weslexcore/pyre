@@ -1,0 +1,22 @@
+---
+// Find a Time: intersect selected people's availability (time off +
+// existing assignments) across a date range, then turn a chosen day into a
+// shift with everyone assigned. Only for people who schedule — everyone else
+// is bounced to their own Availability tab (UX; the shift routes'
+// requireScheduleManage is the security boundary).
+import { hasScheduleManage } from '@/components/admin/adminTools';
+import { ScheduleFindTime } from '@/components/admin/ScheduleFindTime';
+import ScheduleTabs from '@/components/admin/ScheduleTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const access = Astro.locals.adminAccess ?? null;
+if (!access || !hasScheduleManage(access)) return Astro.redirect('/admin/schedule/availability');
+---
+
+<AdminLayout
+  title="Find a Time"
+  subtitle="Pick people and a time window — find the dates everyone can work, then turn one into a shift."
+>
+  <ScheduleTabs current="/admin/schedule/find-a-time" />
+  <ScheduleFindTime client:load />
+</AdminLayout>

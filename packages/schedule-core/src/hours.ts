@@ -1,4 +1,4 @@
-// Hours rollup for the /admin/schedule/hours report — per-person hours by
+// Hours rollup for the /admin/schedule/timesheet report — per-person hours by
 // date and by week, plus the sheet's "% founders" coverage metric. Weeks run
 // Monday–Sunday. Pure functions, pinned down in hours.test.ts.
 

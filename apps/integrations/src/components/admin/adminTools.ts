@@ -484,18 +484,30 @@ interface AdminSubpage {
 const ADMIN_SUBPAGES: AdminSubpage[] = [
   { href: '/admin/schedule/calendar', title: 'Calendar', parent: '/admin/schedule' },
   {
-    href: '/admin/schedule/hours',
-    title: 'Hours',
+    href: '/admin/schedule/timesheet',
+    title: 'Timesheet',
     parent: '/admin/schedule',
-    keywords: ['pay', 'timesheet', 'hours worked'],
+    keywords: ['pay', 'hours', 'hours worked', 'payroll'],
   },
   {
-    href: '/admin/schedule/time-off',
-    title: 'Time Off',
+    href: '/admin/schedule/availability',
+    title: 'Availability',
     parent: '/admin/schedule',
-    keywords: ['vacation', 'pto', 'unavailable'],
+    keywords: [
+      'time off',
+      'vacation',
+      'pto',
+      'unavailable',
+      'shift preferences',
+      'shifts per week',
+    ],
   },
-  { href: '/admin/schedule/availability', title: 'Availability', parent: '/admin/schedule' },
+  {
+    href: '/admin/schedule/find-a-time',
+    title: 'Find a Time',
+    parent: '/admin/schedule',
+    keywords: ['everyone available', 'group shift', 'common availability'],
+  },
   {
     href: '/admin/schedule/duties',
     title: 'Shift Duties',

@@ -1,5 +1,5 @@
 // Time-off entries (trip ranges + recurring weekly patterns) for
-// /admin/schedule/time-off. Entries auto-approve — there is no status
+// /admin/schedule/availability. Entries auto-approve — there is no status
 // workflow; conflicts with existing assignments are surfaced by the UI, not
 // blocked here. Managers (schedule:manage / admins) work on anyone's entries;
 // everyone else with the schedule page manages only their own — "own" means

@@ -1,4 +1,4 @@
-// Scheduling preferences for /admin/schedule/hours: a person's h/wk target and
+// Scheduling preferences for /admin/schedule/availability: a person's h/wk target and
 // shifts-per-week range (min / preferred / max), which the AI drafter plans
 // around. Managers (schedule:manage / admins) edit anyone's; everyone else
 // with the schedule page edits only their own — "own" means the staff row

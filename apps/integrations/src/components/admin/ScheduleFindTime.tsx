@@ -1,4 +1,4 @@
-// Availability finder for /admin/schedule/availability: pick people and a
+// Find a Time (/admin/schedule/find-a-time): pick people and a
 // time window, scan a date range for the days everyone can work — treating
 // both time off and existing shift assignments as busy — and turn a chosen
 // day into a real shift with everyone assigned. All computation happens here
@@ -119,7 +119,7 @@ interface CreateFormState {
   notes: string;
 }
 
-export function ScheduleAvailability() {
+export function ScheduleFindTime() {
   const today = todayLocal();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [startTime, setStartTime] = useState('14:30');

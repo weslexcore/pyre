@@ -1,8 +1,8 @@
-// Scheduling preferences on the Hours tab: each person's h/wk target,
+// Scheduling preferences on the Availability tab: each person's h/wk target,
 // shifts-per-week range (min / preferred / max), and free-text notes in their
 // own words ("1-2 mornings a month"), which the AI drafter plans around. Managers get a table of everyone on the roster; everyone else gets
 // a card for their own row. Rows come from the schedule-board payload the
-// Hours tab already loads. Edits save themselves: a row goes to
+// Availability tab already loads. Edits save themselves: a row goes to
 // /api/admin/staff-preferences shortly after the last keystroke, or as soon as
 // the field loses focus.
 
@@ -197,7 +197,7 @@ export function ScheduleShiftPrefs({
       });
       next = res.ok ? { state: 'saved' } : { state: 'error', message: await readError(res) };
       if (res.ok) {
-        // The board and the Calendar/Hours tabs all read staff rows from the
+        // The board and the Calendar/Timesheet tabs all read staff rows from the
         // cached schedule-board payload.
         invalidateJson('/api/admin/schedule-board');
         onSaved();

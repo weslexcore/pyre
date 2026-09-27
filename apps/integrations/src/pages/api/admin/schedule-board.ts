@@ -271,8 +271,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   const stipendIds = new Set(stipends.map((s) => s.id));
 
   // Pay rate is admin-only. Scheduling preferences (target hours, shifts per
-  // week) are what a manager plans around and edits on the Hours tab, so the
-  // manage side sees everyone's; employees see only their own.
+  // week) are what a manager plans around and edits on the Availability tab,
+  // so the manage side sees everyone's; employees see only their own.
   const redactPay = (s: StaffRow): StaffRow => {
     if (s.id === selfStaffId) return s;
     const out = gate.access.isAdmin ? s : { ...s, pay_rate: null };

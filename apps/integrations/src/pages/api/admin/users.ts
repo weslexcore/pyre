@@ -2,8 +2,8 @@
 // rows — one row per person, covering both dashboard access (is_admin, pages)
 // and the scheduling roster (display_name, is_founder, active), plus pay rate.
 // Admin-only on every method, CSRF-guarded on mutations. Scheduling
-// preferences (target hours, shifts per week) are set from the Hours tab via
-// /api/admin/staff-preferences instead.
+// preferences (target hours, shifts per week) are set from the Availability
+// tab via /api/admin/staff-preferences instead.
 //
 // Guards: an admin can't demote, unlink, or delete themselves; the last admin
 // row can't be demoted or deleted; and access can't be granted to a row with
