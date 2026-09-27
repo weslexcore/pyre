@@ -22,6 +22,7 @@ import { NotificationBell } from '@/components/admin/NotificationBell';
 import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
 import Favicon from '@/components/Favicon.astro';
 import PullToRefresh from '@/components/PullToRefresh.astro';
+import PyreMark from '@/components/PyreMark.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { getUnreadCount } from '@/lib/notifications/unread';
 import { getSetting } from '@/lib/settings/store';
@@ -129,9 +130,10 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               <a
                 href="/admin"
                 data-astro-prefetch
-                class="shrink-0 font-mono text-sm font-bold uppercase tracking-wide text-[var(--pyre-creme)] hover:text-white"
+                aria-label="Pyre Admin home"
+                class="shrink-0 opacity-90 transition-opacity hover:opacity-100"
               >
-                Pyre Admin
+                <PyreMark class="h-7" />
               </a>
               <div class="flex items-center gap-2">
                 {canAddShiftNote && <QuickShiftNote client:load />}

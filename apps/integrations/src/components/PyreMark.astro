@@ -1,0 +1,18 @@
+---
+// The Pyre wave mark, inlined and filled in the same color as the favicon
+// (gold, or sage on staging). Size it with a height class; the SVG keeps its
+// aspect ratio.
+import pyreLogo from '@/assets/pyre_logo.svg?raw';
+import { MARK_COLOR } from '@/lib/brandMark';
+
+interface Props {
+  class?: string;
+}
+const { class: className = 'h-6' } = Astro.props;
+
+const svg = pyreLogo
+  .replace(/<\?xml[^>]*\?>\s*/, '')
+  .replace(/<svg /, `<svg class="${className} w-auto" aria-hidden="true" focusable="false" `);
+---
+
+<span class="inline-flex" style={`color: ${MARK_COLOR}`} set:html={svg} />

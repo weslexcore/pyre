@@ -10,16 +10,14 @@
 //
 // Deployments of the staging branch swap the browser-tab favicon to brand
 // sage (favicon-staging.png is the same mark recolored) so a staging tab is
-// easy to tell apart from production at a glance. Install icons stay gold.
+// easy to tell apart from production at a glance (lib/brandMark, shared with
+// the header logo). Install icons stay gold.
 import pyreLogo from '@/assets/pyre_logo.svg?raw';
+import { isStagingDeploy, MARK_COLOR } from '@/lib/brandMark';
 
-const gold = '#dbb155'; // --pyre-gold in styles/admin.css
 const black = '#23221c'; // --pyre-black in styles/admin.css
-const sage = '#839770'; // --pyre-sage in styles/admin.css
-const isStaging = import.meta.env.VERCEL_GIT_COMMIT_REF === 'staging';
-const markColor = isStaging ? sage : gold;
-const pngHref = isStaging ? '/favicon-staging.png' : '/favicon.png';
-const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, markColor))}`;
+const pngHref = isStagingDeploy ? '/favicon-staging.png' : '/favicon.png';
+const svgHref = `data:image/svg+xml,${encodeURIComponent(pyreLogo.replace(/currentColor/g, MARK_COLOR))}`;
 ---
 
 <link rel="icon" type="image/png" sizes="32x32" href={pngHref} />
