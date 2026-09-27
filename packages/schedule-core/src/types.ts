@@ -64,6 +64,12 @@ export interface StaffRow {
 	min_shifts_per_week: number | null;
 	preferred_shifts_per_week: number | null;
 	max_shifts_per_week: number | null;
+	/**
+	 * Scheduling preferences in the person's own words ("1-2 mornings a
+	 * month"); null = none. A soft preference for the AI drafter. Set and
+	 * redacted like target_hours_per_week.
+	 */
+	scheduling_notes: string | null;
 	created_at: string;
 	updated_at: string;
 }

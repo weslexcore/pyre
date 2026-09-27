@@ -35,8 +35,9 @@ export function buildDraftMessage(weekStart: string, prompt = ''): string {
     'Fill only shifts that are still below their staffNeeded count — leave fully staffed ' +
     "shifts untouched, and never add more people than a shift's remaining need. " +
     'Apply every scheduling rule in your instructions — shift-lead coverage, weekly hour ' +
-    'targets, shifts-per-week preferences (never past anyone’s maximum), and pending shift ' +
-    'requests included — and propose duties for every assignment you draft. ' +
+    'targets, shifts-per-week preferences (never past anyone’s maximum), each person’s own ' +
+    'scheduling notes, and pending shift requests included — and propose duties for every ' +
+    'assignment you draft. ' +
     'Any previous draft for that week is superseded automatically.';
 
   if (!prompt) return base;

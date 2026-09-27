@@ -1,5 +1,6 @@
 // The scheduler's entire world view, pre-computed: roster (with lead flags,
-// weekly hour targets and shifts-per-week preferences), the target week's shifts (coverage windows
+// weekly hour targets, shifts-per-week preferences, free-text scheduling
+// notes, and each person's shifts so far this month), the target week's shifts (coverage windows
 // already synced from Momence by the integrations cron), accepted
 // assignments, pending shift requests, per-person availability for every
 // shift, recent weekly hours and shift counts, and history patterns
@@ -39,7 +40,7 @@ const HISTORY_WEEKS = 8;
 
 export const getWeekContextTool = defineTool({
   description:
-    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags, weekly hour targets and min/preferred/max shifts per week), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours and shift counts, history patterns (including the duties each person usually holds), and the duty list (the only keys save_proposal accepts in `duties`). Call this first, before save_proposal.',
+    'Load everything needed to draft one week of the staffing schedule: roster (with lead flags, weekly hour targets, min/preferred/max shifts per week, each person\'s own scheduling notes, and their shifts so far this month), shifts (coverage windows), accepted assignments, pending shift requests, availability per person per shift, recent weekly hours and shift counts, history patterns (including the duties each person usually holds), and the duty list (the only keys save_proposal accepts in `duties`). Call this first, before save_proposal.',
   inputSchema: z.object({
     weekStart: z
       .string()
@@ -217,6 +218,23 @@ export const getWeekContextTool = defineTool({
       })),
     }));
 
+    // Each person's live shifts from the 1st of the week's month up to the
+    // week, so notes that speak in months ("1-2 mornings a month") can be
+    // counted. The history window (8 weeks) always reaches back that far.
+    const monthStart = `${weekStart.slice(0, 7)}-01`;
+    const shiftsThisMonth = (staffId: string) =>
+      historyAssignments
+        .filter((a) => a.staff_id === staffId)
+        .map((a) => ({ a, shift: shiftById.get(a.shift_id) as ShiftRow }))
+        .filter(({ shift }) => shift.shift_date >= monthStart && shift.status === 'active')
+        .sort((x, y) => x.shift.shift_date.localeCompare(y.shift.shift_date))
+        .map(({ a, shift }) => ({
+          date: shift.shift_date,
+          label: shift.label,
+          startsAt: a.starts_at.slice(0, 5),
+          endsAt: a.ends_at.slice(0, 5),
+        }));
+
     // History patterns: per person, how often they worked each label/weekday
     // and how often they held each duty — the basis for proposing who does
     // what on the draft.
@@ -249,6 +267,11 @@ export const getWeekContextTool = defineTool({
         minShiftsPerWeek: s.min_shifts_per_week,
         preferredShiftsPerWeek: s.preferred_shifts_per_week,
         maxShiftsPerWeek: s.max_shifts_per_week,
+        // Their own words on when they like to work — a soft preference.
+        schedulingNotes: s.scheduling_notes,
+        // Live shifts from the 1st of weekStart's month to the day before
+        // weekStart; this week's are in existingAssignments.
+        shiftsThisMonth: shiftsThisMonth(s.id),
       })),
       shifts: shiftsOut,
       pendingShiftRequests: pendingRequests.map((r) => ({

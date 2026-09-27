@@ -284,6 +284,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           min_shifts_per_week: null,
           preferred_shifts_per_week: null,
           max_shifts_per_week: null,
+          scheduling_notes: null,
         };
   };
 

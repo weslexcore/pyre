@@ -1,6 +1,6 @@
-// Scheduling preferences on the Hours tab: each person's h/wk target and
-// shifts-per-week range (min / preferred / max), which the AI drafter plans
-// around. Managers get a table of everyone on the roster; everyone else gets
+// Scheduling preferences on the Hours tab: each person's h/wk target,
+// shifts-per-week range (min / preferred / max), and free-text notes in their
+// own words ("1-2 mornings a month"), which the AI drafter plans around. Managers get a table of everyone on the roster; everyone else gets
 // a card for their own row. Rows come from the schedule-board payload the
 // Hours tab already loads. Edits save themselves: a row goes to
 // /api/admin/staff-preferences shortly after the last keystroke, or as soon as
@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { readError } from '@/lib/client/api';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { StaffRow } from '@/lib/db';
+import { MAX_SCHEDULING_NOTES_LENGTH } from '@/lib/schedule/shift-prefs';
 
 const inputClass =
   'px-2 py-1.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--pyre-creme)] placeholder-white/30 focus:outline-none focus:border-white/30';
@@ -20,6 +21,7 @@ interface PrefsDraft {
   minShifts: string;
   preferredShifts: string;
   maxShifts: string;
+  schedulingNotes: string;
 }
 
 const draftFor = (s: StaffRow): PrefsDraft => ({
@@ -27,6 +29,7 @@ const draftFor = (s: StaffRow): PrefsDraft => ({
   minShifts: String(s.min_shifts_per_week ?? ''),
   preferredShifts: String(s.preferred_shifts_per_week ?? ''),
   maxShifts: String(s.max_shifts_per_week ?? ''),
+  schedulingNotes: s.scheduling_notes ?? '',
 });
 
 /**
@@ -35,7 +38,7 @@ const draftFor = (s: StaffRow): PrefsDraft => ({
  * column heading on the manager's table.
  */
 const FIELDS: Array<{
-  key: keyof PrefsDraft;
+  key: Exclude<keyof PrefsDraft, 'schedulingNotes'>;
   title: string;
   unit: string;
   help: string;
@@ -94,6 +97,11 @@ const FIELDS: Array<{
 const EXPLAINER =
   'When scheduling we will try to hit your preferred number of shifts and not go past the maximum. Leave any of them blank for no preference.';
 
+const NOTES_HELP =
+  'Anything else about when you like to work, in your own words. We will follow it where we can.';
+const NOTES_PLACEHOLDER =
+  'e.g. 1-2 mornings a month. No mornings unless you are stuck. Weekends are best.';
+
 /** How long a row waits after the last keystroke before saving. */
 const AUTOSAVE_DELAY_MS = 800;
 
@@ -102,7 +110,8 @@ const sameValue = (a: string, b: string): boolean =>
   a.trim() === '' || b.trim() === '' ? a.trim() === b.trim() : Number(a) === Number(b);
 
 const sameDraft = (a: PrefsDraft, b: PrefsDraft): boolean =>
-  FIELDS.every(({ key }) => sameValue(a[key], b[key]));
+  FIELDS.every(({ key }) => sameValue(a[key], b[key])) &&
+  a.schedulingNotes.trim() === b.schedulingNotes.trim();
 
 type RowStatus = { state: 'saving' } | { state: 'saved' } | { state: 'error'; message: string };
 
@@ -177,12 +186,13 @@ export function ScheduleShiftPrefs({
         headers: { 'Content-Type': 'application/json' },
         // Lets a save started by leaving the page (blur, then navigate) land.
         keepalive: true,
-        // Blank clears each value (all four columns are nullable).
+        // Blank clears each value (every column is nullable).
         body: JSON.stringify({
           id,
           ...Object.fromEntries(
             FIELDS.map(({ key }) => [key, draft[key].trim() === '' ? null : Number(draft[key])])
           ),
+          schedulingNotes: draft.schedulingNotes.trim() === '' ? null : draft.schedulingNotes,
         }),
       });
       next = res.ok ? { state: 'saved' } : { state: 'error', message: await readError(res) };
@@ -241,6 +251,26 @@ export function ScheduleShiftPrefs({
     />
   );
 
+  const notesInput = (
+    person: StaffRow,
+    draft: PrefsDraft,
+    setDraft: (fields: Partial<PrefsDraft>) => void,
+    className: string,
+    id?: string
+  ) => (
+    <textarea
+      id={id}
+      className={`${inputClass} ${className} resize-y`}
+      rows={2}
+      maxLength={MAX_SCHEDULING_NOTES_LENGTH}
+      placeholder={NOTES_PLACEHOLDER}
+      value={draft.schedulingNotes}
+      onChange={(e) => setDraft({ schedulingNotes: e.target.value })}
+      onBlur={() => void flush(person.id)}
+      aria-label={`${person.display_name} scheduling notes`}
+    />
+  );
+
   const statusLine = (id: string) => {
     const row = status[id];
     if (!row) return null;
@@ -283,6 +313,16 @@ export function ScheduleShiftPrefs({
             </div>
           ))}
         </div>
+        <div className="space-y-1.5 rounded border border-white/10 px-3 py-2">
+          <label
+            htmlFor="own-pref-notes"
+            className="block font-mono text-xs text-[var(--pyre-creme)]"
+          >
+            Other preferences
+          </label>
+          {notesInput(person, draft, setDraft, 'block w-full', 'own-pref-notes')}
+          <p className="text-xs text-white/40">{NOTES_HELP}</p>
+        </div>
       </section>
     );
   }
@@ -311,6 +351,12 @@ export function ScheduleShiftPrefs({
                     </span>
                   </th>
                 ))}
+                <th className="py-2 pr-3 align-bottom font-normal">
+                  <span className="block font-bold">Other preferences</span>
+                  <span className="block normal-case tracking-normal text-white/30">
+                    in their words
+                  </span>
+                </th>
                 <th />
               </tr>
             </thead>
@@ -332,6 +378,9 @@ export function ScheduleShiftPrefs({
                         {input(person, field, draft, setDraft)}
                       </td>
                     ))}
+                    <td className="py-1.5 pr-3">
+                      {notesInput(person, draft, setDraft, 'w-72 min-w-56')}
+                    </td>
                     <td className="min-w-24 py-1.5">{statusLine(person.id)}</td>
                   </tr>
                 );

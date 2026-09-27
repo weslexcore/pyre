@@ -6,6 +6,7 @@ const none = {
   min_shifts_per_week: null,
   preferred_shifts_per_week: null,
   max_shifts_per_week: null,
+  scheduling_notes: null,
 };
 
 describe('parseShiftPrefs', () => {
@@ -50,5 +51,15 @@ describe('parseShiftPrefs', () => {
       max_shifts_per_week: null,
       preferred_shifts_per_week: 6,
     });
+  });
+
+  it('trims scheduling notes and stores blank as null', () => {
+    expect(parseShiftPrefs({ schedulingNotes: '  1-2 mornings a month\u0007\n ' }, none)).toEqual({
+      scheduling_notes: '1-2 mornings a month',
+    });
+    expect(parseShiftPrefs({ schedulingNotes: '   ' }, none)).toEqual({ scheduling_notes: null });
+    expect(parseShiftPrefs({ schedulingNotes: null }, none)).toEqual({ scheduling_notes: null });
+    expect(parseShiftPrefs({ schedulingNotes: 3 }, none)).toHaveProperty('error');
+    expect(parseShiftPrefs({ schedulingNotes: 'x'.repeat(1001) }, none)).toHaveProperty('error');
   });
 });

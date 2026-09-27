@@ -23,6 +23,7 @@ const person = (id: string, over: Partial<StaffRow> = {}): StaffRow => ({
   min_shifts_per_week: null,
   preferred_shifts_per_week: null,
   max_shifts_per_week: null,
+  scheduling_notes: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   ...over,
