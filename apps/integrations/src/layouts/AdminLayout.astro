@@ -21,6 +21,7 @@ import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
 import Favicon from '@/components/Favicon.astro';
+import PullToRefresh from '@/components/PullToRefresh.astro';
 import { getToolPins } from '@/lib/admin/toolPins';
 import { getUnreadCount } from '@/lib/notifications/unread';
 import { getSetting } from '@/lib/settings/store';
@@ -214,5 +215,6 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
         };
       });
     </script>
+    <PullToRefresh />
   </body>
 </html>

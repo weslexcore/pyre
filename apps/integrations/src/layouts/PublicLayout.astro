@@ -5,6 +5,7 @@
 // a form is shared by its link.
 import Favicon from '@/components/Favicon.astro';
 import { FormHeader } from '@/components/forms/FormHeader';
+import PullToRefresh from '@/components/PullToRefresh.astro';
 import '@/styles/admin.css';
 
 interface Props {
@@ -50,5 +51,6 @@ const backgroundStyle = backgroundUrl
       <FormHeader />
       <slot />
     </main>
+    <PullToRefresh />
   </body>
 </html>
