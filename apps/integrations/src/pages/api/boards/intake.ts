@@ -36,6 +36,7 @@
 //   POST { board, title, externalRef?, columnKey?, notesMd?, properties?,
 //          area?, dueDate? } → { card, created }
 
+import { withoutLinks } from '@/lib/boards/card-links';
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
 import { loadBoardBySlug, loadColumns, loadFields, nextColumnOrder } from '@/lib/boards/store';
@@ -104,7 +105,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (!column) return json({ error: 'That column is not on this board' }, 400);
 
   const fields = await loadFields(db, board.id);
-  const properties = normalizeProperties(fields, body.properties);
+  // Links are staff-made (lib/boards/card-links): a caller outside can't
+  // name another board's cards, so any link answer it sends is dropped.
+  const properties = withoutLinks(fields, normalizeProperties(fields, body.properties));
 
   // The idempotent path. A re-delivery refreshes what the caller knows — a
   // corrected party size, a phone number they added — and leaves everything
@@ -126,7 +129,10 @@ export const POST: APIRoute = async ({ request }) => {
         .update({
           title: parsed.value.title,
           notes_md: parsed.value.notes_md || existing.notes_md,
-          properties: normalizeProperties(fields, body.properties, existing.properties),
+          properties: withoutLinks(
+            fields,
+            normalizeProperties(fields, body.properties, existing.properties)
+          ),
           updated_by: INTAKE_ACTOR,
         })
         .eq('id', existing.id)

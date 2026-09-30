@@ -8,6 +8,7 @@
 // how a card moves twenty times a day without a control crowding every row.
 
 import type { HTMLAttributes } from 'react';
+import { type LinkSummary, linkedTitles } from '@/lib/boards/links';
 import { formatProperty } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
@@ -21,6 +22,8 @@ export interface CardRowProps {
   today: string;
   /** Fields flagged show_on_card, so a lead carries its contact and date. */
   fields?: BoardFieldRow[];
+  /** Linked cards by id, so a link field shows titles rather than a count. */
+  links?: Map<string, LinkSummary>;
   /** The goal this card is filed under, when the surrounding view isn't it. */
   goalTitle?: string;
   /** The board this card is on, when the view spans boards. */
@@ -50,6 +53,7 @@ export function CardRow({
   people,
   today,
   fields = [],
+  links,
   goalTitle,
   boardName,
   onOpen,
@@ -60,7 +64,7 @@ export function CardRow({
   const finished = card.completed_at !== null;
   const shown = fields
     .filter((field) => field.show_on_card && card.properties[field.key] != null)
-    .map((field) => ({ field, text: formatProperty(field, card.properties[field.key]) }))
+    .map((field) => ({ field, text: shownText(field, card.properties[field.key], links) }))
     .filter(({ text }) => text !== '');
 
   return (
@@ -101,4 +105,17 @@ export function CardRow({
       </button>
     </div>
   );
+}
+
+/** A field's answer as the row shows it: a link answer by its cards' titles when known. */
+function shownText(
+  field: BoardFieldRow,
+  value: unknown,
+  links: Map<string, LinkSummary> | undefined
+): string {
+  if (field.kind === 'card_link' && links) {
+    const titles = linkedTitles(value, links);
+    if (titles.length > 0) return titles.join(', ');
+  }
+  return formatProperty(field, value);
 }

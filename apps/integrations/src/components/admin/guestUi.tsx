@@ -84,7 +84,8 @@ export interface FieldDefinition {
     | 'date'
     | 'time'
     | 'time_range'
-    | 'files';
+    | 'files'
+    | 'card_link';
   options: string[];
   hint?: string | null;
   archived?: boolean;
@@ -235,6 +236,8 @@ export function FieldInput({
       return <TimeRangeInput id={id} value={value} onChange={onChange} />;
     case 'files':
       return <p className="text-xs text-white/35">Files are added from the card.</p>;
+    case 'card_link':
+      return <p className="text-xs text-white/35">Cards are linked from the card.</p>;
     default:
       return (
         <input

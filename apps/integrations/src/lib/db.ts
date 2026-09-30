@@ -1029,7 +1029,9 @@ export type BoardFieldKind =
   /** A start and an end, stored as a two-element ['HH:MM', 'HH:MM'] array. */
   | 'time_range'
   /** One to many attachments, stored as an array of board_attachments ids. */
-  | 'files';
+  | 'files'
+  /** Cards on another board (or this one); the links live in board_card_links. */
+  | 'card_link';
 
 /** A per-board question. `board_cards.properties` is keyed by `key`. */
 export interface BoardFieldRow {
@@ -1047,10 +1049,32 @@ export interface BoardFieldRow {
   show_on_calendar: boolean;
   /** A time/time_range field key on the same board that times this date; null is all day. */
   calendar_time_key: string | null;
+  /** Only meaningful for kind 'card_link': the board whose cards answer it; null once deleted. */
+  link_board_id: string | null;
+  /** Only meaningful for kind 'card_link': column keys a card may be picked from; empty is any. */
+  link_columns: string[];
+  /** Only meaningful for kind 'card_link': more than one card may be linked. */
+  link_multiple: boolean;
+  /** Only meaningful for kind 'card_link': the field on the other board showing the far end. */
+  link_inverse_field_id: string | null;
   sort_order: number;
   archived: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * One link answering a `card_link` field (see the board_card_links
+ * migration). Stored under the primary half of a two-way pair; the inverse
+ * field reads it with from/to swapped.
+ */
+export interface BoardCardLinkRow {
+  id: string;
+  field_id: string;
+  from_card_id: string;
+  to_card_id: string;
+  created_by: string;
+  created_at: string;
 }
 
 /** A stored answer to one board field. */
@@ -1182,7 +1206,10 @@ export type BoardEventAction =
   | 'moved'
   | 'kpi_updated'
   | 'completed'
-  | 'comment';
+  | 'comment'
+  /** A card_link answer gained a card; logged on both cards. */
+  | 'linked'
+  | 'unlinked';
 
 /** One line of the trail. Exactly one of goal_id / card_id is set. */
 export interface BoardEventRow {

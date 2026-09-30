@@ -24,6 +24,7 @@ import { getAccess } from '@/lib/auth/access';
 import { assertSameOrigin } from '@/lib/auth/admin';
 import { validateSession } from '@/lib/auth/session';
 import { canViewBoard } from '@/lib/boards/access';
+import { withoutLinks } from '@/lib/boards/card-links';
 import { filterFileAnswers, syncCardAttachments } from '@/lib/boards/card-media';
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
@@ -119,7 +120,15 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
     if (!parsed.ok) return json({ error: parsed.error }, 400);
     // A file id the form's own upload route did not stage on this board
     // names nothing the card may list, and is dropped here.
-    const properties = await filterFileAnswers(db, board.id, null, fields, parsed.value.properties);
+    // Link answers are never on a form (lib/boards/card-links); one that
+    // arrives anyway is dropped rather than stored on the card.
+    const properties = await filterFileAnswers(
+      db,
+      board.id,
+      null,
+      fields,
+      withoutLinks(fields, parsed.value.properties)
+    );
 
     const { data, error } = await db
       .from('board_cards')

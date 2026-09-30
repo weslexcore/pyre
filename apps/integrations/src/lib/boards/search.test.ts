@@ -64,3 +64,33 @@ describe('cardMatches', () => {
     expect(cardMatches(bare, searchTerms('jose'), FIELDS, {})).toBe(false);
   });
 });
+
+describe('linked cards', () => {
+  const MAYA = 'b0000000-0000-4000-8000-00000000000a';
+  const links = new Map([
+    [
+      MAYA,
+      {
+        id: MAYA,
+        title: 'Maya Ortiz',
+        board_slug: 'practitioners',
+        board_name: 'Practitioners',
+        column_key: 'active',
+        column_label: 'Active',
+        column_kind: 'open' as const,
+        openable: false,
+      },
+    ],
+  ]);
+  const withLink = { ...card, properties: { ...card.properties, practitioner: [MAYA] } };
+  const fields = [
+    ...FIELDS,
+    field({ key: 'practitioner', label: 'Practitioner', kind: 'card_link' }),
+  ];
+
+  it('finds a card by the title of a card it links, never by the id', () => {
+    expect(cardMatches(withLink, searchTerms('maya'), fields, PEOPLE, links)).toBe(true);
+    expect(cardSearchText(withLink, fields, PEOPLE, links)).not.toContain(MAYA);
+    expect(cardSearchText(withLink, fields, PEOPLE)).not.toContain(MAYA);
+  });
+});

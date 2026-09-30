@@ -8,6 +8,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref, fileIdsOf } from '@/lib/boards/files';
+import { type LinkSummary, linkIdsOf } from '@/lib/boards/links';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
 import { AREAS } from '@/lib/goals/types';
@@ -19,6 +20,7 @@ import { FieldRow } from '../guestUi';
 import { LinkTextarea } from '../LinkTextarea';
 import { SopMarkdown } from '../SopMarkdown';
 import { useSheetSwipe } from '../useSheetSwipe';
+import { CardLinkField } from './CardLinkField';
 import { FilesField } from './FilesField';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -29,6 +31,10 @@ export interface CardDrawerProps {
   people: PeopleNames;
   /** Everyone who can own a card, by email. */
   owners: { email: string; name: string }[];
+  /** Linked cards by id, for the link fields' chips. */
+  links?: Map<string, LinkSummary>;
+  /** A card was picked in a link field; the board keeps its summary for the row. */
+  onLinkPicked?: (summary: LinkSummary) => void;
   busy?: boolean;
   onSave: (patch: Record<string, unknown>) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -41,6 +47,8 @@ export function CardDrawer({
   fields,
   people,
   owners,
+  links,
+  onLinkPicked,
   busy = false,
   onSave,
   onDelete,
@@ -66,6 +74,8 @@ export function CardDrawer({
   const [confirming, setConfirming] = useState(false);
   // The rows behind the card's files answers: names and sizes for the ids.
   const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
+  // Linked cards' summaries: what the board sent, plus anything picked here.
+  const [known, setKnown] = useState<Map<string, LinkSummary>>(() => new Map(links ?? []));
   const autosave = useCardAutosave(onSave);
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
@@ -331,6 +341,45 @@ export function CardDrawer({
                   setProperties(updated);
                   autosave.schedule({ properties: updated });
                 };
+                if (field.kind === 'card_link') {
+                  const inputId = `card-${card.id}-${field.key}`;
+                  return (
+                    <div key={field.key}>
+                      <label className={labelClass} htmlFor={inputId}>
+                        {field.label}
+                        {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
+                      </label>
+                      {field.hint && (
+                        <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>
+                      )}
+                      {field.link_board_id ? (
+                        <CardLinkField
+                          id={inputId}
+                          label={field.label}
+                          fieldId={field.id}
+                          value={linkIdsOf(properties[field.key])}
+                          multiple={field.link_multiple}
+                          known={known}
+                          disabled={field.archived}
+                          onPicked={(summary) => {
+                            setKnown((prev) => new Map(prev).set(summary.id, summary));
+                            onLinkPicked?.(summary);
+                          }}
+                          // A link is a choice, not typing: save it now.
+                          onChange={(next) => {
+                            const updated = { ...properties, [field.key]: next };
+                            setProperties(updated);
+                            autosave.schedule({ properties: updated }, 0);
+                          }}
+                        />
+                      ) : (
+                        <p className="text-xs text-white/35">
+                          The board this field linked to has been deleted.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
                 if (field.kind === 'files') {
                   const inputId = `card-${card.id}-${field.key}`;
                   return (

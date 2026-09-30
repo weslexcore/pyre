@@ -56,6 +56,7 @@ export const FIELD_KINDS = [
   'time',
   'time_range',
   'files',
+  'card_link',
 ] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 
@@ -72,6 +73,7 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   time: 'Time',
   time_range: 'Time range',
   files: 'Files',
+  card_link: 'Linked cards',
 };
 
 export function isFieldKind(value: unknown): value is FieldKind {
@@ -108,6 +110,25 @@ export function kindIsTime(kind: FieldKind): boolean {
  */
 export function kindIsFiles(kind: FieldKind): boolean {
   return kind === 'files';
+}
+
+/**
+ * The kind whose answer is cards on another board (or this one). The links
+ * live in board_card_links, not in properties (lib/boards/links.ts has the
+ * rules), and every route that writes a card has to settle them — or, where
+ * links make no sense (a public form, intake), drop them.
+ */
+export function kindIsCardLink(kind: FieldKind): boolean {
+  return kind === 'card_link';
+}
+
+/**
+ * Kinds a card's answer can't simply be typed into: they're settled against
+ * a side table by the routes that write cards, and they never appear on a
+ * public form.
+ */
+export function kindIsSettled(kind: FieldKind): boolean {
+  return kindIsFiles(kind) || kindIsCardLink(kind);
 }
 
 // A staff row's `pages` array holds tool hrefs and capability keys; this is a
@@ -189,6 +210,10 @@ export const BOARD_LIMITS = {
   longAnswer: 4000,
   /** A files field holds a handful of documents, not a folder. */
   filesPerField: 10,
+  /** A card_link field lists a handful of cards; past this it's a board of its own. */
+  linksPerField: 50,
+  /** How many cards the link picker offers at once; type to narrow. */
+  linkOptions: 50,
   /** A board is a page, not a database: past this it needs paging. */
   cardsPerBoard: 1000,
 } as const;

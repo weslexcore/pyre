@@ -103,3 +103,21 @@ describe('timeAgo', () => {
     expect(timeAgo('2026-08-10T12:00:00Z', now)).toBe('a month ago');
   });
 });
+
+describe('describeEvent: linked cards', () => {
+  it('names the card and the field it was linked under', () => {
+    expect(describe_('linked', { title: 'Maya Ortiz', label: 'Practitioner' })).toBe(
+      'linked “Maya Ortiz” under Practitioner'
+    );
+    expect(describe_('unlinked', { title: 'Sauna Social', label: 'Events' })).toBe(
+      'unlinked “Sauna Social” under Events'
+    );
+  });
+
+  it('reads the far end of a one-way link, which has no field of its own', () => {
+    expect(describe_('linked', { title: 'Sauna Social', label: null })).toBe(
+      'linked “Sauna Social”'
+    );
+    expect(describe_('unlinked', {})).toBe('unlinked a card');
+  });
+});

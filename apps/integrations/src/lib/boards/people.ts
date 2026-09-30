@@ -22,6 +22,7 @@ import { accessOf } from '@/lib/notifications/recipients';
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard, canWorkGoal } from './access';
+import { type LinkSummary, markOpenable } from './links';
 
 /** Somebody a goal or a card can be assigned to. */
 export interface Assignable {
@@ -63,6 +64,8 @@ export interface ViewerExtras {
   /** Measure the goal's KPIs and comment on its trail. */
   canWorkGoal: boolean;
   today: string;
+  /** The bundle's linked-card summaries, each marked openable or not for this viewer. */
+  linkSummaries: LinkSummary[];
 }
 
 /**
@@ -73,7 +76,8 @@ export interface ViewerExtras {
 export async function boardViewerExtras(
   cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by'>[],
   access: PageAccess,
-  slug: string
+  slug: string,
+  linkSummaries: LinkSummary[] = []
 ): Promise<ViewerExtras> {
   const canManage = canManageBoards(access);
   const people = await getPeopleNames(
@@ -86,5 +90,6 @@ export async function boardViewerExtras(
     canManage,
     canWorkGoal: canWorkGoal(access, slug),
     today: todayEastern(),
+    linkSummaries: markOpenable(linkSummaries, (target) => canViewBoard(access, target)),
   };
 }

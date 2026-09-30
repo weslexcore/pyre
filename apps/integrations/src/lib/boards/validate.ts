@@ -18,6 +18,7 @@ import {
   parseGoalCreate,
 } from '@/lib/goals/validate';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
+import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
 import type { ColumnKind, FieldKind } from './types';
 import {
   answerLimit,
@@ -136,8 +137,74 @@ export interface FieldInput {
   show_on_calendar: boolean;
   /** The key of the `time`/`time_range` field that times it, or null. */
   calendar_time_key: string | null;
+  /** Only set for a `card_link` kind: the board whose cards answer it. */
+  link_board_id: string | null;
+  /** Only for `card_link`: column keys on that board a card may be picked from; [] is any. */
+  link_columns: string[];
+  /** Only for `card_link`: more than one card may be linked. */
+  link_multiple: boolean;
+  /**
+   * Only for `card_link`, and only on the save that asks for it: show the
+   * same links on the target board as a field of its own. The route creates
+   * that field and pairs the two. Never stored as such.
+   */
+  link_inverse?: LinkInverseInput;
   sort_order: number;
   archived: boolean;
+}
+
+/** The far half of a two-way link, as the settings panel asks for it. */
+export interface LinkInverseInput {
+  label: string;
+  multiple: boolean;
+}
+
+/** Column keys, de-duplicated and shaped like keys; what they name is the route's to check. */
+function normalizeColumnKeys(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const keys = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => KEY_RE.test(entry));
+  return [...new Set(keys)];
+}
+
+/**
+ * The card_link half of a field: which board, which of its columns, one or
+ * many, and optionally the far half to create. Null config (every other
+ * kind) comes back empty, the way options do for a kind without them.
+ */
+function parseLinkConfig(
+  field: Record<string, unknown>,
+  label: string
+): ParseResult<
+  Pick<FieldInput, 'link_board_id' | 'link_columns' | 'link_multiple' | 'link_inverse'>
+> {
+  if (field.kind !== 'card_link') {
+    return { ok: true, value: { link_board_id: null, link_columns: [], link_multiple: false } };
+  }
+  // Null only for a field whose board has since been deleted (the column is
+  // `on delete set null`); the route refuses it on a field that is new.
+  const board = field.linkBoardId ?? null;
+  if (board !== null && !isUuid(board)) return fail(`"${label}" needs a board to link cards from`);
+
+  let inverse: LinkInverseInput | undefined;
+  if (field.linkInverse !== undefined && field.linkInverse !== null) {
+    const raw = field.linkInverse as Record<string, unknown>;
+    const inverseLabel = typeof raw === 'object' ? text(raw.label, BOARD_LIMITS.fieldLabel) : null;
+    if (!inverseLabel) return fail(`"${label}" needs a name for the field on the other board`);
+    inverse = { label: inverseLabel, multiple: raw.multiple !== false };
+  }
+
+  return {
+    ok: true,
+    value: {
+      link_board_id: board === null ? null : board.toLowerCase(),
+      link_columns: normalizeColumnKeys(field.linkColumns),
+      link_multiple: field.linkMultiple === true,
+      ...(inverse ? { link_inverse: inverse } : {}),
+    },
+  };
 }
 
 /** Trimmed, de-duplicated (case-insensitively), capped option list. */
@@ -211,6 +278,9 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
     // field has it dropped rather than refused — the same choice
     // normalizeProperties makes about an answer it cannot use. The pointer
     // that goes with it is dropped too, so the two can never disagree.
+    const link = parseLinkConfig(field, label);
+    if (!link.ok) return link;
+
     const onCalendar = field.kind === 'date' && field.showOnCalendar === true;
     const timeKey =
       onCalendar && typeof field.calendarTimeKey === 'string'
@@ -228,6 +298,7 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
       show_label_on_card: field.showLabelOnCard !== false,
       show_on_calendar: onCalendar,
       calendar_time_key: timeKey,
+      ...link.value,
       sort_order: order,
       archived: field.archived === true,
     });
@@ -741,6 +812,10 @@ export function normalizeAnswer(
       // board is dropped there (card-media.ts), the way a pick-one that is
       // no longer on the list is dropped here.
       return normalizeFileIds(raw);
+    case 'card_link':
+      // Shaped here, settled by the route (card-links.ts): which cards the
+      // field may link, and how many, needs the database.
+      return normalizeLinkIds(raw);
     default: {
       if (typeof raw !== 'string') return null;
       // A long text keeps its line breaks — they are how a paragraph is a
@@ -832,6 +907,12 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
       // The card shows a count; the drawer, with the rows in hand, shows names.
       const count = fileIdsOf(value).length;
       return count > 0 ? formatFileCount(count) : '';
+    }
+    case 'card_link': {
+      // Ids are all an answer holds; the row and drawer, with the linked
+      // cards' summaries in hand, show titles instead.
+      const count = linkIdsOf(value).length;
+      return count > 0 ? formatLinkCount(count) : '';
     }
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';

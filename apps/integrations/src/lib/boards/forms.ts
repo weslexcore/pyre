@@ -211,8 +211,17 @@ const TITLE_QUESTION: BoardFormQuestion = {
  * none of them required. The builder starts from this so the first thing a
  * manager sees is a working form to prune, not an empty list to fill.
  */
+/**
+ * Whether a field can be a question on a form: it is live, and it is not a
+ * link. A form is filled in by somebody who can't see the other board, and
+ * a dropdown of its card titles would hand them the list.
+ */
+export function askableOnForm(field: Pick<BoardFieldRow, 'archived'> & { kind?: string }): boolean {
+  return !field.archived && field.kind !== 'card_link';
+}
+
 export function defaultFormConfig(
-  fields: Pick<BoardFieldRow, 'key' | 'archived'>[],
+  fields: (Pick<BoardFieldRow, 'key' | 'archived'> & { kind?: string })[],
   boardName = ''
 ): FormConfig {
   return {
@@ -231,17 +240,15 @@ export function defaultFormConfig(
     doneLabel: '',
     questions: [
       TITLE_QUESTION,
-      ...fields
-        .filter((field) => !field.archived)
-        .map(
-          (field): BoardFormQuestion => ({
-            kind: 'field',
-            key: field.key,
-            label: null,
-            hint: null,
-            required: false,
-          })
-        ),
+      ...fields.filter(askableOnForm).map(
+        (field): BoardFormQuestion => ({
+          kind: 'field',
+          key: field.key,
+          label: null,
+          hint: null,
+          required: false,
+        })
+      ),
     ],
   };
 }
@@ -502,9 +509,9 @@ export function templateKeys(template: string): string[] {
  */
 export function formFieldError(
   config: Pick<FormConfig, 'questions' | 'titleMode' | 'titleTemplate'>,
-  fields: Pick<BoardFieldRow, 'key' | 'archived'>[]
+  fields: (Pick<BoardFieldRow, 'key' | 'archived'> & { kind?: string })[]
 ): string | null {
-  const live = new Set(fields.filter((field) => !field.archived).map((field) => field.key));
+  const live = new Set(fields.filter(askableOnForm).map((field) => field.key));
   for (const question of config.questions) {
     if (question.kind === 'field' && !live.has(question.key)) {
       return `"${question.key}" is not a field on this board`;
@@ -573,9 +580,7 @@ export function formQuestions(
   form: Pick<FormConfig, 'questions' | 'titleMode'>,
   fields: Pick<BoardFieldRow, 'key' | 'label' | 'kind' | 'options' | 'hint' | 'archived'>[]
 ): ResolvedQuestion[] {
-  const byKey = new Map(
-    fields.filter((field) => !field.archived).map((field) => [field.key, field])
-  );
+  const byKey = new Map(fields.filter(askableOnForm).map((field) => [field.key, field]));
   const seen = new Set<string>();
   const resolved: ResolvedQuestion[] = [];
 
