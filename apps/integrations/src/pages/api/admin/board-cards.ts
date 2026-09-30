@@ -16,7 +16,10 @@
 //     keys the board does not have rather than storing whatever arrived;
 //   * a `files` answer is settled around the write (lib/boards/card-media):
 //     ids that name nothing this card may list are dropped before, and the
-//     rows it now lists are claimed and the ones it dropped removed after.
+//     rows it now lists are claimed and the ones it dropped removed after;
+//   * a `card_link` answer is never stored on the card (lib/boards/card-links):
+//     the links it asks for are checked before, made and undone in
+//     board_card_links after, and read back onto the card that is returned.
 //
 // Access is per board: `board:<slug>` opens exactly that board's cards.
 //
@@ -28,6 +31,7 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
+import { applyLinks, prepareLinks, withLinks } from '@/lib/boards/card-links';
 import {
   deleteCardAttachments,
   filterFileAnswers,
@@ -74,7 +78,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const { access } = ready.gate;
     const email = sessionEmail(ready.gate);
     const [extras, linkedSops, role] = await Promise.all([
-      boardViewerExtras(bundle.cards, access, slug),
+      boardViewerExtras(bundle.cards, access, slug, bundle.linkSummaries),
       loadBoardSops(ready.db, bundle.board.id),
       getSopRole(email, access),
     ]);
@@ -142,19 +146,31 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     completion = columnPatch(before, column, email, new Date().toISOString());
   }
 
-  const fields = body.properties === undefined ? [] : await loadBoardFields(db, before.board_id);
-  const properties =
+  // Links are checked before anything is written, so a refused link refuses
+  // the whole save rather than half of it.
+  const fields = await loadBoardFields(db, before.board_id);
+  const prepared =
     body.properties === undefined
-      ? {}
-      : {
-          properties: await filterFileAnswers(
-            db,
-            before.board_id,
-            before.id,
-            fields,
-            normalizeProperties(fields, body.properties, before.properties)
-          ),
-        };
+      ? null
+      : await prepareLinks(
+          db,
+          before.id,
+          fields,
+          normalizeProperties(fields, body.properties, before.properties),
+          body.properties
+        );
+  if (prepared && !prepared.ok) return json({ error: prepared.error }, 400);
+  const properties = prepared
+    ? {
+        properties: await filterFileAnswers(
+          db,
+          before.board_id,
+          before.id,
+          fields,
+          prepared.properties
+        ),
+      }
+    : {};
 
   const { data, error } = await db
     .from('board_cards')
@@ -164,10 +180,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     .single();
   if (error) return dbError(error);
 
-  const card = data as BoardCardRow;
+  const written = data as BoardCardRow;
   if (properties.properties) {
-    await syncCardAttachments(db, card.id, fields, before.properties, card.properties);
+    await syncCardAttachments(db, written.id, fields, before.properties, written.properties);
   }
+  if (prepared?.ok) await applyLinks(db, written, fields, prepared.links, email);
+  const [card] = await withLinks(db, fields, [written]);
   // The completion columns ride along so that clearing a waiting-on badge on
   // the way into Done shows up in the trail as the change it is.
   const events = eventsForCardPatch(before, {

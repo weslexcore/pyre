@@ -4,6 +4,7 @@
 
 import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { type LinkSummary, linkedTitles } from './links';
 import { formatProperty } from './validate';
 
 /** Lowercased, accents stripped, so "Jose" finds "José" and vice versa. */
@@ -20,7 +21,8 @@ export function searchTerms(query: string): string[] {
  * Everything on a card a person might type to find it: the title, the
  * notes, who owns it and what it is waiting on, its area, and each field's
  * answer the way the card shows it (so "6:30 PM" finds a time stored as
- * "18:30", and a yes/no reads as "yes" rather than "true").
+ * "18:30", and a yes/no reads as "yes" rather than "true"). A link answer
+ * is its linked cards' titles, when `links` has them.
  */
 export function cardSearchText(
   card: Pick<
@@ -28,13 +30,18 @@ export function cardSearchText(
     'title' | 'notes_md' | 'owner_email' | 'waiting_on' | 'area' | 'properties'
   >,
   fields: Pick<BoardFieldRow, 'key' | 'label' | 'kind'>[],
-  people: PeopleNames
+  people: PeopleNames,
+  links: Map<string, LinkSummary> = new Map()
 ): string {
   const parts = [card.title, card.notes_md, card.waiting_on ?? '', card.area ?? ''];
   if (card.owner_email) parts.push(card.owner_email, personName(card.owner_email, people));
   for (const field of fields) {
     const value = card.properties[field.key];
     if (value == null) continue;
+    if (field.kind === 'card_link') {
+      parts.push(field.label, ...linkedTitles(value, links));
+      continue;
+    }
     parts.push(field.label, formatProperty(field, value));
     // Two kinds are shown in one shape and stored in another — a date as
     // 10.03.26, a phone as (212) 555-1234 — and both are worth finding by
@@ -56,9 +63,10 @@ export function cardMatches(
   card: Parameters<typeof cardSearchText>[0],
   terms: string[],
   fields: Pick<BoardFieldRow, 'key' | 'label' | 'kind'>[],
-  people: PeopleNames
+  people: PeopleNames,
+  links?: Map<string, LinkSummary>
 ): boolean {
   if (terms.length === 0) return true;
-  const haystack = cardSearchText(card, fields, people);
+  const haystack = cardSearchText(card, fields, people, links);
   return terms.every((term) => haystack.includes(term));
 }

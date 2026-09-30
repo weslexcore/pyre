@@ -709,3 +709,76 @@ describe('long text answers', () => {
     );
   });
 });
+
+describe('linked cards fields', () => {
+  const BOARD = '6a1b8a2c-7d4e-4a1b-9c2d-5e6f7a8b9c0d';
+
+  it('takes a board, the columns it offers, one or many, and the far half to create', () => {
+    const [field] =
+      value(
+        parseBoardPatch({
+          fields: [
+            {
+              key: 'practitioner',
+              label: 'Practitioner',
+              kind: 'card_link',
+              linkBoardId: BOARD.toUpperCase(),
+              linkColumns: ['onboarded', 'active', 'active', 'Not A Key', 'inactive'],
+              linkMultiple: false,
+              linkInverse: { label: '  Events ', multiple: true },
+            },
+          ],
+        })
+      ).fields ?? [];
+    expect(field).toMatchObject({
+      kind: 'card_link',
+      link_board_id: BOARD,
+      link_columns: ['onboarded', 'active', 'inactive'],
+      link_multiple: false,
+      link_inverse: { label: 'Events', multiple: true },
+      options: [],
+    });
+  });
+
+  it('needs a real board id and a name for the far field', () => {
+    const base = { key: 'practitioner', label: 'Practitioner', kind: 'card_link' };
+    expect(error(parseBoardPatch({ fields: [{ ...base, linkBoardId: 'rentals' }] }))).toMatch(
+      /needs a board/
+    );
+    expect(
+      error(
+        parseBoardPatch({
+          fields: [{ ...base, linkBoardId: BOARD, linkInverse: { label: '  ' } }],
+        })
+      )
+    ).toMatch(/name for the field on the other board/);
+  });
+
+  it('leaves the link settings empty on every other kind', () => {
+    const [field] =
+      value(
+        parseBoardPatch({
+          fields: [
+            {
+              key: 'note',
+              label: 'Note',
+              kind: 'text',
+              linkBoardId: BOARD,
+              linkColumns: ['active'],
+              linkMultiple: true,
+            },
+          ],
+        })
+      ).fields ?? [];
+    expect(field).toMatchObject({ link_board_id: null, link_columns: [], link_multiple: false });
+    expect(field).not.toHaveProperty('link_inverse');
+  });
+
+  it('shapes an answer as linked card ids and reads it back as a count', () => {
+    const field = { kind: 'card_link' as const, options: [] };
+    expect(normalizeAnswer(field, [UUID, UUID.toUpperCase(), 'nope'])).toEqual([UUID]);
+    expect(normalizeAnswer(field, 'nope')).toBeNull();
+    expect(formatProperty(field, [UUID])).toBe('1 card');
+    expect(formatProperty(field, [])).toBe('');
+  });
+});

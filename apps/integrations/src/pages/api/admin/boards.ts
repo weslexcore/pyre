@@ -21,6 +21,13 @@
 // is cleared. A files field is the exception: its answers name rows holding
 // real bytes, so it stays what it is.
 //
+// A card_link field is the other exception, for the same reason: its
+// answers are rows in board_card_links naming another board's cards, so it
+// stays a link field, and it keeps the board it links to. Its allowed
+// columns and one-or-many can change freely. Asking for `linkInverse` on it
+// creates the matching field on the target board and pairs the two, so the
+// same links show from both ends.
+//
 // A board's goal travels with its cards: every card on the board is filed
 // under the board's goal, and pointing the board at a different goal
 // re-files them (lib/boards/store attachGoalToBoard).
@@ -50,6 +57,7 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
 import { deleteBoardAttachments } from '@/lib/boards/card-media';
+import { columnKeyOf } from '@/lib/boards/columns';
 import { logBoardEvent } from '@/lib/boards/events';
 import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
 import {
@@ -62,10 +70,17 @@ import {
   loadSection,
   unattachedGoals,
 } from '@/lib/boards/store';
-import { FIELD_KIND_LABELS, GOALS_BOARD_SLUG, isBoardSlug, kindIsTime } from '@/lib/boards/types';
+import {
+  BOARD_LIMITS,
+  FIELD_KIND_LABELS,
+  GOALS_BOARD_SLUG,
+  isBoardSlug,
+  kindIsTime,
+} from '@/lib/boards/types';
 import {
   type ColumnInput,
   type FieldInput,
+  type LinkInverseInput,
   normalizeAnswer,
   parseBoardCreate,
   parseBoardPatch,
@@ -97,7 +112,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       if (!canViewBoard(gate.access, slug)) return json({ error: 'Board not found' }, 404);
       const bundle = await loadBoardBundle(db, slug);
       if (!bundle) return json({ error: 'Board not found' }, 404);
-      return json({ ...bundle, ...(await boardViewerExtras(bundle.cards, gate.access, slug)) });
+      return json({
+        ...bundle,
+        ...(await boardViewerExtras(bundle.cards, gate.access, slug, bundle.linkSummaries)),
+      });
     }
 
     const boards = visibleBoards(gate.access, await loadBoards(db));
@@ -434,8 +452,18 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           : `"${current.label}" already has answers, so it cannot become a files field`;
       return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
     }
+    if (current.kind === 'card_link' || field.kind === 'card_link') {
+      const reason =
+        current.kind === 'card_link'
+          ? `"${current.label}" links cards, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
+          : `"${current.label}" already has answers, so it cannot become a linked cards field`;
+      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
+    }
     recast.push(field);
   }
+
+  const linkProblem = await checkLinkTargets(db, next, byKey);
+  if (linkProblem) return linkProblem;
 
   for (const field of next) {
     const current = byKey.get(field.key);
@@ -451,14 +479,33 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           show_label_on_card: field.show_label_on_card,
           show_on_calendar: field.show_on_calendar,
           calendar_time_key: field.calendar_time_key,
+          // The board it links to is fixed once set (checkLinkTargets); which
+          // of its columns, and how many, are not.
+          link_columns: field.link_columns,
+          link_multiple: field.link_multiple,
           sort_order: field.sort_order,
           archived: field.archived,
         })
         .eq('id', current.id);
       if (error) return dbError(error);
     } else {
-      const { error } = await db.from('board_fields').insert({ ...field, board_id: boardId });
+      const { link_inverse: _inverse, ...row } = field;
+      const { error } = await db.from('board_fields').insert({ ...row, board_id: boardId });
       if (error) return dbError(error);
+    }
+  }
+
+  // After the rows exist, so the new half can point at the field it mirrors.
+  const pairing = next.filter(
+    (field) => field.kind === 'card_link' && field.link_inverse && !field.archived
+  );
+  if (pairing.length > 0) {
+    const saved = new Map((await loadFields(db, boardId)).map((field) => [field.key, field]));
+    for (const field of pairing) {
+      const row = saved.get(field.key);
+      if (!row || row.link_inverse_field_id) continue;
+      const paired = await pairLinkField(db, row, field.link_inverse as LinkInverseInput);
+      if (paired) return paired;
     }
   }
 
@@ -472,12 +519,24 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
 
   const dropped = existing.filter((field) => !wanted.has(field.key));
   for (const field of dropped) {
+    // A link field's answers are rows, not properties: any link it made, or
+    // its partner made that it reads, keeps it (archived) rather than
+    // deleting it and the links with it.
     // Keys match ^[a-z][a-z0-9_]+$, so the JSON path is safe to build.
-    const { count, error: countError } = await db
-      .from('board_cards')
-      .select('id', { count: 'exact', head: true })
-      .eq('board_id', boardId)
-      .not(`properties->${field.key}`, 'is', null);
+    const { count, error: countError } =
+      field.kind === 'card_link'
+        ? await db
+            .from('board_card_links')
+            .select('id', { count: 'exact', head: true })
+            .in(
+              'field_id',
+              [field.id, field.link_inverse_field_id].filter((id): id is string => id !== null)
+            )
+        : await db
+            .from('board_cards')
+            .select('id', { count: 'exact', head: true })
+            .eq('board_id', boardId)
+            .not(`properties->${field.key}`, 'is', null);
     if (countError) return dbError(countError);
 
     const { error } =
@@ -508,6 +567,123 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
     if (error) return dbError(error);
   }
 
+  return null;
+}
+
+/**
+ * Every card_link field on the list names a board that exists and columns
+ * that board has, and a field that already links somewhere keeps linking
+ * there: its answers are cards on that board, and pointing it elsewhere
+ * would leave every one of them naming a card the field no longer offers.
+ */
+async function checkLinkTargets(
+  db: Db,
+  next: FieldInput[],
+  existing: Map<string, BoardFieldRow>
+): Promise<Response | null> {
+  const links = next.filter((field) => field.kind === 'card_link');
+  if (links.length === 0) return null;
+
+  for (const field of links) {
+    const current = existing.get(field.key);
+    if (current?.link_board_id && current.link_board_id !== field.link_board_id) {
+      return json(
+        {
+          error: `"${field.label}" already links cards on another board. Archive it and add a new one instead.`,
+        },
+        400
+      );
+    }
+  }
+
+  const boardIds = [
+    ...new Set(links.map((field) => field.link_board_id).filter((id): id is string => id !== null)),
+  ];
+  const [boardsResult, columnsResult] = await Promise.all([
+    db.from('boards').select('id').in('id', boardIds),
+    db.from('board_columns').select('board_id, key').in('board_id', boardIds),
+  ]);
+  if (boardsResult.error) return dbError(boardsResult.error);
+  if (columnsResult.error) return dbError(columnsResult.error);
+  const boards = new Set(((boardsResult.data ?? []) as { id: string }[]).map((row) => row.id));
+  const columns = new Set(
+    ((columnsResult.data ?? []) as { board_id: string; key: string }[]).map(
+      (row) => `${row.board_id}:${row.key}`
+    )
+  );
+
+  for (const field of links) {
+    // A board deleted since leaves the pointer null (on delete set null); an
+    // untouched field in that state saves as it is.
+    const current = existing.get(field.key);
+    if (current && current.link_board_id === null) {
+      field.link_board_id = null;
+      delete field.link_inverse;
+      continue;
+    }
+    if (!field.link_board_id) {
+      return json({ error: `"${field.label}" needs a board to link cards from` }, 400);
+    }
+    if (!boards.has(field.link_board_id)) {
+      return json({ error: `"${field.label}" links to a board that does not exist` }, 400);
+    }
+    const unknown = field.link_columns.find((key) => !columns.has(`${field.link_board_id}:${key}`));
+    if (unknown) {
+      return json({ error: `"${field.label}" offers a column its board does not have` }, 400);
+    }
+  }
+  return null;
+}
+
+/**
+ * The far half of a two-way link: a card_link field on the target board,
+ * linking back, pointed at `field` and pointed to by it. Any column of this
+ * board may be linked from there; the target board's own settings narrow it.
+ */
+async function pairLinkField(
+  db: Db,
+  field: BoardFieldRow,
+  inverse: LinkInverseInput
+): Promise<Response | null> {
+  const targetId = field.link_board_id;
+  if (!targetId) return null;
+
+  const theirs = await loadFields(db, targetId);
+  if (theirs.filter((row) => !row.archived).length >= BOARD_LIMITS.fieldsPerBoard) {
+    return json(
+      {
+        error: `The board "${field.label}" links to already has ${BOARD_LIMITS.fieldsPerBoard} fields, so the matching field can't be added there`,
+      },
+      400
+    );
+  }
+
+  const { data, error } = await db
+    .from('board_fields')
+    .insert({
+      board_id: targetId,
+      key: columnKeyOf(
+        inverse.label,
+        theirs.map((row) => row.key)
+      ),
+      label: inverse.label,
+      kind: 'card_link',
+      options: [],
+      link_board_id: field.board_id,
+      link_columns: [],
+      link_multiple: inverse.multiple,
+      link_inverse_field_id: field.id,
+      sort_order: Math.max(0, ...theirs.map((row) => row.sort_order)) + 10,
+    })
+    .select('id')
+    .single();
+  if (error) return dbError(error);
+
+  const { error: pairError } = await db
+    .from('board_fields')
+    .update({ link_inverse_field_id: (data as { id: string }).id })
+    .eq('id', field.id);
+  if (pairError) return dbError(pairError);
   return null;
 }
 

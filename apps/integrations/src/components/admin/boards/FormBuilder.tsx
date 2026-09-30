@@ -15,6 +15,7 @@ import { formButtonClass } from '@/components/admin/ui';
 import { BoardForm } from '@/components/forms/BoardForm';
 import { FormHeader } from '@/components/forms/FormHeader';
 import {
+  askableOnForm,
   BUILTIN_LABELS,
   checkBackgroundFile,
   FORM_ACCESS,
@@ -92,7 +93,7 @@ interface QuestionItem {
 function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
   const { board, fields, recipients } = initial;
   const noun = board.card_noun;
-  const liveFields = useMemo(() => fields.filter((field) => !field.archived), [fields]);
+  const liveFields = useMemo(() => fields.filter(askableOnForm), [fields]);
   const fieldByKey = useMemo(() => new Map(fields.map((field) => [field.key, field])), [fields]);
 
   // A name that has since lost the board is dropped on the way in, so the
@@ -848,6 +849,9 @@ function sampleAnswers(fields: BoardFieldRow[]): Record<string, BoardFieldValue>
         break;
       case 'files':
         answers[field.key] = ['3f1b8a2c-7d4e-4a1b-9c2d-5e6f7a8b9c0d'];
+        break;
+      case 'card_link':
+        // Never on a form (askableOnForm), so nothing to sample.
         break;
       default:
         answers[field.key] = field.label;
