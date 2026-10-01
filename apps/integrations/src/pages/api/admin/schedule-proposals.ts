@@ -22,7 +22,11 @@ import {
   logScheduleChange,
   staffNameOf,
 } from '@/lib/schedule/change-log';
-import { acceptDraftRow, resolveProposalIfDone } from '@/lib/schedule/draft-accept';
+import {
+  acceptDraftRow,
+  resolveProposalIfDone,
+  settleOnCallForWeek,
+} from '@/lib/schedule/draft-accept';
 
 export const prerender = false;
 
@@ -119,6 +123,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       summary: `${action === 'approve' ? 'Approved' : 'Discarded'} draft schedule for week of ${proposal.week_start}`,
     });
     if (action === 'approve') {
+      await settleOnCallForWeek(db, proposal.week_start as string, actorFromGate(gate));
       await notifyProposalApproved(db, {
         proposalId,
         weekStart: proposal.week_start as string,

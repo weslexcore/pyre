@@ -585,6 +585,19 @@ export function ScheduleBoard() {
     return drift;
   }, [canManage, data, shiftsByDate]);
 
+  // Shift id → who an open AI draft would put on call (proposal summary
+  // onCall, worked out server-side by the on-call rule as if the draft were
+  // live). Only shifts whose on-call the draft would change are listed;
+  // approving the draft re-plans the week from what actually lands.
+  const draftOnCall = useMemo(() => {
+    const map = new Map<string, OnCallRecommendation>();
+    for (const p of data?.proposals ?? []) {
+      if (p.status !== 'draft') continue;
+      for (const r of proposalOnCall(p)) map.set(r.shiftId, r);
+    }
+    return map;
+  }, [data]);
+
   const requestsByShift = useMemo(() => {
     const map = new Map<string, ShiftRequestRow[]>();
     for (const request of data?.shiftRequests ?? []) {
@@ -1653,6 +1666,18 @@ export function ScheduleBoard() {
                                     </span>
                                   )
                                 ))}
+                              {draftOnCall.has(shift.id) && (
+                                <span
+                                  className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]"
+                                  title="Who the AI draft would put on call. It takes effect when the draft is approved, worked out again from whatever was accepted."
+                                >
+                                  draft on call:{' '}
+                                  {draftOnCall.get(shift.id)?.staffId
+                                    ? (staffById.get(draftOnCall.get(shift.id)?.staffId ?? '')
+                                        ?.display_name ?? '?')
+                                    : 'nobody free'}
+                                </span>
+                              )}
                               {onCallDrift.has(shift.id) && (
                                 <span
                                   className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
@@ -2997,6 +3022,26 @@ function AssignmentEditor({
   );
 }
 
+/** One shift's on-call in a draft, as the proposals route stores it. */
+interface OnCallRecommendation {
+  shiftId: string;
+  staffId: string | null;
+}
+
+/** A proposal's on-call recommendations (summary.onCall), tolerating old rows. */
+function proposalOnCall(proposal: ScheduleProposalRow): OnCallRecommendation[] {
+  const raw = (proposal.summary as { onCall?: unknown }).onCall;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (r): r is OnCallRecommendation =>
+      !!r &&
+      typeof r === 'object' &&
+      typeof (r as OnCallRecommendation).shiftId === 'string' &&
+      ((r as OnCallRecommendation).staffId === null ||
+        typeof (r as OnCallRecommendation).staffId === 'string')
+  );
+}
+
 function ProposalBanner({
   proposal,
   messages,
@@ -3021,6 +3066,8 @@ function ProposalBanner({
     partialAvailabilityPlacements?: number;
     warnings?: string[];
   };
+  const onCall = proposalOnCall(proposal);
+  const onCallNobody = onCall.filter((r) => r.staffId === null).length;
 
   const submitRefine = async () => {
     const prompt = refineNote.trim();
@@ -3046,6 +3093,19 @@ function ProposalBanner({
         {(summary.partialAvailabilityPlacements ?? 0) > 0 && (
           <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] text-[var(--pyre-gold)]">
             {summary.partialAvailabilityPlacements} partial-availability
+          </span>
+        )}
+        {onCall.length > 0 && (
+          <span
+            className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]"
+            title="Shifts whose on-call person this draft would change, by the on-call rule. Shown on each shift as 'draft on call'."
+          >
+            {onCall.length} on-call change{onCall.length === 1 ? '' : 's'}
+          </span>
+        )}
+        {onCallNobody > 0 && (
+          <span className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-[10px] text-[var(--pyre-gold)]">
+            {onCallNobody} with nobody on call
           </span>
         )}
         <span className="ml-auto flex gap-2">
