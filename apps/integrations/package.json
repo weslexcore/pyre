@@ -35,7 +35,7 @@
     "@upstash/qstash": "^2.11.3",
     "@vercel/functions": "^3.4.3",
     "ai": "7.0.105",
-    "astro": "^7.1.6",
+    "astro": "^7.2.8",
     "posthog-node": "^5.46.0",
     "qr-code-styling": "^1.9.2",
     "react": "^19.2.8",
