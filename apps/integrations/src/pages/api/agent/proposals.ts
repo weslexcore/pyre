@@ -9,6 +9,12 @@
 // previous draft, and writes the batch as is_draft rows for review on
 // /admin/schedule.
 //
+// It also works out who would be on call for each shift of the week if the
+// draft went live as-is (the same rule as the board's Auto on-call — see
+// lib/schedule/on-call.ts) and stores that on the proposal's summary as
+// `onCall`, for review beside the draft. Approval re-plans the week from what
+// actually went live, so this is the recommendation, not the write.
+//
 // Auth: Bearer AGENT_API_SECRET (server-to-server; never cookies). dryRun
 // validates and returns the conflict report without writing — used by evals.
 
@@ -30,6 +36,7 @@ import { getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
 import { AGENT_ACTOR, logScheduleChange } from '@/lib/schedule/change-log';
 import { loadDutyCatalog } from '@/lib/schedule/duties';
+import { type OnCallRecommendation, recommendOnCall } from '@/lib/schedule/on-call';
 import { getShiftBufferSettings } from '@/lib/schedule/settings';
 import { DATE_RE, parseAssignmentFields, parseShiftFields } from '@/lib/schedule/validate';
 
@@ -78,6 +85,8 @@ export const POST: APIRoute = async ({ request }) => {
     body.summary && typeof body.summary === 'object' && !Array.isArray(body.summary)
       ? (body.summary as Record<string, unknown>)
       : {};
+  // summary.onCall is server-owned (set below), never taken from the agent.
+  delete summary.onCall;
   const dryRun = body.dryRun === true;
 
   const rawShifts = Array.isArray(body.shifts) ? body.shifts : [];
@@ -398,6 +407,30 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
+  // --- Recommended on-call, as if the draft were live ---
+  // Draft shifts have no ids yet, so they're planned under their payload keys
+  // and re-keyed once written. Best-effort: a failure here costs the review
+  // the recommendation, not the draft (approval re-plans the week anyway).
+  let onCall: OnCallRecommendation[] = [];
+  const planned = await recommendOnCall(db, weekStart, {
+    shifts: draftShifts.map((d) => ({
+      id: `key:${d.key}`,
+      shift_date: d.columns.shift_date as string,
+      starts_at: d.columns.starts_at as string,
+      ends_at: d.columns.ends_at as string,
+      label: d.columns.label as string,
+    })),
+    assignments: draftAssignments.map((a) => ({
+      shiftId: a.shiftId ?? `key:${a.shiftKey}`,
+      staffId: a.staffId,
+    })),
+  });
+  if ('error' in planned) {
+    console.warn('[agent-proposals] on-call recommendation failed:', planned.error.message);
+  } else {
+    onCall = planned;
+  }
+
   if (dryRun) {
     return json({
       ok: true,
@@ -406,6 +439,7 @@ export const POST: APIRoute = async ({ request }) => {
       shifts: draftShifts.length,
       assignments: draftAssignments.length,
       conflicts,
+      onCall,
     });
   }
 
@@ -465,6 +499,20 @@ export const POST: APIRoute = async ({ request }) => {
     shiftIdByKey.set(draft.key, data.id as string);
   }
 
+  // The on-call recommendation, keyed by real shift ids now they exist.
+  if (onCall.length > 0) {
+    onCall = onCall.map((r) =>
+      r.shiftId.startsWith('key:')
+        ? { ...r, shiftId: shiftIdByKey.get(r.shiftId.slice(4)) ?? r.shiftId }
+        : r
+    );
+    const { error } = await db
+      .from('schedule_proposals')
+      .update({ summary: { ...summary, onCall } })
+      .eq('id', proposalId);
+    if (error) console.warn('[agent-proposals] on-call summary update failed:', error.message);
+  }
+
   if (draftAssignments.length > 0) {
     const { error } = await db.from('shift_assignments').insert(
       draftAssignments.map((a) => ({
@@ -514,6 +562,7 @@ export const POST: APIRoute = async ({ request }) => {
       shifts: draftShifts.length,
       assignments: draftAssignments.length,
       conflicts,
+      onCall,
     },
     201
   );
