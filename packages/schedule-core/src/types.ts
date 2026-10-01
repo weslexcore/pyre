@@ -27,6 +27,11 @@ export interface StaffRow {
 	 * whose whole crew is lead-less.
 	 */
 	is_shift_lead: boolean;
+	/**
+	 * May be named a shift's on-call person (ShiftRow.on_call_staff_id) —
+	 * the founders today, possibly shift leads later. See on-call.ts.
+	 */
+	on_call_eligible: boolean;
 	/** Available to be scheduled; false = off the roster, history preserved. */
 	active: boolean;
 	/** Dashboard: sees every admin page and manages people. */
@@ -106,6 +111,16 @@ export interface ShiftRow {
 	 * Null follows the date rule (see horizon.ts isTentativeShift).
 	 */
 	confirmed_at: string | null;
+	/**
+	 * The person the crew calls for this shift; null = nobody yet. Filled by
+	 * the board's Auto on-call action (planOnCall in on-call.ts) or by hand.
+	 */
+	on_call_staff_id: string | null;
+	/**
+	 * The on-call person was chosen by hand (nobody, when on_call_staff_id is
+	 * null); the auto action leaves the shift alone.
+	 */
+	on_call_manual: boolean;
 	created_at: string;
 	updated_at: string;
 }

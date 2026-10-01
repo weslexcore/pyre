@@ -88,6 +88,8 @@ const shift = (overrides: Partial<ShiftRow>): ShiftRow => ({
   sessions_start_at: null,
   sessions_end_at: null,
   confirmed_at: null,
+  on_call_staff_id: null,
+  on_call_manual: false,
   created_at: '',
   updated_at: '',
   ...overrides,

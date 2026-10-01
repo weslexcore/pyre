@@ -497,6 +497,7 @@ interface Roles {
   isAdmin: boolean;
   isFounder: boolean;
   isShiftLead: boolean;
+  onCallEligible: boolean;
   active: boolean;
 }
 
@@ -511,6 +512,11 @@ const ROLE_OPTIONS: Array<{ key: keyof Roles; label: string; hint: string }> = [
     key: 'isShiftLead',
     label: 'Shift lead',
     hint: 'Can anchor a shift. Anyone who is not a shift lead or founder must be scheduled alongside one.',
+  },
+  {
+    key: 'onCallEligible',
+    label: 'On call',
+    hint: 'Can be the on-call person for a shift. ☎ Auto on-call on the schedule puts them on call for days they work, and splits the other days evenly between everyone with this ticked.',
   },
   {
     key: 'isFounder',
@@ -610,6 +616,7 @@ export function UsersManager() {
     isAdmin: false,
     isFounder: false,
     isShiftLead: false,
+    onCallEligible: false,
     active: true,
   });
   // Employee default: view the schedule, manage their own blackout dates.
@@ -736,7 +743,13 @@ export function UsersManager() {
     setNewName('');
     setNewEmail('');
     setNewPayRate('');
-    setNewRoles({ isAdmin: false, isFounder: false, isShiftLead: false, active: true });
+    setNewRoles({
+      isAdmin: false,
+      isFounder: false,
+      isShiftLead: false,
+      onCallEligible: false,
+      active: true,
+    });
     setNewPages(['/admin/schedule']);
   };
 
@@ -751,6 +764,7 @@ export function UsersManager() {
       pages: newRoles.isAdmin ? [] : newPages,
       isFounder: newRoles.isFounder,
       isShiftLead: newRoles.isShiftLead,
+      onCallEligible: newRoles.onCallEligible,
       active: newRoles.active,
       ...(newPayRate.trim() !== '' ? { payRate: Number(newPayRate) } : {}),
     });
@@ -959,6 +973,7 @@ export function UsersManager() {
                 <span className="ml-auto flex flex-wrap items-center gap-1.5">
                   {person.is_founder && <span className={chipClass}>founder</span>}
                   {person.is_shift_lead && <span className={chipClass}>shift lead</span>}
+                  {person.on_call_eligible && <span className={chipClass}>on call</span>}
                   {!person.active && <span className={chipClass}>not scheduled</span>}
                   <span
                     className={`${chipClass} ${person.is_admin ? 'border-[var(--pyre-red)]/50 text-[var(--pyre-creme)]' : ''}`}
@@ -1050,6 +1065,7 @@ export function UsersManager() {
                         isAdmin: person.is_admin,
                         isFounder: person.is_founder,
                         isShiftLead: person.is_shift_lead,
+                        onCallEligible: person.on_call_eligible,
                         active: person.active,
                       }}
                       disabled={busy}
