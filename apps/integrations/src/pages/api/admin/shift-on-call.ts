@@ -10,115 +10,24 @@
 // Reads come from schedule-board (the columns ride on the shift rows). All
 // writes need schedule:manage, like every other change to a shift.
 
-import {
-  addDays,
-  ON_CALL_LOOKBACK_DAYS,
-  type OnCallChange,
-  type OnCallPerson,
-  type OnCallShift,
-  onCallPeople,
-  planOnCall,
-  utcToEastern,
-} from '@pyre/schedule-core';
+import { planOnCall } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { requireScheduleManage } from '@/lib/auth/admin';
-import { getDb, type ShiftRow, type TimeOffRow } from '@/lib/db';
+import { getDb, type ShiftRow } from '@/lib/db';
 import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
+import { fillOnCall, loadOnCallInputs } from '@/lib/schedule/on-call';
 
 export const prerender = false;
-
-type Db = NonNullable<ReturnType<typeof getDb>>;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A month view plus slack; the auto action is never asked for more. */
 const MAX_RANGE_DAYS = 45;
 
-const todayEastern = () => utcToEastern(new Date().toISOString()).date;
-
 function daysBetween(start: string, end: string): number {
   return Math.round(
     (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000
   );
-}
-
-/**
- * Everything planOnCall needs for `fromDate`..`end`: the live shifts with
- * their live assignments (plus the lookback the split counts), the roster,
- * and time off.
- */
-async function loadPlanInputs(
-  db: Db,
-  fromDate: string,
-  end: string
-): Promise<{ shifts: OnCallShift[]; people: OnCallPerson[]; timeOff: TimeOffRow[] } | Response> {
-  const [shiftsRes, staffRes, timeOffRes] = await Promise.all([
-    db
-      .from('shifts')
-      .select(
-        'id, shift_date, label, starts_at, ends_at, status, is_draft, on_call_staff_id, on_call_manual'
-      )
-      .gte('shift_date', addDays(fromDate, -ON_CALL_LOOKBACK_DAYS))
-      .lte('shift_date', end)
-      .eq('is_draft', false)
-      .eq('status', 'active'),
-    db.from('staff').select('id, display_name, active, on_call_eligible'),
-    db.from('time_off').select('*'),
-  ]);
-  const firstError = shiftsRes.error ?? staffRes.error ?? timeOffRes.error;
-  if (firstError) return dbError(firstError);
-
-  const shifts = ((shiftsRes.data ?? []) as Array<Omit<OnCallShift, 'assignments'>>).map((s) => ({
-    ...s,
-    assignments: [] as Array<{ staff_id: string; is_draft: boolean }>,
-  }));
-  if (shifts.length > 0) {
-    const { data, error } = await db
-      .from('shift_assignments')
-      .select('shift_id, staff_id, is_draft')
-      .in(
-        'shift_id',
-        shifts.map((s) => s.id)
-      )
-      .eq('is_draft', false);
-    if (error) return dbError(error);
-    const byId = new Map(shifts.map((s) => [s.id, s]));
-    for (const a of (data ?? []) as Array<{
-      shift_id: string;
-      staff_id: string;
-      is_draft: boolean;
-    }>) {
-      byId.get(a.shift_id)?.assignments.push({ staff_id: a.staff_id, is_draft: a.is_draft });
-    }
-  }
-
-  return {
-    shifts,
-    people: (staffRes.data ?? []) as OnCallPerson[],
-    timeOff: (timeOffRes.data ?? []) as TimeOffRow[],
-  };
-}
-
-/**
- * Write the planned changes, grouped by who they name. Hand-picked shifts are
- * filtered in the update itself, so a pick made while the plan ran survives.
- */
-async function applyChanges(db: Db, changes: OnCallChange[]): Promise<Response | null> {
-  const byTarget = new Map<string | null, string[]>();
-  for (const c of changes) {
-    const ids = byTarget.get(c.to) ?? [];
-    ids.push(c.shiftId);
-    byTarget.set(c.to, ids);
-  }
-  for (const [to, ids] of byTarget) {
-    const { error } = await db
-      .from('shifts')
-      .update({ on_call_staff_id: to })
-      .in('id', ids)
-      .eq('on_call_manual', false);
-    if (error) return dbError(error);
-  }
-  return null;
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
@@ -145,56 +54,25 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: `Pick a range of at most ${MAX_RANGE_DAYS} days` }, 400);
   }
 
-  // Past shifts are a record of who was on call — never rewritten.
-  const today = todayEastern();
-  const fromDate = start > today ? start : today;
-  if (fromDate > end) return json({ changed: 0, unfilled: 0 });
-
-  const inputs = await loadPlanInputs(db, fromDate, end);
-  if (inputs instanceof Response) return inputs;
-  if (onCallPeople(inputs.people).length === 0) {
+  const { count, error: countError } = await db
+    .from('staff')
+    .select('id', { count: 'exact', head: true })
+    .eq('active', true)
+    .eq('on_call_eligible', true);
+  if (countError) return dbError(countError);
+  if (!count) {
     return json({ error: 'Nobody is set up to be on call — tick "On call" on /admin/users' }, 400);
   }
 
-  const changes = planOnCall({ ...inputs, fromDate });
-  const applyError = await applyChanges(db, changes);
-  if (applyError) return applyError;
-
-  // Live shifts in range left with nobody — everyone on call was off.
-  const changedTo = new Map(changes.map((c) => [c.shiftId, c.to]));
-  const unfilled = inputs.shifts.filter(
-    (s) =>
-      s.shift_date >= fromDate &&
-      (changedTo.has(s.id) ? changedTo.get(s.id) : s.on_call_staff_id) === null
-  ).length;
-
-  if (changes.length > 0) {
-    const names = new Map(inputs.people.map((p) => [p.id, p.display_name]));
-    const labels = new Map(
-      (inputs.shifts as Array<OnCallShift & { label: string }>).map((s) => [s.id, s])
-    );
-    await logScheduleChange(db, {
-      actor: actorFromGate(gate),
-      entityType: 'shift',
-      entityId: null,
-      action: 'update',
-      summary: `Auto-filled on-call for ${changes.length} shift${changes.length === 1 ? '' : 's'} (${fromDate} – ${end})`,
-      details: {
-        changes: changes.map((c) => {
-          const shift = labels.get(c.shiftId);
-          return {
-            shiftId: c.shiftId,
-            shift: shift ? describeShift(shift) : null,
-            from: c.from ? (names.get(c.from) ?? c.from) : null,
-            to: c.to ? (names.get(c.to) ?? c.to) : null,
-            reason: c.reason,
-          };
-        }),
-      },
-    });
-  }
-
-  return json({ changed: changes.length, unfilled });
+  // Past shifts are a record of who was on call — fillOnCall starts at today.
+  const result = await fillOnCall(db, {
+    start,
+    end,
+    actor: actorFromGate(gate),
+    why: 'Auto-filled',
+  });
+  if ('error' in result) return dbError(result.error);
+  return json(result);
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
@@ -230,8 +108,8 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (auto) {
     // Back to the rule: plan this shift as the auto action would, from its
     // own date so the split counts everything before it.
-    const inputs = await loadPlanInputs(db, shift.shift_date, shift.shift_date);
-    if (inputs instanceof Response) return inputs;
+    const inputs = await loadOnCallInputs(db, shift.shift_date, shift.shift_date);
+    if ('error' in inputs) return dbError(inputs.error);
     const shifts = inputs.shifts.map((s) => (s.id === id ? { ...s, on_call_manual: false } : s));
     const change = planOnCall({ ...inputs, shifts, fromDate: shift.shift_date }).find(
       (c) => c.shiftId === id

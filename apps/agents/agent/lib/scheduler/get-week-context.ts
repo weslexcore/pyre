@@ -261,6 +261,9 @@ export const getWeekContextTool = defineTool({
         name: s.display_name,
         isFounder: s.is_founder,
         canLead: canLeadShift(s),
+        // May be on call. The server picks who is on call from your draft
+        // (save_proposal returns it); you don't assign it.
+        onCall: s.on_call_eligible,
         targetHoursPerWeek: s.target_hours_per_week,
         // Shifts this week, counting existingAssignments: aim at preferred,
         // reach min where you can; max is a hard cap the server enforces.
