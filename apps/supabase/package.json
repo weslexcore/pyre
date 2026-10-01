@@ -9,6 +9,8 @@
     "status": "supabase status",
     "reset": "supabase db reset",
     "migrate": "supabase migration up",
+    "new": "supabase migration new --workdir ..",
+    "check:migrations": "bash scripts/check-migration-timestamps.sh",
     "db:diff": "supabase db diff",
     "db:push": "supabase db push",
     "gen:types": "supabase gen types typescript --local --schema public"
