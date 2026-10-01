@@ -67,6 +67,7 @@ import {
   useBoardSensors,
 } from './dnd';
 import { QuickAdd } from './QuickAdd';
+import { useCardDeepLink } from './useCardDeepLink';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
 
 interface BundleResponse {
@@ -138,15 +139,7 @@ export function BoardView({ slug }: { slug: string }) {
     void load();
   }, [load]);
 
-  // Arriving from a notification or All Tasks: #card-<id> names the card to
-  // open once the board has rendered.
-  useEffect(() => {
-    if (!bundle) return;
-    const hash = window.location.hash;
-    if (!hash.startsWith('#card-')) return;
-    const id = hash.slice('#card-'.length);
-    if (bundle.cards.some((card) => card.id === id)) setOpenCardId(id);
-  }, [bundle]);
+  useCardDeepLink(bundle?.cards, setOpenCardId);
 
   const saveCard = useOptimisticCardSave(bundle, setBundle);
 

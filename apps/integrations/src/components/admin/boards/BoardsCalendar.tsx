@@ -18,7 +18,7 @@
 // board in a new tab.
 
 import { todayEastern } from '@pyre/schedule-core';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import {
   buildCalendar,
@@ -37,6 +37,7 @@ import { BackLink } from '../BackLink';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
 import { CardDrawer } from './CardDrawer';
+import { useCardDeepLink } from './useCardDeepLink';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
 
 interface CalendarData {
@@ -85,15 +86,7 @@ export function BoardsCalendar() {
 
   const today = data?.today ?? todayEastern();
 
-  // Arriving from a notification or a shared link: #card-<id> names the card
-  // to open, the same convention the board page and All Tasks follow.
-  useEffect(() => {
-    if (!data) return;
-    const hash = window.location.hash;
-    if (!hash.startsWith('#card-')) return;
-    const id = hash.slice('#card-'.length);
-    if (data.cards.some((card) => card.id === id)) setOpenCardId(id);
-  }, [data]);
+  useCardDeepLink(data?.cards, setOpenCardId);
 
   // The edited card is replaced in place, so the month keeps its scroll, its
   // chips, and everything else that is not this card.
