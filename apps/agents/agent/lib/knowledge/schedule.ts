@@ -117,6 +117,8 @@ export interface ShapedShift {
   }>;
   /** The asker's own hours on this shift; 0 when they are not on it. */
   myHours: number;
+  /** Who the crew calls for this shift; null when nobody is on call yet. */
+  onCall: string | null;
 }
 
 /**
@@ -167,6 +169,7 @@ export function shapeShifts(
         url: scheduleUrl(shift.shift_date),
         crew,
         myHours: round1(crew.filter((c) => c.isMe).reduce((sum, c) => sum + c.hours, 0)),
+        onCall: shift.on_call_staff_id ? (nameOf.get(shift.on_call_staff_id) ?? 'Unknown') : null,
       };
     });
 }

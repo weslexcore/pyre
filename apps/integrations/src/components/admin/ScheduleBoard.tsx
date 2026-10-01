@@ -33,11 +33,13 @@ import {
   mismatchedDutyPairs,
   missingShiftLead,
   normalizeDuties,
+  onCallPeople,
   pairedDutyFor,
   SHIFT_LABEL_SUGGESTIONS,
   timeToMinutes,
   toggleDuty,
   weekStartOf,
+  workingOnCall,
 } from '@pyre/schedule-core';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
@@ -558,6 +560,31 @@ export function ScheduleBoard() {
 
   const staffById = useMemo(() => new Map((data?.staff ?? []).map((s) => [s.id, s])), [data]);
 
+  // Shift id → the on-call people the rule would name instead, for live
+  // shifts the auto action owns whose on-call no longer follows rule 1 (a
+  // founder working that day takes the call) — someone was added or moved
+  // since the fill. Manage side only; re-running Auto on-call fixes them.
+  const onCallDrift = useMemo(() => {
+    const drift = new Map<string, string[]>();
+    if (!canManage) return drift;
+    const today = todayLocal();
+    const eligibleIds = new Set(onCallPeople(data?.staff ?? []).map((p) => p.id));
+    for (const shift of data?.shifts ?? []) {
+      if (shift.status !== 'active' || shift.is_draft || shift.on_call_manual) continue;
+      if (shift.shift_date < today) continue;
+      const { onShift, onDay } = workingOnCall(
+        shift,
+        shiftsByDate.get(shift.shift_date) ?? [],
+        eligibleIds
+      );
+      const expected = onShift.length > 0 ? onShift : onDay;
+      if (expected.length > 0 && !expected.includes(shift.on_call_staff_id ?? '')) {
+        drift.set(shift.id, expected);
+      }
+    }
+    return drift;
+  }, [canManage, data, shiftsByDate]);
+
   const requestsByShift = useMemo(() => {
     const map = new Map<string, ShiftRequestRow[]>();
     for (const request of data?.shiftRequests ?? []) {
@@ -854,6 +881,28 @@ export function ScheduleBoard() {
   const proposalAction = (body: Record<string, unknown>) =>
     run(() => api('POST', '/api/admin/schedule-proposals', body));
 
+  // Fill on-call across the visible range by the rule (schedule-core
+  // on-call.ts); the server skips past days and hand-picked shifts.
+  const autoOnCall = () =>
+    run(async () => {
+      const res = await fetch('/api/admin/shift-on-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: range.start, end: range.end }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        unfilled?: number;
+        error?: string;
+      };
+      if (!res.ok) return { error: body.error ?? `HTTP ${res.status}` };
+      invalidateJson('/api/admin/schedule-board');
+      return body.unfilled
+        ? {
+            error: `${body.unfilled} shift${body.unfilled === 1 ? '' : 's'} left with nobody on call — everyone on call has time off then.`,
+          }
+        : {};
+    });
+
   // Mark shifts set in stone ahead of the horizon (or hand them back to the
   // date rule). One reload after the batch; the first failure stops it.
   const setConfirmed = (shiftIds: string[], confirmed: boolean) =>
@@ -1029,6 +1078,17 @@ export function ScheduleBoard() {
               >
                 Sync Momence
               </button>
+              {(view === 'week' || view === 'month') && (
+                <button
+                  type="button"
+                  className={buttonClass}
+                  onClick={() => void autoOnCall()}
+                  disabled={busy || drafting}
+                  title="Name who's on call for every shift from today on: someone on call who works that day takes it, otherwise it's split evenly between those free. Shifts picked by hand are left alone."
+                >
+                  ☎ Auto on-call
+                </button>
+              )}
               {(view === 'week' || view === 'month') && (
                 <button
                   type="button"
@@ -1565,6 +1625,46 @@ export function ScheduleBoard() {
                                   title="Still tentative — can change until the week locks"
                                 >
                                   ≈ tentative
+                                </span>
+                              )}
+                              {shift.status === 'active' &&
+                                !shift.is_draft &&
+                                (shift.on_call_staff_id ? (
+                                  <span
+                                    className={`rounded px-2 py-0.5 font-mono text-xs ${
+                                      shift.on_call_staff_id === selfId
+                                        ? 'bg-[var(--pyre-gold)]/20 text-[var(--pyre-gold)]'
+                                        : 'bg-white/10 text-white/70'
+                                    }`}
+                                    title={`On call for this shift${shift.on_call_manual ? ' (picked by hand)' : ''}`}
+                                  >
+                                    ☎{' '}
+                                    {shift.on_call_staff_id === selfId
+                                      ? "you're on call"
+                                      : (staffById.get(shift.on_call_staff_id)?.display_name ??
+                                        '?')}
+                                  </span>
+                                ) : (
+                                  canManage &&
+                                  shift.shift_date >= todayLocal() && (
+                                    <span
+                                      className="rounded bg-white/5 px-2 py-0.5 font-mono text-xs text-white/40"
+                                      title="Nobody is on call yet — use ☎ Auto on-call, or pick someone under Edit"
+                                    >
+                                      ☎ no on-call
+                                    </span>
+                                  )
+                                ))}
+                              {onCallDrift.has(shift.id) && (
+                                <span
+                                  className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
+                                  title="Someone on call is working this day, so they should take it — run ☎ Auto on-call to update"
+                                >
+                                  ⚠ on-call:{' '}
+                                  {(onCallDrift.get(shift.id) ?? [])
+                                    .map((id) => staffById.get(id)?.display_name ?? '?')
+                                    .join(' / ')}{' '}
+                                  is working
                                 </span>
                               )}
                               {noLead && (
@@ -2436,6 +2536,10 @@ function ShiftDetail({
         </div>
       )}
 
+      {canManage && editMode && shift.status === 'active' && !shift.is_draft && (
+        <OnCallPicker shift={shift} staff={data.staff} busy={busy} run={run} />
+      )}
+
       {canManage && editMode && candidates.length > 0 && shift.status === 'active' && (
         <div>
           <p className="mb-1.5 font-mono text-xs uppercase tracking-wide text-white/40">
@@ -2559,6 +2663,78 @@ function ShiftDetail({
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Who's on call for a shift, in edit mode: "Auto" hands it to the rule (what
+ * ☎ Auto on-call fills); a name or "Nobody" picks by hand, which the auto
+ * action then leaves alone.
+ */
+function OnCallPicker({
+  shift,
+  staff,
+  busy,
+  run,
+}: {
+  shift: BoardShift;
+  staff: StaffRow[];
+  busy: boolean;
+  run: (action: () => Promise<{ error?: string }>) => Promise<string | null>;
+}) {
+  const people = onCallPeople(staff);
+  const value = shift.on_call_manual ? (shift.on_call_staff_id ?? 'none') : 'auto';
+  const autoName =
+    !shift.on_call_manual && shift.on_call_staff_id
+      ? staff.find((s) => s.id === shift.on_call_staff_id)?.display_name
+      : null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label
+        htmlFor={`on-call-${shift.id}`}
+        className="font-mono text-xs uppercase tracking-wide text-white/40"
+      >
+        ☎ On call
+      </label>
+      <select
+        id={`on-call-${shift.id}`}
+        className={`${inputClass} w-auto`}
+        value={value}
+        disabled={busy}
+        onChange={(e) => {
+          const next = e.target.value;
+          void run(() =>
+            api(
+              'PATCH',
+              '/api/admin/shift-on-call',
+              next === 'auto'
+                ? { id: shift.id, auto: true }
+                : { id: shift.id, staffId: next === 'none' ? null : next }
+            )
+          );
+        }}
+      >
+        <option value="auto">Auto{autoName ? ` (${autoName})` : ''}</option>
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.display_name}
+          </option>
+        ))}
+        {/* A hand-picked person who has since lost the flag stays selectable
+            as the current value rather than silently reading as Auto. */}
+        {shift.on_call_manual &&
+          shift.on_call_staff_id &&
+          !people.some((p) => p.id === shift.on_call_staff_id) && (
+            <option value={shift.on_call_staff_id}>
+              {staff.find((s) => s.id === shift.on_call_staff_id)?.display_name ?? '?'}
+            </option>
+          )}
+        <option value="none">Nobody</option>
+      </select>
+      {shift.on_call_manual && (
+        <span className="font-mono text-[10px] text-white/40">picked by hand</span>
       )}
     </div>
   );
