@@ -516,7 +516,7 @@ const ROLE_OPTIONS: Array<{ key: keyof Roles; label: string; hint: string }> = [
   {
     key: 'onCallEligible',
     label: 'On call',
-    hint: 'Can be the on-call person for a shift. ☎ Auto on-call on the schedule puts them on call for days they work, and splits the other days evenly between everyone with this ticked.',
+    hint: 'Can be the on-call person for a shift. Auto on-call on the schedule puts them on call for days they work, and splits the other days evenly between everyone with this ticked.',
   },
   {
     key: 'isFounder',

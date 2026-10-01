@@ -1086,7 +1086,7 @@ export function ScheduleBoard() {
                   disabled={busy || drafting}
                   title="Name who's on call for every shift from today on: someone on call who works that day takes it, otherwise it's split evenly between those free. Shifts picked by hand are left alone."
                 >
-                  ☎ Auto on-call
+                  Auto on-call
                 </button>
               )}
               {(view === 'week' || view === 'month') && (
@@ -1638,29 +1638,27 @@ export function ScheduleBoard() {
                                     }`}
                                     title={`On call for this shift${shift.on_call_manual ? ' (picked by hand)' : ''}`}
                                   >
-                                    ☎{' '}
                                     {shift.on_call_staff_id === selfId
                                       ? "you're on call"
-                                      : (staffById.get(shift.on_call_staff_id)?.display_name ??
-                                        '?')}
+                                      : `on call: ${staffById.get(shift.on_call_staff_id)?.display_name ?? '?'}`}
                                   </span>
                                 ) : (
                                   canManage &&
                                   shift.shift_date >= todayLocal() && (
                                     <span
                                       className="rounded bg-white/5 px-2 py-0.5 font-mono text-xs text-white/40"
-                                      title="Nobody is on call yet — use ☎ Auto on-call, or pick someone under Edit"
+                                      title="Nobody is on call yet — use Auto on-call, or pick someone under Edit"
                                     >
-                                      ☎ no on-call
+                                      no on-call
                                     </span>
                                   )
                                 ))}
                               {onCallDrift.has(shift.id) && (
                                 <span
                                   className="rounded bg-[var(--pyre-gold)]/20 px-2 py-0.5 font-mono text-xs text-[var(--pyre-gold)]"
-                                  title="Someone on call is working this day, so they should take it — run ☎ Auto on-call to update"
+                                  title="Someone on call is working this day, so they should take it — run Auto on-call to update"
                                 >
-                                  ⚠ on-call:{' '}
+                                  on-call:{' '}
                                   {(onCallDrift.get(shift.id) ?? [])
                                     .map((id) => staffById.get(id)?.display_name ?? '?')
                                     .join(' / ')}{' '}
@@ -2670,7 +2668,7 @@ function ShiftDetail({
 
 /**
  * Who's on call for a shift, in edit mode: "Auto" hands it to the rule (what
- * ☎ Auto on-call fills); a name or "Nobody" picks by hand, which the auto
+ * Auto on-call fills); a name or "Nobody" picks by hand, which the auto
  * action then leaves alone.
  */
 function OnCallPicker({
@@ -2696,7 +2694,7 @@ function OnCallPicker({
         htmlFor={`on-call-${shift.id}`}
         className="font-mono text-xs uppercase tracking-wide text-white/40"
       >
-        ☎ On call
+        On call
       </label>
       <select
         id={`on-call-${shift.id}`}
