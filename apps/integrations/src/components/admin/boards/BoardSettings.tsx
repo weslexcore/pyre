@@ -354,9 +354,9 @@ export function BoardSettings({
         <SectionTitle note="renaming keeps the cards">Columns</SectionTitle>
         <ColumnOrder items={drafts} disabled={busy || saving} onChange={setDrafts}>
           {(draft, index) => (
-            <div key={draft.key} className="flex min-w-0 items-center gap-2">
+            <div key={draft.key} className="flex min-w-0 flex-wrap items-center gap-2">
               <input
-                className={`${inputBaseClass} min-w-0 flex-1`}
+                className={`${inputBaseClass} min-w-0 grow basis-48`}
                 type="text"
                 maxLength={BOARD_LIMITS.columnLabel}
                 value={draft.label}
@@ -415,9 +415,9 @@ export function BoardSettings({
         >
           {(draft, index) => (
             <div className="space-y-2 rounded border border-white/10 p-3">
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <input
-                  className={`${inputBaseClass} min-w-0 flex-1`}
+                  className={`${inputBaseClass} min-w-0 grow basis-48`}
                   type="text"
                   maxLength={BOARD_LIMITS.fieldLabel}
                   value={draft.label}
