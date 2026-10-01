@@ -102,8 +102,9 @@ export function CalendarSubscribe() {
     <section className="mt-6 rounded border border-white/10 bg-white/[0.03] p-4">
       <h2 className="mb-1 font-semibold text-[var(--pyre-creme)]">Subscribe to your shifts</h2>
       <p className="mb-4 font-mono text-xs leading-relaxed text-white/50">
-        Add this once and your shifts show up in your own calendar and stay current. It covers the
-        weeks that are locked in — anything further out is still moving, so it isn't included yet.
+        Add this once and your shifts show up in your own calendar and stay current, along with any
+        shifts you're on call for. It covers the weeks that are locked in — anything further out is
+        still moving, so it isn't included yet.
       </p>
 
       <FeedRow

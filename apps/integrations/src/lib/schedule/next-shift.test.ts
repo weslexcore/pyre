@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ShiftAssignmentRow, ShiftRow } from '@/lib/db';
-import { isInSession, isUpcoming, pickWeekShifts } from './next-shift';
+import { isInSession, isUpcoming, pickOnCallShifts, pickWeekShifts } from './next-shift';
 
 const now = { date: '2026-08-31', minutes: 14 * 60 }; // Mon 2pm ET
 
@@ -85,5 +85,60 @@ describe('pickWeekShifts', () => {
     expect(am).toMatchObject({ isPast: true, isToday: true, isInSession: false });
     expect(mid).toMatchObject({ isPast: false, isToday: true, isInSession: true });
     expect(next).toMatchObject({ isPast: false, isToday: false, isInSession: false });
+  });
+});
+
+describe('pickOnCallShifts', () => {
+  const row = (id: string, date: string, startsAt: string, endsAt: string, over = {}) =>
+    ({
+      id,
+      shift_date: date,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      status: 'active',
+      is_draft: false,
+      on_call_staff_id: `oncall-${id}`,
+      ...over,
+    }) as ShiftRow;
+
+  it('lists every shift live right now', () => {
+    const picked = pickOnCallShifts(
+      [
+        row('day', '2026-08-31', '10:00', '16:00'),
+        row('event', '2026-08-31', '13:00', '15:00'),
+        row('evening', '2026-08-31', '17:00', '21:00'),
+      ],
+      now
+    );
+    expect(picked.map((p) => [p.shift.id, p.onCallStaffId, p.isInSession])).toEqual([
+      ['day', 'oncall-day', true],
+      ['event', 'oncall-event', true],
+    ]);
+  });
+
+  it('falls back to the next shift between shifts', () => {
+    const picked = pickOnCallShifts(
+      [
+        row('tomorrow', '2026-09-01', '09:00', '13:00'),
+        row('morning', '2026-08-31', '07:00', '12:00'),
+        row('evening', '2026-08-31', '17:00', '21:00'),
+      ],
+      now
+    );
+    expect(picked.map((p) => [p.shift.id, p.isToday, p.isInSession])).toEqual([
+      ['evening', true, false],
+    ]);
+  });
+
+  it('skips cancelled and draft shifts, and keeps a shift with nobody on call', () => {
+    const picked = pickOnCallShifts(
+      [
+        row('cancelled', '2026-08-31', '13:00', '15:00', { status: 'cancelled' }),
+        row('draft', '2026-08-31', '13:00', '15:00', { is_draft: true }),
+        row('open', '2026-08-31', '13:00', '16:00', { on_call_staff_id: null }),
+      ],
+      now
+    );
+    expect(picked.map((p) => [p.shift.id, p.onCallStaffId])).toEqual([['open', null]]);
   });
 });

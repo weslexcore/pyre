@@ -126,6 +126,46 @@ describe('buildPersonalEvents', () => {
   });
 });
 
+describe('buildPersonalEvents on-call', () => {
+  it("adds an on-call block for a shift they aren't working", () => {
+    const [event] = personal(
+      shift({ on_call_staff_id: ME, assignments: [assignment({ staff_id: THEM })] })
+    );
+    expect(event.uid).toBe('pyre-oncall-shift-1@pyresauna.com');
+    expect(event.summary).toBe('Pyre — On call (Evening)');
+    expect(event.startTime).toBe('14:00:00');
+    expect(event.endTime).toBe('20:30:00');
+    expect(event.description).toContain("You're on call for Evening");
+    expect(event.description).toContain('On shift: Julien');
+  });
+
+  it('marks the shift they work instead of doubling it', () => {
+    const events = personal(shift({ on_call_staff_id: ME }));
+    expect(events).toHaveLength(1);
+    expect(events[0].uid).toBe('pyre-shift-assign-1@pyresauna.com');
+    expect(events[0].summary).toBe('Pyre — Evening (on call)');
+    expect(events[0].description).toContain("You're on call for this shift.");
+  });
+
+  it("tells the crew who's on call", () => {
+    const [event] = personal(shift({ on_call_staff_id: THEM }));
+    expect(event.summary).toBe('Pyre — Evening');
+    expect(event.description).toContain('On call: Julien');
+  });
+
+  it('keeps an on-call block for a cancelled shift as cancelled', () => {
+    const [event] = personal(shift({ on_call_staff_id: ME, status: 'cancelled', assignments: [] }));
+    expect(event.status).toBe('CANCELLED');
+  });
+
+  it('bumps the last-modified stamp when on-call changes on the shift', () => {
+    const [event] = personal(
+      shift({ on_call_staff_id: THEM, updated_at: '2026-08-20T09:00:00.000Z' })
+    );
+    expect(event.lastModified).toBe('2026-08-20T09:00:00.000Z');
+  });
+});
+
 describe('buildTeamEvents', () => {
   const team = (s: ShiftWithAssignments) =>
     buildTeamEvents({ shifts: [s], staffById, origin: ORIGIN });
@@ -137,6 +177,11 @@ describe('buildTeamEvents', () => {
     expect(event.uid).toBe('pyre-cover-shift-1@pyresauna.com');
     expect(event.summary).toBe('Evening — 2/2');
     expect(event.description).toContain('On shift: Sunny, Julien');
+  });
+
+  it("names who's on call", () => {
+    expect(team(shift({ on_call_staff_id: THEM }))[0].description).toContain('On call: Julien');
+    expect(team(shift())[0].description).not.toContain('On call');
   });
 
   it('flags an understaffed shift', () => {
