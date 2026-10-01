@@ -198,3 +198,52 @@ export async function getWeekShifts(
 
   return pickWeekShifts(shifts, (mine ?? []) as ShiftAssignmentRow[], now);
 }
+
+export interface OnCallNow {
+  shift: ShiftRow;
+  /** Who the crew calls for this shift; null when nobody is on call. */
+  onCallStaffId: string | null;
+  isToday: boolean;
+  isInSession: boolean;
+}
+
+/**
+ * The shifts whose on-call person the admin home shows: every shift live
+ * right now (overlapping windows can each have their own), or — between
+ * shifts — just the next one ahead. Pure; the query lives in getOnCallNow.
+ */
+export function pickOnCallShifts(shifts: ShiftRow[], now: LocalWallClock): OnCallNow[] {
+  const upcoming = shifts
+    .filter((s) => s.status === 'active' && !s.is_draft && isUpcoming(s, now))
+    .sort(
+      (a, b) =>
+        a.shift_date.localeCompare(b.shift_date) ||
+        timeToMinutes(a.starts_at) - timeToMinutes(b.starts_at)
+    );
+  const live = upcoming.filter((s) => isInSession(s, now));
+  return (live.length > 0 ? live : upcoming.slice(0, 1)).map((shift) => ({
+    shift,
+    onCallStaffId: shift.on_call_staff_id,
+    isToday: shift.shift_date === now.date,
+    isInSession: isInSession(shift, now),
+  }));
+}
+
+/**
+ * Who to reach for the shift happening now (or the next one), for everyone on
+ * the admin home. Null on any failure — a convenience, like the chips above.
+ */
+export async function getOnCallNow(db: SupabaseClient): Promise<OnCallNow[] | null> {
+  const now = utcToEastern(new Date().toISOString());
+  const { data, error } = await db
+    .from('shifts')
+    .select('*')
+    .eq('is_draft', false)
+    .eq('status', 'active')
+    .gte('shift_date', now.date)
+    .order('shift_date')
+    .order('starts_at')
+    .limit(CANDIDATE_LIMIT);
+  if (error) return null;
+  return pickOnCallShifts((data ?? []) as ShiftRow[], now);
+}

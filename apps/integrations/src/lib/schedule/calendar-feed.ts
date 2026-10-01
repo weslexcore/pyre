@@ -32,10 +32,21 @@ function nameOf(staffById: Map<string, StaffRow>, id: string): string {
   return staffById.get(id)?.display_name ?? 'Someone';
 }
 
+/** "On call: Wes" for a shift's description, or null when nobody is. */
+function onCallLine(staffById: Map<string, StaffRow>, shift: ShiftRow): string | null {
+  return shift.on_call_staff_id ? `On call: ${nameOf(staffById, shift.on_call_staff_id)}` : null;
+}
+
 /**
  * One event per shift the person is assigned to. Keyed on the assignment id:
  * a sub claim deletes the requester's row and inserts the claimer's, so the
  * event correctly disappears from one calendar and appears in the other.
+ *
+ * On-call rides along. Working a shift you're also on call for marks that
+ * shift's event rather than doubling the block. Being on call for a shift
+ * you're not working adds its own event over the shift window, keyed on the
+ * shift: when on-call moves to someone else it leaves this feed and appears
+ * in theirs.
  */
 export function buildPersonalEvents(args: {
   staffId: string;
@@ -52,7 +63,11 @@ export function buildPersonalEvents(args: {
     // Drafts are proposals under review, not commitments — never in a feed.
     if (shift.is_draft) continue;
     const mine = shift.assignments.find((a) => a.staff_id === staffId && !a.is_draft);
-    if (!mine) continue;
+    const onCall = shift.on_call_staff_id === staffId;
+    if (!mine) {
+      if (onCall) events.push(onCallEvent(shift, staffById, origin));
+      continue;
+    }
 
     const coworkers = shift.assignments
       .filter((a) => a.staff_id !== staffId && !a.is_draft)
@@ -64,10 +79,11 @@ export function buildPersonalEvents(args: {
       // The assignment's own hours, not the shift's — people come and go at different times.
       startTime: mine.starts_at,
       endTime: mine.ends_at,
-      summary: `Pyre — ${shift.label}`,
+      summary: `Pyre — ${shift.label}${onCall ? ' (on call)' : ''}`,
       location: VENUE_ADDRESS,
       description: describe([
         `${shift.label}, ${formatWindowLabel(mine)}`,
+        onCall ? "You're on call for this shift." : onCallLine(staffById, shift),
         // Duties travel with the event so the phone shows what the shift is,
         // not only when it is.
         formatDuties(dutyCatalog, mine.duties) &&
@@ -82,11 +98,41 @@ export function buildPersonalEvents(args: {
       ]),
       url: boardUrl(origin, shift),
       status: statusOf(shift),
-      lastModified: mine.updated_at,
+      // The shift row changes when on-call does; the assignment row doesn't.
+      lastModified: mine.updated_at > shift.updated_at ? mine.updated_at : shift.updated_at,
     });
   }
 
   return events;
+}
+
+/** An on-call block for a shift the person isn't working. */
+function onCallEvent(
+  shift: ShiftWithAssignments,
+  staffById: Map<string, StaffRow>,
+  origin: string
+): LocalCalendarEvent {
+  const crew = shift.assignments
+    .filter((a) => !a.is_draft)
+    .map((a) => nameOf(staffById, a.staff_id));
+  return {
+    uid: `pyre-oncall-${shift.id}@pyresauna.com`,
+    date: shift.shift_date,
+    startTime: shift.starts_at,
+    endTime: shift.ends_at,
+    summary: `Pyre — On call (${shift.label})`,
+    location: VENUE_ADDRESS,
+    description: describe([
+      `You're on call for ${shift.label}, ${formatWindowLabel(shift)}. The crew may reach out with questions.`,
+      crew.length > 0 ? `On shift: ${crew.join(', ')}` : 'Nobody assigned yet.',
+      shift.notes ? `Notes: ${shift.notes}` : null,
+      shift.status === 'cancelled' ? 'This shift was cancelled.' : null,
+      boardUrl(origin, shift),
+    ]),
+    url: boardUrl(origin, shift),
+    status: statusOf(shift),
+    lastModified: shift.updated_at,
+  };
 }
 
 /**
@@ -118,6 +164,7 @@ export function buildTeamEvents(args: {
       description: describe([
         `${shift.label}, ${formatWindowLabel(shift)}`,
         names.length > 0 ? `On shift: ${names.join(', ')}` : 'Nobody assigned yet.',
+        onCallLine(staffById, shift),
         short ? `Needs ${shift.staff_needed - assigned.length} more.` : null,
         shift.notes ? `Notes: ${shift.notes}` : null,
         shift.status === 'cancelled' ? 'This shift was cancelled.' : null,

@@ -2,13 +2,15 @@
 // Admin home: directory of the tools this user may view, grouped by section,
 // with a per-user Pinned section at the top (pinning and drag-reordering live
 // in the AdminToolsIndex island). Auth + header live in AdminLayout; the
-// island renders the same filtered tool list the nav uses. Above the cards,
-// the shift chips: everyone on the schedule sees each of their shifts this
-// week (staff with none this week see their next one instead), and admins
-// also see the next shift on the schedule overall. Under the chips come the SOPs for the
-// duties this person holds on their own current-or-next shift, then every
-// checklist run still open on an SOP they may view, their own first, so what
-// they are on the hook to finish is the first thing they see.
+// island renders the same filtered tool list the nav uses. First comes who
+// is on call for the shift happening now (or the next one), so whoever is
+// working knows who to reach with a question. Then the shift chips: everyone
+// on the schedule sees each of their shifts this week (staff with none this
+// week see their next one instead), and admins also see the next shift on
+// the schedule overall. Under the chips come the SOPs for the duties this
+// person holds on their own current-or-next shift, then every checklist run
+// still open on an SOP they may view, their own first, so what they are on
+// the hook to finish is the first thing they see.
 import { AdminToolsIndex } from '@/components/admin/AdminToolsIndex';
 import { canViewPage, toolsForAccess, visibleTools } from '@/components/admin/adminTools';
 import { ShiftSopsPanel } from '@/components/admin/ShiftSops';
@@ -18,8 +20,10 @@ import { listStaff } from '@/lib/auth/access';
 import { getDb } from '@/lib/db';
 import {
   getNextUpcomingShift,
+  getOnCallNow,
   getWeekShifts,
   type NextShift,
+  type OnCallNow,
   type WeekShift,
 } from '@/lib/schedule/next-shift';
 import { formatChipDate, formatCompactTime } from '@pyre/schedule-core';
@@ -50,16 +54,23 @@ let chipIsOwn = false;
 let assignedNames: string[] = [];
 // The viewer's own shifts this week, one chip each.
 let weekShifts: WeekShift[] = [];
+// Who's on call for the shift happening now (or the next one), with names.
+let onCallNow: Array<OnCallNow & { name: string | null }> = [];
+let selfStaffId: string | null = null;
 if (db && access) {
   const staff = (await listStaff()) ?? [];
-  const selfStaffId = email
+  selfStaffId = email
     ? (staff.find((s) => (s.email ?? '').toLowerCase() === email)?.id ?? null)
     : null;
+  const nameById = new Map(staff.map((s) => [s.id, s.display_name]));
+  onCallNow = ((await getOnCallNow(db)) ?? []).map((entry) => ({
+    ...entry,
+    name: entry.onCallStaffId ? (nameById.get(entry.onCallStaffId) ?? null) : null,
+  }));
   if (selfStaffId) weekShifts = (await getWeekShifts(db, selfStaffId)) ?? [];
   if (access.isAdmin) {
     nextShift = await getNextUpcomingShift(db);
     if (nextShift) {
-      const nameById = new Map(staff.map((s) => [s.id, s.display_name]));
       assignedNames = nextShift.assignments.map((a) => nameById.get(a.staff_id) ?? '?');
     }
   } else if (selfStaffId && weekShifts.length === 0) {
@@ -116,6 +127,48 @@ const chipWindow = nextShift
 
 <AdminLayout>
   <div class="space-y-8">
+    {
+      onCallNow.length > 0 && (
+        <section>
+          <h2 class="mb-2 font-mono text-xs uppercase tracking-wide text-[var(--pyre-sage)]">
+            {onCallNow[0].isInSession ? 'On call now' : 'On call next'}
+          </h2>
+          <div class="flex flex-wrap gap-2">
+            {onCallNow.map((entry) => {
+              const href = shiftHref(entry.shift);
+              const Tag = href ? 'a' : 'span';
+              const isSelf = !!selfStaffId && entry.onCallStaffId === selfStaffId;
+              return (
+                <Tag
+                  href={href ?? undefined}
+                  class={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[var(--pyre-sage)]/60 bg-[var(--pyre-sage)]/10 px-4 py-2 ${
+                    href
+                      ? 'transition-colors hover:border-[var(--pyre-sage)] hover:bg-[var(--pyre-sage)]/20'
+                      : ''
+                  }`}
+                >
+                  <span
+                    class={`text-base font-semibold ${
+                      entry.name ? 'text-[var(--pyre-creme)]' : 'text-white/50'
+                    }`}
+                  >
+                    {isSelf ? "You're on call" : (entry.name ?? 'Nobody on call')}
+                  </span>
+                  <span class="font-mono text-xs text-white/60">
+                    {entry.isInSession
+                      ? `${entry.shift.label} until ${formatCompactTime(entry.shift.ends_at)}`
+                      : `${entry.isToday ? 'Today' : formatChipDate(entry.shift.shift_date)} · ${formatCompactTime(entry.shift.starts_at)}–${formatCompactTime(entry.shift.ends_at)} ${entry.shift.label}`}
+                  </span>
+                </Tag>
+              );
+            })}
+          </div>
+          <p class="mt-1.5 font-mono text-[10px] text-white/40">
+            Reach out to them with any questions during the shift.
+          </p>
+        </section>
+      )
+    }
     {
       weekShifts.length > 0 && (
         <section>
