@@ -53,6 +53,6 @@
     "@react-email/ui": "6.9.1",
     "@types/node": "^22.20.1",
     "react-email": "^6.9.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
