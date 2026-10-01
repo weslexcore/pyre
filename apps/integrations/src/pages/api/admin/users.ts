@@ -236,6 +236,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       pages,
       is_founder: body.isFounder === true,
       is_shift_lead: body.isShiftLead === true,
+      on_call_eligible: body.onCallEligible === true,
       // Default off: someone added for dashboard access alone shouldn't
       // silently show up as assignable on the schedule board.
       active: body.active === true,
@@ -282,6 +283,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       | 'email'
       | 'is_founder'
       | 'is_shift_lead'
+      | 'on_call_eligible'
       | 'active'
       | 'momence_member_id'
       | 'pay_rate'
@@ -332,6 +334,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   if (body.isFounder !== undefined) fields.is_founder = body.isFounder === true;
   if (body.isShiftLead !== undefined) fields.is_shift_lead = body.isShiftLead === true;
+  if (body.onCallEligible !== undefined) fields.on_call_eligible = body.onCallEligible === true;
   if (body.active !== undefined) fields.active = body.active === true;
 
   // Deliberately not auto-zeroed when isFounder toggles on an existing row —
