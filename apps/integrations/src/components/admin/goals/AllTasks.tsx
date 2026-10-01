@@ -25,6 +25,7 @@ import { BackLink } from '../BackLink';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
+import { useCardDeepLink } from '../boards/useCardDeepLink';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
 import { cardClass, inputBaseClass, SectionTitle, selectClass } from '../goalsUi';
 
@@ -71,13 +72,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!data) return;
-    const hash = window.location.hash;
-    if (!hash.startsWith('#card-')) return;
-    const id = hash.slice('#card-'.length);
-    if (data.cards.some((card) => card.id === id)) setOpenCardId(id);
-  }, [data]);
+  useCardDeepLink(data?.cards, setOpenCardId);
 
   const saveCard = useOptimisticCardSave(data, setData);
 
