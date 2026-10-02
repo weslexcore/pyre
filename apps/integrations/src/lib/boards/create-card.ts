@@ -133,7 +133,9 @@ export async function createCard(
   await applyLinks(db, written, fields, prepared.links, input.actor);
   const [card] = await withLinks(db, fields, [written]);
 
-  if (card.owner_email) {
+  // Whoever it landed on — named in the request, or the board's defaults
+  // (the insert trigger) — hears about it.
+  if (card.assignee_emails.length > 0) {
     const { data: full } = await db
       .from('boards')
       .select('*')

@@ -215,6 +215,8 @@ export const BOARD_LIMITS = {
   notes: 20000,
   waitingOn: 120,
   area: 40,
+  /** People on one card, or a board's defaults. Mirrors the columns' checks. */
+  assignees: 20,
   externalRef: 200,
   comment: 4000,
   textAnswer: 500,

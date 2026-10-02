@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { notifyCardComment, notifyGoalComment } from './goals';
+import { notifyCardAssigned, notifyCardComment, notifyGoalComment } from './goals';
 
 const { listStaff } = vi.hoisted(() => ({ listStaff: vi.fn() }));
 vi.mock('@/lib/auth/access', () => ({ listStaff }));
@@ -17,13 +17,20 @@ const roster = ['actor', 'owner', 'member', 'outsider', 'revoked'].map((name) =>
 const card = {
   id: 'card',
   title: 'A task',
-  owner_email: 'owner@pyre.test',
+  assignee_emails: ['owner@pyre.test'],
   due_date: null,
   goal_id: null,
 };
 function database() {
   const insert = vi.fn().mockResolvedValue({ error: null });
-  return { db: { from: vi.fn(() => ({ insert })) } as unknown as SupabaseClient, insert };
+  // Superseding a notice deletes the unread one first: delete().in().eq()…is().is().
+  const chain: Record<string, unknown> = {};
+  for (const step of ['delete', 'in', 'eq']) chain[step] = vi.fn(() => chain);
+  chain.is = vi.fn(() => ({ is: vi.fn().mockResolvedValue({ error: null }) }));
+  return {
+    db: { from: vi.fn(() => ({ insert, ...chain })) } as unknown as SupabaseClient,
+    insert,
+  };
 }
 
 beforeEach(() => listStaff.mockResolvedValue(roster));
@@ -65,11 +72,11 @@ describe('comment notifications', () => {
   });
 
   it('delivers mentions even when the card has no owner or its author owns it', async () => {
-    for (const owner_email of [null, 'actor@pyre.test']) {
+    for (const assignee_emails of [[], ['actor@pyre.test']]) {
       const { db, insert } = database();
       await notifyCardComment(
         db,
-        { ...card, owner_email },
+        { ...card, assignee_emails },
         { slug: 'rentals' },
         '@member@pyre.test',
         'actor@pyre.test'
@@ -78,6 +85,21 @@ describe('comment notifications', () => {
         insert.mock.calls[0][0].map((row: { recipient_email: string }) => row.recipient_email)
       ).toEqual(['member@pyre.test']);
     }
+  });
+
+  it('tells each newly added assignee, but not the person who added them', async () => {
+    const { db, insert } = database();
+    await notifyCardAssigned(
+      db,
+      { ...card, assignee_emails: ['owner@pyre.test', 'member@pyre.test', 'actor@pyre.test'] },
+      { slug: 'rentals', card_noun: 'lead' },
+      null,
+      'actor@pyre.test',
+      ['member@pyre.test', 'actor@pyre.test']
+    );
+    expect(
+      insert.mock.calls[0][0].map((row: { recipient_email: string }) => row.recipient_email)
+    ).toEqual(['member@pyre.test']);
   });
 
   it('links goal mentions to a serving board the recipient can open', async () => {

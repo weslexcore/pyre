@@ -4,8 +4,10 @@ import { diffFields, eventsForCardPatch, eventsForGoalPatch } from './diff';
 
 const card = {
   column_id: 'todo',
-  owner_email: null,
+  assignee_emails: [] as string[],
   due_date: null,
+  repeat_every: null,
+  repeat_unit: null,
   title: 'Write the rental SOP',
   notes_md: '',
   waiting_on: null,
@@ -23,11 +25,11 @@ describe('diffFields', () => {
   });
 
   it('ignores keys the patch never mentioned', () => {
-    expect(diffFields(card, { title: 'New' }, ['owner_email'])).toEqual({});
+    expect(diffFields(card, { title: 'New' }, ['due_date'])).toEqual({});
   });
 
   it('treats null and undefined as the same absence', () => {
-    expect(diffFields(card, { owner_email: undefined }, ['owner_email'])).toEqual({});
+    expect(diffFields(card, { due_date: undefined }, ['due_date'])).toEqual({});
   });
 
   it('compares arrays and objects by value', () => {
@@ -50,11 +52,27 @@ describe('eventsForCardPatch', () => {
   it('gives a move, an assignment, and a date their own lines', () => {
     const events = eventsForCardPatch(card, {
       column_id: 'doing',
-      owner_email: 'maya@pyresauna.com',
+      assignee_emails: ['maya@pyresauna.com', 'jo@pyresauna.com'],
       due_date: '2026-10-01',
     });
     expect(events.map((e) => e.action)).toEqual(['moved', 'assigned', 'due_changed']);
     expect(events[0].detail).toEqual({ column_id: { from: 'todo', to: 'doing' } });
+    expect(events[1].detail).toEqual({
+      assignee_emails: { from: [], to: ['maya@pyresauna.com', 'jo@pyresauna.com'] },
+    });
+  });
+
+  it('logs a repeat rule with the other details', () => {
+    const events = eventsForCardPatch(card, { repeat_every: 1, repeat_unit: 'week' });
+    expect(events).toEqual([
+      {
+        action: 'updated',
+        detail: {
+          repeat_every: { from: null, to: 1 },
+          repeat_unit: { from: null, to: 'week' },
+        },
+      },
+    ]);
   });
 
   it('collapses everything else into one updated', () => {

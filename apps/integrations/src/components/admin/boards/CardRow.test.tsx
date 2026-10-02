@@ -38,6 +38,7 @@ function renderField(
     title: 'Booking',
     column_id: 'open',
     completed_at: null,
+    assignee_emails: [],
     properties: { party_size: value },
   } as unknown as BoardCardRow;
   return renderToStaticMarkup(

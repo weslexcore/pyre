@@ -20,6 +20,9 @@ const FIELD_LABELS: Record<string, string> = {
   goal_id: 'the goal it is filed under',
   parent_id: 'its parent goal',
   properties: 'the details',
+  // A rule changes both columns at once; one name for the pair.
+  repeat_every: 'how often it repeats',
+  repeat_unit: 'how often it repeats',
 };
 
 interface Change {
@@ -54,6 +57,24 @@ function sentenceList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
+function emails(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/** "assigned it to Maya and Jo", "took Jo off it", or both in one line. */
+function describeAssignees(change: Change, people: PeopleNames): string {
+  const from = emails(change.from);
+  const to = emails(change.to);
+  const added = to.filter((email) => !from.includes(email));
+  const removed = from.filter((email) => !to.includes(email));
+  const names = (list: string[]) => sentenceList(list.map((email) => personName(email, people)));
+  if (to.length === 0) return 'took everyone off it';
+  const parts: string[] = [];
+  if (added.length > 0) parts.push(`assigned it to ${names(added)}`);
+  if (removed.length > 0) parts.push(`took ${names(removed)} off it`);
+  return parts.length > 0 ? parts.join(' and ') : 'reordered who is on it';
+}
+
 /**
  * What this event says, without the actor's name (the feed puts that in
  * front). `subjectTitle` is the goal or card the event is about, used where
@@ -69,6 +90,8 @@ export function describeEvent(
 
   switch (event.action) {
     case 'created':
+      // The next copy of a repeating card, filed when the last one finished.
+      if (typeof detail.repeatOf === 'string') return 'filed the next repeat';
       return subjectTitle ? `added “${subjectTitle}”` : 'added it';
 
     case 'comment':
@@ -84,6 +107,9 @@ export function describeEvent(
     }
 
     case 'assigned': {
+      // A card's list of assignees; older card events and goals name one owner.
+      const list = changeOf(detail, 'assignee_emails');
+      if (list) return describeAssignees(list, people);
       const change = changeOf(detail, 'owner_email');
       const to = str(change?.to);
       if (!to) return 'took the owner off it';
@@ -141,7 +167,7 @@ export function describeEvent(
     }
 
     default: {
-      const fields = Object.keys(detail).map((key) => FIELD_LABELS[key] ?? key);
+      const fields = [...new Set(Object.keys(detail).map((key) => FIELD_LABELS[key] ?? key))];
       return `changed ${sentenceList(fields)}`;
     }
   }

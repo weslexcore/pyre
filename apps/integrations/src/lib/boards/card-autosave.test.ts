@@ -97,7 +97,9 @@ const card = {
   id: 'card',
   title: 'Before',
   column_id: 'open',
-  owner_email: 'owner@example.com',
+  assignee_emails: ['owner@example.com'],
+  repeat_every: null,
+  repeat_unit: null,
   waiting_on: 'A response',
   completed_at: null,
   completed_by: null,
@@ -112,17 +114,19 @@ describe('optimistic card updates', () => {
   it('maps edited fields and preserves unrelated card data and the rollback snapshot', () => {
     const next = optimisticCardPatch(
       card,
-      { title: 'After', ownerEmail: null, notesMd: 'Notes' },
+      { title: 'After', assigneeEmails: [], notesMd: 'Notes', repeat: { every: 2, unit: 'week' } },
       columns
     );
     expect(next).toMatchObject({
       title: 'After',
-      owner_email: null,
+      assignee_emails: [],
+      repeat_every: 2,
+      repeat_unit: 'week',
       notes_md: 'Notes',
       properties: { count: 3 },
     });
     expect(card.title).toBe('Before');
-    expect(card.owner_email).toBe('owner@example.com');
+    expect(card.assignee_emails).toEqual(['owner@example.com']);
   });
 
   it('immediately updates completion and clears waiting when moving to done', () => {

@@ -20,7 +20,7 @@ import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
 import type { GroupBy } from '@/lib/goals/types';
-import { AREAS, GROUP_BY } from '@/lib/goals/types';
+import { GROUP_BY } from '@/lib/goals/types';
 import { BackLink } from '../BackLink';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
@@ -50,7 +50,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   const [groupBy, setGroupBy] = useState<GroupBy>('board');
   const [ownerFilter, setOwnerFilter] = useState('all');
-  const [areaFilter, setAreaFilter] = useState('all');
   const [waitingOnly, setWaitingOnly] = useState(false);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
@@ -82,12 +81,11 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
       (card) =>
         (ownerFilter === 'all' ||
           (ownerFilter === 'none'
-            ? card.owner_email === null
-            : card.owner_email === ownerFilter)) &&
-        (areaFilter === 'all' || card.area === areaFilter) &&
+            ? card.assignee_emails.length === 0
+            : card.assignee_emails.includes(ownerFilter))) &&
         (!waitingOnly || card.waiting_on !== null)
     );
-  }, [data, ownerFilter, areaFilter, waitingOnly]);
+  }, [data, ownerFilter, waitingOnly]);
 
   const built = useMemo(() => {
     if (!data) return null;
@@ -176,23 +174,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           {owners.map((owner) => (
             <option key={owner.email} value={owner.email}>
               {owner.name}
-            </option>
-          ))}
-        </select>
-
-        <label className="sr-only" htmlFor="tasks-area">
-          Area
-        </label>
-        <select
-          id="tasks-area"
-          className={`${selectClass} w-auto`}
-          value={areaFilter}
-          onChange={(e) => setAreaFilter(e.target.value)}
-        >
-          <option value="all">Every area</option>
-          {AREAS.map((option) => (
-            <option key={option} value={option}>
-              {option}
             </option>
           ))}
         </select>

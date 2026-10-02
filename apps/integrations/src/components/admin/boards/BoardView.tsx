@@ -172,8 +172,12 @@ export function BoardView({ slug }: { slug: string }) {
     const terms = searchTerms(query);
     const people = bundle.people ?? {};
     return bundle.cards.filter((card) => {
-      if (ownerFilter === 'none' && card.owner_email !== null) return false;
-      if (ownerFilter !== 'all' && ownerFilter !== 'none' && card.owner_email !== ownerFilter) {
+      if (ownerFilter === 'none' && card.assignee_emails.length > 0) return false;
+      if (
+        ownerFilter !== 'all' &&
+        ownerFilter !== 'none' &&
+        !card.assignee_emails.includes(ownerFilter)
+      ) {
         return false;
       }
       return cardMatches(card, terms, bundle.fields, people, links);
@@ -237,17 +241,25 @@ export function BoardView({ slug }: { slug: string }) {
     setError(null);
     try {
       if (plan.moved) {
-        const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
-          id: plan.card.id,
-          columnId: plan.columnId,
-        });
+        const result = await sendJson<{ card: BoardCardRow; repeated?: BoardCardRow }>(
+          '/api/admin/board-cards',
+          'PATCH',
+          { id: plan.card.id, columnId: plan.columnId }
+        );
+        // A repeating card dropped into Done comes back with its next copy.
+        const { repeated } = result;
         setBundle((current) =>
           current
             ? {
                 ...current,
-                cards: current.cards.map((row) =>
-                  row.id === result.card.id ? { ...result.card, sort_order: row.sort_order } : row
-                ),
+                cards: [
+                  ...current.cards.map((row) =>
+                    row.id === result.card.id ? { ...result.card, sort_order: row.sort_order } : row
+                  ),
+                  ...(repeated && !current.cards.some((row) => row.id === repeated.id)
+                    ? [repeated]
+                    : []),
+                ],
               }
             : current
         );
@@ -430,6 +442,8 @@ export function BoardView({ slug }: { slug: string }) {
             columns={columns}
             fields={fields}
             cardCount={bundle.cards.length}
+            owners={ownerOptions}
+            people={bundle.people ?? {}}
             busy={busy}
             onSaved={(result) =>
               setBundle((current) => (current ? { ...current, ...result } : current))

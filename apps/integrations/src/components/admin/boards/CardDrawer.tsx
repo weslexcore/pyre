@@ -1,26 +1,33 @@
 // One card, opened. A bottom sheet on a phone and a right-hand panel on a
 // desk, holding everything a row cannot: the notes, the board's own fields,
-// and the thread. No goal picker: a card is filed under its board's goal.
+// and the thread. No goal picker: a card is filed under its board's goal,
+// and no area picker: the board says what area the work is in.
+//
+// The title is the heading, edited where it stands; status, assignees, the
+// due date (and its repeat), and what the card waits on are quiet chips
+// under it (CardMeta), so the first screen is the card's body.
 //
 // Edits save automatically; text is debounced and writes are serialized.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formButtonClass } from '@/components/admin/ui';
 import { type AttachmentSummary, adminAttachmentHref, fileIdsOf } from '@/lib/boards/files';
 import { type LinkSummary, linkIdsOf } from '@/lib/boards/links';
+import { type RepeatRule, repeatRuleOf } from '@/lib/boards/recurrence';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardFieldValue } from '@/lib/db';
-import { AREAS } from '@/lib/goals/types';
-import type { PeopleNames } from '@/lib/sops/names';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import { dangerButtonClass, inputClass, labelClass, selectClass, textareaClass } from '../goalsUi';
+import { dangerButtonClass, labelClass, textareaClass } from '../goalsUi';
 import { FieldRow } from '../guestUi';
 import { LinkTextarea } from '../LinkTextarea';
 import { SopMarkdown } from '../SopMarkdown';
 import { useSheetSwipe } from '../useSheetSwipe';
 import { CardLinkField } from './CardLinkField';
+import { AssigneePicker, DuePicker, InlineTitle, StatusPicker, WaitingPicker } from './CardMeta';
 import { ChecklistField } from './ChecklistField';
 import { FilesField } from './FilesField';
 import { useCardAutosave } from './useCardAutosave';
@@ -67,10 +74,10 @@ export function CardDrawer({
   const [title, setTitle] = useState(card.title);
   const [notes, setNotes] = useState(card.notes_md);
   const [columnId, setColumnId] = useState(card.column_id);
-  const [ownerEmail, setOwnerEmail] = useState(card.owner_email ?? '');
+  const [assignees, setAssignees] = useState(card.assignee_emails);
   const [dueDate, setDueDate] = useState(card.due_date ?? '');
+  const [repeat, setRepeat] = useState<RepeatRule | null>(() => repeatRuleOf(card));
   const [waitingOn, setWaitingOn] = useState(card.waiting_on ?? '');
-  const [area, setArea] = useState(card.area ?? '');
   const [properties, setProperties] = useState<Record<string, BoardFieldValue | null>>(
     card.properties
   );
@@ -81,6 +88,11 @@ export function CardDrawer({
   // Linked cards' summaries: what the board sent, plus anything picked here.
   const [known, setKnown] = useState<Map<string, LinkSummary>>(() => new Map(links ?? []));
   const autosave = useCardAutosave(onSave);
+  // The server ends a repeat when the card is finished (the next copy takes
+  // the rule); the chip follows what the card says now.
+  useEffect(() => {
+    setRepeat(repeatRuleOf({ repeat_every: card.repeat_every, repeat_unit: card.repeat_unit }));
+  }, [card.repeat_every, card.repeat_unit]);
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
   const close = async () => {
@@ -177,6 +189,7 @@ export function CardDrawer({
   const liveColumns = columns.filter((c) => !c.archived || c.id === card.column_id);
   const liveFields = fields.filter((f) => !f.archived || properties[f.key] != null);
   const finished = card.completed_at !== null;
+  const today = todayEastern();
 
   if (typeof document === 'undefined') return null;
 
@@ -205,140 +218,69 @@ export function CardDrawer({
           aria-hidden="true"
           className="touch-only mx-auto mb-3 h-1 w-9 rounded-full bg-white/25 sm:hidden"
         />
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 id={titleId} className="font-mono text-xs uppercase tracking-wide text-white/50">
-            {finished ? 'Finished card' : 'Card'}
-          </h2>
+        <div className="mb-1 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {finished && (
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/40">
+                Finished
+              </p>
+            )}
+            <InlineTitle
+              id={titleId}
+              value={title}
+              finished={finished}
+              onChange={(next) => {
+                setTitle(next);
+                if (next.trim()) autosave.schedule({ title: next }, 600);
+                else autosave.discard('title');
+              }}
+            />
+          </div>
           <button
             ref={closeRef}
             type="button"
-            className={formButtonClass}
+            className={`${formButtonClass} shrink-0`}
             onClick={() => void close()}
           >
             Close
           </button>
         </div>
 
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <StatusPicker columns={liveColumns} value={columnId} onChange={moveToColumn} />
+          <AssigneePicker
+            owners={owners}
+            value={assignees}
+            names={(email) => personName(email, people)}
+            onChange={(next) => {
+              setAssignees(next);
+              autosave.schedule({ assigneeEmails: next }, 0);
+            }}
+          />
+          <DuePicker
+            value={dueDate}
+            repeat={repeat}
+            today={today}
+            onDateChange={(next) => {
+              setDueDate(next);
+              autosave.schedule({ dueDate: next || null }, 0);
+            }}
+            onRepeatChange={(next, delay) => {
+              setRepeat(next);
+              autosave.schedule({ repeat: next }, delay);
+            }}
+          />
+          <WaitingPicker
+            value={waitingOn}
+            disabled={finished}
+            onChange={(next) => {
+              setWaitingOn(next);
+              autosave.schedule({ waitingOn: next || null }, 600);
+            }}
+          />
+        </div>
+
         <div className="space-y-4">
-          <div>
-            <label className={labelClass} htmlFor={`card-title-${card.id}`}>
-              Title
-            </label>
-            <input
-              id={`card-title-${card.id}`}
-              className={`${inputClass} ${finished ? 'text-white/40 line-through' : ''}`}
-              type="text"
-              maxLength={BOARD_LIMITS.title}
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (e.target.value.trim()) autosave.schedule({ title: e.target.value }, 600);
-                else autosave.discard('title');
-              }}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass} htmlFor={`card-column-${card.id}`}>
-                Column
-              </label>
-              <select
-                id={`card-column-${card.id}`}
-                className={selectClass}
-                value={columnId}
-                onChange={(e) => moveToColumn(e.target.value)}
-              >
-                {liveColumns.map((column) => (
-                  <option key={column.id} value={column.id}>
-                    {column.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={labelClass} htmlFor={`card-owner-${card.id}`}>
-                Owner
-              </label>
-              <select
-                id={`card-owner-${card.id}`}
-                className={selectClass}
-                value={ownerEmail}
-                onChange={(e) => {
-                  setOwnerEmail(e.target.value);
-                  autosave.schedule({ ownerEmail: e.target.value || null }, 0);
-                }}
-              >
-                <option value="">Unassigned</option>
-                {owners.map((owner) => (
-                  <option key={owner.email} value={owner.email}>
-                    {owner.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={labelClass} htmlFor={`card-due-${card.id}`}>
-                Due
-              </label>
-              <input
-                id={`card-due-${card.id}`}
-                className={inputClass}
-                type="date"
-                value={dueDate}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  autosave.schedule({ dueDate: e.target.value || null }, 0);
-                }}
-              />
-            </div>
-
-            <div>
-              <label className={labelClass} htmlFor={`card-area-${card.id}`}>
-                Area
-              </label>
-              <select
-                id={`card-area-${card.id}`}
-                className={selectClass}
-                value={area}
-                onChange={(e) => {
-                  setArea(e.target.value);
-                  autosave.schedule({ area: e.target.value || null }, 0);
-                }}
-              >
-                <option value="">None</option>
-                {AREAS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor={`card-waiting-${card.id}`}>
-              Waiting on
-            </label>
-            <input
-              id={`card-waiting-${card.id}`}
-              className={inputClass}
-              type="text"
-              maxLength={BOARD_LIMITS.waitingOn}
-              placeholder="Sarah's availability, the insurer, a quote…"
-              value={waitingOn}
-              onChange={(e) => {
-                setWaitingOn(e.target.value);
-                autosave.schedule({ waitingOn: e.target.value || null }, 600);
-              }}
-            />
-            <p className="mt-1 text-xs text-white/35">
-              The card stays where it is; the badge says why it is stuck.
-            </p>
-          </div>
-
           {liveFields.length > 0 && (
             <div className="space-y-3 border-t border-white/10 pt-4">
               {liveFields.map((field) => {
