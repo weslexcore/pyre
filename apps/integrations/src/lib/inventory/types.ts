@@ -153,3 +153,105 @@ export interface InventoryLedgerPage {
   offset: number;
   people: Record<string, string>;
 }
+
+// ---------------------------------------------------------------------------
+// Counts
+// ---------------------------------------------------------------------------
+
+export const COUNTS_HREF = '/admin/inventory/count';
+
+export type CountStatus = 'open' | 'closed' | 'cancelled';
+export type ReviewStatus = 'none' | 'pending' | 'accepted' | 'recount';
+
+/** A count round: groups lines across areas; can stay open for days. */
+export interface InventoryCountRow {
+  id: string;
+  name: string;
+  area_ids: string[];
+  status: CountStatus;
+  started_by: string;
+  started_at: string;
+  closed_by: string | null;
+  closed_at: string | null;
+}
+
+/** One counted spot, saved through inventory_record_count. */
+export interface InventoryCountLineRow {
+  id: string;
+  count_id: string | null;
+  item_id: string;
+  area_id: string;
+  counted_qty: number;
+  expected_qty: number;
+  variance: number;
+  variance_cents: number | null;
+  counted_by: string;
+  counted_at: string;
+  review_status: ReviewStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+export interface InventorySettings {
+  /** A line goes to review when off by more than this percent... */
+  review_pct: number;
+  /** ...or by more than this many cents. */
+  review_cents: number;
+}
+
+export type AreaDueStatus = 'overdue' | 'due' | 'ok' | 'unscheduled';
+
+/** GET /api/admin/inventory-counts — the Count tab's home. */
+export interface CountsOverview {
+  areas: {
+    area: InventoryAreaRow;
+    lastCountedAt: string | null;
+    status: AreaDueStatus;
+    /** Active items placed here. */
+    spotCount: number;
+  }[];
+  rounds: {
+    round: InventoryCountRow;
+    counted: number;
+    total: number;
+    people: string[];
+  }[];
+  /** Admins only: lines waiting on a decision. */
+  review: (InventoryCountLineRow & { itemName: string; unit: string; areaName: string })[];
+  settings: InventorySettings;
+  people: Record<string, string>;
+  isAdmin: boolean;
+}
+
+/**
+ * One row on the counting screen. Blind until counted: `line` is null for a
+ * spot nobody has counted yet in this round (or this one-off session), and
+ * nothing about the expected quantity is sent for it.
+ */
+export interface CountSheetRow {
+  itemId: string;
+  name: string;
+  unit: string;
+  category: string;
+  line: InventoryCountLineRow | null;
+  /** An admin asked for this spot to be counted again (in any round). */
+  recountAsked: boolean;
+}
+
+/** GET /api/admin/inventory-counts?areaId=… — the counting screen. */
+export interface CountSheet {
+  area: InventoryAreaRow;
+  round: InventoryCountRow | null;
+  rows: CountSheetRow[];
+  people: Record<string, string>;
+}
+
+/** GET /api/admin/inventory-counts?summary=<countId> — a round's results. */
+export interface CountSummary {
+  round: InventoryCountRow;
+  areas: { area: InventoryAreaRow; counted: number; total: number }[];
+  lines: (InventoryCountLineRow & { itemName: string; unit: string; areaName: string })[];
+  notCounted: { itemName: string; areaName: string }[];
+  totals: { shortUnits: number; shortCents: number; foundUnits: number; foundCents: number };
+  people: Record<string, string>;
+}

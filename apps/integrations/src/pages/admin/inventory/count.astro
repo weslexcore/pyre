@@ -1,0 +1,17 @@
+---
+// Inventory counts: count what's on the shelves, area by area — in a round
+// that can stay open for days, or one area on its own. Same grant as the
+// stock page; the /api/admin/inventory-counts route re-checks the session on
+// every request (admin-only parts included), so this page's gate is UX.
+import { InventoryCount } from '@/components/admin/InventoryCount';
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Inventory Count"
+  subtitle="Count what's on the shelf. Differences from what the system expected are recorded as loss (or found stock), separate from everyday use."
+>
+  <InventoryTabs current="/admin/inventory/count" />
+  <InventoryCount client:load />
+</AdminLayout>
