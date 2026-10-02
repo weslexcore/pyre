@@ -8,6 +8,7 @@
 
 import type { SearchPage } from '@/components/admin/adminTools';
 import type { BoardRow } from '@/lib/db';
+import { formatUnits } from '@/lib/inventory/rules';
 import { MIN_QUERY_LENGTH, matchesTerm, queryLength } from '@/lib/sops/search';
 
 export { MIN_QUERY_LENGTH, queryLength };
@@ -55,17 +56,36 @@ export interface TaskHit {
 }
 
 /** /api/admin/search's response. */
+/** One inventory item the server matched by name, category, vendor, or unit. */
+export interface InventoryHit {
+  id: string;
+  name: string;
+  /** Category name; '' when uncategorised. */
+  category: string;
+  unit: string;
+  /** Total on hand across every storage spot. */
+  onHand: number;
+  /** At or below its re-order level. */
+  low: boolean;
+  /** The storage areas it is kept in, in walk order. */
+  areas: string[];
+  /** Whether the caller may edit it (admins) — decides where the row links. */
+  editable: boolean;
+}
+
 export interface SearchResponse {
   q: string;
   sops: SopHit[];
   notes: NoteHit[];
   tasks: TaskHit[];
+  inventory: InventoryHit[];
 }
 
 export type SearchGroup =
   | 'pages'
   | 'boards'
   | 'tasks'
+  | 'inventory'
   | 'sops'
   | 'entries'
   | 'notes'
@@ -76,6 +96,7 @@ export const GROUP_LABELS: Record<SearchGroup, string> = {
   pages: 'Pages',
   boards: 'Boards',
   tasks: 'Tasks',
+  inventory: 'Inventory',
   sops: 'SOPs',
   entries: 'In SOPs',
   notes: 'Shift notes',
@@ -145,6 +166,16 @@ export function taskHref(boardSlug: string, cardId: string): string {
   return `/admin/boards/${boardSlug}#card-${cardId}`;
 }
 
+/**
+ * Link to one inventory item: its edit form on the setup page for an admin,
+ * its log sheet on the stock page for everyone else (the islands read
+ * ?item=).
+ */
+export function inventoryHref(itemId: string, editable: boolean): string {
+  const page = editable ? '/admin/inventory/setup' : '/admin/inventory';
+  return `${page}?${new URLSearchParams({ item: itemId })}`;
+}
+
 /** Link to the Ask page that asks `term` on arrival (SopAsk reads ?q=). */
 export function askHref(term: string): string {
   return `${ASK_HREF}?${new URLSearchParams({ q: term })}`;
@@ -170,7 +201,8 @@ export function askItem(pages: SearchPage[], term: string): SearchItem | null {
 /**
  * The palette's rows in display order: the "Ask a question" row for anyone
  * who holds the Ask page, then pages (matched locally), then boards, then the
- * cards on them the server matched, then SOP documents whose title matched,
+ * cards on them the server matched, then inventory items, then SOP documents
+ * whose title matched,
  * then the matched entries inside every SOP the server returned, then shift
  * notes. A document that matched only in its body doesn't get a document row
  * of its own — its entries are the more useful thing to land on, and they
@@ -242,6 +274,16 @@ export function buildItems(
       hint: where.join(' · '),
       snippet: task.snippet ?? undefined,
       meta: meta.length > 0 ? meta.join(' · ') : undefined,
+    });
+  }
+  for (const item of server.inventory) {
+    items.push({
+      key: `inventory:${item.id}`,
+      group: 'inventory',
+      href: inventoryHref(item.id, item.editable),
+      title: item.name,
+      hint: [item.category, item.areas.join(', ')].filter(Boolean).join(' · '),
+      meta: `${formatUnits(item.onHand, item.unit)} on hand${item.low ? ' · low' : ''}`,
     });
   }
   for (const sop of server.sops) {

@@ -10,6 +10,7 @@ import type { BoardRow } from '@/lib/db';
 import {
   askHref,
   buildItems,
+  inventoryHref,
   matchPages,
   noteHref,
   type SearchResponse,
@@ -149,6 +150,7 @@ describe('buildItems', () => {
         snippet: 'Drained the cold plunge and refilled',
       },
     ],
+    inventory: [],
   };
 
   it('puts pages first, then tasks, then titled SOPs, then entries, then notes', () => {
@@ -190,6 +192,54 @@ describe('buildItems', () => {
     });
   });
 
+  it('puts inventory items after tasks, linking admins to edit and staff to the stock sheet', () => {
+    const withInventory: SearchResponse = {
+      ...server,
+      inventory: [
+        {
+          id: 'i1',
+          name: 'Cold plunge test strips',
+          category: 'Water testing',
+          unit: 'strip',
+          onHand: 40,
+          low: false,
+          areas: ['Back closet', 'Deck box'],
+          editable: true,
+        },
+        {
+          id: 'i2',
+          name: 'Cold plunge filter',
+          category: '',
+          unit: 'filter',
+          onHand: 1,
+          low: true,
+          areas: [],
+          editable: false,
+        },
+      ],
+    };
+    const items = buildItems(pages, withInventory, 'cold plunge');
+    expect(items.map((item) => item.group).slice(0, 6)).toEqual([
+      'pages',
+      'tasks',
+      'tasks',
+      'inventory',
+      'inventory',
+      'sops',
+    ]);
+    expect(items[3]).toMatchObject({
+      href: '/admin/inventory/setup?item=i1',
+      title: 'Cold plunge test strips',
+      hint: 'Water testing · Back closet, Deck box',
+      meta: '40 strips on hand',
+    });
+    expect(items[4]).toMatchObject({
+      href: '/admin/inventory?item=i2',
+      hint: '',
+      meta: '1 filter on hand · low',
+    });
+  });
+
   it('lists every page as a jump list when nothing is typed', () => {
     const items = buildItems(pages, server, '');
     expect(items.map((item) => item.href)).toEqual(['/admin', '/admin/water', '/admin/sops']);
@@ -209,7 +259,7 @@ describe('buildItems', () => {
 
     const none = buildItems(
       withAsk,
-      { q: 'zzz', sops: [], notes: [], tasks: [] },
+      { q: 'zzz', sops: [], notes: [], tasks: [], inventory: [] },
       'why is the tub cloudy'
     );
     expect(none.map((item) => item.group)).toEqual(['ask']);
@@ -242,6 +292,11 @@ describe('hrefs', () => {
 
   it('encodes the note term', () => {
     expect(noteHref('abc', 'pH & chlorine')).toBe('/admin/shift-notes?q=pH+%26+chlorine#note-abc');
+  });
+
+  it('opens an inventory item on the page the viewer may use', () => {
+    expect(inventoryHref('i1', true)).toBe('/admin/inventory/setup?item=i1');
+    expect(inventoryHref('i1', false)).toBe('/admin/inventory?item=i1');
   });
 
   it('opens a task through the board hash BoardView reads', () => {
@@ -328,6 +383,7 @@ describe('board search', () => {
         q: 'events',
         sops: [],
         tasks: [],
+        inventory: [],
         notes: [
           { id: 'n', note_date: '2026-09-21', author_email: 'a', author: 'A', snippet: 'events' },
         ],

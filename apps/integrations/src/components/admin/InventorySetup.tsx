@@ -6,7 +6,7 @@
 // "remove" is retire (active=false), which drops it from the stock screen
 // and keeps its history. The setup routes re-check admin on every request.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buttonClass,
   compactInputClass,
@@ -32,7 +32,7 @@ import type {
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
 import { ErrorBanner } from './ErrorBanner';
 import { Chip, primaryButtonClass } from './incidentUi';
-import { dialogPanelClass, INVENTORY_API, LowBadge } from './inventoryUi';
+import { dialogPanelClass, INVENTORY_API, LowBadge, takeItemParam } from './inventoryUi';
 import { Modal } from './Modal';
 
 const AREAS_API = '/api/admin/inventory-areas';
@@ -508,6 +508,19 @@ function ItemsSection({
 }) {
   const [editing, setEditing] = useState<InventoryItemRow | 'new' | null>(null);
   const [showRetired, setShowRetired] = useState(false);
+
+  // Arriving from the global search (?item=<id>): open that item's edit form.
+  const linkedItemId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (linkedItemId.current === undefined) linkedItemId.current = takeItemParam();
+    const id = linkedItemId.current;
+    if (!id) return;
+    const item = data.items.find((i) => i.id === id);
+    if (!item) return;
+    linkedItemId.current = null;
+    if (!item.active) setShowRetired(true);
+    setEditing(item);
+  }, [data.items]);
   const totals = useMemo(() => totalsByItem(data.stock), [data.stock]);
   const areaName = useMemo(() => new Map(data.areas.map((a) => [a.id, a.name])), [data.areas]);
   const categoryById = useMemo(

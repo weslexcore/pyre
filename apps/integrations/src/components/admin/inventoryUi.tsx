@@ -9,6 +9,21 @@ import { MOVEMENT_LABELS, type MovementType } from '@/lib/inventory/types';
 export const INVENTORY_API = '/api/admin/inventory';
 export const MOVEMENTS_API = '/api/admin/inventory-movements';
 
+/**
+ * The item a link asked to open (`?item=<id>`, from the global search), read
+ * once and then dropped from the address bar, so closing the dialog and
+ * reloading doesn't open it again.
+ */
+export function takeItemParam(): string | null {
+  if (typeof window === 'undefined') return null;
+  const url = new URL(window.location.href);
+  const id = url.searchParams.get('item');
+  if (!id) return null;
+  url.searchParams.delete('item');
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  return id;
+}
+
 export const dialogPanelClass =
   'flex max-h-[90vh] max-w-lg flex-col overflow-y-auto rounded-t-lg border border-white/15 bg-[var(--pyre-black)] p-4 shadow-xl sm:rounded-lg';
 
