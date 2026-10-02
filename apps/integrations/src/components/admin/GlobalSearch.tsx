@@ -33,6 +33,7 @@ import type { BoardRow } from '@/lib/db';
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
 import { SearchTaskCreate } from './SearchTaskCreate';
+import { type SheetSwipeOptions, useSheetSwipe } from './useSheetSwipe';
 
 // Quick actions are rendered above these, without a heading.
 const GROUP_ORDER: SearchGroup[] = ['pages', 'boards', 'tasks', 'sops', 'entries', 'notes'];
@@ -249,6 +250,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const { mounted, closing } = usePresence(open);
 
@@ -422,11 +424,27 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
             className={`absolute inset-0 h-full w-full cursor-default bg-black/70 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none ${closing ? 'opacity-0' : ''}`}
           />
           <div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Search"
             className={`relative flex h-full w-full max-w-xl flex-col bg-[var(--pyre-black)] shadow-xl transition duration-150 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:h-auto sm:max-h-[70vh] sm:rounded-lg sm:border sm:border-white/15 ${closing ? 'translate-y-2 scale-[0.98] opacity-0' : ''}`}
           >
+            {/* On a phone, pulling the panel down closes it, the way the task
+                card sheet does: from the header any time, from the results
+                once they are scrolled to the top. Not while a task is being
+                written, where a stray pull would throw the draft away. */}
+            <SheetSwipe
+              panelRef={panelRef}
+              scrollerRef={listRef}
+              enabled={open && !closing && !creating}
+              requestClose={async () => true}
+              onClosed={close}
+            />
+            <div
+              aria-hidden="true"
+              className="touch-only mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-white/25 sm:hidden"
+            />
             {creating ? (
               <SearchTaskCreate
                 boards={boards.filter(isTaskCreationBoard)}
@@ -504,4 +522,17 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       )}
     </>
   );
+}
+
+/**
+ * Runs the sheet's pull-to-close. The panel only exists while the palette is
+ * open, so the hook lives in a child rendered inside it: its effect then runs
+ * once the panel is in the DOM, and its listeners go when the panel does.
+ */
+function SheetSwipe({
+  panelRef,
+  ...options
+}: SheetSwipeOptions & { panelRef: React.RefObject<HTMLDivElement | null> }) {
+  useSheetSwipe(panelRef, options);
+  return null;
 }
