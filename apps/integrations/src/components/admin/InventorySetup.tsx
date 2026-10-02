@@ -24,6 +24,7 @@ import {
   totalsByItem,
 } from '@/lib/inventory/rules';
 import type {
+  CountsOverview,
   InventoryAreaRow,
   InventoryCategoryRow,
   InventoryItemRow,
@@ -37,6 +38,7 @@ import { Modal } from './Modal';
 
 const AREAS_API = '/api/admin/inventory-areas';
 const CATEGORIES_API = '/api/admin/inventory-categories';
+const COUNTS_API = '/api/admin/inventory-counts';
 const ITEMS_API = '/api/admin/inventory-items';
 const SPOTS_API = '/api/admin/inventory-spots';
 
@@ -85,6 +87,7 @@ export function InventorySetup() {
       <AreasSection areas={data.areas} run={run} refresh={refresh} />
       <CategoriesSection categories={data.categories} run={run} />
       <ItemsSection data={data} refresh={refresh} />
+      <CountReviewSection />
     </div>
   );
 }
@@ -971,5 +974,91 @@ function ItemDialog({
         )}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * When a count line goes to the admin review list on the Count tab: off by
+ * more than this percent of what was expected, or by more than this much
+ * money. Counts still update stock straight away; this only decides what
+ * gets a second look.
+ */
+function CountReviewSection() {
+  const { data, reload } = useCachedJson<CountsOverview>(COUNTS_API);
+  const [pct, setPct] = useState<string | null>(null);
+  const [dollars, setDollars] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  if (!data) return null;
+
+  const pctValue = pct ?? formatQuantity(data.settings.review_pct);
+  const dollarValue = dollars ?? (data.settings.review_cents / 100).toFixed(2);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await sendJson(COUNTS_API, 'PATCH', {
+        action: 'settings',
+        reviewPct: Number(pctValue),
+        reviewDollars: Number(dollarValue),
+      });
+      invalidateJson(COUNTS_API);
+      await reload();
+      setPct(null);
+      setDollars(null);
+      setSaved(true);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="count-review-heading">
+      <h2
+        id="count-review-heading"
+        className="mb-1 font-mono text-xs uppercase tracking-wide text-white/50"
+      >
+        Count review
+      </h2>
+      <p className="mb-3 text-xs text-white/40">
+        A counted line goes to the review list on the Count tab when it's off by more than either
+        amount. Stock updates straight away either way.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="block">
+          <span className={labelClass}>Percent off</span>
+          <input
+            inputMode="decimal"
+            value={pctValue}
+            onChange={(e) => setPct(e.target.value.replace(/[^0-9.]/g, ''))}
+            className={`${compactInputClass} w-24`}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Dollars off</span>
+          <input
+            inputMode="decimal"
+            value={dollarValue}
+            onChange={(e) => setDollars(e.target.value.replace(/[^0-9.]/g, ''))}
+            className={`${compactInputClass} w-28`}
+          />
+        </label>
+        <button
+          type="button"
+          className={goldButtonClass}
+          disabled={busy || (pct === null && dollars === null)}
+          onClick={save}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        {saved && <span className="text-xs text-[var(--pyre-sage)]">Saved</span>}
+      </div>
+      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+    </section>
   );
 }

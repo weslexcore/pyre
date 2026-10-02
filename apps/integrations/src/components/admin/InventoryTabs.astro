@@ -13,6 +13,7 @@ const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
 
 const tabs = [
   { href: '/admin/inventory', label: 'Stock' },
+  { href: '/admin/inventory/count', label: 'Count' },
   { href: '/admin/inventory/history', label: 'History' },
   ...(isAdmin ? [{ href: '/admin/inventory/setup', label: 'Setup' }] : []),
 ];
