@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dollarsToCents, normalizeArea, normalizeItem } from './validate';
+import { dollarsToCents, normalizeArea, normalizeCategory, normalizeItem } from './validate';
 
 describe('normalizeArea', () => {
   it('requires a name on create and maps fields to columns', () => {
@@ -68,5 +68,30 @@ describe('dollarsToCents', () => {
     expect(dollarsToCents('$3.10')).toBe(310);
     expect(dollarsToCents('')).toBeNull();
     expect(dollarsToCents('-1')).toBeUndefined();
+  });
+});
+
+describe('normalizeCategory', () => {
+  it('requires a name and maps fields', () => {
+    expect(normalizeCategory({}).ok).toBe(false);
+    expect(normalizeCategory({ name: ' Linens ', sortOrder: 3 })).toEqual({
+      ok: true,
+      value: { name: 'Linens', sort_order: 3 },
+    });
+  });
+});
+
+describe('normalizeItem category', () => {
+  it('takes a category id, clears on empty, rejects junk', () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    expect(normalizeItem({ categoryId: id }, { partial: true })).toEqual({
+      ok: true,
+      value: { category_id: id },
+    });
+    expect(normalizeItem({ categoryId: '' }, { partial: true })).toEqual({
+      ok: true,
+      value: { category_id: null },
+    });
+    expect(normalizeItem({ categoryId: 'Linens' }, { partial: true }).ok).toBe(false);
   });
 });

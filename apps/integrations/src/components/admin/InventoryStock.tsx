@@ -36,6 +36,7 @@ import {
   LowBadge,
   MOVEMENTS_API,
   QuantityStepper,
+  takeItemParam,
 } from './inventoryUi';
 import { Modal } from './Modal';
 
@@ -70,6 +71,31 @@ export function InventoryStock() {
   }, [flash]);
 
   const grouped = useMemo(() => (data ? groupStockByArea(data) : []), [data]);
+
+  // Arriving from the global search (?item=<id>): open that item's log sheet
+  // in the spot holding the most of it. An item not placed anywhere yet has
+  // no sheet to open, so the list is filtered to it instead.
+  const linkedItemId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (linkedItemId.current === undefined) linkedItemId.current = takeItemParam();
+    const id = linkedItemId.current;
+    // Cached data may predate the item; wait for the refetch to include it.
+    const item = data?.items.find((i) => i.id === id);
+    if (!id || !item) return;
+    linkedItemId.current = null;
+    const lines = grouped.flatMap((g) => g.lines).filter((l) => l.item.id === id);
+    if (lines.length > 0) {
+      setActive(lines.reduce((best, l) => (l.quantity > best.quantity ? l : best)));
+    } else {
+      setQuery(item.name);
+    }
+  }, [data, grouped]);
+  const categoryName = useMemo(
+    () => new Map((data?.categories ?? []).map((c) => [c.id, c.name])),
+    [data?.categories]
+  );
+  const categoryOf = (item: { category_id: string | null }) =>
+    item.category_id ? (categoryName.get(item.category_id) ?? '') : '';
   const lowCount = useMemo(() => {
     const low = new Set<string>();
     for (const g of grouped) for (const l of g.lines) if (l.low) low.add(l.item.id);
@@ -85,7 +111,7 @@ export function InventoryStock() {
           (!lowOnly || l.low) &&
           (!needle ||
             l.item.name.toLowerCase().includes(needle) ||
-            (l.item.category ?? '').toLowerCase().includes(needle))
+            categoryOf(l.item).toLowerCase().includes(needle))
       ),
     }))
     .filter((g) => g.lines.length > 0 || (!needle && !lowOnly));
@@ -178,7 +204,7 @@ export function InventoryStock() {
                         {line.item.name}
                       </span>
                       <span className="block truncate text-xs text-white/40">
-                        {[line.item.category, lotDescription(line.item)]
+                        {[categoryOf(line.item), lotDescription(line.item)]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>

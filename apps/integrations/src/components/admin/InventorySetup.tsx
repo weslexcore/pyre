@@ -6,7 +6,7 @@
 // "remove" is retire (active=false), which drops it from the stock screen
 // and keeps its history. The setup routes re-check admin on every request.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buttonClass,
   compactInputClass,
@@ -23,14 +23,20 @@ import {
   lotDescription,
   totalsByItem,
 } from '@/lib/inventory/rules';
-import type { InventoryAreaRow, InventoryItemRow, InventoryOverview } from '@/lib/inventory/types';
+import type {
+  InventoryAreaRow,
+  InventoryCategoryRow,
+  InventoryItemRow,
+  InventoryOverview,
+} from '@/lib/inventory/types';
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
 import { ErrorBanner } from './ErrorBanner';
 import { Chip, primaryButtonClass } from './incidentUi';
-import { dialogPanelClass, INVENTORY_API, LowBadge } from './inventoryUi';
+import { dialogPanelClass, INVENTORY_API, LowBadge, takeItemParam } from './inventoryUi';
 import { Modal } from './Modal';
 
 const AREAS_API = '/api/admin/inventory-areas';
+const CATEGORIES_API = '/api/admin/inventory-categories';
 const ITEMS_API = '/api/admin/inventory-items';
 const SPOTS_API = '/api/admin/inventory-spots';
 
@@ -77,6 +83,7 @@ export function InventorySetup() {
     <div className="space-y-10">
       {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
       <AreasSection areas={data.areas} run={run} refresh={refresh} />
+      <CategoriesSection categories={data.categories} run={run} />
       <ItemsSection data={data} refresh={refresh} />
     </div>
   );
@@ -317,6 +324,181 @@ function AreaDialog({
   );
 }
 
+/**
+ * The categories the item form's drop-down offers, in display order. Small
+ * enough to edit inline: add at the bottom, rename in place, nudge up or
+ * down, retire (items keep showing a retired category's name).
+ */
+function CategoriesSection({
+  categories,
+  run,
+}: {
+  categories: InventoryCategoryRow[];
+  run: (action: () => Promise<unknown>) => Promise<boolean>;
+}) {
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [showRetired, setShowRetired] = useState(false);
+  const active = categories.filter((c) => c.active);
+  const retired = categories.filter((c) => !c.active);
+
+  const patch = (id: string, body: Record<string, unknown>) =>
+    sendJson(`${CATEGORIES_API}?id=${id}`, 'PATCH', body);
+
+  const move = (index: number, delta: -1 | 1) =>
+    run(async () => {
+      const order = [...active];
+      const [moved] = order.splice(index, 1);
+      order.splice(index + delta, 0, moved);
+      await Promise.all(
+        order.map((c, i) => (c.sort_order === i + 1 ? null : patch(c.id, { sortOrder: i + 1 })))
+      );
+    });
+
+  const add = async () => {
+    if (!newName.trim()) return;
+    if (await run(() => sendJson(CATEGORIES_API, 'POST', { name: newName }))) setNewName('');
+  };
+
+  const rename = async (id: string) => {
+    if (!editName.trim()) return;
+    if (await run(() => patch(id, { name: editName }))) setEditingId(null);
+  };
+
+  return (
+    <section aria-labelledby="categories-heading">
+      <h2
+        id="categories-heading"
+        className="mb-3 font-mono text-xs uppercase tracking-wide text-white/50"
+      >
+        Categories — offered when adding an item
+      </h2>
+
+      {active.length > 0 && (
+        <ol className="mb-3 divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+          {active.map((category, index) => (
+            <li key={category.id} className="flex items-center gap-2 px-3 py-2">
+              {editingId === category.id ? (
+                <>
+                  <input
+                    value={editName}
+                    maxLength={FIELD_LIMITS.categoryName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void rename(category.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    aria-label={`Rename ${category.name}`}
+                    className={`${compactInputClass} min-w-0 flex-1`}
+                  />
+                  <button
+                    type="button"
+                    className={goldButtonClass}
+                    disabled={!editName.trim()}
+                    onClick={() => rename(category.id)}
+                  >
+                    Save
+                  </button>
+                  <button type="button" className={buttonClass} onClick={() => setEditingId(null)}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--pyre-creme)]">
+                    {category.name}
+                  </span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={index === 0}
+                    onClick={() => move(index, -1)}
+                    aria-label={`Move ${category.name} up`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={index === active.length - 1}
+                    onClick={() => move(index, 1)}
+                    aria-label={`Move ${category.name} down`}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => {
+                      setEditingId(category.id);
+                      setEditName(category.name);
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => run(() => patch(category.id, { active: false }))}
+                  >
+                    Retire
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          value={newName}
+          maxLength={FIELD_LIMITS.categoryName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void add();
+          }}
+          placeholder={active.length ? 'New category' : 'Linens, Cleaning, Paper goods…'}
+          aria-label="New category name"
+          className={`${compactInputClass} min-w-0 flex-1 sm:max-w-xs`}
+        />
+        <button type="button" className={goldButtonClass} disabled={!newName.trim()} onClick={add}>
+          Add category
+        </button>
+      </div>
+
+      {retired.length > 0 && (
+        <div className="mt-3">
+          <button
+            type="button"
+            className="text-xs text-white/40 underline"
+            onClick={() => setShowRetired((v) => !v)}
+          >
+            {showRetired ? 'Hide' : 'Show'} {retired.length} retired
+          </button>
+          {showRetired && (
+            <ul className="mt-2 space-y-1">
+              {retired.map((category) => (
+                <li key={category.id} className="flex items-center gap-2 text-sm text-white/50">
+                  <span className="flex-1">{category.name}</span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => run(() => patch(category.id, { active: true }))}
+                  >
+                    Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ItemsSection({
   data,
   refresh,
@@ -326,8 +508,30 @@ function ItemsSection({
 }) {
   const [editing, setEditing] = useState<InventoryItemRow | 'new' | null>(null);
   const [showRetired, setShowRetired] = useState(false);
+
+  // Arriving from the global search (?item=<id>): open that item's edit form.
+  const linkedItemId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (linkedItemId.current === undefined) linkedItemId.current = takeItemParam();
+    const id = linkedItemId.current;
+    if (!id) return;
+    const item = data.items.find((i) => i.id === id);
+    if (!item) return;
+    linkedItemId.current = null;
+    if (!item.active) setShowRetired(true);
+    setEditing(item);
+  }, [data.items]);
   const totals = useMemo(() => totalsByItem(data.stock), [data.stock]);
   const areaName = useMemo(() => new Map(data.areas.map((a) => [a.id, a.name])), [data.areas]);
+  const categoryById = useMemo(
+    () => new Map(data.categories.map((c) => [c.id, c])),
+    [data.categories]
+  );
+  // Uncategorised items sort after every category.
+  const categoryRank = (item: InventoryItemRow) =>
+    item.category_id
+      ? (categoryById.get(item.category_id)?.sort_order ?? 0)
+      : Number.MAX_SAFE_INTEGER;
   const spotsByItem = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const spot of data.spots) {
@@ -343,7 +547,7 @@ function ItemsSection({
     .sort(
       (a, b) =>
         Number(b.active) - Number(a.active) ||
-        (a.category ?? '').localeCompare(b.category ?? '') ||
+        categoryRank(a) - categoryRank(b) ||
         a.name.localeCompare(b.name)
     );
   const retiredCount = data.items.filter((i) => !i.active).length;
@@ -386,8 +590,10 @@ function ItemsSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-[var(--pyre-creme)]">{item.name}</span>
-                    {item.category && (
-                      <span className="text-xs text-white/40">{item.category}</span>
+                    {item.category_id && (
+                      <span className="text-xs text-white/40">
+                        {categoryById.get(item.category_id)?.name}
+                      </span>
                     )}
                     {!item.active && <span className="text-xs text-white/40">(retired)</span>}
                     {item.active && low && <LowBadge />}
@@ -445,7 +651,7 @@ function ItemsSection({
 
 interface ItemForm {
   name: string;
-  category: string;
+  categoryId: string;
   unit: string;
   lotSize: string;
   lotLabel: string;
@@ -459,7 +665,7 @@ interface ItemForm {
 
 const formFor = (item: InventoryItemRow | null): ItemForm => ({
   name: item?.name ?? '',
-  category: item?.category ?? '',
+  categoryId: item?.category_id ?? '',
   unit: item?.unit ?? '',
   lotSize: item ? formatQuantity(item.lot_size) : '1',
   lotLabel: item?.lot_label ?? '',
@@ -489,10 +695,9 @@ function ItemDialog({
   const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const activeAreas = data.areas.filter((a) => a.active);
-  const categories = useMemo(
-    () => [...new Set(data.items.map((i) => i.category).filter((c): c is string => !!c))].sort(),
-    [data.items]
-  );
+  // Active categories, plus the item's own if it has since been retired, so
+  // editing it doesn't silently drop its category.
+  const categoryOptions = data.categories.filter((c) => c.active || c.id === item?.category_id);
 
   const set = (key: keyof ItemForm) => (e: { target: { value: string } }) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -560,18 +765,31 @@ function ItemDialog({
       <div className="space-y-3">
         {field('name', 'Name', { maxLength: FIELD_LIMITS.itemName, placeholder: 'Hand towels' })}
         <div className="grid grid-cols-2 gap-2">
-          {field('category', 'Category', {
-            maxLength: FIELD_LIMITS.category,
-            placeholder: 'Linens',
-            list: 'inventory-categories',
+          <label className="block min-w-0">
+            <span className={labelClass}>Category</span>
+            <select
+              value={form.categoryId}
+              onChange={set('categoryId')}
+              className={`${compactSelectClass} w-full`}
+            >
+              <option value="">No category</option>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.active ? '' : ' (retired)'}
+                </option>
+              ))}
+            </select>
+          </label>
+          {field('unit', 'Unit', {
+            maxLength: FIELD_LIMITS.unit,
+            placeholder: 'towel, bottle, roll',
+            'aria-describedby': 'inventory-unit-hint',
           })}
-          {field('unit', 'Counted in', { maxLength: FIELD_LIMITS.unit, placeholder: 'towel' })}
         </div>
-        <datalist id="inventory-categories">
-          {categories.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
+        <p id="inventory-unit-hint" className="-mt-1 text-xs text-white/40">
+          What you count on the shelf. Stock, re-order levels and cost all use this unit.
+        </p>
 
         <fieldset className="rounded border border-white/10 p-3">
           <legend className="px-1 font-mono text-[10px] uppercase tracking-wide text-white/40">

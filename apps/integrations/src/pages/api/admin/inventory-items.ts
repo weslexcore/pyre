@@ -6,7 +6,7 @@
 
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
-import { beginMutation, dbError, isUuid, json } from '@/lib/http/route';
+import { beginMutation, type Db, dbError, isUuid, json } from '@/lib/http/route';
 import { parseQuantity } from '@/lib/inventory/rules';
 import type { InventoryItemRow } from '@/lib/inventory/types';
 import { normalizeItem } from '@/lib/inventory/validate';
@@ -41,6 +41,25 @@ function parsePlacements(raw: unknown): PlacementInput[] | string {
   return out;
 }
 
+/**
+ * A chosen category must exist and be active — a retired one stays on the
+ * items that already have it, but isn't offered for new choices. Returns the
+ * 400 to send, or null when fine (including no category).
+ */
+async function checkCategory(db: Db, categoryId: unknown): Promise<Response | null> {
+  if (typeof categoryId !== 'string') return null;
+  const { data, error } = await db
+    .from('inventory_categories')
+    .select('active')
+    .eq('id', categoryId)
+    .maybeSingle();
+  if (error) return dbError(error);
+  if (!(data as { active: boolean } | null)?.active) {
+    return json({ error: 'That category no longer exists' }, 400);
+  }
+  return null;
+}
+
 export const POST: APIRoute = async ({ cookies, request }) => {
   const ready = await beginMutation(cookies, request, requireAdmin);
   if (ready instanceof Response) return ready;
@@ -48,6 +67,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const normalized = normalizeItem(body);
   if (!normalized.ok) return json({ error: normalized.error }, 400);
+  const categoryError = await checkCategory(db, normalized.value.category_id);
+  if (categoryError) return categoryError;
   const placements = parsePlacements(body.spots);
   if (typeof placements === 'string') return json({ error: placements }, 400);
 
@@ -114,6 +135,22 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 
   const normalized = normalizeItem(body, { partial: true });
   if (!normalized.ok) return json({ error: normalized.error }, 400);
+  if (typeof normalized.value.category_id === 'string') {
+    // Re-saving an item that already sits in a since-retired category is
+    // fine; only a change of category has to pick an active one.
+    const { data: current } = await db
+      .from('inventory_items')
+      .select('category_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (
+      (current as { category_id: string | null } | null)?.category_id !==
+      normalized.value.category_id
+    ) {
+      const categoryError = await checkCategory(db, normalized.value.category_id);
+      if (categoryError) return categoryError;
+    }
+  }
   if (Object.keys(normalized.value).length === 0) return json({ error: 'Nothing to update' }, 400);
 
   const { data, error } = await db
