@@ -5,13 +5,14 @@
 //
 // Gated on the /admin/inventory page grant. Writes go through
 // inventory-movements (anyone with the page) and inventory-areas / -items /
-// -spots (admins only).
+// -spots / -categories (admins only).
 
 import type { APIRoute } from 'astro';
 import { beginRead, dbError, json } from '@/lib/http/route';
 import {
   INVENTORY_HREF,
   type InventoryAreaRow,
+  type InventoryCategoryRow,
   type InventoryItemRow,
   type InventoryOverview,
   type InventorySpotRow,
@@ -23,18 +24,20 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (ready instanceof Response) return ready;
   const { gate, db } = ready;
 
-  const [areas, items, spots, stock] = await Promise.all([
+  const [areas, categories, items, spots, stock] = await Promise.all([
     db.from('inventory_areas').select('*').order('sort_order').order('name'),
+    db.from('inventory_categories').select('*').order('sort_order').order('name'),
     db.from('inventory_items').select('*').order('name'),
     db.from('inventory_item_spots').select('*'),
     db.from('inventory_stock').select('*'),
   ]);
-  for (const result of [areas, items, spots, stock]) {
+  for (const result of [areas, categories, items, spots, stock]) {
     if (result.error) return dbError(result.error);
   }
 
   const body: InventoryOverview = {
     areas: (areas.data ?? []) as InventoryAreaRow[],
+    categories: (categories.data ?? []) as InventoryCategoryRow[],
     items: ((items.data ?? []) as InventoryItemRow[]).map(numericItem),
     spots: ((spots.data ?? []) as InventorySpotRow[]).map((s) => ({
       ...s,

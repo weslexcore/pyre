@@ -10,7 +10,9 @@
 //
 // Opening an SOP entry lands on that very match (?q= highlights, &m= picks
 // the occurrence); a shift note opens the log filtered to the term, scrolled
-// to that note; a task opens its board with the card's drawer already open. Anyone who holds the Ask page also gets a gold "Ask a
+// to that note; a task opens its board with the card's drawer already open;
+// an inventory item opens its edit form for an admin, its stock sheet for
+// everyone else. Anyone who holds the Ask page also gets a gold "Ask a
 // question" row first, which opens the Ask page and puts the typed text to
 // the knowledge assistant — the semantic search, where the rows below are
 // exact. Modal mechanics follow SopPeekModal (backdrop button, Escape,
@@ -33,16 +35,26 @@ import type { BoardRow } from '@/lib/db';
 import type { SearchPage } from './adminTools';
 import { Marked } from './Marked';
 import { SearchTaskCreate } from './SearchTaskCreate';
+import { type SheetSwipeOptions, useSheetSwipe } from './useSheetSwipe';
 
 // Quick actions are rendered above these, without a heading.
-const GROUP_ORDER: SearchGroup[] = ['pages', 'boards', 'tasks', 'sops', 'entries', 'notes'];
+const GROUP_ORDER: SearchGroup[] = [
+  'pages',
+  'boards',
+  'tasks',
+  'inventory',
+  'sops',
+  'entries',
+  'notes',
+];
 
 // One brand color per group heading (text, underline, and dot), so where one
 // group ends and the next begins reads at a glance even in a long list; the
 // rows themselves stay neutral. Pages take the red the nav uses for "where
 // you are"; boards take sage and the tasks on them a step dimmer; the two
 // SOP groups share gold (the library's own accent), the entries a step
-// dimmer; shift notes take sage.
+// dimmer; shift notes take sage; inventory items take creme, the stock
+// screen's own neutral.
 const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   pages: {
     heading: 'text-[var(--pyre-red)] border-[var(--pyre-red)]/40',
@@ -55,6 +67,10 @@ const GROUP_STYLE: Record<SearchGroup, { heading: string; badge: string }> = {
   tasks: {
     heading: 'text-[var(--pyre-sage)]/80 border-[var(--pyre-sage)]/30',
     badge: 'bg-[var(--pyre-sage)]/60',
+  },
+  inventory: {
+    heading: 'text-[var(--pyre-creme)]/80 border-[var(--pyre-creme)]/30',
+    badge: 'bg-[var(--pyre-creme)]/70',
   },
   sops: {
     heading: 'text-[var(--pyre-gold)] border-[var(--pyre-gold)]/40',
@@ -249,6 +265,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const { mounted, closing } = usePresence(open);
 
@@ -385,7 +402,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const matched = items.filter((item) => item.group !== 'ask' && item.group !== 'create').length;
   const status = !contentSearch
     ? term
-      ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches tasks, SOPs, and shift notes too.`
+      ? `Keep typing — ${MIN_QUERY_LENGTH} characters searches tasks, inventory, SOPs, and shift notes too.`
       : null
     : error
       ? error
@@ -422,11 +439,27 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
             className={`absolute inset-0 h-full w-full cursor-default bg-black/70 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none ${closing ? 'opacity-0' : ''}`}
           />
           <div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Search"
             className={`relative flex h-full w-full max-w-xl flex-col bg-[var(--pyre-black)] shadow-xl transition duration-150 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:h-auto sm:max-h-[70vh] sm:rounded-lg sm:border sm:border-white/15 ${closing ? 'translate-y-2 scale-[0.98] opacity-0' : ''}`}
           >
+            {/* On a phone, pulling the panel down closes it, the way the task
+                card sheet does: from the header any time, from the results
+                once they are scrolled to the top. Not while a task is being
+                written, where a stray pull would throw the draft away. */}
+            <SheetSwipe
+              panelRef={panelRef}
+              scrollerRef={listRef}
+              enabled={open && !closing && !creating}
+              requestClose={async () => true}
+              onClosed={close}
+            />
+            <div
+              aria-hidden="true"
+              className="touch-only mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-white/25 sm:hidden"
+            />
             {creating ? (
               <SearchTaskCreate
                 boards={boards.filter(isTaskCreationBoard)}
@@ -453,7 +486,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck={false}
-                    placeholder="Search pages, boards, tasks, SOPs, and shift notes…"
+                    placeholder="Search pages, boards, tasks, inventory, SOPs, and shift notes…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={onInputKeyDown}
@@ -504,4 +537,17 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
       )}
     </>
   );
+}
+
+/**
+ * Runs the sheet's pull-to-close. The panel only exists while the palette is
+ * open, so the hook lives in a child rendered inside it: its effect then runs
+ * once the panel is in the DOM, and its listeners go when the panel does.
+ */
+function SheetSwipe({
+  panelRef,
+  ...options
+}: SheetSwipeOptions & { panelRef: React.RefObject<HTMLDivElement | null> }) {
+  useSheetSwipe(panelRef, options);
+  return null;
 }

@@ -34,7 +34,7 @@ const item = (
   id,
   name,
   kind: 'operational',
-  category: null,
+  category_id: null,
   unit: 'towel',
   lot_size: 12,
   lot_label: 'case',
