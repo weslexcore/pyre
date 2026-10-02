@@ -54,6 +54,8 @@ function field(overrides: Partial<BoardFieldRow> & Pick<BoardFieldRow, 'key'>): 
     link_columns: [],
     link_multiple: false,
     link_inverse_field_id: null,
+    checklist_md: '',
+    checklist_done_column: null,
     sort_order: 10,
     archived: false,
     created_at: '',

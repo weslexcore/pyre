@@ -27,6 +27,7 @@ import { canViewBoard } from '@/lib/boards/access';
 import { withoutLinks } from '@/lib/boards/card-links';
 import { filterFileAnswers, syncCardAttachments } from '@/lib/boards/card-media';
 import { defaultColumn } from '@/lib/boards/cards';
+import { withoutChecklists } from '@/lib/boards/checklist';
 import { logBoardEvent } from '@/lib/boards/events';
 import {
   clientIp,
@@ -127,7 +128,7 @@ export const POST: APIRoute = async ({ params, request, cookies, clientAddress }
       board.id,
       null,
       fields,
-      withoutLinks(fields, parsed.value.properties)
+      withoutChecklists(fields, withoutLinks(fields, parsed.value.properties))
     );
 
     const { data, error } = await db

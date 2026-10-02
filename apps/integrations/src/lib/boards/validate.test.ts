@@ -782,3 +782,56 @@ describe('linked cards fields', () => {
     expect(formatProperty(field, [])).toBe('');
   });
 });
+
+describe('checklist fields', () => {
+  const base = { key: 'onboarding', label: 'Onboarding', kind: 'checklist' };
+
+  it('keeps the default list and the column a finished card moves to', () => {
+    const [field] =
+      value(
+        parseBoardPatch({
+          fields: [
+            { ...base, checklistMd: '- [ ] One\n- [!] Two\n\n', checklistDoneColumn: 'active' },
+          ],
+        })
+      ).fields ?? [];
+    expect(field.checklist_md).toBe('- [ ] One\n- [!] Two');
+    expect(field.checklist_done_column).toBe('active');
+  });
+
+  it('reads no column as staying put, and empties the config on any other kind', () => {
+    const [stay, text] =
+      value(
+        parseBoardPatch({
+          fields: [
+            { ...base, checklistMd: '- [ ] One', checklistDoneColumn: '' },
+            {
+              key: 'note',
+              label: 'Note',
+              kind: 'text',
+              checklistMd: '- [ ] x',
+              checklistDoneColumn: 'done',
+            },
+          ],
+        })
+      ).fields ?? [];
+    expect(stay.checklist_done_column).toBeNull();
+    expect(text.checklist_md).toBe('');
+    expect(text.checklist_done_column).toBeNull();
+  });
+
+  it('refuses a column key that cannot be one', () => {
+    expect(
+      error(parseBoardPatch({ fields: [{ ...base, checklistDoneColumn: 'Not A Key' }] }))
+    ).toMatch(/column this board does not have/);
+  });
+
+  it('stores a card answer through normalizeProperties and shows progress', () => {
+    const fields = [{ key: 'onboarding', kind: 'checklist' as const, options: [] }];
+    const properties = normalizeProperties(fields, {
+      onboarding: { md: '- [ ] One\n- [ ] Two', checks: [{ i: 0, t: 'One', s: false }] },
+    });
+    expect(formatProperty({ kind: 'checklist' }, properties.onboarding)).toBe('1 of 2');
+    expect(normalizeProperties(fields, { onboarding: 'done' })).toEqual({});
+  });
+});

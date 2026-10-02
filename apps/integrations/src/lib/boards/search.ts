@@ -4,6 +4,7 @@
 
 import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { checklistText } from './checklist';
 import { type LinkSummary, linkedTitles } from './links';
 import { formatProperty } from './validate';
 
@@ -40,6 +41,10 @@ export function cardSearchText(
     if (value == null) continue;
     if (field.kind === 'card_link') {
       parts.push(field.label, ...linkedTitles(value, links));
+      continue;
+    }
+    if (field.kind === 'checklist') {
+      parts.push(field.label, ...checklistText(value));
       continue;
     }
     parts.push(field.label, formatProperty(field, value));

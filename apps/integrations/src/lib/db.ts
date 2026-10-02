@@ -1031,7 +1031,9 @@ export type BoardFieldKind =
   /** One to many attachments, stored as an array of board_attachments ids. */
   | 'files'
   /** Cards on another board (or this one); the links live in board_card_links. */
-  | 'card_link';
+  | 'card_link'
+  /** A list of items to complete or skip, stored as a ChecklistAnswer. */
+  | 'checklist';
 
 /** A per-board question. `board_cards.properties` is keyed by `key`. */
 export interface BoardFieldRow {
@@ -1057,6 +1059,10 @@ export interface BoardFieldRow {
   link_multiple: boolean;
   /** Only meaningful for kind 'card_link': the field on the other board showing the far end. */
   link_inverse_field_id: string | null;
+  /** Only meaningful for kind 'checklist': the default list, as markdown. */
+  checklist_md: string;
+  /** Only meaningful for kind 'checklist': the column key a finished card moves to; null stays put. */
+  checklist_done_column: string | null;
   sort_order: number;
   archived: boolean;
   created_at: string;
@@ -1077,8 +1083,28 @@ export interface BoardCardLinkRow {
   created_at: string;
 }
 
+/** One resolved item of a card's checklist (lib/boards/checklist.ts). */
+export interface ChecklistAnswerCheck {
+  /** The item's index among the list's task items. */
+  i: number;
+  /** The item's text when it was resolved, so an edited list can find it again. */
+  t: string;
+  /** Skipped rather than completed. */
+  s: boolean;
+  /** Session email of whoever resolved it; stamped by the route. */
+  by: string;
+  /** When, ISO; stamped by the route. */
+  at: string;
+}
+
+/** A card's answer to a checklist field: its own copy of the list, and what is resolved. */
+export interface ChecklistAnswer {
+  md: string;
+  checks: ChecklistAnswerCheck[];
+}
+
 /** A stored answer to one board field. */
-export type BoardFieldValue = string | number | boolean | string[];
+export type BoardFieldValue = string | number | boolean | string[] | ChecklistAnswer;
 
 /**
  * One file answering a board's `files` field (see the board_field_files

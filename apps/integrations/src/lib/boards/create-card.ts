@@ -14,6 +14,7 @@ import { notifyCardAssigned } from '@/lib/notifications/goals';
 import { applyLinks, prepareLinks, withLinks } from './card-links';
 import { filterFileAnswers, syncCardAttachments } from './card-media';
 import { defaultColumn, nextSortOrder } from './cards';
+import { withoutChecklists } from './checklist';
 import { logBoardEvent } from './events';
 import { loadColumns } from './store';
 import { isFinishedKind } from './types';
@@ -77,11 +78,13 @@ export async function createCard(
     .select('column_id, sort_order')
     .eq('board_id', board.id);
 
+  // A new card starts from each checklist field's default list: nothing on
+  // it is done yet, and nobody has done it.
   const prepared = await prepareLinks(
     db,
     null,
     fields,
-    normalizeProperties(fields, input.properties),
+    withoutChecklists(fields, normalizeProperties(fields, input.properties)),
     input.properties
   );
   if (!prepared.ok) return { ok: false, status: 400, error: prepared.error };

@@ -2,7 +2,7 @@
 
 import { createCard, loadBoardFields } from '@/lib/boards/create-card';
 import { loadColumns } from '@/lib/boards/store';
-import { GOALS_BOARD_SLUG, kindIsSettled } from '@/lib/boards/types';
+import { GOALS_BOARD_SLUG, kindIsChecklist, kindIsSettled } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardRow } from '@/lib/db';
 import { cardHref, PAYLOAD_PARSERS } from '../types';
@@ -61,7 +61,7 @@ export const boardCardCreate: KindHandler<'board_card.create'> = {
     // File answers can't be proposed (there is nothing to attach), and links
     // are a person's call, so both kinds are left out before normalizing.
     const fields = (await loadBoardFields(db, board.id)).filter(
-      (f) => !f.archived && !kindIsSettled(f.kind)
+      (f) => !f.archived && !kindIsSettled(f.kind) && !kindIsChecklist(f.kind)
     );
     const properties = normalizeProperties(fields, payload.properties);
     return { ok: true, payload: { ...payload, columnKey, properties }, target: null };
