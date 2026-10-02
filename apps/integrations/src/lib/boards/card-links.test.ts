@@ -42,6 +42,8 @@ function linkField(overrides: Partial<BoardFieldRow> = {}): BoardFieldRow {
     link_columns: ['active'],
     link_multiple: false,
     link_inverse_field_id: null,
+    checklist_md: '',
+    checklist_done_column: null,
     sort_order: 10,
     archived: false,
     created_at: '',

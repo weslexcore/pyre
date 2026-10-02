@@ -28,6 +28,11 @@
 // creates the matching field on the target board and pairs the two, so the
 // same links show from both ends.
 //
+// A checklist field is the third: its answers are a card's own list and who
+// ticked what, which no other kind can hold, so it stays a checklist. Its
+// default list and the column a finished card moves to can change freely;
+// that column has to be a live one on this board when it is set.
+//
 // A board's goal travels with its cards: every card on the board is filed
 // under the board's goal, and pointing the board at a different goal
 // re-files them (lib/boards/store attachGoalToBoard).
@@ -94,6 +99,7 @@ import {
   type Db,
   dbError,
   json,
+  sessionEmail,
   storeError,
 } from '@/lib/http/route';
 import { deleteBySourceIds } from '@/lib/notifications/notify';
@@ -114,7 +120,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       if (!bundle) return json({ error: 'Board not found' }, 404);
       return json({
         ...bundle,
-        ...(await boardViewerExtras(bundle.cards, gate.access, slug, bundle.linkSummaries)),
+        ...(await boardViewerExtras(bundle.cards, gate.access, slug, bundle.linkSummaries, {
+          email: sessionEmail(gate),
+          fields: bundle.fields,
+        })),
       });
     }
 
@@ -452,6 +461,13 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           : `"${current.label}" already has answers, so it cannot become a files field`;
       return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
     }
+    if (current.kind === 'checklist' || field.kind === 'checklist') {
+      const reason =
+        current.kind === 'checklist'
+          ? `"${current.label}" is a checklist, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
+          : `"${current.label}" already has answers, so it cannot become a checklist`;
+      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
+    }
     if (current.kind === 'card_link' || field.kind === 'card_link') {
       const reason =
         current.kind === 'card_link'
@@ -464,6 +480,30 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
 
   const linkProblem = await checkLinkTargets(db, next, byKey);
   if (linkProblem) return linkProblem;
+
+  // Columns are applied before fields on the same save, so this reads the
+  // list the board is about to have. A pointer left alone on a column that
+  // has since been archived is not refused — it just stops moving cards.
+  const destinations = next.filter(
+    (field) =>
+      field.kind === 'checklist' &&
+      field.checklist_done_column !== null &&
+      field.checklist_done_column !== byKey.get(field.key)?.checklist_done_column
+  );
+  if (destinations.length > 0) {
+    const live = new Set(
+      (await loadColumns(db, boardId))
+        .filter((column) => !column.archived)
+        .map((column) => column.key)
+    );
+    const missing = destinations.find((field) => !live.has(field.checklist_done_column as string));
+    if (missing) {
+      return json(
+        { error: `"${missing.label}" moves finished cards to a column this board does not have` },
+        400
+      );
+    }
+  }
 
   for (const field of next) {
     const current = byKey.get(field.key);
@@ -483,6 +523,8 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
           // of its columns, and how many, are not.
           link_columns: field.link_columns,
           link_multiple: field.link_multiple,
+          checklist_md: field.checklist_md,
+          checklist_done_column: field.checklist_done_column,
           sort_order: field.sort_order,
           archived: field.archived,
         })

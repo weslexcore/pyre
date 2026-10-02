@@ -19,7 +19,12 @@
 //     rows it now lists are claimed and the ones it dropped removed after;
 //   * a `card_link` answer is never stored on the card (lib/boards/card-links):
 //     the links it asks for are checked before, made and undone in
-//     board_card_links after, and read back onto the card that is returned.
+//     board_card_links after, and read back onto the card that is returned;
+//   * a `checklist` answer says which items are done, never who did them:
+//     every new mark is stamped with the session and the time here, and a
+//     save that finishes a checklist whose field names a column moves the
+//     card there (lib/boards/checklist.ts), unless the same save moves it
+//     somewhere itself.
 //
 // Access is per board: `board:<slug>` opens exactly that board's cards.
 //
@@ -38,12 +43,19 @@ import {
   syncCardAttachments,
 } from '@/lib/boards/card-media';
 import { columnPatch } from '@/lib/boards/cards';
+import { checklistDestination, stampChecklists } from '@/lib/boards/checklist';
 import { createCard, goalTitle, loadBoardFields } from '@/lib/boards/create-card';
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvents } from '@/lib/boards/events';
 import { boardViewerExtras } from '@/lib/boards/people';
 import { loadBoardSops, sopsForViewer } from '@/lib/boards/sops';
-import { loadBoardBundle, loadCard, loadColumn, unattachedGoals } from '@/lib/boards/store';
+import {
+  loadBoardBundle,
+  loadCard,
+  loadColumn,
+  loadColumns,
+  unattachedGoals,
+} from '@/lib/boards/store';
 import { isBoardSlug } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate, parseCardPatch } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardRow } from '@/lib/db';
@@ -78,7 +90,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     const { access } = ready.gate;
     const email = sessionEmail(ready.gate);
     const [extras, linkedSops, role] = await Promise.all([
-      boardViewerExtras(bundle.cards, access, slug, bundle.linkSummaries),
+      boardViewerExtras(bundle.cards, access, slug, bundle.linkSummaries, {
+        email,
+        fields: bundle.fields,
+      }),
       loadBoardSops(ready.db, bundle.board.id),
       getSopRole(email, access),
     ]);
@@ -149,17 +164,38 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   // Links are checked before anything is written, so a refused link refuses
   // the whole save rather than half of it.
   const fields = await loadBoardFields(db, before.board_id);
-  const prepared =
+  const now = new Date().toISOString();
+  const normalized =
     body.properties === undefined
       ? null
-      : await prepareLinks(
-          db,
-          before.id,
+      : stampChecklists(
           fields,
+          before.properties,
           normalizeProperties(fields, body.properties, before.properties),
-          body.properties
+          email,
+          now
         );
+  const prepared =
+    normalized === null
+      ? null
+      : await prepareLinks(db, before.id, fields, normalized, body.properties);
   if (prepared && !prepared.ok) return json({ error: prepared.error }, 400);
+
+  // A checklist this save finishes moves the card to its field's column —
+  // unless the save is moving the card itself, which is the person's call.
+  if (normalized && patch.column_id === undefined) {
+    const destination = checklistDestination(
+      fields,
+      await loadColumns(db, before.board_id),
+      before.column_id,
+      before.properties,
+      normalized
+    );
+    if (destination) {
+      patch.column_id = destination.id;
+      completion = columnPatch(before, destination, email, now);
+    }
+  }
   const properties = prepared
     ? {
         properties: await filterFileAnswers(

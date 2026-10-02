@@ -57,6 +57,7 @@ export const FIELD_KINDS = [
   'time_range',
   'files',
   'card_link',
+  'checklist',
 ] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 
@@ -74,6 +75,7 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   time_range: 'Time range',
   files: 'Files',
   card_link: 'Linked cards',
+  checklist: 'Checklist',
 };
 
 export function isFieldKind(value: unknown): value is FieldKind {
@@ -120,6 +122,16 @@ export function kindIsFiles(kind: FieldKind): boolean {
  */
 export function kindIsCardLink(kind: FieldKind): boolean {
   return kind === 'card_link';
+}
+
+/**
+ * The kind whose answer is a list worked through on the card: items
+ * completed or skipped, each stamped with who and when by the route that
+ * writes it (lib/boards/checklist.ts). Staff work, so it stays off public
+ * forms, intake and agent suggestions, like a link.
+ */
+export function kindIsChecklist(kind: FieldKind): boolean {
+  return kind === 'checklist';
 }
 
 /**
@@ -212,6 +224,8 @@ export const BOARD_LIMITS = {
   filesPerField: 10,
   /** A card_link field lists a handful of cards; past this it's a board of its own. */
   linksPerField: 50,
+  /** A checklist's markdown, the default or a card's own copy. */
+  checklist: 10000,
   /** How many cards the link picker offers at once; type to narrow. */
   linkOptions: 50,
   /** A board is a page, not a database: past this it needs paging. */

@@ -17,6 +17,7 @@ import {
   type ParseResult,
   parseGoalCreate,
 } from '@/lib/goals/validate';
+import { formatChecklist, normalizeChecklist } from './checklist';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
 import type { ColumnKind, FieldKind } from './types';
@@ -149,6 +150,10 @@ export interface FieldInput {
    * that field and pairs the two. Never stored as such.
    */
   link_inverse?: LinkInverseInput;
+  /** Only for `checklist`: the default list every card starts from; '' for any other kind. */
+  checklist_md: string;
+  /** Only for `checklist`: the column key a finished card moves to; null stays put. */
+  checklist_done_column: string | null;
   sort_order: number;
   archived: boolean;
 }
@@ -205,6 +210,32 @@ function parseLinkConfig(
       ...(inverse ? { link_inverse: inverse } : {}),
     },
   };
+}
+
+/**
+ * The checklist half of a field: its default list and the column a finished
+ * card moves to. Which columns the board has is the route's to check; here
+ * the key only has to be shaped like one. Every other kind comes back empty.
+ */
+function parseChecklistConfig(
+  field: Record<string, unknown>,
+  label: string
+): ParseResult<Pick<FieldInput, 'checklist_md' | 'checklist_done_column'>> {
+  if (field.kind !== 'checklist') {
+    return { ok: true, value: { checklist_md: '', checklist_done_column: null } };
+  }
+  const raw = field.checklistMd ?? '';
+  if (typeof raw !== 'string') return fail(`"${label}" needs its checklist written as text`);
+  const md = raw.replace(/\s+$/, '');
+  if (md.length > BOARD_LIMITS.checklist) {
+    return fail(`"${label}" has a checklist over ${BOARD_LIMITS.checklist} characters`);
+  }
+  const column =
+    typeof field.checklistDoneColumn === 'string' ? field.checklistDoneColumn.trim() : '';
+  if (column && !KEY_RE.test(column)) {
+    return fail(`"${label}" moves finished cards to a column this board does not have`);
+  }
+  return { ok: true, value: { checklist_md: md, checklist_done_column: column || null } };
 }
 
 /** Trimmed, de-duplicated (case-insensitively), capped option list. */
@@ -280,6 +311,8 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
     // that goes with it is dropped too, so the two can never disagree.
     const link = parseLinkConfig(field, label);
     if (!link.ok) return link;
+    const checklist = parseChecklistConfig(field, label);
+    if (!checklist.ok) return checklist;
 
     const onCalendar = field.kind === 'date' && field.showOnCalendar === true;
     const timeKey =
@@ -299,6 +332,7 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
       show_on_calendar: onCalendar,
       calendar_time_key: timeKey,
       ...link.value,
+      ...checklist.value,
       sort_order: order,
       archived: field.archived === true,
     });
@@ -816,6 +850,10 @@ export function normalizeAnswer(
       // Shaped here, settled by the route (card-links.ts): which cards the
       // field may link, and how many, needs the database.
       return normalizeLinkIds(raw);
+    case 'checklist':
+      // Shaped here; who resolved each item is stamped by the route
+      // (checklist.ts stampChecklists), never taken from the request.
+      return normalizeChecklist(raw);
     default: {
       if (typeof raw !== 'string') return null;
       // A long text keeps its line breaks — they are how a paragraph is a
@@ -914,6 +952,8 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
       const count = linkIdsOf(value).length;
       return count > 0 ? formatLinkCount(count) : '';
     }
+    case 'checklist':
+      return formatChecklist(value);
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
     default:
