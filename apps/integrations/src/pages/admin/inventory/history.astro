@@ -1,0 +1,15 @@
+---
+// The inventory ledger: every stock movement, who logged it, and why —
+// filterable, exportable to CSV. Same grant as the stock page.
+import { InventoryHistory } from '@/components/admin/InventoryHistory';
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Inventory History"
+  subtitle="Every change to stock, newest first. Used is consumption; waste and count shortfalls are loss."
+>
+  <InventoryTabs current="/admin/inventory/history" />
+  <InventoryHistory client:load />
+</AdminLayout>
