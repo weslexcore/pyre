@@ -42,7 +42,7 @@
 // cascade) and leaves the goal standing. The seeded Tasks board cannot go:
 // All Tasks quick-adds into it.
 //
-//   GET                  → { boards, sections, goals, kpis, tallies, canManage,
+//   GET                  → { boards, sections, goals, kpis, tallies, upNext, canManage,
 //                            owners?, unattachedGoals? }
 //   GET ?slug=<slug>     → { board, columns, fields, cards, goal, kpis, … }
 //   POST   { slug, name, description?, cardNoun?, includeInAllTasks?,
@@ -73,6 +73,7 @@ import {
   loadBoardsIndex,
   loadColumns,
   loadSection,
+  loadUpNext,
   unattachedGoals,
 } from '@/lib/boards/store';
 import {
@@ -129,13 +130,17 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     }
 
     const boards = visibleBoards(gate.access, await loadBoards(db));
-    const index = await loadBoardsIndex(db, boards);
+    // The viewer's own next few dated cards, for the strip on top.
+    const [index, upNext] = await Promise.all([
+      loadBoardsIndex(db, boards),
+      loadUpNext(db, sessionEmail(gate), boards),
+    ]);
     const canManage = canManageBoards(gate.access);
-    if (!canManage) return json({ ...index, canManage });
+    if (!canManage) return json({ ...index, upNext, canManage });
 
     // The New board form needs the roster and the goals nobody has claimed.
     const [owners, unattached] = await Promise.all([listAssignable(), unattachedGoals(db)]);
-    return json({ ...index, canManage, owners, unattachedGoals: unattached });
+    return json({ ...index, upNext, canManage, owners, unattachedGoals: unattached });
   } catch (e) {
     return storeError('boards', e);
   }

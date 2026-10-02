@@ -18,7 +18,7 @@ import { formButtonClass } from '@/components/admin/ui';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
-import type { BoardTally } from '@/lib/boards/store';
+import type { BoardTally, UpNextCard } from '@/lib/boards/store';
 import { BOARD_LIMITS, BOARDS_CALENDAR_HREF, slugOf } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
@@ -39,6 +39,7 @@ import {
   selectClass,
 } from '../goalsUi';
 import { BoardSections } from './BoardSections';
+import { UpNext } from './UpNext';
 
 interface BoardsResponse {
   boards: BoardRow[];
@@ -47,6 +48,8 @@ interface BoardsResponse {
   kpis: GoalKpiRow[];
   tallies: BoardTally[];
   formBoardIds: string[];
+  /** The viewer's next few dated cards. */
+  upNext?: UpNextCard[];
   canManage?: boolean;
   owners?: Assignable[];
   unattachedGoals?: GoalRow[];
@@ -211,6 +214,8 @@ export function BoardsIndex() {
           )}
         </div>
       )}
+
+      <UpNext cards={data.upNext ?? []} today={today} />
 
       {canManage && creating && (
         <form onSubmit={create} className={cardClass}>
