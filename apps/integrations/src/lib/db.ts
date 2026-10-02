@@ -975,6 +975,8 @@ export interface BoardRow {
   /** What one card is called here — 'task', 'lead'. */
   card_noun: string;
   include_in_all_tasks: boolean;
+  /** Who a new card is put on when whoever made it named nobody. */
+  default_assignee_emails: string[];
   /** Whether cards here put their due_date on the calendar, as an all-day entry. */
   due_on_calendar: boolean;
   /** The goal this board serves, judged by its KPIs; null for a plain list. */
@@ -1135,9 +1137,13 @@ export interface BoardCardRow {
   goal_id: string | null;
   title: string;
   notes_md: string;
-  owner_email: string | null;
+  /** Everyone the card is on, lowercased, in the order they were added. */
+  assignee_emails: string[];
   /** YYYY-MM-DD. */
   due_date: string | null;
+  /** With repeat_unit: finishing the card files the next one this much later. */
+  repeat_every: number | null;
+  repeat_unit: 'day' | 'week' | 'month' | 'year' | null;
   /** Why it is stuck, while it stays in progress. */
   waiting_on: string | null;
   area: string | null;

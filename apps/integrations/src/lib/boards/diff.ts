@@ -61,11 +61,20 @@ export interface PendingEvent {
 // single `updated`.
 const CARD_NOTABLE = {
   column_id: 'moved',
-  owner_email: 'assigned',
+  assignee_emails: 'assigned',
   due_date: 'due_changed',
 } as const;
 
-const CARD_REST = ['title', 'notes_md', 'waiting_on', 'area', 'goal_id', 'properties'] as const;
+const CARD_REST = [
+  'title',
+  'notes_md',
+  'waiting_on',
+  'area',
+  'goal_id',
+  'properties',
+  'repeat_every',
+  'repeat_unit',
+] as const;
 
 export function eventsForCardPatch(
   before: Pick<BoardCardRow, (typeof CARD_REST)[number] | keyof typeof CARD_NOTABLE>,

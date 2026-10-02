@@ -77,18 +77,24 @@ export interface ViewerExtras {
  * reshape the board at all.
  */
 export async function boardViewerExtras(
-  cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by' | 'properties'>[],
+  cards: Pick<BoardCardRow, 'assignee_emails' | 'created_by' | 'completed_by' | 'properties'>[],
   access: PageAccess,
   slug: string,
   linkSummaries: LinkSummary[] = [],
-  viewer: { email: string; fields: Pick<BoardFieldRow, 'key' | 'kind'>[] } = {
+  viewer: {
+    email: string;
+    fields: Pick<BoardFieldRow, 'key' | 'kind'>[];
+    defaultAssignees?: string[];
+  } = {
     email: '',
     fields: [],
   }
 ): Promise<ViewerExtras> {
   const canManage = canManageBoards(access);
   const people = await getPeopleNames([
-    ...cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? '']),
+    ...cards.flatMap((card) => [...card.assignee_emails, card.created_by, card.completed_by ?? '']),
+    // The board's own defaults, so its settings name them.
+    ...(viewer.defaultAssignees ?? []),
     // Whoever ticked an item on a checklist, so the row says a name.
     ...checklistPeople(viewer.fields, cards),
     viewer.email,

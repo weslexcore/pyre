@@ -37,6 +37,33 @@ describe('describeEvent', () => {
     );
   });
 
+  it('names who joined and who left a card', () => {
+    const jo = 'jo@pyresauna.com';
+    const maya = 'maya@pyresauna.com';
+    expect(describe_('assigned', { assignee_emails: { from: [], to: [maya, jo] } })).toBe(
+      'assigned it to Maya Ortiz and jo'
+    );
+    expect(describe_('assigned', { assignee_emails: { from: [maya, jo], to: [jo] } })).toBe(
+      'took Maya Ortiz off it'
+    );
+    expect(describe_('assigned', { assignee_emails: { from: [maya], to: [jo] } })).toBe(
+      'assigned it to jo and took Maya Ortiz off it'
+    );
+    expect(describe_('assigned', { assignee_emails: { from: [maya], to: [] } })).toBe(
+      'took everyone off it'
+    );
+  });
+
+  it('says when a card is the next copy of a repeating one', () => {
+    expect(describe_('created', { repeatOf: 'card' })).toBe('filed the next repeat');
+    expect(
+      describe_('updated', {
+        repeat_every: { from: 1, to: null },
+        repeat_unit: { from: 'week', to: null },
+      })
+    ).toBe('changed how often it repeats');
+  });
+
   it('describes a date change on either subject', () => {
     expect(describe_('due_changed', { due_date: { from: null, to: '2026-10-01' } })).toBe(
       'set the date to 2026-10-01'

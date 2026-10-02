@@ -4,14 +4,14 @@
 //
 // Who hears about what follows the grants exactly:
 //
-//   * a card's owner hears when it is put on them and when somebody else
+//   * a card's assignees hear when it is put on them and when somebody else
 //     finishes it; they never hear about their own doing.
 //   * a goal's owner hears when it is marked completed by someone else. The
 //     founders are the audience for that one, and it is the moment the whole
 //     tool exists for, so it carries the note they wrote. The link opens the
 //     board that serves the goal, or the goals overview for a goal no board
 //     serves.
-//   * a comment reaches its owner and explicitly mentioned people with access.
+//   * a comment reaches its assignees and explicitly mentioned people with access.
 //   * a lead from the web reaches whoever holds that board (boardRecipients),
 //     which for the rental pipeline is the community manager and the
 //     founders, and for nobody else at all.
@@ -49,7 +49,7 @@ const NOTICE_DAYS = 30;
 
 const KIND = 'goal_activity' as const;
 
-type CardSubject = Pick<BoardCardRow, 'id' | 'title' | 'owner_email' | 'due_date' | 'goal_id'>;
+type CardSubject = Pick<BoardCardRow, 'id' | 'title' | 'assignee_emails' | 'due_date' | 'goal_id'>;
 
 function normalize(email: string | null | undefined): string {
   return (email ?? '').trim().toLowerCase();
@@ -89,8 +89,15 @@ function goalHrefFor(rows: RosterRow[], goalId: string, boards: Pick<BoardRow, '
   };
 }
 
+/** The card's assignees, minus whoever caused the notice. */
+function assigneesBut(emails: readonly string[], actorEmail: string): string[] {
+  const actor = normalize(actorEmail);
+  return [...new Set(emails.map(normalize))].filter((email) => email && email !== actor);
+}
+
 /**
- * A card was put on somebody. Superseded, so reassigning a task back and
+ * A card was put on somebody: `added` is who joined it with this save (every
+ * assignee, for a new card). Superseded, so reassigning a task back and
  * forth while planning leaves one unread row rather than a trail of them.
  */
 export async function notifyCardAssigned(
@@ -98,13 +105,14 @@ export async function notifyCardAssigned(
   card: CardSubject,
   board: Pick<BoardRow, 'slug' | 'card_noun'>,
   goalTitle: string | null,
-  actorEmail: string
+  actorEmail: string,
+  added: readonly string[] = card.assignee_emails
 ): Promise<void> {
-  const owner = normalize(card.owner_email);
-  if (!owner || owner === normalize(actorEmail)) return;
+  const recipients = assigneesBut(added, actorEmail);
+  if (recipients.length === 0) return;
 
   const rows = (await listStaff()) ?? [];
-  await createNotifications(db, [owner], {
+  await createNotifications(db, recipients, {
     kind: KIND,
     ...cardAssignedText({
       cardTitle: card.title,
@@ -121,7 +129,7 @@ export async function notifyCardAssigned(
   });
 }
 
-/** Somebody else finished a card its owner was carrying. */
+/** Somebody else finished a card its assignees were carrying. */
 export async function notifyCardCompleted(
   db: SupabaseClient,
   card: CardSubject,
@@ -129,11 +137,11 @@ export async function notifyCardCompleted(
   column: Pick<BoardColumnRow, 'label'>,
   actorEmail: string
 ): Promise<void> {
-  const owner = normalize(card.owner_email);
-  if (!owner || owner === normalize(actorEmail)) return;
+  const recipients = assigneesBut(card.assignee_emails, actorEmail);
+  if (recipients.length === 0) return;
 
   const rows = (await listStaff()) ?? [];
-  await createNotifications(db, [owner], {
+  await createNotifications(db, recipients, {
     kind: KIND,
     ...cardCompletedText({
       cardTitle: card.title,
@@ -181,7 +189,7 @@ export async function notifyGoalCompleted(
   });
 }
 
-/** A comment reaches its owner and mentioned users with access. */
+/** A comment reaches its assignees and mentioned users with access. */
 export async function notifyCardComment(
   db: SupabaseClient,
   card: CardSubject,
@@ -189,11 +197,9 @@ export async function notifyCardComment(
   note: string,
   actorEmail: string
 ): Promise<void> {
-  const owner = normalize(card.owner_email);
-
   const rows = (await listStaff()) ?? [];
   const mentions = mentionedEmails(note, mentionPeople(rows, [board.slug]));
-  await createNotifications(db, [owner, ...mentions], {
+  await createNotifications(db, [...card.assignee_emails.map(normalize), ...mentions], {
     kind: KIND,
     ...boardCommentText({
       subjectTitle: card.title,

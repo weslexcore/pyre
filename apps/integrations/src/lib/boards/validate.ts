@@ -20,6 +20,7 @@ import {
 import { formatChecklist, normalizeChecklist } from './checklist';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
+import { isRepeatUnit, REPEAT_EVERY_MAX, type RepeatUnit } from './recurrence';
 import type { ColumnKind, FieldKind } from './types';
 import {
   answerLimit,
@@ -59,6 +60,54 @@ function email(value: unknown): string | null | undefined {
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) return null;
   return trimmed.length >= 3 && trimmed.length <= 320 ? trimmed : undefined;
+}
+
+/**
+ * A list of people by email: `assigneeEmails` as an array, or the older
+ * single `ownerEmail` (null clears). Lowercased, de-duplicated, order kept.
+ * Undefined means the body named nobody either way; a malformed list is
+ * reported by the caller.
+ */
+export function emailList(
+  list: unknown,
+  single?: unknown
+): { ok: true; value: string[] | undefined } | { ok: false } {
+  if (list === undefined) {
+    if (single === undefined) return { ok: true, value: undefined };
+    const one = email(single);
+    if (one === undefined) return { ok: false };
+    return { ok: true, value: one === null ? [] : [one] };
+  }
+  if (list === null) return { ok: true, value: [] };
+  if (!Array.isArray(list) || list.length > BOARD_LIMITS.assignees) return { ok: false };
+  const emails: string[] = [];
+  for (const entry of list) {
+    const one = email(entry);
+    if (!one) return { ok: false };
+    if (!emails.includes(one)) emails.push(one);
+  }
+  return { ok: true, value: emails };
+}
+
+/**
+ * A repeat rule: `{ every, unit }`, or null to stop repeating. Undefined
+ * leaves the card's rule alone.
+ */
+function parseRepeat(
+  value: unknown
+):
+  | { ok: true; value: { repeat_every: number | null; repeat_unit: RepeatUnit | null } | undefined }
+  | { ok: false } {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (value === null) return { ok: true, value: { repeat_every: null, repeat_unit: null } };
+  if (typeof value !== 'object' || Array.isArray(value)) return { ok: false };
+  const rule = value as Record<string, unknown>;
+  const every = numberOf(rule.every);
+  if (every === undefined || !Number.isInteger(every) || every < 1 || every > REPEAT_EVERY_MAX) {
+    return { ok: false };
+  }
+  if (!isRepeatUnit(rule.unit)) return { ok: false };
+  return { ok: true, value: { repeat_every: every, repeat_unit: rule.unit } };
 }
 
 export interface ColumnInput {
@@ -464,6 +513,7 @@ export interface BoardPatch {
   description?: string;
   card_noun?: string;
   include_in_all_tasks?: boolean;
+  default_assignee_emails?: string[];
   due_on_calendar?: boolean;
   archived?: boolean;
   sort_order?: number;
@@ -506,6 +556,14 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
       return fail('includeInAllTasks must be true or false');
     }
     patch.include_in_all_tasks = body.includeInAllTasks;
+  }
+
+  if (body.defaultAssigneeEmails !== undefined) {
+    const assignees = emailList(body.defaultAssigneeEmails);
+    if (!assignees.ok || assignees.value === undefined) {
+      return fail(`defaultAssigneeEmails must be up to ${BOARD_LIMITS.assignees} email addresses`);
+    }
+    patch.default_assignee_emails = assignees.value;
   }
 
   if (body.dueOnCalendar !== undefined) {
@@ -556,13 +614,18 @@ export function parseBoardPatch(body: Record<string, unknown>): ParseResult<Boar
   return { ok: true, value: patch };
 }
 
+const REPEAT_ERROR = `repeat must be null or { every: 1–${REPEAT_EVERY_MAX}, unit: day, week, month, or year }`;
+
 export interface CardCreate {
   board_id?: string;
   column_id: string | null;
   title: string;
   notes_md: string;
-  owner_email: string | null;
+  /** Empty takes the board's default assignees (the insert trigger). */
+  assignee_emails: string[];
   due_date: string | null;
+  repeat_every: number | null;
+  repeat_unit: RepeatUnit | null;
   waiting_on: string | null;
   area: string | null;
   properties: Record<string, BoardFieldValue>;
@@ -594,10 +657,13 @@ export function parseCardCreate(body: Record<string, unknown>): ParseResult<Card
     }
   }
 
-  const owner = email(body.ownerEmail);
-  if (owner === undefined && body.ownerEmail !== undefined) {
-    return fail('ownerEmail must be an email address');
+  const assignees = emailList(body.assigneeEmails, body.ownerEmail);
+  if (!assignees.ok) {
+    return fail(`assigneeEmails must be up to ${BOARD_LIMITS.assignees} email addresses`);
   }
+
+  const repeat = parseRepeat(body.repeat);
+  if (!repeat.ok) return fail(REPEAT_ERROR);
 
   let dueDate: string | null = null;
   if (body.dueDate !== undefined && body.dueDate !== null && body.dueDate !== '') {
@@ -628,8 +694,10 @@ export function parseCardCreate(body: Record<string, unknown>): ParseResult<Card
       column_id: columnId,
       title,
       notes_md: notes,
-      owner_email: owner ?? null,
+      assignee_emails: assignees.value ?? [],
       due_date: dueDate,
+      repeat_every: repeat.value?.repeat_every ?? null,
+      repeat_unit: repeat.value?.repeat_unit ?? null,
       waiting_on: waiting ?? null,
       area: area ?? null,
       properties: {},
@@ -641,8 +709,10 @@ export interface CardPatch {
   column_id?: string;
   title?: string;
   notes_md?: string;
-  owner_email?: string | null;
+  assignee_emails?: string[];
   due_date?: string | null;
+  repeat_every?: number | null;
+  repeat_unit?: RepeatUnit | null;
   waiting_on?: string | null;
   area?: string | null;
   sort_order?: number;
@@ -672,11 +742,15 @@ export function parseCardPatch(body: Record<string, unknown>): ParseResult<CardP
     patch.notes_md = notes;
   }
 
-  if (body.ownerEmail !== undefined) {
-    const owner = email(body.ownerEmail);
-    if (owner === undefined) return fail('ownerEmail must be an email address or null');
-    patch.owner_email = owner;
+  const assignees = emailList(body.assigneeEmails, body.ownerEmail);
+  if (!assignees.ok) {
+    return fail(`assigneeEmails must be up to ${BOARD_LIMITS.assignees} email addresses`);
   }
+  if (assignees.value !== undefined) patch.assignee_emails = assignees.value;
+
+  const repeat = parseRepeat(body.repeat);
+  if (!repeat.ok) return fail(REPEAT_ERROR);
+  if (repeat.value) Object.assign(patch, repeat.value);
 
   if (body.dueDate !== undefined) {
     if (body.dueDate === null || body.dueDate === '') patch.due_date = null;

@@ -18,10 +18,10 @@ const CARD_LIMIT = 2000;
 
 /** Every email a set of cards mentions, by name. */
 async function peopleFor(
-  cards: Pick<BoardCardRow, 'owner_email' | 'created_by' | 'completed_by'>[]
+  cards: Pick<BoardCardRow, 'assignee_emails' | 'created_by' | 'completed_by'>[]
 ): Promise<PeopleNames> {
   return getPeopleNames(
-    cards.flatMap((card) => [card.owner_email ?? '', card.created_by, card.completed_by ?? ''])
+    cards.flatMap((card) => [...card.assignee_emails, card.created_by, card.completed_by ?? ''])
   );
 }
 

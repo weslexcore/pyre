@@ -1,5 +1,5 @@
 // The board's own shape: its name, what it calls a card, whether its cards
-// belong on All Tasks, and its columns — and, at the bottom, the two things
+// belong on All Tasks, who a new card is assigned to, and its columns — and, at the bottom, the two things
 // that take a board off the index: archiving it and deleting it.
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
@@ -47,6 +47,7 @@ import {
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
+import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
   cardClass,
@@ -58,6 +59,7 @@ import {
   selectBaseClass,
 } from '../goalsUi';
 import { BoardSopLinks } from './BoardSopLinks';
+import { AssigneePicker } from './CardMeta';
 import { ColumnOrder } from './ColumnOrder';
 import { type LinkDraft, LinkFieldSettings } from './LinkFieldSettings';
 import { useCardAutosave } from './useCardAutosave';
@@ -109,6 +111,8 @@ export function BoardSettings({
   columns,
   fields,
   cardCount,
+  owners,
+  people,
   busy = false,
   onSaved,
   onSopsSaved,
@@ -119,6 +123,9 @@ export function BoardSettings({
   fields: BoardFieldRow[];
   /** How many cards a delete would take with it. */
   cardCount: number;
+  /** Who a card can be assigned to. */
+  owners: { email: string; name: string }[];
+  people: PeopleNames;
   busy?: boolean;
   onSaved: (result: BoardSettingsResult) => void;
   /** The linked SOPs changed; the board refetches what its viewer may see. */
@@ -130,6 +137,7 @@ export function BoardSettings({
   const [cardNoun, setCardNoun] = useState(board.card_noun);
   const [includeInAllTasks, setIncludeInAllTasks] = useState(board.include_in_all_tasks);
   const [dueOnCalendar, setDueOnCalendar] = useState(board.due_on_calendar);
+  const [defaultAssignees, setDefaultAssignees] = useState(board.default_assignee_emails ?? []);
   const [drafts, setDrafts] = useState<ColumnDraft[]>(() =>
     [...columns]
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -250,6 +258,7 @@ export function BoardSettings({
     cardNoun,
     includeInAllTasks,
     dueOnCalendar,
+    defaultAssigneeEmails: defaultAssignees,
     columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
     // A link field goes out once it knows its board: until then there is
     // nothing the route could save, and holding it back keeps the rest of
@@ -386,6 +395,20 @@ export function BoardSettings({
         <p className="ml-6 text-xs text-white/35">
           On for work with deadlines; off where a follow-up date is noise beside the dates the cards
           are really about.
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <span className={labelClass}>Assign new {nounPlural} to</span>
+        <AssigneePicker
+          owners={owners}
+          value={defaultAssignees}
+          names={(email) => personName(email, people)}
+          onChange={setDefaultAssignees}
+        />
+        <p className="mt-1 text-xs text-white/35">
+          Every new {cardNoun} — added here, from a form, or from the web — lands on these people
+          unless whoever adds it picks someone else.
         </p>
       </div>
 

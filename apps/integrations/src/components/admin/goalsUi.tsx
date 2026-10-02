@@ -169,10 +169,13 @@ export function DueChip({
   dueDate,
   today,
   finished = false,
+  repeat,
 }: {
   dueDate: string;
   today: string;
   finished?: boolean;
+  /** "Weekly": the card repeats, and this date is the next one. */
+  repeat?: string | null;
 }) {
   const tone = finished
     ? 'border-white/10 bg-white/5 text-white/35'
@@ -181,7 +184,114 @@ export function DueChip({
       : dueDate === today
         ? 'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]'
         : 'border-[var(--pyre-sage)]/50 bg-[var(--pyre-sage)]/10 text-[var(--pyre-sage)]';
-  return <span className={`${badgeBase} ${tone}`}>{formatYmd(dueDate)}</span>;
+  if (!repeat) return <span className={`${badgeBase} ${tone}`}>{formatYmd(dueDate)}</span>;
+  return (
+    <span className={`${badgeBase} ${tone}`} title={`Repeats: ${repeat.toLowerCase()}`}>
+      <RepeatIcon className="mr-1 inline-block h-2.5 w-2.5 align-[-1px]" />
+      <span className="sr-only">Repeats {repeat.toLowerCase()}, next </span>
+      {formatYmd(dueDate)}
+    </span>
+  );
+}
+
+/** Two arrows chasing each other: the card comes back. */
+export function RepeatIcon({ className = 'h-3 w-3' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M2.5 7.5V6a3 3 0 0 1 3-3h7.5M10.5 1l2.5 2-2.5 2" />
+      <path d="M13.5 8.5V10a3 3 0 0 1-3 3H3M5.5 15 3 13l2.5-2" />
+    </svg>
+  );
+}
+
+/** "Maya Lin" → "ML"; "jo@x.com" → "JO". */
+export function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+// A person keeps one tint everywhere, so a face is recognisable across rows.
+const AVATAR_TINTS = [
+  'bg-[var(--pyre-gold)]/20 text-[var(--pyre-gold)]',
+  'bg-[var(--pyre-sage)]/20 text-[var(--pyre-sage)]',
+  'bg-[var(--pyre-red)]/20 text-[var(--pyre-red)]',
+  'bg-white/15 text-[var(--pyre-creme)]',
+];
+
+function tintFor(email: string): string {
+  let hash = 0;
+  for (const char of email) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return AVATAR_TINTS[hash % AVATAR_TINTS.length];
+}
+
+/** One person as a round initials badge. */
+export function Avatar({
+  email,
+  name,
+  size = 'sm',
+}: {
+  email: string;
+  name: string;
+  size?: 'sm' | 'md';
+}) {
+  const dims = size === 'md' ? 'h-7 w-7 text-[11px]' : 'h-5 w-5 text-[9px]';
+  return (
+    <span
+      aria-hidden="true"
+      title={name}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-mono font-semibold ring-2 ring-[var(--pyre-black)] ${dims} ${tintFor(email)}`}
+    >
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+/** Everyone on a card, overlapped; past `max` the rest are a count. */
+export function AvatarStack({
+  emails,
+  names,
+  max = 3,
+  size = 'sm',
+}: {
+  emails: readonly string[];
+  /** Display name for each email. */
+  names: (email: string) => string;
+  max?: number;
+  size?: 'sm' | 'md';
+}) {
+  const shown = emails.slice(0, max);
+  const rest = emails.length - shown.length;
+  const dims = size === 'md' ? 'h-7 min-w-7 text-[11px]' : 'h-5 min-w-5 text-[9px]';
+  return (
+    <span className="inline-flex items-center -space-x-0.5">
+      <span className="sr-only">{emails.map(names).join(', ')}</span>
+      {shown.map((email) => (
+        <Avatar key={email} email={email} name={names(email)} size={size} />
+      ))}
+      {rest > 0 && (
+        <span
+          aria-hidden="true"
+          className={`inline-flex items-center justify-center rounded-full bg-white/10 px-1 font-mono text-white/60 ring-2 ring-[var(--pyre-black)] ${dims}`}
+        >
+          +{rest}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /** The task bar: "8 / 12" with the share that finished well. */
