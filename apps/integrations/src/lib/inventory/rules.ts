@@ -1,0 +1,186 @@
+// The inventory's pure rules: quantities, lots, low stock, and the stock
+// screen's grouping. Unit-tested, and shared by the routes and the islands
+// (client-bundle-safe).
+
+import type {
+  InventoryAreaRow,
+  InventoryItemRow,
+  InventorySpotRow,
+  InventoryStockRow,
+  MovementType,
+} from './types';
+
+/** Biggest single movement the app accepts — a sanity bound, not a policy. */
+export const MAX_QUANTITY = 100_000;
+
+/**
+ * A positive quantity from a request or a form field: finite, above zero, at
+ * most two decimals (half a jug of chlorine is real; 0.333 towels is not).
+ * Returns null for anything else.
+ */
+export function parseQuantity(raw: unknown): number | null {
+  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value <= 0 || value > MAX_QUANTITY) return null;
+  if (Math.round(value * 100) !== value * 100) return null;
+  return value;
+}
+
+/**
+ * A signed correction amount: like parseQuantity but either sign, never
+ * zero.
+ */
+export function parseSignedQuantity(raw: unknown): number | null {
+  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+  if (typeof value !== 'number' || value === 0) return null;
+  const magnitude = parseQuantity(Math.abs(value));
+  return magnitude === null ? null : Math.sign(value) * magnitude;
+}
+
+/**
+ * The ledger quantity for a staff-entered amount: usage and waste take stock
+ * out, receiving and opening balances put it in. Transfers and corrections
+ * carry their own sign and never go through here.
+ */
+export function signedQuantity(type: 'use' | 'waste' | 'receive' | 'initial', amount: number) {
+  return type === 'use' || type === 'waste' ? -amount : amount;
+}
+
+/** Units in `lots` whole lots of an item ("2 cases" of 12 = 24). */
+export function lotsToUnits(lots: number, lotSize: number): number {
+  return Math.round(lots * lotSize * 100) / 100;
+}
+
+/** '12', '2.5' — no trailing zeros, at most two decimals. */
+export function formatQuantity(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+/** 'towel' for 1, 'towels' otherwise — naive, good enough for unit names. */
+export function pluralUnit(n: number, unit: string): string {
+  return Math.abs(n) === 1 || /s$/i.test(unit) ? unit : `${unit}s`;
+}
+
+/** '24 towels' / '1 towel'. */
+export function formatUnits(n: number, unit: string): string {
+  return `${formatQuantity(n)} ${pluralUnit(n, unit)}`;
+}
+
+/** 'case of 12', or '' when an item is bought one at a time. */
+export function lotDescription(item: Pick<InventoryItemRow, 'lot_size' | 'lot_label'>): string {
+  if (item.lot_size === 1 && !item.lot_label) return '';
+  return `${item.lot_label?.trim() || 'lot'} of ${formatQuantity(item.lot_size)}`;
+}
+
+/** '$12.50' / '-$5.00' from cents, or '' when there is no cost. */
+export function formatCents(cents: number | null | undefined): string {
+  if (cents == null) return '';
+  return `${cents < 0 ? '-' : ''}$${(Math.abs(cents) / 100).toFixed(2)}`;
+}
+
+/** Total on hand per item across every spot. */
+export function totalsByItem(stock: readonly InventoryStockRow[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const row of stock) {
+    totals.set(row.item_id, (totals.get(row.item_id) ?? 0) + Number(row.quantity));
+  }
+  return totals;
+}
+
+/** At or below its re-order level. Items with no level are never low. */
+export function isLowStock(item: Pick<InventoryItemRow, 'reorder_level'>, total: number): boolean {
+  return item.reorder_level != null && total <= Number(item.reorder_level);
+}
+
+/**
+ * Whole lots to order to get back to the fill-to level (or the re-order
+ * level when no target is set). A low item always suggests at least one lot;
+ * null when the item has no re-order settings.
+ */
+export function suggestedLots(
+  item: Pick<InventoryItemRow, 'reorder_level' | 'reorder_target' | 'lot_size'>,
+  total: number
+): number | null {
+  const target = item.reorder_target ?? item.reorder_level;
+  if (target == null) return null;
+  const need = Number(target) - total;
+  const lots = need > 0 ? Math.ceil(need / Number(item.lot_size)) : 0;
+  return isLowStock(item, total) ? Math.max(lots, 1) : lots;
+}
+
+/** Usage vs loss for reports: which bucket a ledger row's quantity lands in. */
+export function movementBucket(
+  type: MovementType,
+  quantity: number
+): 'usage' | 'explained_loss' | 'unexplained_loss' | 'found' | 'inflow' | 'neutral' {
+  switch (type) {
+    case 'use':
+      return 'usage';
+    case 'waste':
+      return 'explained_loss';
+    case 'count_adjust':
+      return quantity < 0 ? 'unexplained_loss' : 'found';
+    case 'receive':
+      return 'inflow';
+    default:
+      return 'neutral';
+  }
+}
+
+export interface StockLine {
+  item: InventoryItemRow;
+  spot: InventorySpotRow;
+  quantity: number;
+  /** The item's total across every spot, for the low-stock badge. */
+  total: number;
+  low: boolean;
+}
+
+export interface StockArea {
+  area: InventoryAreaRow;
+  lines: StockLine[];
+}
+
+const byOrderThenName = <T extends { sort_order: number }>(
+  a: T,
+  b: T,
+  nameA: string,
+  nameB: string
+) => a.sort_order - b.sort_order || nameA.localeCompare(nameB);
+
+/**
+ * The stock screen: active areas in walk order, each with its active items
+ * in shelf order. An area with no items still appears, so it can be found
+ * and stocked.
+ */
+export function groupStockByArea(data: {
+  areas: readonly InventoryAreaRow[];
+  items: readonly InventoryItemRow[];
+  spots: readonly InventorySpotRow[];
+  stock: readonly InventoryStockRow[];
+}): StockArea[] {
+  const items = new Map(data.items.filter((i) => i.active).map((i) => [i.id, i]));
+  const totals = totalsByItem(data.stock);
+  const onHand = new Map(data.stock.map((s) => [`${s.item_id}:${s.area_id}`, Number(s.quantity)]));
+
+  return data.areas
+    .filter((a) => a.active)
+    .sort((a, b) => byOrderThenName(a, b, a.name, b.name))
+    .map((area) => {
+      const lines: StockLine[] = [];
+      for (const spot of data.spots) {
+        const item = items.get(spot.item_id);
+        if (spot.area_id !== area.id || !item) continue;
+        const total = totals.get(item.id) ?? 0;
+        lines.push({
+          item,
+          spot,
+          quantity: onHand.get(`${item.id}:${area.id}`) ?? 0,
+          total,
+          low: isLowStock(item, total),
+        });
+      }
+      lines.sort((a, b) => byOrderThenName(a.spot, b.spot, a.item.name, b.item.name));
+      return { area, lines };
+    });
+}
