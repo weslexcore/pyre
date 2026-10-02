@@ -17,13 +17,24 @@ export interface InventoryAreaRow {
   updated_at: string;
 }
 
+/** An admin-configured grouping offered in the item form's drop-down. */
+export interface InventoryCategoryRow {
+  id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type InventoryItemKind = 'operational';
 
 export interface InventoryItemRow {
   id: string;
   name: string;
   kind: InventoryItemKind;
-  category: string | null;
+  category_id: string | null;
   unit: string;
   lot_size: number;
   lot_label: string | null;
@@ -127,6 +138,7 @@ export interface InventoryMovementRow {
 /** GET /api/admin/inventory — everything the stock screen draws. */
 export interface InventoryOverview {
   areas: InventoryAreaRow[];
+  categories: InventoryCategoryRow[];
   items: InventoryItemRow[];
   spots: InventorySpotRow[];
   stock: InventoryStockRow[];
