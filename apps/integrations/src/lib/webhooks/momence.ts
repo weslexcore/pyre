@@ -21,8 +21,8 @@ export interface MomenceAddressPayload {
 /** Fired when an async report run (POST /host/reports) finishes. */
 /**
  * `session-created` / `session-updated`. Momence sends the session's shape
- * but not its tags, so the schedule lint re-reads the feed rather than
- * trusting this payload for anything beyond "something changed".
+ * but not its tags. Nothing acts on these today — the schedule lint reads the
+ * feed once a day rather than reacting to each edit.
  */
 export interface MomenceSessionPayload {
   sessionId: number;
