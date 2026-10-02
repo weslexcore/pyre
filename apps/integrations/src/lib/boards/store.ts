@@ -476,3 +476,54 @@ export async function loadAllColumns(db: SupabaseClient): Promise<BoardColumnRow
   if (error) throw new Error(error.message);
   return (data ?? []) as BoardColumnRow[];
 }
+
+/** One of the viewer's next dated cards, for the strip on the boards index. */
+export interface UpNextCard {
+  id: string;
+  title: string;
+  due_date: string;
+  repeat_every: number | null;
+  repeat_unit: BoardCardRow['repeat_unit'];
+  board_slug: string;
+  board_name: string;
+}
+
+/** How many cards the strip shows. */
+export const UP_NEXT_LIMIT = 5;
+
+/**
+ * The viewer's next open cards with a due date, soonest (so the late ones)
+ * first, on the boards they may open. Archived boards are out: their work is
+ * not anybody's next thing.
+ */
+export async function loadUpNext(
+  db: SupabaseClient,
+  email: string,
+  boards: BoardRow[]
+): Promise<UpNextCard[]> {
+  const viewer = email.trim().toLowerCase();
+  const live = new Map(boards.filter((board) => !board.archived).map((b) => [b.id, b]));
+  if (!viewer || live.size === 0) return [];
+  const { data, error } = await db
+    .from('board_cards')
+    .select('id, title, due_date, repeat_every, repeat_unit, board_id')
+    .contains('assignee_emails', [viewer])
+    .is('completed_at', null)
+    .not('due_date', 'is', null)
+    .in('board_id', [...live.keys()])
+    .order('due_date', { ascending: true })
+    .order('sort_order', { ascending: true })
+    .limit(UP_NEXT_LIMIT);
+  if (error) throw new Error(error.message);
+  return (
+    (data ?? []) as (Pick<
+      BoardCardRow,
+      'id' | 'title' | 'repeat_every' | 'repeat_unit' | 'board_id'
+    > & { due_date: string })[]
+  ).flatMap((card) => {
+    const board = live.get(card.board_id);
+    if (!board) return [];
+    const { board_id: _board, ...rest } = card;
+    return [{ ...rest, board_slug: board.slug, board_name: board.name }];
+  });
+}
