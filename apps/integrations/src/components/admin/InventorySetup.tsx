@@ -565,8 +565,15 @@ function ItemDialog({
             placeholder: 'Linens',
             list: 'inventory-categories',
           })}
-          {field('unit', 'Counted in', { maxLength: FIELD_LIMITS.unit, placeholder: 'towel' })}
+          {field('unit', 'Unit', {
+            maxLength: FIELD_LIMITS.unit,
+            placeholder: 'towel, bottle, roll',
+            'aria-describedby': 'inventory-unit-hint',
+          })}
         </div>
+        <p id="inventory-unit-hint" className="-mt-1 text-xs text-white/40">
+          What you count on the shelf. Stock, re-order levels and cost all use this unit.
+        </p>
         <datalist id="inventory-categories">
           {categories.map((c) => (
             <option key={c} value={c} />
