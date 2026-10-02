@@ -111,6 +111,24 @@ export const ADMIN_TOOLS: AdminTool[] = [
     keywords: ['cold plunge', 'plunge', 'logs', 'water tests', 'chemistry', 'chlorine', 'ph'],
   },
   {
+    href: '/admin/inventory',
+    title: 'Inventory',
+    navLabel: 'Inventory',
+    description:
+      'Operational supplies by storage area: log what you use, receive, or waste, and see stock over time.',
+    section: 'operations',
+    keywords: [
+      'supplies',
+      'stock',
+      'towels',
+      'cleaning',
+      'reorder',
+      'restock',
+      'count',
+      'shrinkage',
+    ],
+  },
+  {
     href: '/admin/sops',
     title: 'SOPs',
     navLabel: 'SOPs',

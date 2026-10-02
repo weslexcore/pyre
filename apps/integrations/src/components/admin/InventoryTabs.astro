@@ -1,0 +1,21 @@
+---
+// Sub-nav shared by the /admin/inventory pages. Setup (areas, items, lot
+// sizes, re-order levels, costs) is admin-only, so it is only a tab for
+// admins (the page redirects everyone else).
+import SubNav from './SubNav.astro';
+
+interface Props {
+  current: string;
+}
+const { current } = Astro.props;
+
+const isAdmin = Astro.locals.adminAccess?.isAdmin ?? false;
+
+const tabs = [
+  { href: '/admin/inventory', label: 'Stock' },
+  { href: '/admin/inventory/history', label: 'History' },
+  ...(isAdmin ? [{ href: '/admin/inventory/setup', label: 'Setup' }] : []),
+];
+---
+
+<SubNav tabs={tabs} current={current} />

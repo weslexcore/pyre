@@ -1,0 +1,18 @@
+---
+import { InventorySetup } from '@/components/admin/InventorySetup';
+// Inventory setup: storage areas, items, lot sizes, re-order levels, and
+// costs. Admin-only — everyone else is bounced to the stock page (UX; the
+// setup routes' requireAdmin is the security boundary).
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (!Astro.locals.adminAccess?.isAdmin) return Astro.redirect('/admin/inventory');
+---
+
+<AdminLayout
+  title="Inventory Setup"
+  subtitle="Where supplies are kept, how they're bought, and when to re-order — admins only."
+>
+  <InventoryTabs current="/admin/inventory/setup" />
+  <InventorySetup client:load />
+</AdminLayout>
