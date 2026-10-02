@@ -9,10 +9,19 @@
 
 import type { HTMLAttributes } from 'react';
 import { type LinkSummary, linkedTitles } from '@/lib/boards/links';
+import { describeRepeat, repeatRuleOf } from '@/lib/boards/recurrence';
 import { formatProperty } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
-import { ColumnDot, cardAnchorId, DueChip, QuietChip, rowClass, WaitingBadge } from '../goalsUi';
+import {
+  AvatarStack,
+  ColumnDot,
+  cardAnchorId,
+  DueChip,
+  QuietChip,
+  rowClass,
+  WaitingBadge,
+} from '../goalsUi';
 
 export interface CardRowProps {
   card: BoardCardRow;
@@ -62,6 +71,7 @@ export function CardRow({
 }: CardRowProps) {
   const column = columns.find((c) => c.id === card.column_id);
   const finished = card.completed_at !== null;
+  const repeat = repeatRuleOf(card);
   const shown = fields
     .filter((field) => field.show_on_card && card.properties[field.key] != null)
     .map((field) => ({ field, text: shownText(field, card.properties[field.key], links) }))
@@ -87,12 +97,23 @@ export function CardRow({
             {card.title}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-1.5">
-            {card.owner_email && <QuietChip>{personName(card.owner_email, people)}</QuietChip>}
-            {card.due_date && <DueChip dueDate={card.due_date} today={today} finished={finished} />}
+            {card.assignee_emails.length > 0 && (
+              <AvatarStack
+                emails={card.assignee_emails}
+                names={(email) => personName(email, people)}
+              />
+            )}
+            {card.due_date && (
+              <DueChip
+                dueDate={card.due_date}
+                today={today}
+                finished={finished}
+                repeat={repeat ? describeRepeat(repeat) : null}
+              />
+            )}
             {card.waiting_on && !finished && <WaitingBadge waitingOn={card.waiting_on} />}
             {goalTitle && <QuietChip className={chipClip}>{goalTitle}</QuietChip>}
             {boardName && <QuietChip className={chipClip}>{boardName}</QuietChip>}
-            {card.area && <QuietChip>{card.area}</QuietChip>}
             {SOURCE_CHIPS[card.source] && <QuietChip>{SOURCE_CHIPS[card.source]}</QuietChip>}
             {shown.map(({ field, text }) => (
               <QuietChip key={field.key} className={chipClip}>

@@ -13,13 +13,18 @@ export function optimisticCardPatch(
     title: 'title',
     notesMd: 'notes_md',
     columnId: 'column_id',
-    ownerEmail: 'owner_email',
+    assigneeEmails: 'assignee_emails',
     dueDate: 'due_date',
     waitingOn: 'waiting_on',
     area: 'area',
   } as const;
   for (const [input, field] of Object.entries(fields)) {
     if (input in patch) Object.assign(next, { [field]: patch[input] });
+  }
+  if ('repeat' in patch) {
+    const rule = patch.repeat as { every: number; unit: BoardCardRow['repeat_unit'] } | null;
+    next.repeat_every = rule?.every ?? null;
+    next.repeat_unit = rule?.unit ?? null;
   }
   // Merged, not replaced, because the route merges (normalizeProperties takes
   // the card's current answers as `previous`). A caller that names one key —
@@ -43,22 +48,25 @@ export function useOptimisticCardSave<
   return async (id: string, patch: Record<string, unknown>) => {
     const before = current.current?.cards.find((card) => card.id === id);
     if (!before || !current.current) throw new Error('This card is no longer available');
-    const replace = (card: BoardCardRow) => {
+    // `added` is the next copy of a repeating card the save just finished.
+    const replace = (card: BoardCardRow, added?: BoardCardRow) => {
       if (!current.current) return;
+      const cards = current.current.cards.map((row) => (row.id === id ? card : row));
       const next = {
         ...current.current,
-        cards: current.current.cards.map((row) => (row.id === id ? card : row)),
+        cards: added && !cards.some((row) => row.id === added.id) ? [...cards, added] : cards,
       };
       current.current = next;
       setData(next);
     };
     replace(optimisticCardPatch(before, patch, current.current.columns));
     try {
-      const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
-        id,
-        ...patch,
-      });
-      replace(result.card);
+      const result = await sendJson<{ card: BoardCardRow; repeated?: BoardCardRow }>(
+        '/api/admin/board-cards',
+        'PATCH',
+        { id, ...patch }
+      );
+      replace(result.card, result.repeated);
     } catch (error) {
       replace(before);
       throw error;

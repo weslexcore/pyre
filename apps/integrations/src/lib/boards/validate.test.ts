@@ -214,13 +214,66 @@ describe('parseBoardPatch', () => {
   });
 });
 
+describe('assignees and repeats', () => {
+  it('takes a list of assignees, lowercased and de-duplicated in order', () => {
+    expect(
+      value(
+        parseCardCreate({
+          title: 'Deep-clean the stoves',
+          assigneeEmails: [' Maya@PyreSauna.com ', 'jo@pyresauna.com', 'maya@pyresauna.com'],
+        })
+      ).assignee_emails
+    ).toEqual(['maya@pyresauna.com', 'jo@pyresauna.com']);
+  });
+
+  it('still reads the single ownerEmail older callers send', () => {
+    expect(value(parseCardPatch({ ownerEmail: 'Jo@pyresauna.com' }))).toEqual({
+      assignee_emails: ['jo@pyresauna.com'],
+    });
+    expect(value(parseCardPatch({ ownerEmail: null }))).toEqual({ assignee_emails: [] });
+  });
+
+  it('refuses a malformed list', () => {
+    expect(error(parseCardPatch({ assigneeEmails: 'jo@pyresauna.com' }))).toMatch(/assignee/);
+    expect(error(parseCardPatch({ assigneeEmails: [''] }))).toMatch(/assignee/);
+    const many = Array.from({ length: 21 }, (_, i) => `p${i}@pyresauna.com`);
+    expect(error(parseCardPatch({ assigneeEmails: many }))).toMatch(/assignee/);
+  });
+
+  it('takes a repeat rule, and null to stop repeating', () => {
+    expect(value(parseCardPatch({ repeat: { every: 2, unit: 'week' } }))).toEqual({
+      repeat_every: 2,
+      repeat_unit: 'week',
+    });
+    expect(value(parseCardPatch({ repeat: null }))).toEqual({
+      repeat_every: null,
+      repeat_unit: null,
+    });
+    expect(error(parseCardPatch({ repeat: { every: 0, unit: 'week' } }))).toMatch(/repeat/);
+    expect(error(parseCardPatch({ repeat: { every: 1, unit: 'fortnight' } }))).toMatch(/repeat/);
+    expect(error(parseCardPatch({ repeat: { every: 1.5, unit: 'day' } }))).toMatch(/repeat/);
+  });
+
+  it("takes a board's default assignees", () => {
+    expect(value(parseBoardPatch({ defaultAssigneeEmails: ['Jo@pyresauna.com'] }))).toEqual({
+      default_assignee_emails: ['jo@pyresauna.com'],
+    });
+    expect(value(parseBoardPatch({ defaultAssigneeEmails: [] }))).toEqual({
+      default_assignee_emails: [],
+    });
+    expect(error(parseBoardPatch({ defaultAssigneeEmails: 'jo' }))).toMatch(/defaultAssignee/);
+  });
+});
+
 describe('parseCardCreate', () => {
   it('takes a bare title', () => {
     expect(value(parseCardCreate({ title: '  Call the caterer  ' }))).toMatchObject({
       title: 'Call the caterer',
       column_id: null,
-      owner_email: null,
+      assignee_emails: [],
       due_date: null,
+      repeat_every: null,
+      repeat_unit: null,
     });
   });
 
@@ -238,7 +291,7 @@ describe('parseCardCreate', () => {
       )
     ).toMatchObject({
       column_id: UUID,
-      owner_email: 'maya@pyresauna.com',
+      assignee_emails: ['maya@pyresauna.com'],
       due_date: '2026-10-01',
       waiting_on: 'their callback',
       area: 'Events',

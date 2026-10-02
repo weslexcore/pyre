@@ -135,11 +135,14 @@ function groupByOwner(
 ): TaskGroup[] {
   const viewer = viewerEmail.trim().toLowerCase();
   const byOwner = new Map<string, BoardCardRow[]>();
+  // A card on two people is on both of their lists: each of them owes it.
   for (const card of cards) {
-    const key = card.owner_email ?? UNASSIGNED;
-    const group = byOwner.get(key);
-    if (group) group.push(card);
-    else byOwner.set(key, [card]);
+    const keys = card.assignee_emails.length > 0 ? card.assignee_emails : [UNASSIGNED];
+    for (const key of keys) {
+      const group = byOwner.get(key);
+      if (group) group.push(card);
+      else byOwner.set(key, [card]);
+    }
   }
 
   return [...byOwner.entries()]

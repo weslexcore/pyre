@@ -29,7 +29,7 @@ export async function addCardComment(
     .single();
   if (error) return { ok: false, error: error.message };
 
-  // Notify the owner and explicitly mentioned users who can read the card.
+  // Notify the assignees and explicitly mentioned users who can read the card.
   const card = await loadCard(db, input.cardId);
   if (card) {
     const { data: boardRow } = await db

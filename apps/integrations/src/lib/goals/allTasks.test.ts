@@ -51,7 +51,9 @@ const card = (over: Partial<BoardCardRow> = {}): BoardCardRow =>
     goal_id: null,
     title: 'a task',
     notes_md: '',
-    owner_email: null,
+    assignee_emails: [],
+    repeat_every: null,
+    repeat_unit: null,
     due_date: null,
     waiting_on: null,
     area: null,
@@ -119,9 +121,9 @@ describe('buildAllTasks', () => {
     const people = { 'wes@pyresauna.com': 'Wes', 'julien@pyresauna.com': 'Julien' };
     const built = buildAllTasks(
       [
-        card({ owner_email: 'julien@pyresauna.com' }),
-        card({ owner_email: null }),
-        card({ owner_email: 'wes@pyresauna.com' }),
+        card({ assignee_emails: ['julien@pyresauna.com'] }),
+        card({ assignee_emails: [] }),
+        card({ assignee_emails: ['wes@pyresauna.com'] }),
       ],
       BOARDS,
       COLUMNS,
@@ -129,6 +131,15 @@ describe('buildAllTasks', () => {
       { ...options, groupBy: 'owner' }
     );
     expect(built.groups.map((g) => g.label)).toEqual(['Wes', 'Julien', 'Unassigned']);
+  });
+
+  it('lists a shared card under each of its people', () => {
+    const shared = card({ assignee_emails: ['julien@pyresauna.com', 'wes@pyresauna.com'] });
+    const built = buildAllTasks([shared], BOARDS, COLUMNS, {}, { ...options, groupBy: 'owner' });
+    expect(built.groups.map((g) => [g.key, g.cards.map((c) => c.id)])).toEqual([
+      ['wes@pyresauna.com', [shared.id]],
+      ['julien@pyresauna.com', [shared.id]],
+    ]);
   });
 
   it('groups by board in board order', () => {

@@ -459,7 +459,7 @@ export async function loadBoardsCalendar(
     cards,
     goals: (goalsResult.data ?? []) as GoalRow[],
     people: await getPeopleNames(
-      cards.flatMap((card) => [card.owner_email ?? '', card.created_by])
+      cards.flatMap((card) => [...card.assignee_emails, card.created_by])
     ),
     owners: await listAssignable(),
     today: todayEastern(),

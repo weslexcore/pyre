@@ -49,7 +49,7 @@
 //            goalId? | goal?, sectionId?, columns: [{ key, label, kind, sortOrder? }] }
 //                        → { board, columns } 201
 //   PATCH  { slug, name?, description?, cardNoun?, includeInAllTasks?,
-//            dueOnCalendar?, archived?, sortOrder?, goalId?, sectionId?,
+//            defaultAssigneeEmails?, dueOnCalendar?, archived?, sortOrder?, goalId?, sectionId?,
 //            columns?, fields? }
 //                        → { board, columns, fields }
 //
@@ -123,6 +123,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         ...(await boardViewerExtras(bundle.cards, gate.access, slug, bundle.linkSummaries, {
           email: sessionEmail(gate),
           fields: bundle.fields,
+          defaultAssignees: bundle.board.default_assignee_emails,
         })),
       });
     }

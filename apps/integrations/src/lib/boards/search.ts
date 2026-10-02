@@ -28,14 +28,16 @@ export function searchTerms(query: string): string[] {
 export function cardSearchText(
   card: Pick<
     BoardCardRow,
-    'title' | 'notes_md' | 'owner_email' | 'waiting_on' | 'area' | 'properties'
+    'title' | 'notes_md' | 'assignee_emails' | 'waiting_on' | 'area' | 'properties'
   >,
   fields: Pick<BoardFieldRow, 'key' | 'label' | 'kind'>[],
   people: PeopleNames,
   links: Map<string, LinkSummary> = new Map()
 ): string {
   const parts = [card.title, card.notes_md, card.waiting_on ?? '', card.area ?? ''];
-  if (card.owner_email) parts.push(card.owner_email, personName(card.owner_email, people));
+  for (const assignee of card.assignee_emails ?? []) {
+    parts.push(assignee, personName(assignee, people));
+  }
   for (const field of fields) {
     const value = card.properties[field.key];
     if (value == null) continue;

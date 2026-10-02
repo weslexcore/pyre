@@ -16,7 +16,7 @@ const FIELDS = [
 const card = {
   title: 'Birthday buyout for Dana',
   notes_md: 'Wants the **cold plunge** open late.',
-  owner_email: 'jose@pyresauna.com' as string | null,
+  assignee_emails: ['jose@pyresauna.com'],
   waiting_on: 'the insurer' as string | null,
   area: 'Events' as string | null,
   properties: { contact: 'dana@example.com', window: ['18:30', '21:00'], deposit: true },
@@ -59,7 +59,7 @@ describe('cardMatches', () => {
   });
 
   it('copes with a card that has nothing optional filled in', () => {
-    const bare = { ...card, owner_email: null, waiting_on: null, area: null, properties: {} };
+    const bare = { ...card, assignee_emails: [], waiting_on: null, area: null, properties: {} };
     expect(cardMatches(bare, searchTerms('birthday'), FIELDS, {})).toBe(true);
     expect(cardMatches(bare, searchTerms('jose'), FIELDS, {})).toBe(false);
   });
