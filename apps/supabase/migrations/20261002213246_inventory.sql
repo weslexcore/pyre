@@ -14,12 +14,10 @@
 --     (known loss: broken, expired) and `count_adjust` (a count found fewer
 --     than the ledger expected — unexplained loss), so shrinkage is visible.
 --
--- Six tables:
+-- Five tables:
 --
 --   * `inventory_areas`      — storage areas (back closet, laundry shelf), in
 --                              the order someone walks them on a count.
---   * `inventory_categories` — the configured list items are grouped by
---                              (Linens, Cleaning), picked from a drop-down.
 --   * `inventory_items`      — what we stock, how it is bought (lot size) and
 --                              when to re-order. `kind` is 'operational' for
 --                              now; retail/merch joins later by widening the
@@ -67,32 +65,6 @@ create trigger inventory_areas_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Categories
--- ---------------------------------------------------------------------------
-
--- Admin-managed so items are grouped consistently ("Cleaning", never also
--- "cleaning supplies"), and so reports can roll usage and loss up by
--- category. Retired categories keep their items' history.
-create table public.inventory_categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null check (length(btrim(name)) between 1 and 60),
-  -- display order in the drop-down and the setup list (ascending)
-  sort_order integer not null default 0,
-  active boolean not null default true,
-  created_by text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create unique index inventory_categories_active_name_idx
-  on public.inventory_categories (lower(btrim(name)))
-  where active;
-
-create trigger inventory_categories_set_updated_at
-  before update on public.inventory_categories
-  for each row execute function public.set_updated_at();
-
--- ---------------------------------------------------------------------------
 -- Items
 -- ---------------------------------------------------------------------------
 
@@ -102,8 +74,8 @@ create table public.inventory_items (
   -- 'operational' = used to run the space, never sold. Retail stock will be
   -- added as another kind; reports and lists filter on it.
   kind text not null default 'operational' check (kind in ('operational')),
-  -- grouping for the setup list and reports; null = uncategorised
-  category_id uuid references public.inventory_categories (id) on delete restrict,
+  -- free-text grouping for the setup list and reports: "Cleaning", "Linens"
+  category text check (char_length(category) <= 60),
   -- the unit everything is counted in: "towel", "bottle", "roll"
   unit text not null default 'each' check (length(btrim(unit)) between 1 and 30),
   -- how it is bought: lot_size units per lot, e.g. 12 per "case"
@@ -131,8 +103,6 @@ create table public.inventory_items (
 create unique index inventory_items_active_name_idx
   on public.inventory_items (lower(btrim(name)))
   where active;
-
-create index inventory_items_category_idx on public.inventory_items (category_id);
 
 create trigger inventory_items_set_updated_at
   before update on public.inventory_items
@@ -314,7 +284,6 @@ where coalesce(s.quantity, 0) <> coalesce(l.quantity, 0);
 -- App access is service-role (bypasses RLS); these admin-select policies are
 -- forward-looking convention, same as the other tables.
 alter table public.inventory_areas enable row level security;
-alter table public.inventory_categories enable row level security;
 alter table public.inventory_items enable row level security;
 alter table public.inventory_item_spots enable row level security;
 alter table public.inventory_movements enable row level security;
@@ -322,8 +291,6 @@ alter table public.inventory_stock enable row level security;
 
 create policy "admins can select inventory areas"
   on public.inventory_areas for select to authenticated using (public.is_admin());
-create policy "admins can select inventory categories"
-  on public.inventory_categories for select to authenticated using (public.is_admin());
 create policy "admins can select inventory items"
   on public.inventory_items for select to authenticated using (public.is_admin());
 create policy "admins can select inventory item spots"
