@@ -1,0 +1,69 @@
+# Apply new database migrations to the production Supabase project when they
+# land on master — the same `supabase db push` that used to be run by hand
+# from a laptop (yarn workspace @pyre/supabase db:push).
+#
+# Needs three secrets on the `supabase-production` environment (Settings →
+# Environments → supabase-production), with deployment branches restricted to
+# master so no other branch's workflow can read the database password. Its own
+# environment rather than `Production`, which Vercel's deployments use:
+#   SUPABASE_ACCESS_TOKEN  personal access token, supabase.com → Account → Access Tokens
+#   SUPABASE_PROJECT_ID    the project ref: the xxxx in https://xxxx.supabase.co
+#   SUPABASE_DB_PASSWORD   the project's database password
+#
+# If a push fails because a migration is older than one already applied (two
+# PRs merged out of timestamp order), rename that file to a newer timestamp
+# and merge again; nothing is applied from a failed run.
+
+name: Supabase migrations
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/supabase/migrations/**'
+      - 'apps/supabase/config.toml'
+  # Re-run by hand from the Actions tab, e.g. right after adding the secrets.
+  workflow_dispatch:
+
+# Two merges in quick succession queue up rather than pushing at once.
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # The secrets live on this environment, not the repository.
+    environment: supabase-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        run: |
+          missing=""
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_ID SUPABASE_DB_PASSWORD; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secret(s) on the supabase-production environment:$missing. Add them under Settings → Environments → supabase-production."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # config.toml lives in apps/supabase/, and the CLI looks for
+      # <workdir>/supabase/config.toml, so the workdir is apps/.
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --workdir apps
+
+      - name: Push migrations
+        run: supabase db push --workdir apps

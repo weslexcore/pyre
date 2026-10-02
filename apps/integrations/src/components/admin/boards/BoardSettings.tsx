@@ -20,9 +20,10 @@
 // handles (ColumnOrder). A field's kind can be changed after the fact: the
 // save puts every answer already on the cards through the new kind and
 // clears what will not go — a "maybe" in a field that has become a date.
-// Files are the exception, since those answers name real uploads. A
-// removed field is deleted if no card has answered it and archived if one
-// has, so nothing typed is ever lost.
+// Files are the exception, since those answers name real uploads, and so
+// are linked cards, whose answers name cards on another board (their extra
+// settings are LinkFieldSettings). A removed field is deleted if no card has
+// answered it and archived if one has, so nothing typed is ever lost.
 
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -41,6 +42,7 @@ import {
   kindIsTime,
 } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
+import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
@@ -54,6 +56,7 @@ import {
 } from '../goalsUi';
 import { BoardSopLinks } from './BoardSopLinks';
 import { ColumnOrder } from './ColumnOrder';
+import { type LinkDraft, LinkFieldSettings } from './LinkFieldSettings';
 import { useCardAutosave } from './useCardAutosave';
 
 export interface BoardSettingsResult {
@@ -91,6 +94,9 @@ interface FieldDraft {
   archived: boolean;
 }
 
+/** A field draft carries the link settings too; they mean something only for card_link. */
+type FieldDraftWithLink = FieldDraft & LinkDraft;
+
 export function BoardSettings({
   board,
   columns,
@@ -127,7 +133,7 @@ export function BoardSettings({
         archived: column.archived,
       }))
   );
-  const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>(() =>
+  const [fieldDrafts, setFieldDrafts] = useState<FieldDraftWithLink[]>(() =>
     [...fields]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((field) => ({
@@ -142,8 +148,18 @@ export function BoardSettings({
         showOnCalendar: field.show_on_calendar,
         calendarTimeKey: field.calendar_time_key ?? '',
         archived: field.archived,
+        linkBoardId: field.link_board_id ?? '',
+        linkColumns: field.link_columns ?? [],
+        linkMultiple: field.link_multiple ?? false,
+        linkInverse: null,
       }))
   );
+  // The boards a link field can point at: the index, which a manager — the
+  // only one who sees these settings — has in full.
+  const boardList = useCachedJson<{ boards: BoardRow[] }>(
+    fieldDrafts.some((draft) => draft.kind === 'card_link') ? '/api/admin/boards' : null
+  );
+  const savedByKey = new Map(fields.map((field) => [field.key, field]));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
@@ -151,7 +167,7 @@ export function BoardSettings({
   const nextFieldId = useRef(0);
   const [newFieldKind, setNewFieldKind] = useState<FieldKind>('text');
 
-  const setFieldDraft = (index: number, patch: Partial<FieldDraft>) =>
+  const setFieldDraft = (index: number, patch: Partial<FieldDraftWithLink>) =>
     setFieldDrafts((current) =>
       current.map((draft, i) => (i === index ? { ...draft, ...patch } : draft))
     );
@@ -177,6 +193,10 @@ export function BoardSettings({
         showOnCalendar: false,
         calendarTimeKey: '',
         archived: false,
+        linkBoardId: '',
+        linkColumns: [],
+        linkMultiple: false,
+        linkInverse: null,
       },
     ]);
 
@@ -220,10 +240,18 @@ export function BoardSettings({
     includeInAllTasks,
     dueOnCalendar,
     columns: drafts.map((draft, index) => ({ ...draft, sortOrder: (index + 1) * 10 })),
-    fields: fieldDrafts.map(({ id: _id, ...draft }, index) => ({
-      ...draft,
-      sortOrder: (index + 1) * 10,
-    })),
+    // A link field goes out once it knows its board: until then there is
+    // nothing the route could save, and holding it back keeps the rest of
+    // the list saving while the board is being picked.
+    fields: fieldDrafts
+      .filter((draft) => draft.kind !== 'card_link' || draft.linkBoardId)
+      .map(({ id: _id, linkBoardId, linkInverse, ...draft }, index) => ({
+        ...draft,
+        linkBoardId: linkBoardId || null,
+        // Asked for only until the pair exists; after that the route ignores it.
+        linkInverse: savedByKey.get(draft.key)?.link_inverse_field_id ? null : linkInverse,
+        sortOrder: (index + 1) * 10,
+      })),
   });
   const previous = useRef(snapshot);
   const schedule = useRef(autosave.schedule);
@@ -427,18 +455,26 @@ export function BoardSettings({
                 <select
                   className={`${selectBaseClass} w-32 shrink-0 disabled:opacity-60`}
                   value={draft.kind}
-                  // Files are the one kind that cannot be traded for another:
-                  // the answers name uploads, and nothing else can hold them.
-                  disabled={draft.kind === 'files'}
+                  // Files and links are the kinds that cannot be traded for
+                  // another: their answers name uploads or other cards, and
+                  // nothing else can hold them.
+                  disabled={draft.kind === 'files' || lockedLink(draft)}
                   title={
                     draft.kind === 'files'
                       ? 'A files field keeps its type'
-                      : 'Answers already on the cards are re-read as this type; what does not fit is cleared'
+                      : lockedLink(draft)
+                        ? 'A linked cards field keeps its type'
+                        : 'Answers already on the cards are re-read as this type; what does not fit is cleared'
                   }
                   aria-label={`Kind for ${draft.key}`}
                   onChange={(e) => setFieldDraft(index, { kind: e.target.value as FieldKind })}
                 >
-                  {FIELD_KINDS.map((kind) => (
+                  {FIELD_KINDS.filter(
+                    // A saved field can't become a link: it has answers of
+                    // another shape already.
+                    (kind) =>
+                      kind !== 'card_link' || !savedByKey.has(draft.key) || draft.kind === kind
+                  ).map((kind) => (
                     <option key={kind} value={kind}>
                       {FIELD_KIND_LABELS[kind]}
                     </option>
@@ -518,6 +554,16 @@ export function BoardSettings({
                   onChange={(e) => setFieldDraft(index, { hint: e.target.value })}
                 />
               </div>
+              {draft.kind === 'card_link' && (
+                <LinkFieldSettings
+                  draft={draft}
+                  label={draft.label}
+                  boardName={name}
+                  boards={boardList.data?.boards ?? []}
+                  saved={savedByKey.get(draft.key)}
+                  onChange={(patch) => setFieldDraft(index, patch)}
+                />
+              )}
               {draft.kind === 'date' && draft.showOnCalendar && (
                 <CalendarTiming
                   draft={draft}
@@ -551,7 +597,8 @@ export function BoardSettings({
           Choose a field's type before adding it; archive it and add a new one to change it. A
           removed field is deleted if no card has answered it and archived if one has. A date field
           marked "on calendar" draws its answers on the board's calendar — pick a time field beside
-          it and each entry gets a time as well as a day.
+          it and each entry gets a time as well as a day. A linked cards field picks cards from
+          another board (or this one), and can show the same links on that board too.
         </p>
       </div>
 
@@ -651,6 +698,11 @@ export function BoardSettings({
       )}
     </section>
   );
+}
+
+/** A saved link field: its answers are links, so its kind stays put. */
+function lockedLink(draft: FieldDraft): boolean {
+  return draft.kind === 'card_link' && !draft.id.startsWith('new-');
 }
 
 /**

@@ -24,6 +24,8 @@ import type {
 import type { PeopleNames } from '@/lib/sops/names';
 import { getPeopleNames } from '@/lib/sops/people';
 import { canManageBoards, canViewBoard } from './access';
+import { loadLinkedSummaries, loadLinkRows, withLinks } from './card-links';
+import type { LinkSummary } from './links';
 import { type Assignable, listAssignable } from './people';
 import { BOARD_LIMITS } from './types';
 
@@ -158,6 +160,11 @@ export interface BoardBundle {
   /** The goal this board serves, with its KPIs — null for a plain list. */
   goal: GoalRow | null;
   kpis: GoalKpiRow[];
+  /**
+   * Every card the cards' link answers name, on this board or another, so a
+   * chip can show a title. `openable` is set per viewer (boardViewerExtras).
+   */
+  linkSummaries: LinkSummary[];
 }
 
 /** Everything one board page renders, or null when the slug names nothing. */
@@ -189,13 +196,24 @@ export async function loadBoardBundle(
   if (fieldsResult.error) throw new Error(fieldsResult.error.message);
   if (cardsResult.error) throw new Error(cardsResult.error.message);
 
+  // Link answers live in board_card_links, not on the cards: read every row
+  // this board's link fields see, from either end, and put them back.
+  const fields = (fieldsResult.data ?? []) as BoardFieldRow[];
+  const cards = await withLinks(
+    db,
+    fields,
+    (cardsResult.data ?? []) as BoardCardRow[],
+    await loadLinkRows(db, fields)
+  );
+
   return {
     board,
     columns,
-    fields: (fieldsResult.data ?? []) as BoardFieldRow[],
-    cards: (cardsResult.data ?? []) as BoardCardRow[],
+    fields,
+    cards,
     goal,
     kpis,
+    linkSummaries: await loadLinkedSummaries(db, fields, cards),
   };
 }
 

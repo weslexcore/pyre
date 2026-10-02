@@ -12,11 +12,13 @@ This project uses the migrations provided by the Supabase CLI.
 
 ## Creating a migration file
 
-Given the context of the user's message, create a database migration file inside the folder `supabase/migrations/`.
+Given the context of the user's message, create a database migration file inside the folder `apps/supabase/migrations/`.
+
+Create the file with `yarn workspace @pyre/supabase new <short_description>`, which stamps it with the current UTC time. If you must name it by hand, take the timestamp from `date -u +%Y%m%d%H%M%S` at the moment you create it. Never invent, round (e.g. `120000`), or reuse a timestamp: migrations are pushed to production on merge, and `supabase db push` refuses one older than any already applied. Run `yarn workspace @pyre/supabase check:migrations` to confirm.
 
 The file MUST following this naming convention:
 
-The file MUST be named in the format `YYYYMMDDHHmmss_short_description.sql` with proper casing for months, minutes, and seconds in UTC time:
+The file MUST be named in the format `YYYYMMDDHHmmss_short_description.sql`, where the timestamp is the current UTC time:
 
 1. `YYYY` - Four digits for the year (e.g., `2024`).
 2. `MM` - Two digits for the month (01 to 12).

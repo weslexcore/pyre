@@ -28,6 +28,7 @@ import { buttonClass } from '@/components/admin/ui';
 import { cardsByColumn, columnPatch, defaultColumn } from '@/lib/boards/cards';
 import { appendColumn, type renameColumn } from '@/lib/boards/columns';
 import { formBuilderHref } from '@/lib/boards/forms';
+import { type LinkSummary, summariesById } from '@/lib/boards/links';
 import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
@@ -85,6 +86,8 @@ interface BundleResponse {
   today?: string;
   /** The linked SOPs this viewer may open. */
   sops?: LinkedSop[];
+  /** Every card the link fields name, for chips and search. */
+  linkSummaries?: LinkSummary[];
   error?: string;
 }
 
@@ -142,6 +145,21 @@ export function BoardView({ slug }: { slug: string }) {
   useCardDeepLink(bundle?.cards, setOpenCardId);
 
   const saveCard = useOptimisticCardSave(bundle, setBundle);
+  const links = useMemo(() => summariesById(bundle?.linkSummaries), [bundle?.linkSummaries]);
+  // A card picked in a drawer joins the bundle's summaries, so its row shows
+  // the title as soon as the drawer closes.
+  const rememberLink = (summary: LinkSummary) =>
+    setBundle((prev) =>
+      prev
+        ? {
+            ...prev,
+            linkSummaries: [
+              ...(prev.linkSummaries ?? []).filter((entry) => entry.id !== summary.id),
+              summary,
+            ],
+          }
+        : prev
+    );
 
   const today = bundle?.today ?? todayEastern();
   // The search box and the owner filter narrow what the columns show; the
@@ -156,9 +174,9 @@ export function BoardView({ slug }: { slug: string }) {
       if (ownerFilter !== 'all' && ownerFilter !== 'none' && card.owner_email !== ownerFilter) {
         return false;
       }
-      return cardMatches(card, terms, bundle.fields, people);
+      return cardMatches(card, terms, bundle.fields, people, links);
     });
-  }, [bundle, ownerFilter, query]);
+  }, [bundle, ownerFilter, query, links]);
 
   const grouped = useMemo(
     () => (bundle ? cardsByColumn(bundle.columns, cards) : []),
@@ -505,6 +523,7 @@ export function BoardView({ slug }: { slug: string }) {
                             people={people}
                             today={today}
                             fields={fields}
+                            links={links}
                             dragProps={{ ...listeners, ...attributes }}
                             onOpen={(next) => setOpenCardId(next.id)}
                           />
@@ -528,6 +547,7 @@ export function BoardView({ slug }: { slug: string }) {
                 people={people}
                 today={today}
                 fields={fields}
+                links={links}
                 ghost
                 onOpen={() => undefined}
               />
@@ -556,6 +576,8 @@ export function BoardView({ slug }: { slug: string }) {
           fields={fields}
           people={people}
           owners={ownerOptions}
+          links={links}
+          onLinkPicked={rememberLink}
           busy={busy}
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}

@@ -108,6 +108,18 @@ export function describeEvent(
       return 'changed its status';
     }
 
+    case 'linked':
+    case 'unlinked': {
+      // A card_link answer gained or lost a card (lib/boards/card-links).
+      // The title is the one it had then; the label is absent on the far
+      // end of a one-way link, which has no field of its own to name.
+      const title = str(detail.title);
+      const label = str(detail.label);
+      const what = title ? `“${title}”` : 'a card';
+      const under = label ? ` under ${label}` : '';
+      return event.action === 'linked' ? `linked ${what}${under}` : `unlinked ${what}${under}`;
+    }
+
     case 'kpi_updated': {
       const name = str(detail.name) || 'a KPI';
       return `measured ${name}: ${numberish(detail.from)} → ${numberish(detail.to)}`;

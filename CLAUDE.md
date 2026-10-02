@@ -68,6 +68,8 @@ yarn workspace @pyre/supabase status
 yarn workspace @pyre/supabase reset
 yarn workspace @pyre/supabase gen:types
 yarn workspace @pyre/supabase migrate
+yarn workspace @pyre/supabase new <description>   # new migration, stamped with the current UTC time
+yarn workspace @pyre/supabase check:migrations    # new migrations are newer than master's
 yarn workspace @pyre/supabase db:diff
 yarn workspace @pyre/supabase db:push
 yarn workspace @pyre/supabase seed
@@ -145,7 +147,10 @@ All database operations are managed through the Supabase workspace.
 
 ### Migration Guidelines
 - All database migrations go into `apps/supabase/migrations/`
-- Migration files must follow naming convention: `YYYYMMDDHHmmss_description.sql`
+- Migration files must follow naming convention: `YYYYMMDDHHmmss_description.sql`, stamped with the **current UTC time**
+- **Always create migrations with `yarn workspace @pyre/supabase new <description>`**, which stamps the file with the current UTC time. If a file must be named by hand, take the timestamp from `date -u +%Y%m%d%H%M%S`. Never invent, round (e.g. `120000`), or reuse a timestamp.
+- Migrations are applied to production on merge to master (`.github/workflows/supabase-migrations.yml`), and `supabase db push` refuses a migration older than one already applied. If master gains a newer migration before your PR merges, rename yours to the current time (`git mv`).
+- Check before pushing: `yarn workspace @pyre/supabase check:migrations` (the same check runs on every PR that touches migrations)
 - Always include RLS policies when creating tables
 - Use lowercase SQL with comprehensive comments
 - Generate TypeScript types: `yarn workspace @pyre/supabase gen:types`

@@ -1,0 +1,27 @@
+# Fail a PR whose new migration isn't stamped with a real, current UTC time
+# newer than everything on the base branch. `supabase db push` on merge
+# (supabase-migrations.yml) refuses a migration older than one already
+# applied; this says so on the PR, with the rename that fixes it.
+#
+# If another migration lands on master first, merging master into the PR
+# re-runs this and it fails until the file is renamed to the current time.
+
+name: Migration timestamps
+
+on:
+  pull_request:
+    paths:
+      - 'apps/supabase/migrations/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check new migrations are stamped with the current time
+        run: bash apps/supabase/scripts/check-migration-timestamps.sh "origin/${{ github.base_ref }}"

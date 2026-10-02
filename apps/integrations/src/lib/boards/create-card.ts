@@ -6,11 +6,12 @@
 // them: the card takes its board's goal, lands in the named column only if
 // that column is on this board (else the first open one), and its
 // `properties` are normalized against this board's fields, with any `files`
-// answer settled around the write.
+// and `card_link` answers settled around the write.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BoardCardRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { notifyCardAssigned } from '@/lib/notifications/goals';
+import { applyLinks, prepareLinks, withLinks } from './card-links';
 import { filterFileAnswers, syncCardAttachments } from './card-media';
 import { defaultColumn, nextSortOrder } from './cards';
 import { logBoardEvent } from './events';
@@ -76,13 +77,15 @@ export async function createCard(
     .select('column_id, sort_order')
     .eq('board_id', board.id);
 
-  const properties = await filterFileAnswers(
+  const prepared = await prepareLinks(
     db,
-    board.id,
     null,
     fields,
-    normalizeProperties(fields, input.properties)
+    normalizeProperties(fields, input.properties),
+    input.properties
   );
+  if (!prepared.ok) return { ok: false, status: 400, error: prepared.error };
+  const properties = await filterFileAnswers(db, board.id, null, fields, prepared.properties);
 
   const { data, error } = await db
     .from('board_cards')
@@ -115,14 +118,17 @@ export async function createCard(
     .single();
   if (error) return { ok: false, status: 500, error: error.message };
 
-  const card = data as BoardCardRow;
-  await syncCardAttachments(db, card.id, fields, {}, card.properties);
+  const written = data as BoardCardRow;
+  await syncCardAttachments(db, written.id, fields, {}, written.properties);
   await logBoardEvent(db, {
-    cardId: card.id,
+    cardId: written.id,
     action: 'created',
     actor: input.actor,
     ...(input.eventDetail ? { detail: input.eventDetail } : {}),
   });
+  // After `created`, so the trail reads in the order it happened.
+  await applyLinks(db, written, fields, prepared.links, input.actor);
+  const [card] = await withLinks(db, fields, [written]);
 
   if (card.owner_email) {
     const { data: full } = await db
