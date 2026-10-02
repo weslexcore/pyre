@@ -55,9 +55,7 @@ interface ImportMetaEnv {
   readonly STAFF_EMAILS?: string;
   // Cron auth (QStash schedule forwards "Authorization: Bearer ${CRON_SECRET}")
   readonly CRON_SECRET?: string;
-  // QStash publish token. Lets a Momence session webhook schedule a debounced
-  // schedule-lint run (lib/schedule-lint/trigger.ts; unset = the next hourly
-  // tick runs it instead), and queues shift-note classification to
+  // QStash publish token. Queues shift-note classification to
   // /api/classify/run with retries (lib/classify/dispatch.ts; unset = it runs
   // best-effort in the saving request's background).
   readonly QSTASH_TOKEN?: string;
