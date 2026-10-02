@@ -60,6 +60,7 @@ function payload(overrides: Partial<SopDocumentPayload> = {}): SopDocumentPayloa
     taskCount: 3,
     run: null,
     linked: {},
+    boards: [],
     people: { 'marina@pyresauna.com': 'Marina' },
     loadedAt: Date.now(),
     ...overrides,
