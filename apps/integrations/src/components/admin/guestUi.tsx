@@ -5,7 +5,12 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { answerLimit } from '@/lib/boards/types';
 import { formatPhone, KIND_PROBLEMS, normalizeAnswer, phoneOf } from '@/lib/boards/validate';
-import type { BoardFieldKind, GuestFieldValue, GuestProfileFieldRow } from '@/lib/db';
+import type {
+  BoardFieldKind,
+  ChecklistAnswer,
+  GuestFieldValue,
+  GuestProfileFieldRow,
+} from '@/lib/db';
 import { type MembershipStanding, STANDING_LABELS } from '@/lib/guests/insights';
 import { textareaClass } from './goalsUi';
 import { Chip, inputClass, labelClass, YesNo } from './incidentUi';
@@ -85,7 +90,8 @@ export interface FieldDefinition {
     | 'time'
     | 'time_range'
     | 'files'
-    | 'card_link';
+    | 'card_link'
+    | 'checklist';
   options: string[];
   hint?: string | null;
   archived?: boolean;
@@ -96,16 +102,23 @@ export interface FieldDefinition {
  * `onChange(null)` clears. Pick-one chips toggle off when tapped again so
  * an answer can be withdrawn without a separate clear button.
  */
+function isPlainAnswer(
+  value: GuestFieldValue | ChecklistAnswer | null | undefined
+): value is GuestFieldValue | null | undefined {
+  return !value || typeof value !== 'object' || Array.isArray(value);
+}
+
 export function FieldInput({
   field,
-  value,
+  value: raw,
   onChange,
   idPrefix = 'guest-field',
   multiple,
   min,
 }: {
   field: FieldDefinition;
-  value: GuestFieldValue | null | undefined;
+  /** A checklist answer is drawn by the card's own Checklist, never here. */
+  value: GuestFieldValue | ChecklistAnswer | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
   /** Namespaces the input id so two forms on one page don't collide. */
   idPrefix?: string;
@@ -119,6 +132,11 @@ export function FieldInput({
   min?: string;
 }) {
   const id = `${idPrefix}-${field.key}`;
+  if (field.kind === 'checklist') {
+    return <p className="text-xs text-white/35">The checklist is worked through on the card.</p>;
+  }
+  // Only a checklist stores an object, and it was handled above.
+  const value = isPlainAnswer(raw) ? raw : undefined;
 
   switch (field.kind) {
     case 'choice':
@@ -453,7 +471,7 @@ export function FieldRow({
   idPrefix = 'guest-field',
 }: {
   field: FieldDefinition;
-  value: GuestFieldValue | null | undefined;
+  value: GuestFieldValue | ChecklistAnswer | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
   idPrefix?: string;
 }) {

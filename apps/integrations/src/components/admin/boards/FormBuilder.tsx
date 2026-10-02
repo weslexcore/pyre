@@ -851,6 +851,7 @@ function sampleAnswers(fields: BoardFieldRow[]): Record<string, BoardFieldValue>
         answers[field.key] = ['3f1b8a2c-7d4e-4a1b-9c2d-5e6f7a8b9c0d'];
         break;
       case 'card_link':
+      case 'checklist':
         // Never on a form (askableOnForm), so nothing to sample.
         break;
       default:

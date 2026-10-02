@@ -22,8 +22,11 @@
 // clears what will not go — a "maybe" in a field that has become a date.
 // Files are the exception, since those answers name real uploads, and so
 // are linked cards, whose answers name cards on another board (their extra
-// settings are LinkFieldSettings). A removed field is deleted if no card has
-// answered it and archived if one has, so nothing typed is ever lost.
+// settings are LinkFieldSettings), and so are checklists, whose answers are
+// a card's own list and who ticked what (their default list and the column a
+// finished card moves to are ChecklistSettings). A removed field is deleted
+// if no card has answered it and archived if one has, so nothing typed is
+// ever lost.
 
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -91,6 +94,10 @@ interface FieldDraft {
   showOnCalendar: boolean;
   /** The key of the time field that times it; '' is an all-day entry. */
   calendarTimeKey: string;
+  /** Only a checklist has one: the default list, as markdown. */
+  checklistMd: string;
+  /** Only a checklist: the column key a finished card moves to; '' stays put. */
+  checklistDoneColumn: string;
   archived: boolean;
 }
 
@@ -147,6 +154,8 @@ export function BoardSettings({
         showLabelOnCard: field.show_label_on_card !== false,
         showOnCalendar: field.show_on_calendar,
         calendarTimeKey: field.calendar_time_key ?? '',
+        checklistMd: field.checklist_md ?? '',
+        checklistDoneColumn: field.checklist_done_column ?? '',
         archived: field.archived,
         linkBoardId: field.link_board_id ?? '',
         linkColumns: field.link_columns ?? [],
@@ -192,6 +201,8 @@ export function BoardSettings({
         showLabelOnCard: true,
         showOnCalendar: false,
         calendarTimeKey: '',
+        checklistMd: '',
+        checklistDoneColumn: '',
         archived: false,
         linkBoardId: '',
         linkColumns: [],
@@ -458,22 +469,26 @@ export function BoardSettings({
                   // Files and links are the kinds that cannot be traded for
                   // another: their answers name uploads or other cards, and
                   // nothing else can hold them.
-                  disabled={draft.kind === 'files' || lockedLink(draft)}
+                  disabled={draft.kind === 'files' || lockedLink(draft) || lockedChecklist(draft)}
                   title={
                     draft.kind === 'files'
                       ? 'A files field keeps its type'
                       : lockedLink(draft)
                         ? 'A linked cards field keeps its type'
-                        : 'Answers already on the cards are re-read as this type; what does not fit is cleared'
+                        : lockedChecklist(draft)
+                          ? 'A checklist keeps its type'
+                          : 'Answers already on the cards are re-read as this type; what does not fit is cleared'
                   }
                   aria-label={`Kind for ${draft.key}`}
                   onChange={(e) => setFieldDraft(index, { kind: e.target.value as FieldKind })}
                 >
                   {FIELD_KINDS.filter(
-                    // A saved field can't become a link: it has answers of
-                    // another shape already.
+                    // A saved field can't become a link or a checklist: it
+                    // has answers of another shape already.
                     (kind) =>
-                      kind !== 'card_link' || !savedByKey.has(draft.key) || draft.kind === kind
+                      (kind !== 'card_link' && kind !== 'checklist') ||
+                      !savedByKey.has(draft.key) ||
+                      draft.kind === kind
                   ).map((kind) => (
                     <option key={kind} value={kind}>
                       {FIELD_KIND_LABELS[kind]}
@@ -564,6 +579,13 @@ export function BoardSettings({
                   onChange={(patch) => setFieldDraft(index, patch)}
                 />
               )}
+              {draft.kind === 'checklist' && (
+                <ChecklistSettings
+                  draft={draft}
+                  columns={drafts.filter((column) => !column.archived)}
+                  onChange={(patch) => setFieldDraft(index, patch)}
+                />
+              )}
               {draft.kind === 'date' && draft.showOnCalendar && (
                 <CalendarTiming
                   draft={draft}
@@ -598,7 +620,8 @@ export function BoardSettings({
           removed field is deleted if no card has answered it and archived if one has. A date field
           marked "on calendar" draws its answers on the board's calendar — pick a time field beside
           it and each entry gets a time as well as a day. A linked cards field picks cards from
-          another board (or this one), and can show the same links on that board too.
+          another board (or this one), and can show the same links on that board too. A checklist
+          gives every card a list to work through, and can move the card on once it is done.
         </p>
       </div>
 
@@ -697,6 +720,77 @@ export function BoardSettings({
         />
       )}
     </section>
+  );
+}
+
+/** A saved checklist: its answers are lists worked through, so its kind stays put. */
+function lockedChecklist(draft: FieldDraft): boolean {
+  return draft.kind === 'checklist' && !draft.id.startsWith('new-');
+}
+
+/**
+ * A checklist's default list — what every card on the board starts from —
+ * and the column a card moves to once its list is finished. Only live
+ * columns are offered; one archived after it was picked stays selected and
+ * says so, and simply stops moving cards.
+ */
+function ChecklistSettings({
+  draft,
+  columns,
+  onChange,
+}: {
+  draft: FieldDraft;
+  columns: ColumnDraft[];
+  onChange: (patch: Partial<FieldDraft>) => void;
+}) {
+  const mdId = `checklist-md-${draft.id}`;
+  const columnId = `checklist-column-${draft.id}`;
+  const known = columns.some((column) => column.key === draft.checklistDoneColumn);
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-xs text-white/50" htmlFor={mdId}>
+          Default checklist
+        </label>
+        <textarea
+          id={mdId}
+          className={`${inputClass} min-h-28 font-mono text-xs`}
+          rows={Math.min(14, Math.max(4, draft.checklistMd.split('\n').length + 1))}
+          maxLength={BOARD_LIMITS.checklist}
+          placeholder={'- [ ] Contract signed\n- [!] W-9 received\n- [ ] Intro call booked'}
+          value={draft.checklistMd}
+          onChange={(e) => onChange({ checklistMd: e.target.value })}
+        />
+        <p className="mt-1 text-xs text-white/35">
+          Markdown, like an SOP: “- [ ]” for an item, “- [!]” for one that must be checked off and
+          can’t be skipped; indent two spaces to nest. Every card starts from this list and can edit
+          its own copy.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-white/50" htmlFor={columnId}>
+          When every item is done, move the card to
+        </label>
+        <select
+          id={columnId}
+          className={`${selectBaseClass} w-auto max-w-56`}
+          value={draft.checklistDoneColumn}
+          onChange={(e) => onChange({ checklistDoneColumn: e.target.value })}
+        >
+          <option value="">Leave it where it is</option>
+          {columns.map((column) => (
+            <option key={column.key} value={column.key}>
+              {column.label}
+            </option>
+          ))}
+          {draft.checklistDoneColumn && !known && (
+            <option value={draft.checklistDoneColumn}>
+              {draft.checklistDoneColumn} (archived)
+            </option>
+          )}
+        </select>
+      </div>
+    </div>
   );
 }
 

@@ -40,7 +40,7 @@ import { withoutLinks } from '@/lib/boards/card-links';
 import { defaultColumn } from '@/lib/boards/cards';
 import { logBoardEvent } from '@/lib/boards/events';
 import { loadBoardBySlug, loadColumns, loadFields, nextColumnOrder } from '@/lib/boards/store';
-import { BOARD_LIMITS, isBoardSlug } from '@/lib/boards/types';
+import { BOARD_LIMITS, isBoardSlug, kindIsChecklist } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
@@ -104,7 +104,10 @@ export const POST: APIRoute = async ({ request }) => {
     : defaultColumn(columns);
   if (!column) return json({ error: 'That column is not on this board' }, 400);
 
-  const fields = await loadFields(db, board.id);
+  // Checklists are worked by staff on the card: an answer an outside caller
+  // sends for one is dropped like an unknown key, and a card's progress on
+  // a re-delivery stays as it was.
+  const fields = (await loadFields(db, board.id)).filter((field) => !kindIsChecklist(field.kind));
   // Links are staff-made (lib/boards/card-links): a caller outside can't
   // name another board's cards, so any link answer it sends is dropped.
   const properties = withoutLinks(fields, normalizeProperties(fields, body.properties));

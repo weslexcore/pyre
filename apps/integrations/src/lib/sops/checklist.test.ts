@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countTasks,
   forbiddenSkips,
+  isChecklistComplete,
   parseChecklist,
   requiredIndexes,
   subtreeTasks,
@@ -124,5 +125,23 @@ describe('forbiddenSkips', () => {
 
   it('costs nothing when nothing is being skipped', () => {
     expect(forbiddenSkips(DOC, [{ itemIndex: 1 }])).toEqual([]);
+  });
+});
+
+describe('isChecklistComplete', () => {
+  const tasks = parseChecklist('- [ ] One\n- [!] Two\n- [ ] Three').tasks;
+  const mark = (index: number, skipped = false) => ({ index, skipped });
+
+  it('is never complete with no items', () => {
+    expect(isChecklistComplete([], [])).toBe(false);
+  });
+
+  it('needs every item resolved', () => {
+    expect(isChecklistComplete(tasks, [mark(0), mark(1)])).toBe(false);
+    expect(isChecklistComplete(tasks, [mark(0), mark(1), mark(2, true)])).toBe(true);
+  });
+
+  it('holds open on a required item that was skipped', () => {
+    expect(isChecklistComplete(tasks, [mark(0), mark(1, true), mark(2)])).toBe(false);
   });
 });

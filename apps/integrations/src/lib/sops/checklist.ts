@@ -128,3 +128,37 @@ export function forbiddenSkips<T extends { itemIndex: number; skipped?: boolean 
   const required = requiredIndexes(content);
   return items.filter((item) => item.skipped && required.has(item.itemIndex));
 }
+
+/**
+ * One resolved item, however the caller stores it — a sop_run_checks row, an
+ * entry in a board card's checklist answer. What the shared Checklist
+ * component draws from.
+ */
+export interface ChecklistMark {
+  /** The task's index (ChecklistTask.index). */
+  index: number;
+  /** Skipped rather than completed. */
+  skipped: boolean;
+  /** Who resolved it: an email, named through PeopleNames. */
+  by: string;
+  /** When, as an ISO timestamp. */
+  at: string;
+}
+
+/**
+ * Whether a checklist has reached the end: it has items, every one is
+ * resolved, and every required one is resolved by completing it. A skipped
+ * required item (one marked required after the skip was recorded) holds the
+ * checklist open, the same as an untouched one.
+ */
+export function isChecklistComplete(
+  tasks: Pick<ChecklistTask, 'index' | 'required'>[],
+  marks: Pick<ChecklistMark, 'index' | 'skipped'>[]
+): boolean {
+  if (tasks.length === 0) return false;
+  const byIndex = new Map(marks.map((mark) => [mark.index, mark]));
+  return tasks.every((task) => {
+    const mark = byIndex.get(task.index);
+    return mark !== undefined && !(task.required && mark.skipped);
+  });
+}

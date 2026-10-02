@@ -217,7 +217,7 @@ const TITLE_QUESTION: BoardFormQuestion = {
  * a dropdown of its card titles would hand them the list.
  */
 export function askableOnForm(field: Pick<BoardFieldRow, 'archived'> & { kind?: string }): boolean {
-  return !field.archived && field.kind !== 'card_link';
+  return !field.archived && field.kind !== 'card_link' && field.kind !== 'checklist';
 }
 
 export function defaultFormConfig(

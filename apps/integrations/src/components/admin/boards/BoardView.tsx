@@ -88,6 +88,8 @@ interface BundleResponse {
   sops?: LinkedSop[];
   /** Every card the link fields name, for chips and search. */
   linkSummaries?: LinkSummary[];
+  /** Who is looking, for a checklist tap's stamp before the server's arrives. */
+  viewerEmail?: string;
   error?: string;
 }
 
@@ -578,6 +580,7 @@ export function BoardView({ slug }: { slug: string }) {
           owners={ownerOptions}
           links={links}
           onLinkPicked={rememberLink}
+          viewerEmail={bundle?.viewerEmail}
           busy={busy}
           onClose={() => setOpenCardId(null)}
           onSave={(patch) => saveCard(openCard.id, patch)}

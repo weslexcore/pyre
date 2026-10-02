@@ -21,6 +21,7 @@ import { LinkTextarea } from '../LinkTextarea';
 import { SopMarkdown } from '../SopMarkdown';
 import { useSheetSwipe } from '../useSheetSwipe';
 import { CardLinkField } from './CardLinkField';
+import { ChecklistField } from './ChecklistField';
 import { FilesField } from './FilesField';
 import { useCardAutosave } from './useCardAutosave';
 
@@ -35,6 +36,8 @@ export interface CardDrawerProps {
   links?: Map<string, LinkSummary>;
   /** A card was picked in a link field; the board keeps its summary for the row. */
   onLinkPicked?: (summary: LinkSummary) => void;
+  /** Who is looking: a checklist tap shows their name until the server's stamp arrives. */
+  viewerEmail?: string;
   busy?: boolean;
   onSave: (patch: Record<string, unknown>) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -49,6 +52,7 @@ export function CardDrawer({
   owners,
   links,
   onLinkPicked,
+  viewerEmail = '',
   busy = false,
   onSave,
   onDelete,
@@ -157,6 +161,19 @@ export function CardDrawer({
     onClosed: onClose,
   });
 
+  // The column select and a finished checklist both move the card this way.
+  const moveToColumn = (id: string) => {
+    if (id === columnId) return;
+    setColumnId(id);
+    const destination = columns.find((column) => column.id === id);
+    if (destination && isFinishedKind(destination.kind)) {
+      setWaitingOn('');
+      autosave.schedule({ columnId: id, waitingOn: null }, 0);
+    } else {
+      autosave.schedule({ columnId: id }, 0);
+    }
+  };
+
   const liveColumns = columns.filter((c) => !c.archived || c.id === card.column_id);
   const liveFields = fields.filter((f) => !f.archived || properties[f.key] != null);
   const finished = card.completed_at !== null;
@@ -230,16 +247,7 @@ export function CardDrawer({
                 id={`card-column-${card.id}`}
                 className={selectClass}
                 value={columnId}
-                onChange={(e) => {
-                  setColumnId(e.target.value);
-                  const destination = columns.find((column) => column.id === e.target.value);
-                  if (destination && isFinishedKind(destination.kind)) {
-                    setWaitingOn('');
-                    autosave.schedule({ columnId: e.target.value, waitingOn: null }, 0);
-                  } else {
-                    autosave.schedule({ columnId: e.target.value }, 0);
-                  }
-                }}
+                onChange={(e) => moveToColumn(e.target.value)}
               >
                 {liveColumns.map((column) => (
                   <option key={column.id} value={column.id}>
@@ -341,6 +349,44 @@ export function CardDrawer({
                   setProperties(updated);
                   autosave.schedule({ properties: updated });
                 };
+                if (field.kind === 'checklist') {
+                  const inputId = `card-${card.id}-${field.key}`;
+                  // Where a finished list sends the card: a live column of
+                  // this board, or nowhere.
+                  const target = field.checklist_done_column
+                    ? columns.find(
+                        (column) => column.key === field.checklist_done_column && !column.archived
+                      )
+                    : undefined;
+                  return (
+                    <div key={field.key}>
+                      <span className={labelClass} id={`${inputId}-label`}>
+                        {field.label}
+                        {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
+                      </span>
+                      {field.hint && (
+                        <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>
+                      )}
+                      <ChecklistField
+                        id={inputId}
+                        field={field}
+                        value={properties[field.key]}
+                        people={people}
+                        viewerEmail={viewerEmail}
+                        destination={target?.label}
+                        disabled={field.archived}
+                        // A tap is a choice and saves now; typing in the
+                        // list waits for a pause, like the notes.
+                        onChange={(next, immediate) => {
+                          const updated = { ...properties, [field.key]: next };
+                          setProperties(updated);
+                          autosave.schedule({ properties: updated }, immediate ? 0 : 600);
+                        }}
+                        onComplete={target ? () => moveToColumn(target.id) : undefined}
+                      />
+                    </div>
+                  );
+                }
                 if (field.kind === 'card_link') {
                   const inputId = `card-${card.id}-${field.key}`;
                   return (
