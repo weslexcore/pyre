@@ -220,11 +220,6 @@ export function CardDrawer({
         />
         <div className="mb-1 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            {finished && (
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-white/40">
-                Finished
-              </p>
-            )}
             <InlineTitle
               id={titleId}
               value={title}
