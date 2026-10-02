@@ -56,6 +56,13 @@ export interface SheetSwipeOptions {
   requestClose: () => Promise<boolean>;
   /** The sheet has left the screen: time to unmount it. */
   onClosed: () => void;
+  /**
+   * The element that scrolls, when it is not the sheet itself (a sheet with
+   * a fixed header over a scrolling list). A touch that lands inside it
+   * pulls only when it is scrolled to its top; a touch anywhere else on the
+   * sheet (the header) always may.
+   */
+  scrollerRef?: RefObject<HTMLElement | null>;
 }
 
 export function useSheetSwipe(
@@ -147,7 +154,9 @@ export function useSheetSwipe(
       gesture.touchId = touch.identifier;
       gesture.startX = touch.clientX;
       gesture.startY = touch.clientY;
-      gesture.scrollTop = panel.scrollTop;
+      const scroller = latest.current.scrollerRef?.current ?? panel;
+      gesture.scrollTop =
+        scroller === panel || scroller.contains(event.target as Node) ? scroller.scrollTop : 0;
       gesture.claim = 'wait';
       gesture.offset = 0;
       gesture.samples = [{ t: event.timeStamp, y: touch.clientY }];
