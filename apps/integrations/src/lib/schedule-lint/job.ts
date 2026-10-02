@@ -5,22 +5,23 @@
 // this week, the report digest, the recipient — is what makes the same list go
 // out once and anything still open get a Monday reminder.
 //
-// Quiet. Runs are frequent (a Momence session webhook schedules one), and the
-// feed keeps moving under them: sessions drop out of it as they finish, so the
-// list of findings can differ from the last one without anything having gone
-// wrong. A changed list is therefore not enough to email about — a run only
-// writes when it raises a finding key the week has not already reported, which
-// is remembered in Redis under ./REPORTED_PREFIX and forgotten when the week
-// turns over. So: something new, an email the same run; the same trouble, one
-// email a week; a list that only lost items, silence.
+// Quiet. The feed keeps moving between runs: sessions drop out of it as they
+// finish, so the list of findings can differ from the last one without
+// anything having gone wrong. A changed list is therefore not enough to email
+// about — a run only writes when it raises a finding key the week has not
+// already reported, which is remembered in Redis under ./REPORTED_PREFIX and
+// forgotten when the week turns over. So: something new, an email that day;
+// the same trouble, one email a week; a list that only lost items, silence.
 //
-// Cadence. The tick is hourly; this job runs when one of three things holds:
-//   daily  — first tick at/after SYNC_HOUR_ET with no done-key for today, the
-//            backstop that catches whatever the webhooks missed;
-//   dirty  — a Momence session webhook set the dirty flag because QStash was
-//            not available to schedule a debounced run (see ./trigger);
-//   forced — `?job=schedule-lint&force=1`, which is how the QStash follow-up
-//            to a webhook arrives, ten minutes after the last change.
+// Cadence. Once a day, off hours: the first hourly tick at/after LINT_HOUR_ET
+// with no done-key for today. That is at most one email a day — Momence edits
+// do not trigger runs, so a burst of schedule changes waits for the night.
+// Two other ways in:
+//   resume — a run that ran out of the tick's budget mid-send sets RESUME_KEY,
+//            and the next tick finishes it (the send keys skip whoever has
+//            already had the email);
+//   forced — `?job=schedule-lint&force=1`, or "Email admins now" on the admin
+//            page, for a person asking for the report.
 
 import { utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import { getRedis } from '@pyre/webhook-core';
@@ -30,13 +31,20 @@ import { getDb } from '@/lib/db';
 import { sendTemplate } from '@/lib/email/send';
 import { fetchMomenceEvents } from '@/lib/momence-events';
 import { adminEmails } from '@/lib/notifications/recipients';
-import { SYNC_HOUR_ET } from '@/lib/reports/schedule';
 import { buildEmailProps } from './email';
 import { countFindings, runLint } from './lint';
 import { defaultRules, resolveRules } from './registry';
 import { listResolutions, listRuleRows, touchResolutions } from './store';
-import { DIRTY_KEY, type LintTrigger } from './trigger';
 import type { RuleInstance, Severity } from './types';
+
+/**
+ * Hour (ET) the daily run starts. Off hours, so the email is waiting in the
+ * morning and the night's quiet schedule is what gets linted.
+ */
+export const LINT_HOUR_ET = 3;
+
+/** Set when a run ran out of time mid-send; the next tick finishes it. */
+export const RESUME_KEY = 'schedule-lint:resume';
 
 const DONE_PREFIX = 'schedule-lint:done:';
 /** A day plus slack for a run that had to resume. */
@@ -51,7 +59,7 @@ const REPORTED_TTL_SECONDS = 9 * 24 * 60 * 60;
 const TIME_FLOOR_MS = 5_000;
 
 export interface ScheduleLintSummary {
-  trigger: 'daily' | 'dirty' | 'forced' | 'dry-run';
+  trigger: 'daily' | 'resume' | 'forced' | 'dry-run';
   horizonStart?: string;
   horizonEnd?: string;
   findings: number;
@@ -146,14 +154,13 @@ export async function runScheduleLint(
 
   const redis = getRedis();
   if (!ctx.dryRun && !ctx.force) {
-    // Without Redis there is no day gate, and an hourly lint would only be
-    // wasteful, not wrong — but skip rather than guess.
+    // Without Redis there is no day gate, and an hourly lint would email
+    // hourly — skip rather than guess.
     if (!redis) return { ...base, skipped: 'redis-unavailable' };
-    const dirty = await redis.get<LintTrigger>(DIRTY_KEY);
-    if (dirty) {
-      base.trigger = 'dirty';
+    if (await redis.get(RESUME_KEY)) {
+      base.trigger = 'resume';
     } else {
-      if (eastern.minutes < SYNC_HOUR_ET * 60) return { ...base, skipped: 'before-sync-hour' };
+      if (eastern.minutes < LINT_HOUR_ET * 60) return { ...base, skipped: 'before-lint-hour' };
       if (await redis.get(doneKey)) return { ...base, skipped: 'already-done' };
     }
   }
@@ -197,7 +204,7 @@ export async function runScheduleLint(
   const finish = async () => {
     if (!redis) return;
     await redis.set(doneKey, { finishedAt: new Date().toISOString() }, { ex: DONE_TTL_SECONDS });
-    await redis.del(DIRTY_KEY);
+    await redis.del(RESUME_KEY);
   };
 
   // What of this list is news. Without Redis nothing is remembered, so every
@@ -258,8 +265,8 @@ export async function runScheduleLint(
 
   if (summary.outOfTime) {
     // The send-key claims already made let the next tick pick up exactly
-    // where this one stopped; the dirty flag makes sure there is a next tick.
-    if (redis) await redis.set(DIRTY_KEY, { reason: 'resume', at: now.toISOString() });
+    // where this one stopped; the resume flag makes sure there is a next tick.
+    if (redis) await redis.set(RESUME_KEY, { at: now.toISOString() });
   } else {
     // Remember the list, so the rest of the week is quiet unless something
     // new turns up. Only after a clean pass: an admin the send threw for has

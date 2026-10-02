@@ -38,10 +38,9 @@ vi.mock('@pyre/webhook-core', async (importOriginal) => ({
   getRedis: () => (redisAvailable ? fakeRedis : null),
 }));
 
-const { runScheduleLint } = await import('./job');
-const { DIRTY_KEY } = await import('./trigger');
+const { runScheduleLint, RESUME_KEY } = await import('./job');
 
-/** 8am EDT on Monday 2026-09-14 — past the 6am sync hour. */
+/** 8am EDT on Monday 2026-09-14 — past the 3am lint hour. */
 const MONDAY_8AM_ET = new Date('2026-09-14T12:00:00Z');
 const DONE_KEY = 'schedule-lint:done:2026-09-14';
 
@@ -108,9 +107,9 @@ describe('runScheduleLint', () => {
   });
 
   describe('the gate', () => {
-    it('waits for the sync hour', async () => {
-      vi.setSystemTime(new Date('2026-09-14T09:30:00Z')); // 5:30am EDT
-      expect((await runScheduleLint(ctx)).skipped).toBe('before-sync-hour');
+    it('waits for the off-hours lint hour', async () => {
+      vi.setSystemTime(new Date('2026-09-14T06:30:00Z')); // 2:30am EDT
+      expect((await runScheduleLint(ctx)).skipped).toBe('before-lint-hour');
       expect(fetchMomenceEvents).not.toHaveBeenCalled();
     });
 
@@ -125,13 +124,27 @@ describe('runScheduleLint', () => {
       expect(fetchMomenceEvents).toHaveBeenCalledTimes(1);
     });
 
-    it('runs at any hour when the dirty flag is set, and clears it', async () => {
-      vi.setSystemTime(new Date('2026-09-14T09:30:00Z'));
-      store.set(DIRTY_KEY, { reason: 'session-created', at: 'x' });
+    it('runs at 3am ET', async () => {
+      vi.setSystemTime(new Date('2026-09-14T07:05:00Z')); // 3:05am EDT
       const summary = await runScheduleLint(ctx);
-      expect(summary.trigger).toBe('dirty');
+      expect(summary.trigger).toBe('daily');
+      expect(summary.sent).toBe(2);
+    });
+
+    it('ignores a stale dirty flag left by the old webhook trigger', async () => {
+      store.set(DONE_KEY, { finishedAt: 'x' });
+      store.set('schedule-lint:dirty', { reason: 'session-created', at: 'x' });
+      expect((await runScheduleLint(ctx)).skipped).toBe('already-done');
+      expect(fetchMomenceEvents).not.toHaveBeenCalled();
+    });
+
+    it('finishes an out-of-time run on the next tick, and clears the flag', async () => {
+      store.set(DONE_KEY, { finishedAt: 'x' });
+      store.set(RESUME_KEY, { at: 'x' });
+      const summary = await runScheduleLint(ctx);
+      expect(summary.trigger).toBe('resume');
       expect(summary.findings).toBe(2);
-      expect(store.has(DIRTY_KEY)).toBe(false);
+      expect(store.has(RESUME_KEY)).toBe(false);
     });
 
     it('ignores the gate when forced', async () => {
@@ -215,12 +228,12 @@ describe('runScheduleLint', () => {
     expect(summary).toMatchObject({ sent: 1, failed: ['wes@pyre.test'] });
   });
 
-  it('stops before the budget runs out and leaves the dirty flag for the next tick', async () => {
+  it('stops before the budget runs out and leaves the resume flag for the next tick', async () => {
     let calls = 0;
     const tight = { ...ctx, timeRemainingMs: () => (calls++ === 0 ? 50_000 : 1_000) };
     const summary = await runScheduleLint(tight);
     expect(summary).toMatchObject({ sent: 1, outOfTime: true });
-    expect(store.get(DIRTY_KEY)).toMatchObject({ reason: 'resume' });
+    expect(store.get(RESUME_KEY)).toBeTruthy();
     expect(store.has(DONE_KEY)).toBe(false);
   });
 

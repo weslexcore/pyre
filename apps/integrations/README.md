@@ -195,7 +195,7 @@ flowchart TD
         J1["1 · journey-sweeps<br/>scan member audiences, enroll matches"]
         J2["2 · journey-advance<br/>send due journey steps"]
         J3["3 · credit-reminders<br/>expiring / unused credit pack nudges"]
-        J4["… partner / referral maintenance, sync-shifts,<br/>schedule-lint (daily), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
+        J4["… partner / referral maintenance, sync-shifts,<br/>schedule-lint (daily, 3am ET), business syncs,<br/>lost-found sweep, weekly-shifts (Mondays)"]
         J1 --> J2 --> J3 --> J4
     end
 ```
@@ -219,7 +219,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/ti
 # Manually enroll a member into a journey (for whitelist testing)
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?enroll=<memberId>&journey=<journeyId>"
 
-# Run one job now, ignoring its own day gate (the schedule lint's webhook follow-up uses this)
+# Run one job now, ignoring its own day gate
 curl -H "Authorization: Bearer $CRON_SECRET" "https://<integrations>/api/cron/tick?job=schedule-lint&force=1"
 ```
 
@@ -255,30 +255,25 @@ every title linking to the session in Momence. The send key is
 `schedule-lint:{week}:{digest}:{email}`, where the digest hashes the finding
 keys, so the same list is emailed once. On top of that, a run only emails when
 it raises a finding key the week has not already reported — the keys that went
-out are kept in Redis under `schedule-lint:reported:{week}`. Runs are frequent
-and the feed moves under them (a session that finishes drops out of it, taking
-its finding with it), so a changed list is not by itself worth an email: a new
-problem goes out the run it appears, anything still open comes back when the
-week turns over, and a list that only got shorter says nothing. **Email admins
-now** on the admin page overrides that and sends the current list.
+out are kept in Redis under `schedule-lint:reported:{week}`. The feed moves
+between runs (a session that finishes drops out of it, taking its finding with
+it), so a changed list is not by itself worth an email: a new problem goes out
+the day it appears, anything still open comes back when the week turns over,
+and a list that only got shorter says nothing. **Email admins now** on the
+admin page overrides that and sends the current list.
 
-It runs three ways:
+It runs two ways:
 
-- **Daily**: the first tick at or after 6am ET, gated by a Redis done-key.
-- **On a Momence change**: the `session-created` / `session-updated` webhooks
-  call `requestLintRun()`, which publishes a QStash message to
-  `/api/cron/tick?job=schedule-lint&force=1` delayed ten minutes and
-  deduplicated on a ten-minute bucket, so a burst of edits becomes one run
-  after they settle. Without `QSTASH_TOKEN` it sets a Redis dirty flag and the
-  next hourly tick runs the lint.
+- **Daily, off hours**: the first tick at or after 3am ET (`LINT_HOUR_ET`),
+  gated by a Redis done-key — so at most one email a day. Momence session
+  edits do not trigger runs; a day's changes are linted that night. A run that
+  runs out of time mid-send sets `schedule-lint:resume` and the next tick
+  finishes it.
 - **By hand**: `?job=schedule-lint&force=1`, or `&dryRun=1` to see the findings
   and who would be emailed without sending.
 
-Setup: add `QSTASH_TOKEN` (the QStash publish token) alongside the existing
-`CRON_SECRET`, confirm in the Momence dashboard that the webhook endpoint
-receives `session-created` / `session-updated` (subscriptions are per endpoint;
-Momence enables webhooks through support), and add `schedule-lint` to
-`EMAIL_LIVE_TEMPLATES` once the first real run looks right on the whitelist.
+Setup: add `schedule-lint` to `EMAIL_LIVE_TEMPLATES` once the first real run
+looks right on the whitelist.
 
 ## Email system
 
