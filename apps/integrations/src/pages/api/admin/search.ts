@@ -223,8 +223,14 @@ async function searchInventoryItems(
     db.from('inventory_item_spots').select('*'),
     db.from('inventory_stock').select('*'),
   ]);
+  // Inventory is one extra group, so a failed read drops only that group
+  // (logged) rather than failing the whole search — e.g. while a deploy is
+  // live before the migration that adds a table it reads has run.
   for (const result of [items, categories, areas, spots, stock]) {
-    if (result.error) return { inventory: [], error: result.error.message };
+    if (result.error) {
+      console.error('[search] inventory read failed:', result.error.message);
+      return { inventory: [] };
+    }
   }
   const inventory = searchInventory(
     {
