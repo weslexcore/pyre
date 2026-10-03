@@ -28,6 +28,21 @@ export interface InventoryCategoryRow {
   updated_at: string;
 }
 
+/**
+ * A product that comes in variants — sizes, colours, flavours. Each variant
+ * is its own item (own stock, re-order level, cost); the database keeps a
+ * variant's name ("Pyre Tee — M") and category in step with its product.
+ */
+export interface InventoryProductRow {
+  id: string;
+  name: string;
+  category_id: string | null;
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type InventoryItemKind = 'operational';
 
 export interface InventoryItemRow {
@@ -44,6 +59,12 @@ export interface InventoryItemRow {
   vendor: string | null;
   vendor_url: string | null;
   notes: string | null;
+  /** The product this is a variant of; null for a standalone item. */
+  product_id: string | null;
+  /** The variant's label within its product ("M", "Lemon"); set with product_id. */
+  variant: string | null;
+  /** Position among the product's variants (ascending). */
+  variant_order: number;
   active: boolean;
   created_by: string;
   created_at: string;
@@ -141,6 +162,7 @@ export interface InventoryMovementRow {
 export interface InventoryOverview {
   areas: InventoryAreaRow[];
   categories: InventoryCategoryRow[];
+  products: InventoryProductRow[];
   items: InventoryItemRow[];
   spots: InventorySpotRow[];
   stock: InventoryStockRow[];

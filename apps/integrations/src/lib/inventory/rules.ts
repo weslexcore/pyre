@@ -6,6 +6,7 @@ import type {
   InventoryAreaRow,
   InventoryCategoryRow,
   InventoryItemRow,
+  InventoryProductRow,
   InventorySpotRow,
   InventoryStockRow,
   MovementType,
@@ -165,6 +166,21 @@ const byOrderThenName = <T extends { sort_order: number }>(
 ) => a.sort_order - b.sort_order || nameA.localeCompare(nameB);
 
 /**
+ * Items by name, except that variants of one product keep their set order
+ * (S, M, L, XL — not alphabetical). Their names share the product prefix, so
+ * a product's variants still sit together among other items.
+ */
+export function compareItems(
+  a: Pick<InventoryItemRow, 'name' | 'product_id' | 'variant_order'>,
+  b: Pick<InventoryItemRow, 'name' | 'product_id' | 'variant_order'>
+): number {
+  if (a.product_id && a.product_id === b.product_id) {
+    return a.variant_order - b.variant_order || a.name.localeCompare(b.name);
+  }
+  return a.name.localeCompare(b.name);
+}
+
+/**
  * The stock screen: active areas in walk order, each with its active items
  * in shelf order. An area with no items still appears, so it can be found
  * and stocked.
@@ -196,7 +212,7 @@ export function groupStockByArea(data: {
           low: isLowStock(item, total),
         });
       }
-      lines.sort((a, b) => byOrderThenName(a.spot, b.spot, a.item.name, b.item.name));
+      lines.sort((a, b) => a.spot.sort_order - b.spot.sort_order || compareItems(a.item, b.item));
       return { area, lines };
     });
 }
@@ -210,22 +226,38 @@ export interface StockItem {
   lines: StockLine[];
 }
 
+/** A product's variants, together, in the by-category view. */
+export interface StockProduct {
+  product: InventoryProductRow;
+  /** Active variants in their set order. */
+  variants: StockItem[];
+  /** Across every variant and spot. */
+  total: number;
+  /** Whether any variant is low. */
+  low: boolean;
+}
+
+export type StockEntry = ({ kind: 'item' } & StockItem) | ({ kind: 'product' } & StockProduct);
+
 export interface StockCategory {
   /** null = items with no category. */
   category: InventoryCategoryRow | null;
-  items: StockItem[];
+  /** Standalone items and products, by name. */
+  entries: StockEntry[];
 }
 
 /**
  * The stock screen by category: categories in display order (a retired one
  * still shows while items carry it), each with its active items by name and
- * where each one is stored. Uncategorised items come last. Categories with no
- * active items are left out — unlike an empty area, there's nothing to do
- * with one here.
+ * where each one is stored. A product's variants are gathered under it, in
+ * their set order. Uncategorised items come last. Categories with no active
+ * items are left out — unlike an empty area, there's nothing to do with one
+ * here.
  */
 export function groupStockByCategory(data: {
   areas: readonly InventoryAreaRow[];
   categories: readonly InventoryCategoryRow[];
+  products: readonly InventoryProductRow[];
   items: readonly InventoryItemRow[];
   spots: readonly InventorySpotRow[];
   stock: readonly InventoryStockRow[];
@@ -239,32 +271,55 @@ export function groupStockByCategory(data: {
       linesByItem.set(line.item.id, list);
     }
   }
+  const products = new Map(data.products.map((p) => [p.id, p]));
 
-  const byCategory = new Map<string | null, StockItem[]>();
+  const byCategory = new Map<string | null, StockEntry[]>();
+  const productEntries = new Map<string, { kind: 'product' } & StockProduct>();
+  const add = (categoryId: string | null, entry: StockEntry) => {
+    const known = categoryId && data.categories.some((c) => c.id === categoryId);
+    const key = known ? categoryId : null;
+    const list = byCategory.get(key) ?? [];
+    list.push(entry);
+    byCategory.set(key, list);
+  };
+
   for (const item of data.items) {
     if (!item.active) continue;
     const total = totals.get(item.id) ?? 0;
-    const entry = {
+    const stockItem: StockItem = {
       item,
       total,
       low: isLowStock(item, total),
       lines: linesByItem.get(item.id) ?? [],
     };
-    const known = item.category_id && data.categories.some((c) => c.id === item.category_id);
-    const key = known ? item.category_id : null;
-    const list = byCategory.get(key) ?? [];
-    list.push(entry);
-    byCategory.set(key, list);
+    const product = item.product_id ? products.get(item.product_id) : undefined;
+    if (!product) {
+      add(item.category_id, { kind: 'item', ...stockItem });
+      continue;
+    }
+    let entry = productEntries.get(product.id);
+    if (!entry) {
+      entry = { kind: 'product', product, variants: [], total: 0, low: false };
+      productEntries.set(product.id, entry);
+      add(product.category_id, entry);
+    }
+    entry.variants.push(stockItem);
+    entry.total = Math.round((entry.total + total) * 100) / 100;
+    entry.low ||= stockItem.low;
   }
+  for (const entry of productEntries.values()) {
+    entry.variants.sort((a, b) => compareItems(a.item, b.item));
+  }
+  const entryName = (e: StockEntry) => (e.kind === 'item' ? e.item.name : e.product.name);
   for (const list of byCategory.values()) {
-    list.sort((a, b) => a.item.name.localeCompare(b.item.name));
+    list.sort((a, b) => entryName(a).localeCompare(entryName(b)));
   }
 
   const grouped: StockCategory[] = [...data.categories]
     .sort((a, b) => byOrderThenName(a, b, a.name, b.name))
     .filter((c) => byCategory.has(c.id))
-    .map((category) => ({ category, items: byCategory.get(category.id) ?? [] }));
+    .map((category) => ({ category, entries: byCategory.get(category.id) ?? [] }));
   const uncategorised = byCategory.get(null);
-  if (uncategorised) grouped.push({ category: null, items: uncategorised });
+  if (uncategorised) grouped.push({ category: null, entries: uncategorised });
   return grouped;
 }
