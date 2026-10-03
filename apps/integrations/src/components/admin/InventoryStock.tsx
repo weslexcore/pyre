@@ -29,6 +29,14 @@ import {
   WASTE_REASONS,
 } from '@/lib/inventory/types';
 import { ErrorBanner } from './ErrorBanner';
+import {
+  DeliveryFields,
+  type DeliveryState,
+  deliveryBody,
+  deliveryReady,
+  EMPTY_DELIVERY,
+  rejectedUnits,
+} from './InventoryDeliveryFields';
 import { Chip, primaryButtonClass, TileButton } from './incidentUi';
 import {
   dialogPanelClass,
@@ -266,23 +274,25 @@ function LogDialog({
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [toAreaId, setToAreaId] = useState(otherAreas[0]?.id ?? '');
+  const [delivery, setDelivery] = useState<DeliveryState>(EMPTY_DELIVERY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  const parsed = parseQuantity(amount);
+  const receiving = type === 'receive';
+  // A delivery can be all rejects, so receiving accepts 0 good units.
+  const parsed =
+    receiving && Number(amount) === 0 && amount.trim() !== '' ? 0 : parseQuantity(amount);
   const units =
-    parsed == null
-      ? null
-      : type === 'receive' && inLots
-        ? lotsToUnits(parsed, item.lot_size)
-        : parsed;
+    parsed == null ? null : receiving && inLots ? lotsToUnits(parsed, item.lot_size) : parsed;
+  const rejected = receiving ? rejectedUnits(delivery) : 0;
   const takesOut = type === 'use' || type === 'waste' || type === 'transfer';
   const tooMany = takesOut && units != null && units > onHand;
   const canSubmit =
     units != null &&
     !busy &&
     !tooMany &&
+    (receiving ? deliveryReady(delivery) && units + (rejected ?? 0) > 0 : units > 0) &&
     (type !== 'waste' || reason.trim() !== '') &&
     (type !== 'transfer' || toAreaId !== '');
 
@@ -297,7 +307,8 @@ function LogDialog({
         areaId: spot.area_id,
         ...(type === 'receive' && inLots ? { lots: parsed } : { quantity: parsed }),
         ...(type === 'transfer' ? { toAreaId } : {}),
-        reason: type === 'waste' ? reason : undefined,
+        ...(receiving ? deliveryBody(delivery) : {}),
+        ...(type === 'waste' ? { reason } : {}),
         note: note || undefined,
       });
       const verb = ACTIONS.find((a) => a.type === type)?.verb ?? 'Logged';
@@ -307,7 +318,13 @@ function LogDialog({
           : type === 'receive'
             ? ` into ${areaName}`
             : ` from ${areaName}`;
-      await onLogged(`${verb} ${formatUnits(units, item.unit)} of ${item.name}${where}.`);
+      const rejectedNote =
+        receiving && rejected
+          ? ` ${formatUnits(rejected, item.unit)} rejected (${delivery.reason.trim()}).`
+          : '';
+      await onLogged(
+        `${verb} ${formatUnits(units, item.unit)} of ${item.name}${where}.${rejectedNote}`
+      );
     } catch (e) {
       setError(e instanceof ApiError || e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -331,6 +348,12 @@ function LogDialog({
             {areaName} · {formatUnits(onHand, item.unit)} here
             {line.total !== onHand && ` · ${formatQuantity(line.total)} in all spots`}
           </p>
+          <a
+            href={`/admin/inventory/items/${item.id}`}
+            className="text-xs text-[var(--pyre-gold)] underline"
+          >
+            History &amp; chart
+          </a>
         </div>
         <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
           Close
@@ -355,8 +378,8 @@ function LogDialog({
 
       <div className="mb-4">
         <label htmlFor={`${titleId}-qty`} className={labelClass}>
-          {type === 'receive' && inLots
-            ? `How many ${pluralUnit(2, item.lot_label || 'lot')}`
+          {receiving
+            ? `Accepted — into stock${inLots ? ` (${pluralUnit(2, item.lot_label || 'lot')})` : ''}`
             : `How many ${pluralUnit(2, item.unit)}`}
         </label>
         <QuantityStepper
@@ -364,6 +387,7 @@ function LogDialog({
           value={amount}
           onChange={setAmount}
           label="quantity"
+          min={receiving ? 0 : undefined}
         />
         {type === 'receive' && hasLots && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -385,6 +409,16 @@ function LogDialog({
           </p>
         )}
       </div>
+
+      {receiving && (
+        <DeliveryFields
+          idPrefix={titleId}
+          itemId={item.id}
+          unit={item.unit}
+          value={delivery}
+          onChange={setDelivery}
+        />
+      )}
 
       {type === 'transfer' && (
         <div className="mb-4">
@@ -450,7 +484,9 @@ function LogDialog({
           ? 'Saving…'
           : units == null
             ? 'Enter a quantity'
-            : `${ACTIONS.find((a) => a.type === type)?.label} ${formatUnits(units, item.unit)}`}
+            : receiving && rejected
+              ? `Receive ${formatUnits(units, item.unit)} · reject ${formatQuantity(rejected)}`
+              : `${ACTIONS.find((a) => a.type === type)?.label} ${formatUnits(units, item.unit)}`}
       </button>
     </Modal>
   );

@@ -37,7 +37,12 @@ const PAGE_SIZE = 50;
 
 export function InventoryHistory() {
   const overview = useCachedJson<InventoryOverview>(INVENTORY_API);
-  const [itemId, setItemId] = useState('');
+  // ?itemId= (from an item page's "Full history") presets the item filter.
+  const [itemId, setItemId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const id = new URLSearchParams(window.location.search).get('itemId') ?? '';
+    return /^[0-9a-f-]{36}$/i.test(id) ? id : '';
+  });
   const [areaId, setAreaId] = useState('');
   const [type, setType] = useState<MovementType | ''>('');
   const [since, setSince] = useState('');

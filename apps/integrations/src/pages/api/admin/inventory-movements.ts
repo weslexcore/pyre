@@ -16,7 +16,9 @@
 
 import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
+import { itemTotal, notifyIfLow } from '@/lib/inventory/alerts';
 import { ledgerToCsv } from '@/lib/inventory/csv';
+import { parseDelivery } from '@/lib/inventory/delivery';
 import {
   formatUnits,
   lotsToUnits,
@@ -141,7 +143,10 @@ interface ItemFacts {
   name: string;
   unit: string;
   lot_size: number;
+  lot_label: string | null;
   unit_cost_cents: number | null;
+  reorder_level: number | null;
+  reorder_target: number | null;
   active: boolean;
 }
 
@@ -172,7 +177,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     await Promise.all([
       db
         .from('inventory_items')
-        .select('id, name, unit, lot_size, unit_cost_cents, active')
+        .select(
+          'id, name, unit, lot_size, lot_label, unit_cost_cents, reorder_level, reorder_target, active'
+        )
         .eq('id', body.itemId)
         .maybeSingle(),
       db.from('inventory_areas').select('id, name, active').eq('id', body.areaId).maybeSingle(),
@@ -183,6 +190,30 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const area = areaData as { id: string; name: string; active: boolean } | null;
   if (!item?.active) return json({ error: 'Item not found' }, 404);
   if (!area?.active) return json({ error: 'Storage area not found' }, 404);
+
+  // A delivery: the accepted part goes into stock, any rejects are recorded
+  // (held for pickup, pending credit), and held rejects the driver took back
+  // are marked picked up — one transaction (inventory_record_delivery).
+  if (type === 'receive') {
+    const delivery = parseDelivery(body, Number(item.lot_size));
+    if (delivery instanceof Response) return delivery;
+    const { data, error } = await db.rpc('inventory_record_delivery', {
+      p_item_id: item.id,
+      p_area_id: area.id,
+      p_accepted: delivery.accepted,
+      p_rejected: delivery.rejected,
+      p_reason: delivery.reason,
+      p_note: text(body.note, NOTE_MAX),
+      p_order_id: null,
+      p_pickup_ids: delivery.pickupIds,
+      p_received_by: email,
+    });
+    if (error) {
+      if (error.code === 'P0001') return json({ error: error.message }, 409);
+      return dbError(error);
+    }
+    return json({ delivery: data }, 201);
+  }
 
   // Amount: receiving may be entered in whole lots ("2 cases"); corrections
   // carry their own sign; everything else is a positive count of units.
@@ -282,13 +313,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return dbError(error);
   }
 
-  return json(
-    {
-      movements: ((data ?? []) as InventoryMovementRow[]).map((m) => ({
-        ...m,
-        quantity: Number(m.quantity),
-      })),
-    },
-    201
-  );
+  const saved = ((data ?? []) as InventoryMovementRow[]).map((m) => ({
+    ...m,
+    quantity: Number(m.quantity),
+  }));
+
+  // Did this take the item to its re-order level? (A move between spots
+  // nets to zero and never does.) Best-effort; never fails the save.
+  const change = saved.reduce((sum, m) => sum + m.quantity, 0);
+  if (change < 0 && item.reorder_level != null) {
+    const after = await itemTotal(db, item.id);
+    if (after != null) await notifyIfLow(db, item, after - change, after, email);
+  }
+
+  return json({ movements: saved }, 201);
 };

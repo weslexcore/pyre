@@ -1,0 +1,16 @@
+---
+import { InventoryReorder } from '@/components/admin/InventoryReorder';
+// Re-ordering: items at or below their re-order level, what's on order, and
+// receiving deliveries. Same grant as the stock page; placing and cancelling
+// orders is admin-only, re-checked by /api/admin/inventory-orders.
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Re-order"
+  subtitle="What's running low, what's on order, and receiving it when it arrives."
+>
+  <InventoryTabs current="/admin/inventory/reorder" />
+  <InventoryReorder client:load />
+</AdminLayout>
