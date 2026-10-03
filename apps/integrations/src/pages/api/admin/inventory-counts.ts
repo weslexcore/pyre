@@ -1,8 +1,9 @@
 // Inventory counts API for the /admin/inventory/count tab.
 //
-//   GET                         → CountsOverview: areas with due status,
-//                                 open rounds with progress, and (admins) the
-//                                 review list and thresholds
+//   GET                         → CountsOverview: areas and items with their
+//                                 own schedule, with due status; open rounds
+//                                 with progress; and (admins) the review list
+//                                 and thresholds
 //   GET ?areaId=&countId=       → CountSheet: one area's items in shelf order,
 //   GET ?areaId=&since=           in a round, or a one-off count of the area
 //                                 since the screen opened. Blind: a spot
@@ -24,7 +25,14 @@
 import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, type Db, dbError, isUuid, json } from '@/lib/http/route';
 import { itemTotal, notifyIfLow } from '@/lib/inventory/alerts';
-import { areaDueStatus, countTotals, DEFAULT_SETTINGS, DUE_ORDER } from '@/lib/inventory/counts';
+import {
+  areaDueStatus,
+  countTotals,
+  DEFAULT_SETTINGS,
+  DUE_ORDER,
+  itemDueStatus,
+  itemLastCounted,
+} from '@/lib/inventory/counts';
 import { parseQuantity } from '@/lib/inventory/rules';
 import {
   type CountSheet,
@@ -39,6 +47,7 @@ import {
   type InventoryItemRow,
   type InventorySettings,
   type InventorySpotRow,
+  type ItemCountDue,
 } from '@/lib/inventory/types';
 import { getPeopleNames } from '@/lib/sops/people';
 
@@ -106,13 +115,27 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
   const cat = catalogue as Catalogue;
 
   const since = new Date(Date.now() - LAST_COUNTED_DAYS * 86_400_000).toISOString();
-  const [recentLines, openRounds, settings] = await Promise.all([
+  const scheduledItems = [...cat.itemById.values()].filter((i) => i.count_every_days != null);
+  const [recentLines, itemLines, openRounds, settings] = await Promise.all([
     db
       .from('inventory_count_lines')
       .select('area_id, counted_at')
       .gte('counted_at', since)
       .order('counted_at', { ascending: false })
       .limit(5000),
+    // Latest count per spot of each item with its own schedule.
+    scheduledItems.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : db
+          .from('inventory_count_lines')
+          .select('item_id, area_id, counted_at')
+          .in(
+            'item_id',
+            scheduledItems.map((i) => i.id)
+          )
+          .gte('counted_at', since)
+          .order('counted_at', { ascending: false })
+          .limit(20_000),
     db
       .from('inventory_counts')
       .select('*')
@@ -122,6 +145,7 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
   ]);
   if (recentLines.error) return dbError(recentLines.error);
   if (openRounds.error) return dbError(openRounds.error);
+  if (itemLines.error) return dbError(itemLines.error);
 
   const lastCounted = new Map<string, string>();
   for (const row of (recentLines.data ?? []) as { area_id: string; counted_at: string }[]) {
@@ -147,6 +171,46 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
     .sort(
       (a, b) => DUE_ORDER[a.status] - DUE_ORDER[b.status] || a.area.sort_order - b.area.sort_order
     );
+
+  // Items with their own schedule: as stale as their least recently counted
+  // spot. Shown overdue first, then due, then in name order.
+  const lastBySpot = new Map<string, string>();
+  for (const row of (itemLines.data ?? []) as {
+    item_id: string;
+    area_id: string;
+    counted_at: string;
+  }[]) {
+    const key = spotKey(row.item_id, row.area_id);
+    if (!lastBySpot.has(key)) lastBySpot.set(key, row.counted_at);
+  }
+  const areaOrder = new Map(cat.areas.map((a, i) => [a.id, i]));
+  const items: ItemCountDue[] = scheduledItems
+    .map((item) => {
+      const areaIds = cat.spots
+        .filter((s) => s.item_id === item.id)
+        .map((s) => s.area_id)
+        .sort((a, b) => (areaOrder.get(a) ?? 0) - (areaOrder.get(b) ?? 0));
+      const lastCountedAt = itemLastCounted(
+        areaIds,
+        new Map(
+          areaIds.flatMap((a) => {
+            const at = lastBySpot.get(spotKey(item.id, a));
+            return at ? [[a, at] as const] : [];
+          })
+        )
+      );
+      return {
+        itemId: item.id,
+        name: item.name,
+        everyDays: item.count_every_days as number,
+        status: itemDueStatus(lastCountedAt, item.count_every_days as number, now),
+        lastCountedAt,
+        areas: areaIds.map((id) => ({ id, name: cat.areaById.get(id)?.name ?? '' })),
+      };
+    })
+    // An item not kept anywhere has nothing to count.
+    .filter((i) => i.areas.length > 0)
+    .sort((a, b) => DUE_ORDER[a.status] - DUE_ORDER[b.status] || a.name.localeCompare(b.name));
 
   // Progress of each open round: counted lines over countable spots.
   const rounds = (openRounds.data ?? []) as InventoryCountRow[];
@@ -188,6 +252,7 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
         ...numericLine(line),
         itemName: item?.name ?? 'Retired item',
         unit: item?.unit ?? '',
+        unit_plural: item?.unit_plural ?? '',
         areaName: cat.areaById.get(line.area_id)?.name ?? 'Retired area',
       };
     });
@@ -198,7 +263,7 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
     ...review.map((l) => l.counted_by),
   ]);
 
-  return { areas, rounds: roundViews, review, settings, people, isAdmin };
+  return { areas, items, rounds: roundViews, review, settings, people, isAdmin };
 }
 
 async function sheet(
@@ -265,6 +330,7 @@ async function sheet(
         itemId: item.id,
         name: item.name,
         unit: item.unit,
+        unit_plural: item.unit_plural,
         category: item.category_id ? (cat.categoryName.get(item.category_id) ?? '') : '',
         line: lineBySpot.get(spotKey(item.id, areaId)) ?? null,
         recountAsked: recountItems.has(item.id),
@@ -322,6 +388,7 @@ async function summary(db: Db, countId: string): Promise<CountSummary | Response
       ...line,
       itemName: item?.name ?? 'Retired item',
       unit: item?.unit ?? '',
+      unit_plural: item?.unit_plural ?? '',
       areaName: cat.areaById.get(line.area_id)?.name ?? 'Retired area',
     };
   });
@@ -427,7 +494,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         itemTotal(db, body.itemId),
         db
           .from('inventory_items')
-          .select('id, name, unit, lot_size, lot_label, reorder_level, reorder_target')
+          .select(
+            'id, name, unit, unit_plural, lot_size, lot_label, lot_label_plural, reorder_level, reorder_target'
+          )
           .eq('id', body.itemId)
           .maybeSingle(),
       ]);

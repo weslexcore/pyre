@@ -21,6 +21,7 @@ import {
   groupStockByCategory,
   lotDescription,
   lotsToUnits,
+  lotUnit,
   parseQuantity,
   pluralUnit,
   type StockEntry,
@@ -207,29 +208,33 @@ export function InventoryStock() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Search on its own full-width row, filters below, so it stays wide
+          enough to type into on a phone. */}
+      <div className="space-y-2">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find an item…"
           aria-label="Find an item"
-          className={`${compactInputClass} min-w-0 flex-1 sm:max-w-xs`}
+          className={`${compactInputClass} w-full sm:max-w-md`}
         />
-        <fieldset className="flex gap-1">
-          <legend className="sr-only">Group by</legend>
-          <Chip selected={view === 'area'} label="By area" onClick={() => chooseView('area')} />
+        <div className="flex flex-wrap items-center gap-2">
+          <fieldset className="flex gap-1">
+            <legend className="sr-only">Group by</legend>
+            <Chip selected={view === 'area'} label="By area" onClick={() => chooseView('area')} />
+            <Chip
+              selected={view === 'category'}
+              label="By category"
+              onClick={() => chooseView('category')}
+            />
+          </fieldset>
           <Chip
-            selected={view === 'category'}
-            label="By category"
-            onClick={() => chooseView('category')}
+            selected={lowOnly}
+            label={`Low only${lowCount ? ` (${lowCount})` : ''}`}
+            onClick={() => setLowOnly((v) => !v)}
           />
-        </fieldset>
-        <Chip
-          selected={lowOnly}
-          label={`Low only${lowCount ? ` (${lowCount})` : ''}`}
-          onClick={() => setLowOnly((v) => !v)}
-        />
+        </div>
       </div>
 
       {flash && (
@@ -424,7 +429,7 @@ function CategoryItemRow({
               key={line.spot.id}
               type="button"
               onClick={() => onOpen(line)}
-              aria-label={`${item.name} in ${areaName(line.spot.area_id)}: ${formatUnits(line.quantity, item.unit)}`}
+              aria-label={`${item.name} in ${areaName(line.spot.area_id)}: ${formatUnits(line.quantity, item)}`}
               className="rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white/70 hover:border-white/30"
             >
               {areaName(line.spot.area_id)}{' '}
@@ -569,11 +574,9 @@ function LogDialog({
             : ` from ${areaName}`;
       const rejectedNote =
         receiving && rejected
-          ? ` ${formatUnits(rejected, item.unit)} rejected (${deliveryReasons(delivery).join(', ')}).`
+          ? ` ${formatUnits(rejected, item)} rejected (${deliveryReasons(delivery).join(', ')}).`
           : '';
-      await onLogged(
-        `${verb} ${formatUnits(units, item.unit)} of ${item.name}${where}.${rejectedNote}`
-      );
+      await onLogged(`${verb} ${formatUnits(units, item)} of ${item.name}${where}.${rejectedNote}`);
     } catch (e) {
       setError(e instanceof ApiError || e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -594,7 +597,7 @@ function LogDialog({
             {item.name}
           </h2>
           <p className="text-xs text-white/50">
-            {areaName} · {formatUnits(onHand, item.unit)} here
+            {areaName} · {formatUnits(onHand, item)} here
             {line.total !== onHand && ` · ${formatQuantity(line.total)} in all spots`}
           </p>
           <a
@@ -628,8 +631,8 @@ function LogDialog({
       <div className="mb-4">
         <label htmlFor={`${titleId}-qty`} className={labelClass}>
           {receiving
-            ? `Accepted — into stock${inLots ? ` (${pluralUnit(2, item.lot_label || 'lot')})` : ''}`
-            : `How many ${pluralUnit(2, item.unit)}`}
+            ? `Accepted — into stock${inLots ? ` (${pluralUnit(2, lotUnit(item))})` : ''}`
+            : `How many ${pluralUnit(2, item)}`}
         </label>
         <QuantityStepper
           id={`${titleId}-qty`}
@@ -640,20 +643,20 @@ function LogDialog({
         />
         {type === 'receive' && hasLots && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Chip selected={!inLots} label={`${item.unit}s`} onClick={() => setInLots(false)} />
+            <Chip selected={!inLots} label={pluralUnit(2, item)} onClick={() => setInLots(false)} />
             <Chip
               selected={inLots}
               label={lotDescription(item) || 'lots'}
               onClick={() => setInLots(true)}
             />
             {inLots && units != null && (
-              <span className="text-xs text-white/50">= {formatUnits(units, item.unit)}</span>
+              <span className="text-xs text-white/50">= {formatUnits(units, item)}</span>
             )}
           </div>
         )}
         {tooMany && (
           <p className="mt-2 text-xs text-[var(--pyre-red)]">
-            Only {formatUnits(onHand, item.unit)} here. If the shelf has more, an admin can fix the
+            Only {formatUnits(onHand, item)} here. If the shelf has more, an admin can fix the
             count.
           </p>
         )}
@@ -663,7 +666,7 @@ function LogDialog({
         <DeliveryFields
           idPrefix={titleId}
           itemId={item.id}
-          unit={item.unit}
+          unit={item}
           value={delivery}
           onChange={setDelivery}
         />
@@ -734,8 +737,8 @@ function LogDialog({
           : units == null
             ? 'Enter a quantity'
             : receiving && rejected
-              ? `Receive ${formatUnits(units, item.unit)} · reject ${formatQuantity(rejected)}`
-              : `${ACTIONS.find((a) => a.type === type)?.label} ${formatUnits(units, item.unit)}`}
+              ? `Receive ${formatUnits(units, item)} · reject ${formatQuantity(rejected)}`
+              : `${ACTIONS.find((a) => a.type === type)?.label} ${formatUnits(units, item)}`}
       </button>
     </Modal>
   );

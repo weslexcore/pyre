@@ -7,11 +7,14 @@ import {
   isLowStock,
   lotDescription,
   lotsToUnits,
+  lotUnit,
   movementBucket,
   parseQuantity,
   parseSignedQuantity,
+  pluralUnit,
   signedQuantity,
   suggestedLots,
+  suggestPlural,
   totalsByItem,
 } from './rules';
 import type {
@@ -42,9 +45,13 @@ const item = (
   name,
   kind: 'operational',
   category_id: null,
+  unit_id: 'towel',
   unit: 'towel',
+  unit_plural: 'towels',
   lot_size: 12,
+  lot_unit_id: 'case',
   lot_label: 'case',
+  lot_label_plural: 'cases',
   reorder_level: 10,
   reorder_target: 36,
   unit_cost_cents: 250,
@@ -54,6 +61,7 @@ const item = (
   product_id: null,
   variant: null,
   variant_order: 0,
+  count_every_days: null,
   active: true,
   created_by: 'a@x',
   created_at: '',
@@ -117,6 +125,29 @@ describe('lots', () => {
     expect(formatUnits(1, 'towel')).toBe('1 towel');
     expect(formatUnits(3, 'towel')).toBe('3 towels');
     expect(formatUnits(3, 'gloves')).toBe('3 gloves');
+  });
+
+  it("uses the unit's own plural when it has one", () => {
+    const box = { unit: 'box', unit_plural: 'boxes' };
+    expect(formatUnits(1, box)).toBe('1 box');
+    expect(formatUnits(2, box)).toBe('2 boxes');
+    expect(formatUnits(0, box)).toBe('0 boxes');
+    expect(pluralUnit(5, { unit: 'each', unit_plural: 'each' })).toBe('each');
+    expect(pluralUnit(2, { unit: 'loaf', unit_plural: 'loaves' })).toBe('loaves');
+  });
+
+  it('suggests plurals for new units', () => {
+    expect(
+      ['box', 'bottle', 'each', 'glass', 'battery', 'tray', 'brush', 'towels'].map(suggestPlural)
+    ).toEqual(['boxes', 'bottles', 'each', 'glasses', 'batteries', 'trays', 'brushes', 'towels']);
+  });
+
+  it('names the lot unit, or plain "lot"', () => {
+    expect(lotUnit({ lot_label: 'box', lot_label_plural: 'boxes' })).toEqual({
+      unit: 'box',
+      unit_plural: 'boxes',
+    });
+    expect(pluralUnit(2, lotUnit({ lot_label: null, lot_label_plural: null }))).toBe('lots');
   });
 });
 

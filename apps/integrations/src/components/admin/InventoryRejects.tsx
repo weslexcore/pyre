@@ -18,7 +18,13 @@ import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, fmtShortDate } from '@/lib/client/format';
 import { rejectRate, rejectValueCents } from '@/lib/inventory/rejects';
-import { formatCents, formatQuantity, formatUnits, pluralUnit } from '@/lib/inventory/rules';
+import {
+  formatCents,
+  formatQuantity,
+  formatUnits,
+  pluralUnit,
+  type UnitNames,
+} from '@/lib/inventory/rules';
 import type { RejectSeries, RejectsOverview, RejectView } from '@/lib/inventory/types';
 import { dollarsToCents } from '@/lib/inventory/validate';
 import { personName } from '@/lib/sops/names';
@@ -174,7 +180,7 @@ export function InventoryRejects() {
               <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-white/60">
                 <span className="text-[var(--pyre-creme)]">{r.itemName}</span>
                 <span>
-                  {formatUnits(r.rejected_qty, r.unit)} ({r.reasons.join(', ')}){' '}
+                  {formatUnits(r.rejected_qty, r)} ({r.reasons.join(', ')}){' '}
                   {fmtShortDate(r.received_at)}
                 </span>
                 <span
@@ -263,7 +269,7 @@ function RejectSummary({
         {r.itemName}
       </a>
       <p className="text-xs text-white/60">
-        {formatUnits(r.rejected_qty, r.unit)} rejected of {formatQuantity(r.delivered_qty)} ·{' '}
+        {formatUnits(r.rejected_qty, r)} rejected of {formatQuantity(r.delivered_qty)} ·{' '}
         {r.reasons.join(', ')}
         {showValue && value != null && ` · ${formatCents(value)}`}
       </p>
@@ -286,7 +292,7 @@ function OverTime({ items }: { items: RejectsOverview['items'] }) {
   const series = useCachedJson<RejectSeries>(
     itemId ? `${REJECTS_API}?itemId=${itemId}&weeks=${weeks}` : null
   );
-  const unit = series.data?.unit ?? items.find((i) => i.id === itemId)?.unit ?? '';
+  const unit: UnitNames = series.data ?? items.find((i) => i.id === itemId) ?? { unit: '' };
 
   const totals = (series.data?.weeks ?? []).reduce(
     (acc, w) => ({
@@ -418,7 +424,7 @@ function CreditDialog({
         </button>
       </div>
       <p className="mb-4 text-sm text-white/60">
-        {formatUnits(reject.rejected_qty, reject.unit)} rejected ({reject.reasons.join(', ')}) on{' '}
+        {formatUnits(reject.rejected_qty, reject)} rejected ({reject.reasons.join(', ')}) on{' '}
         {etStamp(reject.received_at)}
         {reject.vendor && ` from ${reject.vendor}`}.
       </p>

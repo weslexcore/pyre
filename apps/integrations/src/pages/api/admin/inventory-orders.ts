@@ -125,6 +125,7 @@ export const GET: APIRoute = async ({ cookies }) => {
         ...numericOrder(o),
         itemName: item?.name ?? 'Retired item',
         unit: item?.unit ?? '',
+        unit_plural: item?.unit_plural ?? '',
         areaName: o.received_area_id
           ? (allAreas.find((a) => a.id === o.received_area_id)?.name ?? null)
           : null,
