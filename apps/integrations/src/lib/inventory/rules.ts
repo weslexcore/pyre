@@ -58,14 +58,49 @@ export function formatQuantity(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
-/** 'towel' for 1, 'towels' otherwise — naive, good enough for unit names. */
-export function pluralUnit(n: number, unit: string): string {
-  return Math.abs(n) === 1 || /s$/i.test(unit) ? unit : `${unit}s`;
+/**
+ * A unit's two spellings. An item row fits as-is ({ unit, unit_plural }); so
+ * does any view that carries an item's unit and plural.
+ */
+export interface UnitNames {
+  unit: string;
+  unit_plural?: string | null;
 }
 
-/** '24 towels' / '1 towel'. */
-export function formatUnits(n: number, unit: string): string {
+/**
+ * A first guess at a plural, for suggesting one when a unit is added (the
+ * admin can correct it) and for any unit that arrives without its plural.
+ * Mirrors the guess 20261003162143_inventory_units.sql made for existing
+ * units: a word already ending in a single "s" is left alone, as it was
+ * usually typed as a plural.
+ */
+export function suggestPlural(word: string): string {
+  const w = word.trim();
+  if (!w) return w;
+  if (/^(each|dozen)$/i.test(w)) return w;
+  if (/(ss|x|z|ch|sh)$/i.test(w)) return `${w}es`;
+  if (/s$/i.test(w)) return w;
+  if (/[^aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
+  return `${w}s`;
+}
+
+/** 'box' for 1, 'boxes' otherwise — the unit's own plural when known. */
+export function pluralUnit(n: number, unit: string | UnitNames): string {
+  const names = typeof unit === 'string' ? { unit } : unit;
+  if (Math.abs(n) === 1) return names.unit;
+  return names.unit_plural?.trim() || suggestPlural(names.unit);
+}
+
+/** '24 towels' / '1 box'. */
+export function formatUnits(n: number, unit: string | UnitNames): string {
   return `${formatQuantity(n)} ${pluralUnit(n, unit)}`;
+}
+
+/** What an item is bought by, as a unit: its lot unit, or plain "lot". */
+export function lotUnit(item: Pick<InventoryItemRow, 'lot_label' | 'lot_label_plural'>): UnitNames {
+  return item.lot_label?.trim()
+    ? { unit: item.lot_label.trim(), unit_plural: item.lot_label_plural }
+    : { unit: 'lot', unit_plural: 'lots' };
 }
 
 /** 'case of 12', or '' when an item is bought one at a time. */

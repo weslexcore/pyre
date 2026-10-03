@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { etStamp } from '@/lib/client/format';
-import { formatQuantity, pluralUnit } from '@/lib/inventory/rules';
+import { formatQuantity, pluralUnit, type UnitNames } from '@/lib/inventory/rules';
 import { MOVEMENT_LABELS, type StockPoint } from '@/lib/inventory/types';
 
 const SERIES = '#5590c8';
@@ -49,7 +49,7 @@ export function InventoryStockChart({
   now,
 }: {
   points: StockPoint[];
-  unit: string;
+  unit: UnitNames;
   reorderLevel: number | null;
   /** The right edge of the window (ISO) — the line runs flat to it. */
   now: string;

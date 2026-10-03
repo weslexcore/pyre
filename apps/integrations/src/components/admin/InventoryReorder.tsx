@@ -29,6 +29,7 @@ import {
   formatUnits,
   lotDescription,
   lotsToUnits,
+  lotUnit,
   parseQuantity,
   pluralUnit,
 } from '@/lib/inventory/rules';
@@ -59,8 +60,8 @@ const ORDERS_API = '/api/admin/inventory-orders';
 const message = (e: unknown) =>
   e instanceof ApiError || e instanceof Error ? e.message : String(e);
 
-const lotName = (item: Pick<InventoryItemRow, 'lot_label'>, n: number) =>
-  pluralUnit(n, item.lot_label?.trim() || 'lot');
+const lotName = (item: Pick<InventoryItemRow, 'lot_label' | 'lot_label_plural'>, n: number) =>
+  pluralUnit(n, lotUnit(item));
 
 const itemHref = (id: string) => `/admin/inventory/items/${id}`;
 
@@ -137,7 +138,7 @@ export function InventoryReorder() {
                     Order {formatQuantity(line.suggestedLots)}{' '}
                     {lotName(line.item, line.suggestedLots)}
                     {lotDescription(line.item) &&
-                      ` (${formatUnits(line.suggestedUnits, line.item.unit)})`}
+                      ` (${formatUnits(line.suggestedUnits, line.item)})`}
                     {line.estimateCents != null && ` · ~${formatCents(line.estimateCents)}`}
                   </p>
                   <p className="text-xs text-white/35">
@@ -205,14 +206,14 @@ export function InventoryReorder() {
                   </a>
                   <p className="text-xs text-white/50">
                     {formatQuantity(order.lots)} {lotName(order.item, order.lots)} ·{' '}
-                    {formatUnits(order.units, order.item.unit)}
+                    {formatUnits(order.units, order.item)}
                     {order.unit_cost_cents != null &&
                       ` · ~${formatCents(Math.round(order.units * order.unit_cost_cents))}`}
                   </p>
                   <p className="text-xs text-white/35">
                     Ordered {timeAgo(order.ordered_at)} by{' '}
                     {personName(order.ordered_by, data.people)} ·{' '}
-                    {formatUnits(order.total, order.item.unit)} on hand now
+                    {formatUnits(order.total, order.item)} on hand now
                     {order.note && ` · ${order.note}`}
                   </p>
                 </div>
@@ -260,7 +261,7 @@ export function InventoryReorder() {
                 </a>{' '}
                 {order.status === 'received' && order.received_at ? (
                   <>
-                    — received {formatUnits(order.received_units ?? order.units, order.unit)}
+                    — received {formatUnits(order.received_units ?? order.units, order)}
                     {order.areaName && ` into ${order.areaName}`} · {etStamp(order.received_at)} by{' '}
                     {personName(order.received_by ?? '', data.people)}
                   </>
@@ -343,11 +344,11 @@ function OrderDialog({
     <Modal labelledBy="order-dialog" onClose={onClose} panelClassName={dialogPanelClass}>
       <DialogHeader id="order-dialog" title={`Order ${item.name}`} onClose={onClose} />
       <label htmlFor="order-lots" className={labelClass}>
-        How many {pluralUnit(2, item.lot_label?.trim() || 'lot')}
+        How many {pluralUnit(2, lotUnit(item))}
       </label>
       <QuantityStepper id="order-lots" value={lots} onChange={setLots} label="lots" />
       {units != null && lotDescription(item) && (
-        <p className="mt-1 text-xs text-white/50">= {formatUnits(units, item.unit)}</p>
+        <p className="mt-1 text-xs text-white/50">= {formatUnits(units, item)}</p>
       )}
       <label className="mt-4 block">
         <span className={labelClass}>Note (optional)</span>
@@ -421,9 +422,9 @@ function ReceiveDialog({
       });
       const area = areas.find((a) => a.id === areaId)?.name ?? '';
       await onDone(
-        `Received ${formatUnits(parsed, item.unit)} of ${item.name} into ${area}.${
+        `Received ${formatUnits(parsed, item)} of ${item.name} into ${area}.${
           rejected
-            ? ` ${formatUnits(rejected, item.unit)} rejected (${deliveryReasons(delivery).join(', ')}).`
+            ? ` ${formatUnits(rejected, item)} rejected (${deliveryReasons(delivery).join(', ')}).`
             : ''
         }`
       );
@@ -457,19 +458,19 @@ function ReceiveDialog({
         </select>
       </label>
       <label htmlFor="receive-units" className={labelClass}>
-        Accepted — {pluralUnit(2, item.unit)} into stock
+        Accepted — {pluralUnit(2, item)} into stock
       </label>
       <QuantityStepper id="receive-units" value={units} onChange={setUnits} label="units" min={0} />
       <p className="mt-1 text-xs text-white/50">
         Ordered: {formatQuantity(order.lots)} {lotName(item, order.lots)} (
-        {formatUnits(order.units, item.unit)}). Change it if the delivery was short or some were
+        {formatUnits(order.units, item)}). Change it if the delivery was short or some were
         rejected.
       </p>
       <div className="mt-4">
         <DeliveryFields
           idPrefix="receive"
           itemId={item.id}
-          unit={item.unit}
+          unit={item}
           value={delivery}
           onChange={setDelivery}
         />
@@ -486,8 +487,8 @@ function ReceiveDialog({
           : parsed == null
             ? 'Enter a quantity'
             : rejected
-              ? `Receive ${formatUnits(parsed, item.unit)} · reject ${formatQuantity(rejected)}`
-              : `Receive ${formatUnits(parsed, item.unit)}`}
+              ? `Receive ${formatUnits(parsed, item)} · reject ${formatQuantity(rejected)}`
+              : `Receive ${formatUnits(parsed, item)}`}
       </button>
     </Modal>
   );

@@ -158,7 +158,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .gte('occurred_at', from.toISOString())
       .lt('occurred_at', to.toISOString())
       .limit(REPORT_MAX_ROWS),
-    db.from('inventory_items').select('id, name, unit, category_id'),
+    db.from('inventory_items').select('id, name, unit, unit_plural, category_id'),
     db.from('inventory_categories').select('id, name'),
     db.from('inventory_areas').select('id, name'),
   ]);
@@ -174,6 +174,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
           id: string;
           name: string;
           unit: string;
+          unit_plural: string;
           category_id: string | null;
         }[]
       ).map((i) => [i.id, i])
