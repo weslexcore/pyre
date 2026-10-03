@@ -11,10 +11,14 @@ import {
 	type DutyCatalog,
 	type DutyDef,
 	dutyPhases,
+	dutyRunsOn,
 	dutyTitle,
 	formatDuties,
+	formatDutyDays,
 	mismatchedDutyPairs,
 	normalizeDuties,
+	normalizeDutyDays,
+	offDayDuties,
 	pairedDutyFor,
 	toggleDuty,
 } from "../src/duties";
@@ -183,6 +187,7 @@ describe("an admin-edited catalog", () => {
 		side: null,
 		sessionDefault: null,
 		sopSlug: null,
+		days: null,
 		sortOrder: 10,
 		archived: false,
 		...over,
@@ -252,6 +257,92 @@ describe("an admin-edited catalog", () => {
 		expect(mismatchedDutyPairs(withPlunge, held)).toEqual([]);
 		// Taking it off leaves the half and its pair alone.
 		expect(toggleDuty(withPlunge, held, "plunge_care")).toEqual([
+			"setup_a",
+			"customer_care",
+			"breakdown_a",
+		]);
+	});
+});
+
+describe("duty days", () => {
+	// 2026-10-07 is a Wednesday, 2026-10-09 a Friday, 2026-10-11 a Sunday.
+	const WED = "2026-10-07";
+	const FRI = "2026-10-09";
+	const SUN = "2026-10-11";
+	const base = C[0] as DutyDef;
+	const plants: DutyDef = {
+		...base,
+		key: "water_plants",
+		label: "Water Plants",
+		phase: "session",
+		side: null,
+		sessionDefault: null,
+		days: [0, 5, 6],
+	};
+	const propaneStart: DutyDef = {
+		...base,
+		key: "weigh_propane",
+		label: "Weigh Propane",
+		phase: "setup",
+		side: null,
+		sessionDefault: null,
+		days: [3],
+	};
+	const propaneEnd: DutyDef = {
+		...propaneStart,
+		key: "weigh_propane_2",
+		phase: "breakdown",
+		days: [0],
+	};
+	const catalog: DutyCatalog = [...C, plants, propaneStart, propaneEnd];
+
+	it("stores one spelling: unique, ascending, and null for every day", () => {
+		expect(normalizeDutyDays([6, 5, 0, 5])).toEqual([0, 5, 6]);
+		expect(normalizeDutyDays([0, 1, 2, 3, 4, 5, 6])).toBeNull();
+		expect(normalizeDutyDays([])).toBeNull();
+		expect(normalizeDutyDays(null)).toBeNull();
+		expect(normalizeDutyDays([7, -1, 1.5, 2])).toEqual([2]);
+	});
+
+	it("runs on its days only", () => {
+		expect(dutyRunsOn(plants, FRI)).toBe(true);
+		expect(dutyRunsOn(plants, SUN)).toBe(true);
+		expect(dutyRunsOn(plants, WED)).toBe(false);
+		expect(dutyRunsOn(base, WED)).toBe(true);
+		expect(dutyRunsOn(propaneStart, WED)).toBe(true);
+		expect(dutyRunsOn(propaneEnd, WED)).toBe(false);
+	});
+
+	it("reads Monday first, with runs of three or more as a range", () => {
+		expect(formatDutyDays(null)).toBe("Every day");
+		expect(formatDutyDays([0, 5, 6])).toBe("Fri–Sun");
+		expect(formatDutyDays([3])).toBe("Wed");
+		expect(formatDutyDays([0, 6])).toBe("Sat, Sun");
+		expect(formatDutyDays([1, 3, 4, 5])).toBe("Mon, Wed–Fri");
+	});
+
+	it("flags held duties the day doesn't call for", () => {
+		const held = ["setup_a", "water_plants", "weigh_propane_2"];
+		expect(offDayDuties(catalog, held, WED)).toEqual(["water_plants", "weigh_propane_2"]);
+		expect(offDayDuties(catalog, held, SUN)).toEqual([]);
+		expect(offDayDuties(catalog, ["host"], WED)).toEqual([]);
+	});
+
+	it("doesn't fill in a pair or in-session duty that isn't done that day", () => {
+		const weekendCare = C.map((d) =>
+			d.key === "customer_care" ? { ...d, days: [0, 6] } : d,
+		);
+		expect(toggleDuty(weekendCare, [], "setup_a", { date: WED })).toEqual([
+			"setup_a",
+			"breakdown_a",
+		]);
+		expect(toggleDuty(weekendCare, [], "setup_a", { date: SUN })).toEqual([
+			"setup_a",
+			"customer_care",
+			"breakdown_a",
+		]);
+		// Without a date, nothing is held back.
+		expect(toggleDuty(weekendCare, [], "setup_a")).toEqual([
 			"setup_a",
 			"customer_care",
 			"breakdown_a",

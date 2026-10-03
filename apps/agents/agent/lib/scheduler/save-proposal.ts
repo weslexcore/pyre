@@ -56,7 +56,7 @@ export const saveProposalTool = defineTool({
             .array(z.string())
             .default([])
             .describe(
-              "Jobs this person holds within their hours. Only keys from get_week_context's `duties` list are accepted (admins edit that list). Halves with the same `side` pair across set-up and break down — whoever takes A at set-up takes A at break down — and each half's `sessionDefault` is the in-session duty it usually comes with. Propose them on every assignment, only for phases the person is on the shift for, and never duplicate a duty another person on the same shift already holds."
+              "Jobs this person holds within their hours. Only keys from get_week_context's `duties` list are accepted (admins edit that list), and only those in the shift's `dutyKeys` (the duties done on its day). Halves with the same `side` pair across set-up and break down — whoever takes A at set-up takes A at break down — and each half's `sessionDefault` is the in-session duty it usually comes with. Propose them on every assignment, only for phases the person is on the shift for, and never duplicate a duty another person on the same shift already holds."
             ),
           notes: z.string().max(500).nullish(),
         })

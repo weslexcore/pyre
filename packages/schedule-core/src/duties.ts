@@ -11,6 +11,15 @@
 // than reading a constant. Keys are permanent (they're what the duties[]
 // arrays store); labels, SOP links, order and sides are free to change.
 // DEFAULT_DUTY_CATALOG mirrors the rows the shift_duties migration seeds.
+//
+// A duty can also be limited to certain days of the week (water the plants
+// Friday to Sunday). Off those days it isn't offered on the board or to the
+// scheduler; a duty needed at both ends of the shift on different days (weigh
+// the propane at Wednesday's set-up and Sunday's break down) is two duties,
+// one per phase.
+
+import { dayOfWeek } from "./availability";
+import { DOW_LABELS } from "./constants";
 
 export const DUTY_PHASE_KEYS = ["setup", "session", "breakdown"] as const;
 export type DutyPhaseKey = (typeof DUTY_PHASE_KEYS)[number];
@@ -44,6 +53,11 @@ export interface DutyDef {
 	sessionDefault: string | null;
 	/** Slug of the SOP that defines it — /admin/sops/{slug}; null if unlinked. */
 	sopSlug: string | null;
+	/**
+	 * Days of the week it's done, 0 = Sunday … 6 = Saturday (as
+	 * dayOfWeek); null for every day.
+	 */
+	days: number[] | null;
 	sortOrder: number;
 	/** Retired: no longer offered, but still readable on old assignments. */
 	archived: boolean;
@@ -60,6 +74,7 @@ export interface ShiftDutyRow {
 	side: DutySide | null;
 	session_default: string | null;
 	sop_id: string | null;
+	days: number[] | null;
 	sort_order: number;
 	archived: boolean;
 }
@@ -76,6 +91,7 @@ export function dutyDefFromRow(
 		side: row.side,
 		sessionDefault: row.session_default,
 		sopSlug,
+		days: normalizeDutyDays(row.days),
 		sortOrder: row.sort_order,
 		archived: row.archived,
 	};
@@ -95,6 +111,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: "a",
 		sessionDefault: "customer_care",
 		sopSlug: "set-up-a-fire-and-water",
+		days: null,
 		sortOrder: 0,
 		archived: false,
 	},
@@ -106,6 +123,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: "b",
 		sessionDefault: "host",
 		sopSlug: "set-up-b-space-prep",
+		days: null,
 		sortOrder: 1,
 		archived: false,
 	},
@@ -117,6 +135,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: null,
 		sessionDefault: null,
 		sopSlug: "host-responsibilities",
+		days: null,
 		sortOrder: 2,
 		archived: false,
 	},
@@ -128,6 +147,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: null,
 		sessionDefault: null,
 		sopSlug: "customer-care-responsibilities",
+		days: null,
 		sortOrder: 3,
 		archived: false,
 	},
@@ -139,6 +159,7 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: "a",
 		sessionDefault: "customer_care",
 		sopSlug: "break-down-a-fire-and-water",
+		days: null,
 		sortOrder: 4,
 		archived: false,
 	},
@@ -150,10 +171,76 @@ export const DEFAULT_DUTY_CATALOG: DutyCatalog = [
 		side: "b",
 		sessionDefault: "host",
 		sopSlug: "break-down-b-guest-areas",
+		days: null,
 		sortOrder: 5,
 		archived: false,
 	},
 ];
+
+/**
+ * A duty's days as stored: unique, in order, each 0-6. Every day (or none,
+ * or anything unreadable) is null — "no limit" has one spelling.
+ */
+export function normalizeDutyDays(
+	days: readonly number[] | null | undefined,
+): number[] | null {
+	if (!days) return null;
+	const valid = [...new Set(days)]
+		.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+		.sort((a, b) => a - b);
+	return valid.length === 0 || valid.length === 7 ? null : valid;
+}
+
+/** Whether the duty is done on `date` (YYYY-MM-DD). */
+export function dutyRunsOn(def: DutyDef, date: string): boolean {
+	return def.days === null || def.days.includes(dayOfWeek(date));
+}
+
+/** The week as it reads on the board: Monday first, the weekend together. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+
+/**
+ * "Every day", "Wed", "Sat, Sun", "Fri–Sun", "Mon, Wed–Fri". Three or more
+ * days in a row become a range.
+ */
+export function formatDutyDays(days: readonly number[] | null): string {
+	const set = new Set(normalizeDutyDays(days) ?? []);
+	if (set.size === 0) return "Every day";
+	const runs: number[][] = [];
+	let run: number[] = [];
+	for (const d of WEEK_ORDER) {
+		if (set.has(d)) {
+			run.push(d);
+		} else if (run.length > 0) {
+			runs.push(run);
+			run = [];
+		}
+	}
+	if (run.length > 0) runs.push(run);
+	return runs
+		.flatMap((r) =>
+			r.length >= 3
+				? [`${DOW_LABELS[r[0]]}–${DOW_LABELS[r[r.length - 1]]}`]
+				: r.map((d) => DOW_LABELS[d]),
+		)
+		.join(", ");
+}
+
+/**
+ * Duties held on `date` that aren't done that day — an assignment made
+ * before the duty's days were limited, or the board's warning on a picker
+ * that still shows them so they can be taken off.
+ */
+export function offDayDuties(
+	catalog: DutyCatalog,
+	duties: readonly string[],
+	date: string,
+): string[] {
+	return normalizeDuties(catalog, duties).filter((key) => {
+		const def = dutyDef(catalog, key);
+		return def ? !dutyRunsOn(def, date) : false;
+	});
+}
 
 /** Canonical order: phase (set up -> session -> break down), then sort order. */
 export function sortCatalog(catalog: DutyCatalog): DutyDef[] {
@@ -253,12 +340,14 @@ export function normalizeDuties(
  *
  * Nothing is ever auto-removed, so every part of the mix stays an admin's to
  * change — drop the in-session duty and pick the other one, split the
- * letters, or (working a shift alone) hold every half at once.
+ * letters, or (working a shift alone) hold every half at once. Given the
+ * shift's `date`, a pair or in-session duty not done that day isn't filled in.
  */
 export function toggleDuty(
 	catalog: DutyCatalog,
 	duties: readonly string[],
 	key: string,
+	opts: { date?: string } = {},
 ): string[] {
 	const held = new Set(normalizeDuties(catalog, duties));
 	if (held.has(key)) {
@@ -266,11 +355,17 @@ export function toggleDuty(
 		return normalizeDuties(catalog, [...held]);
 	}
 	held.add(key);
+	const runs = (k: string) => {
+		const def = dutyDef(catalog, k);
+		return !!def && (!opts.date || dutyRunsOn(def, opts.date));
+	};
 	const pair = pairedDutyFor(catalog, key);
-	if (pair) held.add(pair);
+	if (pair && runs(pair)) held.add(pair);
 	const inSession = dutyDef(catalog, key)?.sessionDefault;
 	const inSessionDef = inSession ? dutyDef(catalog, inSession) : undefined;
-	if (inSessionDef && !inSessionDef.archived) held.add(inSessionDef.key);
+	if (inSessionDef && !inSessionDef.archived && runs(inSessionDef.key)) {
+		held.add(inSessionDef.key);
+	}
 	return normalizeDuties(catalog, [...held]);
 }
 

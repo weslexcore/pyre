@@ -5,7 +5,8 @@
 //   POST   { label, phase, … }       — add a duty, placed last in its phase
 //   PATCH  { key, …changes }         — rename, re-describe, re-link the SOP,
 //                                      move phase / side / in-session default,
-//                                      archive / restore
+//                                      limit to days of the week, archive /
+//                                      restore
 //   PATCH  { order: [keys] }         — re-order
 //   DELETE ?key=                     — remove a duty no assignment holds
 //
@@ -32,7 +33,8 @@ import {
 
 type Db = NonNullable<ReturnType<typeof getDb>>;
 
-const COLUMNS = 'key, label, detail, phase, side, session_default, sop_id, sort_order, archived';
+const COLUMNS =
+  'key, label, detail, phase, side, session_default, sop_id, days, sort_order, archived';
 
 const emailOf = (gate: AdminGate): string => normalizeEmail(gate.user.email);
 
