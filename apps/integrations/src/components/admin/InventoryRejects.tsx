@@ -174,7 +174,8 @@ export function InventoryRejects() {
               <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-white/60">
                 <span className="text-[var(--pyre-creme)]">{r.itemName}</span>
                 <span>
-                  {formatUnits(r.rejected_qty, r.unit)} ({r.reason}) {fmtShortDate(r.received_at)}
+                  {formatUnits(r.rejected_qty, r.unit)} ({r.reasons.join(', ')}){' '}
+                  {fmtShortDate(r.received_at)}
                 </span>
                 <span
                   className={
@@ -263,7 +264,7 @@ function RejectSummary({
       </a>
       <p className="text-xs text-white/60">
         {formatUnits(r.rejected_qty, r.unit)} rejected of {formatQuantity(r.delivered_qty)} ·{' '}
-        {r.reason}
+        {r.reasons.join(', ')}
         {showValue && value != null && ` · ${formatCents(value)}`}
       </p>
       <p className="text-xs text-white/40">
@@ -417,7 +418,7 @@ function CreditDialog({
         </button>
       </div>
       <p className="mb-4 text-sm text-white/60">
-        {formatUnits(reject.rejected_qty, reject.unit)} rejected ({reject.reason}) on{' '}
+        {formatUnits(reject.rejected_qty, reject.unit)} rejected ({reject.reasons.join(', ')}) on{' '}
         {etStamp(reject.received_at)}
         {reject.vendor && ` from ${reject.vendor}`}.
       </p>

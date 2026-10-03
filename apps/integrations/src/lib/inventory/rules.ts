@@ -4,6 +4,7 @@
 
 import type {
   InventoryAreaRow,
+  InventoryCategoryRow,
   InventoryItemRow,
   InventorySpotRow,
   InventoryStockRow,
@@ -198,4 +199,72 @@ export function groupStockByArea(data: {
       lines.sort((a, b) => byOrderThenName(a.spot, b.spot, a.item.name, b.item.name));
       return { area, lines };
     });
+}
+
+export interface StockItem {
+  item: InventoryItemRow;
+  /** Across every spot. */
+  total: number;
+  low: boolean;
+  /** One per spot the item lives in, in walk order. */
+  lines: StockLine[];
+}
+
+export interface StockCategory {
+  /** null = items with no category. */
+  category: InventoryCategoryRow | null;
+  items: StockItem[];
+}
+
+/**
+ * The stock screen by category: categories in display order (a retired one
+ * still shows while items carry it), each with its active items by name and
+ * where each one is stored. Uncategorised items come last. Categories with no
+ * active items are left out — unlike an empty area, there's nothing to do
+ * with one here.
+ */
+export function groupStockByCategory(data: {
+  areas: readonly InventoryAreaRow[];
+  categories: readonly InventoryCategoryRow[];
+  items: readonly InventoryItemRow[];
+  spots: readonly InventorySpotRow[];
+  stock: readonly InventoryStockRow[];
+}): StockCategory[] {
+  const totals = totalsByItem(data.stock);
+  const linesByItem = new Map<string, StockLine[]>();
+  for (const { lines } of groupStockByArea(data)) {
+    for (const line of lines) {
+      const list = linesByItem.get(line.item.id) ?? [];
+      list.push(line);
+      linesByItem.set(line.item.id, list);
+    }
+  }
+
+  const byCategory = new Map<string | null, StockItem[]>();
+  for (const item of data.items) {
+    if (!item.active) continue;
+    const total = totals.get(item.id) ?? 0;
+    const entry = {
+      item,
+      total,
+      low: isLowStock(item, total),
+      lines: linesByItem.get(item.id) ?? [],
+    };
+    const known = item.category_id && data.categories.some((c) => c.id === item.category_id);
+    const key = known ? item.category_id : null;
+    const list = byCategory.get(key) ?? [];
+    list.push(entry);
+    byCategory.set(key, list);
+  }
+  for (const list of byCategory.values()) {
+    list.sort((a, b) => a.item.name.localeCompare(b.item.name));
+  }
+
+  const grouped: StockCategory[] = [...data.categories]
+    .sort((a, b) => byOrderThenName(a, b, a.name, b.name))
+    .filter((c) => byCategory.has(c.id))
+    .map((category) => ({ category, items: byCategory.get(category.id) ?? [] }));
+  const uncategorised = byCategory.get(null);
+  if (uncategorised) grouped.push({ category: null, items: uncategorised });
+  return grouped;
 }

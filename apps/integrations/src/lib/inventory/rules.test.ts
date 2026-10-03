@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatUnits,
   groupStockByArea,
+  groupStockByCategory,
   isLowStock,
   lotDescription,
   lotsToUnits,
@@ -12,7 +13,12 @@ import {
   suggestedLots,
   totalsByItem,
 } from './rules';
-import type { InventoryAreaRow, InventoryItemRow, InventorySpotRow } from './types';
+import type {
+  InventoryAreaRow,
+  InventoryCategoryRow,
+  InventoryItemRow,
+  InventorySpotRow,
+} from './types';
 
 const area = (id: string, name: string, sort_order: number, active = true): InventoryAreaRow => ({
   id,
@@ -180,5 +186,66 @@ describe('groupStockByArea', () => {
 
   it('totals stock per item', () => {
     expect(totalsByItem(stock).get('t')).toBe(9);
+  });
+});
+
+describe('groupStockByCategory', () => {
+  const category = (
+    id: string,
+    name: string,
+    sort_order: number,
+    active = true
+  ): InventoryCategoryRow => ({
+    id,
+    name,
+    sort_order,
+    active,
+    created_by: 'a@x',
+    created_at: '',
+    updated_at: '',
+  });
+  const areas = [area('b', 'Front desk', 2), area('a', 'Back closet', 1)];
+  const categories = [
+    category('lin', 'Linens', 2),
+    category('cln', 'Cleaning', 1),
+    category('old', 'Old stuff', 3, false),
+    category('nil', 'Empty', 0),
+  ];
+  const items = [
+    item('t', 'Towels', { category_id: 'lin' }),
+    item('r', 'Robes', { category_id: 'lin', reorder_level: null }),
+    item('s', 'Spray', { category_id: 'cln', reorder_level: null }),
+    item('x', 'Gone', { category_id: 'old', reorder_level: null }),
+    item('u', 'Unsorted', { reorder_level: null }),
+    item('d', 'Retired', { category_id: 'cln', active: false }),
+  ];
+  const spots = [spot('t', 'b'), spot('t', 'a'), spot('s', 'a')];
+  const stock = [
+    { item_id: 't', area_id: 'a', quantity: 6, updated_at: '' },
+    { item_id: 't', area_id: 'b', quantity: 3, updated_at: '' },
+    { item_id: 's', area_id: 'a', quantity: 2, updated_at: '' },
+  ];
+  const grouped = groupStockByCategory({ areas, categories, items, spots, stock });
+
+  it('orders categories by display order, skips empty ones, puts uncategorised last', () => {
+    expect(grouped.map((g) => g.category?.name ?? null)).toEqual([
+      'Cleaning',
+      'Linens',
+      'Old stuff',
+      null,
+    ]);
+  });
+
+  it('lists active items by name with their total and every spot in walk order', () => {
+    const linens = grouped[1];
+    expect(linens.items.map((i) => i.item.name)).toEqual(['Robes', 'Towels']);
+    const towels = linens.items[1];
+    expect(towels).toMatchObject({ total: 9, low: true });
+    expect(towels.lines.map((l) => [l.spot.area_id, l.quantity])).toEqual([
+      ['a', 6],
+      ['b', 3],
+    ]);
+    expect(linens.items[0].lines).toEqual([]);
+    expect(grouped[0].items.map((i) => i.item.name)).toEqual(['Spray']);
   });
 });

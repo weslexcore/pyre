@@ -1,5 +1,6 @@
 // The reject part of receiving a delivery, shared by the stock screen's
-// Receive and the Re-order tab's Received: how many were rejected and why,
+// Receive and the Re-order tab's Received: how many were rejected and why
+// (tick every reason that applies, and/or type one),
 // and — when rejects from an earlier delivery of this item are still on site
 // waiting for the driver — whether they went back with this one (ticked by
 // default: the driver usually takes them when dropping the next load).
@@ -21,12 +22,20 @@ export const REJECTS_API = '/api/admin/inventory-rejects';
 
 export interface DeliveryState {
   rejected: string;
-  reason: string;
+  /** One-tap reasons ticked, in the order they were ticked. */
+  reasons: string[];
+  /** A typed reason, on top of (or instead of) the ticked ones. */
+  otherReason: string;
   /** null until the held list has loaded (then every held reject is ticked). */
   pickupIds: string[] | null;
 }
 
-export const EMPTY_DELIVERY: DeliveryState = { rejected: '0', reason: '', pickupIds: null };
+export const EMPTY_DELIVERY: DeliveryState = {
+  rejected: '0',
+  reasons: [],
+  otherReason: '',
+  pickupIds: null,
+};
 
 /** "0"/"" is none; otherwise a positive quantity, or null when invalid. */
 export function rejectedUnits(state: DeliveryState): number | null {
@@ -35,12 +44,18 @@ export function rejectedUnits(state: DeliveryState): number | null {
   return parseQuantity(raw);
 }
 
+/** Every reason given: the ticked ones, then the typed one. */
+export function deliveryReasons(state: DeliveryState): string[] {
+  const other = state.otherReason.trim();
+  return other ? [...state.reasons, other] : state.reasons;
+}
+
 /** The delivery part of the receive request body. */
 export function deliveryBody(state: DeliveryState) {
   const rejected = rejectedUnits(state) ?? 0;
   return {
     rejected,
-    reason: rejected > 0 ? state.reason.trim() : undefined,
+    reasons: rejected > 0 ? deliveryReasons(state) : undefined,
     pickupIds: state.pickupIds ?? [],
   };
 }
@@ -48,7 +63,7 @@ export function deliveryBody(state: DeliveryState) {
 /** Whether the reject fields are complete enough to save. */
 export function deliveryReady(state: DeliveryState): boolean {
   const rejected = rejectedUnits(state);
-  return rejected != null && (rejected === 0 || state.reason.trim() !== '');
+  return rejected != null && (rejected === 0 || deliveryReasons(state).length > 0);
 }
 
 export function DeliveryFields({
@@ -93,23 +108,33 @@ export function DeliveryFields({
         />
         {rejected != null && rejected > 0 && (
           <div className="mt-3">
-            <span className={labelClass}>Why</span>
+            <span className={labelClass}>Why — pick all that apply</span>
             <div className="mb-2 flex flex-wrap gap-2">
-              {REJECT_REASONS.map((r) => (
-                <Chip
-                  key={r}
-                  selected={value.reason === r}
-                  label={r}
-                  onClick={() => onChange({ ...value, reason: r })}
-                />
-              ))}
+              {REJECT_REASONS.map((r) => {
+                const selected = value.reasons.includes(r);
+                return (
+                  <Chip
+                    key={r}
+                    selected={selected}
+                    label={r}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        reasons: selected
+                          ? value.reasons.filter((x) => x !== r)
+                          : [...value.reasons, r],
+                      })
+                    }
+                  />
+                );
+              })}
             </div>
             <input
-              value={value.reason}
+              value={value.otherReason}
               maxLength={120}
-              onChange={(e) => onChange({ ...value, reason: e.target.value })}
-              placeholder="Or say why"
-              aria-label="Why they were rejected"
+              onChange={(e) => onChange({ ...value, otherReason: e.target.value })}
+              placeholder="Something else? Say why"
+              aria-label="Another reason they were rejected"
               className={`${compactInputClass} w-full`}
             />
             <p className="mt-2 text-xs text-white/50">
@@ -139,7 +164,7 @@ export function DeliveryFields({
                     }}
                   />
                   <span>
-                    {formatUnits(Number(r.rejected_qty), unit)} ({r.reason}) from{' '}
+                    {formatUnits(Number(r.rejected_qty), unit)} ({r.reasons.join(', ')}) from{' '}
                     {fmtShortDate(r.received_at)} — driver took them back
                   </span>
                 </label>
