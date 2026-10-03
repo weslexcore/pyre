@@ -20,6 +20,8 @@ import {
   defaultAssignmentWindow,
   type DutyDef,
   dutyDefFromRow,
+  dutyRunsOn,
+  formatDutyDays,
   type ShiftDutyRow,
   sortCatalog,
   rollupHours,
@@ -75,7 +77,9 @@ export const getWeekContextTool = defineTool({
       // Admin-edited at /admin/schedule/duties; archived ones can't be assigned.
       db
         .from('shift_duties')
-        .select('key, label, detail, phase, side, session_default, sop_id, sort_order, archived')
+        .select(
+          'key, label, detail, phase, side, session_default, sop_id, days, sort_order, archived'
+        )
         .eq('archived', false),
       // When people arrive before the first session and leave after the last
       // (the board's schedule settings) — what an assignment without hours gets.
@@ -169,6 +173,9 @@ export const getWeekContextTool = defineTool({
       staffNeeded: shift.staff_needed,
       notes: shift.notes,
       syncFlag: shift.sync_flag,
+      // The duty keys done on this shift's day — the ones to hand out here.
+      // A duty limited to other days (`duties[].days`) isn't in the list.
+      dutyKeys: duties.filter((d) => dutyRunsOn(d, shift.shift_date)).map((d) => d.key),
       availability: Object.fromEntries(
         staff.map((person) => {
           const result = availabilityFor(
@@ -319,6 +326,9 @@ export const getWeekContextTool = defineTool({
         phase: d.phase,
         side: d.side,
         sessionDefault: d.sessionDefault,
+        // "Every day", or the days it's done ("Fri–Sun", "Wed"). Each shift's
+        // dutyKeys already applies it.
+        days: formatDutyDays(d.days),
       })),
     };
   },

@@ -22,6 +22,7 @@ const row = (key: string): ShiftDutyRow => {
     side: d.side,
     session_default: d.sessionDefault,
     sop_id: null,
+    days: d.days,
     sort_order: d.sortOrder,
     archived: d.archived,
   };
@@ -59,9 +60,32 @@ describe('normalizeDutyCreate', () => {
         side: null,
         session_default: null,
         sop_id: SOP_ID,
+        days: null,
         archived: false,
       },
     });
+  });
+
+  it('limits a duty to days of the week, stored in one spelling', () => {
+    const result = normalizeDutyCreate(
+      { label: 'Water Plants', phase: 'session', days: [6, 0, 5, 5] },
+      C
+    );
+    expect(result.ok && result.value.days).toEqual([0, 5, 6]);
+    const everyDay = normalizeDutyCreate(
+      { label: 'Sweep', phase: 'session', days: [0, 1, 2, 3, 4, 5, 6] },
+      C
+    );
+    expect(everyDay.ok && everyDay.value.days).toBeNull();
+  });
+
+  it('refuses no days, or something that is not a weekday', () => {
+    expect(normalizeDutyCreate({ label: 'X', phase: 'session', days: [] }, C)).toEqual({
+      ok: false,
+      error: 'Pick at least one day',
+    });
+    expect(normalizeDutyCreate({ label: 'X', phase: 'session', days: [7] }, C).ok).toBe(false);
+    expect(normalizeDutyCreate({ label: 'X', phase: 'session', days: 'fri' }, C).ok).toBe(false);
   });
 
   it('requires a label and a phase', () => {
@@ -132,6 +156,20 @@ describe('normalizeDutyPatch', () => {
       ok: false,
       error: 'No changes',
     });
+  });
+
+  it('changes the days, and back to every day', () => {
+    expect(normalizeDutyPatch({ days: [3] }, row('host'), C)).toEqual({
+      ok: true,
+      value: { days: [3] },
+    });
+    expect(normalizeDutyPatch({ days: null }, { ...row('host'), days: [0, 5, 6] }, C)).toEqual({
+      ok: true,
+      value: { days: null },
+    });
+    expect(normalizeDutyPatch({ days: [6, 5, 0] }, { ...row('host'), days: [0, 5, 6] }, C)).toEqual(
+      { ok: false, error: 'No changes' }
+    );
   });
 
   it('archives and restores', () => {

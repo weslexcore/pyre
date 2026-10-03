@@ -24,6 +24,8 @@ import {
   DOW_LABELS,
   dayOfWeek,
   defaultAssignmentWindow,
+  dutyDef,
+  dutyRunsOn,
   findRestViolations,
   type StaffRow,
   type TimeOffRow,
@@ -217,6 +219,15 @@ export const POST: APIRoute = async ({ request }) => {
       windowEnd = draft.columns.ends_at as string;
     } else {
       return json({ error: `assignments[${i}]: needs shiftId or shiftKey` }, 400);
+    }
+
+    // A duty not done on the shift's day (shift_duties.days) is dropped
+    // rather than failing the whole draft; the admin can still add it.
+    if (Array.isArray(columns.duties)) {
+      columns.duties = (columns.duties as string[]).filter((key) => {
+        const def = dutyDef(dutyCatalog, key);
+        return !def || dutyRunsOn(def, date);
+      });
     }
 
     const pairKey = `${shiftId ?? shiftKey}:${staffId}`;

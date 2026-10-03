@@ -4,17 +4,21 @@
 // Duties are grouped by the phase of the shift they belong to. Each can be
 // renamed, re-described, re-linked to a different SOP, moved between phases,
 // given an A/B side (set-up and break-down only) with the in-session duty
-// that side usually takes, nudged up or down, and retired. Keys are
+// that side usually takes, limited to days of the week (water the plants
+// Friday to Sunday), nudged up or down, and retired. Keys are
 // permanent — every assignment stores them — so a duty someone already holds
 // is retired rather than deleted, and stays readable on those shifts.
 
 import {
+  DOW_LABELS,
   DUTY_PHASE_KEYS,
   DUTY_PHASE_LABELS,
   type DutyDef,
   type DutyPhaseKey,
   type DutySide,
   dutyPhases,
+  formatDutyDays,
+  normalizeDutyDays,
 } from '@pyre/schedule-core';
 import { useMemo, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -50,7 +54,14 @@ interface DutyForm {
   side: DutySide | '';
   sessionDefault: string;
   sopId: string;
+  /** Days of the week it's done (0 = Sunday); all seven for every day. */
+  days: number[];
 }
+
+const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
+
+/** The day picker's order: Monday first, the weekend together. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 const BLANK_FORM: DutyForm = {
   label: '',
@@ -59,6 +70,7 @@ const BLANK_FORM: DutyForm = {
   side: '',
   sessionDefault: '',
   sopId: '',
+  days: EVERY_DAY,
 };
 
 function formFor(duty: DutyView): DutyForm {
@@ -69,6 +81,7 @@ function formFor(duty: DutyView): DutyForm {
     side: duty.side ?? '',
     sessionDefault: duty.sessionDefault ?? '',
     sopId: duty.sopId ?? '',
+    days: duty.days ?? EVERY_DAY,
   };
 }
 
@@ -82,6 +95,7 @@ function bodyFor(form: DutyForm): Record<string, unknown> {
     side: isHalf && form.side ? form.side : null,
     sessionDefault: isHalf && form.sessionDefault ? form.sessionDefault : null,
     sopId: form.sopId || null,
+    days: normalizeDutyDays(form.days),
   };
 }
 
@@ -150,7 +164,9 @@ export function ShiftDutiesManager() {
     const next = bodyFor(form);
     const prev = bodyFor(formFor(duty));
     const changes = Object.fromEntries(
-      Object.entries(next).filter(([k, v]) => (prev as Record<string, unknown>)[k] !== v)
+      Object.entries(next).filter(
+        ([k, v]) => JSON.stringify((prev as Record<string, unknown>)[k]) !== JSON.stringify(v)
+      )
     );
     if (Object.keys(changes).length === 0) {
       setEditing(null);
@@ -189,6 +205,7 @@ export function ShiftDutiesManager() {
                   {duty.label}
                 </span>
                 {duty.side && <QuietBadge>Side {duty.side.toUpperCase()}</QuietBadge>}
+                {duty.days && <QuietBadge>{formatDutyDays(duty.days)}</QuietBadge>}
                 {duty.archived && <QuietBadge>Retired</QuietBadge>}
               </div>
               {duty.detail && <p className="mt-0.5 text-xs text-white/45">{duty.detail}</p>}
@@ -282,7 +299,7 @@ export function ShiftDutiesManager() {
               <button
                 type="button"
                 className={primaryButtonClass}
-                disabled={busy !== null || !form.label.trim()}
+                disabled={busy !== null || !form.label.trim() || form.days.length === 0}
                 onClick={() => void saveEdit(duty)}
               >
                 {busy === duty.key ? 'Saving…' : 'Save'}
@@ -374,7 +391,7 @@ export function ShiftDutiesManager() {
   );
 }
 
-/** Label, detail, phase, side, in-session default and SOP — shared by add and edit. */
+/** Label, detail, phase, side, in-session default, SOP and days — shared by add and edit. */
 function DutyFields({
   idPrefix,
   form,
@@ -453,6 +470,52 @@ function DutyFields({
           ))}
         </select>
       </div>
+      <fieldset className="sm:col-span-2">
+        <legend className={labelClass}>Days</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEK_ORDER.map((day) => {
+            const on = form.days.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                aria-pressed={on}
+                className={`rounded border px-2.5 py-1.5 font-mono text-xs uppercase tracking-wide transition-colors ${
+                  on
+                    ? 'border-[var(--pyre-sage)] bg-[var(--pyre-sage)]/20 text-[var(--pyre-creme)]'
+                    : 'border-white/10 bg-white/5 text-white/50 hover:text-white'
+                }`}
+                onClick={() =>
+                  onChange({
+                    ...form,
+                    days: on ? form.days.filter((d) => d !== day) : [...form.days, day],
+                  })
+                }
+              >
+                {DOW_LABELS[day]}
+              </button>
+            );
+          })}
+          {form.days.length < 7 && (
+            <button
+              type="button"
+              className="px-1 font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
+              onClick={() => onChange({ ...form, days: EVERY_DAY })}
+            >
+              Every day
+            </button>
+          )}
+        </div>
+        <p
+          className={`mt-1 text-xs ${form.days.length === 0 ? 'text-[var(--pyre-red)]' : 'text-white/40'}`}
+        >
+          {form.days.length === 0
+            ? 'Pick at least one day.'
+            : form.days.length === 7
+              ? 'Done every shift.'
+              : `Only offered on shifts ${formatDutyDays(form.days)}. A job done at set-up one day and break down another is two duties.`}
+        </p>
+      </fieldset>
       {isHalf && (
         <>
           <div>
@@ -539,7 +602,7 @@ function AddDutyForm({
           <button
             type="button"
             className={primaryButtonClass}
-            disabled={busy || !form.label.trim()}
+            disabled={busy || !form.label.trim() || form.days.length === 0}
             onClick={async () => {
               if (await onAdd(bodyFor(form))) {
                 setForm(BLANK_FORM);

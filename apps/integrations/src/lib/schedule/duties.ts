@@ -28,7 +28,7 @@ export async function loadDutyCatalog(db: SupabaseClient): Promise<DutyCatalog> 
   const { data, error } = await db
     .from('shift_duties')
     .select(
-      'key, label, detail, phase, side, session_default, sop_id, sort_order, archived, sops(slug)'
+      'key, label, detail, phase, side, session_default, sop_id, days, sort_order, archived, sops(slug)'
     );
   if (error) {
     console.error('[schedule] shift_duties read failed, using defaults:', error.message);

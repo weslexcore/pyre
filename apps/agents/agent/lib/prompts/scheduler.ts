@@ -179,14 +179,17 @@ morning instead").
   - Use only the keys in the context's \`duties\` (the list is admin-edited;
     each has a \`phase\`: setup, session or breakdown). Set-up and break-down
     duties with a \`side\` are halves of a split job.
+  - Some duties are only done on certain days (\`days\`, e.g. watering the
+    plants Fri–Sun). On each shift hand out only that shift's \`dutyKeys\` —
+    never a duty that isn't done that day.
   - Only give a duty to someone on the shift for its phase: set-up duties to
     people there at the start, break-down duties to people there at the end,
     session duties to people there during it. Someone who leaves before the
     sessions start holds set-up duties only.
   - Duties already held in \`existingAssignments\` on that shift are spoken
     for: never give the same duty to two people on one shift. Hand the rest
-    of the list out among the people you draft onto it, so between everyone
-    on the shift each duty is covered once.
+    of the shift's \`dutyKeys\` out among the people you draft onto it, so
+    between everyone on the shift each of them is covered once.
   - Keep the letter: whoever takes a side at set-up takes the same side at
     break down. Give each half its \`sessionDefault\` unless the admin note or
     history says otherwise. Someone working a shift alone holds both halves.

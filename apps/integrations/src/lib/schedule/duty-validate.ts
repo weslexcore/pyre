@@ -18,6 +18,7 @@ import {
   type DutyCatalog,
   type DutyPhaseKey,
   type DutySide,
+  normalizeDutyDays,
   type ShiftDutyRow,
 } from '@pyre/schedule-core';
 import { isUuid } from '@/lib/http/json';
@@ -32,6 +33,8 @@ export interface DutyColumns {
   side: DutySide | null;
   session_default: string | null;
   sop_id: string | null;
+  /** Days of the week (0 = Sunday); null for every day. */
+  days: number[] | null;
   archived: boolean;
 }
 
@@ -94,6 +97,18 @@ function readFields(body: Record<string, unknown>, base: DutyColumns): DutyColum
     }
     next.sop_id = (body.sopId as string | null) || null;
   }
+  if (body.days !== undefined) {
+    if (body.days !== null) {
+      if (
+        !Array.isArray(body.days) ||
+        body.days.some((d) => !Number.isInteger(d) || (d as number) < 0 || (d as number) > 6)
+      ) {
+        return 'days must be a list of weekdays (0 = Sunday … 6 = Saturday) or null';
+      }
+      if (body.days.length === 0) return 'Pick at least one day';
+    }
+    next.days = normalizeDutyDays(body.days as number[] | null);
+  }
   if (body.archived !== undefined) {
     if (typeof body.archived !== 'boolean') return 'archived must be true or false';
     next.archived = body.archived;
@@ -151,6 +166,7 @@ export function normalizeDutyCreate(
     side: null,
     session_default: null,
     sop_id: null,
+    days: null,
     archived: false,
   });
   if (typeof cols === 'string') return { ok: false, error: cols };
@@ -173,6 +189,7 @@ export function normalizeDutyPatch(
     side: existing.side,
     session_default: existing.session_default,
     sop_id: existing.sop_id,
+    days: normalizeDutyDays(existing.days),
     archived: existing.archived,
   };
   const cols = readFields(body, base);
@@ -181,7 +198,10 @@ export function normalizeDutyPatch(
   if (incoherent) return { ok: false, error: incoherent };
   const changes: Partial<DutyColumns> = {};
   for (const column of Object.keys(cols) as Array<keyof DutyColumns>) {
-    if (cols[column] !== base[column]) (changes as Record<string, unknown>)[column] = cols[column];
+    // days is a list: compare by value, not identity.
+    if (JSON.stringify(cols[column]) !== JSON.stringify(base[column])) {
+      (changes as Record<string, unknown>)[column] = cols[column];
+    }
   }
   if (Object.keys(changes).length === 0) return { ok: false, error: 'No changes' };
   return { ok: true, value: changes };
