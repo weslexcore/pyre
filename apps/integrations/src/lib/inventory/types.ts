@@ -130,6 +130,8 @@ export interface InventoryMovementRow {
   note: string | null;
   transfer_group: string | null;
   count_line_id: string | null;
+  /** The re-order a receive came from; null for an ad-hoc receive. */
+  order_id?: string | null;
   recorded_by: string;
   occurred_at: string;
   created_at: string;
@@ -254,4 +256,116 @@ export interface CountSummary {
   notCounted: { itemName: string; areaName: string }[];
   totals: { shortUnits: number; shortCents: number; foundUnits: number; foundCents: number };
   people: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Re-ordering
+// ---------------------------------------------------------------------------
+
+export const REORDER_HREF = '/admin/inventory/reorder';
+
+export type OrderStatus = 'ordered' | 'received' | 'cancelled';
+
+export interface InventoryOrderRow {
+  id: string;
+  item_id: string;
+  lots: number;
+  units: number;
+  unit_cost_cents: number | null;
+  status: OrderStatus;
+  note: string | null;
+  ordered_by: string;
+  ordered_at: string;
+  received_by: string | null;
+  received_at: string | null;
+  received_units: number | null;
+  received_area_id: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+}
+
+/** One item on the "needs ordering" list. */
+export interface ReorderLine {
+  item: InventoryItemRow;
+  category: string;
+  /** Total on hand across every spot. */
+  total: number;
+  suggestedLots: number;
+  suggestedUnits: number;
+  /** suggestedUnits at the item's unit cost; null without a cost. */
+  estimateCents: number | null;
+}
+
+/** GET /api/admin/inventory-orders — the Re-order tab. */
+export interface ReorderOverview {
+  /** At or below the re-order level, with nothing on order. */
+  needed: ReorderLine[];
+  /** Open orders, oldest first, with the item they are for. */
+  open: (InventoryOrderRow & { item: InventoryItemRow; total: number })[];
+  /** Received or cancelled in the last 30 days, newest first. */
+  recent: (InventoryOrderRow & { itemName: string; unit: string; areaName: string | null })[];
+  /** Active areas, for choosing where a delivery goes. */
+  areas: InventoryAreaRow[];
+  people: Record<string, string>;
+  isAdmin: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+export type ReportGroup = 'item' | 'category' | 'area';
+
+/** Usage, loss, and inflow for one group over a period, in units and cents. */
+export interface ReportRow {
+  key: string;
+  label: string;
+  /** Item reports only: the unit and id, for linking to the item page. */
+  unit?: string;
+  itemId?: string;
+  used: number;
+  usedCents: number;
+  wasted: number;
+  wastedCents: number;
+  short: number;
+  shortCents: number;
+  found: number;
+  foundCents: number;
+  received: number;
+  receivedCents: number;
+}
+
+/** GET /api/admin/inventory-reports — the Reports tab. */
+export interface InventoryReport {
+  from: string;
+  to: string;
+  groupBy: ReportGroup;
+  rows: ReportRow[];
+  totals: Omit<ReportRow, 'key' | 'label' | 'unit' | 'itemId'>;
+  /** True when the period held more movements than one report reads. */
+  truncated: boolean;
+}
+
+/** One point on an item's stock-over-time line. */
+export interface StockPoint {
+  /** ISO time of the movement that set this level. */
+  t: string;
+  /** Total on hand across every spot right after it. */
+  qty: number;
+  type: MovementType;
+  change: number;
+}
+
+/** GET /api/admin/inventory-reports?itemId=… — the item page. */
+export interface ItemHistory {
+  item: InventoryItemRow;
+  category: string;
+  /** Per-spot on hand now. */
+  spots: { areaId: string; areaName: string; quantity: number }[];
+  total: number;
+  points: StockPoint[];
+  /** The same window's usage and loss, for the summary tiles. */
+  summary: Omit<ReportRow, 'key' | 'label' | 'unit' | 'itemId'>;
+  openOrder: InventoryOrderRow | null;
+  isAdmin: boolean;
 }

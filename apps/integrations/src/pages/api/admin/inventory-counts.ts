@@ -23,6 +23,7 @@
 
 import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, type Db, dbError, isUuid, json } from '@/lib/http/route';
+import { itemTotal, notifyIfLow } from '@/lib/inventory/alerts';
 import { areaDueStatus, countTotals, DEFAULT_SETTINGS, DUE_ORDER } from '@/lib/inventory/counts';
 import { parseQuantity } from '@/lib/inventory/rules';
 import {
@@ -403,6 +404,10 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const counted = body.counted === 0 || body.counted === '0' ? 0 : parseQuantity(body.counted);
     if (counted == null) return json({ error: 'Enter how many are on the shelf (0 or more)' }, 400);
 
+    // The total before the count, to tell whether the count took the item to
+    // its re-order level (a shortfall found on the shelf alerts like a use).
+    const before = await itemTotal(db, body.itemId);
+
     const { data, error } = await db.rpc('inventory_record_count', {
       p_count_id: body.countId ?? null,
       p_item_id: body.itemId,
@@ -415,7 +420,23 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       if (error.code === 'P0001') return json({ error: error.message }, 409);
       return dbError(error);
     }
-    return json({ line: numericLine(data as InventoryCountLineRow) }, 201);
+    const line = numericLine(data as InventoryCountLineRow);
+
+    if (before != null) {
+      const [after, { data: item }] = await Promise.all([
+        itemTotal(db, body.itemId),
+        db
+          .from('inventory_items')
+          .select('id, name, unit, lot_size, lot_label, reorder_level, reorder_target')
+          .eq('id', body.itemId)
+          .maybeSingle(),
+      ]);
+      if (after != null && item) {
+        await notifyIfLow(db, item as Parameters<typeof notifyIfLow>[1], before, after, email);
+      }
+    }
+
+    return json({ line }, 201);
   }
 
   return json({ error: "action must be 'start' or 'line'" }, 400);

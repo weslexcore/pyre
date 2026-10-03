@@ -566,7 +566,8 @@ export type NotificationKind =
   | 'shift_note_reply'
   | 'sub_request'
   | 'goal_activity'
-  | 'agent_suggestion';
+  | 'agent_suggestion'
+  | 'inventory_low';
 
 // One row in one person's inbox (see the staff notifications migration).
 // Written by the API routes that record the event; read/dismissed/expires
