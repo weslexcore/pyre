@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   areaDueStatus,
+  countEveryLabel,
   countTotals,
   DEFAULT_SETTINGS,
   defaultRoundName,
+  itemDueStatus,
+  itemLastCounted,
   needsReview,
 } from './counts';
 
@@ -55,5 +58,50 @@ describe('countTotals', () => {
 describe('defaultRoundName', () => {
   it('names the round by the studio date', () => {
     expect(defaultRoundName(now)).toBe('Count – Oct 20');
+  });
+});
+
+describe('itemDueStatus', () => {
+  // 10:00 ET on Oct 3 (14:00Z).
+  const now = new Date('2026-10-03T14:00:00Z');
+
+  it('treats daily as once per studio day, however late the last count was', () => {
+    expect(itemDueStatus('2026-10-03T12:30:00Z', 1, now)).toBe('ok'); // this morning
+    expect(itemDueStatus('2026-10-03T03:30:00Z', 1, now)).toBe('due'); // 11:30pm ET yesterday
+    expect(itemDueStatus('2026-10-02T21:00:00Z', 1, now)).toBe('due'); // yesterday evening
+    expect(itemDueStatus('2026-10-01T15:00:00Z', 1, now)).toBe('overdue'); // two days ago
+    expect(itemDueStatus(null, 1, now)).toBe('due');
+  });
+
+  it('counts weekly from the day of the last count', () => {
+    expect(itemDueStatus('2026-09-28T15:00:00Z', 7, now)).toBe('ok');
+    expect(itemDueStatus('2026-09-26T15:00:00Z', 7, now)).toBe('due');
+    expect(itemDueStatus('2026-09-22T15:00:00Z', 7, now)).toBe('overdue');
+  });
+});
+
+describe('itemLastCounted', () => {
+  const last = new Map([
+    ['a', '2026-10-02T10:00:00Z'],
+    ['b', '2026-09-30T10:00:00Z'],
+  ]);
+
+  it('is the oldest spot, or never when a spot was never counted', () => {
+    expect(itemLastCounted(['a', 'b'], last)).toBe('2026-09-30T10:00:00Z');
+    expect(itemLastCounted(['a'], last)).toBe('2026-10-02T10:00:00Z');
+    expect(itemLastCounted(['a', 'c'], last)).toBeNull();
+    expect(itemLastCounted([], last)).toBeNull();
+  });
+});
+
+describe('countEveryLabel', () => {
+  it('names the common frequencies', () => {
+    expect([1, 7, 14, 30, 3].map(countEveryLabel)).toEqual([
+      'Daily',
+      'Weekly',
+      'Every 2 weeks',
+      'Monthly',
+      'Every 3 days',
+    ]);
   });
 });
