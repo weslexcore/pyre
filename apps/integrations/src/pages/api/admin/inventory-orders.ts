@@ -14,6 +14,7 @@
 
 import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
+import { parseDelivery } from '@/lib/inventory/delivery';
 import {
   isLowStock,
   lotsToUnits,
@@ -188,19 +189,43 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   if (body.action === 'receive') {
     if (!isUuid(body.areaId)) return json({ error: 'Choose where it was put away' }, 400);
-    const units = parseQuantity(body.units);
-    if (units == null) return json({ error: 'Enter how many arrived' }, 400);
-    const { data, error } = await db.rpc('inventory_receive_order', {
-      p_order_id: body.id,
+    const { data: orderData, error: orderError } = await db
+      .from('inventory_orders')
+      .select('id, item_id, inventory_items(lot_size)')
+      .eq('id', body.id)
+      .maybeSingle();
+    if (orderError) return dbError(orderError);
+    if (!orderData) return json({ error: 'Order not found' }, 404);
+    const order = orderData as unknown as {
+      id: string;
+      item_id: string;
+      inventory_items: { lot_size: number } | null;
+    };
+
+    // `units` is what was accepted; rejects (with a reason) and the held
+    // rejects the driver took back come in the same body as on the stock
+    // screen's Receive.
+    const delivery = parseDelivery(
+      { ...body, quantity: body.units },
+      Number(order.inventory_items?.lot_size ?? 1)
+    );
+    if (delivery instanceof Response) return delivery;
+    const { data, error } = await db.rpc('inventory_record_delivery', {
+      p_item_id: order.item_id,
       p_area_id: body.areaId,
-      p_units: units,
+      p_accepted: delivery.accepted,
+      p_rejected: delivery.rejected,
+      p_reason: delivery.reason,
+      p_note: null,
+      p_order_id: order.id,
+      p_pickup_ids: delivery.pickupIds,
       p_received_by: email,
     });
     if (error) {
       if (error.code === 'P0001') return json({ error: error.message }, 409);
       return dbError(error);
     }
-    return json({ order: numericOrder(data as InventoryOrderRow) });
+    return json({ delivery: data });
   }
 
   if (body.action === 'cancel') {
