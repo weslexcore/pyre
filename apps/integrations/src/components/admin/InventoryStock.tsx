@@ -331,6 +331,12 @@ function LogDialog({
             {areaName} · {formatUnits(onHand, item.unit)} here
             {line.total !== onHand && ` · ${formatQuantity(line.total)} in all spots`}
           </p>
+          <a
+            href={`/admin/inventory/items/${item.id}`}
+            className="text-xs text-[var(--pyre-gold)] underline"
+          >
+            History &amp; chart
+          </a>
         </div>
         <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
           Close

@@ -592,7 +592,12 @@ function ItemsSection({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-[var(--pyre-creme)]">{item.name}</span>
+                    <a
+                      href={`/admin/inventory/items/${item.id}`}
+                      className="text-sm text-[var(--pyre-creme)] hover:underline"
+                    >
+                      {item.name}
+                    </a>
                     {item.category_id && (
                       <span className="text-xs text-white/40">
                         {categoryById.get(item.category_id)?.name}

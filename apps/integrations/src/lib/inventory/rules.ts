@@ -108,6 +108,21 @@ export function suggestedLots(
   return isLowStock(item, total) ? Math.max(lots, 1) : lots;
 }
 
+/**
+ * Whether a change just took an item to its re-order level: above it before,
+ * at or below it after. Only that moment alerts — an item already low stays
+ * quiet while it is used further, rather than alerting on every use.
+ */
+export function crossedReorderLevel(
+  item: Pick<InventoryItemRow, 'reorder_level'>,
+  before: number,
+  after: number
+): boolean {
+  if (item.reorder_level == null) return false;
+  const level = Number(item.reorder_level);
+  return before > level && after <= level;
+}
+
 /** Usage vs loss for reports: which bucket a ledger row's quantity lands in. */
 export function movementBucket(
   type: MovementType,

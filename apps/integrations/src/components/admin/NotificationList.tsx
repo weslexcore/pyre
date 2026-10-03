@@ -25,6 +25,7 @@ const KIND_STYLE: Record<StaffNotificationRow['kind'], string> = {
   sub_request: 'border-[var(--pyre-red)]/30 text-[var(--pyre-red)]/80',
   goal_activity: 'border-[var(--pyre-gold)]/40 text-[var(--pyre-gold)]/90',
   agent_suggestion: 'border-[var(--pyre-sage)]/40 text-[var(--pyre-sage)]/90',
+  inventory_low: 'border-[var(--pyre-red)]/40 text-[var(--pyre-red)]/90',
 };
 
 // What a swipe in progress promises, drawn in the track the row uncovers.
