@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { rejectRate } from '@/lib/inventory/rejects';
-import { formatCents, formatQuantity, pluralUnit } from '@/lib/inventory/rules';
+import { formatCents, formatQuantity, pluralUnit, type UnitNames } from '@/lib/inventory/rules';
 import type { RejectWeek } from '@/lib/inventory/types';
 
 const SERIES = '#5590c8';
@@ -45,7 +45,7 @@ function ticks(max: number): number[] {
   return out;
 }
 
-export function InventoryRejectChart({ weeks, unit }: { weeks: RejectWeek[]; unit: string }) {
+export function InventoryRejectChart({ weeks, unit }: { weeks: RejectWeek[]; unit: UnitNames }) {
   const figureRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [W, setW] = useState(640);

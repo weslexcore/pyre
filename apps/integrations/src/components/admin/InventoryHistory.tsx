@@ -195,7 +195,7 @@ export function InventoryHistory() {
                   <span
                     className={`block text-sm ${m.quantity < 0 ? 'text-white/80' : 'text-[var(--pyre-sage)]'}`}
                   >
-                    {signed(m.quantity)} {item ? pluralUnit(m.quantity, item.unit) : ''}
+                    {signed(m.quantity)} {item ? pluralUnit(m.quantity, item) : ''}
                   </span>
                   {value && <span className="block text-[10px] text-white/40">{value}</span>}
                 </div>
@@ -339,8 +339,8 @@ function CorrectionDialog({
           className={`${compactInputClass} w-full`}
         />
         <span className="mt-1 block text-xs text-white/40">
-          {item ? `${formatUnits(onHand, item.unit)} here now` : ''}
-          {item && amount != null ? ` → ${formatUnits(onHand + amount, item.unit)}` : ''}
+          {item ? `${formatUnits(onHand, item)} here now` : ''}
+          {item && amount != null ? ` → ${formatUnits(onHand + amount, item)}` : ''}
         </span>
       </label>
       <label className="mb-4 block">

@@ -5,6 +5,7 @@ import {
   normalizeCategory,
   normalizeItem,
   normalizeProduct,
+  normalizeUnit,
   parseVariants,
 } from './validate';
 
@@ -28,18 +29,37 @@ describe('normalizeArea', () => {
   });
 });
 
+const UNIT = '00000000-0000-4000-8000-0000000000a1';
+const CASE = '00000000-0000-4000-8000-0000000000c5';
+
 describe('normalizeItem', () => {
-  it('fills defaults for unit and lot size on create', () => {
-    const result = normalizeItem({ name: 'Towels' });
-    expect(result).toEqual({ ok: true, value: { name: 'Towels', unit: 'each', lot_size: 1 } });
+  it('needs a unit picked on create, and defaults the lot size', () => {
+    expect(normalizeItem({ name: 'Towels' })).toMatchObject({ ok: false, error: 'Pick a unit' });
+    expect(normalizeItem({ name: 'Towels', unit: 'towel' }).ok).toBe(false);
+    expect(normalizeItem({ name: 'Towels', unitId: UNIT })).toEqual({
+      ok: true,
+      value: { name: 'Towels', unit_id: UNIT, lot_size: 1 },
+    });
+  });
+
+  it('takes a lot unit by id and clears it on empty', () => {
+    expect(normalizeItem({ lotUnitId: CASE }, { partial: true })).toEqual({
+      ok: true,
+      value: { lot_unit_id: CASE },
+    });
+    expect(normalizeItem({ lotUnitId: '' }, { partial: true })).toEqual({
+      ok: true,
+      value: { lot_unit_id: null },
+    });
+    expect(normalizeItem({ lotUnitId: 'case' }, { partial: true }).ok).toBe(false);
   });
 
   it('maps re-order settings and cost', () => {
     const result = normalizeItem({
       name: 'Towels',
-      unit: 'towel',
+      unitId: UNIT,
       lotSize: '12',
-      lotLabel: 'case',
+      lotUnitId: CASE,
       reorderLevel: 10,
       reorderTarget: 36,
       unitCost: '2.50',
@@ -48,7 +68,7 @@ describe('normalizeItem', () => {
       ok: true,
       value: {
         lot_size: 12,
-        lot_label: 'case',
+        lot_unit_id: CASE,
         reorder_level: 10,
         reorder_target: 36,
         unit_cost_cents: 250,
@@ -57,9 +77,11 @@ describe('normalizeItem', () => {
   });
 
   it('rejects a fill-to level below the re-order level, bad lots and urls', () => {
-    expect(normalizeItem({ name: 'X', reorderLevel: 10, reorderTarget: 5 }).ok).toBe(false);
-    expect(normalizeItem({ name: 'X', lotSize: 0 }).ok).toBe(false);
-    expect(normalizeItem({ name: 'X', vendorUrl: 'javascript:alert(1)' }).ok).toBe(false);
+    const base = { name: 'X', unitId: UNIT };
+    expect(normalizeItem(base).ok).toBe(true);
+    expect(normalizeItem({ ...base, reorderLevel: 10, reorderTarget: 5 }).ok).toBe(false);
+    expect(normalizeItem({ ...base, lotSize: 0 }).ok).toBe(false);
+    expect(normalizeItem({ ...base, vendorUrl: 'javascript:alert(1)' }).ok).toBe(false);
   });
 
   it('patches without requiring name', () => {
@@ -138,5 +160,20 @@ describe('parseVariants', () => {
     expect(typeof parseVariants(Array.from({ length: 31 }, (_, i) => `v${i}`))).toBe('string');
     expect(typeof parseVariants(['x'.repeat(41)])).toBe('string');
     expect(typeof parseVariants([1, 2])).toBe('string');
+  });
+});
+
+describe('normalizeUnit', () => {
+  it('needs both spellings on create and patches either', () => {
+    expect(normalizeUnit({ name: 'box' }).ok).toBe(false);
+    expect(normalizeUnit({ name: ' box ', plural: 'boxes', sortOrder: 2 })).toEqual({
+      ok: true,
+      value: { name: 'box', plural: 'boxes', sort_order: 2 },
+    });
+    expect(normalizeUnit({ plural: 'each' }, { partial: true })).toEqual({
+      ok: true,
+      value: { plural: 'each' },
+    });
+    expect(normalizeUnit({ plural: '' }, { partial: true }).ok).toBe(false);
   });
 });

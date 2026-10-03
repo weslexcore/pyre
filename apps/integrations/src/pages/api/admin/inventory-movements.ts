@@ -142,8 +142,10 @@ interface ItemFacts {
   id: string;
   name: string;
   unit: string;
+  unit_plural: string;
   lot_size: number;
   lot_label: string | null;
+  lot_label_plural: string | null;
   unit_cost_cents: number | null;
   reorder_level: number | null;
   reorder_target: number | null;
@@ -178,7 +180,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       db
         .from('inventory_items')
         .select(
-          'id, name, unit, lot_size, lot_label, unit_cost_cents, reorder_level, reorder_target, active'
+          'id, name, unit, unit_plural, lot_size, lot_label, lot_label_plural, unit_cost_cents, reorder_level, reorder_target, active'
         )
         .eq('id', body.itemId)
         .maybeSingle(),
@@ -304,7 +306,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       const onHand = Number((stock as { quantity: number } | null)?.quantity ?? 0);
       return json(
         {
-          error: `Only ${formatUnits(onHand, item.unit)} on hand in ${area.name}. Count it if that's wrong.`,
+          error: `Only ${formatUnits(onHand, item)} on hand in ${area.name}. Count it if that's wrong.`,
           onHand,
         },
         409

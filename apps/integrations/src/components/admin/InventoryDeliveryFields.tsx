@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 import { labelClass } from '@/components/admin/ui';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { fmtShortDate } from '@/lib/client/format';
-import { formatUnits, parseQuantity } from '@/lib/inventory/rules';
+import { formatUnits, parseQuantity, type UnitNames } from '@/lib/inventory/rules';
 import { type InventoryRejectRow, REJECT_REASONS } from '@/lib/inventory/types';
 import { Chip } from './incidentUi';
 import { QuantityStepper } from './inventoryUi';
@@ -75,7 +75,7 @@ export function DeliveryFields({
 }: {
   idPrefix: string;
   itemId: string;
-  unit: string;
+  unit: UnitNames;
   value: DeliveryState;
   onChange: (next: DeliveryState) => void;
 }) {

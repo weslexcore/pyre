@@ -13,7 +13,7 @@
 import { movementBucket } from './rules';
 import type { InventoryMovementRow, ReportGroup, ReportRow, StockPoint } from './types';
 
-export type ReportFigures = Omit<ReportRow, 'key' | 'label' | 'unit' | 'itemId'>;
+export type ReportFigures = Omit<ReportRow, 'key' | 'label' | 'unit' | 'unit_plural' | 'itemId'>;
 
 export const emptyFigures = (): ReportFigures => ({
   used: 0,
@@ -66,7 +66,10 @@ export function addMovement(figures: ReportFigures, m: Movement): void {
 }
 
 export interface ReportLookups {
-  items: Map<string, { name: string; unit: string; category_id: string | null }>;
+  items: Map<
+    string,
+    { name: string; unit: string; unit_plural?: string; category_id: string | null }
+  >;
   categories: Map<string, string>;
   areas: Map<string, string>;
 }
@@ -106,6 +109,7 @@ export function summarize(
       row = { key, label, ...emptyFigures() };
       if (groupBy === 'item') {
         row.unit = item?.unit ?? '';
+        row.unit_plural = item?.unit_plural ?? '';
         row.itemId = m.item_id;
       }
       rows.set(key, row);
