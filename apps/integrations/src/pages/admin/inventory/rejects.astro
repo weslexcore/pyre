@@ -1,0 +1,17 @@
+---
+import { InventoryRejects } from '@/components/admin/InventoryRejects';
+// Rejected deliveries: what's waiting for the driver to take back, what the
+// vendor still owes in credit, and each item's rejects over time. Same grant
+// as the stock page; credit decisions are admin-only, re-checked by
+// /api/admin/inventory-rejects.
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Rejects"
+  subtitle="Deliveries turned away for quality: waiting for pickup, credit owed, and how often it happens."
+>
+  <InventoryTabs current="/admin/inventory/rejects" />
+  <InventoryRejects client:load />
+</AdminLayout>

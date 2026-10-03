@@ -369,3 +369,70 @@ export interface ItemHistory {
   openOrder: InventoryOrderRow | null;
   isAdmin: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Rejected deliveries
+// ---------------------------------------------------------------------------
+
+export const REJECTS_HREF = '/admin/inventory/rejects';
+
+/** One-tap reasons on the receive form (free text is also fine). */
+export const REJECT_REASONS = ['Stained', 'Torn', 'Wet', 'Damaged', 'Wrong item'] as const;
+
+export type CreditStatus = 'pending' | 'credited' | 'denied';
+
+export interface InventoryRejectRow {
+  id: string;
+  item_id: string;
+  order_id: string | null;
+  movement_id: string | null;
+  delivered_qty: number;
+  rejected_qty: number;
+  reason: string;
+  note: string | null;
+  unit_cost_cents: number | null;
+  vendor: string | null;
+  received_by: string;
+  received_at: string;
+  picked_up_at: string | null;
+  picked_up_by: string | null;
+  credit_status: CreditStatus;
+  credit_cents: number | null;
+  credit_note: string | null;
+  credited_by: string | null;
+  credited_at: string | null;
+}
+
+export type RejectView = InventoryRejectRow & { itemName: string; unit: string };
+
+/** One week of an item's deliveries, for the rejects chart and table. */
+export interface RejectWeek {
+  /** Monday of the week, YYYY-MM-DD on the studio's clock. */
+  week: string;
+  delivered: number;
+  rejected: number;
+  /** rejected at the unit cost when rejected. */
+  rejectedCents: number;
+}
+
+/** GET /api/admin/inventory-rejects — the Rejects tab. */
+export interface RejectsOverview {
+  /** Held on site until the vendor takes them back, oldest first. */
+  held: RejectView[];
+  /** Waiting on a credit decision, oldest first. */
+  pendingCredit: RejectView[];
+  /** Decided in the last 90 days, newest first. */
+  decided: RejectView[];
+  /** Items that have had rejects, most rejected first — the chart's picker. */
+  items: { id: string; name: string; unit: string; rejected: number }[];
+  people: Record<string, string>;
+  isAdmin: boolean;
+}
+
+/** GET /api/admin/inventory-rejects?itemId=&weeks= — one item's weeks. */
+export interface RejectSeries {
+  itemId: string;
+  name: string;
+  unit: string;
+  weeks: RejectWeek[];
+}

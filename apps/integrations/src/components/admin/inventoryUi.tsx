@@ -71,16 +71,20 @@ export function QuantityStepper({
   onChange,
   label,
   step = 1,
+  min,
   id,
 }: {
   value: string;
   onChange: (next: string) => void;
   label: string;
   step?: number;
+  /** Lowest the − button goes (default: one step, so it never reaches 0). */
+  min?: number;
   id: string;
 }) {
   const current = Number(value) || 0;
-  const bump = (delta: number) => onChange(formatQuantity(Math.max(0, current + delta)));
+  const floor = min ?? step;
+  const bump = (delta: number) => onChange(formatQuantity(Math.max(min ?? 0, current + delta)));
   const stepButton =
     'h-12 w-12 shrink-0 rounded border border-white/15 bg-white/5 text-2xl leading-none text-[var(--pyre-creme)] hover:border-white/30 disabled:opacity-30';
   return (
@@ -89,7 +93,7 @@ export function QuantityStepper({
         type="button"
         className={stepButton}
         onClick={() => bump(-step)}
-        disabled={current <= step}
+        disabled={current <= floor}
         aria-label={`Decrease ${label}`}
       >
         −
