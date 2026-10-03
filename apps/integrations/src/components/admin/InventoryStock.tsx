@@ -208,29 +208,33 @@ export function InventoryStock() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Search on its own full-width row, filters below, so it stays wide
+          enough to type into on a phone. */}
+      <div className="space-y-2">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find an item…"
           aria-label="Find an item"
-          className={`${compactInputClass} min-w-0 flex-1 sm:max-w-xs`}
+          className={`${compactInputClass} w-full sm:max-w-md`}
         />
-        <fieldset className="flex gap-1">
-          <legend className="sr-only">Group by</legend>
-          <Chip selected={view === 'area'} label="By area" onClick={() => chooseView('area')} />
+        <div className="flex flex-wrap items-center gap-2">
+          <fieldset className="flex gap-1">
+            <legend className="sr-only">Group by</legend>
+            <Chip selected={view === 'area'} label="By area" onClick={() => chooseView('area')} />
+            <Chip
+              selected={view === 'category'}
+              label="By category"
+              onClick={() => chooseView('category')}
+            />
+          </fieldset>
           <Chip
-            selected={view === 'category'}
-            label="By category"
-            onClick={() => chooseView('category')}
+            selected={lowOnly}
+            label={`Low only${lowCount ? ` (${lowCount})` : ''}`}
+            onClick={() => setLowOnly((v) => !v)}
           />
-        </fieldset>
-        <Chip
-          selected={lowOnly}
-          label={`Low only${lowCount ? ` (${lowCount})` : ''}`}
-          onClick={() => setLowOnly((v) => !v)}
-        />
+        </div>
       </div>
 
       {flash && (
