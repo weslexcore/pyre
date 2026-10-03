@@ -1,5 +1,5 @@
 // Inventory overview for /admin/inventory: every area, item, spot, and the
-// cached on-hand per spot — the whole stock screen in one read. The catalogue
+// products their variants belong to, and the cached on-hand per spot — the whole stock screen in one read. The catalogue
 // is small (tens of items, a handful of areas), so the island groups and
 // filters client-side rather than paging.
 //
@@ -15,6 +15,7 @@ import {
   type InventoryCategoryRow,
   type InventoryItemRow,
   type InventoryOverview,
+  type InventoryProductRow,
   type InventorySpotRow,
   type InventoryStockRow,
 } from '@/lib/inventory/types';
@@ -24,20 +25,22 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (ready instanceof Response) return ready;
   const { gate, db } = ready;
 
-  const [areas, categories, items, spots, stock] = await Promise.all([
+  const [areas, categories, products, items, spots, stock] = await Promise.all([
     db.from('inventory_areas').select('*').order('sort_order').order('name'),
     db.from('inventory_categories').select('*').order('sort_order').order('name'),
+    db.from('inventory_products').select('*').order('name'),
     db.from('inventory_items').select('*').order('name'),
     db.from('inventory_item_spots').select('*'),
     db.from('inventory_stock').select('*'),
   ]);
-  for (const result of [areas, categories, items, spots, stock]) {
+  for (const result of [areas, categories, products, items, spots, stock]) {
     if (result.error) return dbError(result.error);
   }
 
   const body: InventoryOverview = {
     areas: (areas.data ?? []) as InventoryAreaRow[],
     categories: (categories.data ?? []) as InventoryCategoryRow[],
+    products: (products.data ?? []) as InventoryProductRow[],
     items: ((items.data ?? []) as InventoryItemRow[]).map(numericItem),
     spots: ((spots.data ?? []) as InventorySpotRow[]).map((s) => ({
       ...s,
