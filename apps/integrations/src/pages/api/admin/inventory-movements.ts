@@ -202,7 +202,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       p_area_id: area.id,
       p_accepted: delivery.accepted,
       p_rejected: delivery.rejected,
-      p_reason: delivery.reason,
+      p_reasons: delivery.reasons,
       p_note: text(body.note, NOTE_MAX),
       p_order_id: null,
       p_pickup_ids: delivery.pickupIds,

@@ -1,6 +1,8 @@
 // The stock screen (/admin/inventory): every storage area in walk order with
-// what's on its shelves. Tap an item to log what happened to it — used,
-// received, wasted, or moved to another spot. Each tap writes one ledger
+// what's on its shelves — or, switched to "By category", every category with
+// its items, their totals, and where each is kept. Tap an item (or one of its
+// spots) to log what happened to it — used, received, wasted, or moved to
+// another spot. Each tap writes one ledger
 // row, so several people can log at once without overwriting each other.
 //
 // Totals across spots drive the Low badge (re-order level reached). The
@@ -15,10 +17,12 @@ import {
   formatQuantity,
   formatUnits,
   groupStockByArea,
+  groupStockByCategory,
   lotDescription,
   lotsToUnits,
   parseQuantity,
   pluralUnit,
+  type StockItem,
   type StockLine,
 } from '@/lib/inventory/rules';
 import {
@@ -34,6 +38,7 @@ import {
   type DeliveryState,
   deliveryBody,
   deliveryReady,
+  deliveryReasons,
   EMPTY_DELIVERY,
   rejectedUnits,
 } from './InventoryDeliveryFields';
@@ -48,6 +53,27 @@ import {
 } from './inventoryUi';
 import { Modal } from './Modal';
 
+type StockView = 'area' | 'category';
+
+// The viewer's last choice, so the screen opens the way they left it.
+const VIEW_KEY = 'pyre-inventory-stock-view';
+
+const readViewPref = (): StockView => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'category' ? 'category' : 'area';
+  } catch {
+    return 'area';
+  }
+};
+
+const writeViewPref = (view: StockView): void => {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Private mode etc. — the toggle still works for the session.
+  }
+};
+
 const ACTIONS: { type: StaffMovementType; label: string; verb: string }[] = [
   { type: 'use', label: 'Use', verb: 'Used' },
   { type: 'receive', label: 'Receive', verb: 'Received' },
@@ -59,6 +85,13 @@ export function InventoryStock() {
   const { data, error, loading, reload } = useCachedJson<InventoryOverview>(INVENTORY_API);
   const [query, setQuery] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
+  // Read after mount: the island is server-rendered, where there is no storage.
+  const [view, setView] = useState<StockView>('area');
+  useEffect(() => setView(readViewPref()), []);
+  const chooseView = (next: StockView) => {
+    setView(next);
+    writeViewPref(next);
+  };
   const [active, setActive] = useState<StockLine | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -79,6 +112,7 @@ export function InventoryStock() {
   }, [flash]);
 
   const grouped = useMemo(() => (data ? groupStockByArea(data) : []), [data]);
+  const byCategory = useMemo(() => (data ? groupStockByCategory(data) : []), [data]);
 
   // Arriving from the global search (?item=<id>): open that item's log sheet
   // in the spot holding the most of it. An item not placed anywhere yet has
@@ -111,18 +145,19 @@ export function InventoryStock() {
   }, [grouped]);
 
   const needle = query.trim().toLowerCase();
+  const matches = (entry: { item: StockLine['item']; low: boolean }) =>
+    (!lowOnly || entry.low) &&
+    (!needle ||
+      entry.item.name.toLowerCase().includes(needle) ||
+      categoryOf(entry.item).toLowerCase().includes(needle));
   const visible = grouped
-    .map((g) => ({
-      ...g,
-      lines: g.lines.filter(
-        (l) =>
-          (!lowOnly || l.low) &&
-          (!needle ||
-            l.item.name.toLowerCase().includes(needle) ||
-            categoryOf(l.item).toLowerCase().includes(needle))
-      ),
-    }))
+    .map((g) => ({ ...g, lines: g.lines.filter(matches) }))
     .filter((g) => g.lines.length > 0 || (!needle && !lowOnly));
+  const visibleCategories = byCategory
+    .map((g) => ({ ...g, items: g.items.filter(matches) }))
+    .filter((g) => g.items.length > 0);
+  const areaName = new Map(data?.areas.map((a) => [a.id, a.name]) ?? []);
+  const nothingShown = view === 'area' ? visible.length === 0 : visibleCategories.length === 0;
 
   if (loading) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (error && !data) return <ErrorBanner>Couldn't load inventory: {error}</ErrorBanner>;
@@ -159,6 +194,15 @@ export function InventoryStock() {
           aria-label="Find an item"
           className={`${compactInputClass} min-w-0 flex-1 sm:max-w-xs`}
         />
+        <fieldset className="flex gap-1">
+          <legend className="sr-only">Group by</legend>
+          <Chip selected={view === 'area'} label="By area" onClick={() => chooseView('area')} />
+          <Chip
+            selected={view === 'category'}
+            label="By category"
+            onClick={() => chooseView('category')}
+          />
+        </fieldset>
         <Chip
           selected={lowOnly}
           label={`Low only${lowCount ? ` (${lowCount})` : ''}`}
@@ -175,64 +219,90 @@ export function InventoryStock() {
         </p>
       )}
 
-      {visible.length === 0 && (
+      {nothingShown && (
         <p className="text-sm text-white/50">
           {lowOnly ? 'Nothing is low right now.' : 'No items match.'}
         </p>
       )}
 
-      {visible.map(({ area, lines }) => (
-        <section key={area.id} aria-labelledby={`area-${area.id}`}>
-          <h2
-            id={`area-${area.id}`}
-            className="mb-2 font-mono text-xs uppercase tracking-wide text-white/50"
-          >
-            {area.name}
-            {area.description && (
-              <span className="ml-2 normal-case tracking-normal text-white/30">
-                {area.description}
-              </span>
+      {view === 'category' &&
+        visibleCategories.map(({ category, items }) => {
+          const headingId = `category-${category?.id ?? 'none'}`;
+          return (
+            <section key={headingId} aria-labelledby={headingId}>
+              <h2
+                id={headingId}
+                className="mb-2 font-mono text-xs uppercase tracking-wide text-white/50"
+              >
+                {category?.name ?? 'Uncategorised'}
+              </h2>
+              <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+                {items.map((entry) => (
+                  <CategoryItemRow
+                    key={entry.item.id}
+                    entry={entry}
+                    areaName={(id) => areaName.get(id) ?? ''}
+                    onOpen={setActive}
+                  />
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+
+      {view === 'area' &&
+        visible.map(({ area, lines }) => (
+          <section key={area.id} aria-labelledby={`area-${area.id}`}>
+            <h2
+              id={`area-${area.id}`}
+              className="mb-2 font-mono text-xs uppercase tracking-wide text-white/50"
+            >
+              {area.name}
+              {area.description && (
+                <span className="ml-2 normal-case tracking-normal text-white/30">
+                  {area.description}
+                </span>
+              )}
+            </h2>
+            {lines.length === 0 ? (
+              <p className="rounded border border-dashed border-white/10 px-3 py-3 text-xs text-white/40">
+                No items stored here yet.
+              </p>
+            ) : (
+              <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+                {lines.map((line) => (
+                  <li key={line.spot.id}>
+                    <button
+                      type="button"
+                      onClick={() => setActive(line)}
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-white/5"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-[var(--pyre-creme)]">
+                          {line.item.name}
+                        </span>
+                        <span className="block truncate text-xs text-white/40">
+                          {[categoryOf(line.item), lotDescription(line.item)]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </span>
+                      {line.low && <LowBadge>Low · {formatQuantity(line.total)} total</LowBadge>}
+                      <span className="shrink-0 text-right">
+                        <span className="block text-lg leading-tight text-[var(--pyre-creme)]">
+                          {formatQuantity(line.quantity)}
+                        </span>
+                        <span className="block font-mono text-[10px] uppercase text-white/40">
+                          {line.item.unit}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </h2>
-          {lines.length === 0 ? (
-            <p className="rounded border border-dashed border-white/10 px-3 py-3 text-xs text-white/40">
-              No items stored here yet.
-            </p>
-          ) : (
-            <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
-              {lines.map((line) => (
-                <li key={line.spot.id}>
-                  <button
-                    type="button"
-                    onClick={() => setActive(line)}
-                    className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-white/5"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-[var(--pyre-creme)]">
-                        {line.item.name}
-                      </span>
-                      <span className="block truncate text-xs text-white/40">
-                        {[categoryOf(line.item), lotDescription(line.item)]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    </span>
-                    {line.low && <LowBadge>Low · {formatQuantity(line.total)} total</LowBadge>}
-                    <span className="shrink-0 text-right">
-                      <span className="block text-lg leading-tight text-[var(--pyre-creme)]">
-                        {formatQuantity(line.quantity)}
-                      </span>
-                      <span className="block font-mono text-[10px] uppercase text-white/40">
-                        {line.item.unit}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
+          </section>
+        ))}
 
       {active && (
         <LogDialog
@@ -249,6 +319,83 @@ export function InventoryStock() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * One item in the by-category view: its total across every spot, and each
+ * spot it lives in. Logging is always against one spot, so an item kept in
+ * one place opens straight to it; one kept in several offers each spot.
+ */
+function CategoryItemRow({
+  entry,
+  areaName,
+  onOpen,
+}: {
+  entry: StockItem;
+  areaName: (areaId: string) => string;
+  onOpen: (line: StockLine) => void;
+}) {
+  const { item, total, low, lines } = entry;
+  const only = lines.length === 1 ? lines[0] : null;
+  const summary = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm text-[var(--pyre-creme)]">{item.name}</span>
+        <span className="block truncate text-xs text-white/40">
+          {lines.length === 0
+            ? 'Not stored in any area yet'
+            : [only ? areaName(only.spot.area_id) : null, lotDescription(item)]
+                .filter(Boolean)
+                .join(' · ')}
+        </span>
+      </span>
+      {low && <LowBadge>Low</LowBadge>}
+      <span className="shrink-0 text-right">
+        <span className="block text-lg leading-tight text-[var(--pyre-creme)]">
+          {formatQuantity(total)}
+        </span>
+        <span className="block font-mono text-[10px] uppercase text-white/40">
+          {item.unit}
+          {lines.length > 1 && ' total'}
+        </span>
+      </span>
+    </>
+  );
+
+  if (only) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onOpen(only)}
+          className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-white/5"
+        >
+          {summary}
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li className="px-3 py-3">
+      <div className="flex items-center gap-3">{summary}</div>
+      {lines.length > 1 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {lines.map((line) => (
+            <button
+              key={line.spot.id}
+              type="button"
+              onClick={() => onOpen(line)}
+              aria-label={`${item.name} in ${areaName(line.spot.area_id)}: ${formatUnits(line.quantity, item.unit)}`}
+              className="rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white/70 hover:border-white/30"
+            >
+              {areaName(line.spot.area_id)}{' '}
+              <span className="text-[var(--pyre-creme)]">{formatQuantity(line.quantity)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -320,7 +467,7 @@ function LogDialog({
             : ` from ${areaName}`;
       const rejectedNote =
         receiving && rejected
-          ? ` ${formatUnits(rejected, item.unit)} rejected (${delivery.reason.trim()}).`
+          ? ` ${formatUnits(rejected, item.unit)} rejected (${deliveryReasons(delivery).join(', ')}).`
           : '';
       await onLogged(
         `${verb} ${formatUnits(units, item.unit)} of ${item.name}${where}.${rejectedNote}`

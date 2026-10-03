@@ -202,7 +202,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       inventory_items: { lot_size: number } | null;
     };
 
-    // `units` is what was accepted; rejects (with a reason) and the held
+    // `units` is what was accepted; rejects (with their reasons) and the held
     // rejects the driver took back come in the same body as on the stock
     // screen's Receive.
     const delivery = parseDelivery(
@@ -215,7 +215,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       p_area_id: body.areaId,
       p_accepted: delivery.accepted,
       p_rejected: delivery.rejected,
-      p_reason: delivery.reason,
+      p_reasons: delivery.reasons,
       p_note: null,
       p_order_id: order.id,
       p_pickup_ids: delivery.pickupIds,
