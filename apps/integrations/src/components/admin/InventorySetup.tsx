@@ -1,6 +1,9 @@
 // Inventory setup (/admin/inventory/setup, admins only): storage areas in
 // walk order with their count schedule, and items with how they are bought
 // (lot size), when to re-order, what they cost, and which areas they live in.
+// A product that comes in sizes, colours, or flavours is set up once with its
+// variants; each variant is then its own item (own stock and re-order level),
+// listed under the product.
 //
 // Nothing here is ever deleted — the ledger references areas and items — so
 // "remove" is retire (active=false), which drops it from the stock screen
@@ -17,6 +20,7 @@ import {
 import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import {
+  compareItems,
   formatCents,
   formatQuantity,
   formatUnits,
@@ -29,6 +33,7 @@ import type {
   InventoryCategoryRow,
   InventoryItemRow,
   InventoryOverview,
+  InventoryProductRow,
 } from '@/lib/inventory/types';
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
 import { ErrorBanner } from './ErrorBanner';
@@ -40,6 +45,7 @@ const AREAS_API = '/api/admin/inventory-areas';
 const CATEGORIES_API = '/api/admin/inventory-categories';
 const COUNTS_API = '/api/admin/inventory-counts';
 const ITEMS_API = '/api/admin/inventory-items';
+const PRODUCTS_API = '/api/admin/inventory-products';
 const SPOTS_API = '/api/admin/inventory-spots';
 
 const COUNT_SCHEDULES: { days: number | null; label: string }[] = [
@@ -509,7 +515,8 @@ function ItemsSection({
   data: InventoryOverview;
   refresh: () => Promise<void>;
 }) {
-  const [editing, setEditing] = useState<InventoryItemRow | 'new' | null>(null);
+  const [editing, setEditing] = useState<InventoryItemRow | 'new' | 'new-product' | null>(null);
+  const [editingProduct, setEditingProduct] = useState<InventoryProductRow | null>(null);
   const [showRetired, setShowRetired] = useState(false);
 
   // Arriving from the global search (?item=<id>): open that item's edit form.
@@ -531,7 +538,7 @@ function ItemsSection({
     [data.categories]
   );
   // Uncategorised items sort after every category.
-  const categoryRank = (item: InventoryItemRow) =>
+  const categoryRank = (item: { category_id: string | null }) =>
     item.category_id
       ? (categoryById.get(item.category_id)?.sort_order ?? 0)
       : Number.MAX_SAFE_INTEGER;
@@ -545,26 +552,111 @@ function ItemsSection({
     return map;
   }, [data.spots, areaName]);
 
-  const shown = data.items
-    .filter((i) => i.active || showRetired)
-    .sort(
-      (a, b) =>
-        Number(b.active) - Number(a.active) ||
-        categoryRank(a) - categoryRank(b) ||
-        a.name.localeCompare(b.name)
-    );
+  const productById = useMemo(() => new Map(data.products.map((p) => [p.id, p])), [data.products]);
+  // Standalone items, and products with their variants, as one list.
+  type Entry =
+    | { kind: 'item'; item: InventoryItemRow }
+    | { kind: 'product'; product: InventoryProductRow; variants: InventoryItemRow[] };
+  const entries: Entry[] = [];
+  const variantsOf = new Map<string, InventoryItemRow[]>();
+  for (const item of data.items) {
+    const product = item.product_id ? productById.get(item.product_id) : undefined;
+    if (!product) {
+      if (item.active || showRetired) entries.push({ kind: 'item', item });
+      continue;
+    }
+    if (!item.active && !showRetired) continue;
+    const list = variantsOf.get(product.id);
+    if (list) list.push(item);
+    else {
+      const variants = [item];
+      variantsOf.set(product.id, variants);
+      entries.push({ kind: 'product', product, variants });
+    }
+  }
+  for (const list of variantsOf.values()) list.sort(compareItems);
+  const entryActive = (e: Entry) => (e.kind === 'item' ? e.item.active : e.product.active);
+  const entryName = (e: Entry) => (e.kind === 'item' ? e.item.name : e.product.name);
+  const entryCategory = (e: Entry) => (e.kind === 'item' ? e.item : e.product);
+  entries.sort(
+    (a, b) =>
+      Number(entryActive(b)) - Number(entryActive(a)) ||
+      categoryRank(entryCategory(a)) - categoryRank(entryCategory(b)) ||
+      entryName(a).localeCompare(entryName(b))
+  );
   const retiredCount = data.items.filter((i) => !i.active).length;
   const hasAreas = data.areas.some((a) => a.active);
 
+  const itemRow = (item: InventoryItemRow, label?: string) => {
+    const total = totals.get(item.id) ?? 0;
+    const low = item.reorder_level != null && total <= item.reorder_level;
+    return (
+      <li
+        key={item.id}
+        className={`flex items-start gap-3 px-3 py-2.5 ${item.active ? '' : 'opacity-50'}`}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/admin/inventory/items/${item.id}`}
+              className="text-sm text-[var(--pyre-creme)] hover:underline"
+            >
+              {label ?? item.name}
+            </a>
+            {!label && item.category_id && (
+              <span className="text-xs text-white/40">
+                {categoryById.get(item.category_id)?.name}
+              </span>
+            )}
+            {!item.active && <span className="text-xs text-white/40">(retired)</span>}
+            {item.active && low && <LowBadge />}
+          </div>
+          <p className="text-xs text-white/45">
+            {[
+              `${formatUnits(total, item.unit)} on hand`,
+              lotDescription(item),
+              item.reorder_level != null &&
+                `re-order at ${formatQuantity(item.reorder_level)}${
+                  item.reorder_target != null
+                    ? `, fill to ${formatQuantity(item.reorder_target)}`
+                    : ''
+                }`,
+              item.unit_cost_cents != null && `${formatCents(item.unit_cost_cents)}/${item.unit}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+          <p className="text-xs text-white/30">
+            {(spotsByItem.get(item.id) ?? []).join(', ') || 'Not placed in any area'}
+          </p>
+        </div>
+        <button type="button" className={buttonClass} onClick={() => setEditing(item)}>
+          Edit
+        </button>
+      </li>
+    );
+  };
+
   return (
     <section aria-labelledby="items-heading">
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2
           id="items-heading"
           className="flex-1 font-mono text-xs uppercase tracking-wide text-white/50"
         >
           Items
         </h2>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={!hasAreas}
+          title={
+            hasAreas ? 'Sizes, colours, or flavours of one product' : 'Add a storage area first'
+          }
+          onClick={() => setEditing('new-product')}
+        >
+          Add with variants
+        </button>
         <button
           type="button"
           className={goldButtonClass}
@@ -576,62 +668,46 @@ function ItemsSection({
         </button>
       </div>
 
-      {shown.length === 0 ? (
+      {entries.length === 0 ? (
         <p className="text-sm text-white/50">
           {hasAreas ? 'No items yet.' : 'Add a storage area first, then the items kept there.'}
         </p>
       ) : (
         <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
-          {shown.map((item) => {
-            const total = totals.get(item.id) ?? 0;
-            const low = item.reorder_level != null && total <= item.reorder_level;
-            return (
-              <li
-                key={item.id}
-                className={`flex items-start gap-3 px-3 py-2.5 ${item.active ? '' : 'opacity-50'}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={`/admin/inventory/items/${item.id}`}
-                      className="text-sm text-[var(--pyre-creme)] hover:underline"
-                    >
-                      {item.name}
-                    </a>
-                    {item.category_id && (
+          {entries.map((entry) =>
+            entry.kind === 'item' ? (
+              itemRow(entry.item)
+            ) : (
+              <li key={entry.product.id} className={entry.product.active ? '' : 'opacity-50'}>
+                <div className="flex items-center gap-3 px-3 pt-2.5">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <span className="text-sm text-[var(--pyre-creme)]">{entry.product.name}</span>
+                    {entry.product.category_id && (
                       <span className="text-xs text-white/40">
-                        {categoryById.get(item.category_id)?.name}
+                        {categoryById.get(entry.product.category_id)?.name}
                       </span>
                     )}
-                    {!item.active && <span className="text-xs text-white/40">(retired)</span>}
-                    {item.active && low && <LowBadge />}
+                    <span className="text-xs text-white/40">
+                      {entry.variants.length} variant{entry.variants.length === 1 ? '' : 's'}
+                    </span>
+                    {!entry.product.active && (
+                      <span className="text-xs text-white/40">(retired)</span>
+                    )}
                   </div>
-                  <p className="text-xs text-white/45">
-                    {[
-                      `${formatUnits(total, item.unit)} on hand`,
-                      lotDescription(item),
-                      item.reorder_level != null &&
-                        `re-order at ${formatQuantity(item.reorder_level)}${
-                          item.reorder_target != null
-                            ? `, fill to ${formatQuantity(item.reorder_target)}`
-                            : ''
-                        }`,
-                      item.unit_cost_cents != null &&
-                        `${formatCents(item.unit_cost_cents)}/${item.unit}`,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                  <p className="text-xs text-white/30">
-                    {(spotsByItem.get(item.id) ?? []).join(', ') || 'Not placed in any area'}
-                  </p>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => setEditingProduct(entry.product)}
+                  >
+                    Edit product
+                  </button>
                 </div>
-                <button type="button" className={buttonClass} onClick={() => setEditing(item)}>
-                  Edit
-                </button>
+                <ul className="ml-6 divide-y divide-white/5 border-l border-white/10">
+                  {entry.variants.map((v) => itemRow(v, v.variant ?? v.name))}
+                </ul>
               </li>
-            );
-          })}
+            )
+          )}
         </ul>
       )}
 
@@ -647,9 +723,18 @@ function ItemsSection({
 
       {editing && (
         <ItemDialog
-          item={editing === 'new' ? null : editing}
+          item={typeof editing === 'string' ? null : editing}
+          withVariants={editing === 'new-product'}
           data={data}
           onClose={() => setEditing(null)}
+          onChanged={refresh}
+        />
+      )}
+      {editingProduct && (
+        <ProductDialog
+          product={editingProduct}
+          data={data}
+          onClose={() => setEditingProduct(null)}
           onChanged={refresh}
         />
       )}
@@ -659,6 +744,10 @@ function ItemsSection({
 
 interface ItemForm {
   name: string;
+  /** A variant's label, when editing one. */
+  variant: string;
+  /** "S, M, L, XL" — the variants of a new product. */
+  variants: string;
   categoryId: string;
   unit: string;
   lotSize: string;
@@ -673,6 +762,8 @@ interface ItemForm {
 
 const formFor = (item: InventoryItemRow | null): ItemForm => ({
   name: item?.name ?? '',
+  variant: item?.variant ?? '',
+  variants: '',
   categoryId: item?.category_id ?? '',
   unit: item?.unit ?? '',
   lotSize: item ? formatQuantity(item.lot_size) : '1',
@@ -687,11 +778,14 @@ const formFor = (item: InventoryItemRow | null): ItemForm => ({
 
 function ItemDialog({
   item,
+  withVariants = false,
   data,
   onClose,
   onChanged,
 }: {
   item: InventoryItemRow | null;
+  /** New product with variants: the settings are shared by every variant. */
+  withVariants?: boolean;
   data: InventoryOverview;
   onClose: () => void;
   onChanged: () => Promise<void>;
@@ -724,18 +818,46 @@ function ItemDialog({
     }
   };
 
-  const save = () =>
-    attempt(() =>
-      item
-        ? sendJson(`${ITEMS_API}?id=${item.id}`, 'PATCH', form)
-        : sendJson(ITEMS_API, 'POST', {
-            ...form,
-            spots: Object.entries(placements).map(([areaId, quantity]) => ({
-              areaId,
-              quantity: quantity === '' ? 0 : Number(quantity),
-            })),
-          })
-    );
+  // A variant's name and category come from its product.
+  const product = item?.product_id
+    ? data.products.find((p) => p.id === item.product_id)
+    : undefined;
+  const isVariant = Boolean(item?.product_id);
+  const variantList = form.variants
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  const save = () => {
+    const { name, variant, variants, categoryId, ...settings } = form;
+    return attempt(() => {
+      if (item) {
+        return sendJson(
+          `${ITEMS_API}?id=${item.id}`,
+          'PATCH',
+          isVariant ? { ...settings, variant } : { ...settings, name, categoryId }
+        );
+      }
+      if (withVariants) {
+        return sendJson(PRODUCTS_API, 'POST', {
+          ...settings,
+          name,
+          categoryId,
+          variants: variantList,
+          spots: Object.keys(placements),
+        });
+      }
+      return sendJson(ITEMS_API, 'POST', {
+        ...settings,
+        name,
+        categoryId,
+        spots: Object.entries(placements).map(([areaId, quantity]) => ({
+          areaId,
+          quantity: quantity === '' ? 0 : Number(quantity),
+        })),
+      });
+    });
+  };
 
   const field = (key: keyof ItemForm, label: string, props: Record<string, unknown> = {}) => (
     <label className="block min-w-0">
@@ -763,7 +885,7 @@ function ItemDialog({
     >
       <div className="mb-4 flex items-start gap-3">
         <h2 id="item-dialog" className="flex-1 text-lg text-[var(--pyre-creme)]">
-          {item ? `Edit ${item.name}` : 'Add an item'}
+          {item ? `Edit ${item.name}` : withVariants ? 'Add an item with variants' : 'Add an item'}
         </h2>
         <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
           Close
@@ -771,9 +893,37 @@ function ItemDialog({
       </div>
 
       <div className="space-y-3">
-        {field('name', 'Name', { maxLength: FIELD_LIMITS.itemName, placeholder: 'Hand towels' })}
+        {isVariant ? (
+          <>
+            {field('variant', 'Variant', { maxLength: FIELD_LIMITS.variant, placeholder: 'M' })}
+            <p className="-mt-1 text-xs text-white/40">
+              One of {product?.name ?? 'a product'}'s variants. Its name and category follow the
+              product — change those with Edit product.
+            </p>
+          </>
+        ) : withVariants ? (
+          <>
+            {field('name', 'Name', {
+              maxLength: FIELD_LIMITS.productName,
+              placeholder: 'Pyre Tee',
+            })}
+            {field('variants', 'Variants', {
+              placeholder: 'S, M, L, XL',
+              'aria-describedby': 'inventory-variants-hint',
+            })}
+            <p id="inventory-variants-hint" className="-mt-1 text-xs text-white/40">
+              Separate with commas, in the order they should be listed — sizes, colours, or
+              flavours. Each one gets its own stock and re-order level; the settings below start the
+              same for all of them and can be changed per variant later.
+              {variantList.length > 0 &&
+                ` Adds ${variantList.map((v) => `${form.name.trim() || '…'} — ${v}`).join(', ')}.`}
+            </p>
+          </>
+        ) : (
+          field('name', 'Name', { maxLength: FIELD_LIMITS.itemName, placeholder: 'Hand towels' })
+        )}
         <div className="grid grid-cols-2 gap-2">
-          <label className="block min-w-0">
+          <label className={`block min-w-0 ${isVariant ? 'hidden' : ''}`}>
             <span className={labelClass}>Category</span>
             <select
               value={form.categoryId}
@@ -838,7 +988,7 @@ function ItemDialog({
         {!item && (
           <fieldset className="rounded border border-white/10 p-3">
             <legend className="px-1 font-mono text-[10px] uppercase tracking-wide text-white/40">
-              Where it's kept, and how many are there now
+              {withVariants ? "Where they're kept" : "Where it's kept, and how many are there now"}
             </legend>
             <ul className="space-y-2">
               {activeAreas.map((area) => {
@@ -860,7 +1010,7 @@ function ItemDialog({
                       />
                       {area.name}
                     </label>
-                    {placed && (
+                    {placed && !withVariants && (
                       <input
                         inputMode="decimal"
                         aria-label={`Opening count in ${area.name}`}
@@ -879,6 +1029,12 @@ function ItemDialog({
                 );
               })}
             </ul>
+            {withVariants && (
+              <p className="mt-2 text-xs text-white/40">
+                Every variant is placed here with nothing on hand. Put stock in with Receive on the
+                stock screen, or a count.
+              </p>
+            )}
           </fieldset>
         )}
 
@@ -957,11 +1113,22 @@ function ItemDialog({
       <div className="mt-4 flex gap-2">
         <button
           type="button"
-          disabled={busy || !form.name.trim() || !form.unit.trim()}
+          disabled={
+            busy ||
+            !form.unit.trim() ||
+            (isVariant ? !form.variant.trim() : !form.name.trim()) ||
+            (withVariants && variantList.length === 0)
+          }
           onClick={save}
           className={`${primaryButtonClass} flex-1`}
         >
-          {busy ? 'Saving…' : item ? 'Save' : 'Add item'}
+          {busy
+            ? 'Saving…'
+            : item
+              ? 'Save'
+              : withVariants
+                ? `Add ${variantList.length || ''} variant${variantList.length === 1 ? '' : 's'}`
+                : 'Add item'}
         </button>
         {item && (
           <button
@@ -978,6 +1145,218 @@ function ItemDialog({
           </button>
         )}
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * A product's own settings — name and category, which its variants follow —
+ * plus the order its variants are listed in, adding another variant, and
+ * retiring the whole product. Each variant's stock settings are edited on its
+ * own row.
+ */
+function ProductDialog({
+  product,
+  data,
+  onClose,
+  onChanged,
+}: {
+  product: InventoryProductRow;
+  data: InventoryOverview;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [name, setName] = useState(product.name);
+  const [categoryId, setCategoryId] = useState(product.category_id ?? '');
+  const [newVariant, setNewVariant] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const categoryOptions = data.categories.filter((c) => c.active || c.id === product.category_id);
+  const variants = data.items
+    .filter((i) => i.product_id === product.id && i.active)
+    .sort(compareItems);
+  const current = data.products.find((p) => p.id === product.id) ?? product;
+
+  const attempt = async (action: () => Promise<unknown>, close = false) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      await onChanged();
+      if (close) onClose();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Swap two neighbours by renumbering the whole list 1..n, so earlier gaps
+  // or ties can't leave the order ambiguous.
+  const move = (index: number, by: -1 | 1) => {
+    const order = [...variants];
+    const [moved] = order.splice(index, 1);
+    order.splice(index + by, 0, moved);
+    return attempt(() =>
+      Promise.all(
+        order.map((v, i) =>
+          v.variant_order === i + 1
+            ? null
+            : sendJson(`${ITEMS_API}?id=${v.id}`, 'PATCH', { variantOrder: i + 1 })
+        )
+      )
+    );
+  };
+
+  const changed = name.trim() !== current.name || categoryId !== (current.category_id ?? '');
+
+  return (
+    <Modal
+      labelledBy="product-dialog"
+      onClose={onClose}
+      initialFocus={closeRef}
+      panelClassName={dialogPanelClass}
+    >
+      <div className="mb-4 flex items-start gap-3">
+        <h2 id="product-dialog" className="flex-1 text-lg text-[var(--pyre-creme)]">
+          Edit {current.name}
+        </h2>
+        <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
+          Close
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>Name</span>
+            <input
+              value={name}
+              maxLength={FIELD_LIMITS.productName}
+              onChange={(e) => setName(e.target.value)}
+              className={`${compactInputClass} w-full`}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={labelClass}>Category</span>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className={`${compactSelectClass} w-full`}
+            >
+              <option value="">No category</option>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.active ? '' : ' (retired)'}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {changed && (
+          <button
+            type="button"
+            disabled={busy || !name.trim()}
+            className={`${primaryButtonClass} w-full`}
+            onClick={() =>
+              attempt(() =>
+                sendJson(`${PRODUCTS_API}?id=${product.id}`, 'PATCH', { name, categoryId })
+              )
+            }
+          >
+            Save name and category
+          </button>
+        )}
+
+        {current.active && (
+          <fieldset className="rounded border border-white/10 p-3">
+            <legend className="px-1 font-mono text-[10px] uppercase tracking-wide text-white/40">
+              Variants, in listed order
+            </legend>
+            <ul className="space-y-1.5">
+              {variants.map((v, i) => (
+                <li key={v.id} className="flex items-center gap-2 text-sm text-white/80">
+                  <span className="flex-1">{v.variant}</span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || i === 0}
+                    aria-label={`Move ${v.variant} up`}
+                    onClick={() => move(i, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || i === variants.length - 1}
+                    aria-label={`Move ${v.variant} down`}
+                    onClick={() => move(i, 1)}
+                  >
+                    ↓
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={newVariant}
+                maxLength={FIELD_LIMITS.variant}
+                onChange={(e) => setNewVariant(e.target.value)}
+                placeholder="Add a variant, e.g. XXL"
+                aria-label="New variant"
+                className={`${compactInputClass} min-w-0 flex-1`}
+              />
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={busy || !newVariant.trim()}
+                onClick={() =>
+                  attempt(async () => {
+                    await sendJson(PRODUCTS_API, 'POST', {
+                      productId: product.id,
+                      variant: newVariant,
+                    });
+                    setNewVariant('');
+                  })
+                }
+              >
+                Add
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-white/40">
+              A new variant starts with the same settings and storage areas as the first one, and
+              nothing on hand. To stop carrying one, retire it from its own Edit.
+            </p>
+          </fieldset>
+        )}
+      </div>
+
+      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          className={buttonClass}
+          onClick={() =>
+            attempt(
+              () =>
+                sendJson(`${PRODUCTS_API}?id=${product.id}`, 'PATCH', { active: !current.active }),
+              true
+            )
+          }
+        >
+          {current.active ? 'Retire product and all variants' : 'Restore product'}
+        </button>
+      </div>
+      {!current.active && (
+        <p className="mt-2 text-xs text-white/40">
+          Restoring brings the product back; restore each variant you still carry from its own Edit.
+        </p>
+      )}
     </Modal>
   );
 }

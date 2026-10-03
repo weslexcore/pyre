@@ -13,6 +13,8 @@ export const FIELD_LIMITS = {
   areaName: 80,
   areaDescription: 500,
   itemName: 120,
+  productName: 60,
+  variant: 40,
   categoryName: 60,
   unit: 30,
   lotLabel: 30,
@@ -189,9 +191,79 @@ export function normalizeItem(
     if (cents === undefined) return { ok: false, error: 'unitCost must be a dollar amount' };
     out.unit_cost_cents = cents;
   }
+  if (has(body, 'variant')) {
+    // Only meaningful on a variant; the table refuses it on a standalone item.
+    const variant = text(body.variant, FIELD_LIMITS.variant);
+    if (!variant) {
+      return { ok: false, error: `variant is required (max ${FIELD_LIMITS.variant} chars)` };
+    }
+    out.variant = variant;
+  }
+  if (has(body, 'variantOrder')) {
+    const order = integer(body.variantOrder, 0, 10_000);
+    if (order === undefined || order === null) {
+      return { ok: false, error: 'variantOrder must be a whole number' };
+    }
+    out.variant_order = order;
+  }
   if (has(body, 'active')) {
     if (typeof body.active !== 'boolean') return { ok: false, error: 'active must be true/false' };
     out.active = body.active;
   }
   return { ok: true, value: out };
+}
+
+export function normalizeProduct(
+  body: Record<string, unknown>,
+  { partial = false } = {}
+): Normalized<Columns> {
+  const out: Columns = {};
+  if (!partial || has(body, 'name')) {
+    const name = text(body.name, FIELD_LIMITS.productName);
+    if (!name) {
+      return { ok: false, error: `name is required (max ${FIELD_LIMITS.productName} chars)` };
+    }
+    out.name = name;
+  }
+  if (has(body, 'categoryId')) {
+    const id = body.categoryId;
+    if (id == null || id === '') out.category_id = null;
+    else if (typeof id === 'string' && UUID_RE.test(id)) out.category_id = id;
+    else return { ok: false, error: 'categoryId must be a category id or empty' };
+  }
+  if (has(body, 'active')) {
+    if (typeof body.active !== 'boolean') return { ok: false, error: 'active must be true/false' };
+    out.active = body.active;
+  }
+  return { ok: true, value: out };
+}
+
+/** Most variants one product can be created with in one go. */
+export const MAX_VARIANTS = 30;
+
+/**
+ * Variant labels for a new product, from a list or a comma-separated string
+ * ("S, M, L, XL"): trimmed, blanks dropped, repeats (ignoring case) dropped,
+ * in the order given. An error message when there are none, too many, or one
+ * is too long.
+ */
+export function parseVariants(raw: unknown): string[] | string {
+  const parts = typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw : null;
+  if (!parts?.every((p) => typeof p === 'string')) {
+    return 'variants must be a list of names';
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts as string[]) {
+    const label = part.trim();
+    if (!label || seen.has(label.toLowerCase())) continue;
+    if (label.length > FIELD_LIMITS.variant) {
+      return `Keep each variant under ${FIELD_LIMITS.variant} characters`;
+    }
+    seen.add(label.toLowerCase());
+    out.push(label);
+  }
+  if (out.length === 0) return 'Add at least one variant';
+  if (out.length > MAX_VARIANTS) return `At most ${MAX_VARIANTS} variants`;
+  return out;
 }

@@ -1,6 +1,7 @@
 // The stock screen (/admin/inventory): every storage area in walk order with
 // what's on its shelves — or, switched to "By category", every category with
-// its items, their totals, and where each is kept. Tap an item (or one of its
+// its items, their totals, and where each is kept (a product's sizes or
+// flavours gathered under it). Tap an item (or one of its
 // spots) to log what happened to it — used, received, wasted, or moved to
 // another spot. Each tap writes one ledger
 // row, so several people can log at once without overwriting each other.
@@ -22,8 +23,10 @@ import {
   lotsToUnits,
   parseQuantity,
   pluralUnit,
+  type StockEntry,
   type StockItem,
   type StockLine,
+  type StockProduct,
 } from '@/lib/inventory/rules';
 import {
   type InventoryAreaRow,
@@ -88,6 +91,15 @@ export function InventoryStock() {
   // Read after mount: the island is server-rendered, where there is no storage.
   const [view, setView] = useState<StockView>('area');
   useEffect(() => setView(readViewPref()), []);
+  // Products opened in the by-category view (all open while searching).
+  const [openProducts, setOpenProducts] = useState<Set<string>>(() => new Set());
+  const toggleProduct = (id: string) =>
+    setOpenProducts((open) => {
+      const next = new Set(open);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const chooseView = (next: StockView) => {
     setView(next);
     writeViewPref(next);
@@ -153,9 +165,19 @@ export function InventoryStock() {
   const visible = grouped
     .map((g) => ({ ...g, lines: g.lines.filter(matches) }))
     .filter((g) => g.lines.length > 0 || (!needle && !lowOnly));
+  // A product shows while any of its variants match, with just those variants
+  // (all of them when the product's own name matches).
+  const visibleEntry = (entry: StockEntry): StockEntry | null => {
+    if (entry.kind === 'item') return matches(entry) ? entry : null;
+    const variants = entry.variants.filter(matches);
+    return variants.length > 0 ? { ...entry, variants } : null;
+  };
   const visibleCategories = byCategory
-    .map((g) => ({ ...g, items: g.items.filter(matches) }))
-    .filter((g) => g.items.length > 0);
+    .map((g) => ({
+      ...g,
+      entries: g.entries.map(visibleEntry).filter((e): e is StockEntry => e !== null),
+    }))
+    .filter((g) => g.entries.length > 0);
   const areaName = new Map(data?.areas.map((a) => [a.id, a.name]) ?? []);
   const nothingShown = view === 'area' ? visible.length === 0 : visibleCategories.length === 0;
 
@@ -226,7 +248,7 @@ export function InventoryStock() {
       )}
 
       {view === 'category' &&
-        visibleCategories.map(({ category, items }) => {
+        visibleCategories.map(({ category, entries }) => {
           const headingId = `category-${category?.id ?? 'none'}`;
           return (
             <section key={headingId} aria-labelledby={headingId}>
@@ -237,14 +259,25 @@ export function InventoryStock() {
                 {category?.name ?? 'Uncategorised'}
               </h2>
               <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
-                {items.map((entry) => (
-                  <CategoryItemRow
-                    key={entry.item.id}
-                    entry={entry}
-                    areaName={(id) => areaName.get(id) ?? ''}
-                    onOpen={setActive}
-                  />
-                ))}
+                {entries.map((entry) =>
+                  entry.kind === 'item' ? (
+                    <CategoryItemRow
+                      key={entry.item.id}
+                      entry={entry}
+                      areaName={(id) => areaName.get(id) ?? ''}
+                      onOpen={setActive}
+                    />
+                  ) : (
+                    <ProductRow
+                      key={entry.product.id}
+                      entry={entry}
+                      expanded={Boolean(needle) || lowOnly || openProducts.has(entry.product.id)}
+                      onToggle={() => toggleProduct(entry.product.id)}
+                      areaName={(id) => areaName.get(id) ?? ''}
+                      onOpen={setActive}
+                    />
+                  )
+                )}
               </ul>
             </section>
           );
@@ -329,10 +362,13 @@ export function InventoryStock() {
  */
 function CategoryItemRow({
   entry,
+  label,
   areaName,
   onOpen,
 }: {
   entry: StockItem;
+  /** Shown in place of the item's name (a variant's own label under its product). */
+  label?: string;
   areaName: (areaId: string) => string;
   onOpen: (line: StockLine) => void;
 }) {
@@ -341,7 +377,9 @@ function CategoryItemRow({
   const summary = (
     <>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-[var(--pyre-creme)]">{item.name}</span>
+        <span className="block truncate text-sm text-[var(--pyre-creme)]">
+          {label ?? item.name}
+        </span>
         <span className="block truncate text-xs text-white/40">
           {lines.length === 0
             ? 'Not stored in any area yet'
@@ -394,6 +432,70 @@ function CategoryItemRow({
             </button>
           ))}
         </div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * A product in the by-category view: its total across every variant, a
+ * one-line breakdown ("S 5 · M 1 · L 4"), and — opened — a row per variant
+ * to log against.
+ */
+function ProductRow({
+  entry,
+  expanded,
+  onToggle,
+  areaName,
+  onOpen,
+}: {
+  entry: StockProduct;
+  expanded: boolean;
+  onToggle: () => void;
+  areaName: (areaId: string) => string;
+  onOpen: (line: StockLine) => void;
+}) {
+  const { product, variants, total, low } = entry;
+  const unit = variants[0]?.item.unit ?? '';
+  const panelId = `product-${product.id}`;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-white/5"
+      >
+        <span aria-hidden className="w-3 shrink-0 font-mono text-xs text-white/40">
+          {expanded ? '▾' : '▸'}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm text-[var(--pyre-creme)]">{product.name}</span>
+          <span className="block truncate text-xs text-white/40">
+            {variants.map((v) => `${v.item.variant} ${formatQuantity(v.total)}`).join(' · ')}
+          </span>
+        </span>
+        {low && <LowBadge>Low</LowBadge>}
+        <span className="shrink-0 text-right">
+          <span className="block text-lg leading-tight text-[var(--pyre-creme)]">
+            {formatQuantity(total)}
+          </span>
+          <span className="block font-mono text-[10px] uppercase text-white/40">{unit} total</span>
+        </span>
+      </button>
+      {expanded && (
+        <ul id={panelId} className="ml-6 divide-y divide-white/5 border-l border-white/10">
+          {variants.map((v) => (
+            <CategoryItemRow
+              key={v.item.id}
+              entry={v}
+              label={v.item.variant ?? v.item.name}
+              areaName={areaName}
+              onOpen={onOpen}
+            />
+          ))}
+        </ul>
       )}
     </li>
   );
