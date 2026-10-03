@@ -19,6 +19,7 @@ import {
 } from '@/components/admin/ui';
 import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
+import { countEveryLabel, ITEM_COUNT_SCHEDULES } from '@/lib/inventory/counts';
 import {
   compareItems,
   formatCents,
@@ -849,6 +850,8 @@ function ItemsSection({
                     : ''
                 }`,
               item.unit_cost_cents != null && `${formatCents(item.unit_cost_cents)}/${item.unit}`,
+              item.count_every_days != null &&
+                `count ${countEveryLabel(item.count_every_days).toLowerCase()}`,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -982,6 +985,8 @@ interface ItemForm {
   lotUnitId: string;
   reorderLevel: string;
   reorderTarget: string;
+  /** Minimum count frequency in days; '' = follow its areas. */
+  countEveryDays: string;
   unitCost: string;
   vendor: string;
   vendorUrl: string;
@@ -998,6 +1003,7 @@ const formFor = (item: InventoryItemRow | null): ItemForm => ({
   lotUnitId: item?.lot_unit_id ?? '',
   reorderLevel: item?.reorder_level == null ? '' : formatQuantity(item.reorder_level),
   reorderTarget: item?.reorder_target == null ? '' : formatQuantity(item.reorder_target),
+  countEveryDays: item?.count_every_days == null ? '' : String(item.count_every_days),
   unitCost: item?.unit_cost_cents == null ? '' : (item.unit_cost_cents / 100).toFixed(2),
   vendor: item?.vendor ?? '',
   vendorUrl: item?.vendor_url ?? '',
@@ -1237,6 +1243,35 @@ function ItemDialog({
           maxLength: FIELD_LIMITS.vendorUrl,
           placeholder: 'https://',
         })}
+        {!withVariants && (
+          <label className="block min-w-0">
+            <span className={labelClass}>Count at least</span>
+            <select
+              value={form.countEveryDays}
+              onChange={set('countEveryDays')}
+              aria-describedby="inventory-count-every-hint"
+              className={`${compactSelectClass} w-full`}
+            >
+              <option value="">When its storage area is counted</option>
+              {[
+                ...ITEM_COUNT_SCHEDULES,
+                // keep an unusual saved value selectable
+                ...(form.countEveryDays &&
+                !(ITEM_COUNT_SCHEDULES as readonly number[]).includes(Number(form.countEveryDays))
+                  ? [Number(form.countEveryDays)]
+                  : []),
+              ].map((days) => (
+                <option key={days} value={String(days)}>
+                  {countEveryLabel(days)}
+                </option>
+              ))}
+            </select>
+            <span id="inventory-count-every-hint" className="mt-1 block text-xs text-white/40">
+              For items that need checking more often than their shelf, like propane. The Count tab
+              lists it as due once this much time has passed. Daily means once each day.
+            </span>
+          </label>
+        )}
         {field('notes', 'Notes', { maxLength: FIELD_LIMITS.notes })}
 
         {!item && (

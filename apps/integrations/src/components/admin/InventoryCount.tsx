@@ -1,6 +1,7 @@
 // The Count tab (/admin/inventory/count): count what is on the shelves.
 //
-// Home lists the storage areas (overdue and due first), the open count
+// Home lists the items with their own count schedule (propane daily, hair
+// ties weekly — overdue and due first), the storage areas (likewise), the open count
 // rounds with their progress, and — for admins — the lines waiting on a
 // review. From there you either start/continue a round (several areas, can
 // stay open for days, several people at once) or count one area on its own.
@@ -17,7 +18,7 @@ import { buttonClass, compactInputClass, goldButtonClass, labelClass } from '@/c
 import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime, timeAgo } from '@/lib/client/format';
-import { defaultRoundName } from '@/lib/inventory/counts';
+import { countEveryLabel, defaultRoundName } from '@/lib/inventory/counts';
 import {
   formatCents,
   formatQuantity,
@@ -200,6 +201,59 @@ function Home({ go }: { go: (view: View) => void }) {
           </ul>
         )}
       </section>
+
+      {data.items.length > 0 && (
+        <section aria-labelledby="items-due-heading">
+          <h2
+            id="items-due-heading"
+            className="mb-3 font-mono text-xs uppercase tracking-wide text-white/50"
+          >
+            Items to count
+            {(() => {
+              const due = data.items.filter((i) => i.status !== 'ok').length;
+              return due > 0 ? ` — ${due} due` : ' — all up to date';
+            })()}
+          </h2>
+          <ul className="divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+            {data.items.map((item) => (
+              <li key={item.itemId} className="flex flex-wrap items-center gap-3 px-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-[var(--pyre-creme)]">{item.name}</span>
+                    <StatusChip status={item.status} />
+                  </div>
+                  <p className="text-xs text-white/40">
+                    {countEveryLabel(item.everyDays)} ·{' '}
+                    {item.lastCountedAt
+                      ? `last counted ${timeAgo(item.lastCountedAt)}`
+                      : 'not counted yet'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {item.areas.map((area) => (
+                    <button
+                      key={area.id}
+                      type="button"
+                      className={buttonClass}
+                      aria-label={`Count ${area.name} (has ${item.name})`}
+                      onClick={() =>
+                        go({
+                          kind: 'sheet',
+                          areaId: area.id,
+                          countId: null,
+                          since: new Date().toISOString(),
+                        })
+                      }
+                    >
+                      {item.areas.length === 1 ? 'Count' : `Count in ${area.name}`}
+                    </button>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="areas-heading">
         <h2

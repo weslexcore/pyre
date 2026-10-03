@@ -61,6 +61,7 @@ const item = (
   product_id: null,
   variant: null,
   variant_order: 0,
+  count_every_days: null,
   active: true,
   created_by: 'a@x',
   created_at: '',

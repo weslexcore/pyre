@@ -197,6 +197,12 @@ export function normalizeItem(
     if (cents === undefined) return { ok: false, error: 'unitCost must be a dollar amount' };
     out.unit_cost_cents = cents;
   }
+  if (has(body, 'countEveryDays')) {
+    // The item's own minimum count frequency; empty = follow its areas.
+    const days = integer(body.countEveryDays, 1, 365);
+    if (days === undefined) return { ok: false, error: 'countEveryDays must be 1–365 or empty' };
+    out.count_every_days = days;
+  }
   if (has(body, 'variant')) {
     // Only meaningful on a variant; the table refuses it on a standalone item.
     const variant = text(body.variant, FIELD_LIMITS.variant);

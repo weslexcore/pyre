@@ -89,6 +89,8 @@ export interface InventoryItemRow {
   variant: string | null;
   /** Position among the product's variants (ascending). */
   variant_order: number;
+  /** Minimum count frequency in studio days (1 = daily); null = follow its areas. */
+  count_every_days: number | null;
   active: boolean;
   created_by: string;
   created_at: string;
@@ -250,6 +252,18 @@ export interface InventorySettings {
 
 export type AreaDueStatus = 'overdue' | 'due' | 'ok' | 'unscheduled';
 
+/** An item with its own count schedule, and where it stands. */
+export interface ItemCountDue {
+  itemId: string;
+  name: string;
+  everyDays: number;
+  status: AreaDueStatus;
+  /** When its least recently counted spot was counted; null if one never was. */
+  lastCountedAt: string | null;
+  /** The areas it lives in, in walk order — where to count it. */
+  areas: { id: string; name: string }[];
+}
+
 /** GET /api/admin/inventory-counts — the Count tab's home. */
 export interface CountsOverview {
   areas: {
@@ -265,6 +279,11 @@ export interface CountsOverview {
     total: number;
     people: string[];
   }[];
+  /**
+   * Items with their own count schedule, overdue and due first. An item is
+   * as stale as its least recently counted spot.
+   */
+  items: ItemCountDue[];
   /** Admins only: lines waiting on a decision. */
   review: (InventoryCountLineRow & {
     itemName: string;
