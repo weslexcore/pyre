@@ -35,6 +35,14 @@ import {
 import type { InventoryItemRow, ReorderLine, ReorderOverview } from '@/lib/inventory/types';
 import { personName } from '@/lib/sops/names';
 import { ErrorBanner } from './ErrorBanner';
+import {
+  DeliveryFields,
+  type DeliveryState,
+  deliveryBody,
+  deliveryReady,
+  EMPTY_DELIVERY,
+  rejectedUnits,
+} from './InventoryDeliveryFields';
 import { primaryButtonClass } from './incidentUi';
 import {
   dialogPanelClass,
@@ -389,13 +397,17 @@ function ReceiveDialog({
   const { item } = order;
   const [units, setUnits] = useState(formatQuantity(order.units));
   const [areaId, setAreaId] = useState(areas[0]?.id ?? '');
+  const [delivery, setDelivery] = useState<DeliveryState>(EMPTY_DELIVERY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const parsed = parseQuantity(units);
+  // A delivery can be all rejects, so 0 accepted is allowed.
+  const parsed = units.trim() !== '' && Number(units) === 0 ? 0 : parseQuantity(units);
+  const rejected = rejectedUnits(delivery) ?? 0;
+  const ready = parsed != null && !!areaId && deliveryReady(delivery) && parsed + rejected > 0;
   const areaRef = useRef<HTMLSelectElement>(null);
 
   const save = async () => {
-    if (parsed == null || !areaId) return;
+    if (!ready || parsed == null) return;
     setBusy(true);
     setError(null);
     try {
@@ -404,9 +416,16 @@ function ReceiveDialog({
         id: order.id,
         areaId,
         units: parsed,
+        ...deliveryBody(delivery),
       });
       const area = areas.find((a) => a.id === areaId)?.name ?? '';
-      await onDone(`Received ${formatUnits(parsed, item.unit)} of ${item.name} into ${area}.`);
+      await onDone(
+        `Received ${formatUnits(parsed, item.unit)} of ${item.name} into ${area}.${
+          rejected
+            ? ` ${formatUnits(rejected, item.unit)} rejected (${delivery.reason.trim()}).`
+            : ''
+        }`
+      );
     } catch (e) {
       setError(message(e));
       setBusy(false);
@@ -437,17 +456,27 @@ function ReceiveDialog({
         </select>
       </label>
       <label htmlFor="receive-units" className={labelClass}>
-        How many {pluralUnit(2, item.unit)} arrived
+        Accepted — {pluralUnit(2, item.unit)} into stock
       </label>
-      <QuantityStepper id="receive-units" value={units} onChange={setUnits} label="units" />
+      <QuantityStepper id="receive-units" value={units} onChange={setUnits} label="units" min={0} />
       <p className="mt-1 text-xs text-white/50">
         Ordered: {formatQuantity(order.lots)} {lotName(item, order.lots)} (
-        {formatUnits(order.units, item.unit)}). Change it if the delivery was short.
+        {formatUnits(order.units, item.unit)}). Change it if the delivery was short or some were
+        rejected.
       </p>
+      <div className="mt-4">
+        <DeliveryFields
+          idPrefix="receive"
+          itemId={item.id}
+          unit={item.unit}
+          value={delivery}
+          onChange={setDelivery}
+        />
+      </div>
       {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
       <button
         type="button"
-        disabled={busy || parsed == null || !areaId}
+        disabled={busy || !ready}
         onClick={save}
         className={`${primaryButtonClass} mt-4 w-full`}
       >
@@ -455,7 +484,9 @@ function ReceiveDialog({
           ? 'Saving…'
           : parsed == null
             ? 'Enter a quantity'
-            : `Receive ${formatUnits(parsed, item.unit)}`}
+            : rejected
+              ? `Receive ${formatUnits(parsed, item.unit)} · reject ${formatQuantity(rejected)}`
+              : `Receive ${formatUnits(parsed, item.unit)}`}
       </button>
     </Modal>
   );

@@ -18,6 +18,7 @@ import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
 import { itemTotal, notifyIfLow } from '@/lib/inventory/alerts';
 import { ledgerToCsv } from '@/lib/inventory/csv';
+import { parseDelivery } from '@/lib/inventory/delivery';
 import {
   formatUnits,
   lotsToUnits,
@@ -189,6 +190,30 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const area = areaData as { id: string; name: string; active: boolean } | null;
   if (!item?.active) return json({ error: 'Item not found' }, 404);
   if (!area?.active) return json({ error: 'Storage area not found' }, 404);
+
+  // A delivery: the accepted part goes into stock, any rejects are recorded
+  // (held for pickup, pending credit), and held rejects the driver took back
+  // are marked picked up — one transaction (inventory_record_delivery).
+  if (type === 'receive') {
+    const delivery = parseDelivery(body, Number(item.lot_size));
+    if (delivery instanceof Response) return delivery;
+    const { data, error } = await db.rpc('inventory_record_delivery', {
+      p_item_id: item.id,
+      p_area_id: area.id,
+      p_accepted: delivery.accepted,
+      p_rejected: delivery.rejected,
+      p_reason: delivery.reason,
+      p_note: text(body.note, NOTE_MAX),
+      p_order_id: null,
+      p_pickup_ids: delivery.pickupIds,
+      p_received_by: email,
+    });
+    if (error) {
+      if (error.code === 'P0001') return json({ error: error.message }, 409);
+      return dbError(error);
+    }
+    return json({ delivery: data }, 201);
+  }
 
   // Amount: receiving may be entered in whole lots ("2 cases"); corrections
   // carry their own sign; everything else is a positive count of units.
