@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { dollarsToCents, normalizeArea, normalizeCategory, normalizeItem } from './validate';
+import {
+  dollarsToCents,
+  normalizeArea,
+  normalizeCategory,
+  normalizeItem,
+  normalizeProduct,
+  parseVariants,
+} from './validate';
 
 describe('normalizeArea', () => {
   it('requires a name on create and maps fields to columns', () => {
@@ -93,5 +100,43 @@ describe('normalizeItem category', () => {
       value: { category_id: null },
     });
     expect(normalizeItem({ categoryId: 'Linens' }, { partial: true }).ok).toBe(false);
+  });
+});
+
+describe('normalizeProduct', () => {
+  it('requires a name on create and caps it so a variant name still fits', () => {
+    expect(normalizeProduct({ name: ' Pyre Tee ', categoryId: '' })).toEqual({
+      ok: true,
+      value: { name: 'Pyre Tee', category_id: null },
+    });
+    expect(normalizeProduct({ name: 'x'.repeat(61) }).ok).toBe(false);
+    expect(normalizeProduct({ active: false }, { partial: true })).toEqual({
+      ok: true,
+      value: { active: false },
+    });
+  });
+});
+
+describe('normalizeItem variants', () => {
+  it('takes a variant label and its position', () => {
+    expect(normalizeItem({ variant: ' XL ', variantOrder: 4 }, { partial: true })).toEqual({
+      ok: true,
+      value: { variant: 'XL', variant_order: 4 },
+    });
+    expect(normalizeItem({ variant: '' }, { partial: true }).ok).toBe(false);
+  });
+});
+
+describe('parseVariants', () => {
+  it('splits a comma list, trims, and drops blanks and repeats in order', () => {
+    expect(parseVariants('S, M, , m, L,XL')).toEqual(['S', 'M', 'L', 'XL']);
+    expect(parseVariants(['Lemon', ' Lime '])).toEqual(['Lemon', 'Lime']);
+  });
+
+  it('refuses none, too many, too long, and non-text', () => {
+    expect(typeof parseVariants(' , ')).toBe('string');
+    expect(typeof parseVariants(Array.from({ length: 31 }, (_, i) => `v${i}`))).toBe('string');
+    expect(typeof parseVariants(['x'.repeat(41)])).toBe('string');
+    expect(typeof parseVariants([1, 2])).toBe('string');
   });
 });

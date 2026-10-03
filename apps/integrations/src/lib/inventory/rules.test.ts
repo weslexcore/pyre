@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compareItems,
   formatUnits,
   groupStockByArea,
   groupStockByCategory,
@@ -50,6 +51,9 @@ const item = (
   vendor: null,
   vendor_url: null,
   notes: null,
+  product_id: null,
+  variant: null,
+  variant_order: 0,
   active: true,
   created_by: 'a@x',
   created_at: '',
@@ -225,7 +229,9 @@ describe('groupStockByCategory', () => {
     { item_id: 't', area_id: 'b', quantity: 3, updated_at: '' },
     { item_id: 's', area_id: 'a', quantity: 2, updated_at: '' },
   ];
-  const grouped = groupStockByCategory({ areas, categories, items, spots, stock });
+  const grouped = groupStockByCategory({ areas, categories, products: [], items, spots, stock });
+  const names = (g: (typeof grouped)[number]) =>
+    g.entries.map((e) => (e.kind === 'item' ? e.item.name : e.product.name));
 
   it('orders categories by display order, skips empty ones, puts uncategorised last', () => {
     expect(grouped.map((g) => g.category?.name ?? null)).toEqual([
@@ -238,14 +244,77 @@ describe('groupStockByCategory', () => {
 
   it('lists active items by name with their total and every spot in walk order', () => {
     const linens = grouped[1];
-    expect(linens.items.map((i) => i.item.name)).toEqual(['Robes', 'Towels']);
-    const towels = linens.items[1];
-    expect(towels).toMatchObject({ total: 9, low: true });
+    expect(names(linens)).toEqual(['Robes', 'Towels']);
+    const [robes, towels] = linens.entries;
+    expect(towels).toMatchObject({ kind: 'item', total: 9, low: true });
+    if (towels.kind !== 'item' || robes.kind !== 'item') throw new Error('expected items');
     expect(towels.lines.map((l) => [l.spot.area_id, l.quantity])).toEqual([
       ['a', 6],
       ['b', 3],
     ]);
-    expect(linens.items[0].lines).toEqual([]);
-    expect(grouped[0].items.map((i) => i.item.name)).toEqual(['Spray']);
+    expect(robes.lines).toEqual([]);
+    expect(names(grouped[0])).toEqual(['Spray']);
+  });
+
+  it("gathers a product's variants under it, in their set order, with a combined total", () => {
+    const tee = {
+      id: 'p',
+      name: 'Pyre Tee',
+      category_id: 'lin',
+      active: true,
+      created_by: 'a@x',
+      created_at: '',
+      updated_at: '',
+    };
+    const variant = (id: string, label: string, order: number, over = {}) =>
+      item(id, `Pyre Tee — ${label}`, {
+        category_id: 'lin',
+        product_id: 'p',
+        variant: label,
+        variant_order: order,
+        reorder_level: 2,
+        ...over,
+      });
+    const withTees = groupStockByCategory({
+      areas,
+      categories,
+      products: [tee],
+      items: [
+        ...items,
+        variant('vl', 'L', 3),
+        variant('vs', 'S', 1),
+        variant('vm', 'M', 2),
+        variant('vx', 'XL', 4, { active: false }),
+      ],
+      spots: [...spots, spot('vs', 'a'), spot('vm', 'a'), spot('vl', 'b')],
+      stock: [
+        ...stock,
+        { item_id: 'vs', area_id: 'a', quantity: 5, updated_at: '' },
+        { item_id: 'vm', area_id: 'a', quantity: 1, updated_at: '' },
+        { item_id: 'vl', area_id: 'b', quantity: 4, updated_at: '' },
+      ],
+    });
+    const linens = withTees.find((g) => g.category?.id === 'lin');
+    if (!linens) throw new Error('no linens');
+    expect(names(linens)).toEqual(['Pyre Tee', 'Robes', 'Towels']);
+    const product = linens.entries[0];
+    if (product.kind !== 'product') throw new Error('expected a product');
+    expect(product.variants.map((v) => v.item.variant)).toEqual(['S', 'M', 'L']);
+    expect(product).toMatchObject({ total: 10, low: true });
+  });
+});
+
+describe('compareItems', () => {
+  it("keeps one product's variants in their set order and sorts the rest by name", () => {
+    const m = item('m', 'Tee — M', { product_id: 'p', variant: 'M', variant_order: 2 });
+    const xl = item('xl', 'Tee — XL', { product_id: 'p', variant: 'XL', variant_order: 4 });
+    const l = item('l', 'Tee — L', { product_id: 'p', variant: 'L', variant_order: 3 });
+    const soap = item('s', 'Soap');
+    expect([xl, soap, l, m].sort(compareItems).map((i) => i.name)).toEqual([
+      'Soap',
+      'Tee — M',
+      'Tee — L',
+      'Tee — XL',
+    ]);
   });
 });

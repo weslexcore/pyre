@@ -1,8 +1,9 @@
 // Inventory items for /admin/inventory (admins only): POST adds one — with
 // the spots it lives in and their opening counts, so setting up an item is
-// one form — and PATCH edits lot size, re-order settings, cost, or retires
-// it. Items are never deleted (the ledger references them); retiring is
-// active=false.
+// one form — and PATCH edits lot size, re-order settings, cost, a variant's
+// label or position, or retires it. Items are never deleted (the ledger
+// references them); retiring is active=false. Products with variants are
+// created through inventory-products.
 
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
@@ -160,6 +161,11 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
     .select('*')
     .maybeSingle();
   if (error) {
+    // e.g. restoring a variant whose product is retired
+    if (error.code === 'P0001') return json({ error: error.message }, 409);
+    if (error.code === '23514' && 'variant' in normalized.value) {
+      return json({ error: 'Only a variant of a product has a variant name' }, 400);
+    }
     // The table keeps fill-to ≥ re-order level; a patch of one can break it.
     if (error.code === '23514') {
       return json({ error: 'The fill-to level must be at least the re-order level' }, 400);
