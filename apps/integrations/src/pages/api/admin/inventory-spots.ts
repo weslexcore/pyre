@@ -96,11 +96,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
       .eq('item_id', item_id)
       .eq('area_id', area_id)
       .maybeSingle(),
-    db.from('inventory_items').select('unit').eq('id', item_id).maybeSingle(),
+    db.from('inventory_items').select('unit, unit_plural').eq('id', item_id).maybeSingle(),
   ]);
   const onHand = Number((stock as { quantity: number } | null)?.quantity ?? 0);
   if (onHand > 0) {
-    const unit = (item as { unit: string } | null)?.unit ?? 'unit';
+    const unit = (item as { unit: string; unit_plural: string } | null) ?? 'unit';
     return json(
       { error: `${formatUnits(onHand, unit)} still here — move or count them out first` },
       409

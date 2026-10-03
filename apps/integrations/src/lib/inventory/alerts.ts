@@ -10,14 +10,22 @@ import { listStaff } from '@/lib/auth/access';
 import { createNotifications } from '@/lib/notifications/notify';
 import { adminsPlus } from '@/lib/notifications/recipients';
 import { daysFromNow } from '@/lib/notifications/types';
-import { crossedReorderLevel, formatUnits, lotDescription, suggestedLots } from './rules';
+import { crossedReorderLevel, formatUnits, lotDescription, lotUnit, suggestedLots } from './rules';
 import { type InventoryItemRow, REORDER_HREF } from './types';
 
 const LOW_NOTICE_DAYS = 14;
 
 type AlertItem = Pick<
   InventoryItemRow,
-  'id' | 'name' | 'unit' | 'reorder_level' | 'reorder_target' | 'lot_size' | 'lot_label'
+  | 'id'
+  | 'name'
+  | 'unit'
+  | 'unit_plural'
+  | 'reorder_level'
+  | 'reorder_target'
+  | 'lot_size'
+  | 'lot_label'
+  | 'lot_label_plural'
 >;
 
 /** Total on hand for an item across every spot; null when it can't be read. */
@@ -54,16 +62,15 @@ export async function notifyIfLow(
       },
       after
     );
-    const lot = item.lot_label?.trim() || 'lot';
     const suggestion =
       lots && lots > 0
-        ? ` Suggested order: ${lots} ${lots === 1 ? lot : `${lot}s`}${lotDescription(item) ? ` (${lotDescription(item)})` : ''}.`
+        ? ` Suggested order: ${formatUnits(lots, lotUnit(item))}${lotDescription(item) ? ` (${lotDescription(item)})` : ''}.`
         : '';
 
     await createNotifications(db, adminsPlus(rows), {
       kind: 'inventory_low',
       title: `${item.name} is low`,
-      body: `${formatUnits(after, item.unit)} left (re-order at ${formatUnits(Number(item.reorder_level), item.unit)}).${suggestion}`,
+      body: `${formatUnits(after, item)} left (re-order at ${formatUnits(Number(item.reorder_level), item)}).${suggestion}`,
       href: REORDER_HREF,
       source: { type: 'inventory_item', id: item.id },
       actorEmail,

@@ -69,7 +69,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     // falls inside the window.
     const since = new Date(Date.now() - (weeks * 7 + 1) * DAY_MS).toISOString();
     const [item, receipts, rejects] = await Promise.all([
-      db.from('inventory_items').select('id, name, unit').eq('id', itemId).maybeSingle(),
+      db
+        .from('inventory_items')
+        .select('id, name, unit, unit_plural')
+        .eq('id', itemId)
+        .maybeSingle(),
       db
         .from('inventory_movements')
         .select('occurred_at, quantity')
@@ -88,11 +92,12 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       if (result.error) return dbError(result.error);
     }
     if (!item.data) return json({ error: 'Item not found' }, 404);
-    const row = item.data as { id: string; name: string; unit: string };
+    const row = item.data as { id: string; name: string; unit: string; unit_plural: string };
     const body: RejectSeries = {
       itemId: row.id,
       name: row.name,
       unit: row.unit,
+      unit_plural: row.unit_plural,
       weeks: weeklyRejects(
         (receipts.data ?? []) as { occurred_at: string; quantity: number }[],
         (rejects.data ?? []) as {
@@ -129,18 +134,25 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .order('credited_at', { ascending: false })
       .limit(LIST_LIMIT),
     db.from('inventory_rejects').select('item_id, rejected_qty').limit(20_000),
-    db.from('inventory_items').select('id, name, unit'),
+    db.from('inventory_items').select('id, name, unit, unit_plural'),
   ]);
   for (const result of [held, pending, decided, counts, items]) {
     if (result.error) return dbError(result.error);
   }
 
   const itemById = new Map(
-    ((items.data ?? []) as { id: string; name: string; unit: string }[]).map((i) => [i.id, i])
+    ((items.data ?? []) as { id: string; name: string; unit: string; unit_plural: string }[]).map(
+      (i) => [i.id, i]
+    )
   );
   const view = (r: InventoryRejectRow): RejectView => {
     const item = itemById.get(r.item_id);
-    return { ...numeric(r), itemName: item?.name ?? 'Retired item', unit: item?.unit ?? '' };
+    return {
+      ...numeric(r),
+      itemName: item?.name ?? 'Retired item',
+      unit: item?.unit ?? '',
+      unit_plural: item?.unit_plural ?? '',
+    };
   };
 
   const totals = new Map<string, number>();
@@ -157,6 +169,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         id,
         name: itemById.get(id)?.name ?? 'Retired item',
         unit: itemById.get(id)?.unit ?? '',
+        unit_plural: itemById.get(id)?.unit_plural ?? '',
         rejected,
       }))
       .sort((a, b) => b.rejected - a.rejected || a.name.localeCompare(b.name)),

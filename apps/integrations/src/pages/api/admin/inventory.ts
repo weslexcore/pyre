@@ -5,7 +5,7 @@
 //
 // Gated on the /admin/inventory page grant. Writes go through
 // inventory-movements (anyone with the page) and inventory-areas / -items /
-// -spots / -categories (admins only).
+// -spots / -categories / -units / -products (admins only).
 
 import type { APIRoute } from 'astro';
 import { beginRead, dbError, json } from '@/lib/http/route';
@@ -18,6 +18,7 @@ import {
   type InventoryProductRow,
   type InventorySpotRow,
   type InventoryStockRow,
+  type InventoryUnitRow,
 } from '@/lib/inventory/types';
 
 export const GET: APIRoute = async ({ cookies }) => {
@@ -25,21 +26,23 @@ export const GET: APIRoute = async ({ cookies }) => {
   if (ready instanceof Response) return ready;
   const { gate, db } = ready;
 
-  const [areas, categories, products, items, spots, stock] = await Promise.all([
+  const [areas, categories, units, products, items, spots, stock] = await Promise.all([
     db.from('inventory_areas').select('*').order('sort_order').order('name'),
     db.from('inventory_categories').select('*').order('sort_order').order('name'),
+    db.from('inventory_units').select('*').order('sort_order').order('name'),
     db.from('inventory_products').select('*').order('name'),
     db.from('inventory_items').select('*').order('name'),
     db.from('inventory_item_spots').select('*'),
     db.from('inventory_stock').select('*'),
   ]);
-  for (const result of [areas, categories, products, items, spots, stock]) {
+  for (const result of [areas, categories, units, products, items, spots, stock]) {
     if (result.error) return dbError(result.error);
   }
 
   const body: InventoryOverview = {
     areas: (areas.data ?? []) as InventoryAreaRow[],
     categories: (categories.data ?? []) as InventoryCategoryRow[],
+    units: (units.data ?? []) as InventoryUnitRow[],
     products: (products.data ?? []) as InventoryProductRow[],
     items: ((items.data ?? []) as InventoryItemRow[]).map(numericItem),
     spots: ((spots.data ?? []) as InventorySpotRow[]).map((s) => ({
