@@ -40,6 +40,7 @@ import {
   type DeliveryState,
   deliveryBody,
   deliveryReady,
+  deliveryReasons,
   EMPTY_DELIVERY,
   rejectedUnits,
 } from './InventoryDeliveryFields';
@@ -422,7 +423,7 @@ function ReceiveDialog({
       await onDone(
         `Received ${formatUnits(parsed, item.unit)} of ${item.name} into ${area}.${
           rejected
-            ? ` ${formatUnits(rejected, item.unit)} rejected (${delivery.reason.trim()}).`
+            ? ` ${formatUnits(rejected, item.unit)} rejected (${deliveryReasons(delivery).join(', ')}).`
             : ''
         }`
       );

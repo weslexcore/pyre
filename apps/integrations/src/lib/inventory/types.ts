@@ -376,7 +376,7 @@ export interface ItemHistory {
 
 export const REJECTS_HREF = '/admin/inventory/rejects';
 
-/** One-tap reasons on the receive form (free text is also fine). */
+/** One-tap reasons on the receive form; several can apply, and free text is also fine. */
 export const REJECT_REASONS = ['Stained', 'Torn', 'Wet', 'Damaged', 'Wrong item'] as const;
 
 export type CreditStatus = 'pending' | 'credited' | 'denied';
@@ -388,7 +388,8 @@ export interface InventoryRejectRow {
   movement_id: string | null;
   delivered_qty: number;
   rejected_qty: number;
-  reason: string;
+  /** Every reason that applied, at least one. */
+  reasons: string[];
   note: string | null;
   unit_cost_cents: number | null;
   vendor: string | null;
