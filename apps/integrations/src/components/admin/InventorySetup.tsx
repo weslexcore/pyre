@@ -9,7 +9,7 @@
 // "remove" is retire (active=false), which drops it from the stock screen
 // and keeps its history. The setup routes re-check admin on every request.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buttonClass,
   compactInputClass,
@@ -39,6 +39,7 @@ import type {
   InventoryUnitRow,
 } from '@/lib/inventory/types';
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
+import { useCardAutosave } from './boards/useCardAutosave';
 import { ErrorBanner } from './ErrorBanner';
 import { Chip, primaryButtonClass } from './incidentUi';
 import { dialogPanelClass, INVENTORY_API, LowBadge, takeItemParam } from './inventoryUi';
@@ -64,6 +65,39 @@ const scheduleLabel = (days: number | null) =>
 
 const message = (e: unknown) =>
   e instanceof ApiError || e instanceof Error ? e.message : String(e);
+
+type Autosave = ReturnType<typeof useCardAutosave>;
+
+/**
+ * A dialog's close, kept the same function across renders: Modal re-focuses
+ * its first control whenever onClose changes, which would pull focus out of
+ * a field on every autosaved keystroke.
+ */
+function useStableClose(close: () => Promise<void>) {
+  const latest = useRef(close);
+  latest.current = close;
+  return useCallback(() => void latest.current(), []);
+}
+
+/** Focuses an inline editor as soon as it opens. */
+const focusOnMount = (el: HTMLInputElement | null) => el?.focus();
+
+/** Edits to existing records save as they're made; this says how that's going. */
+function SaveStatus({ autosave, problem }: { autosave: Autosave; problem?: string | null }) {
+  const saving = autosave.status === 'saving' || autosave.status === 'pending';
+  return (
+    <div className="flex items-center gap-2">
+      <span role="status" className="text-xs text-white/50">
+        {problem || autosave.error ? 'Changes not saved' : saving ? 'Saving…' : 'All changes saved'}
+      </span>
+      {autosave.error && (
+        <button type="button" className={buttonClass} onClick={() => void autosave.flush()}>
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function InventorySetup() {
   const { data, error, loading, reload } = useCachedJson<InventoryOverview>(INVENTORY_API);
@@ -230,6 +264,11 @@ function AreasSection({
             await refresh();
             setEditing(null);
           }}
+          onAutosave={async (patch) => {
+            if (editing === 'new') return;
+            await sendJson(`${AREAS_API}?id=${editing.id}`, 'PATCH', patch);
+            await refresh();
+          }}
         />
       )}
     </section>
@@ -240,10 +279,14 @@ function AreaDialog({
   area,
   onClose,
   onSave,
+  onAutosave,
 }: {
   area: InventoryAreaRow | null;
   onClose: () => void;
+  /** Adds the area (or retires it), then closes. */
   onSave: (body: Record<string, unknown>) => Promise<void>;
+  /** Saves an edit to an existing area as it's made. */
+  onAutosave: (patch: Record<string, unknown>) => Promise<void>;
 }) {
   const [name, setName] = useState(area?.name ?? '');
   const [description, setDescription] = useState(area?.description ?? '');
@@ -253,22 +296,49 @@ function AreaDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const autosave = useCardAutosave(onAutosave);
+  const problem = area && !name.trim() ? 'An area needs a name.' : null;
 
-  const save = async (extra: Record<string, unknown> = {}) => {
+  const submit = async (body: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
     try {
-      await onSave({ name, description, countEveryDays, ...extra });
+      await onSave(body);
     } catch (e) {
       setError(message(e));
       setBusy(false);
     }
   };
 
+  // Existing areas save each change; a blank name is held back until fixed.
+  const changeName = (next: string) => {
+    setName(next);
+    if (!area) return;
+    if (next.trim()) autosave.schedule({ name: next }, 600);
+    else autosave.discard('name');
+  };
+  const changeDescription = (next: string) => {
+    setDescription(next);
+    if (area) autosave.schedule({ description: next }, 600);
+  };
+  const changeCountEvery = (next: number | null) => {
+    setCountEveryDays(next);
+    if (area) autosave.schedule({ countEveryDays: next }, 0);
+  };
+
+  const close = useStableClose(async () => {
+    if (problem) return;
+    if (await autosave.flush()) onClose();
+  });
+
+  const retire = async () => {
+    if (await autosave.flush()) await submit({ active: false });
+  };
+
   return (
     <Modal
       labelledBy="area-dialog"
-      onClose={onClose}
+      onClose={close}
       initialFocus={closeRef}
       panelClassName={dialogPanelClass}
     >
@@ -276,7 +346,7 @@ function AreaDialog({
         <h2 id="area-dialog" className="flex-1 text-lg text-[var(--pyre-creme)]">
           {area ? 'Edit area' : 'Add a storage area'}
         </h2>
-        <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
+        <button ref={closeRef} type="button" onClick={close} className={buttonClass}>
           Close
         </button>
       </div>
@@ -285,7 +355,7 @@ function AreaDialog({
         <input
           value={name}
           maxLength={FIELD_LIMITS.areaName}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => changeName(e.target.value)}
           placeholder="Back closet"
           className={`${compactInputClass} w-full`}
         />
@@ -295,7 +365,7 @@ function AreaDialog({
         <input
           value={description}
           maxLength={FIELD_LIMITS.areaDescription}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => changeDescription(e.target.value)}
           placeholder="Behind the laundry, top two shelves"
           className={`${compactInputClass} w-full`}
         />
@@ -308,32 +378,35 @@ function AreaDialog({
               key={s.label}
               selected={countEveryDays === s.days}
               label={s.label}
-              onClick={() => setCountEveryDays(s.days)}
+              onClick={() => changeCountEvery(s.days)}
             />
           ))}
         </div>
       </div>
-      {error && <ErrorBanner className="mb-3">{error}</ErrorBanner>}
-      <div className="flex gap-2">
+      {(problem ?? autosave.error ?? error) && (
+        <ErrorBanner className="mb-3">{problem ?? autosave.error ?? error}</ErrorBanner>
+      )}
+      {area ? (
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <SaveStatus autosave={autosave} problem={problem} />
+          </div>
+          {area.active && (
+            <button type="button" disabled={busy} className={buttonClass} onClick={retire}>
+              Retire
+            </button>
+          )}
+        </div>
+      ) : (
         <button
           type="button"
           disabled={busy || !name.trim()}
-          onClick={() => save()}
-          className={`${primaryButtonClass} flex-1`}
+          onClick={() => submit({ name, description, countEveryDays })}
+          className={`${primaryButtonClass} w-full`}
         >
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving…' : 'Add area'}
         </button>
-        {area?.active && (
-          <button
-            type="button"
-            disabled={busy}
-            className={buttonClass}
-            onClick={() => save({ active: false })}
-          >
-            Retire
-          </button>
-        )}
-      </div>
+      )}
     </Modal>
   );
 }
@@ -375,9 +448,16 @@ function CategoriesSection({
     if (await run(() => sendJson(CATEGORIES_API, 'POST', { name: newName }))) setNewName('');
   };
 
-  const rename = async (id: string) => {
-    if (!editName.trim()) return;
-    if (await run(() => patch(id, { name: editName }))) setEditingId(null);
+  // A rename saves when the field loses focus (or on Enter); Escape, a blank
+  // name, or no change just puts the old name back.
+  const cancelRename = useRef(false);
+  const rename = async (category: InventoryCategoryRow) => {
+    if (cancelRename.current || !editName.trim() || editName.trim() === category.name) {
+      cancelRename.current = false;
+      setEditingId(null);
+      return;
+    }
+    if (await run(() => patch(category.id, { name: editName }))) setEditingId(null);
   };
 
   return (
@@ -394,30 +474,20 @@ function CategoriesSection({
           {active.map((category, index) => (
             <li key={category.id} className="flex items-center gap-2 px-3 py-2">
               {editingId === category.id ? (
-                <>
-                  <input
-                    value={editName}
-                    maxLength={FIELD_LIMITS.categoryName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void rename(category.id);
-                      if (e.key === 'Escape') setEditingId(null);
-                    }}
-                    aria-label={`Rename ${category.name}`}
-                    className={`${compactInputClass} min-w-0 flex-1`}
-                  />
-                  <button
-                    type="button"
-                    className={goldButtonClass}
-                    disabled={!editName.trim()}
-                    onClick={() => rename(category.id)}
-                  >
-                    Save
-                  </button>
-                  <button type="button" className={buttonClass} onClick={() => setEditingId(null)}>
-                    Cancel
-                  </button>
-                </>
+                <input
+                  ref={focusOnMount}
+                  value={editName}
+                  maxLength={FIELD_LIMITS.categoryName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={() => void rename(category)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') cancelRename.current = true;
+                    if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+                  }}
+                  aria-label={`Rename ${category.name}`}
+                  aria-describedby="category-rename-hint"
+                  className={`${compactInputClass} min-w-0 flex-1`}
+                />
               ) : (
                 <>
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--pyre-creme)]">
@@ -465,6 +535,9 @@ function CategoriesSection({
         </ol>
       )}
 
+      <span id="category-rename-hint" className="sr-only">
+        Saves when you leave the field. Escape cancels.
+      </span>
       <div className="flex gap-2">
         <input
           value={newName}
@@ -563,9 +636,28 @@ function UnitsSection({
     }
   };
 
-  const save = async (id: string) => {
-    if (!editName.trim() || !editPlural.trim()) return;
-    if (await run(() => patch(id, { name: editName, plural: editPlural }))) setEditingId(null);
+  // An edit saves when focus leaves the row (or on Enter), sending only what
+  // changed; Escape or a blank field puts the old spelling back.
+  const cancelEdit = useRef(false);
+  const save = async (unit: InventoryUnitRow) => {
+    const body: Record<string, string> = {};
+    if (editName.trim() !== unit.name) body.name = editName;
+    if (editPlural.trim() !== unit.plural) body.plural = editPlural;
+    if (
+      cancelEdit.current ||
+      !editName.trim() ||
+      !editPlural.trim() ||
+      Object.keys(body).length === 0
+    ) {
+      cancelEdit.current = false;
+      setEditingId(null);
+      return;
+    }
+    if (await run(() => patch(unit.id, body))) setEditingId(null);
+  };
+  const editKeys = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') cancelEdit.current = true;
+    if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
   };
 
   return (
@@ -582,12 +674,21 @@ function UnitsSection({
           {active.map((unit, index) => (
             <li key={unit.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
               {editingId === unit.id ? (
-                <>
+                <fieldset
+                  className="flex min-w-0 flex-1 flex-wrap gap-2 border-0 p-0"
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) void save(unit);
+                  }}
+                >
+                  <legend className="sr-only">Edit {unit.name}</legend>
                   <input
+                    ref={focusOnMount}
                     value={editName}
                     maxLength={FIELD_LIMITS.unit}
                     onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={editKeys}
                     aria-label={`One ${unit.name}`}
+                    aria-describedby="unit-edit-hint"
                     placeholder="One…"
                     className={`${compactInputClass} min-w-0 flex-1`}
                   />
@@ -595,26 +696,13 @@ function UnitsSection({
                     value={editPlural}
                     maxLength={FIELD_LIMITS.unit}
                     onChange={(e) => setEditPlural(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void save(unit.id);
-                      if (e.key === 'Escape') setEditingId(null);
-                    }}
+                    onKeyDown={editKeys}
                     aria-label={`More than one ${unit.name}`}
+                    aria-describedby="unit-edit-hint"
                     placeholder="More than one…"
                     className={`${compactInputClass} min-w-0 flex-1`}
                   />
-                  <button
-                    type="button"
-                    className={goldButtonClass}
-                    disabled={!editName.trim() || !editPlural.trim()}
-                    onClick={() => save(unit.id)}
-                  >
-                    Save
-                  </button>
-                  <button type="button" className={buttonClass} onClick={() => setEditingId(null)}>
-                    Cancel
-                  </button>
-                </>
+                </fieldset>
               ) : (
                 <>
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--pyre-creme)]">
@@ -666,6 +754,9 @@ function UnitsSection({
         </ol>
       )}
 
+      <span id="unit-edit-hint" className="sr-only">
+        Saves when you leave the row. Escape cancels.
+      </span>
       <div className="flex flex-wrap gap-2">
         <input
           value={newName}
@@ -972,7 +1063,7 @@ function ItemsSection({
   );
 }
 
-interface ItemForm {
+export interface ItemForm {
   name: string;
   /** A variant's label, when editing one. */
   variant: string;
@@ -992,6 +1083,32 @@ interface ItemForm {
   vendorUrl: string;
   notes: string;
 }
+
+/**
+ * What's wrong with an edit, by field. Those fields are held back from saving
+ * until fixed; everything else still saves. The two re-order levels are
+ * checked as a pair, since the table refuses a fill-to below the re-order.
+ */
+export const itemProblems = (form: ItemForm, isVariant: boolean) => {
+  const problems: Partial<Record<keyof ItemForm, string>> = {};
+  if (isVariant && !form.variant.trim()) problems.variant = 'A variant needs a name.';
+  if (!isVariant && !form.name.trim()) problems.name = 'An item needs a name.';
+  if (!form.unitId) problems.unitId = 'Pick a unit.';
+  if (!(Number(form.lotSize) > 0)) problems.lotSize = 'How many come in a lot must be above 0.';
+  if (
+    form.reorderLevel.trim() !== '' &&
+    form.reorderTarget.trim() !== '' &&
+    Number(form.reorderTarget) < Number(form.reorderLevel)
+  ) {
+    problems.reorderTarget = 'The fill-to level must be at least the re-order level.';
+  }
+  if (form.vendorUrl.trim() && !/^https?:\/\//i.test(form.vendorUrl.trim())) {
+    problems.vendorUrl = 'The re-order link must start with http:// or https://.';
+  }
+  return problems;
+};
+
+const REORDER_PAIR: (keyof ItemForm)[] = ['reorderLevel', 'reorderTarget'];
 
 const formFor = (item: InventoryItemRow | null): ItemForm => ({
   name: item?.name ?? '',
@@ -1035,8 +1152,34 @@ function ItemDialog({
   // editing it doesn't silently drop its category.
   const categoryOptions = data.categories.filter((c) => c.active || c.id === item?.category_id);
 
-  const set = (key: keyof ItemForm) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  // An existing item saves each change as it's made (typing waits for a
+  // pause; picks save at once). A new item is added with the button.
+  const autosave = useCardAutosave(async (patch) => {
+    if (!item) return;
+    await sendJson(`${ITEMS_API}?id=${item.id}`, 'PATCH', patch);
+    await onChanged();
+  });
+  const isVariant = Boolean(item?.product_id);
+  const set =
+    (key: keyof ItemForm, delay = 600) =>
+    (e: { target: { value: string } }) => {
+      const next = { ...form, [key]: e.target.value };
+      setForm(next);
+      if (!item || key === 'variants') return;
+      const keys = REORDER_PAIR.includes(key) ? REORDER_PAIR : [key];
+      const problems = itemProblems(next, isVariant);
+      if (keys.some((k) => problems[k])) {
+        for (const k of keys) autosave.discard(k);
+      } else {
+        autosave.schedule(Object.fromEntries(keys.map((k) => [k, next[k]])), delay);
+      }
+    };
+  const problem = item ? (Object.values(itemProblems(form, isVariant))[0] ?? null) : null;
+
+  const close = useStableClose(async () => {
+    if (problem) return;
+    if (await autosave.flush()) onClose();
+  });
 
   const attempt = async (action: () => Promise<unknown>, close = true) => {
     setBusy(true);
@@ -1056,22 +1199,14 @@ function ItemDialog({
   const product = item?.product_id
     ? data.products.find((p) => p.id === item.product_id)
     : undefined;
-  const isVariant = Boolean(item?.product_id);
   const variantList = form.variants
     .split(',')
     .map((v) => v.trim())
     .filter(Boolean);
 
-  const save = () => {
+  const add = () => {
     const { name, variant, variants, categoryId, ...settings } = form;
     return attempt(() => {
-      if (item) {
-        return sendJson(
-          `${ITEMS_API}?id=${item.id}`,
-          'PATCH',
-          isVariant ? { ...settings, variant } : { ...settings, name, categoryId }
-        );
-      }
       if (withVariants) {
         return sendJson(PRODUCTS_API, 'POST', {
           ...settings,
@@ -1124,7 +1259,7 @@ function ItemDialog({
       <span className={labelClass}>{label}</span>
       <select
         value={form[key]}
-        onChange={set(key)}
+        onChange={set(key, 0)}
         aria-describedby={describedBy}
         className={`${compactSelectClass} w-full`}
       >
@@ -1145,7 +1280,7 @@ function ItemDialog({
   return (
     <Modal
       labelledBy="item-dialog"
-      onClose={onClose}
+      onClose={close}
       initialFocus={closeRef}
       panelClassName={dialogPanelClass}
     >
@@ -1153,7 +1288,7 @@ function ItemDialog({
         <h2 id="item-dialog" className="flex-1 text-lg text-[var(--pyre-creme)]">
           {item ? `Edit ${item.name}` : withVariants ? 'Add an item with variants' : 'Add an item'}
         </h2>
-        <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
+        <button ref={closeRef} type="button" onClick={close} className={buttonClass}>
           Close
         </button>
       </div>
@@ -1193,7 +1328,7 @@ function ItemDialog({
             <span className={labelClass}>Category</span>
             <select
               value={form.categoryId}
-              onChange={set('categoryId')}
+              onChange={set('categoryId', 0)}
               className={`${compactSelectClass} w-full`}
             >
               <option value="">No category</option>
@@ -1248,7 +1383,7 @@ function ItemDialog({
             <span className={labelClass}>Count at least</span>
             <select
               value={form.countEveryDays}
-              onChange={set('countEveryDays')}
+              onChange={set('countEveryDays', 0)}
               aria-describedby="inventory-count-every-hint"
               className={`${compactSelectClass} w-full`}
             >
@@ -1397,43 +1532,45 @@ function ItemDialog({
         )}
       </div>
 
-      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+      {(problem ?? autosave.error ?? error) && (
+        <ErrorBanner className="mt-3">{problem ?? autosave.error ?? error}</ErrorBanner>
+      )}
 
-      <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          disabled={
-            busy ||
-            !form.unitId ||
-            (isVariant ? !form.variant.trim() : !form.name.trim()) ||
-            (withVariants && variantList.length === 0)
-          }
-          onClick={save}
-          className={`${primaryButtonClass} flex-1`}
-        >
-          {busy
-            ? 'Saving…'
-            : item
-              ? 'Save'
-              : withVariants
-                ? `Add ${variantList.length || ''} variant${variantList.length === 1 ? '' : 's'}`
-                : 'Add item'}
-        </button>
-        {item && (
+      {item ? (
+        <div className="mt-4 flex items-center gap-2">
+          <div className="flex-1">
+            <SaveStatus autosave={autosave} problem={problem} />
+          </div>
           <button
             type="button"
             disabled={busy}
             className={buttonClass}
-            onClick={() =>
-              attempt(() =>
+            onClick={async () => {
+              if (!(await autosave.flush())) return;
+              await attempt(() =>
                 sendJson(`${ITEMS_API}?id=${item.id}`, 'PATCH', { active: !item.active })
-              )
-            }
+              );
+            }}
           >
             {item.active ? 'Retire' : 'Restore'}
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={
+            busy || !form.unitId || !form.name.trim() || (withVariants && variantList.length === 0)
+          }
+          onClick={add}
+          className={`${primaryButtonClass} mt-4 w-full`}
+        >
+          {busy
+            ? 'Saving…'
+            : withVariants
+              ? `Add ${variantList.length || ''} variant${variantList.length === 1 ? '' : 's'}`
+              : 'Add item'}
+        </button>
+      )}
     </Modal>
   );
 }
@@ -1498,12 +1635,30 @@ function ProductDialog({
     );
   };
 
-  const changed = name.trim() !== current.name || categoryId !== (current.category_id ?? '');
+  // Name and category save as they're changed; a blank name is held back.
+  const autosave = useCardAutosave(async (patch) => {
+    await sendJson(`${PRODUCTS_API}?id=${product.id}`, 'PATCH', patch);
+    await onChanged();
+  });
+  const problem = name.trim() ? null : 'A product needs a name.';
+  const changeName = (next: string) => {
+    setName(next);
+    if (next.trim()) autosave.schedule({ name: next }, 600);
+    else autosave.discard('name');
+  };
+  const changeCategory = (next: string) => {
+    setCategoryId(next);
+    autosave.schedule({ categoryId: next }, 0);
+  };
+  const close = useStableClose(async () => {
+    if (problem) return;
+    if (await autosave.flush()) onClose();
+  });
 
   return (
     <Modal
       labelledBy="product-dialog"
-      onClose={onClose}
+      onClose={close}
       initialFocus={closeRef}
       panelClassName={dialogPanelClass}
     >
@@ -1511,7 +1666,7 @@ function ProductDialog({
         <h2 id="product-dialog" className="flex-1 text-lg text-[var(--pyre-creme)]">
           Edit {current.name}
         </h2>
-        <button ref={closeRef} type="button" onClick={onClose} className={buttonClass}>
+        <button ref={closeRef} type="button" onClick={close} className={buttonClass}>
           Close
         </button>
       </div>
@@ -1523,7 +1678,7 @@ function ProductDialog({
             <input
               value={name}
               maxLength={FIELD_LIMITS.productName}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => changeName(e.target.value)}
               className={`${compactInputClass} w-full`}
             />
           </label>
@@ -1531,7 +1686,7 @@ function ProductDialog({
             <span className={labelClass}>Category</span>
             <select
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              onChange={(e) => changeCategory(e.target.value)}
               className={`${compactSelectClass} w-full`}
             >
               <option value="">No category</option>
@@ -1544,20 +1699,6 @@ function ProductDialog({
             </select>
           </label>
         </div>
-        {changed && (
-          <button
-            type="button"
-            disabled={busy || !name.trim()}
-            className={`${primaryButtonClass} w-full`}
-            onClick={() =>
-              attempt(() =>
-                sendJson(`${PRODUCTS_API}?id=${product.id}`, 'PATCH', { name, categoryId })
-              )
-            }
-          >
-            Save name and category
-          </button>
-        )}
 
         {current.active && (
           <fieldset className="rounded border border-white/10 p-3">
@@ -1623,20 +1764,26 @@ function ProductDialog({
         )}
       </div>
 
-      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+      {(problem ?? autosave.error ?? error) && (
+        <ErrorBanner className="mt-3">{problem ?? autosave.error ?? error}</ErrorBanner>
+      )}
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex items-center gap-2">
+        <div className="flex-1">
+          <SaveStatus autosave={autosave} problem={problem} />
+        </div>
         <button
           type="button"
           disabled={busy}
           className={buttonClass}
-          onClick={() =>
-            attempt(
+          onClick={async () => {
+            if (!(await autosave.flush())) return;
+            await attempt(
               () =>
                 sendJson(`${PRODUCTS_API}?id=${product.id}`, 'PATCH', { active: !current.active }),
               true
-            )
-          }
+            );
+          }}
         >
           {current.active ? 'Retire product and all variants' : 'Restore product'}
         </button>
@@ -1658,35 +1805,31 @@ function ProductDialog({
  */
 function CountReviewSection() {
   const { data, reload } = useCachedJson<CountsOverview>(COUNTS_API);
+  // Edited values, until the page is left; null = showing what's saved.
   const [pct, setPct] = useState<string | null>(null);
   const [dollars, setDollars] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  // The settings are saved as a pair, so each change sends both values.
+  const autosave = useCardAutosave(async (patch) => {
+    await sendJson(COUNTS_API, 'PATCH', { action: 'settings', ...patch });
+    invalidateJson(COUNTS_API);
+    await reload();
+  });
   if (!data) return null;
 
   const pctValue = pct ?? formatQuantity(data.settings.review_pct);
   const dollarValue = dollars ?? (data.settings.review_cents / 100).toFixed(2);
+  const isNumber = (value: string) => value !== '' && !Number.isNaN(Number(value));
+  const problem =
+    isNumber(pctValue) && isNumber(dollarValue) ? null : 'Enter both amounts as numbers.';
 
-  const save = async () => {
-    setBusy(true);
-    setError(null);
-    setSaved(false);
-    try {
-      await sendJson(COUNTS_API, 'PATCH', {
-        action: 'settings',
-        reviewPct: Number(pctValue),
-        reviewDollars: Number(dollarValue),
-      });
-      invalidateJson(COUNTS_API);
-      await reload();
-      setPct(null);
-      setDollars(null);
-      setSaved(true);
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
+  const change = (nextPct: string, nextDollars: string) => {
+    setPct(nextPct);
+    setDollars(nextDollars);
+    if (isNumber(nextPct) && isNumber(nextDollars)) {
+      autosave.schedule({ reviewPct: Number(nextPct), reviewDollars: Number(nextDollars) }, 600);
+    } else {
+      autosave.discard('reviewPct');
+      autosave.discard('reviewDollars');
     }
   };
 
@@ -1708,7 +1851,7 @@ function CountReviewSection() {
           <input
             inputMode="decimal"
             value={pctValue}
-            onChange={(e) => setPct(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => change(e.target.value.replace(/[^0-9.]/g, ''), dollarValue)}
             className={`${compactInputClass} w-24`}
           />
         </label>
@@ -1717,21 +1860,19 @@ function CountReviewSection() {
           <input
             inputMode="decimal"
             value={dollarValue}
-            onChange={(e) => setDollars(e.target.value.replace(/[^0-9.]/g, ''))}
+            onChange={(e) => change(pctValue, e.target.value.replace(/[^0-9.]/g, ''))}
             className={`${compactInputClass} w-28`}
           />
         </label>
-        <button
-          type="button"
-          className={goldButtonClass}
-          disabled={busy || (pct === null && dollars === null)}
-          onClick={save}
-        >
-          {busy ? 'Saving…' : 'Save'}
-        </button>
-        {saved && <span className="text-xs text-[var(--pyre-sage)]">Saved</span>}
+        {(pct !== null || dollars !== null) && (
+          <div className="pb-1.5">
+            <SaveStatus autosave={autosave} problem={problem} />
+          </div>
+        )}
       </div>
-      {error && <ErrorBanner className="mt-3">{error}</ErrorBanner>}
+      {(problem ?? autosave.error) && (
+        <ErrorBanner className="mt-3">{problem ?? autosave.error}</ErrorBanner>
+      )}
     </section>
   );
 }
