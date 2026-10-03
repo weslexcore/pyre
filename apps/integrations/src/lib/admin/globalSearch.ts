@@ -63,6 +63,7 @@ export interface InventoryHit {
   /** Category name; '' when uncategorised. */
   category: string;
   unit: string;
+  unit_plural: string;
   /** Total on hand across every storage spot. */
   onHand: number;
   /** At or below its re-order level. */
@@ -283,7 +284,7 @@ export function buildItems(
       href: inventoryHref(item.id, item.editable),
       title: item.name,
       hint: [item.category, item.areas.join(', ')].filter(Boolean).join(' · '),
-      meta: `${formatUnits(item.onHand, item.unit)} on hand${item.low ? ' · low' : ''}`,
+      meta: `${formatUnits(item.onHand, item)} on hand${item.low ? ' · low' : ''}`,
     });
   }
   for (const sop of server.sops) {

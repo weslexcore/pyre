@@ -71,6 +71,7 @@ export function searchInventory(
       name: item.name,
       category,
       unit: item.unit,
+      unit_plural: item.unit_plural,
       onHand,
       low: isLowStock(item, onHand),
       areas,

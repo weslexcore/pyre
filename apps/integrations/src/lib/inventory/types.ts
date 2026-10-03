@@ -29,6 +29,22 @@ export interface InventoryCategoryRow {
 }
 
 /**
+ * A unit things are counted or bought in, with its plural spelled out
+ * ("box" / "boxes", "each" / "each"). One admin-managed list serves both the
+ * counting unit and the lot ("case of 12") in the item form.
+ */
+export interface InventoryUnitRow {
+  id: string;
+  name: string;
+  plural: string;
+  sort_order: number;
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * A product that comes in variants — sizes, colours, flavours. Each variant
  * is its own item (own stock, re-order level, cost); the database keeps a
  * variant's name ("Pyre Tee — M") and category in step with its product.
@@ -50,9 +66,17 @@ export interface InventoryItemRow {
   name: string;
   kind: InventoryItemKind;
   category_id: string | null;
+  /** What it's counted in, from inventory_units. */
+  unit_id: string;
+  /** Copies of that unit's name and plural, kept by the database. */
   unit: string;
+  unit_plural: string;
   lot_size: number;
+  /** What it's bought by ("case"), from inventory_units; null = one at a time. */
+  lot_unit_id: string | null;
+  /** Copies of the lot unit's name and plural, kept by the database. */
   lot_label: string | null;
+  lot_label_plural: string | null;
   reorder_level: number | null;
   reorder_target: number | null;
   unit_cost_cents: number | null;
@@ -162,6 +186,7 @@ export interface InventoryMovementRow {
 export interface InventoryOverview {
   areas: InventoryAreaRow[];
   categories: InventoryCategoryRow[];
+  units: InventoryUnitRow[];
   products: InventoryProductRow[];
   items: InventoryItemRow[];
   spots: InventorySpotRow[];
@@ -241,7 +266,12 @@ export interface CountsOverview {
     people: string[];
   }[];
   /** Admins only: lines waiting on a decision. */
-  review: (InventoryCountLineRow & { itemName: string; unit: string; areaName: string })[];
+  review: (InventoryCountLineRow & {
+    itemName: string;
+    unit: string;
+    unit_plural: string;
+    areaName: string;
+  })[];
   settings: InventorySettings;
   people: Record<string, string>;
   isAdmin: boolean;
@@ -256,6 +286,7 @@ export interface CountSheetRow {
   itemId: string;
   name: string;
   unit: string;
+  unit_plural: string;
   category: string;
   line: InventoryCountLineRow | null;
   /** An admin asked for this spot to be counted again (in any round). */
@@ -274,7 +305,12 @@ export interface CountSheet {
 export interface CountSummary {
   round: InventoryCountRow;
   areas: { area: InventoryAreaRow; counted: number; total: number }[];
-  lines: (InventoryCountLineRow & { itemName: string; unit: string; areaName: string })[];
+  lines: (InventoryCountLineRow & {
+    itemName: string;
+    unit: string;
+    unit_plural: string;
+    areaName: string;
+  })[];
   notCounted: { itemName: string; areaName: string }[];
   totals: { shortUnits: number; shortCents: number; foundUnits: number; foundCents: number };
   people: Record<string, string>;
@@ -325,7 +361,12 @@ export interface ReorderOverview {
   /** Open orders, oldest first, with the item they are for. */
   open: (InventoryOrderRow & { item: InventoryItemRow; total: number })[];
   /** Received or cancelled in the last 30 days, newest first. */
-  recent: (InventoryOrderRow & { itemName: string; unit: string; areaName: string | null })[];
+  recent: (InventoryOrderRow & {
+    itemName: string;
+    unit: string;
+    unit_plural: string;
+    areaName: string | null;
+  })[];
   /** Active areas, for choosing where a delivery goes. */
   areas: InventoryAreaRow[];
   people: Record<string, string>;
@@ -344,6 +385,7 @@ export interface ReportRow {
   label: string;
   /** Item reports only: the unit and id, for linking to the item page. */
   unit?: string;
+  unit_plural?: string;
   itemId?: string;
   used: number;
   usedCents: number;
@@ -426,7 +468,11 @@ export interface InventoryRejectRow {
   credited_at: string | null;
 }
 
-export type RejectView = InventoryRejectRow & { itemName: string; unit: string };
+export type RejectView = InventoryRejectRow & {
+  itemName: string;
+  unit: string;
+  unit_plural: string;
+};
 
 /** One week of an item's deliveries, for the rejects chart and table. */
 export interface RejectWeek {
@@ -447,7 +493,7 @@ export interface RejectsOverview {
   /** Decided in the last 90 days, newest first. */
   decided: RejectView[];
   /** Items that have had rejects, most rejected first — the chart's picker. */
-  items: { id: string; name: string; unit: string; rejected: number }[];
+  items: { id: string; name: string; unit: string; unit_plural: string; rejected: number }[];
   people: Record<string, string>;
   isAdmin: boolean;
 }
@@ -457,5 +503,6 @@ export interface RejectSeries {
   itemId: string;
   name: string;
   unit: string;
+  unit_plural: string;
   weeks: RejectWeek[];
 }

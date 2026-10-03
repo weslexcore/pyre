@@ -17,7 +17,6 @@ export const FIELD_LIMITS = {
   variant: 40,
   categoryName: 60,
   unit: 30,
-  lotLabel: 30,
   vendor: 120,
   vendorUrl: 500,
   notes: 2000,
@@ -136,14 +135,21 @@ export function normalizeItem(
     if (!name) return { ok: false, error: `name is required (max ${FIELD_LIMITS.itemName} chars)` };
     out.name = name;
   }
-  if (!partial || has(body, 'unit')) {
-    const unit = text(body.unit ?? 'each', FIELD_LIMITS.unit);
-    if (!unit) return { ok: false, error: `unit is required (max ${FIELD_LIMITS.unit} chars)` };
-    out.unit = unit;
+  // Units are picked from inventory_units; the item's text copies follow.
+  if (!partial || has(body, 'unitId')) {
+    if (typeof body.unitId !== 'string' || !UUID_RE.test(body.unitId)) {
+      return { ok: false, error: 'Pick a unit' };
+    }
+    out.unit_id = body.unitId;
+  }
+  if (has(body, 'lotUnitId')) {
+    const id = body.lotUnitId;
+    if (id == null || id === '') out.lot_unit_id = null;
+    else if (typeof id === 'string' && UUID_RE.test(id)) out.lot_unit_id = id;
+    else return { ok: false, error: 'lotUnitId must be a unit id or empty' };
   }
 
   const texts: Array<[string, string, number]> = [
-    ['lotLabel', 'lot_label', FIELD_LIMITS.lotLabel],
     ['vendor', 'vendor', FIELD_LIMITS.vendor],
     ['vendorUrl', 'vendor_url', FIELD_LIMITS.vendorUrl],
     ['notes', 'notes', FIELD_LIMITS.notes],
@@ -205,6 +211,33 @@ export function normalizeItem(
       return { ok: false, error: 'variantOrder must be a whole number' };
     }
     out.variant_order = order;
+  }
+  if (has(body, 'active')) {
+    if (typeof body.active !== 'boolean') return { ok: false, error: 'active must be true/false' };
+    out.active = body.active;
+  }
+  return { ok: true, value: out };
+}
+
+export function normalizeUnit(
+  body: Record<string, unknown>,
+  { partial = false } = {}
+): Normalized<Columns> {
+  const out: Columns = {};
+  for (const key of ['name', 'plural'] as const) {
+    if (partial && !has(body, key)) continue;
+    const value = text(body[key], FIELD_LIMITS.unit);
+    if (!value) {
+      return { ok: false, error: `${key} is required (max ${FIELD_LIMITS.unit} chars)` };
+    }
+    out[key] = value;
+  }
+  if (has(body, 'sortOrder')) {
+    const sortOrder = integer(body.sortOrder, -10_000, 10_000);
+    if (sortOrder === undefined || sortOrder === null) {
+      return { ok: false, error: 'sortOrder must be a whole number' };
+    }
+    out.sort_order = sortOrder;
   }
   if (has(body, 'active')) {
     if (typeof body.active !== 'boolean') return { ok: false, error: 'active must be true/false' };

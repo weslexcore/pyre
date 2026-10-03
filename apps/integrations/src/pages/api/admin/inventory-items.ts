@@ -10,6 +10,7 @@ import { requireAdmin } from '@/lib/auth/admin';
 import { beginMutation, type Db, dbError, isUuid, json } from '@/lib/http/route';
 import { parseQuantity } from '@/lib/inventory/rules';
 import type { InventoryItemRow } from '@/lib/inventory/types';
+import { checkUnits } from '@/lib/inventory/units';
 import { normalizeItem } from '@/lib/inventory/validate';
 
 const DUPLICATE = 'An active item already has that name';
@@ -70,6 +71,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (!normalized.ok) return json({ error: normalized.error }, 400);
   const categoryError = await checkCategory(db, normalized.value.category_id);
   if (categoryError) return categoryError;
+  const unitError = await checkUnits(db, normalized.value);
+  if (unitError) return unitError;
   const placements = parsePlacements(body.spots);
   if (typeof placements === 'string') return json({ error: placements }, 400);
 
@@ -136,22 +139,31 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 
   const normalized = normalizeItem(body, { partial: true });
   if (!normalized.ok) return json({ error: normalized.error }, 400);
-  if (typeof normalized.value.category_id === 'string') {
-    // Re-saving an item that already sits in a since-retired category is
-    // fine; only a change of category has to pick an active one.
-    const { data: current } = await db
-      .from('inventory_items')
-      .select('category_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (
-      (current as { category_id: string | null } | null)?.category_id !==
-      normalized.value.category_id
-    ) {
-      const categoryError = await checkCategory(db, normalized.value.category_id);
-      if (categoryError) return categoryError;
-    }
+  // Re-saving an item that already has a since-retired category or unit is
+  // fine; only a change has to pick an active one.
+  const { data: currentData, error: currentError } = await db
+    .from('inventory_items')
+    .select('category_id, unit_id, lot_unit_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (currentError) return dbError(currentError);
+  const current = currentData as {
+    category_id: string | null;
+    unit_id: string;
+    lot_unit_id: string | null;
+  } | null;
+  if (
+    typeof normalized.value.category_id === 'string' &&
+    current?.category_id !== normalized.value.category_id
+  ) {
+    const categoryError = await checkCategory(db, normalized.value.category_id);
+    if (categoryError) return categoryError;
   }
+  const unitError = await checkUnits(db, normalized.value, [
+    current?.unit_id ?? null,
+    current?.lot_unit_id ?? null,
+  ]);
+  if (unitError) return unitError;
   if (Object.keys(normalized.value).length === 0) return json({ error: 'Nothing to update' }, 400);
 
   const { data, error } = await db

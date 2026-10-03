@@ -25,6 +25,7 @@ import {
   formatQuantity,
   formatUnits,
   lotDescription,
+  suggestPlural,
   totalsByItem,
 } from '@/lib/inventory/rules';
 import type {
@@ -34,6 +35,7 @@ import type {
   InventoryItemRow,
   InventoryOverview,
   InventoryProductRow,
+  InventoryUnitRow,
 } from '@/lib/inventory/types';
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
 import { ErrorBanner } from './ErrorBanner';
@@ -46,6 +48,7 @@ const CATEGORIES_API = '/api/admin/inventory-categories';
 const COUNTS_API = '/api/admin/inventory-counts';
 const ITEMS_API = '/api/admin/inventory-items';
 const PRODUCTS_API = '/api/admin/inventory-products';
+const UNITS_API = '/api/admin/inventory-units';
 const SPOTS_API = '/api/admin/inventory-spots';
 
 const COUNT_SCHEDULES: { days: number | null; label: string }[] = [
@@ -92,6 +95,7 @@ export function InventorySetup() {
       {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
       <AreasSection areas={data.areas} run={run} refresh={refresh} />
       <CategoriesSection categories={data.categories} run={run} />
+      <UnitsSection units={data.units} items={data.items} run={run} />
       <ItemsSection data={data} refresh={refresh} />
       <CountReviewSection />
     </div>
@@ -508,6 +512,229 @@ function CategoriesSection({
   );
 }
 
+/**
+ * The units items are counted and bought in, each with its plural spelled
+ * out so "2 boxes" and "3 each" read right everywhere. Renaming a unit or
+ * fixing its plural updates every item using it.
+ */
+function UnitsSection({
+  units,
+  items,
+  run,
+}: {
+  units: InventoryUnitRow[];
+  items: InventoryItemRow[];
+  run: (action: () => Promise<unknown>) => Promise<boolean>;
+}) {
+  const [newName, setNewName] = useState('');
+  const [newPlural, setNewPlural] = useState('');
+  // Until the plural is typed into, it follows the suggestion for the name.
+  const [pluralTouched, setPluralTouched] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPlural, setEditPlural] = useState('');
+  const [showRetired, setShowRetired] = useState(false);
+  const active = units.filter((u) => u.active);
+  const retired = units.filter((u) => !u.active);
+  const usedBy = (id: string) =>
+    items.filter((i) => i.active && (i.unit_id === id || i.lot_unit_id === id)).length;
+
+  const patch = (id: string, body: Record<string, unknown>) =>
+    sendJson(`${UNITS_API}?id=${id}`, 'PATCH', body);
+
+  const move = (index: number, delta: -1 | 1) =>
+    run(async () => {
+      const order = [...active];
+      const [moved] = order.splice(index, 1);
+      order.splice(index + delta, 0, moved);
+      await Promise.all(
+        order.map((u, i) => (u.sort_order === i + 1 ? null : patch(u.id, { sortOrder: i + 1 })))
+      );
+    });
+
+  const plural = pluralTouched ? newPlural : suggestPlural(newName);
+  const add = async () => {
+    if (!newName.trim() || !plural.trim()) return;
+    if (await run(() => sendJson(UNITS_API, 'POST', { name: newName, plural }))) {
+      setNewName('');
+      setNewPlural('');
+      setPluralTouched(false);
+    }
+  };
+
+  const save = async (id: string) => {
+    if (!editName.trim() || !editPlural.trim()) return;
+    if (await run(() => patch(id, { name: editName, plural: editPlural }))) setEditingId(null);
+  };
+
+  return (
+    <section aria-labelledby="units-heading">
+      <h2
+        id="units-heading"
+        className="mb-3 font-mono text-xs uppercase tracking-wide text-white/50"
+      >
+        Units — what items are counted and bought in
+      </h2>
+
+      {active.length > 0 && (
+        <ol className="mb-3 divide-y divide-white/5 rounded border border-white/10 bg-white/[0.03]">
+          {active.map((unit, index) => (
+            <li key={unit.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              {editingId === unit.id ? (
+                <>
+                  <input
+                    value={editName}
+                    maxLength={FIELD_LIMITS.unit}
+                    onChange={(e) => setEditName(e.target.value)}
+                    aria-label={`One ${unit.name}`}
+                    placeholder="One…"
+                    className={`${compactInputClass} min-w-0 flex-1`}
+                  />
+                  <input
+                    value={editPlural}
+                    maxLength={FIELD_LIMITS.unit}
+                    onChange={(e) => setEditPlural(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void save(unit.id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    aria-label={`More than one ${unit.name}`}
+                    placeholder="More than one…"
+                    className={`${compactInputClass} min-w-0 flex-1`}
+                  />
+                  <button
+                    type="button"
+                    className={goldButtonClass}
+                    disabled={!editName.trim() || !editPlural.trim()}
+                    onClick={() => save(unit.id)}
+                  >
+                    Save
+                  </button>
+                  <button type="button" className={buttonClass} onClick={() => setEditingId(null)}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--pyre-creme)]">
+                    1 {unit.name} · 2 {unit.plural}
+                    <span className="ml-2 text-xs text-white/40">
+                      {usedBy(unit.id) || 'no'} item{usedBy(unit.id) === 1 ? '' : 's'}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={index === 0}
+                    onClick={() => move(index, -1)}
+                    aria-label={`Move ${unit.name} up`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={index === active.length - 1}
+                    onClick={() => move(index, 1)}
+                    aria-label={`Move ${unit.name} down`}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => {
+                      setEditingId(unit.id);
+                      setEditName(unit.name);
+                      setEditPlural(unit.plural);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => run(() => patch(unit.id, { active: false }))}
+                  >
+                    Retire
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={newName}
+          maxLength={FIELD_LIMITS.unit}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder={active.length ? 'One… e.g. box' : 'towel, bottle, box, case…'}
+          aria-label="New unit, one of it"
+          className={`${compactInputClass} min-w-0 flex-1 sm:max-w-[12rem]`}
+        />
+        <input
+          value={plural}
+          maxLength={FIELD_LIMITS.unit}
+          onChange={(e) => {
+            setPluralTouched(true);
+            setNewPlural(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void add();
+          }}
+          placeholder="More than one… e.g. boxes"
+          aria-label="New unit, more than one"
+          className={`${compactInputClass} min-w-0 flex-1 sm:max-w-[12rem]`}
+        />
+        <button
+          type="button"
+          className={goldButtonClass}
+          disabled={!newName.trim() || !plural.trim()}
+          onClick={add}
+        >
+          Add unit
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-white/40">
+        The plural is filled in for you — check it. Use the same word for both when it doesn't
+        change ("each").
+      </p>
+
+      {retired.length > 0 && (
+        <div className="mt-3">
+          <button
+            type="button"
+            className="text-xs text-white/40 underline"
+            onClick={() => setShowRetired((v) => !v)}
+          >
+            {showRetired ? 'Hide' : 'Show'} {retired.length} retired
+          </button>
+          {showRetired && (
+            <ul className="mt-2 space-y-1">
+              {retired.map((unit) => (
+                <li key={unit.id} className="flex items-center gap-2 text-sm text-white/50">
+                  <span className="flex-1">
+                    {unit.name} / {unit.plural}
+                  </span>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    onClick={() => run(() => patch(unit.id, { active: true }))}
+                  >
+                    Restore
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ItemsSection({
   data,
   refresh,
@@ -613,7 +840,7 @@ function ItemsSection({
           </div>
           <p className="text-xs text-white/45">
             {[
-              `${formatUnits(total, item.unit)} on hand`,
+              `${formatUnits(total, item)} on hand`,
               lotDescription(item),
               item.reorder_level != null &&
                 `re-order at ${formatQuantity(item.reorder_level)}${
@@ -749,9 +976,10 @@ interface ItemForm {
   /** "S, M, L, XL" — the variants of a new product. */
   variants: string;
   categoryId: string;
-  unit: string;
+  unitId: string;
   lotSize: string;
-  lotLabel: string;
+  /** '' = bought one at a time. */
+  lotUnitId: string;
   reorderLevel: string;
   reorderTarget: string;
   unitCost: string;
@@ -765,9 +993,9 @@ const formFor = (item: InventoryItemRow | null): ItemForm => ({
   variant: item?.variant ?? '',
   variants: '',
   categoryId: item?.category_id ?? '',
-  unit: item?.unit ?? '',
+  unitId: item?.unit_id ?? '',
   lotSize: item ? formatQuantity(item.lot_size) : '1',
-  lotLabel: item?.lot_label ?? '',
+  lotUnitId: item?.lot_unit_id ?? '',
   reorderLevel: item?.reorder_level == null ? '' : formatQuantity(item.reorder_level),
   reorderTarget: item?.reorder_target == null ? '' : formatQuantity(item.reorder_target),
   unitCost: item?.unit_cost_cents == null ? '' : (item.unit_cost_cents / 100).toFixed(2),
@@ -871,7 +1099,39 @@ function ItemDialog({
     </label>
   );
 
-  const unit = form.unit.trim() || 'unit';
+  const unitRow = data.units.find((u) => u.id === form.unitId);
+  const lotRow = data.units.find((u) => u.id === form.lotUnitId);
+  const unit = unitRow?.name ?? 'unit';
+  const units = unitRow?.plural ?? 'units';
+  // Active units, plus the item's own if since retired, so editing it
+  // doesn't silently drop them.
+  const unitOptions = data.units.filter(
+    (u) => u.active || u.id === item?.unit_id || u.id === item?.lot_unit_id
+  );
+  const unitSelect = (
+    key: 'unitId' | 'lotUnitId',
+    label: string,
+    empty: string,
+    describedBy?: string
+  ) => (
+    <label className="block min-w-0">
+      <span className={labelClass}>{label}</span>
+      <select
+        value={form[key]}
+        onChange={set(key)}
+        aria-describedby={describedBy}
+        className={`${compactSelectClass} w-full`}
+      >
+        <option value="">{empty}</option>
+        {unitOptions.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name === u.plural ? u.name : `${u.name} / ${u.plural}`}
+            {u.active ? '' : ' (retired)'}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   const itemSpots = item ? data.spots.filter((s) => s.item_id === item.id) : [];
   const unplacedAreas = activeAreas.filter((a) => !itemSpots.some((s) => s.area_id === a.id));
   const [addAreaId, setAddAreaId] = useState('');
@@ -939,14 +1199,11 @@ function ItemDialog({
               ))}
             </select>
           </label>
-          {field('unit', 'Unit', {
-            maxLength: FIELD_LIMITS.unit,
-            placeholder: 'towel, bottle, roll',
-            'aria-describedby': 'inventory-unit-hint',
-          })}
+          {unitSelect('unitId', 'Unit', 'Pick a unit…', 'inventory-unit-hint')}
         </div>
         <p id="inventory-unit-hint" className="-mt-1 text-xs text-white/40">
           What you count on the shelf. Stock, re-order levels and cost all use this unit.
+          {data.units.every((u) => !u.active) && ' Add units in the Units section first.'}
         </p>
 
         <fieldset className="rounded border border-white/10 p-3">
@@ -954,11 +1211,8 @@ function ItemDialog({
             How it's bought
           </legend>
           <div className="grid grid-cols-2 gap-2">
-            {field('lotLabel', 'Lot name', {
-              maxLength: FIELD_LIMITS.lotLabel,
-              placeholder: 'case',
-            })}
-            {field('lotSize', `${unit}s per lot`, { inputMode: 'decimal' })}
+            {unitSelect('lotUnitId', 'Bought by the', 'One at a time')}
+            {field('lotSize', `${units} per ${lotRow?.name ?? 'lot'}`, { inputMode: 'decimal' })}
           </div>
         </fieldset>
 
@@ -1053,7 +1307,7 @@ function ItemDialog({
                     <span className="flex-1">
                       {data.areas.find((a) => a.id === spot.area_id)?.name ?? '?'}
                       <span className="ml-2 text-xs text-white/40">
-                        {formatUnits(onHand, item.unit)}
+                        {formatUnits(onHand, item)}
                       </span>
                     </span>
                     <button
@@ -1115,7 +1369,7 @@ function ItemDialog({
           type="button"
           disabled={
             busy ||
-            !form.unit.trim() ||
+            !form.unitId ||
             (isVariant ? !form.variant.trim() : !form.name.trim()) ||
             (withVariants && variantList.length === 0)
           }
