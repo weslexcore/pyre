@@ -14,12 +14,15 @@ import {
   DEFAULT_ARRIVE_BEFORE_MIN,
   DEFAULT_DUTY_CATALOG,
   DEFAULT_LEAVE_AFTER_MIN,
+  DOW_LABELS,
   type DutyCatalog,
   type DutyDef,
+  dayOfWeek,
   defaultAssignmentWindow,
   dutyDef,
   dutyLabel,
   dutyPhases,
+  dutyRunsOn,
   dutyTitle,
   findRestViolations,
   firstTentativeDate,
@@ -33,6 +36,7 @@ import {
   mismatchedDutyPairs,
   missingShiftLead,
   normalizeDuties,
+  offDayDuties,
   onCallPeople,
   pairedDutyFor,
   SHIFT_LABEL_SUGGESTIONS,
@@ -2283,11 +2287,24 @@ function ShiftDetail({
                         ⚠ letters split across phases
                       </span>
                     )}
+                    {offDayDuties(dutyCatalog, a.duties, shift.shift_date).length > 0 && (
+                      <span
+                        className="font-mono text-[10px] text-[var(--pyre-gold)]"
+                        title="The duty list says this isn't done on this day of the week"
+                      >
+                        ⚠{' '}
+                        {offDayDuties(dutyCatalog, a.duties, shift.shift_date)
+                          .map((key) => dutyLabel(dutyCatalog, key))
+                          .join(', ')}{' '}
+                        not done {DOW_LABELS[dayOfWeek(shift.shift_date)]}
+                      </span>
+                    )}
                   </div>
                 )}
                 {editing && (
                   <AssignmentEditor
                     assignment={a}
+                    date={shift.shift_date}
                     onSave={(fields) =>
                       run(() =>
                         api('PATCH', '/api/admin/shift-assignments', { id: a.id, ...fields })
@@ -2877,9 +2894,12 @@ type AutosaveStatus =
  */
 function AssignmentEditor({
   assignment,
+  date,
   onSave,
 }: {
   assignment: ShiftAssignmentRow;
+  /** The shift's day: duties limited to other days aren't offered. */
+  date: string;
   /** Resolves to the error message, or null once saved. */
   onSave: (fields: AssignmentFields) => Promise<string | null>;
 }) {
@@ -2894,10 +2914,14 @@ function AssignmentEditor({
     normalizeDuties(dutyCatalog, assignment.duties)
   );
   const mismatches = mismatchedDutyPairs(dutyCatalog, duties);
-  // Retired duties aren't offered, but one this person already holds stays
-  // on the picker so it can be seen and taken off.
+  // Retired duties, and ones not done on this day of the week, aren't
+  // offered — but one this person already holds stays on the picker so it
+  // can be seen and taken off.
   const phases = dutyPhases(
-    dutyCatalog.filter((d) => !d.archived || assignment.duties.includes(d.key))
+    dutyCatalog.filter(
+      (d) => (!d.archived && dutyRunsOn(d, date)) || assignment.duties.includes(d.key)
+    ),
+    { includeArchived: true }
   );
 
   const [status, setStatus] = useState<AutosaveStatus>({ state: 'idle' });
@@ -2988,7 +3012,9 @@ function AssignmentEditor({
                   : dutyTitle(dutyCatalog, duty.key)
               }
               aria-pressed={duties.includes(duty.key)}
-              onClick={() => setDuties((current) => toggleDuty(dutyCatalog, current, duty.key))}
+              onClick={() =>
+                setDuties((current) => toggleDuty(dutyCatalog, current, duty.key, { date }))
+              }
             >
               {duty.label}
               {duty.detail && (

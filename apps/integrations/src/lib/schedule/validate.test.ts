@@ -54,6 +54,7 @@ describe('parseAssignmentFields duties', () => {
         side: null,
         sessionDefault: null,
         sopSlug: null,
+        days: null,
         sortOrder: 1.5,
         archived: false,
       },
