@@ -15,7 +15,9 @@ import {
   formatQuantity,
   formatUnits,
   lotDescription,
+  lotUnit,
   pluralUnit,
+  type UnitNames,
 } from '@/lib/inventory/rules';
 import type { InventoryLedgerPage, ItemHistory } from '@/lib/inventory/types';
 import { personName } from '@/lib/sops/names';
@@ -41,7 +43,7 @@ export function InventoryItem({ itemId }: { itemId: string }) {
   if (!data) return null;
   const { item, summary } = data;
   const low = item.reorder_level != null && data.total <= item.reorder_level;
-  const unit = item.unit;
+  const unit: UnitNames = item;
 
   const tiles: { label: string; units: number; cents: number; tone: string }[] = [
     {
@@ -86,7 +88,7 @@ export function InventoryItem({ itemId }: { itemId: string }) {
             {low && <LowBadge />}
             {data.openOrder && (
               <span className="rounded border border-[var(--pyre-sage)]/50 px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--pyre-sage)]">
-                On order: {formatQuantity(data.openOrder.lots)} × {item.lot_label || 'lot'}
+                On order: {formatUnits(data.openOrder.lots, lotUnit(item))}
               </span>
             )}
           </div>
@@ -94,7 +96,7 @@ export function InventoryItem({ itemId }: { itemId: string }) {
             {[
               data.category,
               lotDescription(item),
-              item.unit_cost_cents != null && `${formatCents(item.unit_cost_cents)}/${unit}`,
+              item.unit_cost_cents != null && `${formatCents(item.unit_cost_cents)}/${item.unit}`,
             ]
               .filter(Boolean)
               .join(' · ')}

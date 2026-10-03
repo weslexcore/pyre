@@ -18,7 +18,13 @@ import { ApiError, sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { etStamp, etTime, timeAgo } from '@/lib/client/format';
 import { defaultRoundName } from '@/lib/inventory/counts';
-import { formatCents, formatQuantity, formatUnits, parseQuantity } from '@/lib/inventory/rules';
+import {
+  formatCents,
+  formatQuantity,
+  formatUnits,
+  parseQuantity,
+  pluralUnit,
+} from '@/lib/inventory/rules';
 import type {
   AreaDueStatus,
   CountSheet,
@@ -428,7 +434,7 @@ function ReviewList({
             </div>
             <p className="text-xs text-white/60">
               Expected {formatQuantity(line.expected_qty)}, counted{' '}
-              {formatUnits(line.counted_qty, line.unit)} → <Variance line={line} />
+              {formatUnits(line.counted_qty, line)} → <Variance line={line} />
             </p>
             <p className="text-xs text-white/40">
               {personName(line.counted_by, overview.people)} · {etStamp(line.counted_at)}
@@ -797,7 +803,7 @@ function SheetLine({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm text-[var(--pyre-creme)]">{row.name}</p>
           <p className="truncate text-xs text-white/40">
-            {[row.category, `counted in ${row.unit}s`].filter(Boolean).join(' · ')}
+            {[row.category, `counted in ${pluralUnit(2, row)}`].filter(Boolean).join(' · ')}
           </p>
         </div>
         {editing && !disabled ? (
@@ -842,7 +848,7 @@ function SheetLine({
       </div>
       {line && (
         <p className="mt-1 text-xs text-white/50">
-          {formatUnits(line.counted_qty, row.unit)} · <Variance line={line} /> ·{' '}
+          {formatUnits(line.counted_qty, row)} · <Variance line={line} /> ·{' '}
           {personName(line.counted_by, people)} {etTime(line.counted_at)}
           {line.review_status === 'pending' && ' · an admin will review this'}
         </p>

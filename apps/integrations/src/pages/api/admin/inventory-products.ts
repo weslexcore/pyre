@@ -20,6 +20,7 @@ import type { APIRoute } from 'astro';
 import { requireAdmin } from '@/lib/auth/admin';
 import { beginMutation, type Db, dbError, isUuid, json } from '@/lib/http/route';
 import type { InventoryProductRow } from '@/lib/inventory/types';
+import { checkUnits } from '@/lib/inventory/units';
 import { normalizeItem, normalizeProduct, parseVariants } from '@/lib/inventory/validate';
 
 const DUPLICATE = 'Something active already has that name';
@@ -28,9 +29,9 @@ const MAX_SPOTS = 20;
 
 /** The item columns a new product's variants share. */
 const SHARED_COLUMNS = [
-  'unit',
+  'unit_id',
   'lot_size',
-  'lot_label',
+  'lot_unit_id',
   'reorder_level',
   'reorder_target',
   'unit_cost_cents',
@@ -84,6 +85,8 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (!item.ok) return json({ error: item.error }, 400);
   const categoryError = await checkCategory(db, product.value.category_id);
   if (categoryError) return categoryError;
+  const unitError = await checkUnits(db, item.value);
+  if (unitError) return unitError;
 
   const rawSpots = body.spots ?? [];
   if (!Array.isArray(rawSpots) || rawSpots.length > MAX_SPOTS || !rawSpots.every(isUuid)) {

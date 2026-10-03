@@ -188,6 +188,7 @@ async function overview(db: Db, isAdmin: boolean): Promise<CountsOverview | Resp
         ...numericLine(line),
         itemName: item?.name ?? 'Retired item',
         unit: item?.unit ?? '',
+        unit_plural: item?.unit_plural ?? '',
         areaName: cat.areaById.get(line.area_id)?.name ?? 'Retired area',
       };
     });
@@ -265,6 +266,7 @@ async function sheet(
         itemId: item.id,
         name: item.name,
         unit: item.unit,
+        unit_plural: item.unit_plural,
         category: item.category_id ? (cat.categoryName.get(item.category_id) ?? '') : '',
         line: lineBySpot.get(spotKey(item.id, areaId)) ?? null,
         recountAsked: recountItems.has(item.id),
@@ -322,6 +324,7 @@ async function summary(db: Db, countId: string): Promise<CountSummary | Response
       ...line,
       itemName: item?.name ?? 'Retired item',
       unit: item?.unit ?? '',
+      unit_plural: item?.unit_plural ?? '',
       areaName: cat.areaById.get(line.area_id)?.name ?? 'Retired area',
     };
   });
@@ -427,7 +430,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
         itemTotal(db, body.itemId),
         db
           .from('inventory_items')
-          .select('id, name, unit, lot_size, lot_label, reorder_level, reorder_target')
+          .select(
+            'id, name, unit, unit_plural, lot_size, lot_label, lot_label_plural, reorder_level, reorder_target'
+          )
           .eq('id', body.itemId)
           .maybeSingle(),
       ]);
