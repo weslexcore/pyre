@@ -1,0 +1,16 @@
+---
+// One inventory item: stock over time, usage vs loss, where it's kept, and its
+// recent changes. Same grant as the stock page; the API re-checks it.
+import { InventoryItem } from '@/components/admin/InventoryItem';
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import { isUuid } from '@/lib/http/json';
+
+const { id } = Astro.params;
+if (!isUuid(id)) return Astro.redirect('/admin/inventory');
+---
+
+<AdminLayout title="Inventory Item" subtitle="Stock over time, and what happened to it.">
+  <InventoryTabs current="" />
+  <InventoryItem client:load itemId={id} />
+</AdminLayout>

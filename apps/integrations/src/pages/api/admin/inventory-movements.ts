@@ -16,6 +16,7 @@
 
 import type { APIRoute } from 'astro';
 import { beginMutation, beginRead, dbError, isUuid, json } from '@/lib/http/route';
+import { itemTotal, notifyIfLow } from '@/lib/inventory/alerts';
 import { ledgerToCsv } from '@/lib/inventory/csv';
 import {
   formatUnits,
@@ -141,7 +142,10 @@ interface ItemFacts {
   name: string;
   unit: string;
   lot_size: number;
+  lot_label: string | null;
   unit_cost_cents: number | null;
+  reorder_level: number | null;
+  reorder_target: number | null;
   active: boolean;
 }
 
@@ -172,7 +176,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     await Promise.all([
       db
         .from('inventory_items')
-        .select('id, name, unit, lot_size, unit_cost_cents, active')
+        .select(
+          'id, name, unit, lot_size, lot_label, unit_cost_cents, reorder_level, reorder_target, active'
+        )
         .eq('id', body.itemId)
         .maybeSingle(),
       db.from('inventory_areas').select('id, name, active').eq('id', body.areaId).maybeSingle(),
@@ -282,13 +288,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return dbError(error);
   }
 
-  return json(
-    {
-      movements: ((data ?? []) as InventoryMovementRow[]).map((m) => ({
-        ...m,
-        quantity: Number(m.quantity),
-      })),
-    },
-    201
-  );
+  const saved = ((data ?? []) as InventoryMovementRow[]).map((m) => ({
+    ...m,
+    quantity: Number(m.quantity),
+  }));
+
+  // Did this take the item to its re-order level? (A move between spots
+  // nets to zero and never does.) Best-effort; never fails the save.
+  const change = saved.reduce((sum, m) => sum + m.quantity, 0);
+  if (change < 0 && item.reorder_level != null) {
+    const after = await itemTotal(db, item.id);
+    if (after != null) await notifyIfLow(db, item, after - change, after, email);
+  }
+
+  return json({ movements: saved }, 201);
 };

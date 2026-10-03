@@ -1,0 +1,15 @@
+---
+import { InventoryReports } from '@/components/admin/InventoryReports';
+// Inventory reports: usage vs loss (waste and count shortfalls) by item,
+// category, or area, for a period. Same grant as the stock page.
+import InventoryTabs from '@/components/admin/InventoryTabs.astro';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Inventory Reports"
+  subtitle="Everyday use kept apart from loss — what was wasted, and what counts found missing."
+>
+  <InventoryTabs current="/admin/inventory/reports" />
+  <InventoryReports client:load />
+</AdminLayout>
