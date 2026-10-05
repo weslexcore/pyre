@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { type LinkSummary, summariesById } from '@/lib/boards/links';
 import type { Assignable } from '@/lib/boards/people';
 import { readError, sendJson } from '@/lib/client/api';
-import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { CardDrawer } from './CardDrawer';
 import {
@@ -29,6 +29,7 @@ import { namesAsOwners } from './owners';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
 
 interface PeekBundle {
+  board: Pick<BoardRow, 'name' | 'slug'>;
   columns: BoardColumnRow[];
   fields: BoardFieldRow[];
   cards: BoardCardRow[];
@@ -173,6 +174,7 @@ function PeekDrawer({
   return (
     <CardDrawer
       card={card}
+      board={bundle.board}
       columns={bundle.columns}
       fields={bundle.fields}
       people={people}

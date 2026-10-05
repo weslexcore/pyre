@@ -218,6 +218,7 @@ export function BoardsCalendar() {
         <CardDrawer
           key={openCard.id}
           card={openCard}
+          board={data?.boards.find((board) => board.id === openCard.board_id)}
           columns={cardColumns}
           fields={cardFields}
           people={data?.people ?? {}}

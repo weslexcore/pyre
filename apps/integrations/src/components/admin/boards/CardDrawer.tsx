@@ -9,6 +9,7 @@
 //
 // Edits save automatically; text is debounced and writes are serialized.
 
+import { navigate } from 'astro:transitions/client';
 import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -48,6 +49,11 @@ export interface CardDrawerProps {
   busy?: boolean;
   onSave: (patch: Record<string, unknown>) => Promise<void>;
   onDelete: () => Promise<void>;
+  /**
+   * The board the card is on, named above the title with a link to it — for
+   * a drawer opened anywhere but that board's own page.
+   */
+  board?: { name: string; slug: string };
   onClose: () => void;
 }
 
@@ -58,6 +64,7 @@ export function CardDrawer({
   people,
   owners,
   links,
+  board,
   onLinkPicked,
   viewerEmail = '',
   busy = false,
@@ -95,11 +102,12 @@ export function CardDrawer({
   }, [card.repeat_every, card.repeat_unit]);
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
-  const close = async () => {
-    if (!title.trim() || closeInProgress.current) return;
+  /** Resolves true once the drawer has closed with every edit saved. */
+  const close = async (): Promise<boolean> => {
+    if (!title.trim() || closeInProgress.current) return false;
     closeInProgress.current = true;
     try {
-      if (!(await autosave.flush())) return;
+      if (!(await autosave.flush())) return false;
       setClosing(true);
       // Reverse the actual entry animation, including its current position if
       // closed mid-entry. Reduced motion has no animation, so closes immediately.
@@ -121,6 +129,7 @@ export function CardDrawer({
         await animation.finished.catch(() => undefined);
       }
       onClose();
+      return true;
     } finally {
       closeInProgress.current = false;
     }
@@ -218,6 +227,24 @@ export function CardDrawer({
           aria-hidden="true"
           className="touch-only mx-auto mb-3 h-1 w-9 rounded-full bg-white/25 sm:hidden"
         />
+        {board && (
+          <a
+            href={boardHref(board.slug)}
+            data-astro-prefetch
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              // Leave by closing, so an edit still waiting to save is saved first.
+              event.preventDefault();
+              void close().then((closed) => {
+                if (closed) void navigate(boardHref(board.slug));
+              });
+            }}
+            className="mb-1 inline-flex max-w-full items-center gap-1 font-mono text-[11px] uppercase tracking-wide text-white/45 hover:text-white"
+          >
+            <span className="truncate">{board.name}</span>
+            <span aria-hidden="true">→</span>
+          </a>
+        )}
         <div className="mb-1 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <InlineTitle
@@ -491,4 +518,8 @@ export function CardDrawer({
     </div>,
     document.body
   );
+}
+
+function boardHref(slug: string): string {
+  return `/admin/boards/${slug}`;
 }

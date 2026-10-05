@@ -279,6 +279,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
         <CardDrawer
           key={openCard.id}
           card={openCard}
+          board={boards.find((board) => board.id === openCard.board_id)}
           columns={columns.filter((column) => column.board_id === openCard.board_id)}
           fields={[]}
           people={people}
