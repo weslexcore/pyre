@@ -1,0 +1,28 @@
+/* Essential-oil blend cards — 5×3in print, one card per page (see templates/index-card).
+   Each group gets its own eyebrow accent; note pills are colored top → base, light → deep. */
+
+.tpl-index-card[data-accent="uplifting"] {
+  --tpl-index-card-accent: var(--pyre-red);
+}
+
+.tpl-index-card[data-accent="soothing"] {
+  --tpl-index-card-accent: var(--pyre-sky);
+}
+
+.tpl-index-card[data-accent="balanced"] {
+  --tpl-index-card-accent: var(--pyre-sage);
+}
+
+.tpl-index-card__tag[data-tag="top"] {
+  color: var(--pyre-red);
+}
+
+.tpl-index-card__tag[data-tag="heart"] {
+  color: var(--pyre-sage);
+}
+
+.tpl-index-card__tag[data-tag="base"] {
+  color: var(--pyre-creme);
+  background: var(--pyre-blue);
+  border-color: var(--pyre-blue);
+}

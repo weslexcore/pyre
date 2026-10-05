@@ -7,6 +7,7 @@ export type SizeKey =
   | 'small-menu'
   | 'postcard-4x6'
   | 'business-card'
+  | 'index-card'
   | 'letter'
   | 'letter-landscape'
   | 'tall-menu';
@@ -15,6 +16,8 @@ export interface Size {
   w: number;
   h: number;
   label: string;
+  /** Print artboards only (300dpi). Bleed per edge in inches; 0 for full-sheet prints with no trim. */
+  bleedIn?: number;
 }
 
 export const SIZES: Record<SizeKey, Size> = {
@@ -25,15 +28,17 @@ export const SIZES: Record<SizeKey, Size> = {
   story: { w: 1080, h: 1920, label: '9:16' },
   'small-menu': { w: 1080, h: 1920, label: '9:16' },
   /* Print: 4×6in trim + 0.125in bleed per edge at 300dpi. Content must stay 112px from the canvas edge. */
-  'postcard-4x6': { w: 1275, h: 1875, label: '4x6in print' },
+  'postcard-4x6': { w: 1275, h: 1875, label: '4x6in print', bleedIn: 0.125 },
   /* Print: 3.5×2in trim + 0.125in bleed per edge at 300dpi. Keep content ≥75px from the canvas edge (37px bleed + cutting tolerance). */
-  'business-card': { w: 1125, h: 675, label: '3.5x2in print' },
+  'business-card': { w: 1125, h: 675, label: '3.5x2in print', bleedIn: 0.125 },
+  /* Print: 5×3in landscape index card + 0.125in bleed per edge at 300dpi. Keep content ≥90px from the canvas edge (37px bleed + cutting tolerance). */
+  'index-card': { w: 1575, h: 975, label: '5x3in print', bleedIn: 0.125 },
   /* Print: US Letter (8.5×11in) at 300dpi. Full-sheet menu — keep content within comfortable margins. */
-  letter: { w: 2550, h: 3300, label: '8.5x11in print' },
+  letter: { w: 2550, h: 3300, label: '8.5x11in print', bleedIn: 0 },
   /* Print: US Letter (8.5×11in) rotated to landscape at 300dpi. Full-sheet sign — keep content within comfortable margins. */
-  'letter-landscape': { w: 3300, h: 2550, label: '11x8.5in print' },
+  'letter-landscape': { w: 3300, h: 2550, label: '11x8.5in print', bleedIn: 0 },
   /* Print: 4.25×11in tall cocktail/table menu at 300dpi — half a letter sheet cut lengthwise, so two print per sheet. */
-  'tall-menu': { w: 1275, h: 3300, label: '4.25x11in print' },
+  'tall-menu': { w: 1275, h: 3300, label: '4.25x11in print', bleedIn: 0 },
 };
 
 export const SIZE_KEYS = Object.keys(SIZES) as SizeKey[];

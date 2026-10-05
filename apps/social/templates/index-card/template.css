@@ -1,0 +1,103 @@
+/* Index-card template — a 5×3in landscape print card (size key `index-card`).
+   Canvas: 1575×975px = 5.25×3.25in at 300dpi (5×3in trim + 0.125in bleed per edge).
+   Keep content ≥90px from the canvas edge: 37px of bleed is trimmed, the rest is cutting tolerance.
+   Linkable via <link rel="stylesheet" href="/templates/index-card/template.css">. */
+
+.tpl-index-card {
+  --tpl-index-card-accent: var(--pyre-red);
+
+  width: 100vw;
+  height: 100vh;
+  background: var(--pyre-creme);
+  color: var(--pyre-black);
+  font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+  padding: 104px 120px 96px;
+}
+
+.tpl-index-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tpl-index-card__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tpl-index-card-accent);
+}
+
+.tpl-index-card__logo {
+  height: 64px;
+  width: auto;
+}
+
+.tpl-index-card__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 104px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin-top: var(--space-3);
+}
+
+.tpl-index-card__lede {
+  font-size: 38px;
+  line-height: 1.25;
+  color: var(--pyre-blue);
+  margin-top: var(--space-2);
+}
+
+/* Ledger: label | value | tag, hairline rules between rows like the menu sheet. */
+.tpl-index-card__rows {
+  list-style: none;
+  padding: 0;
+  margin: auto 0 0;
+  border-top: 3px solid var(--pyre-black);
+}
+
+.tpl-index-card__row {
+  display: grid;
+  grid-template-columns: 1fr auto 168px;
+  align-items: center;
+  column-gap: var(--space-6);
+  padding: 18px 0;
+  border-bottom: 2px solid color-mix(in srgb, var(--pyre-black) 20%, transparent);
+}
+
+.tpl-index-card__label {
+  font-size: 44px;
+  line-height: 1.1;
+}
+
+.tpl-index-card__value {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pyre-blue);
+}
+
+.tpl-index-card__tag {
+  justify-self: end;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 20px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.tpl-index-card__footer {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pyre-blue);
+}

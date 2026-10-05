@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Essential oil blends · Pyre</title>
+    <link rel="stylesheet" href="/shared/reset.css" />
+    <link rel="stylesheet" href="/shared/brand.css" />
+    <link rel="stylesheet" href="/shared/pages.css" />
+    <link rel="stylesheet" href="/templates/index-card/template.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="/shared/pages.js"></script>
+  </head>
+  <body>
+    <script type="module">
+      import { renderIndexCards } from '/templates/index-card/template.ts';
+      import { cards } from './blends.data.ts';
+
+      renderIndexCards(cards, document.body);
+    </script>
+  </body>
+</html>

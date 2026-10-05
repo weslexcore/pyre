@@ -214,6 +214,95 @@
         font-size: 11px;
         color: var(--muted);
       }
+      .print-toggle {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+      }
+      .print-toggle input {
+        accent-color: var(--accent);
+        margin: 0;
+      }
+      .page-block.is-selected iframe {
+        outline: 6px solid var(--accent);
+        outline-offset: -6px;
+      }
+
+      /* Print sheets: hidden on screen, the only thing on paper. Built by scripts/lib/print-sheet.ts. */
+      #printSheets {
+        display: none;
+      }
+      @page {
+        size: letter;
+        margin: 0;
+      }
+      @page portrait-sheet {
+        size: letter portrait;
+        margin: 0;
+      }
+      @page landscape-sheet {
+        size: letter landscape;
+        margin: 0;
+      }
+      @media print {
+        body {
+          background: #fff;
+          min-height: 0;
+        }
+        body > :not(#printSheets) {
+          display: none;
+        }
+        #printSheets {
+          display: block;
+        }
+      }
+      .print-sheet {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        break-after: page;
+      }
+      .print-sheet:last-child {
+        break-after: auto;
+      }
+      .print-sheet--portrait {
+        page: portrait-sheet;
+        width: 8.5in;
+        height: 11in;
+      }
+      .print-sheet--landscape {
+        page: landscape-sheet;
+        width: 11in;
+        height: 8.5in;
+      }
+      .print-sheet__grid {
+        position: relative;
+        display: grid;
+      }
+      .print-sheet__cell {
+        overflow: hidden;
+      }
+      .print-sheet__cell img {
+        display: block;
+        max-width: none;
+      }
+      .print-sheet__mark {
+        position: absolute;
+        border: 0 solid #000;
+      }
+      .print-sheet__mark--v {
+        height: 0.1875in;
+        border-left-width: 0.5pt;
+        transform: translateX(-0.25pt);
+      }
+      .print-sheet__mark--h {
+        width: 0.1875in;
+        border-top-width: 0.5pt;
+        transform: translateY(-0.25pt);
+      }
     </style>
   </head>
   <body>
@@ -223,6 +312,8 @@
       <select id="sizeSelect" title="Filter previews by export size"></select>
       <button id="exportAll" class="btn" type="button">Export all</button>
       <button id="joinReels" class="btn" type="button" title="Concatenate already-rendered per-page reels into one MP4">Join reels</button>
+      <button id="selectPrint" class="btn btn--tile" type="button" title="Tick every print-size page in this post">Select all</button>
+      <button id="printSelected" class="btn" type="button" title="Render the ticked pages and tile them onto Letter sheets">Print</button>
       <span class="hint">
         Edit any file under <code>posts/</code> or <code>shared/</code> and the preview will hot-reload.
       </span>
@@ -232,14 +323,24 @@
     <footer>
       Click <strong>Export</strong> on any tile to render that file, or
       <code>yarn render &lt;post&gt;</code> from the terminal. Files land in
-      <code>exports/&lt;post&gt;/</code>.
+      <code>exports/&lt;post&gt;/</code>. Tick <strong>Print</strong> on print-size pages (any post)
+      and hit <strong>Print</strong> to lay them out on Letter sheets.
     </footer>
+    <div id="printSheets"></div>
 
     <script type="module">
+      import { buildPrintSheets, isPrintable } from '/scripts/lib/print-sheet.ts';
       // Single source of truth for export dimensions — shared with the render pipeline.
       import { SIZES } from '/scripts/lib/sizes.ts';
 
       const root = document.getElementById('root');
+      const selectPrintBtn = document.getElementById('selectPrint');
+      const printBtn = document.getElementById('printSelected');
+      const printSheetsEl = document.getElementById('printSheets');
+
+      /** Pages ticked for printing, kept across post switches so one print run can mix posts. */
+      const printSelection = new Map();
+      const printKey = (s) => `${s.post}|${s.size}|${s.format}|${s.filename ?? ''}|${s.page}`;
       const select = document.getElementById('postSelect');
       const sizeSelect = document.getElementById('sizeSelect');
       const exportAllBtn = document.getElementById('exportAll');
@@ -336,6 +437,8 @@
         root.innerHTML = '<div class="empty">No posts yet. Create one under <code>posts/&lt;name&gt;/</code>.</div>';
         exportAllBtn.disabled = true;
         joinReelsBtn.disabled = true;
+        selectPrintBtn.disabled = true;
+        printBtn.disabled = true;
       } else {
         for (const post of posts) {
           const opt = document.createElement('option');
@@ -369,6 +472,70 @@
 
         exportAllBtn.addEventListener('click', () => exportAll());
         joinReelsBtn.addEventListener('click', () => joinReels());
+        selectPrintBtn.addEventListener('click', () => toggleSelectAllForPrint());
+        printBtn.addEventListener('click', () => printSelectedPages());
+      }
+
+      function printSpecFrom(box) {
+        const { size, format, page, filename } = box.dataset;
+        return { post: currentPost.name, size, format, filename, page: Number(page) };
+      }
+
+      function setPrintSelected(spec, selected) {
+        const key = printKey(spec);
+        if (selected) printSelection.set(key, spec);
+        else printSelection.delete(key);
+      }
+
+      function updatePrintControls() {
+        const boxes = [...root.querySelectorAll('.print-check')];
+        for (const box of boxes) {
+          box.closest('.page-block')?.classList.toggle('is-selected', box.checked);
+        }
+        const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
+        selectPrintBtn.textContent = allChecked ? 'Deselect all' : 'Select all';
+        selectPrintBtn.disabled = busy || boxes.length === 0;
+        const n = printSelection.size;
+        printBtn.textContent = n ? `Print (${n})` : 'Print';
+        printBtn.disabled = busy || n === 0;
+      }
+
+      function toggleSelectAllForPrint() {
+        const boxes = [...root.querySelectorAll('.print-check')];
+        const select = !boxes.every((b) => b.checked);
+        for (const box of boxes) {
+          box.checked = select;
+          setPrintSelected(printSpecFrom(box), select);
+        }
+        updatePrintControls();
+      }
+
+      /** Render every ticked page through /__render, tile them onto Letter sheets, open the print dialog. */
+      async function printSelectedPages() {
+        if (busy || printSelection.size === 0) return;
+        const specs = [...printSelection.values()];
+        setBusy(true);
+        try {
+          const items = [];
+          for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i];
+            const body = { post: spec.post, size: spec.size, format: spec.format, page: spec.page };
+            if (spec.filename) body.filename = spec.filename;
+            const data = await streamProgress('/__render', body, `[${i + 1}/${specs.length}] `);
+            // Cache-bust: re-renders overwrite the same export path.
+            items.push({ size: spec.size, src: `${data.file}?t=${Date.now()}` });
+          }
+          setStatus('Laying out sheets…');
+          const sheets = await buildPrintSheets(items, printSheetsEl);
+          setStatus(
+            `${specs.length} page${specs.length === 1 ? '' : 's'} on ${sheets} sheet${sheets === 1 ? '' : 's'} · print at 100% scale`
+          );
+          window.print();
+        } catch (err) {
+          setStatus(`Print failed: ${err.message}`, 'error');
+        } finally {
+          setBusy(false);
+        }
       }
 
       async function savePairTransition(pairIndex, transition) {
@@ -444,8 +611,30 @@
                   title="Click to change this page's duration"
                 >${formatSeconds(durMs)}</span>`
               : '';
+            const canPrint = !isVideo && isPrintable(entry.size);
+            const printSpec = {
+              post: currentPost.name,
+              size: entry.size,
+              format: entry.format,
+              filename: entry.filename,
+              page,
+            };
+            const printSelected = canPrint && printSelection.has(printKey(printSpec));
+            const printToggle = canPrint
+              ? `<label class="print-toggle" title="Include this page in the next print run">
+                  <input
+                    class="print-check"
+                    type="checkbox"
+                    data-size="${entry.size}"
+                    data-format="${entry.format}"
+                    data-page="${page}"
+                    ${entry.filename ? `data-filename="${entry.filename}"` : ''}
+                    ${printSelected ? 'checked' : ''}
+                  />Print
+                </label>`
+              : '';
             pieces.push(`
-              <div class="page-block">
+              <div class="page-block${printSelected ? ' is-selected' : ''}">
                 <div class="frame-label">
                   <span class="size">${entry.size}</span>
                   <span>${dims.w}×${dims.h} · ${dims.label}</span>
@@ -465,6 +654,7 @@
                   >↻</button>`
                       : ''
                   }
+                  ${printToggle}
                   <button
                     class="btn btn--tile export-btn"
                     type="button"
@@ -523,6 +713,14 @@
             });
           });
         });
+
+        root.querySelectorAll('.print-check').forEach((box) => {
+          box.addEventListener('change', () => {
+            setPrintSelected(printSpecFrom(box), box.checked);
+            updatePrintControls();
+          });
+        });
+        updatePrintControls();
 
         root.querySelectorAll('.playpause-btn').forEach((btn) => {
           btn.addEventListener('click', () => togglePlayPause(btn));
@@ -690,6 +888,7 @@
         root.querySelectorAll('.export-btn').forEach((b) => {
           b.disabled = value;
         });
+        updatePrintControls();
       }
 
       function describePhase(msg) {
