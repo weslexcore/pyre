@@ -17,6 +17,7 @@ import {
   toolsForAccess,
   visibleTools,
 } from '@/components/admin/adminTools';
+import { CardPeek } from '@/components/admin/boards/CardPeek';
 import { GlobalSearch } from '@/components/admin/GlobalSearch';
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { QuickShiftNote } from '@/components/admin/QuickShiftNote';
@@ -177,6 +178,8 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
               )
             }
           </main>
+          {/* A card link opens its drawer over this page, not on its board. */}
+          <CardPeek client:load />
         </>
       )
     }

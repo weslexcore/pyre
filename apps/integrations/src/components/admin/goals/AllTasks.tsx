@@ -71,7 +71,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     void load();
   }, [load]);
 
-  useCardDeepLink(data?.cards, setOpenCardId);
+  useCardDeepLink(data?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload: load });
 
   const saveCard = useOptimisticCardSave(data, setData);
 

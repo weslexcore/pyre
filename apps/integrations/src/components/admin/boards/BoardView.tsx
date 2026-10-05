@@ -67,6 +67,7 @@ import {
   SortableColumn,
   useBoardSensors,
 } from './dnd';
+import { namesAsOwners } from './owners';
 import { QuickAdd } from './QuickAdd';
 import { useCardDeepLink } from './useCardDeepLink';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
@@ -144,7 +145,7 @@ export function BoardView({ slug }: { slug: string }) {
     void load();
   }, [load]);
 
-  useCardDeepLink(bundle?.cards, setOpenCardId);
+  useCardDeepLink(bundle?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload: load });
 
   const saveCard = useOptimisticCardSave(bundle, setBundle);
   const links = useMemo(() => summariesById(bundle?.linkSummaries), [bundle?.linkSummaries]);
@@ -629,15 +630,4 @@ function GearIcon() {
       <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
-}
-
-/**
- * The fallback owner list for a single-board grantee, who is not handed the
- * roster: the people already named on this board. Enough to filter by and to
- * reassign between, without turning a pipeline grant into a staff directory.
- */
-function namesAsOwners(people: PeopleNames): Assignable[] {
-  return Object.entries(people)
-    .map(([email, name]) => ({ email, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -86,7 +86,7 @@ export function BoardsCalendar() {
 
   const today = data?.today ?? todayEastern();
 
-  useCardDeepLink(data?.cards, setOpenCardId);
+  useCardDeepLink(data?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload });
 
   // The edited card is replaced in place, so the month keeps its scroll, its
   // chips, and everything else that is not this card.
