@@ -5,8 +5,12 @@
 // (served by /api/admin/link-targets, ranked by lib/sops/link-suggest.ts,
 // drawn by LinkPicker). Arrow keys move, Enter or Tab picks, Escape hides the
 // list until the next link. Picking writes the full href and the closing
-// paren in one go, so a finished link is always well-formed.
+// paren in one go, so a finished link is always well-formed. A caller's own
+// onKeyDown and onBlur still run — the key handler only for keys the picker
+// didn't take — so another autocomplete (comment @mentions) can sit on top.
 import {
+  type ChangeEvent,
+  type Ref,
   type TextareaHTMLAttributes,
   useCallback,
   useEffect,
@@ -25,10 +29,12 @@ import { caretAnchor, LinkPicker } from './LinkPicker';
 
 type Props = Omit<
   TextareaHTMLAttributes<HTMLTextAreaElement>,
-  'value' | 'onChange' | 'onKeyDown' | 'onKeyUp' | 'onClick' | 'onBlur' | 'onScroll'
+  'value' | 'onChange' | 'onKeyUp' | 'onClick' | 'onScroll'
 > & {
   value: string;
-  onChange: (next: string) => void;
+  /** `event` is absent when the change is a picked link. */
+  onChange: (next: string, event?: ChangeEvent<HTMLTextAreaElement>) => void;
+  ref?: Ref<HTMLTextAreaElement>;
   /** A page that shouldn't suggest itself — the SOP being edited, say. */
   excludeHref?: string;
 };
@@ -57,8 +63,25 @@ function loadTargets(): Promise<LinkTarget[]> {
   return promise;
 }
 
-export function LinkTextarea({ value, onChange, excludeHref, disabled, ...rest }: Props) {
+export function LinkTextarea({
+  value,
+  onChange,
+  excludeHref,
+  disabled,
+  ref: outerRef,
+  onKeyDown: outerKeyDown,
+  onBlur: outerBlur,
+  ...rest
+}: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const setRef = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      ref.current = el;
+      if (typeof outerRef === 'function') outerRef(el);
+      else if (outerRef) outerRef.current = el;
+    },
+    [outerRef]
+  );
   const [loaded, setLoaded] = useState<LinkTarget[] | null>(null);
   const [context, setContext] = useState<LinkContext | null>(null);
   const [anchor, setAnchor] = useState({ top: 0, left: 0 });
@@ -132,16 +155,21 @@ export function LinkTextarea({ value, onChange, excludeHref, disabled, ...rest }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!open || e.nativeEvent.isComposing) return;
+    if (!pickerKey(e)) outerKeyDown?.(e);
+  };
+
+  // True when the picker took the key.
+  const pickerKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!open || e.nativeEvent.isComposing) return false;
     if (e.key === 'Escape') {
       e.preventDefault();
       // Keep the Escape from closing a drawer or dialog the field sits in.
       e.stopPropagation();
       setDismissedStart(context?.start ?? null);
       setContext(null);
-      return;
+      return true;
     }
-    if (items.length === 0) return;
+    if (items.length === 0) return false;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((i) => (i + 1) % items.length);
@@ -151,18 +179,21 @@ export function LinkTextarea({ value, onChange, excludeHref, disabled, ...rest }
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       pick(items[Math.min(activeIndex, items.length - 1)]);
+    } else {
+      return false;
     }
+    return true;
   };
 
   return (
     <div className="relative">
       <textarea
         {...rest}
-        ref={ref}
+        ref={setRef}
         value={value}
         disabled={disabled}
         onChange={(e) => {
-          onChange(e.target.value);
+          onChange(e.target.value, e);
           sync(e.target);
         }}
         onKeyDown={onKeyDown}
@@ -173,7 +204,10 @@ export function LinkTextarea({ value, onChange, excludeHref, disabled, ...rest }
           sync(e.currentTarget);
         }}
         onClick={(e) => sync(e.currentTarget)}
-        onBlur={() => setContext(null)}
+        onBlur={(e) => {
+          setContext(null);
+          outerBlur?.(e);
+        }}
         onScroll={(e) => {
           if (context) setAnchor(caretAnchor(e.currentTarget));
         }}

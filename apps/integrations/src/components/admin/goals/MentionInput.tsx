@@ -1,7 +1,10 @@
+// Comment box: @ mentions people with board access, and markdown links get
+// the same page search as every other markdown field (via LinkTextarea).
 import { useRef, useState } from 'react';
 import { type MentionPerson, mentionQuery } from '@/lib/boards/mentions';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import { textareaClass } from '../goalsUi';
+import { LinkTextarea } from '../LinkTextarea';
 
 export function MentionInput({
   id,
@@ -44,7 +47,7 @@ export function MentionInput({
   };
   return (
     <div className="relative">
-      <textarea
+      <LinkTextarea
         ref={input}
         id={id}
         className={`${textareaClass} min-h-[70px]`}
@@ -58,9 +61,9 @@ export function MentionInput({
         onBlur={() => setDismissed(true)}
         onFocus={() => setDismissed(false)}
         onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setCaret(event.target.selectionStart);
+        onChange={(next, event) => {
+          onChange(next);
+          if (event) setCaret(event.target.selectionStart);
           setActive(0);
           setDismissed(false);
         }}
