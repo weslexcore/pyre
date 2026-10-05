@@ -110,8 +110,8 @@ describe('getRecommendations', () => {
   });
 
   describe('chlorine (target 1–3, hard limit 5)', () => {
-    it('doses 7 g sanitizer at 1 ppm or less (1 is inside the target but still dosed)', () => {
-      for (const reading of [1, 0.5, 0]) {
+    it('doses 7 g sanitizer below 1 ppm', () => {
+      for (const reading of [0.9, 0.5, 0]) {
         const rec = only({ chlorine: reading });
         expect(rec).toMatchObject({
           parameter: 'chlorine',
@@ -120,6 +120,10 @@ describe('getRecommendations', () => {
           grams: 7,
         });
       }
+    });
+
+    it('returns nothing at exactly 1 ppm (in target, no dose)', () => {
+      expect(getRecommendations({ chlorine: 1 })).toEqual([]);
     });
 
     it('is info-only between target max and the hard limit', () => {
@@ -171,15 +175,16 @@ describe('getRecommendations', () => {
     });
   });
 
-  // House rule: alkalinity buffers pH, so pH dosed against off-target TA
-  // drifts straight back. The engine refuses to dose pH until TA lands.
-  describe('TA gates pH', () => {
+  // House rule: alkalinity buffers pH, so pH dosed against low TA drifts
+  // straight back. The engine refuses to dose pH until low TA lands. High TA
+  // has no fix, so it never holds pH up.
+  describe('low TA gates pH', () => {
     it('blocks a pH-lowering dose while TA is below target', () => {
       const recs = getRecommendations({ ta: 70, ph: 7.9 });
       const ph = recs.find((r) => r.parameter === 'ph');
       expect(ph).toMatchObject({ severity: 'blocked', chemical: null, grams: null });
       expect(ph?.instruction).toContain('DO NOT ADJUST pH');
-      expect(ph?.reason).toContain('TA 70 ppm is off');
+      expect(ph?.reason).toContain('TA 70 ppm is low');
     });
 
     it('blocks a pH-raising dose while TA is below target', () => {
@@ -187,14 +192,30 @@ describe('getRecommendations', () => {
       expect(ph).toMatchObject({ severity: 'blocked', grams: null });
     });
 
-    it('blocks pH while TA is above target too (no lowering chart to run first)', () => {
-      const ph = getRecommendations({ ta: 150, ph: 8.0 }).find((r) => r.parameter === 'ph');
-      expect(ph).toMatchObject({ severity: 'blocked', grams: null });
+    it('doses pH normally while TA is above target (nothing lowers TA)', () => {
+      const recs = getRecommendations({ ta: 150, ph: 8.0 });
+      expect(recs.find((r) => r.parameter === 'ph')).toMatchObject({
+        severity: 'action',
+        chemical: PRODUCTS.phLower,
+        grams: 14,
+      });
+      expect(
+        getRecommendations({ ta: 150, ph: 7.0 }).find((r) => r.parameter === 'ph')
+      ).toMatchObject({
+        severity: 'action',
+        chemical: PRODUCTS.phRaise,
+      });
     });
 
-    it('carries the TA-first rule on the TA recommendation itself', () => {
+    it('carries the TA-first rule on a low-TA recommendation', () => {
       expect(only({ ta: 70 }).instruction).toContain('FIX TOTAL ALKALINITY FIRST');
-      expect(only({ ta: 150 }).instruction).toContain('FIX TOTAL ALKALINITY FIRST');
+    });
+
+    it('tells staff high TA needs nothing and to carry on', () => {
+      const rec = only({ ta: 150 });
+      expect(rec).toMatchObject({ parameter: 'ta', severity: 'info', chemical: null, grams: null });
+      expect(rec.instruction).not.toContain('FIX TOTAL ALKALINITY FIRST');
+      expect(rec.instruction).toContain('check pH');
     });
 
     it('doses pH normally once TA is in range', () => {

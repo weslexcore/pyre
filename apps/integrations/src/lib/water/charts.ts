@@ -115,7 +115,8 @@ export const PH_RAISE: readonly ChartRow[] = [
   { reading: 6.8, grams: 11 },
 ];
 
-// Raise chlorine — "Cold Water Sanitizer": 1 ppm or less gets one flat dose.
+// Raise chlorine — "Cold Water Sanitizer": one flat dose. The manual doses at
+// "1 ppm or less"; house rule doses only below 1 (1 ppm is in target).
 export const CHLORINE_RAISE_GRAMS = 7;
 
 // Raise salt — "Dead Sea Salt": 24 g raises ~50 ppm; dose to the target

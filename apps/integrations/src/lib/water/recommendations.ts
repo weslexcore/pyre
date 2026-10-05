@@ -30,7 +30,7 @@ export interface Readings {
 
 /**
  * 'blocked' is advice that is deliberately *not* a dose: the reading is out of
- * range, but correcting it now would be wrong (today: pH while TA is off).
+ * range, but correcting it now would be wrong (today: pH while TA is low).
  * It never produces a dose draft — it tells the operator to stop and fix
  * something else first.
  */
@@ -122,12 +122,15 @@ const range = (parameter: Parameter): string => {
 
 /**
  * House rule, worded the same everywhere it appears so staff read it as one
- * rule and not two pieces of advice: alkalinity first, pH only after it lands.
+ * rule and not two pieces of advice: when TA is low, alkalinity first, pH only
+ * after it lands.
  */
 export const TA_FIRST_INSTRUCTION = `FIX TOTAL ALKALINITY FIRST — do not adjust pH until TA is back in the ${range('ta')} ppm target.`;
 
 export const PH_BLOCKED_INSTRUCTION =
   'DO NOT ADJUST pH — correct TA first, run the pumps ~15 minutes, then retest. pH usually follows TA back into range on its own; dose it only if it is still out after the retest.';
+
+export const TA_HIGH_INSTRUCTION = 'Nothing to do for TA — check pH and carry on as normal.';
 
 /**
  * Recommendations for a set of readings, criticals first, then dosing/info
@@ -163,45 +166,45 @@ export function getRecommendations(readings: Readings): Recommendation[] {
     });
   }
 
-  // TA is the gate on pH: alkalinity is what holds pH still, so pH dosed
-  // against off-target TA bounces straight back and wastes product. Whenever
-  // TA is off, its recommendation carries that rule and the pH block below
-  // refuses to dose.
-  const offTa = ta != null && !inTarget('ta', ta) ? ta : null;
+  // Low TA is the gate on pH: alkalinity is what holds pH still, so pH dosed
+  // against too little buffer bounces straight back and wastes product. When
+  // TA is low, its recommendation carries that rule and the pH block below
+  // refuses to dose. High TA gates nothing — there is no product to lower it,
+  // so waiting on it would only stall pH; staff check pH and carry on (and
+  // Cold Water Run Down, the usual high-TA pH fix, also pulls TA down).
+  const [taMin] = TARGETS.ta;
+  const lowTa = ta != null && ta < taMin ? ta : null;
 
-  if (offTa != null) {
-    const [taMin] = TARGETS.ta;
-    if (offTa < taMin) {
-      doses.push({
-        parameter: 'ta',
-        severity: 'action',
-        chemical: PRODUCTS.taRaise,
-        grams: nearestDoseConservative(TA_RAISE, offTa),
-        reason: `TA ${offTa} ppm is below the ${range('ta')} ppm target`,
-        instruction: TA_FIRST_INSTRUCTION,
-      });
-    } else {
-      doses.push({
-        parameter: 'ta',
-        severity: 'info',
-        chemical: null,
-        grams: null,
-        reason: `TA ${offTa} ppm is above the ${range('ta')} ppm target — no lowering chart; it drifts down on its own. Persistent: consult the manual.`,
-        instruction: TA_FIRST_INSTRUCTION,
-      });
-    }
+  if (lowTa != null) {
+    doses.push({
+      parameter: 'ta',
+      severity: 'action',
+      chemical: PRODUCTS.taRaise,
+      grams: nearestDoseConservative(TA_RAISE, lowTa),
+      reason: `TA ${lowTa} ppm is below the ${range('ta')} ppm target`,
+      instruction: TA_FIRST_INSTRUCTION,
+    });
+  } else if (ta != null && !inTarget('ta', ta)) {
+    doses.push({
+      parameter: 'ta',
+      severity: 'info',
+      chemical: null,
+      grams: null,
+      reason: `TA ${ta} ppm is above the ${range('ta')} ppm target — there is no product to lower it; it drifts down on its own.`,
+      instruction: TA_HIGH_INSTRUCTION,
+    });
   }
 
   if (ph != null && !inTarget('ph', ph)) {
     const [, phMax] = TARGETS.ph;
-    if (offTa != null) {
+    if (lowTa != null) {
       // No dose, on purpose: pH is out of range but TA has to come back first.
       doses.push({
         parameter: 'ph',
         severity: 'blocked',
         chemical: null,
         grams: null,
-        reason: `pH ${ph} is ${ph > phMax ? 'above' : 'below'} the ${range('ph')} target, but TA ${offTa} ppm is off — TA is what holds pH steady, so a pH dose now would drift right back.`,
+        reason: `pH ${ph} is ${ph > phMax ? 'above' : 'below'} the ${range('ph')} target, but TA ${lowTa} ppm is low — TA is what holds pH steady, so a pH dose now would drift right back.`,
         instruction: PH_BLOCKED_INSTRUCTION,
       });
     } else if (ph > phMax) {
@@ -226,17 +229,17 @@ export function getRecommendations(readings: Readings): Recommendation[] {
     }
   }
 
-  // The chart doses at "1 ppm or less" — exactly 1 is inside the 1–3 target
-  // but still gets the dose, so this block isn't gated on the target range.
+  // House rule: exactly 1 ppm is in target and needs nothing, even though the
+  // printed chart doses at "1 ppm or less".
   if (chlorine != null && chlorine <= HARD_LIMITS.chlorine) {
     const [chlorineMin, chlorineMax] = TARGETS.chlorine;
-    if (chlorine <= chlorineMin) {
+    if (chlorine < chlorineMin) {
       doses.push({
         parameter: 'chlorine',
         severity: 'action',
         chemical: PRODUCTS.sanitizer,
         grams: CHLORINE_RAISE_GRAMS,
-        reason: `Free chlorine ${chlorine} ppm is at or below the ${range('chlorine')} ppm target floor`,
+        reason: `Free chlorine ${chlorine} ppm is below the ${range('chlorine')} ppm target`,
       });
     } else if (chlorine > chlorineMax) {
       doses.push({
