@@ -100,7 +100,12 @@ function pickKey(file: File): string {
 }
 
 const tileClass = 'rounded border border-white/10 bg-white/5 p-1.5';
+// A tile is a quarter of the row on a desk, so the name and size get one
+// line and the actions their own beneath it: side by side they ran into
+// each other.
 const tileNameClass = 'mt-1 flex items-center gap-2 font-mono text-[10px] text-white/30';
+const tileActionsClass =
+  'mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[10px] text-white/30';
 
 export function FilesField({
   id,
@@ -323,22 +328,30 @@ export function FilesField({
                     {name}
                   </span>
                   {row && <span className="shrink-0">{formatBytes(row.size_bytes)}</span>}
-                  {href && (
-                    <a href={href(fileId, true)} className="shrink-0 uppercase hover:text-white">
-                      download
-                    </a>
-                  )}
-                  {!disabled && !readOnly && (
-                    <button
-                      type="button"
-                      className="shrink-0 uppercase hover:text-[var(--pyre-red)]"
-                      aria-label={`Remove ${name}`}
-                      onClick={() => remove(fileId)}
-                    >
-                      Remove
-                    </button>
-                  )}
                 </div>
+                {(href || (!disabled && !readOnly)) && (
+                  <div className={tileActionsClass}>
+                    {href && (
+                      <a
+                        href={href(fileId, true)}
+                        className="uppercase hover:text-white"
+                        aria-label={`Download ${name}`}
+                      >
+                        Download
+                      </a>
+                    )}
+                    {!disabled && !readOnly && (
+                      <button
+                        type="button"
+                        className="uppercase hover:text-[var(--pyre-red)]"
+                        aria-label={`Remove ${name}`}
+                        onClick={() => remove(fileId)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -364,10 +377,12 @@ export function FilesField({
                   {entry.file.name}
                 </span>
                 <span className="shrink-0">{formatBytes(entry.file.size)}</span>
+              </div>
+              <div className={tileActionsClass}>
                 {entry.status === 'failed' && (
                   <button
                     type="button"
-                    className="shrink-0 uppercase underline hover:text-white"
+                    className="uppercase underline hover:text-white"
                     title={entry.error}
                     onClick={() => void start(entry.key, entry.file)}
                   >
@@ -376,7 +391,7 @@ export function FilesField({
                 )}
                 <button
                   type="button"
-                  className="shrink-0 uppercase hover:text-[var(--pyre-red)]"
+                  className="uppercase hover:text-[var(--pyre-red)]"
                   aria-label={`Remove ${entry.file.name}`}
                   onClick={() => {
                     entry.abort?.();
