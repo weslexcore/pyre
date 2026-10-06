@@ -16,3 +16,10 @@ export const SHIFT_LABEL_SUGGESTIONS = [
   'Evening',
   'Maintenance',
 ] as const;
+
+/**
+ * How far back the board's Requests view (and its badge count) reaches for
+ * pending hours changes. Staying late is asked about after the fact, so these
+ * sit on past shifts — but not indefinitely: older asks fall off the queue.
+ */
+export const HOURS_CHANGE_LOOKBACK_DAYS = 35;

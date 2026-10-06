@@ -5,12 +5,13 @@
 // date filtering, just ownership). Availability and conflicts are computed
 // locally by the islands via lib/schedule.
 
-import { addDays, utcToEastern } from '@pyre/schedule-core';
+import { addDays, HOURS_CHANGE_LOOKBACK_DAYS, utcToEastern } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
 import { canViewPage, hasScheduleManage } from '@/components/admin/adminTools';
 import { requirePage } from '@/lib/auth/admin';
 import {
   getDb,
+  type HoursChangeRequestRow,
   redactCalendarToken,
   type ScheduleDraftMessageRow,
   type ScheduleProposalRow,
@@ -68,14 +69,20 @@ export interface ScheduleBoardPayload {
    */
   shiftRequests: ShiftRequestRow[];
   /**
+   * Pending hours changes on the fetched shifts (someone asking to move their
+   * own arrive/leave times): all of them on the manage side, only the
+   * caller's own otherwise.
+   */
+  hoursChangeRequests: HoursChangeRequestRow[];
+  /**
    * Open sub requests for the fetched shifts — everyone sees these, so any
    * teammate can take the shift from the board.
    */
   subRequests: SubRequestRow[];
   /**
    * Manage side: outstanding asks on today-or-future shifts across the whole
-   * horizon (not just the fetched range) — pending shift requests plus open
-   * sub requests, the Requests badge. 0 otherwise.
+   * horizon (not just the fetched range) — pending shift requests, open sub
+   * requests, and pending hours changes, the Requests badge. 0 otherwise.
    */
   pendingRequestCount: number;
   /** The admin toggles for the employee-facing actions. */
@@ -220,14 +227,34 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     shiftRequests = (requests ?? []) as ShiftRequestRow[];
   }
 
+  // Pending hours changes, same visibility as shift requests.
+  let hoursChangeRequests: HoursChangeRequestRow[] = [];
+  if (shifts.length > 0 && (canManage || selfStaffId)) {
+    let changesQuery = db
+      .from('hours_change_requests')
+      .select('*')
+      .eq('status', 'pending')
+      .in(
+        'shift_id',
+        shifts.map((s) => s.id)
+      )
+      .order('created_at');
+    if (!canManage) changesQuery = changesQuery.eq('staff_id', selfStaffId as string);
+
+    const { data: changes, error } = await changesQuery;
+    if (error) return dbError(error);
+    hoursChangeRequests = (changes ?? []) as HoursChangeRequestRow[];
+  }
+
   // The Requests badge: outstanding asks on any upcoming shift, however far
   // out — a week-sized fetch must not hide requests sitting in later weeks.
   // Sub requests count too: an open sub is as much waiting on attention as a
-  // pending shift request.
+  // pending shift request. Hours changes reach back into recent past shifts —
+  // staying late is usually asked about after the fact.
   let pendingRequestCount = 0;
   if (canManage) {
     const today = utcToEastern(new Date().toISOString()).date;
-    const [requestsCount, subsCount] = await Promise.all([
+    const [requestsCount, subsCount, changesCount] = await Promise.all([
       db
         .from('shift_requests')
         .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
@@ -238,10 +265,16 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
         .eq('status', 'open')
         .gte('shifts.shift_date', today),
+      db
+        .from('hours_change_requests')
+        .select('id, shifts!inner(shift_date)', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .gte('shifts.shift_date', addDays(today, -HOURS_CHANGE_LOOKBACK_DAYS)),
     ]);
-    const countError = requestsCount.error ?? subsCount.error;
+    const countError = requestsCount.error ?? subsCount.error ?? changesCount.error;
     if (countError) return dbError(countError);
-    pendingRequestCount = (requestsCount.count ?? 0) + (subsCount.count ?? 0);
+    pendingRequestCount =
+      (requestsCount.count ?? 0) + (subsCount.count ?? 0) + (changesCount.count ?? 0);
   }
 
   let subRequests: SubRequestRow[] = [];
@@ -317,6 +350,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     isAdmin: gate.access.isAdmin,
     selfStaffId,
     shiftRequests,
+    hoursChangeRequests,
     subRequests,
     pendingRequestCount,
     settings: await getScheduleSettings(),

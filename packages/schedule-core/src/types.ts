@@ -173,6 +173,35 @@ export interface ShiftRequestRow {
 }
 
 /**
+ * An employee's ask to change their own arrive/leave times on a shift
+ * they're assigned to (staying late, coming in early). The assignment keeps
+ * its hours until a schedule manager approves; approval writes the requested
+ * hours onto it. Only one pending request per assignment.
+ */
+export interface HoursChangeRequestRow {
+	id: string;
+	assignment_id: string;
+	shift_id: string;
+	staff_id: string;
+	/** The assignment's hours when the ask was made. */
+	from_starts_at: string;
+	from_ends_at: string;
+	/** The hours they're asking for. */
+	requested_starts_at: string;
+	requested_ends_at: string;
+	status: "pending" | "approved" | "denied";
+	/** Optional message from the requester. */
+	note: string | null;
+	/** Dashboard email of the manager who decided; null while pending. */
+	decided_by: string | null;
+	decided_at: string | null;
+	/** Optional reason from the manager, emailed to the requester. */
+	decision_note: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+/**
  * An employee's ask for a sub on a shift they're assigned to. Creating one
  * logs their hours as time off (time_off_id) and emails admins plus everyone
  * available that day; the requester keeps the assignment until a claim swaps

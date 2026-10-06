@@ -12,11 +12,13 @@
 
 import { addDays, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { SCHEDULE_MANAGE } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import { normalizeEmail } from '@/lib/email/address';
-import { createNotifications } from './notify';
+import { createNotifications, resolveSourceForAll } from './notify';
 import {
   adminEmails,
+  adminsPlus,
   canOpenSchedule,
   nameFor,
   type RosterRow,
@@ -26,6 +28,8 @@ import {
 import {
   type AssignmentChange,
   assignmentChangeText,
+  type HoursChangeEvent,
+  hoursChangeText,
   proposalApprovedText,
   type ShiftChange,
   type ShiftLike,
@@ -276,4 +280,56 @@ export async function notifySubEvent(
     return;
   }
   await createNotifications(db, admins, { ...base, ...subRequestText(common) });
+}
+
+const HOURS_CHANGE_NOTICE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Hours-change activity. `requested` reaches the schedule managers (admins
+ * plus anyone holding schedule:manage); a decision marks their rows read and
+ * reaches the requester. Unlike the other schedule notices this one fires for
+ * past shifts too — staying late is usually asked about after the fact, and
+ * the ask waits on someone either way.
+ */
+export async function notifyHoursChange(
+  db: SupabaseClient,
+  input: {
+    event: HoursChangeEvent;
+    requestId: string;
+    shift: ShiftForNotice;
+    from: { starts_at: string; ends_at: string };
+    to: { starts_at: string; ends_at: string };
+    requesterStaffId: string;
+    /** The requester's note on `requested`; the manager's reason on a decision. */
+    note?: string | null;
+    actorEmail: string | null;
+  }
+): Promise<void> {
+  const rows = (await listStaff()) ?? [];
+  const requester = rosterById(rows).get(input.requesterStaffId);
+  const source = { type: 'hours_change', id: input.requestId };
+  const text = hoursChangeText({
+    event: input.event,
+    shift: input.shift,
+    from: input.from,
+    to: input.to,
+    requesterName: requester?.display_name?.trim() || 'Someone',
+    note: input.note,
+  });
+  const base = {
+    kind: 'schedule_change' as const,
+    ...text,
+    href: boardHref(rows, input.shift),
+    source,
+    actorEmail: input.actorEmail,
+    expiresAt: new Date(Date.now() + HOURS_CHANGE_NOTICE_TTL_MS).toISOString(),
+  };
+
+  if (input.event === 'requested') {
+    await createNotifications(db, adminsPlus(rows, SCHEDULE_MANAGE), base);
+    return;
+  }
+  await resolveSourceForAll(db, source.type, source.id);
+  const email = normalizeEmail(requester?.email);
+  if (email) await createNotifications(db, [email], base);
 }

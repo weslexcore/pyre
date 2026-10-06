@@ -29,6 +29,7 @@ import {
   formatChipDate,
   formatCompactTime,
   formatShiftNotes,
+  HOURS_CHANGE_LOOKBACK_DAYS,
   isTentativeShift,
   MAX_SHIFT_BUFFER_MIN,
   MAX_STANDING_INSTRUCTIONS_LENGTH,
@@ -51,6 +52,7 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass } from '@/components/admin/ui';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import type {
+  HoursChangeRequestRow,
   ScheduleDraftMessageRow,
   ScheduleProposalRow,
   ShiftAssignmentRow,
@@ -74,6 +76,8 @@ interface BoardShift extends ShiftRow {
 interface BoardSettings {
   shiftRequestsEnabled: boolean;
   subRequestsEnabled: boolean;
+  /** Employees may ask to change their own hours on a shift (a manager approves). */
+  hoursChangesEnabled: boolean;
   /** Minutes before the first session a person added to a shift starts. */
   arriveBeforeMin: number;
   /** Minutes after the last session a person added to a shift leaves. */
@@ -83,6 +87,7 @@ interface BoardSettings {
 const DEFAULT_SETTINGS: BoardSettings = {
   shiftRequestsEnabled: true,
   subRequestsEnabled: true,
+  hoursChangesEnabled: true,
   arriveBeforeMin: DEFAULT_ARRIVE_BEFORE_MIN,
   leaveAfterMin: DEFAULT_LEAVE_AFTER_MIN,
 };
@@ -103,9 +108,12 @@ interface BoardData {
   selfStaffId?: string | null;
   /** Pending requests (all of them on the manage side, own only otherwise). */
   shiftRequests?: ShiftRequestRow[];
+  /** Pending hours changes (all of them on the manage side, own only otherwise). */
+  hoursChangeRequests?: HoursChangeRequestRow[];
   /** Open sub requests — visible to everyone so any teammate can take one. */
   subRequests?: SubRequestRow[];
-  /** Manage side: outstanding shift + sub requests on upcoming shifts, whole horizon. */
+  /** Manage side: outstanding shift + sub requests on upcoming shifts and pending
+   * hours changes, whole horizon. */
   pendingRequestCount?: number;
   settings?: BoardSettings;
   /** Live assignments the day before and after the range, for the rest rule. */
@@ -387,9 +395,18 @@ export function ScheduleBoard() {
   const range = useMemo(() => {
     if (view === 'month')
       return { start: monthStart, end: addDays(monthStart, daysInMonth(monthStart) - 1) };
-    if (view === 'uncovered' || view === 'requests') {
+    if (view === 'uncovered') {
       const start = weekStartOf(todayLocal());
       return { start, end: addDays(start, UNCOVERED_HORIZON_DAYS) };
+    }
+    // Requests reach back too: hours changes (staying late) are usually
+    // asked for after the shift.
+    if (view === 'requests') {
+      const start = weekStartOf(todayLocal());
+      return {
+        start: addDays(start, -HOURS_CHANGE_LOOKBACK_DAYS),
+        end: addDays(start, UNCOVERED_HORIZON_DAYS),
+      };
     }
     return { start: weekStart, end: addDays(weekStart, 6) };
   }, [view, weekStart, monthStart]);
@@ -513,8 +530,9 @@ export function ScheduleBoard() {
     return (data?.shifts ?? []).filter((s) => s.shift_date >= today && isUncovered(s));
   }, [view, data]);
 
-  // Shifts with an outstanding ask, today forward — the Requests view. Both
-  // kinds land here: pending shift requests and open sub requests (the
+  // Shifts with an outstanding ask — the Requests view. Every kind lands
+  // here: pending shift requests and open sub requests from today forward,
+  // and pending hours changes on any fetched shift, past ones included (the
   // payload only ever holds pending/open rows, so shift-id membership is
   // enough).
   const requestShifts = useMemo(() => {
@@ -524,7 +542,10 @@ export function ScheduleBoard() {
       ...(data?.shiftRequests ?? []).map((r) => r.shift_id),
       ...(data?.subRequests ?? []).map((s) => s.shift_id),
     ]);
-    return (data?.shifts ?? []).filter((s) => s.shift_date >= today && withRequests.has(s.id));
+    const withHoursChanges = new Set((data?.hoursChangeRequests ?? []).map((r) => r.shift_id));
+    return (data?.shifts ?? []).filter(
+      (s) => (s.shift_date >= today && withRequests.has(s.id)) || withHoursChanges.has(s.id)
+    );
   }, [view, data]);
 
   // A month wholly behind us has nothing upcoming, so history months always
@@ -608,6 +629,16 @@ export function ScheduleBoard() {
       const list = map.get(request.shift_id) ?? [];
       list.push(request);
       map.set(request.shift_id, list);
+    }
+    return map;
+  }, [data]);
+
+  const hoursChangesByShift = useMemo(() => {
+    const map = new Map<string, HoursChangeRequestRow[]>();
+    for (const change of data?.hoursChangeRequests ?? []) {
+      const list = map.get(change.shift_id) ?? [];
+      list.push(change);
+      map.set(change.shift_id, list);
     }
     return map;
   }, [data]);
@@ -998,7 +1029,7 @@ export function ScheduleBoard() {
                 type="button"
                 className={pillClass(view === 'requests')}
                 aria-pressed={view === 'requests'}
-                title="Shifts with an outstanding shift request or open sub request"
+                title="Shifts with an outstanding shift request, open sub request, or hours change"
                 onClick={() => setView('requests')}
               >
                 Requests
@@ -1332,6 +1363,23 @@ export function ScheduleBoard() {
                 Employees can request a sub (logs time off, emails the admins, and emails everyone
                 available a one-click link to take the shift)
               </label>
+              <label className="flex items-center gap-2 font-mono text-xs text-white/70">
+                <input
+                  type="checkbox"
+                  checked={settings.hoursChangesEnabled}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void run(() =>
+                      api('POST', '/api/admin/schedule-settings', {
+                        key: 'hours_changes',
+                        enabled: e.target.checked,
+                      })
+                    )
+                  }
+                />
+                Employees can change their own arrive and leave times on a shift (a manager approves
+                before the schedule changes)
+              </label>
 
               <div className="space-y-2 border-t border-white/10 pt-3">
                 <p className="font-mono text-xs font-bold uppercase tracking-wide text-white/40">
@@ -1445,7 +1493,7 @@ export function ScheduleBoard() {
 
           {view === 'requests' && days.length === 0 && !loading && (
             <p className="rounded border border-[var(--pyre-sage)]/40 bg-[var(--pyre-sage)]/10 px-3 py-2 font-mono text-xs text-[var(--pyre-sage)]">
-              No outstanding shift or sub requests — all caught up.
+              No outstanding shift, sub, or hours change requests — all caught up.
             </p>
           )}
 
@@ -1455,11 +1503,7 @@ export function ScheduleBoard() {
               let shifts = allShifts;
               if (view === 'uncovered') shifts = allShifts.filter(isUncovered);
               if (view === 'requests') {
-                shifts = allShifts.filter(
-                  (s) =>
-                    (requestsByShift.get(s.id) ?? []).length > 0 ||
-                    (subsByShift.get(s.id) ?? []).length > 0
-                );
+                shifts = allShifts.filter((s) => requestShifts.includes(s));
               }
               if (mineOnly && calendarView && selfId) {
                 shifts = shifts.filter((s) => s.assignments.some((a) => a.staff_id === selfId));
@@ -1561,6 +1605,7 @@ export function ScheduleBoard() {
                       const notes = formatShiftNotes(shift);
                       const requests = requestsByShift.get(shift.id) ?? [];
                       const subs = subsByShift.get(shift.id) ?? [];
+                      const hoursChanges = hoursChangesByShift.get(shift.id) ?? [];
                       const noLead =
                         shift.status === 'active' && missingShiftLead(shift.assignments, staffById);
                       const restBreaks = shift.assignments
@@ -1725,6 +1770,16 @@ export function ScheduleBoard() {
                                   sub needed
                                 </span>
                               )}
+                              {hoursChanges.length > 0 && (
+                                <span
+                                  className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]"
+                                  title="New arrive/leave times waiting for a manager to approve"
+                                >
+                                  {canManage
+                                    ? `${hoursChanges.length} hours change${hoursChanges.length > 1 ? 's' : ''}`
+                                    : 'hours change pending'}
+                                </span>
+                              )}
                               <span className="text-sm text-white/70">
                                 {selfFirst(shift.assignments, selfId).map((a, i) => (
                                   <Fragment key={a.id}>
@@ -1801,6 +1856,7 @@ export function ScheduleBoard() {
                               }
                               selfId={selfId}
                               requests={requests}
+                              hoursChanges={hoursChanges}
                               subs={subs}
                               settings={settings}
                               onEdit={() => openEditShift(shift)}
@@ -2007,6 +2063,7 @@ function ShiftDetail({
   onToggleEditMode,
   selfId,
   requests,
+  hoursChanges,
   subs,
   settings,
   onEdit,
@@ -2031,6 +2088,8 @@ function ShiftDetail({
   selfId: string | null;
   /** Pending requests on this shift (own only for non-managers). */
   requests: ShiftRequestRow[];
+  /** Pending hours changes on this shift (own only for non-managers). */
+  hoursChanges: HoursChangeRequestRow[];
   /** Open sub requests on this shift. */
   subs: SubRequestRow[];
   settings: BoardSettings;
@@ -2061,6 +2120,19 @@ function ShiftDetail({
   // optional reason that's stored and emailed to the requester.
   const [deciding, setDeciding] = useState<{ id: string; action: 'approve' | 'deny' } | null>(null);
   const [decisionNote, setDecisionNote] = useState('');
+  // Hours change composer for the viewer's own assignment: the new arrive and
+  // leave times plus an optional note, prefilled from their current hours.
+  const [hoursDraft, setHoursDraft] = useState<{
+    startsAt: string;
+    endsAt: string;
+    note: string;
+  } | null>(null);
+  // Manager decision on an hours change, same shape as `deciding` above.
+  const [decidingHours, setDecidingHours] = useState<{
+    id: string;
+    action: 'approve' | 'deny';
+  } | null>(null);
+  const [hoursDecisionNote, setHoursDecisionNote] = useState('');
 
   // The hours a request asked for — entered with it, or (legacy rows) the
   // default hours. Mirrors the approval fallback on the server.
@@ -2075,6 +2147,16 @@ function ShiftDetail({
   const selfRequest = selfId ? (requests.find((r) => r.staff_id === selfId) ?? null) : null;
   const canRequest =
     !canManage && settings.shiftRequestsEnabled && upcoming && !!selfId && !assignedIds.has(selfId);
+
+  // Changing your own hours works on recent past shifts too — staying late is
+  // usually only known once it's happened. Asks older than the Requests
+  // view's lookback would never surface for a manager, so they're not offered.
+  const canChangeHours =
+    !canManage &&
+    settings.hoursChangesEnabled &&
+    shift.status === 'active' &&
+    !shift.is_draft &&
+    shift.shift_date >= addDays(todayLocal(), -HOURS_CHANGE_LOOKBACK_DAYS);
 
   // Add-to-calendar only means something for a shift you're actually on, and
   // only while it's still ahead of you.
@@ -2137,6 +2219,9 @@ function ShiftDetail({
             const person = staffById.get(a.staff_id);
             const isSelf = a.staff_id === selfId;
             const personSub = subs.find((s) => s.requester_staff_id === a.staff_id) ?? null;
+            const hoursChange = hoursChanges.find((c) => c.assignment_id === a.id) ?? null;
+            const decidingThisHours =
+              hoursChange && decidingHours?.id === hoursChange.id ? decidingHours : null;
             const availability = availabilityFor(
               data.timeOff,
               a.staff_id,
@@ -2180,8 +2265,94 @@ function ShiftDetail({
                       {personSub.notified_count > 0 && ` · ${personSub.notified_count} asked`}
                     </span>
                   )}
+                  {hoursChange && (
+                    <span
+                      className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]"
+                      title={
+                        hoursChange.note
+                          ? `Asked for new hours: ${hoursChange.note}`
+                          : 'Asked for new hours — waiting for a manager to approve'
+                      }
+                    >
+                      asked for {formatCompactTime(hoursChange.requested_starts_at)}–
+                      {formatCompactTime(hoursChange.requested_ends_at)} ·{' '}
+                      {assignmentHours(
+                        hoursChange.requested_starts_at,
+                        hoursChange.requested_ends_at
+                      )}
+                      h{isSelf && ' · waiting for approval'}
+                    </span>
+                  )}
                   {a.notes && <span className="font-mono text-xs text-white/40">{a.notes}</span>}
                   <span className="ml-auto flex items-center gap-2">
+                    {isSelf && !a.is_draft && canChangeHours && !hoursChange && (
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
+                        title="Ask to change when you arrive or leave — a manager approves before the schedule changes"
+                        disabled={busy}
+                        onClick={() =>
+                          setHoursDraft(
+                            hoursDraft
+                              ? null
+                              : { startsAt: hhmm(a.starts_at), endsAt: hhmm(a.ends_at), note: '' }
+                          )
+                        }
+                      >
+                        change my hours
+                      </button>
+                    )}
+                    {hoursChange && isSelf && !canManage && (
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-white/50 underline hover:text-white disabled:opacity-40"
+                        title="Withdraw your hours change request"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            api('DELETE', `/api/admin/hours-change-requests?id=${hoursChange.id}`)
+                          )
+                        }
+                      >
+                        withdraw
+                      </button>
+                    )}
+                    {hoursChange && canManage && (
+                      <>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-[var(--pyre-sage)] underline disabled:opacity-40"
+                          title="Approve — changes their hours on the schedule to the ones they asked for"
+                          disabled={busy}
+                          onClick={() => {
+                            setHoursDecisionNote('');
+                            setDecidingHours(
+                              decidingThisHours?.action === 'approve'
+                                ? null
+                                : { id: hoursChange.id, action: 'approve' }
+                            );
+                          }}
+                        >
+                          approve hours
+                        </button>
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-[var(--pyre-red)] underline disabled:opacity-40"
+                          title="Deny — their hours stay as scheduled"
+                          disabled={busy}
+                          onClick={() => {
+                            setHoursDecisionNote('');
+                            setDecidingHours(
+                              decidingThisHours?.action === 'deny'
+                                ? null
+                                : { id: hoursChange.id, action: 'deny' }
+                            );
+                          }}
+                        >
+                          deny
+                        </button>
+                      </>
+                    )}
                     {isSelf &&
                       !a.is_draft &&
                       upcoming &&
@@ -2256,6 +2427,121 @@ function ShiftDetail({
                     )}
                   </span>
                 </div>
+                {isSelf && !hoursChange && hoursDraft && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded bg-white/5 px-2 py-1.5">
+                    <span className="font-mono text-xs text-white/50">Arrive</span>
+                    <input
+                      type="time"
+                      step={900}
+                      className={`${inputClass} w-auto`}
+                      value={hoursDraft.startsAt}
+                      onChange={(e) => setHoursDraft({ ...hoursDraft, startsAt: e.target.value })}
+                      aria-label="New arrive time"
+                    />
+                    <span className="font-mono text-xs text-white/50">Leave</span>
+                    <input
+                      type="time"
+                      step={900}
+                      className={`${inputClass} w-auto`}
+                      value={hoursDraft.endsAt}
+                      onChange={(e) => setHoursDraft({ ...hoursDraft, endsAt: e.target.value })}
+                      aria-label="New leave time"
+                    />
+                    <input
+                      className={`${inputClass} flex-1 min-w-48`}
+                      maxLength={500}
+                      placeholder="Why (optional) — e.g. stayed to finish laundry"
+                      value={hoursDraft.note}
+                      onChange={(e) => setHoursDraft({ ...hoursDraft, note: e.target.value })}
+                      aria-label="Reason for the change"
+                    />
+                    <button
+                      type="button"
+                      className={`${buttonClass} border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]`}
+                      disabled={
+                        busy ||
+                        !hoursDraft.startsAt ||
+                        !hoursDraft.endsAt ||
+                        hoursDraft.endsAt <= hoursDraft.startsAt ||
+                        (hoursDraft.startsAt === hhmm(a.starts_at) &&
+                          hoursDraft.endsAt === hhmm(a.ends_at))
+                      }
+                      onClick={() => {
+                        const draft = hoursDraft;
+                        setHoursDraft(null);
+                        void run(() =>
+                          api('POST', '/api/admin/hours-change-requests', {
+                            assignmentId: a.id,
+                            startsAt: draft.startsAt,
+                            endsAt: draft.endsAt,
+                            ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+                          })
+                        );
+                      }}
+                    >
+                      Send for approval
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      onClick={() => setHoursDraft(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {hoursChange && canManage && (
+                  <p className="mt-1 font-mono text-xs text-white/50">
+                    Asked to change {formatCompactTime(hoursChange.from_starts_at)}–
+                    {formatCompactTime(hoursChange.from_ends_at)} to{' '}
+                    {formatCompactTime(hoursChange.requested_starts_at)}–
+                    {formatCompactTime(hoursChange.requested_ends_at)} on{' '}
+                    {new Date(hoursChange.created_at).toLocaleDateString()}
+                    {hoursChange.note ? ` — ${hoursChange.note}` : ''}
+                  </p>
+                )}
+                {hoursChange && decidingThisHours && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <input
+                      className={`${inputClass} flex-1 min-w-48`}
+                      maxLength={500}
+                      placeholder="Reason (optional) — included in the email to them"
+                      value={hoursDecisionNote}
+                      onChange={(e) => setHoursDecisionNote(e.target.value)}
+                      aria-label="Decision reason"
+                    />
+                    <button
+                      type="button"
+                      className={`${buttonClass} ${
+                        decidingThisHours.action === 'approve'
+                          ? 'border-[var(--pyre-sage)]/60 text-[var(--pyre-sage)]'
+                          : 'text-[var(--pyre-red)]'
+                      }`}
+                      disabled={busy}
+                      onClick={() => {
+                        const note = hoursDecisionNote.trim();
+                        setDecidingHours(null);
+                        setHoursDecisionNote('');
+                        void run(() =>
+                          api('PATCH', '/api/admin/hours-change-requests', {
+                            id: hoursChange.id,
+                            action: decidingThisHours.action,
+                            ...(note ? { note } : {}),
+                          })
+                        );
+                      }}
+                    >
+                      {decidingThisHours.action === 'approve' ? 'Confirm approve' : 'Confirm deny'}
+                    </button>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      onClick={() => setDecidingHours(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {a.duties.length > 0 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {normalizeDuties(dutyCatalog, a.duties).map((duty) => {

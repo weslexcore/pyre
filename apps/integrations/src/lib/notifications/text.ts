@@ -242,3 +242,36 @@ export function intakeCardText(input: {
     body: `Came in from ${input.via ?? 'the web'}, on ${input.boardName}`,
   };
 }
+
+export type HoursChangeEvent = 'requested' | 'approved' | 'denied';
+
+export function hoursChangeText(input: {
+  event: HoursChangeEvent;
+  shift: ShiftLike;
+  /** The hours they were on when they asked. */
+  from: { starts_at: string; ends_at: string };
+  /** The hours they asked for. */
+  to: { starts_at: string; ends_at: string };
+  requesterName: string;
+  note?: string | null;
+}): { title: string; body: string } {
+  const change = `${shortWindow(input.from)} → ${shortWindow(input.to)}`;
+  const note = input.note ? ` · ${input.note}` : '';
+  switch (input.event) {
+    case 'requested':
+      return {
+        title: `${input.requesterName} asked to change their hours on ${shiftPhrase(input.shift)}`,
+        body: `${change}${note}`,
+      };
+    case 'approved':
+      return {
+        title: `Hours change approved: ${shiftPhrase(input.shift)}`,
+        body: `Now ${shortWindow(input.to)}${note}`,
+      };
+    case 'denied':
+      return {
+        title: `Hours change not approved: ${shiftPhrase(input.shift)}`,
+        body: `Still ${shortWindow(input.from)}${note}`,
+      };
+  }
+}

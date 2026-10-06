@@ -7,6 +7,7 @@ import { sampleConfirmationProps } from './components/ConfirmationEmail';
 import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
 import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
+import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
@@ -48,6 +49,7 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'sub-claimed-notice': SubClaimedNotice.PreviewProps,
   'weekly-shifts': WeeklyShifts.PreviewProps,
   'shift-request-decision': ShiftRequestDecision.PreviewProps,
+  'hours-change-decision': HoursChangeDecision.PreviewProps,
   'incident-reported': IncidentReported.PreviewProps,
   'lost-found-found': LostFoundFound.PreviewProps,
   'lost-found-claimed': LostFoundClaimed.PreviewProps,

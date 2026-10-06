@@ -194,6 +194,21 @@ export interface WeeklyShiftsProps {
   scheduleUrl: string;
 }
 
+export interface HoursChangeDecisionProps {
+  /** The requester — the employee whose hours change was decided. */
+  firstName: string;
+  decision: 'approved' | 'denied';
+  shiftLabel: string;
+  dateLabel: string;
+  /** The hours they were on when they asked. */
+  fromTimeLabel: string;
+  /** The hours they asked for. */
+  timeLabel: string;
+  /** Optional reason the manager attached to the decision. */
+  reasonNote?: string | null;
+  scheduleUrl: string;
+}
+
 export interface ShiftRequestDecisionProps {
   /** The requester — the employee whose ask was decided. */
   firstName: string;
@@ -342,6 +357,7 @@ export interface EmailPropsByTemplate {
   'sub-claimed-notice': SubClaimedNoticeProps;
   'weekly-shifts': WeeklyShiftsProps;
   'shift-request-decision': ShiftRequestDecisionProps;
+  'hours-change-decision': HoursChangeDecisionProps;
   'incident-reported': IncidentReportedProps;
   'lost-found-found': LostFoundFoundProps;
   'lost-found-claimed': LostFoundClaimedProps;

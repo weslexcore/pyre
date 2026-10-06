@@ -16,7 +16,7 @@ import {
 } from '@pyre/schedule-core';
 import { getDb } from '../db';
 
-export const SCHEDULE_SETTING_KEYS = ['shift_requests', 'sub_requests'] as const;
+export const SCHEDULE_SETTING_KEYS = ['shift_requests', 'sub_requests', 'hours_changes'] as const;
 export type ScheduleSettingKey = (typeof SCHEDULE_SETTING_KEYS)[number];
 
 /** The minute-count settings: when staff arrive and leave, from the sessions. */
@@ -28,6 +28,8 @@ export interface ScheduleSettings extends ShiftBufferSettings {
   shiftRequestsEnabled: boolean;
   /** Employees may request a sub for a shift they're assigned to. */
   subRequestsEnabled: boolean;
+  /** Employees may ask to change their own hours on a shift (a manager approves). */
+  hoursChangesEnabled: boolean;
 }
 
 interface SettingRow {
@@ -70,6 +72,7 @@ export async function getScheduleSettings(): Promise<ScheduleSettings> {
   return {
     shiftRequestsEnabled: rows.shift_requests?.enabled ?? true,
     subRequestsEnabled: rows.sub_requests?.enabled ?? true,
+    hoursChangesEnabled: rows.hours_changes?.enabled ?? true,
     arriveBeforeMin: rows.arrive_before_min?.minutes ?? DEFAULT_ARRIVE_BEFORE_MIN,
     leaveAfterMin: rows.leave_after_min?.minutes ?? DEFAULT_LEAVE_AFTER_MIN,
   };
