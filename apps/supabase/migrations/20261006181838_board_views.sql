@@ -19,9 +19,6 @@
 --   * hide_finished     — leave out cards in done and dropped columns.
 --   * show_empty        — list groups with no cards in them, where the
 --                          groups are known ahead (options, columns).
---   * show_status       — name each card's column on its row. Grouped by
---                          anything but the column, the column is the one
---                          thing about a card the grouping no longer says.
 --
 -- Views belong to the board, not to a person: anyone who can open the board
 -- can make, change, and remove them, and everyone sees the same list. A view
@@ -39,7 +36,6 @@ create table public.board_views (
   sort_by text not null default 'manual' check (char_length(sort_by) <= 60),
   hide_finished boolean not null default true,
   show_empty boolean not null default false,
-  show_status boolean not null default true,
   sort_order integer not null default 0,
   created_by text,
   updated_by text,
@@ -62,8 +58,6 @@ comment on column public.board_views.group_field_key is
   'board_fields.key of the field the view groups by, when group_by = field. Left in place if the field is deleted; the view says so.';
 comment on column public.board_views.date_unit is
   'day, week, month, or year: how a date grouping buckets its cards. Null for a grouping that is not a date.';
-comment on column public.board_views.show_status is
-  'Whether each card''s row names its column (its status) in this view; off shows neither the name nor the dot.';
 comment on column public.board_views.sort_by is
   'Order within a group: manual, due_date, title, created_at, or field:<key> naming a date or number field.';
 
