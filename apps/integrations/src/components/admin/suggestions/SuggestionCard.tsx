@@ -127,6 +127,8 @@ export function SuggestionCard({
     }
   };
 
+  const dismiss = () => void run(() => api.dismiss(suggestion.id, dismissNote.trim()), true);
+
   if (!pending) {
     const who = suggestion.decided_by ? personName(suggestion.decided_by, names) : null;
     return (
@@ -263,23 +265,26 @@ export function SuggestionCard({
         </p>
       )}
 
-      {dismissing ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className={`${compactInputClass} min-w-48 flex-1`}
-            placeholder="Why not? (optional — the agent reads this next time)"
-            value={dismissNote}
-            maxLength={1000}
-            onChange={(e) => setDismissNote(e.target.value)}
-          />
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={busy}
-            onClick={() => void run(() => api.dismiss(suggestion.id, dismissNote.trim()), true)}
-          >
-            Dismiss
-          </button>
+      {/* Dismiss stays where it is when it opens the reason box, so a second
+          click on the same spot dismisses without one. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={goldButtonClass}
+          disabled={busy || !parsed.ok || suggestion.status === 'applying'}
+          onClick={() => void run(() => api.approve(suggestion.id, draft), true)}
+        >
+          {editedFromOriginal ? 'Approve with edits' : 'Approve'}
+        </button>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy}
+          onClick={() => (dismissing ? dismiss() : setDismissing(true))}
+        >
+          Dismiss
+        </button>
+        {dismissing ? (
           <button
             type="button"
             className={buttonClass}
@@ -288,46 +293,46 @@ export function SuggestionCard({
           >
             Cancel
           </button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={goldButtonClass}
-            disabled={busy || !parsed.ok || suggestion.status === 'applying'}
-            onClick={() => void run(() => api.approve(suggestion.id, draft), true)}
-          >
-            {editedFromOriginal ? 'Approve with edits' : 'Approve'}
-          </button>
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={busy}
-            onClick={() => setDismissing(true)}
-          >
-            Dismiss
-          </button>
-          {dirty && parsed.ok && (
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={busy}
-              onClick={() => void run(() => api.saveEdit(suggestion.id, draft), false)}
-            >
-              Save for later
-            </button>
-          )}
-          {editedFromOriginal && (
-            <button
-              type="button"
-              className="font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
-              disabled={busy}
-              onClick={() => setDraft(original)}
-            >
-              Reset to the AI’s version
-            </button>
-          )}
-        </div>
+        ) : (
+          <>
+            {dirty && parsed.ok && (
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={busy}
+                onClick={() => void run(() => api.saveEdit(suggestion.id, draft), false)}
+              >
+                Save for later
+              </button>
+            )}
+            {editedFromOriginal && (
+              <button
+                type="button"
+                className="font-mono text-[10px] uppercase tracking-wide text-white/40 underline hover:text-white"
+                disabled={busy}
+                onClick={() => setDraft(original)}
+              >
+                Reset to the AI’s version
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {dismissing && (
+        <input
+          className={`${compactInputClass} w-full`}
+          placeholder="Why not? (optional, the agent reads this next time)"
+          value={dismissNote}
+          maxLength={1000}
+          disabled={busy}
+          // biome-ignore lint/a11y/noAutofocus: opened by the Dismiss click, so typing the reason follows on
+          autoFocus
+          onChange={(e) => setDismissNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') dismiss();
+            if (e.key === 'Escape') setDismissing(false);
+          }}
+        />
       )}
     </div>
   );
