@@ -252,7 +252,7 @@ export function SopDocument({
     // assistant ready to draft, which is also where the create form's rough
     // notes land.
     const isStub = doc.sop.content_md.replace(/^\s*#[^\n]*\n?/, '').trim() === '';
-    setShowAssist(Boolean(opts.review) || isStub);
+    setShowAssist(doc.assistEnabled && (Boolean(opts.review) || isStub));
     setAutoReview(Boolean(opts.review));
     setMode('edit');
   }, []);
@@ -383,13 +383,15 @@ export function SopDocument({
             <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
               Edit
             </button>
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => startEdit(data, { review: true })}
-            >
-              Review with AI
-            </button>
+            {data.assistEnabled && (
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => startEdit(data, { review: true })}
+              >
+                Review with AI
+              </button>
+            )}
           </>
         )}
         <button type="button" className={buttonClass} onClick={() => setShowHistory((v) => !v)}>
@@ -701,7 +703,7 @@ export function SopDocument({
             onChange={(e) => setDraftTitle(e.target.value)}
             placeholder="Title"
           />
-          {showAssist && (
+          {showAssist && data.assistEnabled && (
             <SopAssist
               sopId={sop.id}
               slug={sop.slug}
@@ -732,16 +734,18 @@ export function SopDocument({
             >
               Preview
             </button>
-            <button
-              type="button"
-              className={`${buttonClass} ${showAssist ? 'border-white/40 text-white' : ''}`}
-              onClick={() => {
-                setAutoReview(false);
-                setShowAssist((v) => !v);
-              }}
-            >
-              Assistant
-            </button>
+            {data.assistEnabled && (
+              <button
+                type="button"
+                className={`${buttonClass} ${showAssist ? 'border-white/40 text-white' : ''}`}
+                onClick={() => {
+                  setAutoReview(false);
+                  setShowAssist((v) => !v);
+                }}
+              >
+                Assistant
+              </button>
+            )}
             <span className="ml-auto font-mono text-[10px] text-white/40">
               Markdown — “- [ ]” for checklist items, “- [!]” for one that must be checked and can’t
               be skipped · type [name](/ to pick a page or SOP to link

@@ -34,6 +34,7 @@ import {
 } from '@/lib/sops/levels';
 import { type CategoryRank, sectionsInOrder, sortSops } from '@/lib/sops/order';
 import { getPeopleNames, listGrantablePeople } from '@/lib/sops/people';
+import { sopAssistEnabled } from '@/lib/sops/assist';
 import { getSopRole } from '@/lib/sops/role';
 import { MAX_SOP_CONTENT, MAX_SOP_TITLE, saveSopVersion } from '@/lib/sops/save-version';
 import { countMatches, MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, searchContent } from '@/lib/sops/search';
@@ -286,6 +287,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     // The create form grants access at creation time, so it needs the same
     // roster the settings panel does. Admins only, for the same reason.
     staff: role === 'admin' ? await listGrantablePeople() : undefined,
+    // Whether the create form offers rough notes for the writing assistant.
+    assistEnabled: role === 'admin' ? await sopAssistEnabled() : false,
     role,
     pins,
     people: await getPeopleNames(sorted.map((s) => s.updated_by ?? '')),

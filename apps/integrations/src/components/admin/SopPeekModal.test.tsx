@@ -56,6 +56,7 @@ function payload(overrides: Partial<SopDocumentPayload> = {}): SopDocumentPayloa
     accessLabel: 'Everyone',
     role: 'staff',
     canEdit: false,
+    assistEnabled: false,
     viewerEmail: 'me@pyresauna.com',
     taskCount: 3,
     run: null,

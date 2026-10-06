@@ -61,6 +61,8 @@ interface ListResponse {
   /** Roster names for the `updated_by` emails on the cards. */
   people?: PeopleNames;
   role: SopRole;
+  /** The create form offers rough notes for the writing assistant (admins only). */
+  assistEnabled?: boolean;
   pins: string[];
   /** The caller's own current-or-next shift duties; null when they hold none. */
   shiftSops: ShiftSops | null;
@@ -142,6 +144,7 @@ export function SopsIndex() {
   const [newCategory, setNewCategory] = useState<string>(NEW_SECTION);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [assistEnabled, setAssistEnabled] = useState(false);
   // New documents start readable by everyone and editable by admins — the
   // same defaults the columns carry.
   const [newView, setNewView] = useState<SopGrant>({
@@ -238,6 +241,7 @@ export function SopsIndex() {
       // deriving from the documents would drop them.
       setCategories(body.categories ?? categoriesInOrder(body.sops));
       setRole(body.role);
+      setAssistEnabled(body.assistEnabled ?? false);
       setStaff(body.staff ?? []);
       setPins(new Set(body.pins ?? []));
       setShiftSops(body.shiftSops ?? null);
@@ -335,7 +339,7 @@ export function SopsIndex() {
       // The editor's writing assistant picks these up and drafts from them.
       // Best-effort: without storage, the editor opens with an empty
       // assistant and the notes can be pasted there.
-      if (newNotes.trim()) {
+      if (assistEnabled && newNotes.trim()) {
         try {
           window.sessionStorage.setItem(assistNotesKey(sop.slug), newNotes);
         } catch {
@@ -786,14 +790,16 @@ export function SopsIndex() {
                   onChange={setNewEdit}
                 />
               </div>
-              <textarea
-                className={`${inputClass} min-h-24 w-full resize-y text-sm`}
-                placeholder="Rough notes (optional): the steps, what to watch for, who does it. The writing assistant turns them into a draft for you to review."
-                value={newNotes}
-                disabled={busy}
-                maxLength={20_000}
-                onChange={(e) => setNewNotes(e.target.value)}
-              />
+              {assistEnabled && (
+                <textarea
+                  className={`${inputClass} min-h-24 w-full resize-y text-sm`}
+                  placeholder="Rough notes (optional): the steps, what to watch for, who does it. The writing assistant turns them into a draft for you to review."
+                  value={newNotes}
+                  disabled={busy}
+                  maxLength={20_000}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                />
+              )}
               {newTitle.trim() && (
                 <p className="font-mono text-[10px] text-white/40">
                   /admin/sops/{slugify(newTitle)}

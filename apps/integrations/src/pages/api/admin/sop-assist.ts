@@ -1,6 +1,8 @@
 // The SOP writing assistant behind the document editor (lib/sops/assist.ts).
-// POST { sopId, mode: 'draft' | 'review', title, content, notes? } returns
-// { proposal }: a revised title and body for the editor to diff and accept
+// POST { sopId, mode: 'draft' | 'review' | 'refine', title, content, notes?,
+// conversation? } returns { proposal }. A refine carries the chat in which
+// the editor answered the assistant's questions, with the proposal being
+// refined as title and content. Every proposal is a revised title and body for the editor to diff and accept
 // or discard. Nothing is written here; accepting puts the text in the editor
 // and the usual PUT /api/admin/sops saves it.
 //
@@ -14,12 +16,13 @@ import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
 import { gateMutation, isUuid, json, readJsonBody } from '@/lib/http/route';
 import {
-  type AssistMode,
+  type AssistChatMessage,
   loadAssistContext,
-  MAX_ASSIST_NOTES,
+  parseConversation,
   runSopAssist,
-  sopAssistAvailable,
+  sopAssistEnabled,
 } from '@/lib/sops/assist';
+import { MAX_ASSIST_NOTES } from '@/lib/sops/assist-limits';
 import { loadSop } from '@/lib/sops/document';
 import { canEditSop, canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { getSopRole } from '@/lib/sops/role';
@@ -33,15 +36,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   const body = await readJsonBody(request);
   if (body instanceof Response) return body;
 
-  if (!sopAssistAvailable()) {
-    return json({ error: 'The writing assistant is unavailable (AI Gateway not configured)' }, 503);
+  if (!(await sopAssistEnabled())) {
+    return json({ error: 'The writing assistant is turned off (see Settings)' }, 503);
   }
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const mode = body.mode;
-  if (mode !== 'draft' && mode !== 'review') {
-    return json({ error: "mode must be 'draft' or 'review'" }, 400);
+  if (mode !== 'draft' && mode !== 'review' && mode !== 'refine') {
+    return json({ error: "mode must be 'draft', 'review', or 'refine'" }, 400);
   }
   const sopId = typeof body.sopId === 'string' ? body.sopId : '';
   if (!isUuid(sopId)) return json({ error: 'sopId must be a UUID' }, 400);
@@ -61,8 +64,19 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   if (notes.length > MAX_ASSIST_NOTES) {
     return json({ error: `notes are too long (max ${MAX_ASSIST_NOTES} chars)` }, 400);
   }
-  if (mode === 'review' && !content.trim()) {
+  if (mode !== 'draft' && !content.trim()) {
     return json({ error: 'There is nothing to review yet' }, 400);
+  }
+  let conversation: AssistChatMessage[] = [];
+  if (mode === 'refine') {
+    const parsed = parseConversation(body.conversation);
+    if (!parsed) {
+      return json(
+        { error: 'conversation must be the chat so far, with at least one reply from you' },
+        400
+      );
+    }
+    conversation = parsed;
   }
 
   const { sop, error: loadError } = await loadSop(db, { id: sopId });
@@ -81,11 +95,12 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   try {
     const proposal = await runSopAssist({
-      mode: mode as AssistMode,
+      mode,
       sop,
       title,
       content,
       notes,
+      conversation,
       context,
     });
     return json({ proposal });

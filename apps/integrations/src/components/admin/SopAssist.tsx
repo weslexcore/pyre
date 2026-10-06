@@ -3,19 +3,35 @@
 // turns rough details into a formatted document, and "Review" reads the
 // document for clarity and consistency with the library and proposes a
 // revision. Either way the proposal shows as a diff against the editor's text
-// with what the assistant found, the facts it needs confirmed, and any
-// checklist items, required markers, or links it would lose. "Use this
-// version" puts it in the editor; nothing is saved until Save.
+// with what the assistant found and any checklist items, required markers, or
+// links it would lose. "Use this version" puts it in the editor; nothing is
+// saved until Save.
+//
+// Facts the assistant could not fill in (marked TBD in the text) become a
+// chat (lib/sops/assist-chat): it asks one question at a time, and once the
+// round is answered or skipped it works the answers into the proposal and
+// the diff updates. With no question open, the editor can keep chatting to
+// ask for changes.
 //
 // Rough notes typed on the library's create form arrive through
 // sessionStorage (see assistNotesKey) and start a draft as soon as the new
 // document's editor opens.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { buttonClass, inputClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
 import type { AssistFinding, AssistMode, AssistProposal } from '@/lib/sops/assist';
+import {
+  type ChatState,
+  EMPTY_CHAT,
+  hasUnsentReplies,
+  openRound,
+  reply,
+  sendEarly,
+  toConversation,
+} from '@/lib/sops/assist-chat';
 import { assistStructureWarnings } from '@/lib/sops/assist-checks';
+import { MAX_ASSIST_CHAT_TEXT, MAX_ASSIST_NOTES } from '@/lib/sops/assist-limits';
 import { SopDiff } from './SopDiff';
 
 /** Where the create form leaves its rough notes for the new document's editor. */
@@ -70,31 +86,89 @@ export function SopAssist({
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState<AssistMode | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The proposal, and the text it was made against (the diff's "before").
+  // The proposal (refined in place by the chat), the text it was made
+  // against (the diff's "before"), and the first answer's summary and
+  // findings, which stay put while the chat refines.
   const [result, setResult] = useState<{
     proposal: AssistProposal;
     before: string;
     beforeTitle: string;
+    summary: string;
+    findings: AssistFinding[];
   } | null>(null);
+  const [chat, setChat] = useState<ChatState>(EMPTY_CHAT);
+  // How many chat messages the assistant has seen.
+  const [sentThrough, setSentThrough] = useState(0);
 
-  const run = async (mode: AssistMode, withNotes = notes) => {
+  const post = async (body: Record<string, unknown>): Promise<AssistProposal> => {
+    const res = await fetch('/api/admin/sop-assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sopId, ...body }),
+    });
+    if (!res.ok) throw new Error(await readError(res));
+    return ((await res.json()) as { proposal: AssistProposal }).proposal;
+  };
+
+  const run = async (mode: 'draft' | 'review', withNotes = notes) => {
     setBusy(mode);
     setError(null);
     setResult(null);
+    setChat(EMPTY_CHAT);
+    setSentThrough(0);
     try {
-      const res = await fetch('/api/admin/sop-assist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sopId, mode, title, content, notes: withNotes }),
+      const proposal = await post({ mode, title, content, notes: withNotes });
+      setResult({
+        proposal,
+        before: content,
+        beforeTitle: title,
+        summary: proposal.summary,
+        findings: proposal.findings,
       });
-      if (!res.ok) throw new Error(await readError(res));
-      const { proposal } = (await res.json()) as { proposal: AssistProposal };
-      setResult({ proposal, before: content, beforeTitle: title });
+      const count = proposal.openQuestions.length;
+      const intro =
+        count > 0
+          ? `I have ${count === 1 ? 'a question' : `${count} questions`} so I can fill in what’s marked TBD. Answer what you can, or skip.`
+          : null;
+      setChat(openRound(EMPTY_CHAT, intro, proposal.openQuestions));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The assistant failed');
     } finally {
       setBusy(null);
     }
+  };
+
+  // The editor's answers so far go back with the proposal; the reply and any
+  // follow-up questions open the next round.
+  const refine = async (next: ChatState) => {
+    if (!result) return;
+    const previouslySent = sentThrough;
+    setChat(next);
+    setSentThrough(next.messages.length);
+    setBusy('refine');
+    setError(null);
+    try {
+      const proposal = await post({
+        mode: 'refine',
+        title: result.proposal.title,
+        content: result.proposal.contentMd,
+        conversation: toConversation(next),
+      });
+      setResult((prev) => (prev ? { ...prev, proposal } : prev));
+      setChat((current) => openRound(current, proposal.summary, proposal.openQuestions));
+    } catch (e) {
+      // Unsent again, so "Send answers" offers the retry.
+      setSentThrough(previouslySent);
+      setError(e instanceof Error ? e.message : 'The assistant failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const say = (text: string, opts: { skipped?: boolean } = {}) => {
+    const { state, send } = reply(chat, text, opts);
+    if (send) void refine(state);
+    else setChat(state);
   };
 
   // Once per mount: the create form's notes, or the document's review button.
@@ -125,6 +199,7 @@ export function SopAssist({
     result !== null &&
     result.proposal.contentMd.trim() === result.before.trim() &&
     result.proposal.title === result.beforeTitle;
+  const tbdCount = result ? (result.proposal.contentMd.match(/\bTBD\b/g) ?? []).length : 0;
 
   return (
     <div className="space-y-3 rounded border border-white/10 bg-white/5 p-4">
@@ -152,7 +227,7 @@ export function SopAssist({
             disabled={disabled || busy !== null}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Rough details, in any order: the steps, what to watch for, who does it, when. Shorthand is fine."
-            maxLength={20_000}
+            maxLength={MAX_ASSIST_NOTES}
           />
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -188,7 +263,7 @@ export function SopAssist({
         </div>
       )}
 
-      {busy && (
+      {(busy === 'draft' || busy === 'review') && (
         <p className="font-mono text-xs text-white/40">
           This can take up to a minute for a long document.
         </p>
@@ -197,13 +272,11 @@ export function SopAssist({
 
       {result && (
         <div className="space-y-3 border-t border-white/10 pt-3">
-          {result.proposal.summary && (
-            <p className="text-sm text-white/80">{result.proposal.summary}</p>
-          )}
+          {result.summary && <p className="text-sm text-white/80">{result.summary}</p>}
 
-          {result.proposal.findings.length > 0 && (
+          {result.findings.length > 0 && (
             <ul className="space-y-2">
-              {result.proposal.findings.map((finding, i) => (
+              {result.findings.map((finding, i) => (
                 <li
                   // biome-ignore lint/suspicious/noArrayIndexKey: findings are a fixed list per proposal
                   key={i}
@@ -231,17 +304,16 @@ export function SopAssist({
             </ul>
           )}
 
-          {result.proposal.openQuestions.length > 0 && (
-            <div className="rounded border border-[var(--pyre-gold)]/30 bg-[var(--pyre-gold)]/5 px-3 py-2">
-              <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
-                To confirm before saving (marked TBD in the text)
-              </p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-white/80">
-                {result.proposal.openQuestions.map((question) => (
-                  <li key={question}>{question}</li>
-                ))}
-              </ul>
-            </div>
+          {chat.messages.length > 0 && (
+            <AssistChat
+              chat={chat}
+              busy={busy === 'refine'}
+              disabled={disabled || busy !== null}
+              canSendEarly={chat.queue.length > 0 && hasUnsentReplies(chat, sentThrough)}
+              canRetry={busy === null && !chat.asking && hasUnsentReplies(chat, sentThrough)}
+              onSay={say}
+              onSendNow={() => void refine(sendEarly(chat))}
+            />
           )}
 
           {warnings.length > 0 && (
@@ -281,6 +353,12 @@ export function SopAssist({
             </>
           )}
 
+          {tbdCount > 0 && (
+            <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
+              {tbdCount} TBD{tbdCount === 1 ? '' : 's'} left in the text. Fill them in before
+              saving, here or in the editor.
+            </p>
+          )}
           {stale && (
             <p className="font-mono text-[10px] text-[var(--pyre-gold)]">
               The editor has changed since this was made. Using it replaces those edits.
@@ -291,7 +369,7 @@ export function SopAssist({
               <button
                 type="button"
                 className={buttonClass}
-                disabled={disabled}
+                disabled={disabled || busy !== null}
                 onClick={() => {
                   onApply(result.proposal);
                   setResult(null);
@@ -305,6 +383,130 @@ export function SopAssist({
             </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** The assistant's questions and the editor's answers, with the reply box. */
+function AssistChat({
+  chat,
+  busy,
+  disabled,
+  canSendEarly,
+  canRetry,
+  onSay,
+  onSendNow,
+}: {
+  chat: ChatState;
+  /** The assistant is working the answers in. */
+  busy: boolean;
+  disabled: boolean;
+  /** Answers are waiting while more questions are queued. */
+  canSendEarly: boolean;
+  /** The last send failed; the answers can go again. */
+  canRetry: boolean;
+  onSay: (text: string, opts?: { skipped?: boolean }) => void;
+  onSendNow: () => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const endRef = useRef<HTMLDivElement>(null);
+
+  // Keep the newest message in view inside the thread.
+  const count = chat.messages.length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: count and busy are the triggers
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [count, busy]);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text || disabled) return;
+    onSay(text);
+    setDraft('');
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded border border-white/10 bg-black/20 p-3">
+      <div className="max-h-80 space-y-2 overflow-y-auto">
+        {chat.messages.map((message, i) =>
+          message.role === 'assistant' ? (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: the thread only grows
+              key={i}
+              className="mr-8 w-fit rounded-lg rounded-tl-none bg-white/10 px-3 py-2 text-sm text-white/90"
+            >
+              {message.text}
+            </div>
+          ) : (
+            <div
+              // biome-ignore lint/suspicious/noArrayIndexKey: the thread only grows
+              key={i}
+              className={`ml-auto w-fit max-w-[85%] rounded-lg rounded-tr-none px-3 py-2 text-sm whitespace-pre-wrap ${
+                message.skipped
+                  ? 'border border-white/10 text-white/40 italic'
+                  : 'bg-[var(--pyre-gold)]/15 text-[var(--pyre-creme)]'
+              }`}
+            >
+              {message.skipped ? 'Skipped' : message.text}
+            </div>
+          )
+        )}
+        {busy && (
+          <div className="mr-8 w-fit rounded-lg rounded-tl-none bg-white/10 px-3 py-2 font-mono text-xs text-white/50">
+            Updating the draft…
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div className="flex items-end gap-2">
+        <textarea
+          className={`${inputClass} max-h-40 min-h-10 flex-1 resize-y text-sm`}
+          rows={1}
+          value={draft}
+          disabled={disabled}
+          maxLength={MAX_ASSIST_CHAT_TEXT}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={chat.asking ? 'Your answer' : 'Ask for a change, or add a detail'}
+          aria-label={chat.asking ? 'Answer the assistant' : 'Message the assistant'}
+        />
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={disabled || !draft.trim()}
+          onClick={send}
+        >
+          Send
+        </button>
+        {chat.asking && (
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={disabled}
+            onClick={() => onSay('', { skipped: true })}
+          >
+            Skip
+          </button>
+        )}
+      </div>
+      {(canSendEarly || canRetry) && (
+        <button
+          type="button"
+          className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)] underline hover:text-white disabled:opacity-40"
+          disabled={disabled}
+          onClick={onSendNow}
+        >
+          {canRetry ? 'Send answers again' : 'Update the draft with these answers now'}
+        </button>
       )}
     </div>
   );

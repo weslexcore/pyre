@@ -9,6 +9,7 @@
 import type { PageAccess } from '@/components/admin/adminTools';
 import { type LinkedBoard, loadSopBoards } from '@/lib/boards/sops';
 import type { getDb, SopRow } from '@/lib/db';
+import { sopAssistEnabled } from './assist';
 import { countTasks } from './checklist';
 import {
   canEditSop,
@@ -33,6 +34,8 @@ export interface SopDocumentPayload {
   accessLabel: string;
   role: SopRole;
   canEdit: boolean;
+  /** The writing assistant is switched on and this reader may use it (they can edit). */
+  assistEnabled: boolean;
   /** The session email, so the island can attribute optimistic checks. */
   viewerEmail: string;
   taskCount: number;
@@ -158,6 +161,7 @@ export async function loadSopDocument(
       accessLabel: describeGrants(grants.roles, grants.emails),
       role: viewer.role,
       canEdit: canEditSop(viewer, sop),
+      assistEnabled: canEditSop(viewer, sop) && (await sopAssistEnabled()),
       viewerEmail: viewer.email,
       taskCount,
       run,

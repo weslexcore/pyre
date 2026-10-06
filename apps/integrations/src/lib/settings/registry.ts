@@ -13,7 +13,7 @@
 import { HIDEABLE_TOOLS } from '@/components/admin/adminTools';
 import { DEFAULT_DUE_DAYS, type DueDays, parseDueDays } from '@/lib/suggestions/priority';
 
-export type SettingSection = 'suggestions' | 'navigation';
+export type SettingSection = 'suggestions' | 'sops' | 'navigation';
 
 export const SETTING_SECTIONS: { key: SettingSection; label: string; description: string }[] = [
   {
@@ -27,6 +27,12 @@ export const SETTING_SECTIONS: { key: SettingSection; label: string; description
     label: 'Agent suggestions',
     description:
       'The agent that proposes tasks, task comments, and SOP edits from shift notes. Nothing it proposes happens until an admin approves it.',
+  },
+  {
+    key: 'sops',
+    label: 'SOP writing assistant',
+    description:
+      'AI help in the SOP editor: drafting a document from rough notes, reviewing one for clarity and consistency, and asking the editor about anything it needs to fill in. Nothing it writes is saved until the editor accepts it and saves.',
   },
 ];
 
@@ -104,6 +110,14 @@ export const SETTINGS = {
     ],
     default: ['action', 'update'],
     min: 1,
+  },
+  'sops.assist': {
+    type: 'boolean',
+    section: 'sops',
+    label: 'Writing assistant',
+    description:
+      'Shows the assistant in the SOP editor, the Review with AI button on each document, and the rough-notes box on the new SOP form. Turning it off hides all three for everyone; saved documents are unaffected.',
+    default: true,
   },
   'suggestions.dueDays': {
     type: 'due_days',
