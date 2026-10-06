@@ -130,9 +130,37 @@ export const PH_RAISE: readonly ChartRow[] = [
   { reading: 6.8, grams: 11 },
 ];
 
-// Raise chlorine — "Cold Water Sanitizer": one flat dose. The manual doses at
-// "1 ppm or less"; house rule doses only below 1 (1 ppm is in target).
-export const CHLORINE_RAISE_GRAMS = 7;
+// Raise chlorine — "Cold Water Sanitizer", 99% sodium dichloro-s-triazinetrione
+// (dichlor). The manual prints one flat 7 g dose at "1 ppm or less", but in
+// 120 gal that raises free chlorine ~9 ppm — past the 5 ppm limit that closes
+// the tub, which is what staff saw. So the dose is computed instead: just
+// enough to bring the reading up to CHLORINE_DOSE_TO_PPM.
+//
+// Anhydrous dichlor is ~62% available chlorine (the dihydrate ~56%). Using
+// the stronger figure means a slightly smaller dose if the product is the
+// weaker form, never a larger one.
+export const DICHLOR_AVAILABLE_CHLORINE = 0.62;
+export const LITERS_PER_GALLON = 3.785;
+
+/** Free chlorine a sanitizer dose aims for: the middle of the 1–3 ppm target. */
+export const CHLORINE_DOSE_TO_PPM = 2;
+
+/** ppm of free chlorine one gram of sanitizer adds to a plunge of this size. */
+export const sanitizerPpmPerGram = (gallons: number): number =>
+  (1000 * DICHLOR_AVAILABLE_CHLORINE) / (gallons * LITERS_PER_GALLON);
+
+/**
+ * Sanitizer to bring free chlorine from `reading` up to CHLORINE_DOSE_TO_PPM,
+ * rounded DOWN so it can't overshoot: to the nearest 0.5 g like every other
+ * dose, or — when that rounds to nothing, which only happens in a small plunge
+ * where half a gram alone could push past the limit — to the nearest 0.1 g.
+ */
+export function sanitizerGrams(reading: number, gallons: number): number {
+  const raw = Math.max(0, CHLORINE_DOSE_TO_PPM - reading) / sanitizerPpmPerGram(gallons);
+  const halves = Math.floor(raw * 2) / 2;
+  if (halves > 0) return halves;
+  return Math.max(0.1, Math.floor(raw * 10) / 10);
+}
 
 // Raise salt — "Dead Sea Salt": 24 g raises ~50 ppm; dose to the target
 // midpoint.

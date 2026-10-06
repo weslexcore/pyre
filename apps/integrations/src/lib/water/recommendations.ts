@@ -5,7 +5,6 @@
 
 import {
   CHART_GALLONS,
-  CHLORINE_RAISE_GRAMS,
   type ChartRow,
   HARD_LIMITS,
   type Parameter,
@@ -15,6 +14,8 @@ import {
   SALT_DOSE_TO_PPM,
   SALT_GRAMS_PER_STEP,
   SALT_PPM_PER_STEP,
+  sanitizerGrams,
+  sanitizerPpmPerGram,
   scaleGrams,
   TA_RAISE,
   TARGETS,
@@ -242,16 +243,20 @@ export function getRecommendations(
   }
 
   // House rule: exactly 1 ppm is in target and needs nothing, even though the
-  // printed chart doses at "1 ppm or less".
+  // printed chart doses at "1 ppm or less". Below it, the dose is sized from
+  // the reading (see sanitizerGrams) rather than the chart's flat 7 g, which
+  // overshoots the hard limit.
   if (chlorine != null && chlorine <= HARD_LIMITS.chlorine) {
     const [chlorineMin, chlorineMax] = TARGETS.chlorine;
     if (chlorine < chlorineMin) {
+      const grams = sanitizerGrams(chlorine, gallons);
+      const rise = Math.round(grams * sanitizerPpmPerGram(gallons) * 10) / 10;
       doses.push({
         parameter: 'chlorine',
         severity: 'action',
         chemical: PRODUCTS.sanitizer,
-        grams: scale(CHLORINE_RAISE_GRAMS),
-        reason: `Free chlorine ${chlorine} ppm is below the ${range('chlorine')} ppm target`,
+        grams,
+        reason: `Free chlorine ${chlorine} ppm is below the ${range('chlorine')} ppm target — this dose adds about ${rise} ppm.`,
       });
     } else if (chlorine > chlorineMax) {
       doses.push({

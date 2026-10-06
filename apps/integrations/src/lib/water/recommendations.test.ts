@@ -3,7 +3,7 @@
 // boundary gets pinned down here.
 
 import { describe, expect, it } from 'vitest';
-import { PRODUCTS, scaleGrams, shockDoses } from './charts';
+import { PRODUCTS, sanitizerPpmPerGram, scaleGrams, shockDoses } from './charts';
 import { classifyReading, getGuestSafety, getRecommendations } from './recommendations';
 
 const only = (
@@ -113,16 +113,46 @@ describe('getRecommendations', () => {
   });
 
   describe('chlorine (target 1–3, hard limit 5)', () => {
-    it('doses 7 g sanitizer below 1 ppm', () => {
-      for (const reading of [0.9, 0.5, 0]) {
-        const rec = only({ chlorine: reading });
-        expect(rec).toMatchObject({
+    // Dichlor at ~62% available chlorine adds ~1.37 ppm per gram in 120 gal;
+    // the dose brings the reading up to 2 ppm, rounded down to 0.5 g.
+    it('sizes sanitizer below 1 ppm from how far the reading is from 2 ppm', () => {
+      for (const [reading, grams] of [
+        [0, 1],
+        [0.5, 1],
+        [0.9, 0.5],
+      ] as const) {
+        expect(only({ chlorine: reading })).toMatchObject({
           parameter: 'chlorine',
           severity: 'action',
           chemical: PRODUCTS.sanitizer,
-          grams: 7,
+          grams,
         });
       }
+    });
+
+    const chlorineAfterDose = (reading: number, gallons: number) =>
+      reading +
+      (only({ chlorine: reading }, { gallons }).grams as number) * sanitizerPpmPerGram(gallons);
+
+    it('never doses past the 5 ppm limit, even in a small plunge', () => {
+      for (const gallons of [20, 40, 60, 120, 200, 500]) {
+        for (const reading of [0, 0.2, 0.5, 0.8, 0.99]) {
+          expect(chlorineAfterDose(reading, gallons)).toBeLessThanOrEqual(5);
+        }
+      }
+    });
+
+    it('lands inside the 1–3 ppm target for plunges 60 gal and up', () => {
+      for (const gallons of [60, 120, 200, 500]) {
+        for (const reading of [0, 0.2, 0.5, 0.8, 0.99]) {
+          expect(chlorineAfterDose(reading, gallons)).toBeGreaterThanOrEqual(1);
+          expect(chlorineAfterDose(reading, gallons)).toBeLessThanOrEqual(3);
+        }
+      }
+    });
+
+    it('says how much the dose raises it', () => {
+      expect(only({ chlorine: 0 }).reason).toContain('adds about 1.4 ppm');
     });
 
     it('returns nothing at exactly 1 ppm (in target, no dose)', () => {
@@ -269,8 +299,7 @@ describe('dose sizing by plunge volume', () => {
   });
 
   it('halves doses for a 60 gal plunge and doubles them for 240 gal', () => {
-    expect(only({ chlorine: 0.5 }, { gallons: 60 }).grams).toBe(3.5);
-    expect(only({ chlorine: 0.5 }, { gallons: 240 }).grams).toBe(14);
+    expect(only({ chlorine: 0 }, { gallons: 240 }).grams).toBe(2.5);
     expect(only({ ph: 7.9 }, { gallons: 60 }).grams).toBe(5);
     expect(only({ ph: 7.0 }, { gallons: 240 }).grams).toBe(14);
   });
