@@ -1064,6 +1064,7 @@ export interface ViewPatch {
   sort_by?: string;
   hide_finished?: boolean;
   show_empty?: boolean;
+  show_status?: boolean;
 }
 
 function viewSort(value: unknown): string | undefined {
@@ -1075,7 +1076,7 @@ function viewSort(value: unknown): string | undefined {
 
 /**
  * A view's settings, from `{ name, groupBy, groupFieldKey, dateUnit, layout,
- * sortBy, hideFinished, showEmpty }`. A create needs a name and a grouping;
+ * sortBy, hideFinished, showEmpty, showStatus }`. A create needs a name and a grouping;
  * a patch takes whatever it is given. Changing the grouping to a built-in
  * clears the field it named.
  */
@@ -1126,6 +1127,7 @@ export function parseViewInput(
   for (const [input, column] of [
     ['hideFinished', 'hide_finished'],
     ['showEmpty', 'show_empty'],
+    ['showStatus', 'show_status'],
   ] as const) {
     if (body[input] === undefined) continue;
     if (typeof body[input] !== 'boolean') return fail(`${input} must be true or false`);

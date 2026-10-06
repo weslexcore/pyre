@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { LinkSummary } from '@/lib/boards/links';
-import type { BoardCardRow, BoardFieldRow } from '@/lib/db';
+import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import { CardRow } from './CardRow';
 
 function renderField(
@@ -105,5 +105,53 @@ describe('linked cards on a row', () => {
 
   it('falls back to a count when the titles are not in hand', () => {
     expect(renderField(link, [MAYA, LEO])).toContain('Practitioner: 2 cards');
+  });
+});
+
+describe("a card's status", () => {
+  const column = {
+    id: 'quoted',
+    board_id: 'board',
+    key: 'quoted',
+    label: 'Quote sent',
+    kind: 'open',
+    assignee_emails: [],
+    sort_order: 10,
+    archived: false,
+    created_at: '',
+    updated_at: '',
+  } satisfies BoardColumnRow;
+  const card = {
+    id: 'card',
+    title: 'Booking',
+    column_id: 'quoted',
+    completed_at: null,
+    assignee_emails: [],
+    properties: {},
+  } as unknown as BoardCardRow;
+  const render = (status?: 'dot' | 'label' | 'none') =>
+    renderToStaticMarkup(
+      <CardRow
+        card={card}
+        columns={[column]}
+        people={{}}
+        today="2026-09-22"
+        status={status}
+        onOpen={() => {}}
+      />
+    );
+
+  it('is the dot alone on a board', () => {
+    const html = render();
+    expect(html).toContain('aria-label="Quote sent"');
+    expect(html).not.toContain('>Quote sent</span>');
+  });
+
+  it('names the column when a view asks for it', () => {
+    expect(render('label')).toContain('>Quote sent</span>');
+  });
+
+  it('shows neither when a view turns it off', () => {
+    expect(render('none')).not.toContain('Quote sent');
   });
 });

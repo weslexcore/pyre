@@ -42,6 +42,12 @@ export interface CardRowProps {
   dragProps?: HTMLAttributes<HTMLButtonElement>;
   /** True for the ghost being carried, which needs no controls. */
   ghost?: boolean;
+  /**
+   * How the card's column shows: the dot alone (a board, where the column
+   * around the card says the rest), the dot with the column's name (a view
+   * grouped by something else), or nothing.
+   */
+  status?: 'dot' | 'label' | 'none';
 }
 
 // A chip is one line, so one that outgrows the row (a long field value,
@@ -68,6 +74,7 @@ export function CardRow({
   onOpen,
   dragProps,
   ghost = false,
+  status = 'dot',
 }: CardRowProps) {
   const column = columns.find((c) => c.id === card.column_id);
   const finished = card.completed_at !== null;
@@ -87,7 +94,9 @@ export function CardRow({
         onClick={() => onOpen(card)}
         {...dragProps}
       >
-        <span className="mt-0.5">{column && <ColumnDot column={column} />}</span>
+        {status !== 'none' && (
+          <span className="mt-0.5">{column && <ColumnDot column={column} />}</span>
+        )}
         <span className="min-w-0 flex-1">
           <span
             className={`block truncate text-sm ${
@@ -97,6 +106,9 @@ export function CardRow({
             {card.title}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-1.5">
+            {status === 'label' && column && (
+              <QuietChip className={chipClip}>{column.label}</QuietChip>
+            )}
             {card.assignee_emails.length > 0 && (
               <AvatarStack
                 emails={card.assignee_emails}

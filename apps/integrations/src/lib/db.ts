@@ -1051,6 +1051,8 @@ export interface BoardViewRow {
   sort_by: string;
   hide_finished: boolean;
   show_empty: boolean;
+  /** Whether each card's row names its column; off shows neither name nor dot. */
+  show_status: boolean;
   sort_order: number;
   created_by: string | null;
   updated_by: string | null;

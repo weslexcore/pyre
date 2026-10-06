@@ -75,6 +75,7 @@ export function ViewEditor({
   const [sortBy, setSortBy] = useState(view?.sort_by ?? 'manual');
   const [hideFinished, setHideFinished] = useState(view?.hide_finished ?? true);
   const [showEmpty, setShowEmpty] = useState(view?.show_empty ?? false);
+  const [showStatus, setShowStatus] = useState(view?.show_status ?? true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,6 +124,7 @@ export function ViewEditor({
       sortBy,
       hideFinished,
       showEmpty,
+      showStatus,
     };
     try {
       const result = view
@@ -289,6 +291,17 @@ export function ViewEditor({
           />
           Hide finished cards
         </label>
+        <label className="flex items-center gap-2 text-sm text-white/70">
+          <input
+            type="checkbox"
+            checked={showStatus}
+            onChange={(e) => setShowStatus(e.target.checked)}
+          />
+          Show status on cards
+        </label>
+        <p className="ml-6 text-xs text-white/35">
+          The column each card sits in, by name. Off leaves the cards without it.
+        </p>
         <label className="flex items-center gap-2 text-sm text-white/70">
           <input
             type="checkbox"

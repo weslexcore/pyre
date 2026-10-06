@@ -6,7 +6,7 @@
 // The board bundle (GET /api/admin/board-cards) carries the list.
 //
 //   POST   { board, name, groupBy, groupFieldKey?, dateUnit?, layout?, sortBy?,
-//            hideFinished?, showEmpty? }                       → { view }
+//            hideFinished?, showEmpty?, showStatus? }                       → { view }
 //   PATCH  { id, ...any of those }                            → { view }
 //   PUT    { board, ids: [] }                                 → { ok }  (every view, in order)
 //   DELETE ?id=<uuid>                                         → { ok }
@@ -57,6 +57,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       sort_by: 'manual',
       hide_finished: true,
       show_empty: false,
+      show_status: true,
       ...parsed.value,
     };
     const problem = viewProblem(

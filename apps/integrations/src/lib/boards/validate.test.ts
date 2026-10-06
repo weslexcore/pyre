@@ -944,9 +944,9 @@ describe('parseViewInput', () => {
   });
 
   it('takes a patch piecemeal, and a built-in grouping clears the field', () => {
-    expect(value(parseViewInput({ showEmpty: true }, { create: false }))).toEqual({
-      show_empty: true,
-    });
+    expect(
+      value(parseViewInput({ showEmpty: true, showStatus: false }, { create: false }))
+    ).toEqual({ show_empty: true, show_status: false });
     expect(value(parseViewInput({ groupBy: 'assignee' }, { create: false }))).toEqual({
       group_by: 'assignee',
       group_field_key: null,

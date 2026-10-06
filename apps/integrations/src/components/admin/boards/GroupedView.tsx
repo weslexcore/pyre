@@ -109,6 +109,8 @@ export function GroupedView({
           today={today}
           fields={fields}
           links={links}
+          // Grouped by column, each heading already says it.
+          status={!view.show_status ? 'none' : view.group_by === 'column' ? 'dot' : 'label'}
           onOpen={(next) => onOpenCard(next.id)}
         />
       ))
