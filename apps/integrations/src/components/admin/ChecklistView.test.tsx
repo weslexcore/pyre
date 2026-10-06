@@ -132,6 +132,18 @@ describe('ChecklistView', () => {
     expect(finished).not.toContain('>Start fresh<');
   });
 
+  it('renders Show To Do as a switch apart from the actions, not on a finished run', () => {
+    const open = render({ run: RUN, checks: [CHECK] });
+    expect(open).toContain('role="switch"');
+    expect(open).toContain('aria-checked="false"');
+    expect(open).toContain('Show To Do');
+    const finished = render({
+      run: { ...RUN, status: 'completed', ended_at: '2026-09-01T14:20:00Z' },
+      checks: [CHECK],
+    });
+    expect(finished).not.toContain('Show To Do');
+  });
+
   it('counts skips in the header alongside progress', () => {
     const html = render({ run: RUN, checks: [CHECK, SKIP] });
     expect(html).toContain('2 of 3');

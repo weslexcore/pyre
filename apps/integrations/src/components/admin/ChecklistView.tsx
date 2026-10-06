@@ -37,8 +37,8 @@ const STICKY_TOP = { nav: 'top-14', none: 'top-0' } as const;
 const headerButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 
-// Show To Do, while off: quiet, like Discard, but without the red.
-const filterOffButtonClass =
+// Start fresh: quiet, like Discard, but without the red.
+const quietButtonClass =
   'rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-white/30 hover:text-white/80';
 
 const discardButtonClass =
@@ -155,18 +155,10 @@ export function ChecklistView({
                 </button>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className={filtering ? headerButtonClass : filterOffButtonClass}
-                    aria-pressed={filtering}
-                    onClick={() => setOutstandingOnly((on) => !on)}
-                  >
-                    Show To Do
-                  </button>
                   {onStartFresh && (
                     <button
                       type="button"
-                      className={filterOffButtonClass}
+                      className={quietButtonClass}
                       title="Close this run as left unfinished. It stays in the run log."
                       disabled={busy}
                       onClick={onStartFresh}
@@ -195,6 +187,33 @@ export function ChecklistView({
               style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
             />
           </div>
+          {/* A view filter, not an action on the run: it sits apart from the
+              buttons above and reads as a switch. */}
+          {!finished && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={filtering}
+              className="group flex items-center gap-2 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:text-white/90"
+              onClick={() => setOutstandingOnly((on) => !on)}
+            >
+              <span
+                aria-hidden="true"
+                className={`relative h-4 w-7 rounded-full border transition-colors ${
+                  filtering
+                    ? 'border-[var(--pyre-gold)] bg-[var(--pyre-gold)]/30'
+                    : 'border-white/20 bg-white/5'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-2.5 w-2.5 rounded-full transition-all ${
+                    filtering ? 'left-3.5 bg-[var(--pyre-gold)]' : 'left-0.5 bg-white/50'
+                  }`}
+                />
+              </span>
+              <span className={filtering ? 'text-[var(--pyre-gold)]' : undefined}>Show To Do</span>
+            </button>
+          )}
           {!allDone && (
             <p className="font-mono text-[10px] text-white/40">
               Check off or skip every item — the checklist finishes on its own.
