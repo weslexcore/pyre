@@ -24,6 +24,10 @@
 // lands with the tap rather than with the server's answer, and a checklist
 // that was already complete when it first rendered is history, not news.
 //
+// With `outstandingOnly` the document is cut down to what is still left to do
+// (outstandingSegments): resolved items and prose drop out, headings stay over
+// whatever remains, and a tap that resolves an item takes it off the list.
+//
 // Each task row is memoized — a tap re-renders the rows it changed, not the
 // whole document.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +36,7 @@ import {
   type ChecklistMark,
   type ChecklistTask,
   isChecklistComplete,
+  outstandingSegments,
   parseChecklist,
   subtreeTasks,
 } from '@/lib/sops/checklist';
@@ -322,6 +327,7 @@ export function Checklist({
   people,
   linked,
   locked = false,
+  outstandingOnly = false,
   highlight,
   frameClassName = DEFAULT_FRAME,
   onSopLink,
@@ -337,6 +343,8 @@ export function Checklist({
   linked?: LinkedProgressMap;
   /** The boxes show their state but take no taps (a finished SOP run). */
   locked?: boolean;
+  /** Draw only the items still to do (plus their headings and parent items). */
+  outstandingOnly?: boolean;
   highlight?: string;
   /** The classes of the box the document sits in. */
   frameClassName?: string;
@@ -352,6 +360,10 @@ export function Checklist({
   const parsed = useMemo(() => parseChecklist(content), [content]);
   const markByIndex = useMemo(() => new Map(marks.map((m) => [m.index, m])), [marks]);
   const complete = useMemo(() => isChecklistComplete(parsed.tasks, marks), [parsed, marks]);
+  const segments = useMemo(
+    () => (outstandingOnly ? outstandingSegments(parsed, marks) : parsed.segments),
+    [outstandingOnly, parsed, marks]
+  );
 
   // One burst (and one onComplete) each time the checklist reaches the end.
   // What is watched is that state, not any id — an SOP's first tap shows an
@@ -430,7 +442,10 @@ export function Checklist({
     <>
       <Confetti burst={burst} />
       <div className={frameClassName}>
-        {parsed.segments.map((segment) => {
+        {outstandingOnly && segments.length === 0 && (
+          <p className="font-mono text-xs text-white/50">Nothing outstanding.</p>
+        )}
+        {segments.map((segment) => {
           if (segment.kind === 'markdown') {
             // Each prose chunk renders as its own SopMarkdown, which zeroes a
             // leading heading's top margin (first:mt-0) — so section headers

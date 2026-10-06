@@ -3,6 +3,7 @@ import {
   countTasks,
   forbiddenSkips,
   isChecklistComplete,
+  outstandingSegments,
   parseChecklist,
   requiredIndexes,
   subtreeTasks,
@@ -143,5 +144,52 @@ describe('isChecklistComplete', () => {
 
   it('holds open on a required item that was skipped', () => {
     expect(isChecklistComplete(tasks, [mark(0), mark(1, true), mark(2)])).toBe(false);
+  });
+});
+
+describe('outstandingSegments', () => {
+  const parsed = parseChecklist(DOC);
+  const mark = (index: number, skipped = false) => ({ index, skipped });
+  const shown = (marks: { index: number; skipped: boolean }[]) =>
+    outstandingSegments(parsed, marks).map((s) =>
+      s.kind === 'task' ? s.task.text : `[${s.content}]`
+    );
+
+  it('keeps every item, and only the headings of the prose, when nothing is resolved', () => {
+    expect(shown([])).toEqual([
+      '[## Large Sauna]',
+      'Uncover wood',
+      '**Ensure fire is out!**',
+      'Remove chimney',
+      'Cover chimney hole',
+      '[## Plunges]',
+      'Re-cover plunges',
+    ]);
+  });
+
+  it('drops resolved items, and a heading with nothing left under it', () => {
+    expect(shown([mark(0), mark(1), mark(2), mark(3, true)])).toEqual([
+      '[## Plunges]',
+      'Re-cover plunges',
+    ]);
+  });
+
+  it('keeps a resolved parent above an outstanding child', () => {
+    expect(shown([mark(0), mark(1), mark(3), mark(4)])).toEqual([
+      '[## Large Sauna]',
+      '**Ensure fire is out!**',
+      'Remove chimney',
+    ]);
+  });
+
+  it('counts a skipped required item as outstanding', () => {
+    expect(shown([mark(0), mark(1, true), mark(2), mark(3), mark(4)])).toEqual([
+      '[## Large Sauna]',
+      '**Ensure fire is out!**',
+    ]);
+  });
+
+  it('is empty once everything is done', () => {
+    expect(shown([0, 1, 2, 3, 4].map((i) => mark(i)))).toEqual([]);
   });
 });

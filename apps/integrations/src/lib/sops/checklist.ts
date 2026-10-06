@@ -162,3 +162,63 @@ export function isChecklistComplete(
     return mark !== undefined && !(task.required && mark.skipped);
   });
 }
+
+/**
+ * Whether an item still needs doing: nothing recorded against it, or it is
+ * required and was skipped (which holds the checklist open all the same).
+ */
+export function isOutstanding(
+  task: Pick<ChecklistTask, 'required'>,
+  mark: Pick<ChecklistMark, 'skipped'> | undefined
+): boolean {
+  return mark === undefined || (task.required && mark.skipped);
+}
+
+const HEADING_RE = /^#{1,6}\s/;
+
+/**
+ * The segments to draw when a checklist is filtered down to what is still
+ * outstanding. Every outstanding item stays, along with the items it is
+ * nested under (so a sub-task keeps its context, drawn resolved as it is).
+ * Prose drops out except its headings, and a heading only stays when an item
+ * under it does — the filtered list reads as "what's left, by section".
+ */
+export function outstandingSegments(
+  parsed: ParsedChecklist,
+  marks: Pick<ChecklistMark, 'index' | 'skipped'>[]
+): ChecklistSegment[] {
+  const byIndex = new Map(marks.map((mark) => [mark.index, mark]));
+  const keep = new Set<number>();
+  // The chain of items above the current one, by depth.
+  const ancestors: ChecklistTask[] = [];
+  for (const task of parsed.tasks) {
+    while (ancestors.length > 0 && ancestors[ancestors.length - 1].depth >= task.depth) {
+      ancestors.pop();
+    }
+    if (isOutstanding(task, byIndex.get(task.index))) {
+      keep.add(task.index);
+      for (const ancestor of ancestors) keep.add(ancestor.index);
+    }
+    ancestors.push(task);
+  }
+
+  const out: ChecklistSegment[] = [];
+  // The latest headings seen, held back until an item under them is kept.
+  let pendingHeadings: ChecklistSegment | null = null;
+  for (const segment of parsed.segments) {
+    if (segment.kind === 'markdown') {
+      const headings = segment.content.split('\n').filter((line) => HEADING_RE.test(line));
+      if (headings.length > 0) {
+        pendingHeadings = { kind: 'markdown', content: headings.join('\n\n'), line: segment.line };
+      }
+      continue;
+    }
+    if (!keep.has(segment.task.index)) continue;
+    if (pendingHeadings) {
+      out.push(pendingHeadings);
+      pendingHeadings = null;
+    }
+    out.push(segment);
+  }
+  return out;
+}

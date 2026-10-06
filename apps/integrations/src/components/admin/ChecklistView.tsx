@@ -11,10 +11,14 @@
 // run then shows ticked and locked, with Start again in the header, until
 // someone clears it.
 //
+// While a run is going, Outstanding only cuts the document down to the items
+// still to do, so a long checklist reads as what's left rather than a scroll
+// past everything already ticked.
+//
 // Taps are never blocked: SopDocument applies them locally and queues the
 // server work, so `busy` only holds Discard while requests are still in
 // flight.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { etTime } from '@/lib/client/format';
 import type { SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { parseChecklist } from '@/lib/sops/checklist';
@@ -30,6 +34,10 @@ const STICKY_TOP = { nav: 'top-14', none: 'top-0' } as const;
 
 const headerButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
+
+// Outstanding only, while off: quiet, like Discard, but without the red.
+const filterOffButtonClass =
+  'rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-white/30 hover:text-white/80';
 
 const discardButtonClass =
   'rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-[var(--pyre-red)]/50 hover:text-[var(--pyre-red)] disabled:opacity-40';
@@ -99,6 +107,10 @@ export function ChecklistView({
     }).length;
   }, [parsed, checks]);
   const finished = run !== null && run.status !== 'in_progress';
+  // Only means something mid-run: before the first tap everything is
+  // outstanding, and a finished run has nothing left.
+  const [outstandingOnly, setOutstandingOnly] = useState(false);
+  const filtering = outstandingOnly && run !== null && !finished;
   const allDone = finished || (run !== null && total > 0 && done >= total);
 
   return (
@@ -137,14 +149,24 @@ export function ChecklistView({
                   Start again
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className={discardButtonClass}
-                  disabled={busy}
-                  onClick={onDiscard}
-                >
-                  Discard
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={filtering ? headerButtonClass : filterOffButtonClass}
+                    aria-pressed={filtering}
+                    onClick={() => setOutstandingOnly((on) => !on)}
+                  >
+                    Outstanding only
+                  </button>
+                  <button
+                    type="button"
+                    className={discardButtonClass}
+                    disabled={busy}
+                    onClick={onDiscard}
+                  >
+                    Discard
+                  </button>
+                </>
               )}
             </span>
           </div>
@@ -184,6 +206,7 @@ export function ChecklistView({
         people={people}
         linked={linked}
         locked={finished}
+        outstandingOnly={filtering}
         highlight={highlight}
         onSopLink={onSopLink}
         onToggle={onToggle}
