@@ -116,7 +116,7 @@ export const SETTINGS = {
     section: 'sops',
     label: 'Writing assistant',
     description:
-      'Shows the assistant in the SOP editor, the Review with AI button on each document, and the rough-notes box on the new SOP form. Turning it off hides all three for everyone; saved documents are unaffected.',
+      'Shows the assistant in the SOP editor, the AI Review button on each document, and the rough-notes box on the new SOP form. Turning it off hides all three for everyone; saved documents are unaffected.',
     default: true,
   },
   'suggestions.dueDays': {

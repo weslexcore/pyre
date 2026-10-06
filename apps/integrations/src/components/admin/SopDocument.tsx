@@ -15,7 +15,7 @@
 //
 // The editor carries the writing assistant (SopAssist): draft the document
 // from rough notes, or review it for clarity and consistency, and accept the
-// proposal into the editor before saving. "Review with AI" opens the editor
+// proposal into the editor before saving. The sparkle Review button opens the editor
 // with a review already running.
 //
 // The page arrives with the document and its open run already rendered
@@ -43,6 +43,7 @@ import { ChecklistConfirmDialog, ChecklistView } from './ChecklistView';
 import { LinkedRow, linkedChipClass } from './LinkedRow';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
+import { SparkleIcon } from './Signals';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
 import { SopAssist } from './SopAssist';
 import { SopDiff } from './SopDiff';
@@ -386,10 +387,12 @@ export function SopDocument({
             {data.assistEnabled && (
               <button
                 type="button"
-                className={buttonClass}
+                className={`${buttonClass} flex items-center gap-1.5`}
+                title="Review with AI"
                 onClick={() => startEdit(data, { review: true })}
               >
-                Review with AI
+                <SparkleIcon />
+                Review
               </button>
             )}
           </>

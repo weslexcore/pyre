@@ -75,7 +75,7 @@ export function SopAssist({
   title: string;
   content: string;
   disabled?: boolean;
-  /** Start a review as soon as the panel opens (the document's "Review with AI" button). */
+  /** Start a review as soon as the panel opens (the document's AI Review button). */
   autoReview?: boolean;
   onApply: (proposal: AssistProposal) => void;
 }) {
