@@ -21,6 +21,11 @@
 // switch. Keeping it here rather than on /admin/boards/<slug>/calendar means
 // no second round trip, the search and owner filters narrow both views, and
 // clicking a day opens the drawer that is already mounted.
+//
+// Saved views (?view=<id>) are the same idea again: the board's cards
+// grouped by a date, a person, or a field (GroupedView), filtered by the same
+// search and owner, opening the same drawer. Anyone on the board can make
+// one, and everyone on the board sees it.
 
 import { todayEastern } from '@pyre/schedule-core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,13 +38,14 @@ import type { Assignable } from '@/lib/boards/people';
 import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import type { LinkedSop } from '@/lib/boards/sops';
-import { BOARDS_HREF } from '@/lib/boards/types';
+import { BOARD_LIMITS, BOARDS_HREF } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type {
   BoardCardRow,
   BoardColumnRow,
   BoardFieldRow,
   BoardRow,
+  BoardViewRow,
   GoalKpiRow,
   GoalRow,
 } from '@/lib/db';
@@ -67,10 +73,12 @@ import {
   SortableColumn,
   useBoardSensors,
 } from './dnd';
+import { GroupedView } from './GroupedView';
 import { namesAsOwners } from './owners';
 import { QuickAdd } from './QuickAdd';
 import { useCardDeepLink } from './useCardDeepLink';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
+import { ViewEditor } from './ViewEditor';
 
 interface BundleResponse {
   board: BoardRow;
@@ -91,10 +99,13 @@ interface BundleResponse {
   linkSummaries?: LinkSummary[];
   /** Who is looking, for a checklist tap's stamp before the server's arrives. */
   viewerEmail?: string;
+  /** The board's saved views, in switcher order. */
+  views?: BoardViewRow[];
   error?: string;
 }
 
-type ViewMode = 'board' | 'calendar';
+/** The board, its calendar, or a saved view's id. */
+type ViewMode = string;
 
 /**
  * Which view a link asked for. Read once at module scope, the way
@@ -104,9 +115,7 @@ type ViewMode = 'board' | 'calendar';
  */
 const initialView: ViewMode = (() => {
   if (typeof window === 'undefined') return 'board';
-  return new URLSearchParams(window.location.search).get('view') === 'calendar'
-    ? 'calendar'
-    : 'board';
+  return new URLSearchParams(window.location.search).get('view') || 'board';
 })();
 
 export function BoardView({ slug }: { slug: string }) {
@@ -117,6 +126,8 @@ export function BoardView({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The view editor: null shut, 'new' for a new view, or the id being edited.
+  const [editing, setEditing] = useState<string | null>(null);
   const settingsRef = useRef<BoardSettingsHandle>(null);
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -313,6 +324,16 @@ export function BoardView({ slug }: { slug: string }) {
   const noun = board.card_noun;
   const quickAddColumn = defaultColumn(columns);
   const hasCalendar = boardHasCalendar(board, fields);
+  const views = bundle.views ?? [];
+  // A link to a view since deleted, or a calendar the board no longer has,
+  // lands on the board.
+  const savedView = views.find((v) => v.id === view) ?? null;
+  const mode: 'board' | 'calendar' | 'saved' = savedView
+    ? 'saved'
+    : view === 'calendar' && hasCalendar
+      ? 'calendar'
+      : 'board';
+  const editingView = editing && editing !== 'new' ? views.find((v) => v.id === editing) : null;
 
   // The view rides in the URL so a refresh, a back button, and a link shared
   // in a message all land where the person was. replaceState rather than
@@ -320,8 +341,8 @@ export function BoardView({ slug }: { slug: string }) {
   const showView = (next: ViewMode) => {
     setView(next);
     const url = new URL(window.location.href);
-    if (next === 'calendar') url.searchParams.set('view', 'calendar');
-    else url.searchParams.delete('view');
+    if (next === 'board') url.searchParams.delete('view');
+    else url.searchParams.set('view', next);
     window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
   };
   const ownerOptions = owners.length > 0 ? owners : namesAsOwners(people);
@@ -339,26 +360,57 @@ export function BoardView({ slug }: { slug: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <BackLink href={BOARDS_HREF}>All boards</BackLink>
-          {hasCalendar && (
-            <span className="flex gap-1.5">
+          <span className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className={pillClass(mode === 'board')}
+              aria-pressed={mode === 'board'}
+              onClick={() => showView('board')}
+            >
+              Board
+            </button>
+            {hasCalendar && (
               <button
                 type="button"
-                className={pillClass(view === 'board')}
-                aria-pressed={view === 'board'}
-                onClick={() => showView('board')}
-              >
-                Board
-              </button>
-              <button
-                type="button"
-                className={pillClass(view === 'calendar')}
-                aria-pressed={view === 'calendar'}
+                className={pillClass(mode === 'calendar')}
+                aria-pressed={mode === 'calendar'}
                 onClick={() => showView('calendar')}
               >
                 Calendar
               </button>
-            </span>
-          )}
+            )}
+            {views.map((saved) => (
+              <button
+                key={saved.id}
+                type="button"
+                className={pillClass(savedView?.id === saved.id)}
+                aria-pressed={savedView?.id === saved.id}
+                onClick={() => showView(saved.id)}
+              >
+                {saved.name}
+              </button>
+            ))}
+            {savedView && (
+              <button
+                type="button"
+                className={pillClass(editing === savedView.id)}
+                aria-expanded={editing === savedView.id}
+                onClick={() => setEditing(editing === savedView.id ? null : savedView.id)}
+              >
+                Edit view
+              </button>
+            )}
+            {views.length < BOARD_LIMITS.viewsPerBoard && (
+              <button
+                type="button"
+                className={pillClass(editing === 'new')}
+                aria-expanded={editing === 'new'}
+                onClick={() => setEditing(editing === 'new' ? null : 'new')}
+              >
+                + View
+              </button>
+            )}
+          </span>
           {canManage && (
             <a className={buttonClass} href={formBuilderHref(slug)}>
               Form
@@ -454,6 +506,39 @@ export function BoardView({ slug }: { slug: string }) {
         </div>
       )}
 
+      {editing && (editing === 'new' || editingView) && (
+        <ViewEditor
+          key={editing}
+          slug={slug}
+          view={editingView ?? null}
+          fields={fields}
+          onClose={() => setEditing(null)}
+          onSaved={(saved) => {
+            setBundle((current) =>
+              current
+                ? {
+                    ...current,
+                    views: (current.views ?? []).some((v) => v.id === saved.id)
+                      ? (current.views ?? []).map((v) => (v.id === saved.id ? saved : v))
+                      : [...(current.views ?? []), saved],
+                  }
+                : current
+            );
+            setEditing(null);
+            showView(saved.id);
+          }}
+          onDeleted={(id) => {
+            setBundle((current) =>
+              current
+                ? { ...current, views: (current.views ?? []).filter((v) => v.id !== id) }
+                : current
+            );
+            setEditing(null);
+            showView('board');
+          }}
+        />
+      )}
+
       {sops.length > 0 && (
         <LinkedRow label={sops.length === 1 ? 'SOP' : 'SOPs'}>
           {sops.map((sop) => (
@@ -485,7 +570,20 @@ export function BoardView({ slug }: { slug: string }) {
         <QuickAdd noun={noun} busy={busy} onAdd={(title) => addCard(title, quickAddColumn.id)} />
       )}
 
-      {view === 'calendar' && hasCalendar ? (
+      {mode === 'saved' && savedView ? (
+        <GroupedView
+          view={savedView}
+          cards={cards}
+          columns={columns}
+          fields={fields}
+          people={people}
+          links={links}
+          today={today}
+          viewerEmail={bundle.viewerEmail}
+          noun={noun}
+          onOpenCard={setOpenCardId}
+        />
+      ) : mode === 'calendar' ? (
         <BoardCalendar
           board={board}
           columns={columns}

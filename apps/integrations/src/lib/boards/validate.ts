@@ -7,7 +7,7 @@
 // the intake endpoint, which builds its own insert and stamps 'intake'
 // itself — the body it accepts still comes through parseCardCreate.
 
-import type { BoardFieldKind, BoardFieldRow, BoardFieldValue } from '@/lib/db';
+import type { BoardFieldKind, BoardFieldRow, BoardFieldValue, BoardViewRow } from '@/lib/db';
 import { GOAL_LIMITS, isArea } from '@/lib/goals/types';
 import {
   type GoalCreate,
@@ -26,11 +26,15 @@ import {
   answerLimit,
   BOARD_LIMITS,
   isColumnKind,
+  isDateUnit,
   isFieldKind,
+  isViewGroupBy,
+  isViewLayout,
   KEY_RE,
   kindHasOptions,
   kindIsTime,
   SLUG_RE,
+  VIEW_SORTS,
 } from './types';
 
 export type { ParseResult };
@@ -1043,4 +1047,90 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
     default:
       return typeof value === 'string' ? value : Array.isArray(value) ? value.join(', ') : '';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Saved views. Shape only: whether the field a view names exists on the
+// board, and is a kind it can group or sort by, is viewProblem's to say
+// (lib/boards/views.ts), with the board's fields in hand.
+
+/** A view's columns as a write sets them. */
+export interface ViewPatch {
+  name?: string;
+  group_by?: BoardViewRow['group_by'];
+  group_field_key?: string | null;
+  date_unit?: BoardViewRow['date_unit'];
+  layout?: BoardViewRow['layout'];
+  sort_by?: string;
+  hide_finished?: boolean;
+  show_empty?: boolean;
+}
+
+function viewSort(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  if ((VIEW_SORTS as readonly string[]).includes(value)) return value;
+  const key = value.startsWith('field:') ? value.slice('field:'.length) : '';
+  return KEY_RE.test(key) ? value : undefined;
+}
+
+/**
+ * A view's settings, from `{ name, groupBy, groupFieldKey, dateUnit, layout,
+ * sortBy, hideFinished, showEmpty }`. A create needs a name and a grouping;
+ * a patch takes whatever it is given. Changing the grouping to a built-in
+ * clears the field it named.
+ */
+export function parseViewInput(
+  body: Record<string, unknown>,
+  { create }: { create: boolean }
+): ParseResult<ViewPatch> {
+  const patch: ViewPatch = {};
+
+  if (body.name !== undefined || create) {
+    const name = text(body.name, BOARD_LIMITS.viewName);
+    if (!name) return fail(`A view needs a name of up to ${BOARD_LIMITS.viewName} characters`);
+    patch.name = name;
+  }
+
+  if (body.groupBy !== undefined || create) {
+    if (!isViewGroupBy(body.groupBy)) {
+      return fail('groupBy must be column, assignee, due_date, created_at, or field');
+    }
+    patch.group_by = body.groupBy;
+    if (body.groupBy === 'field') {
+      const key = typeof body.groupFieldKey === 'string' ? body.groupFieldKey.trim() : '';
+      if (!KEY_RE.test(key)) return fail('Pick the field this view groups by');
+      patch.group_field_key = key;
+    } else {
+      patch.group_field_key = null;
+    }
+  }
+
+  if (body.dateUnit !== undefined) {
+    if (body.dateUnit !== null && !isDateUnit(body.dateUnit)) {
+      return fail('dateUnit must be day, week, month, or year');
+    }
+    patch.date_unit = body.dateUnit;
+  }
+
+  if (body.layout !== undefined) {
+    if (!isViewLayout(body.layout)) return fail('layout must be sections or lanes');
+    patch.layout = body.layout;
+  }
+
+  if (body.sortBy !== undefined) {
+    const sort = viewSort(body.sortBy);
+    if (!sort) return fail('sortBy must be manual, due_date, title, created_at, or field:<key>');
+    patch.sort_by = sort;
+  }
+
+  for (const [input, column] of [
+    ['hideFinished', 'hide_finished'],
+    ['showEmpty', 'show_empty'],
+  ] as const) {
+    if (body[input] === undefined) continue;
+    if (typeof body[input] !== 'boolean') return fail(`${input} must be true or false`);
+    patch[column] = body[input];
+  }
+
+  return { ok: true, value: patch };
 }

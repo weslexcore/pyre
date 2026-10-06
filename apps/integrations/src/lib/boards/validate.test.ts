@@ -10,6 +10,7 @@ import {
   parseBoardPatch,
   parseCardCreate,
   parseCardPatch,
+  parseViewInput,
   phoneOf,
 } from './validate';
 
@@ -906,5 +907,58 @@ describe('checklist fields', () => {
     });
     expect(formatProperty({ kind: 'checklist' }, properties.onboarding)).toBe('1 of 2');
     expect(normalizeProperties(fields, { onboarding: 'done' })).toEqual({});
+  });
+});
+
+describe('parseViewInput', () => {
+  it('takes a new view whole, and wants a name and a grouping', () => {
+    expect(
+      value(
+        parseViewInput(
+          {
+            name: ' By month ',
+            groupBy: 'field',
+            groupFieldKey: 'event_date',
+            dateUnit: 'month',
+            layout: 'lanes',
+            sortBy: 'field:event_date',
+            hideFinished: false,
+          },
+          { create: true }
+        )
+      )
+    ).toEqual({
+      name: 'By month',
+      group_by: 'field',
+      group_field_key: 'event_date',
+      date_unit: 'month',
+      layout: 'lanes',
+      sort_by: 'field:event_date',
+      hide_finished: false,
+    });
+    expect(error(parseViewInput({ groupBy: 'column' }, { create: true }))).toMatch(/name/);
+    expect(error(parseViewInput({ name: 'X' }, { create: true }))).toMatch(/groupBy/);
+    expect(error(parseViewInput({ name: 'X', groupBy: 'field' }, { create: true }))).toMatch(
+      /field/
+    );
+  });
+
+  it('takes a patch piecemeal, and a built-in grouping clears the field', () => {
+    expect(value(parseViewInput({ showEmpty: true }, { create: false }))).toEqual({
+      show_empty: true,
+    });
+    expect(value(parseViewInput({ groupBy: 'assignee' }, { create: false }))).toEqual({
+      group_by: 'assignee',
+      group_field_key: null,
+    });
+  });
+
+  it('refuses settings no view has', () => {
+    expect(error(parseViewInput({ dateUnit: 'decade' }, { create: false }))).toMatch(/dateUnit/);
+    expect(error(parseViewInput({ layout: 'grid' }, { create: false }))).toMatch(/layout/);
+    expect(error(parseViewInput({ sortBy: 'field:' }, { create: false }))).toMatch(/sortBy/);
+    expect(error(parseViewInput({ hideFinished: 'yes' }, { create: false }))).toMatch(
+      /hideFinished/
+    );
   });
 });

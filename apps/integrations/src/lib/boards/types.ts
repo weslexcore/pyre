@@ -232,4 +232,70 @@ export const BOARD_LIMITS = {
   linkOptions: 50,
   /** A board is a page, not a database: past this it needs paging. */
   cardsPerBoard: 1000,
+  viewName: 40,
+  /** Saved views on one board; past this the switcher stops being a row. */
+  viewsPerBoard: 20,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Saved views: a board's cards grouped by something other than their column.
+// The grouping itself is lib/boards/views.ts.
+
+/** What a view groups by: a built-in, or one of the board's fields. */
+export const VIEW_GROUP_BYS = ['column', 'assignee', 'due_date', 'created_at', 'field'] as const;
+export type ViewGroupBy = (typeof VIEW_GROUP_BYS)[number];
+
+export function isViewGroupBy(value: unknown): value is ViewGroupBy {
+  return typeof value === 'string' && (VIEW_GROUP_BYS as readonly string[]).includes(value);
+}
+
+/** How a date grouping buckets its cards. */
+export const DATE_UNITS = ['day', 'week', 'month', 'year'] as const;
+export type DateUnit = (typeof DATE_UNITS)[number];
+
+export const DATE_UNIT_LABELS: Record<DateUnit, string> = {
+  day: 'Day',
+  week: 'Week',
+  month: 'Month',
+  year: 'Year',
+};
+
+export function isDateUnit(value: unknown): value is DateUnit {
+  return typeof value === 'string' && (DATE_UNITS as readonly string[]).includes(value);
+}
+
+export const VIEW_LAYOUTS = ['sections', 'lanes'] as const;
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number];
+
+export const VIEW_LAYOUT_LABELS: Record<ViewLayout, string> = {
+  sections: 'Sections, stacked',
+  lanes: 'Lanes, side by side',
+};
+
+export function isViewLayout(value: unknown): value is ViewLayout {
+  return typeof value === 'string' && (VIEW_LAYOUTS as readonly string[]).includes(value);
+}
+
+/** The order within a group, besides `field:<key>` for a date, number, or time field. */
+export const VIEW_SORTS = ['manual', 'due_date', 'title', 'created_at'] as const;
+export type ViewSort = (typeof VIEW_SORTS)[number] | `field:${string}`;
+
+/** Every field kind a view can group by. Long text is paragraphs, not a value to share. */
+export const GROUPABLE_KINDS: readonly FieldKind[] = [
+  'text',
+  'email',
+  'phone',
+  'number',
+  'yes_no',
+  'choice',
+  'multi_choice',
+  'date',
+  'time',
+  'time_range',
+  'files',
+  'card_link',
+  'checklist',
+];
+
+/** The kinds a view can sort a group's cards by. */
+export const SORTABLE_KINDS: readonly FieldKind[] = ['date', 'number', 'time', 'time_range'];

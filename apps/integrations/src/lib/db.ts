@@ -1033,6 +1033,31 @@ export interface BoardColumnRow {
   updated_at: string;
 }
 
+/**
+ * A saved view of a board: its cards grouped by a built-in or one of its
+ * fields. Shared by everyone who can open the board.
+ */
+export interface BoardViewRow {
+  id: string;
+  board_id: string;
+  name: string;
+  group_by: 'column' | 'assignee' | 'due_date' | 'created_at' | 'field';
+  /** board_fields.key when group_by is 'field'; may name a field since deleted. */
+  group_field_key: string | null;
+  /** How a date grouping buckets; null when the grouping is not a date. */
+  date_unit: 'day' | 'week' | 'month' | 'year' | null;
+  layout: 'sections' | 'lanes';
+  /** manual, due_date, title, created_at, or field:<key>. */
+  sort_by: string;
+  hide_finished: boolean;
+  show_empty: boolean;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type BoardFieldKind =
   | 'text'
   /** Text with room to breathe: paragraphs, wrapped, in a box that can be dragged taller. */

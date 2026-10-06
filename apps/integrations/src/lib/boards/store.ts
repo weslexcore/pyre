@@ -18,6 +18,7 @@ import type {
   BoardFormRow,
   BoardRow,
   BoardSectionRow,
+  BoardViewRow,
   GoalKpiRow,
   GoalRow,
 } from '@/lib/db';
@@ -165,6 +166,27 @@ export interface BoardBundle {
    * chip can show a title. `openable` is set per viewer (boardViewerExtras).
    */
   linkSummaries: LinkSummary[];
+  /** The board's saved views, in switcher order. */
+  views: BoardViewRow[];
+}
+
+/**
+ * A board's saved views, in switcher order. A failed read is an empty list
+ * rather than a broken board: the views are a way of looking, and the board
+ * still works without them.
+ */
+export async function loadViews(db: SupabaseClient, boardId: string): Promise<BoardViewRow[]> {
+  const { data, error } = await db
+    .from('board_views')
+    .select('*')
+    .eq('board_id', boardId)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[boards] could not load views:', error.message);
+    return [];
+  }
+  return (data ?? []) as BoardViewRow[];
 }
 
 /** Everything one board page renders, or null when the slug names nothing. */
@@ -175,7 +197,7 @@ export async function loadBoardBundle(
   const board = await loadBoardBySlug(db, slug);
   if (!board) return null;
 
-  const [columns, fieldsResult, cardsResult, goal, kpis] = await Promise.all([
+  const [columns, fieldsResult, cardsResult, goal, kpis, views] = await Promise.all([
     loadColumns(db, board.id),
     db
       .from('board_fields')
@@ -191,6 +213,7 @@ export async function loadBoardBundle(
       .limit(BOARD_LIMITS.cardsPerBoard),
     board.goal_id ? loadGoal(db, board.goal_id) : Promise.resolve(null),
     board.goal_id ? loadKpis(db, board.goal_id) : Promise.resolve([] as GoalKpiRow[]),
+    loadViews(db, board.id),
   ]);
 
   if (fieldsResult.error) throw new Error(fieldsResult.error.message);
@@ -214,6 +237,7 @@ export async function loadBoardBundle(
     goal,
     kpis,
     linkSummaries: await loadLinkedSummaries(db, fields, cards),
+    views,
   };
 }
 
