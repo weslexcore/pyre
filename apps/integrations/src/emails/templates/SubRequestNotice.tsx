@@ -12,6 +12,8 @@ export function SubRequestNotice({
   dateLabel,
   timeLabel,
   notifiedCount,
+  severityLabel,
+  reason,
   scheduleUrl,
 }: SubRequestNoticeProps) {
   return (
@@ -21,6 +23,13 @@ export function SubRequestNotice({
         {staffName} asked for a sub on the {shiftLabel} shift, {dateLabel} ({timeLabel}). The date
         is logged in their time off, and they stay on the shift until someone takes it.
       </Text>
+      {(severityLabel || reason) && (
+        <Text style={text}>
+          {severityLabel && `Severity: ${severityLabel}`}
+          {severityLabel && reason && <br />}
+          {reason && `Reason: ${reason}`}
+        </Text>
+      )}
       <Text style={text}>
         {notifiedCount > 0
           ? `${notifiedCount} available ${notifiedCount === 1 ? 'person was' : 'people were'} emailed a one-click link to take the shift — you'll get another email when someone does.`
@@ -39,6 +48,8 @@ SubRequestNotice.PreviewProps = {
   dateLabel: 'Thursday, August 14',
   timeLabel: '2:30p–8:30p',
   notifiedCount: 3,
+  severityLabel: 'Emergency',
+  reason: 'Sick — fever since this morning',
   scheduleUrl: 'https://pyre-integrations.vercel.app/admin/schedule',
 } satisfies SubRequestNoticeProps;
 

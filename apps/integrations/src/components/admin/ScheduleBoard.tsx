@@ -41,6 +41,7 @@ import {
   onCallPeople,
   pairedDutyFor,
   SHIFT_LABEL_SUGGESTIONS,
+  type TimeOffSeverity,
   timeToMinutes,
   toggleDuty,
   weekStartOf,
@@ -68,6 +69,7 @@ import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
+import { SeverityChip, SeverityPicker } from './TimeOffSeverity';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -1770,6 +1772,15 @@ export function ScheduleBoard() {
                                   sub needed
                                 </span>
                               )}
+                              {subs.length > 0 && (
+                                <SeverityChip
+                                  severity={
+                                    subs.find((sub) => sub.severity === 'high')?.severity ??
+                                    subs.find((sub) => sub.severity === 'medium')?.severity ??
+                                    subs.find((sub) => sub.severity === 'low')?.severity
+                                  }
+                                />
+                              )}
                               {hoursChanges.length > 0 && (
                                 <span
                                   className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]"
@@ -2169,17 +2180,25 @@ function ShiftDetail({
       ? (subs.find((s) => s.requester_staff_id !== selfId) ?? null)
       : null;
 
-  const requestSub = async () => {
-    if (
-      !(await confirmAction({
-        title: 'Request a sub for this shift?',
-        body: 'Your hours are logged as time off, the admins are emailed, and everyone available that day gets a one-click link to take the shift. You stay on the shift until someone takes it.',
-        confirmLabel: 'Request sub',
-      }))
-    ) {
-      return;
-    }
-    void run(() => api('POST', '/api/admin/shift-sub', { shiftId: shift.id }));
+  // Sub request composer: an optional reason (logged on their time off, seen
+  // by managers only) and severity (seen by everyone asked to cover).
+  const [subDraft, setSubDraft] = useState<{
+    reason: string;
+    severity: TimeOffSeverity | null;
+  } | null>(null);
+
+  const requestSub = () => {
+    const draft = subDraft;
+    if (!draft) return;
+    setSubDraft(null);
+    const reason = draft.reason.trim();
+    void run(() =>
+      api('POST', '/api/admin/shift-sub', {
+        shiftId: shift.id,
+        ...(reason ? { reason } : {}),
+        ...(draft.severity ? { severity: draft.severity } : {}),
+      })
+    );
   };
 
   const cancelSub = async (sub: SubRequestRow) => {
@@ -2265,6 +2284,7 @@ function ShiftDetail({
                       {personSub.notified_count > 0 && ` · ${personSub.notified_count} asked`}
                     </span>
                   )}
+                  {personSub && <SeverityChip severity={personSub.severity} />}
                   {hoursChange && (
                     <span
                       className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]"
@@ -2363,7 +2383,9 @@ function ShiftDetail({
                           className="font-mono text-xs text-[var(--pyre-gold)] underline disabled:opacity-40"
                           title="Ask for a sub — logs the date as time off, emails the admins, and emails everyone available a link to take the shift"
                           disabled={busy}
-                          onClick={requestSub}
+                          onClick={() =>
+                            setSubDraft(subDraft ? null : { reason: '', severity: null })
+                          }
                         >
                           request a sub
                         </button>
@@ -2427,6 +2449,50 @@ function ShiftDetail({
                     )}
                   </span>
                 </div>
+                {isSelf && !personSub && subDraft && (
+                  <div className="mt-1.5 space-y-2 rounded bg-white/5 px-2 py-2">
+                    <p className="font-mono text-xs text-white/50">
+                      Your hours are logged as time off, the admins are emailed, and everyone
+                      available that day gets a link to take the shift. You stay on it until someone
+                      does.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-white/50">
+                        How urgent (optional):
+                      </span>
+                      <SeverityPicker
+                        value={subDraft.severity}
+                        onChange={(severity) => setSubDraft({ ...subDraft, severity })}
+                        disabled={busy}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        className={`${inputClass} flex-1 min-w-48`}
+                        maxLength={500}
+                        placeholder="Reason (optional) — only managers see this"
+                        value={subDraft.reason}
+                        onChange={(e) => setSubDraft({ ...subDraft, reason: e.target.value })}
+                        aria-label="Reason for the sub request"
+                      />
+                      <button
+                        type="button"
+                        className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}
+                        disabled={busy}
+                        onClick={requestSub}
+                      >
+                        Request sub
+                      </button>
+                      <button
+                        type="button"
+                        className={buttonClass}
+                        onClick={() => setSubDraft(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isSelf && !hoursChange && hoursDraft && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded bg-white/5 px-2 py-1.5">
                     <span className="font-mono text-xs text-white/50">Arrive</span>
@@ -2740,6 +2806,10 @@ function ShiftDetail({
                   needs a sub for {formatCompactTime(sub.starts_at)}–
                   {formatCompactTime(sub.ends_at)}
                 </span>
+                <SeverityChip severity={sub.severity} />
+                {sub.reason && (
+                  <span className="font-mono text-xs text-white/60">{sub.reason}</span>
+                )}
                 <span className="font-mono text-xs text-white/50">
                   asked {new Date(sub.created_at).toLocaleDateString()}
                   {sub.notified_count > 0 && ` · ${sub.notified_count} people emailed`}
@@ -2768,6 +2838,7 @@ function ShiftDetail({
             for {formatCompactTime(takeableSub.starts_at)}–{formatCompactTime(takeableSub.ends_at)}{' '}
             — first come, first served.
           </span>
+          <SeverityChip severity={takeableSub.severity} />
           <button
             type="button"
             className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}

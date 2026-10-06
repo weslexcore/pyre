@@ -289,7 +289,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       )
       .order('created_at');
     if (error) return dbError(error);
-    subRequests = (subs ?? []) as SubRequestRow[];
+    // Why someone needs a sub is between them and the managers; teammates
+    // still see the severity, so they know how much it matters.
+    subRequests = ((subs ?? []) as SubRequestRow[]).map((sub) =>
+      canManage || sub.requester_staff_id === selfStaffId ? sub : { ...sub, reason: null }
+    );
   }
 
   // Pay rate is payroll data: admins see everyone's; each person only their

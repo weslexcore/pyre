@@ -5,6 +5,7 @@
 // collide with existing assignments over the coming weeks so the admin can
 // re-staff.
 
+import type { TimeOffSeverity } from '@pyre/schedule-core';
 import {
   addDays,
   DOW_LABELS,
@@ -18,6 +19,7 @@ import { invalidateJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
 import { ScheduleShiftPrefs } from './ScheduleShiftPrefs';
 import { StaffMultiSelect } from './StaffMultiSelect';
+import { SeverityChip, SeverityPicker } from './TimeOffSeverity';
 
 interface BoardData {
   staff: StaffRow[];
@@ -83,6 +85,7 @@ export function ScheduleTimeOff() {
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [note, setNote] = useState('');
+  const [severity, setSeverity] = useState<TimeOffSeverity | null>(null);
 
   // Conflicts are checked over today → +6 weeks of shifts.
   const rangeStart = useMemo(todayLocal, []);
@@ -159,6 +162,7 @@ export function ScheduleTimeOff() {
     setStartsAt('');
     setEndsAt('');
     setNote('');
+    setSeverity(null);
   };
 
   const startEditing = (entry: TimeOffRow) => {
@@ -172,6 +176,7 @@ export function ScheduleTimeOff() {
     setStartsAt(hhmm(entry.starts_at));
     setEndsAt(hhmm(entry.ends_at));
     setNote(entry.note ?? '');
+    setSeverity(entry.severity ?? null);
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -196,6 +201,7 @@ export function ScheduleTimeOff() {
         startsAt: allDay ? null : startsAt || null,
         endsAt: allDay ? null : endsAt || null,
         note: note.trim() || null,
+        severity,
       }),
     });
     if (!res.ok) {
@@ -234,6 +240,7 @@ export function ScheduleTimeOff() {
     >
       <span className="font-medium">{staffById.get(entry.staff_id)?.display_name ?? '?'}</span>
       <span className="font-mono text-xs text-white/60">{describeEntry(entry)}</span>
+      <SeverityChip severity={entry.severity} />
       {entry.note && <span className="font-mono text-xs text-white/40">{entry.note}</span>}
       {canTouch(entry) && (
         <span className="ml-auto flex gap-3">
@@ -436,6 +443,13 @@ export function ScheduleTimeOff() {
                 />
               </div>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs uppercase tracking-wide text-white/40">
+              Severity (optional)
+            </span>
+            <SeverityPicker value={severity} onChange={setSeverity} disabled={busy} />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

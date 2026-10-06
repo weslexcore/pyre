@@ -110,17 +110,23 @@ export function subRequestText(input: {
   window: { starts_at: string; ends_at: string };
   requesterName: string;
   claimerName?: string | null;
+  /** "Emergency" etc., appended to the requested notice; null = not given. */
+  severityLabel?: string | null;
   /** The reader is the requester (claimed: "X is covering your shift"). */
   forRequester?: boolean;
   /** The reader could claim it (requested: "Can you cover…?"). */
   forCandidate?: boolean;
 }): { title: string; body: string } {
   const when = `${shiftPhrase(input.shift)}, ${shortWindow(input.window)}`;
+  const severity = input.severityLabel ? ` · ${input.severityLabel}` : '';
   switch (input.event) {
     case 'requested':
       return input.forCandidate
-        ? { title: `Can you cover ${when}?`, body: `${input.requesterName} needs a sub` }
-        : { title: `${input.requesterName} requested a sub`, body: when };
+        ? {
+            title: `Can you cover ${when}?`,
+            body: `${input.requesterName} needs a sub${severity}`,
+          }
+        : { title: `${input.requesterName} requested a sub`, body: `${when}${severity}` };
     case 'claimed':
       return input.forRequester
         ? { title: `${input.claimerName ?? 'Someone'} is covering your shift`, body: when }

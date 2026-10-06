@@ -221,6 +221,8 @@ export async function notifySubEvent(
     claimerStaffId?: string | null;
     /** Staff ids of the people asked to cover (requested only). */
     candidateStaffIds?: string[];
+    /** "Emergency" etc. (requested only); null = not given. */
+    severityLabel?: string | null;
     actorEmail: string | null;
   }
 ): Promise<void> {
@@ -238,6 +240,7 @@ export async function notifySubEvent(
     window: input.window,
     requesterName,
     claimerName,
+    severityLabel: input.severityLabel ?? null,
   };
   const base = {
     kind: 'sub_request' as const,

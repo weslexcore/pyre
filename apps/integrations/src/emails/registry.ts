@@ -96,7 +96,8 @@ export const EMAIL_TEMPLATES: Registry = {
     Component: ReferralRewardEarned,
   },
   'sub-request-notice': {
-    subject: (p) => `${p.staffName} needs a sub: ${p.shiftLabel} on ${p.dateLabel}`,
+    subject: (p) =>
+      `${p.severityLabel ? `[${p.severityLabel}] ` : ''}${p.staffName} needs a sub: ${p.shiftLabel} on ${p.dateLabel}`,
     Component: SubRequestNotice,
   },
   'sub-open-notice': {
