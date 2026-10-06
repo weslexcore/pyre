@@ -88,6 +88,22 @@ export function attachmentDiff(
   };
 }
 
+/** How many files one comment may carry: the same handful as a field. */
+export const MAX_FILES_PER_COMMENT = BOARD_LIMITS.filesPerField;
+
+/**
+ * A comment's attachment ids as posted: the ones that look like ids, each
+ * once, lowercased, capped. Which of them the poster may claim is
+ * claimCommentAttachments' question.
+ */
+export function normalizeCommentFileIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter(isAttachmentId).map((id) => id.toLowerCase()))].slice(
+    0,
+    MAX_FILES_PER_COMMENT
+  );
+}
+
 /** "1 file", "3 files". */
 export function formatFileCount(count: number): string {
   return `${count} ${count === 1 ? 'file' : 'files'}`;
@@ -96,7 +112,7 @@ export function formatFileCount(count: number): string {
 /** What the islands know about a file: the row without its object key. */
 export type AttachmentSummary = Pick<
   BoardAttachmentRow,
-  'id' | 'card_id' | 'field_key' | 'file_name' | 'mime_type' | 'size_bytes' | 'kind'
+  'id' | 'card_id' | 'field_key' | 'event_id' | 'file_name' | 'mime_type' | 'size_bytes' | 'kind'
 >;
 
 export function summaryOf(row: BoardAttachmentRow): AttachmentSummary {
@@ -104,6 +120,7 @@ export function summaryOf(row: BoardAttachmentRow): AttachmentSummary {
     id: row.id,
     card_id: row.card_id,
     field_key: row.field_key,
+    event_id: row.event_id,
     file_name: row.file_name,
     mime_type: row.mime_type,
     size_bytes: row.size_bytes,

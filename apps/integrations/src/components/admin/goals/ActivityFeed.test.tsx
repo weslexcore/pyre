@@ -97,3 +97,61 @@ describe('card discussion and activity', () => {
     expect(html).toContain('Order towels');
   });
 });
+
+describe('files on comments', () => {
+  const photo = {
+    id: 'a0000000-0000-4000-8000-000000000001',
+    card_id: 'card',
+    field_key: null,
+    event_id: '2',
+    file_name: 'heater.jpg',
+    mime_type: 'image/jpeg',
+    size_bytes: 2048,
+    kind: 'photo' as const,
+  };
+
+  it("shows a comment's files under it, to open and download, with nothing to remove", () => {
+    const html = renderToStaticMarkup(
+      <EventEntries
+        events={[events[1]]}
+        mode="comments"
+        attachments={[photo]}
+        loading={false}
+        subjectTitle="Task"
+        columns={[]}
+        people={{}}
+      />
+    );
+    expect(html).toContain('First discussion');
+    expect(html).toContain('alt="heater.jpg"');
+    expect(html).toContain(`board-media?id=${photo.id}&amp;download=1`);
+    expect(html).not.toContain('Remove');
+    expect(html).not.toContain('Add files');
+  });
+
+  it('shows a comment that is only files, with no empty body', () => {
+    const html = renderToStaticMarkup(
+      <EventEntries
+        events={[{ ...events[1], note: '', detail: { files: 1 } }]}
+        mode="comments"
+        attachments={[photo]}
+        loading={false}
+        subjectTitle="Task"
+        columns={[]}
+        people={{}}
+      />
+    );
+    expect(html).toContain('heater.jpg');
+  });
+
+  it('offers files on a card comment only when the board is known, never on a goal', () => {
+    const withBoard = renderToStaticMarkup(
+      <ActivityFeed cardId="card" boardId="board" subjectTitle="Task" columns={[]} people={{}} />
+    );
+    expect(withBoard).toContain('Add files');
+    const goal = renderToStaticMarkup(
+      <ActivityFeed goalId="goal" subjectTitle="Goal" columns={[]} people={{}} />
+    );
+    expect(goal).not.toContain('Add files');
+  });
+});

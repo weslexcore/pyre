@@ -1,6 +1,8 @@
-// Files answering a card's `files` fields, for signed-in staff.
+// Files answering a card's `files` fields, and files posted with a card's
+// comments, for signed-in staff.
 //
 //   POST   multipart { boardId, field, file } → { attachment } 201
+//   POST   multipart { boardId, for: 'comment', file } → { attachment } 201
 //   GET    ?card=<uuid>                       → { attachments }
 //   GET    ?id=<uuid>[&download=1][&format=json] → 302 to a signed URL
 //   DELETE ?id=<uuid>                         → { ok: true }  (staged rows only)
@@ -10,6 +12,9 @@
 // row when that answer lands (api/admin/board-cards.ts). Removing a file
 // from a card is likewise an answer edit, not a DELETE here; DELETE only
 // un-picks a staged row, for a drawer closed before its answer saved.
+//
+// A comment's file is staged the same way, with no field, and the comment
+// claims it when it is posted (api/admin/board-events.ts).
 //
 // Access is the board's: `board:<slug>` reaches exactly that board's files,
 // for uploading as much as for reading back. Nothing in the bucket is
@@ -67,8 +72,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const boardId = String(form.get('boardId') ?? '');
   if (!isUuidParam(boardId)) return json({ error: 'boardId must be a UUID' }, 400);
+  const forComment = form.get('for') === 'comment';
   const fieldKey = String(form.get('field') ?? '');
-  if (!KEY_RE.test(fieldKey)) return json({ error: 'field must be a field key' }, 400);
+  if (!forComment && !KEY_RE.test(fieldKey)) {
+    return json({ error: 'field must be a field key' }, 400);
+  }
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: 'No file was uploaded' }, 400);
 
@@ -78,14 +86,16 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     if (!board || !canViewBoard(gate.access, board.slug)) {
       return json({ error: 'Board not found' }, 404);
     }
-    const field = (await loadFields(db, board.id)).find((entry) => entry.key === fieldKey);
-    if (field?.kind !== 'files' || field.archived) {
-      return json({ error: 'That field does not take files' }, 400);
+    if (!forComment) {
+      const field = (await loadFields(db, board.id)).find((entry) => entry.key === fieldKey);
+      if (field?.kind !== 'files' || field.archived) {
+        return json({ error: 'That field does not take files' }, 400);
+      }
     }
 
     const stored = await storeAttachment(db, {
       boardId: board.id,
-      fieldKey,
+      fieldKey: forComment ? null : fieldKey,
       file,
       uploadedBy: email,
       cap: 'uploader',

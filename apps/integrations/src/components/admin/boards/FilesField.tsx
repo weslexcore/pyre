@@ -56,6 +56,10 @@ export interface FilesFieldProps {
   /** In the builder's preview: nothing is uploaded, and a pick is only pretended. */
   preview?: boolean;
   disabled?: boolean;
+  /** Only the files, to look at and download: no picker, nothing to remove (a posted comment's). */
+  readOnly?: boolean;
+  /** Told when uploads start and all finish, so a send can wait for them. */
+  onBusyChange?: (busy: boolean) => void;
   onChange: (ids: string[] | null) => void;
 }
 
@@ -109,6 +113,8 @@ export function FilesField({
   unpick,
   preview = false,
   disabled = false,
+  readOnly = false,
+  onBusyChange,
   onChange,
 }: FilesFieldProps) {
   // The rows behind the ids: what arrived with the card, plus every upload
@@ -131,6 +137,11 @@ export function FilesField({
     },
     []
   );
+
+  const uploading = pending.some((entry) => entry.status === 'uploading');
+  const busyChange = useRef(onBusyChange);
+  busyChange.current = onBusyChange;
+  useEffect(() => busyChange.current?.(uploading), [uploading]);
 
   const rows = new Map<string, AttachmentSummary>();
   for (const row of known) rows.set(row.id, row);
@@ -173,6 +184,7 @@ export function FilesField({
           id: globalThis.crypto?.randomUUID?.() ?? `preview-${key}`,
           card_id: null,
           field_key: params.field ?? '',
+          event_id: null,
           file_name: original.name,
           mime_type: original.type,
           size_bytes: original.size,
@@ -316,7 +328,7 @@ export function FilesField({
                       download
                     </a>
                   )}
-                  {!disabled && (
+                  {!disabled && !readOnly && (
                     <button
                       type="button"
                       className="shrink-0 uppercase hover:text-[var(--pyre-red)]"
@@ -378,30 +390,32 @@ export function FilesField({
           ))}
         </ul>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <label
-          className={`${formButtonClass} cursor-pointer ${full || disabled ? 'opacity-50' : ''}`}
-        >
-          {listed.length > 0 || pending.length > 0 ? 'Add more files' : 'Add files'}
-          <input
-            id={id}
-            type="file"
-            accept={ACCEPT_ATTRIBUTE}
-            multiple
-            className="hidden"
-            disabled={full || disabled}
-            aria-label={`Add files to ${label}`}
-            onChange={(e) => {
-              pick(e.target.files);
-              e.target.value = '';
-            }}
-          />
-        </label>
-        <span className="text-xs text-white/35">
-          Up to {MAX_FILES_PER_FIELD} files, {formatBytes(MAX_FILE_BYTES)} each. Photos, video, or
-          PDF.
-        </span>
-      </div>
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            className={`${formButtonClass} cursor-pointer ${full || disabled ? 'opacity-50' : ''}`}
+          >
+            {listed.length > 0 || pending.length > 0 ? 'Add more files' : 'Add files'}
+            <input
+              id={id}
+              type="file"
+              accept={ACCEPT_ATTRIBUTE}
+              multiple
+              className="hidden"
+              disabled={full || disabled}
+              aria-label={`Add files to ${label}`}
+              onChange={(e) => {
+                pick(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <span className="text-xs text-white/35">
+            Up to {MAX_FILES_PER_FIELD} files, {formatBytes(MAX_FILE_BYTES)} each. Photos, video, or
+            PDF.
+          </span>
+        </div>
+      )}
       {problem && (
         <p role="alert" className="text-xs text-[var(--pyre-red)]">
           {problem}

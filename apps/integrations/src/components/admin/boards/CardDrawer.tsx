@@ -493,6 +493,7 @@ export function CardDrawer({
           <div className="border-t border-white/10 pt-4">
             <ActivityFeed
               cardId={card.id}
+              boardId={card.board_id}
               subjectTitle={card.title}
               columns={columns}
               people={people}

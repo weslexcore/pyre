@@ -1163,8 +1163,10 @@ export interface BoardAttachmentRow {
   board_id: string;
   /** Owning card; null while staged (uploaded before the answer naming it was saved). */
   card_id: string | null;
-  /** The board_fields.key this answers. */
-  field_key: string;
+  /** The board_fields.key this answers; null for a file posted with a comment. */
+  field_key: string | null;
+  /** The comment (board_events) this was posted with; null while staged and for a field's files. */
+  event_id: string | null;
   storage_path: string;
   file_name: string;
   mime_type: string;

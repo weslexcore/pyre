@@ -1,13 +1,20 @@
 // Card discussion and change history are separate views of the same event log.
 // Goals retain their combined feed. Posting a comment uses the existing API.
+//
+// A card comment can carry files: each one uploads the moment it is picked
+// (staged, as a files field's do) and the comment claims them when it is
+// posted. A comment may be files alone. A goal has no board to keep files
+// on, so its comments are words only.
 
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
+import { type AttachmentSummary, adminAttachmentHref } from '@/lib/boards/files';
 import type { MentionPerson } from '@/lib/boards/mentions';
 import { readError, sendJson } from '@/lib/client/api';
 import type { BoardColumnRow, BoardEventRow } from '@/lib/db';
 import { describeEvent, timeAgo } from '@/lib/goals/history';
 import { type PeopleNames, personName } from '@/lib/sops/names';
+import { FilesField } from '../boards/FilesField';
 import { SectionTitle } from '../goalsUi';
 import { SopMarkdown } from '../SopMarkdown';
 import { MentionInput } from './MentionInput';
@@ -16,10 +23,21 @@ interface EventsResponse {
   events: BoardEventRow[];
   people?: PeopleNames;
   mentionPeople?: MentionPerson[];
+  /** A card's comments' files. */
+  attachments?: AttachmentSummary[];
+}
+
+/** Where a comment's file is uploaded before the comment is posted. */
+const COMMENT_UPLOAD = '/api/admin/board-media';
+
+/** Un-pick a staged comment file; one left behind is swept within a day. */
+async function unpickCommentFile(id: string) {
+  await sendJson(`/api/admin/board-media?id=${encodeURIComponent(id)}`, 'DELETE');
 }
 
 export function ActivityFeed({
   cardId,
+  boardId,
   goalId,
   subjectTitle,
   columns,
@@ -28,6 +46,8 @@ export function ActivityFeed({
 }: {
   /** Exactly one of these; it decides which trail is read and commented on. */
   cardId?: string;
+  /** The card's board, where a comment's files are kept; without it, no files. */
+  boardId?: string;
   goalId?: string;
   subjectTitle: string;
   columns: BoardColumnRow[];
@@ -38,6 +58,13 @@ export function ActivityFeed({
   const [names, setNames] = useState<PeopleNames>(people);
   const [note, setNote] = useState('');
   const [mentionPeople, setMentionPeople] = useState<MentionPerson[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
+  // The files picked for the comment being written, already uploaded.
+  const [files, setFiles] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  // Remounts the picker after a post, so its tiles start empty.
+  const [pickerKey, setPickerKey] = useState(0);
+  const takesFiles = Boolean(cardId && boardId);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +80,7 @@ export function ActivityFeed({
       const body = (await res.json()) as EventsResponse;
       setEvents(body.events);
       setMentionPeople(body.mentionPeople ?? []);
+      setAttachments(body.attachments ?? []);
       setNames({ ...people, ...(body.people ?? {}) });
       setError(null);
     } catch (e) {
@@ -72,12 +100,19 @@ export function ActivityFeed({
   const comment = async (event: FormEvent) => {
     event.preventDefault();
     const body = note.trim();
-    if (!body || busy) return;
+    if ((!body && files.length === 0) || busy || uploading) return;
     setBusy(true);
     setError(null);
     try {
-      await sendJson('/api/admin/board-events', 'POST', { cardId, goalId, note: body });
+      await sendJson('/api/admin/board-events', 'POST', {
+        cardId,
+        goalId,
+        note: body,
+        ...(files.length > 0 ? { attachmentIds: files } : {}),
+      });
       setNote('');
+      setFiles([]);
+      setPickerKey((n) => n + 1);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not post that');
@@ -111,9 +146,30 @@ export function ActivityFeed({
           people={mentionPeople}
           disabled={busy}
         />
+        {takesFiles && boardId && (
+          <div className="mt-2">
+            <FilesField
+              key={pickerKey}
+              id={`comment-files-${cardId}`}
+              label="this comment"
+              value={files}
+              action={COMMENT_UPLOAD}
+              params={{ boardId, for: 'comment' }}
+              href={adminAttachmentHref}
+              unpick={unpickCommentFile}
+              disabled={busy}
+              onBusyChange={setUploading}
+              onChange={(ids) => setFiles(ids ?? [])}
+            />
+          </div>
+        )}
         <div className="mt-2 flex justify-end">
-          <button type="submit" className={formButtonClass} disabled={busy || !note.trim()}>
-            {busy ? 'Posting…' : 'Comment'}
+          <button
+            type="submit"
+            className={formButtonClass}
+            disabled={busy || uploading || (!note.trim() && files.length === 0)}
+          >
+            {busy ? 'Posting…' : uploading ? 'Uploading…' : 'Comment'}
           </button>
         </div>
       </form>
@@ -122,6 +178,7 @@ export function ActivityFeed({
       <EventEntries
         events={events}
         mode={cardId ? 'comments' : 'all'}
+        attachments={attachments}
         loading={loading}
         subjectTitle={subjectTitle}
         columns={columns}
@@ -152,6 +209,7 @@ export function ActivityFeed({
 export function EventEntries({
   events,
   mode,
+  attachments = [],
   loading,
   subjectTitle,
   columns,
@@ -159,6 +217,8 @@ export function EventEntries({
 }: {
   events: BoardEventRow[];
   mode: 'comments' | 'activity' | 'all';
+  /** Files posted with comments, matched to theirs by event_id. */
+  attachments?: AttachmentSummary[];
   loading: boolean;
   subjectTitle: string;
   columns: BoardColumnRow[];
@@ -170,6 +230,11 @@ export function EventEntries({
       (mode === 'comments' ? entry.action === 'comment' : entry.action !== 'comment')
   );
   const columnsById = new Map(columns.map((column) => [column.id, column]));
+  const filesByEvent = new Map<string, AttachmentSummary[]>();
+  for (const file of attachments) {
+    if (!file.event_id) continue;
+    filesByEvent.set(file.event_id, [...(filesByEvent.get(file.event_id) ?? []), file]);
+  }
   const nowIso = new Date().toISOString();
   if (visible.length === 0) {
     return (
@@ -210,9 +275,26 @@ export function EventEntries({
             // keep a one-line comment on one line's worth of space.
             <div className="min-w-0 flex-1 break-words">
               <span className="text-[var(--pyre-creme)]">{personName(entry.actor, people)}</span>
-              <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
-                <SopMarkdown content={entry.note ?? ''} />
-              </div>
+              {entry.note?.trim() && (
+                <div className="[&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
+                  <SopMarkdown content={entry.note} />
+                </div>
+              )}
+              {filesByEvent.has(entry.id) && (
+                <div className="mt-2">
+                  <FilesField
+                    id={`comment-files-${entry.id}`}
+                    label="this comment"
+                    value={(filesByEvent.get(entry.id) ?? []).map((file) => file.id)}
+                    known={filesByEvent.get(entry.id)}
+                    action={COMMENT_UPLOAD}
+                    params={{}}
+                    href={adminAttachmentHref}
+                    readOnly
+                    onChange={() => undefined}
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <span className="min-w-0 flex-1 break-words">

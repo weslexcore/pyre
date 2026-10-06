@@ -6,16 +6,22 @@
 // Comments share the event store with changes. The card UI separates
 // discussion from the audit trail using the event action.
 //
-//   GET ?cardId=<uuid>   → { events, people, mentionPeople }
+//   GET ?cardId=<uuid>   → { events, people, mentionPeople, attachments }
 //   GET ?goalId=<uuid>   → { events, people, mentionPeople }
 //   GET ?since=<iso>     → { events, people }   (the recent-activity read)
-//   POST { cardId? | goalId?, note } → { event } 201
+//   POST { cardId? | goalId?, note, attachmentIds? } → { event, attachments? } 201
+//
+// A card comment may carry files its author staged through board-media
+// (for: 'comment'), and may be files alone; a goal has no board to keep
+// files on, so a goal comment is words only.
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { listStaff } from '@/lib/auth/access';
 import { canManageBoards, canViewBoard } from '@/lib/boards/access';
+import { loadCommentAttachments } from '@/lib/boards/card-media';
 import { addCardComment } from '@/lib/boards/comment';
 import { loadEventsFor, loadEventsSince } from '@/lib/boards/events';
+import { normalizeCommentFileIds, summaryOf } from '@/lib/boards/files';
 import { mentionPeople } from '@/lib/boards/mentions';
 import { boardsForGoal, canReachGoal, loadCard } from '@/lib/boards/store';
 import { BOARD_LIMITS } from '@/lib/boards/types';
@@ -100,6 +106,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     events,
     people: await getPeopleNames(events.map((event) => event.actor)),
     mentionPeople: cardId || goalId ? mentionPeople((await listStaff()) ?? [], slugs) : [],
+    ...(cardId ? { attachments: (await loadCommentAttachments(db, cardId)).map(summaryOf) } : {}),
   });
 };
 
@@ -117,7 +124,16 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   const note = typeof body.note === 'string' ? body.note.trim() : '';
-  if (!note) return json({ error: 'note must be non-empty text' }, 400);
+  if (body.attachmentIds !== undefined && !Array.isArray(body.attachmentIds)) {
+    return json({ error: 'attachmentIds must be a list of file ids' }, 400);
+  }
+  const attachmentIds = normalizeCommentFileIds(body.attachmentIds);
+  if (attachmentIds.length > 0 && !cardId) {
+    return json({ error: 'Only a card comment can carry files' }, 400);
+  }
+  if (!note && attachmentIds.length === 0) {
+    return json({ error: 'A comment needs words or a file' }, 400);
+  }
   if (note.length > BOARD_LIMITS.comment) {
     return json({ error: `note must be ${BOARD_LIMITS.comment} characters or fewer` }, 400);
   }
@@ -139,9 +155,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   // side effect: a card comment goes through addCardComment, which returns
   // its failure, and a goal comment is inserted directly for the same reason.
   if (cardId) {
-    const added = await addCardComment(db, { cardId, note, actor: email });
-    if (!added.ok) return json({ error: added.error }, 500);
-    return json({ event: added.event }, 201);
+    const added = await addCardComment(db, { cardId, note, actor: email, attachmentIds });
+    if (!added.ok) return json({ error: added.error }, added.status ?? 500);
+    return json({ event: added.event, attachments: added.attachments.map(summaryOf) }, 201);
   }
 
   const { data, error } = await db

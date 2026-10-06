@@ -90,8 +90,11 @@ export type UploadProblem = { status: number; error: string };
 
 export interface UploadInput {
   boardId: string;
-  /** The `files` field this answers; checked by the caller against the board's fields. */
-  fieldKey: string;
+  /**
+   * The `files` field this answers, checked by the caller against the
+   * board's fields; null for a file to be posted with a comment.
+   */
+  fieldKey: string | null;
   file: File;
   /** Session email, or 'form' for a public submission. */
   uploadedBy: string;
@@ -169,6 +172,72 @@ export async function storeAttachment(
     return { status: 500, error: error.message };
   }
   return data as BoardAttachmentRow;
+}
+
+/**
+ * A posted comment's files: the staged rows this person uploaded for a
+ * comment on this board are the comment's now. Anything else the ids name —
+ * someone else's upload, a field's file, one already posted — is left
+ * alone, so a comment can only ever carry what its own author picked for it.
+ */
+export async function claimCommentAttachments(
+  db: SupabaseClient,
+  input: { boardId: string; cardId: string; eventId: string; actor: string; ids: string[] }
+): Promise<BoardAttachmentRow[]> {
+  if (input.ids.length === 0) return [];
+  const { data, error } = await db
+    .from('board_attachments')
+    .update({ card_id: input.cardId, event_id: input.eventId })
+    .in('id', input.ids)
+    .eq('board_id', input.boardId)
+    .eq('uploaded_by', input.actor)
+    .is('card_id', null)
+    .is('event_id', null)
+    .is('field_key', null)
+    .select('*');
+  if (error) {
+    console.error('[board-media] comment claim failed:', error.message);
+    return [];
+  }
+  // In the order they were picked.
+  const order = new Map(input.ids.map((id, index) => [id, index]));
+  return ((data ?? []) as BoardAttachmentRow[]).sort(
+    (a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)
+  );
+}
+
+/** How many of these ids name staged comment files this person may post on this board. */
+export async function countClaimableCommentFiles(
+  db: SupabaseClient,
+  input: { boardId: string; actor: string; ids: string[] }
+): Promise<number> {
+  if (input.ids.length === 0) return 0;
+  const { count, error } = await db
+    .from('board_attachments')
+    .select('id', { count: 'exact', head: true })
+    .in('id', input.ids)
+    .eq('board_id', input.boardId)
+    .eq('uploaded_by', input.actor)
+    .is('card_id', null)
+    .is('event_id', null)
+    .is('field_key', null);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** The files posted with a card's comments, in upload order. */
+export async function loadCommentAttachments(
+  db: SupabaseClient,
+  cardId: string
+): Promise<BoardAttachmentRow[]> {
+  const { data, error } = await db
+    .from('board_attachments')
+    .select('*')
+    .eq('card_id', cardId)
+    .not('event_id', 'is', null)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as BoardAttachmentRow[];
 }
 
 /**
