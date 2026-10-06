@@ -675,7 +675,13 @@ async function checkLinkTargets(
     if (!boards.has(field.link_board_id)) {
       return json({ error: `"${field.label}" links to a board that does not exist` }, 400);
     }
-    const unknown = field.link_columns.find((key) => !columns.has(`${field.link_board_id}:${key}`));
+    // A column the field already offered may have been deleted since (an
+    // empty column is deleted, not archived); the key matches no card, so it
+    // saves as it is rather than blocking every save of this board's fields.
+    const kept = new Set(current?.link_columns ?? []);
+    const unknown = field.link_columns.find(
+      (key) => !kept.has(key) && !columns.has(`${field.link_board_id}:${key}`)
+    );
     if (unknown) {
       return json({ error: `"${field.label}" offers a column its board does not have` }, 400);
     }
