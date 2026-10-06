@@ -22,7 +22,7 @@ describe('classifyPurchase', () => {
   });
 
   it('calls recurring bought-membership types a membership', () => {
-    expect(classify({ catalogMembershipId: 756341, membershipType: 'subscription' })).toBe(
+    expect(classify({ catalogMembershipId: 943595, membershipType: 'subscription' })).toBe(
       'membership'
     );
     expect(classify({ membershipType: 'on-demand-subscription' })).toBe('membership');

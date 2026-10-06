@@ -66,7 +66,7 @@ const transaction = (over: Record<string, unknown> = {}) => ({
       items: [
         {
           id: 327197063,
-          saleItemId: 756341,
+          saleItemId: 943595,
           itemType: 'membership',
           itemName: 'Founding Membership',
           payingMember: { id: 22073, firstName: 'Ada', lastName: 'Lovelace' },
@@ -87,7 +87,7 @@ beforeEach(() => {
   captureEvent.mockResolvedValue(true);
   inferPurchaseAttribution.mockResolvedValue(null);
   fetchMemberActivePacks.mockResolvedValue([
-    { id: 74580257, type: 'subscription', membership: { id: 756341, name: 'Founding' } },
+    { id: 74580257, type: 'subscription', membership: { id: 943595, name: 'Founding' } },
   ]);
 });
 
@@ -140,7 +140,7 @@ describe('handlePaymentTransaction', () => {
     expect(summary.purchases).toEqual([
       expect.objectContaining({
         kind: 'membership',
-        membershipId: 756341,
+        membershipId: 943595,
         email: 'ada@example.com',
         captured: true,
         attributionMethod: 'session_click_inference',
@@ -148,7 +148,7 @@ describe('handlePaymentTransaction', () => {
     ]);
     expect(fetchMomenceMember).not.toHaveBeenCalled();
     expect(fetchMemberActivePacks).toHaveBeenCalledWith(22073, { fresh: true });
-    expect(inferPurchaseAttribution).toHaveBeenCalledWith(756341);
+    expect(inferPurchaseAttribution).toHaveBeenCalledWith(943595);
     expect(captureEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         distinctId: 'ada@example.com',
@@ -156,7 +156,7 @@ describe('handlePaymentTransaction', () => {
         timestamp: new Date('2026-09-09T23:49:33.174Z'),
         properties: expect.objectContaining({
           payment_transaction_id: 341635651,
-          membership_id: 756341,
+          membership_id: 943595,
           purchase_kind: 'membership',
           membership_type: 'subscription',
           amount_paid: 172.65,

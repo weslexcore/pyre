@@ -27,7 +27,7 @@ const membership: MembershipContent = {
       ],
       cta: {
         label: 'Claim Founding Membership',
-        href: 'https://momence.com/m/756341',
+        href: 'https://momence.com/m/943595',
         ariaLabel: 'Claim Founding Unlimited membership — $199 per month for life',
       },
     },

@@ -17,7 +17,7 @@ const TIERS = [
     name: 'Founding Unlimited - $199/month for life',
     detail:
       "Unlimited access - use 12 credits and you'll save over $250. Includes 4 guest passes per month (up to $180 value) and 10% off other purchases. ",
-    href: emailLink('https://momence.com/m/756341', 'post-intro-offer', 'founding-unlimited'),
+    href: emailLink('https://momence.com/m/943595', 'post-intro-offer', 'founding-unlimited'),
     buttonColor: COLORS.red,
     buttonText: 'BECOME A FOUNDING MEMBER',
     buttonTextColor: COLORS.creme,
