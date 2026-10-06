@@ -214,6 +214,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       }
     : {};
 
+  // A column hands the card to its own assignees, unless this save names
+  // who the card is on: then the person picked, and that stands.
+  if (completion && patch.assignee_emails !== undefined) {
+    const { assignee_emails: _handoff, ...rest } = completion;
+    completion = rest;
+  }
+
   const { data, error } = await db
     .from('board_cards')
     .update({ ...patch, ...(completion ?? {}), ...properties, updated_by: email })

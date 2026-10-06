@@ -263,6 +263,26 @@ describe('assignees and repeats', () => {
     });
     expect(error(parseBoardPatch({ defaultAssigneeEmails: 'jo' }))).toMatch(/defaultAssignee/);
   });
+
+  it("takes each column's assignees, and leaves them alone when a column names none", () => {
+    const patch = value(
+      parseBoardPatch({
+        columns: [
+          { key: 'new', label: 'New', kind: 'open', assigneeEmails: ['Jo@pyresauna.com'] },
+          { key: 'booked', label: 'Booked', kind: 'done' },
+        ],
+      })
+    );
+    expect(patch.columns?.[0].assignee_emails).toEqual(['jo@pyresauna.com']);
+    expect(patch.columns?.[1]).not.toHaveProperty('assignee_emails');
+    expect(
+      error(
+        parseBoardPatch({
+          columns: [{ key: 'new', label: 'New', kind: 'open', assigneeEmails: 'jo' }],
+        })
+      )
+    ).toMatch(/Column "new"/);
+  });
 });
 
 describe('parseCardCreate', () => {

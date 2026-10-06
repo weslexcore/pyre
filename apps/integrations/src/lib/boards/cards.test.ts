@@ -9,7 +9,8 @@ const col = (
   id: string,
   kind: BoardColumnRow['kind'],
   sort = 0,
-  archived = false
+  archived = false,
+  assignees: string[] = []
 ): BoardColumnRow =>
   ({
     id,
@@ -17,6 +18,7 @@ const col = (
     key: id,
     label: id,
     kind,
+    assignee_emails: assignees,
     sort_order: sort,
     archived,
     created_at: '',
@@ -65,6 +67,18 @@ describe('columnPatch', () => {
   it('keeps the badge on a move between open columns', () => {
     const waiting = card({ waiting_on: "Sarah's availability" });
     expect(columnPatch(waiting, DOING, ME, NOW)?.waiting_on).toBe("Sarah's availability");
+  });
+
+  it("hands the card to the column's assignees", () => {
+    const quoted = col('quoted', 'open', 15, false, ['jo@pyresauna.com', 'sam@pyresauna.com']);
+    expect(columnPatch(card(), quoted, ME, NOW)?.assignee_emails).toEqual([
+      'jo@pyresauna.com',
+      'sam@pyresauna.com',
+    ]);
+  });
+
+  it('leaves the assignees alone for a column with nobody on it', () => {
+    expect(columnPatch(card(), DOING, ME, NOW)).not.toHaveProperty('assignee_emails');
   });
 
   it('clears the stamp when a card is pulled back out of Done', () => {

@@ -81,7 +81,11 @@ export async function fileNextRepeat(
       goal_id: card.goal_id,
       title: card.title,
       notes_md: card.notes_md,
-      assignee_emails: card.assignee_emails,
+      // On whoever owns the column it lands in, if anyone does; otherwise
+      // on the people who had the last one.
+      assignee_emails: column.assignee_emails?.length
+        ? column.assignee_emails
+        : card.assignee_emails,
       due_date: nextRepeatDate(card.due_date, rule, today),
       repeat_every: rule.every,
       repeat_unit: rule.unit,

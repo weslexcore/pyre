@@ -356,6 +356,9 @@ async function applyColumns(
         .update({
           label: column.label,
           kind: column.kind,
+          ...(column.assignee_emails !== undefined
+            ? { assignee_emails: column.assignee_emails }
+            : {}),
           sort_order: column.sort_order,
           archived: column.archived,
         })

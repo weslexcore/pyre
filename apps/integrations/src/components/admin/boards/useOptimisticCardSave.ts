@@ -34,7 +34,12 @@ export function optimisticCardPatch(
     next.properties = { ...card.properties, ...(patch.properties as typeof card.properties) };
   }
   const column = columns.find((column) => column.id === patch.columnId);
-  if (column) Object.assign(next, columnPatch(card, column, '', new Date().toISOString()));
+  if (column) {
+    const moved = columnPatch(card, column, '', new Date().toISOString());
+    // The route keeps assignees the save names over the column's own.
+    if (moved && 'assigneeEmails' in patch) delete moved.assignee_emails;
+    Object.assign(next, moved);
+  }
   return next;
 }
 

@@ -11,11 +11,15 @@ import type { BoardColumnRow } from '@/lib/db';
 import type { ColumnKind } from './types';
 import { BOARD_LIMITS, KEY_RE } from './types';
 
+/** What a column carries through a whole-list save. */
+type ColumnFields = 'key' | 'label' | 'kind' | 'assignee_emails' | 'archived' | 'sort_order';
+
 /** One column as PATCH /api/admin/boards takes it. */
 export interface ColumnPayload {
   key: string;
   label: string;
   kind: ColumnKind;
+  assigneeEmails: string[];
   archived: boolean;
   sortOrder: number;
 }
@@ -46,15 +50,14 @@ export function columnKeyOf(label: string, taken: Iterable<string>): string {
 }
 
 /** A board's columns, in order, as the route wants them back. */
-export function columnsPayload(
-  columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[]
-): ColumnPayload[] {
+export function columnsPayload(columns: Pick<BoardColumnRow, ColumnFields>[]): ColumnPayload[] {
   return [...columns]
     .sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key))
     .map((column) => ({
       key: column.key,
       label: column.label,
       kind: column.kind,
+      assigneeEmails: column.assignee_emails ?? [],
       archived: column.archived,
       sortOrder: column.sort_order,
     }));
@@ -62,7 +65,7 @@ export function columnsPayload(
 
 /** The same list with one column's label changed. */
 export function renameColumn(
-  columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[],
+  columns: Pick<BoardColumnRow, ColumnFields>[],
   key: string,
   label: string
 ): ColumnPayload[] {
@@ -77,7 +80,7 @@ export function renameColumn(
  * so nothing is ever stranded (applyColumns in api/admin/boards.ts).
  */
 export function removeColumn(
-  columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[],
+  columns: Pick<BoardColumnRow, ColumnFields>[],
   key: string
 ): ColumnPayload[] {
   return columnsPayload(columns).filter((column) => column.key !== key);
@@ -95,7 +98,7 @@ export function isLastOpenColumn(
 
 /** The same list with a new column after the last one. */
 export function appendColumn(
-  columns: Pick<BoardColumnRow, 'key' | 'label' | 'kind' | 'archived' | 'sort_order'>[],
+  columns: Pick<BoardColumnRow, ColumnFields>[],
   label: string,
   kind: ColumnKind = 'open'
 ): ColumnPayload[] {
@@ -110,6 +113,7 @@ export function appendColumn(
       ),
       label,
       kind,
+      assigneeEmails: [],
       archived: false,
       sortOrder: last + 10,
     },

@@ -114,6 +114,8 @@ export interface ColumnInput {
   key: string;
   label: string;
   kind: ColumnKind;
+  /** Who a card moving in is handed to. Absent leaves a saved column's list alone. */
+  assignee_emails?: string[];
   sort_order: number;
   archived: boolean;
 }
@@ -154,10 +156,18 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
       return fail(`Column "${key}" has a bad sort order`);
     }
 
+    const assignees = emailList(column.assigneeEmails);
+    if (!assignees.ok) {
+      return fail(
+        `Column "${key}" can be assigned to up to ${BOARD_LIMITS.assignees} email addresses`
+      );
+    }
+
     columns.push({
       key,
       label,
       kind: column.kind,
+      ...(assignees.value !== undefined ? { assignee_emails: assignees.value } : {}),
       sort_order: order,
       archived: column.archived === true,
     });
@@ -621,7 +631,7 @@ export interface CardCreate {
   column_id: string | null;
   title: string;
   notes_md: string;
-  /** Empty takes the board's default assignees (the insert trigger). */
+  /** Empty takes the column's assignees, then the board's defaults (the insert trigger). */
   assignee_emails: string[];
   due_date: string | null;
   repeat_every: number | null;

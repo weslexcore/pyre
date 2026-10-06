@@ -1,6 +1,8 @@
 // The board's own shape: its name, what it calls a card, whether its cards
-// belong on All Tasks, who a new card is assigned to, and its columns — and, at the bottom, the two things
-// that take a board off the index: archiving it and deleting it.
+// belong on All Tasks, who a new card is assigned to, and its columns — each
+// of which can name who a card moving into it is handed to — and, at the
+// bottom, the two things that take a board off the index: archiving it and
+// deleting it.
 //
 // Columns are edited as a list and saved as a list — the route reconciles by
 // key, so renaming a column keeps its cards, and removing one deletes it if
@@ -78,6 +80,8 @@ interface ColumnDraft {
   key: string;
   label: string;
   kind: ColumnKind;
+  /** Who a card moving in is handed to; [] leaves its assignees alone. */
+  assigneeEmails: string[];
   archived: boolean;
 }
 
@@ -145,6 +149,7 @@ export function BoardSettings({
         key: column.key,
         label: column.label,
         kind: column.kind,
+        assigneeEmails: column.assignee_emails ?? [],
         archived: column.archived,
       }))
   );
@@ -237,6 +242,7 @@ export function BoardSettings({
         ),
         label: 'New column',
         kind: 'open',
+        assigneeEmails: [],
         archived: false,
       },
     ]);
@@ -408,7 +414,7 @@ export function BoardSettings({
         />
         <p className="mt-1 text-xs text-white/35">
           Every new {cardNoun} — added here, from a form, or from the web — lands on these people
-          unless whoever adds it picks someone else.
+          unless whoever adds it picks someone else, or its column has assignees of its own.
         </p>
       </div>
 
@@ -437,6 +443,14 @@ export function BoardSettings({
                   </option>
                 ))}
               </select>
+              <div className="shrink-0">
+                <AssigneePicker
+                  owners={owners}
+                  value={draft.assigneeEmails}
+                  names={(email) => personName(email, people)}
+                  onChange={(next) => setDraft(index, { assigneeEmails: next })}
+                />
+              </div>
               <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                 <input
                   type="checkbox"
@@ -461,7 +475,9 @@ export function BoardSettings({
           Add column
         </button>
         <p className="mt-2 text-xs text-white/35">
-          A removed column is deleted if it is empty and archived if it still holds cards.
+          A {cardNoun} moved into a column with assignees is handed to them, in place of whoever had
+          it; a column with nobody leaves it with whoever had it. A removed column is deleted if it
+          is empty and archived if it still holds cards.
         </p>
       </div>
 

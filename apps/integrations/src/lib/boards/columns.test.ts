@@ -12,6 +12,7 @@ const column = (key: string, sort: number, over: Record<string, unknown> = {}) =
   key,
   label: key,
   kind: 'open' as const,
+  assignee_emails: [] as string[],
   archived: false,
   sort_order: sort,
   ...over,
@@ -47,9 +48,32 @@ describe('columnKeyOf', () => {
 describe('columnsPayload', () => {
   it('sorts by sort order and renames the fields the route wants', () => {
     expect(columnsPayload([column('done', 30), column('new', 10)])).toEqual([
-      { key: 'new', label: 'new', kind: 'open', archived: false, sortOrder: 10 },
-      { key: 'done', label: 'done', kind: 'open', archived: false, sortOrder: 30 },
+      {
+        key: 'new',
+        label: 'new',
+        kind: 'open',
+        assigneeEmails: [],
+        archived: false,
+        sortOrder: 10,
+      },
+      {
+        key: 'done',
+        label: 'done',
+        kind: 'open',
+        assigneeEmails: [],
+        archived: false,
+        sortOrder: 30,
+      },
     ]);
+  });
+
+  it("carries each column's assignees, so a rename from the header keeps them", () => {
+    const next = renameColumn(
+      [column('quoted', 10, { assignee_emails: ['jo@pyresauna.com'] })],
+      'quoted',
+      'Quote sent'
+    );
+    expect(next[0].assigneeEmails).toEqual(['jo@pyresauna.com']);
   });
 });
 
@@ -70,6 +94,7 @@ describe('appendColumn', () => {
       key: 'follow_up',
       label: 'Follow up',
       kind: 'open',
+      assigneeEmails: [],
       archived: false,
       sortOrder: 40,
     });

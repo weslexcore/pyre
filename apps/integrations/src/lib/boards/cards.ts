@@ -14,7 +14,8 @@ import { isFinishedKind } from './types';
 export type ColumnPatch = Pick<
   BoardCardRow,
   'column_id' | 'completed_at' | 'completed_by' | 'waiting_on'
->;
+> &
+  Partial<Pick<BoardCardRow, 'assignee_emails'>>;
 
 /**
  * The patch that moves `card` into `next`. Null when the card is already
@@ -25,10 +26,13 @@ export type ColumnPatch = Pick<
  * anybody, and leaving the badge behind would strand "waiting on Sarah" on a
  * task that shipped last month. Leaving one clears the stamp, so a card
  * pulled back out of Done reads as open again.
+ *
+ * A column with assignees of its own hands the card to them, replacing
+ * whoever had it: that stage is theirs. One without leaves the card alone.
  */
 export function columnPatch(
   card: Pick<BoardCardRow, 'column_id' | 'completed_at' | 'completed_by' | 'waiting_on'>,
-  next: Pick<BoardColumnRow, 'id' | 'kind'>,
+  next: Pick<BoardColumnRow, 'id' | 'kind'> & Partial<Pick<BoardColumnRow, 'assignee_emails'>>,
   email: string,
   nowIso: string
 ): ColumnPatch | null {
@@ -40,6 +44,7 @@ export function columnPatch(
     completed_at: finished ? (card.completed_at ?? nowIso) : null,
     completed_by: finished ? (card.completed_by ?? email) : null,
     waiting_on: finished ? null : card.waiting_on,
+    ...(next.assignee_emails?.length ? { assignee_emails: [...next.assignee_emails] } : {}),
   };
 }
 

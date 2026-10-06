@@ -1025,6 +1025,8 @@ export interface BoardColumnRow {
   key: string;
   label: string;
   kind: BoardColumnKind;
+  /** Who a card moving in here is handed to; [] leaves its assignees alone. */
+  assignee_emails: string[];
   sort_order: number;
   archived: boolean;
   created_at: string;
