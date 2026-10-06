@@ -194,7 +194,7 @@ export function ChecklistView({
               type="button"
               role="switch"
               aria-checked={filtering}
-              className="group flex items-center gap-2 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:text-white/90"
+              className="group -mx-2 mt-1 flex items-center gap-3 rounded px-2 py-2.5 font-mono text-xs uppercase tracking-wide text-white/60 transition-colors hover:bg-white/5 hover:text-white/90"
               onClick={() => setOutstandingOnly((on) => !on)}
             >
               <span
