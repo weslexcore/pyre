@@ -201,9 +201,12 @@ function CardCreateEditor({
           onChange={(e) => set({ title: e.target.value })}
         />
       </label>
-      <label className="block">
-        <span className={labelClass}>Notes</span>
+      <div>
+        <label htmlFor={`${idPrefix}-notes`} className={labelClass}>
+          Notes
+        </label>
         <LinkTextarea
+          id={`${idPrefix}-notes`}
           className={textareaClass}
           value={value.notesMd}
           maxLength={SUGGESTION_LIMITS.notes}
@@ -213,7 +216,7 @@ function CardCreateEditor({
         <span className="mt-1 block font-mono text-[10px] text-white/30">
           A link back to the shift note is added when the card is created.
         </span>
-      </label>
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block">
           <span className={labelClass}>Severity</span>
@@ -295,6 +298,7 @@ function CardCommentEditor({
   onChange,
   target,
   disabled,
+  idPrefix,
 }: EditorProps<'board_card.comment'>) {
   const set = (patch: Partial<CardCommentPayload>) => onChange({ ...value, ...patch });
   return (
@@ -309,9 +313,12 @@ function CardCommentEditor({
           <span>{target?.label ?? 'an existing task'}</span>
         )}
       </p>
-      <label className="block">
-        <span className={labelClass}>Comment</span>
+      <div>
+        <label htmlFor={`${idPrefix}-comment`} className={labelClass}>
+          Comment
+        </label>
         <LinkTextarea
+          id={`${idPrefix}-comment`}
           className={textareaClass}
           value={value.note}
           maxLength={SUGGESTION_LIMITS.comment}
@@ -321,7 +328,7 @@ function CardCommentEditor({
         <span className="mt-1 block font-mono text-[10px] text-white/30">
           A link back to the shift note is added when the comment is posted.
         </span>
-      </label>
+      </div>
     </div>
   );
 }
