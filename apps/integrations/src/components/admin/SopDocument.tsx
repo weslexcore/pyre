@@ -13,6 +13,11 @@
 // open in a peek modal (SopPeekModal) so a tutorial never navigates away from
 // a half-finished checklist.
 //
+// The editor carries the writing assistant (SopAssist): draft the document
+// from rough notes, or review it for clarity and consistency, and accept the
+// proposal into the editor before saving. "Review with AI" opens the editor
+// with a review already running.
+//
 // The page arrives with the document and its open run already rendered
 // (`initial`, assembled server-side by lib/sops/document.ts), so nothing is
 // fetched on mount. The run itself — optimistic taps, the serialized queue,
@@ -39,6 +44,7 @@ import { LinkedRow, linkedChipClass } from './LinkedRow';
 import { LinkTextarea } from './LinkTextarea';
 import { cascadeLinked } from './linkedCascade';
 import { SopAccessPicker, withAdmins } from './SopAccessPicker';
+import { SopAssist } from './SopAssist';
 import { SopDiff } from './SopDiff';
 import { SopMarkdown } from './SopMarkdown';
 import { SopPeekModal } from './SopPeekModal';
@@ -162,6 +168,9 @@ export function SopDocument({
   const [draftContent, setDraftContent] = useState('');
   const [draftNote, setDraftNote] = useState('');
   const [preview, setPreview] = useState(false);
+  // The writing assistant panel, and whether it opened to review right away.
+  const [showAssist, setShowAssist] = useState(false);
+  const [autoReview, setAutoReview] = useState(false);
 
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
 
@@ -234,11 +243,17 @@ export function SopDocument({
     }
   }, [slug, run.resetRun]);
 
-  const startEdit = useCallback((doc: DocResponse) => {
+  const startEdit = useCallback((doc: DocResponse, opts: { review?: boolean } = {}) => {
     setDraftTitle(doc.sop.title);
     setDraftContent(doc.sop.content_md);
     setDraftNote('');
     setPreview(false);
+    // A new document (only the create form's stub heading) opens with the
+    // assistant ready to draft, which is also where the create form's rough
+    // notes land.
+    const isStub = doc.sop.content_md.replace(/^\s*#[^\n]*\n?/, '').trim() === '';
+    setShowAssist(Boolean(opts.review) || isStub);
+    setAutoReview(Boolean(opts.review));
     setMode('edit');
   }, []);
 
@@ -364,9 +379,18 @@ export function SopDocument({
       <div className="flex flex-wrap items-center gap-2">
         <BackLink href="/admin/sops">All SOPs</BackLink>
         {mode === 'view' && canEdit && !sop.archived && (
-          <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
-            Edit
-          </button>
+          <>
+            <button type="button" className={buttonClass} onClick={() => startEdit(data)}>
+              Edit
+            </button>
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => startEdit(data, { review: true })}
+            >
+              Review with AI
+            </button>
+          </>
         )}
         <button type="button" className={buttonClass} onClick={() => setShowHistory((v) => !v)}>
           History ({sop.current_version})
@@ -677,6 +701,22 @@ export function SopDocument({
             onChange={(e) => setDraftTitle(e.target.value)}
             placeholder="Title"
           />
+          {showAssist && (
+            <SopAssist
+              sopId={sop.id}
+              slug={sop.slug}
+              title={draftTitle}
+              content={draftContent}
+              disabled={busy}
+              autoReview={autoReview}
+              onApply={(proposal) => {
+                setDraftTitle(proposal.title);
+                setDraftContent(proposal.contentMd);
+                setDraftNote((note) => note || proposal.changeNote);
+                setPreview(false);
+              }}
+            />
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -691,6 +731,16 @@ export function SopDocument({
               onClick={() => setPreview(true)}
             >
               Preview
+            </button>
+            <button
+              type="button"
+              className={`${buttonClass} ${showAssist ? 'border-white/40 text-white' : ''}`}
+              onClick={() => {
+                setAutoReview(false);
+                setShowAssist((v) => !v);
+              }}
+            >
+              Assistant
             </button>
             <span className="ml-auto font-mono text-[10px] text-white/40">
               Markdown — “- [ ]” for checklist items, “- [!]” for one that must be checked and can’t

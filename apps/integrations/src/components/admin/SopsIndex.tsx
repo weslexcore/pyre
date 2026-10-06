@@ -1,7 +1,8 @@
 // SOP library for /admin/sops: documents grouped by section (the free-text
 // `category` on each document), filtered server-side to what the caller's role
 // may view and sorted by the admin-managed section order. Admins get a create
-// form (title, section, access levels), can add/rename/remove the sections
+// form (title, section, access levels, and optional rough notes the writing
+// assistant drafts the document from once its editor opens), can add/rename/remove the sections
 // themselves — including empty ones, which the server keeps in the list so a
 // new section is somewhere to file the next SOP rather than a no-op — see
 // archived documents, and reorder by drag and drop: the
@@ -14,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { assistNotesKey } from '@/components/admin/SopAssist';
 import { buttonClass, dragHandleClass, inputClass, selectClass } from '@/components/admin/ui';
 import { readError } from '@/lib/client/api';
 import { etStamp } from '@/lib/client/format';
@@ -139,6 +141,7 @@ export function SopsIndex() {
   // `newCategoryName` is the section to create alongside the document.
   const [newCategory, setNewCategory] = useState<string>(NEW_SECTION);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newNotes, setNewNotes] = useState('');
   // New documents start readable by everyone and editable by admins — the
   // same defaults the columns carry.
   const [newView, setNewView] = useState<SopGrant>({
@@ -329,6 +332,16 @@ export function SopsIndex() {
       });
       if (!res.ok) throw new Error(await readError(res));
       const { sop } = (await res.json()) as { sop: SopRow };
+      // The editor's writing assistant picks these up and drafts from them.
+      // Best-effort: without storage, the editor opens with an empty
+      // assistant and the notes can be pasted there.
+      if (newNotes.trim()) {
+        try {
+          window.sessionStorage.setItem(assistNotesKey(sop.slug), newNotes);
+        } catch {
+          // Storage blocked; nothing to hand off.
+        }
+      }
       // Straight into the editor for the new document.
       window.location.href = `/admin/sops/${sop.slug}?edit=1`;
     } catch (e) {
@@ -773,6 +786,14 @@ export function SopsIndex() {
                   onChange={setNewEdit}
                 />
               </div>
+              <textarea
+                className={`${inputClass} min-h-24 w-full resize-y text-sm`}
+                placeholder="Rough notes (optional): the steps, what to watch for, who does it. The writing assistant turns them into a draft for you to review."
+                value={newNotes}
+                disabled={busy}
+                maxLength={20_000}
+                onChange={(e) => setNewNotes(e.target.value)}
+              />
               {newTitle.trim() && (
                 <p className="font-mono text-[10px] text-white/40">
                   /admin/sops/{slugify(newTitle)}
