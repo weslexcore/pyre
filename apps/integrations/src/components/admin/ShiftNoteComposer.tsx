@@ -14,6 +14,7 @@
 import { todayEastern } from '@pyre/schedule-core';
 import { type Ref, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { LinkTextarea } from '@/components/admin/LinkTextarea';
 import {
   buttonClass,
   compactInputClass,
@@ -325,7 +326,7 @@ export function ShiftNoteComposer({
         <label htmlFor={`${fieldId}-body`} className={microLabelClass}>
           What's worth noting
         </label>
-        <textarea
+        <LinkTextarea
           id={`${fieldId}-body`}
           ref={textareaRef}
           aria-describedby={`${fieldId}-hint`}
@@ -334,7 +335,7 @@ export function ShiftNoteComposer({
           placeholder="Cold plunge is warming up // running low on towels // etc. "
           maxLength={NOTE_BODY_MAX}
           value={draftBody}
-          onChange={(e) => setDraftBody(e.target.value)}
+          onChange={setDraftBody}
         />
       </div>
 

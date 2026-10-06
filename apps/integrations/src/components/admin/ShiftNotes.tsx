@@ -79,6 +79,7 @@ import { type PeopleNames, personName } from '@/lib/sops/names';
 import { matchesTerm } from '@/lib/sops/search';
 import { BulkClassify } from './BulkClassify';
 import { FilterMultiSelect } from './FilterMultiSelect';
+import { LinkTextarea } from './LinkTextarea';
 import {
   buttonClass,
   type CreatedShiftNote,
@@ -912,11 +913,11 @@ export function ShiftNotes() {
                       onChange={(e) => setEditDate(e.target.value)}
                     />
                   </label>
-                  <textarea
+                  <LinkTextarea
                     className={textareaClass}
                     maxLength={NOTE_BODY_MAX}
                     value={editBody}
-                    onChange={(e) => setEditBody(e.target.value)}
+                    onChange={setEditBody}
                   />
                   <div className="flex gap-2">
                     <button
@@ -1144,11 +1145,11 @@ export function ShiftNotes() {
                         </div>
                         {replyEditId === reply.id ? (
                           <div className="mt-2 space-y-2">
-                            <textarea
+                            <LinkTextarea
                               className={replyTextareaClass}
                               maxLength={REPLY_BODY_MAX}
                               value={replyEditBody}
-                              onChange={(e) => setReplyEditBody(e.target.value)}
+                              onChange={setReplyEditBody}
                             />
                             <div className="flex gap-2">
                               <button
@@ -1181,15 +1182,15 @@ export function ShiftNotes() {
                   )}
                   {canReply(note, viewer) && (
                     <div className="space-y-2">
-                      <textarea
+                      <LinkTextarea
                         className={replyTextareaClass}
                         placeholder={
                           viewer.isAdmin ? 'Reply to this note…' : 'Reply to the admins…'
                         }
                         maxLength={REPLY_BODY_MAX}
                         value={replyDrafts[note.id] ?? ''}
-                        onChange={(e) =>
-                          setReplyDrafts((prev) => ({ ...prev, [note.id]: e.target.value }))
+                        onChange={(next) =>
+                          setReplyDrafts((prev) => ({ ...prev, [note.id]: next }))
                         }
                         aria-label={`Reply to ${personName(note.author_email, names)}'s note`}
                       />
