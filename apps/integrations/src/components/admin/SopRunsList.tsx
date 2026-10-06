@@ -28,21 +28,21 @@ export interface RunEntry extends SopRunRow {
   sop_run_checks: RunCheck[];
   /**
    * The items a finished run never resolved, from the document snapshot it
-   * pinned (see attachUncheckedItems). Only runs ended short by the old
-   * Finish action have any — a run now finishes only once every item is
-   * completed or skipped. Absent while a run is in progress, when it resolved
+   * pinned (see attachUncheckedItems): runs left unfinished (Start fresh, or
+   * still open when their studio day ended), and old runs ended short by the
+   * removed Finish action. Absent while a run is in progress, when it resolved
    * every item, or when the snapshot could not be read — the record then
    * falls back to counting what was never checked.
    */
   unchecked?: UncheckedItem[];
 }
 
-// 'abandoned' is historical: ending a run early now discards it outright, so
-// only runs from before that change carry the status.
+// 'abandoned' is a run left unfinished: someone chose Start fresh, or it was
+// still open when its studio day ended and the next shift got a new one.
 export const STATUS_META: Record<SopRunRow['status'], { label: string; className: string }> = {
   in_progress: { label: 'In progress', className: 'text-[var(--pyre-gold)]' },
   completed: { label: 'Completed', className: 'text-[var(--pyre-sage)]' },
-  abandoned: { label: 'Abandoned', className: 'text-white/40' },
+  abandoned: { label: 'Left unfinished', className: 'text-[var(--pyre-red)]/80' },
 };
 
 function formatDuration(startIso: string, endIso: string): string {
@@ -93,8 +93,8 @@ function UncheckedLine({ item }: { item: UncheckedItem }) {
 
 /**
  * The expanded record of one run: the SOP link, every resolved item with who
- * and when (skips say so), and — for a run that ended short, before skipping
- * existed — the items nobody accounted for, by name. Exported for the static
+ * and when (skips say so), and — for a run that ended short (left unfinished,
+ * or ended by the old Finish action) — the items nobody accounted for, by name. Exported for the static
  * render test; the list opens it on tap.
  */
 export function RunRecord({
@@ -247,7 +247,7 @@ export function RunsList({
                 className={`font-mono text-xs ${complete ? 'text-[var(--pyre-sage)]' : 'text-white/60'}`}
               >
                 {progressLabel(checks, run.task_count)}
-                {run.status === 'completed' && !complete && ' — items never checked'}
+                {run.status !== 'in_progress' && !complete && ' — items never checked'}
               </span>
               <span className="ml-auto text-right font-mono text-[10px] text-white/40">
                 started by {actorLabel(run.started_by, viewerEmail, people)} ·{' '}
@@ -257,6 +257,12 @@ export function RunsList({
                     <br />
                     ended by {actorLabel(run.ended_by, viewerEmail, people)} ·{' '}
                     {etStamp(run.ended_at)} ({formatDuration(run.started_at, run.ended_at)})
+                  </>
+                )}
+                {run.ended_at && !run.ended_by && run.status === 'abandoned' && (
+                  <>
+                    <br />
+                    closed automatically at end of day
                   </>
                 )}
               </span>

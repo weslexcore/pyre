@@ -122,6 +122,21 @@ export const CRON_JOBS: CronJob[] = [
     },
   },
   {
+    // Closes SOP checklist runs left open from an earlier studio day as
+    // abandoned, so the run log shows them as left unfinished. The SOP pages
+    // already ignore stale runs; this settles the record. Idempotent.
+    name: 'sop-run-expiry',
+    run: async (ctx) => {
+      const db = (await import('@/lib/db')).getDb();
+      if (!db) return { skipped: 'no-db' };
+      const { abandoned, error } = await (await import('@/lib/sops/runs')).abandonStaleRuns(db, {
+        dryRun: ctx.dryRun,
+      });
+      if (error) throw new Error(`SOP run expiry failed: ${error}`);
+      return { abandoned, dryRun: ctx.dryRun };
+    },
+  },
+  {
     // Monday morning: each employee's locked-in shifts for the week ahead,
     // one deep link per shift. Runs after sync-shifts so the roundup reflects
     // the latest Momence coverage. No-op on every other day/hour.

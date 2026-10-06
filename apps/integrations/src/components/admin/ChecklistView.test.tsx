@@ -120,6 +120,18 @@ describe('ChecklistView', () => {
     expect(html).toContain('finishes on its own');
   });
 
+  it('offers Start fresh beside Discard on an open run, never on a finished one', () => {
+    const open = render({ run: RUN, checks: [CHECK], onStartFresh: noop });
+    expect(open).toContain('>Start fresh<');
+    expect(open).toContain('stays in the run log');
+    const finished = render({
+      run: { ...RUN, status: 'completed', ended_at: '2026-09-01T14:20:00Z' },
+      checks: [CHECK],
+      onStartFresh: noop,
+    });
+    expect(finished).not.toContain('>Start fresh<');
+  });
+
   it('counts skips in the header alongside progress', () => {
     const html = render({ run: RUN, checks: [CHECK, SKIP] });
     expect(html).toContain('2 of 3');

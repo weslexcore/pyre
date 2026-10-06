@@ -688,6 +688,7 @@ export function SopDocument({
                 onSopLink={setPeekSlug}
                 onToggle={onToggle}
                 onDiscard={run.requestDiscard}
+                onStartFresh={() => void run.startFresh()}
                 onStartAgain={run.startAgain}
               />
             </div>

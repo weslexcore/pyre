@@ -15,13 +15,13 @@ import { type PeopleNames, personName, sameActor } from '@/lib/sops/names';
 import { BackLink } from './BackLink';
 import { type RunEntry, RunsList } from './SopRunsList';
 
-// 'Abandoned' only turns up runs from before ending early became a discard
-// (which deletes the run); kept so that history stays reachable.
+// 'Left unfinished' is the abandoned status: Start fresh, or a run still open
+// when its studio day ended.
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'in_progress', label: 'In progress' },
   { key: 'completed', label: 'Completed' },
-  { key: 'abandoned', label: 'Abandoned' },
+  { key: 'abandoned', label: 'Left unfinished' },
 ] as const;
 
 /** Everyone who touched this run: started, ended, or checked an item. */

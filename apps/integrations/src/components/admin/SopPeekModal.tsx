@@ -125,6 +125,7 @@ export function PeekChecklist({
         onSopLink={onSopLink}
         onToggle={onToggle}
         onDiscard={run.requestDiscard}
+        onStartFresh={() => void run.startFresh()}
         onStartAgain={run.startAgain}
       />
       {run.confirmDiscard && run.runData && (

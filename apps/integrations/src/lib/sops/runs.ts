@@ -6,6 +6,7 @@ import type { getDb, SopRow, SopRunCheckRow, SopRunRow } from '@/lib/db';
 import { countTasks, parseChecklist } from './checklist';
 import { canViewSop, type SopAccessFields, type SopViewer } from './levels';
 import { type LinkedProgressMap, linkedSopSlugs } from './links';
+import { studioDayStart } from './run-day';
 
 export type Db = NonNullable<ReturnType<typeof getDb>>;
 
@@ -15,6 +16,58 @@ export interface SopRunState {
   checks: SopRunCheckRow[];
   /** The document snapshot the run started with (the current text if unchanged). */
   content: string;
+}
+
+/**
+ * Close an open run as abandoned, keeping it and its checks in the log —
+ * the log names the items it never resolved. `email` is whoever chose to
+ * start fresh; null when the end-of-day rollover closed it. Guarded on
+ * in_progress like completeIfFull, so a teammate finishing it first wins
+ * and a repeat is a no-op.
+ */
+export async function abandonRun(
+  db: Db,
+  runId: string,
+  email: string | null
+): Promise<{ abandoned: boolean; error: string | null }> {
+  const { data, error } = await db
+    .from('sop_runs')
+    .update({ status: 'abandoned', ended_by: email, ended_at: new Date().toISOString() })
+    .eq('id', runId)
+    .eq('status', 'in_progress')
+    .select('id')
+    .maybeSingle();
+  if (error) return { abandoned: false, error: error.message };
+  return { abandoned: data !== null, error: null };
+}
+
+/**
+ * Abandon every open run started before today's studio day — the hourly
+ * sweep, so the log shows yesterday's unfinished checklists as left
+ * unfinished without waiting for someone to reopen them. The readers below
+ * already ignore stale runs, so this only settles the record.
+ */
+export async function abandonStaleRuns(
+  db: Db,
+  opts: { dryRun?: boolean; now?: Date } = {}
+): Promise<{ abandoned: number; error: string | null }> {
+  const cutoff = studioDayStart(opts.now);
+  if (opts.dryRun) {
+    const { count, error } = await db
+      .from('sop_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'in_progress')
+      .lt('started_at', cutoff);
+    return { abandoned: count ?? 0, error: error?.message ?? null };
+  }
+  const { data, error } = await db
+    .from('sop_runs')
+    .update({ status: 'abandoned', ended_by: null, ended_at: new Date().toISOString() })
+    .eq('status', 'in_progress')
+    .lt('started_at', cutoff)
+    .select('id');
+  if (error) return { abandoned: 0, error: error.message };
+  return { abandoned: data?.length ?? 0, error: null };
 }
 
 /** Everyone one run names: who started it, ended it, and checked its items. */
@@ -186,7 +239,9 @@ type ActiveRunRow = SopRunRow & {
 };
 
 /**
- * Every unfinished run on a document this viewer may read, newest first.
+ * Every unfinished run on a document this viewer may read, newest first —
+ * today's only: a run left open from an earlier studio day is stale (see
+ * isStaleRun) and no longer anyone's to walk up to.
  * Runs are shared per document — whoever walks up next continues the open
  * one — so this is deliberately not scoped to the caller's own runs; callers
  * mark those with sameActor() instead. Feeds the "in progress" strip on the
@@ -201,6 +256,7 @@ export async function loadActiveRuns(
     .from('sop_runs')
     .select('*, sops(*), sop_run_checks(item_index)')
     .eq('status', 'in_progress')
+    .gte('started_at', studioDayStart())
     .order('started_at', { ascending: false })
     .limit(limit);
   if (error) return { runs: [], error: error.message };
@@ -227,8 +283,8 @@ type RunWithEmbeddedChecks = SopRunRow & { sop_run_checks: SopRunCheckRow[] | nu
 
 /**
  * The newest in-progress run on `sop` with its checks, in one query (the
- * checks come embedded, sorted here by item index). Null when nobody has a
- * run open — unless `since` is given, in which case the newest run completed
+ * checks come embedded, sorted here by item index). Stale runs from an
+ * earlier studio day don't count. Null when nobody has a run open — unless `since` is given, in which case the newest run completed
  * at or after that moment stands in, so a sub-checklist opened from a parent
  * run still shows the ticks that finished it during this run of the parent.
  */
@@ -242,6 +298,7 @@ export async function loadRunState(
     .select('*, sop_run_checks(*)')
     .eq('sop_id', sop.id)
     .eq('status', 'in_progress')
+    .gte('started_at', studioDayStart())
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -302,7 +359,7 @@ type LinkedRunRow = Pick<SopRunRow, 'sop_id' | 'task_count'> & {
 
 /**
  * Progress of every task-bearing document `sop` links to, for the bars under
- * the parent's items. An open run shows its count; a run completed since the
+ * the parent's items. An open run from today shows its count; a run completed since the
  * parent's own run started counts as done (so "Completed" means this shift,
  * not ever); anything else is not started. Documents the viewer can't read,
  * archived ones, and prose-only pages get no entry — and no bar.
@@ -330,6 +387,7 @@ export async function loadLinkedProgress(
       .select('sop_id, task_count, sop_run_checks(item_index)')
       .in('sop_id', ids)
       .eq('status', 'in_progress')
+      .gte('started_at', studioDayStart())
       .order('started_at', { ascending: false }),
     parentRun
       ? db

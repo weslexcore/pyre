@@ -3,8 +3,10 @@
 // confetti) bound to the shared run. There is no separate "run mode" any
 // more: with no run open the rows sit unresolved and the first tap starts one
 // (useSopRun owns that logic — this component just reports toggles); once a
-// run exists a sticky progress header appears with Discard, and un-resolving
-// the last remaining item silently discards the run again.
+// run exists a sticky progress header appears with Start fresh (close the
+// run as left unfinished — it stays in the log) and Discard (erase a run
+// started by mistake), and un-resolving the last remaining item silently
+// discards the run again.
 //
 // Resolving the last item finishes the run by itself (there is no Finish
 // button, so a finished run never has an unaccounted-for item); the finished
@@ -55,6 +57,7 @@ export function ChecklistView({
   onSopLink,
   onToggle,
   onDiscard,
+  onStartFresh,
   onStartAgain,
 }: {
   /** Run snapshot when a run is open, otherwise the current document. */
@@ -79,6 +82,8 @@ export function ChecklistView({
    */
   onToggle: (items: CheckItems, checked: boolean) => void;
   onDiscard: () => void;
+  /** Closes the open run as left unfinished (kept in the log); the next tap starts a new one. */
+  onStartFresh?: () => void;
   /** Clears a finished run off the screen so the next tap starts a new one. */
   onStartAgain?: () => void;
 }) {
@@ -158,9 +163,21 @@ export function ChecklistView({
                   >
                     Outstanding only
                   </button>
+                  {onStartFresh && (
+                    <button
+                      type="button"
+                      className={filterOffButtonClass}
+                      title="Close this run as left unfinished. It stays in the run log."
+                      disabled={busy}
+                      onClick={onStartFresh}
+                    >
+                      Start fresh
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={discardButtonClass}
+                    title="Started by mistake: erase this run. Nothing is saved."
                     disabled={busy}
                     onClick={onDiscard}
                   >

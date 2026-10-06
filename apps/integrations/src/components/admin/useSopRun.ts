@@ -12,7 +12,10 @@
 // item is resolved (the server completes it as the row lands); the finished
 // run stays on screen, every box ticked or struck, until Start again clears
 // it. There is no Finish: the record never carries an item nobody accounted
-// for. Discard is the only way out of a run short of resolving everything.
+// for. A run short of resolving everything ends one of three ways: Start
+// fresh (abandoned — kept in the log with its missing items named), Discard
+// (deleted — it was started by mistake), or the end of the studio day (a run
+// from an earlier day is stale: the next tap drops it and starts today's).
 //
 // Every closure the queue runs later reads the latest options and refs at call
 // time, never the render it was created in — an op must see the state the
@@ -33,6 +36,7 @@ import {
   revertCheck,
   revertUncheck,
 } from '@/lib/sops/optimistic';
+import { isStaleRun } from '@/lib/sops/run-day';
 
 /** What the runs API answers with after a start, check, or lookup. */
 export interface RunResponse extends RunResponseBody {
@@ -71,6 +75,8 @@ export interface SopRunController {
   /** Discard the run — straight through when nothing is resolved, else via the dialog. */
   requestDiscard: () => void;
   discardRun: () => Promise<void>;
+  /** Close the open run short but keep it in the log; the next tap starts a new one. */
+  startFresh: () => Promise<void>;
   /** Clear a finished run off the screen; the next tap starts a new one. */
   startAgain: () => void;
   /** Replace the run outright (page reload, run deleted from the log). */
@@ -87,6 +93,8 @@ export function isLiveRun(state: RunState | null): boolean {
 const FRESH_MS = 15_000;
 
 const COMPLETED_NOTICE = 'Checklist completed — nice work.';
+const STALE_NOTICE =
+  'The last run of this checklist was left unfinished on an earlier day — this is a fresh one.';
 
 async function postStart(sopId: string, items: CheckItems): Promise<RunResponse> {
   const res = await fetch('/api/admin/sop-runs', {
@@ -217,6 +225,11 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
           const probe = await fetch(`/api/admin/sop-runs?sopId=${sop.id}`);
           const alive = probe.ok && ((await probe.json()) as { run: SopRunRow | null }).run;
           if (alive) throw e;
+          // The old run's ticks are not this run's: keep only this tap's.
+          const now = runRef.current;
+          if (now) {
+            commit({ ...now, checks: now.checks.filter((c) => added.includes(c.item_index)) });
+          }
           reconcile(await postStart(sop.id, items));
         }
       } catch (e) {
@@ -260,6 +273,15 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
       // A finished run takes no taps; Start again clears it first.
       if (runRef.current && !isLiveRun(runRef.current)) return;
       onError(null);
+      // A screen left open overnight still shows yesterday's run. It takes no
+      // more ticks (the server would refuse them): drop it, and let this tap
+      // start today's — or, for an untick, simply show the empty checklist.
+      const shown = runRef.current;
+      if (shown && isPersisted(shown.run) && isStaleRun(shown.run)) {
+        resetRun(null);
+        latest.current.onNotice(STALE_NOTICE);
+        if (!checked) return;
+      }
       const nowIso = new Date().toISOString();
       if (checked) {
         // With nothing on screen, prefer the run the server still knows (an
@@ -288,7 +310,7 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
       commit(next.checks.length === 0 ? null : next);
       enqueue(() => sendUncheck(items[0].itemIndex, removed));
     },
-    [commit, enqueue, sendCheck, sendUncheck]
+    [commit, enqueue, resetRun, sendCheck, sendUncheck]
   );
 
   const discardRun = useCallback(async () => {
@@ -309,6 +331,23 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
       setRunBusy(false);
     }
   }, [commit, mergePeople]);
+
+  const startFresh = useCallback(async () => {
+    const current = runRef.current;
+    if (!current || !isLiveRun(current) || !isPersisted(current.run)) return;
+    if (pendingRef.current > 0) return;
+    setRunBusy(true);
+    latest.current.onError(null);
+    try {
+      await patchRun(current.run.id, { action: 'abandon' });
+      resetRun(null);
+      latest.current.onNotice('Saved as left unfinished — the checklist is ready to start fresh.');
+    } catch (e) {
+      latest.current.onError(e instanceof Error ? e.message : 'Failed to start fresh');
+    } finally {
+      setRunBusy(false);
+    }
+  }, [resetRun]);
 
   // Discarding a run with nothing resolved loses nothing and goes straight
   // through; one with checks on it confirms in the dialog first.
@@ -366,6 +405,7 @@ export function useSopRun(options: UseSopRunOptions): SopRunController {
     toggleCheck,
     requestDiscard,
     discardRun,
+    startFresh,
     startAgain,
     resetRun,
   };

@@ -3,7 +3,8 @@
 // optionally recording a first check in the same request, since the UI starts
 // a run implicitly when the first box is tapped, or checking every item at
 // once (checkAll — a parent checklist ticking off the item that links here) —
-// PATCH resolves/un-resolves items or discards the run, GET fetches a single
+// PATCH resolves/un-resolves items, discards the run, or abandons it (Start
+// fresh), GET fetches a single
 // run (?id=), the in-progress run for a document (?sopId=), every unfinished
 // run the caller may view (?view=active — the library's in-progress strip),
 // or the run log (?view=list — every run of the SOPs the caller may view),
@@ -22,13 +23,16 @@
 // (same effect as discard), so a stray first tap that gets untapped never
 // litters the log.
 //
-// A run stays in progress until every item is resolved — there is no
-// stepping out of one to come back later. Discard is the escape hatch for a
-// checklist started by mistake: it deletes the run and its checks instead of
-// logging them, so the record only ever holds work that actually happened.
-// (Runs from before this: 'abandoned' ones from before discard replaced it,
-// and completed ones ended short by the old Finish action, still render in
-// the log — their missing items read as never checked.)
+// A run stays in progress until every item is resolved, or until the studio
+// day ends: a run started on an earlier day is stale (isStaleRun) — it is
+// never joined or ticked again, but closed as 'abandoned' and kept in the log
+// with its missing items named, and the next tap starts today's run. The
+// hourly cron sweep (sop-run-expiry) closes the ones nobody reopens. Staff can
+// do the same by hand with Start fresh (action 'abandon'). Discard is the
+// escape hatch for a checklist started by mistake: it deletes the run and its
+// checks instead of logging them. (Completed runs ended short by the old
+// Finish action still render in the log — their missing items read as never
+// checked.)
 //
 // Permissions follow the document: anyone who may view an SOP may run it,
 // check items, and discard the open run (runs are shared per document, so
@@ -47,7 +51,9 @@ import { countTasks, forbiddenSkips, parseChecklist } from '@/lib/sops/checklist
 import { canViewSop, type SopViewer } from '@/lib/sops/levels';
 import { getPeopleNames } from '@/lib/sops/people';
 import { getSopRole } from '@/lib/sops/role';
+import { isStaleRun } from '@/lib/sops/run-day';
 import {
+  abandonRun,
   attachUncheckedItems,
   completeIfFull,
   loadActiveRuns,
@@ -185,7 +191,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       .limit(LIST_LIMIT);
     if (listSopId) query = query.eq('sop_id', listSopId);
     if (status) {
-      // 'abandoned' only matches runs from before discard replaced it.
+      // 'abandoned' is a run left unfinished: Start fresh, or the end of its day.
       if (!['in_progress', 'completed', 'abandoned'].includes(status)) {
         return json({ error: 'status must be in_progress, completed, or abandoned' }, 400);
       }
@@ -354,10 +360,18 @@ export const POST: APIRoute = async ({ cookies, request }) => {
   }
 
   if (existingResult.error) return json({ error: existingResult.error.message }, 500);
-  const existing = existingResult.data;
+  let existing = existingResult.data as SopRunRow | null;
+  // A run left open from an earlier studio day is not joined: it closes as
+  // abandoned (kept in the log, its missing items named) and this tap starts
+  // today's run. The hourly sweep does the same for runs nobody reopens.
+  if (existing && isStaleRun(existing)) {
+    const { error: abandonError } = await abandonRun(db, existing.id, null);
+    if (abandonError) return json({ error: abandonError }, 500);
+    existing = null;
+  }
 
   if (existing) {
-    const run = existing as SopRunRow;
+    const run = existing;
     // The run's own snapshot, needed to expand checkAll and to know which
     // items that snapshot marks required. Skipped nothing and checking
     // nothing wholesale? Then it isn't read at all.
@@ -479,9 +493,10 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 
   // There is deliberately no 'complete': a run finishes itself when its last
   // item is resolved, so the record never carries items nobody accounted for.
+  // 'abandon' is Start fresh: it closes the run short but keeps it in the log.
   const action = body.action;
-  if (typeof action !== 'string' || !['check', 'uncheck', 'discard'].includes(action)) {
-    return json({ error: 'action must be check, uncheck, or discard' }, 400);
+  if (typeof action !== 'string' || !['check', 'uncheck', 'discard', 'abandon'].includes(action)) {
+    return json({ error: 'action must be check, uncheck, discard, or abandon' }, 400);
   }
 
   const { data: runData, error: runError } = await db
@@ -498,6 +513,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (!sop || !canViewSop(viewer, sop)) return json({ error: 'Run not found' }, 404);
   if (run.status !== 'in_progress') {
     return json({ error: 'This run is already finished' }, 409);
+  }
+  // Yesterday's open run takes no more ticks: close it as abandoned and send
+  // the client back to start today's (it treats `stale` like a vanished run).
+  // Discard and abandon still apply — they end the run either way.
+  if ((action === 'check' || action === 'uncheck') && isStaleRun(run)) {
+    const { error: abandonError } = await abandonRun(db, runId, null);
+    if (abandonError) return json({ error: abandonError }, 500);
+    return json({ error: 'This checklist was left open from an earlier day', stale: true }, 409);
   }
 
   const email = gate.user.email ?? '';
@@ -574,6 +597,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       checks: remainingChecks,
       people: await getPeopleNames(runActors(run, remainingChecks)),
     });
+  } else if (action === 'abandon') {
+    // abandon — Start fresh: the run ends short and stays in the log (its
+    // unresolved items read as never checked), and the next tap starts a new
+    // one. Unlike discard, the work already done keeps its record.
+    const { error } = await abandonRun(db, runId, email);
+    if (error) return json({ error }, 500);
+    return json({ run: null, checks: [], abandoned: true });
   } else {
     // discard — started by mistake: erase the run and its checks (they
     // cascade) so nothing lands in the log. Only reachable while in progress
