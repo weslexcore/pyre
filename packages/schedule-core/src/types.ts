@@ -4,7 +4,6 @@
 // never UTC. Shared by apps/integrations (which re-exports them from lib/db)
 // and apps/agents.
 
-import type { TimeOffSeverity } from "./constants";
 import type { AssignmentDuty } from "./duties";
 
 /**
@@ -226,8 +225,8 @@ export interface SubRequestRow {
 	notified_count: number;
 	/** Optional reason from the requester — manager-side only (redacted for teammates). */
 	reason: string | null;
-	/** Optional: how badly they need it off. Visible to everyone. */
-	severity: TimeOffSeverity | null;
+	/** They marked it an emergency (can't work it). Visible to everyone. */
+	is_emergency: boolean;
 	created_at: string;
 	updated_at: string;
 }
@@ -243,8 +242,8 @@ export interface TimeOffRow {
 	starts_at: string | null;
 	ends_at: string | null;
 	note: string | null;
-	/** Optional: how badly they need it off; null = not given. */
-	severity: TimeOffSeverity | null;
+	/** The person can't work this time (illness, family emergency). */
+	is_emergency: boolean;
 	created_by: "staff" | "admin";
 	created_at: string;
 	updated_at: string;

@@ -141,8 +141,8 @@ export interface SubRequestNoticeProps {
   timeLabel: string;
   /** How many available people were emailed a claim link. */
   notifiedCount: number;
-  /** "Emergency" etc. — how badly they need it off; null = not given. */
-  severityLabel?: string | null;
+  /** They marked it an emergency (can't work it). */
+  emergency?: boolean;
   /** Their reason, if they gave one (admins only — never in the teammate email). */
   reason?: string | null;
   scheduleUrl: string;
@@ -155,9 +155,8 @@ export interface SubOpenNoticeProps {
   shiftLabel: string;
   dateLabel: string;
   timeLabel: string;
-  /** "Emergency" etc. — how badly they need it off; null = not given. The
-   * reason itself is never sent to teammates. */
-  severityLabel?: string | null;
+  /** They marked it an emergency. The reason itself is never sent to teammates. */
+  emergency?: boolean;
   /** Signed one-click claim link bound to this recipient. */
   claimUrl: string;
   scheduleUrl: string;

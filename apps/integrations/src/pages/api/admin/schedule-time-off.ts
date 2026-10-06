@@ -5,7 +5,6 @@
 // everyone else with the schedule page manages only their own — "own" means
 // the staff row whose email matches their login.
 
-import { isTimeOffSeverity } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
@@ -115,10 +114,8 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
   }
 
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
-  const severity = body.severity ?? null;
-  if (severity !== null && !isTimeOffSeverity(severity)) {
-    return "severity must be 'low', 'medium', or 'high'";
-  }
+  const emergency = body.emergency ?? false;
+  if (typeof emergency !== 'boolean') return 'emergency must be a boolean';
 
   return {
     staff_id: staffId,
@@ -129,7 +126,7 @@ function parseEntryColumns(body: Record<string, unknown>): Record<string, unknow
     starts_at: startsAt,
     ends_at: endsAt,
     note: note || null,
-    severity,
+    is_emergency: emergency,
   };
 }
 

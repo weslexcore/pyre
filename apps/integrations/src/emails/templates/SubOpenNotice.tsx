@@ -12,7 +12,7 @@ export function SubOpenNotice({
   shiftLabel,
   dateLabel,
   timeLabel,
-  severityLabel,
+  emergency,
   claimUrl,
   scheduleUrl,
 }: SubOpenNoticeProps) {
@@ -23,7 +23,7 @@ export function SubOpenNotice({
         {requesterName} needs a sub for the {shiftLabel} shift on {dateLabel} ({timeLabel}), and
         you're marked available that day.
       </Text>
-      {severityLabel && <Text style={text}>They marked it: {severityLabel}.</Text>}
+      {emergency && <Text style={text}>They marked it an emergency.</Text>}
       <Text style={text}>
         If you can take it, click below — first come, first served. The shift moves to you right
         away and the schedule updates for everyone.

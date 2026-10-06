@@ -41,7 +41,6 @@ import {
   onCallPeople,
   pairedDutyFor,
   SHIFT_LABEL_SUGGESTIONS,
-  type TimeOffSeverity,
   timeToMinutes,
   toggleDuty,
   weekStartOf,
@@ -65,11 +64,11 @@ import type {
 } from '@/lib/db';
 import { MAX_DRAFT_PROMPT_LENGTH } from '@/lib/schedule/draft-prompt';
 import { formatSignups, type ShiftSignups } from '@/lib/schedule/signups-format';
+import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { readMyShiftsPref, writeMyShiftsPref } from './myShiftsPref';
 import { WeekHoursSheet, WeekHoursSidebar, weekHoursRows } from './ScheduleWeekHours';
 import { StaffMultiSelect } from './StaffMultiSelect';
 import { filterChipClass, pillClass, toolbarCaptionClass } from './scheduleUi';
-import { SeverityChip, SeverityPicker } from './TimeOffSeverity';
 
 interface BoardShift extends ShiftRow {
   assignments: ShiftAssignmentRow[];
@@ -1772,15 +1771,7 @@ export function ScheduleBoard() {
                                   sub needed
                                 </span>
                               )}
-                              {subs.length > 0 && (
-                                <SeverityChip
-                                  severity={
-                                    subs.find((sub) => sub.severity === 'high')?.severity ??
-                                    subs.find((sub) => sub.severity === 'medium')?.severity ??
-                                    subs.find((sub) => sub.severity === 'low')?.severity
-                                  }
-                                />
-                              )}
+                              <EmergencyChip emergency={subs.some((sub) => sub.is_emergency)} />
                               {hoursChanges.length > 0 && (
                                 <span
                                   className="rounded bg-[var(--pyre-blue)]/25 px-2 py-0.5 font-mono text-xs text-[var(--pyre-creme)]"
@@ -2181,10 +2172,10 @@ function ShiftDetail({
       : null;
 
   // Sub request composer: an optional reason (logged on their time off, seen
-  // by managers only) and severity (seen by everyone asked to cover).
+  // by managers only) and an emergency flag (seen by everyone asked to cover).
   const [subDraft, setSubDraft] = useState<{
     reason: string;
-    severity: TimeOffSeverity | null;
+    emergency: boolean;
   } | null>(null);
 
   const requestSub = () => {
@@ -2196,7 +2187,7 @@ function ShiftDetail({
       api('POST', '/api/admin/shift-sub', {
         shiftId: shift.id,
         ...(reason ? { reason } : {}),
-        ...(draft.severity ? { severity: draft.severity } : {}),
+        ...(draft.emergency ? { emergency: true } : {}),
       })
     );
   };
@@ -2284,7 +2275,7 @@ function ShiftDetail({
                       {personSub.notified_count > 0 && ` · ${personSub.notified_count} asked`}
                     </span>
                   )}
-                  {personSub && <SeverityChip severity={personSub.severity} />}
+                  {personSub && <EmergencyChip emergency={personSub.is_emergency} />}
                   {hoursChange && (
                     <span
                       className="rounded bg-[var(--pyre-blue)]/25 px-1.5 py-0.5 font-mono text-[10px] text-[var(--pyre-creme)]"
@@ -2384,7 +2375,7 @@ function ShiftDetail({
                           title="Ask for a sub — logs the date as time off, emails the admins, and emails everyone available a link to take the shift"
                           disabled={busy}
                           onClick={() =>
-                            setSubDraft(subDraft ? null : { reason: '', severity: null })
+                            setSubDraft(subDraft ? null : { reason: '', emergency: false })
                           }
                         >
                           request a sub
@@ -2456,16 +2447,11 @@ function ShiftDetail({
                       available that day gets a link to take the shift. You stay on it until someone
                       does.
                     </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-white/50">
-                        How urgent (optional):
-                      </span>
-                      <SeverityPicker
-                        value={subDraft.severity}
-                        onChange={(severity) => setSubDraft({ ...subDraft, severity })}
-                        disabled={busy}
-                      />
-                    </div>
+                    <EmergencyToggle
+                      checked={subDraft.emergency}
+                      onChange={(emergency) => setSubDraft({ ...subDraft, emergency })}
+                      disabled={busy}
+                    />
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         className={`${inputClass} flex-1 min-w-48`}
@@ -2806,7 +2792,7 @@ function ShiftDetail({
                   needs a sub for {formatCompactTime(sub.starts_at)}–
                   {formatCompactTime(sub.ends_at)}
                 </span>
-                <SeverityChip severity={sub.severity} />
+                <EmergencyChip emergency={sub.is_emergency} />
                 {sub.reason && (
                   <span className="font-mono text-xs text-white/60">{sub.reason}</span>
                 )}
@@ -2838,7 +2824,7 @@ function ShiftDetail({
             for {formatCompactTime(takeableSub.starts_at)}–{formatCompactTime(takeableSub.ends_at)}{' '}
             — first come, first served.
           </span>
-          <SeverityChip severity={takeableSub.severity} />
+          <EmergencyChip emergency={takeableSub.is_emergency} />
           <button
             type="button"
             className={`${buttonClass} border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]`}

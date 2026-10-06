@@ -5,7 +5,6 @@
 // collide with existing assignments over the coming weeks so the admin can
 // re-staff.
 
-import type { TimeOffSeverity } from '@pyre/schedule-core';
 import {
   addDays,
   DOW_LABELS,
@@ -17,9 +16,9 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { buttonClass, inputClass } from '@/components/admin/ui';
 import { invalidateJson } from '@/lib/client/cachedJson';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow, TimeOffRow } from '@/lib/db';
+import { EmergencyChip, EmergencyToggle } from './EmergencyChip';
 import { ScheduleShiftPrefs } from './ScheduleShiftPrefs';
 import { StaffMultiSelect } from './StaffMultiSelect';
-import { SeverityChip, SeverityPicker } from './TimeOffSeverity';
 
 interface BoardData {
   staff: StaffRow[];
@@ -85,7 +84,7 @@ export function ScheduleTimeOff() {
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [note, setNote] = useState('');
-  const [severity, setSeverity] = useState<TimeOffSeverity | null>(null);
+  const [emergency, setEmergency] = useState(false);
 
   // Conflicts are checked over today → +6 weeks of shifts.
   const rangeStart = useMemo(todayLocal, []);
@@ -162,7 +161,7 @@ export function ScheduleTimeOff() {
     setStartsAt('');
     setEndsAt('');
     setNote('');
-    setSeverity(null);
+    setEmergency(false);
   };
 
   const startEditing = (entry: TimeOffRow) => {
@@ -176,7 +175,7 @@ export function ScheduleTimeOff() {
     setStartsAt(hhmm(entry.starts_at));
     setEndsAt(hhmm(entry.ends_at));
     setNote(entry.note ?? '');
-    setSeverity(entry.severity ?? null);
+    setEmergency(entry.is_emergency);
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -201,7 +200,7 @@ export function ScheduleTimeOff() {
         startsAt: allDay ? null : startsAt || null,
         endsAt: allDay ? null : endsAt || null,
         note: note.trim() || null,
-        severity,
+        emergency,
       }),
     });
     if (!res.ok) {
@@ -240,7 +239,7 @@ export function ScheduleTimeOff() {
     >
       <span className="font-medium">{staffById.get(entry.staff_id)?.display_name ?? '?'}</span>
       <span className="font-mono text-xs text-white/60">{describeEntry(entry)}</span>
-      <SeverityChip severity={entry.severity} />
+      <EmergencyChip emergency={entry.is_emergency} />
       {entry.note && <span className="font-mono text-xs text-white/40">{entry.note}</span>}
       {canTouch(entry) && (
         <span className="ml-auto flex gap-3">
@@ -445,12 +444,7 @@ export function ScheduleTimeOff() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-white/40">
-              Severity (optional)
-            </span>
-            <SeverityPicker value={severity} onChange={setSeverity} disabled={busy} />
-          </div>
+          <EmergencyToggle checked={emergency} onChange={setEmergency} disabled={busy} />
 
           <div className="flex flex-wrap items-center gap-2">
             <input

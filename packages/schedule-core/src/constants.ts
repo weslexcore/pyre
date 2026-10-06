@@ -23,27 +23,3 @@ export const SHIFT_LABEL_SUGGESTIONS = [
  * sit on past shifts — but not indefinitely: older asks fall off the queue.
  */
 export const HOURS_CHANGE_LOOKBACK_DAYS = 35;
-
-/**
- * How badly someone needs time off (time_off.severity, sub_requests.severity
- * — mirrors their check constraints). Optional everywhere; null = not given.
- */
-export const TIME_OFF_SEVERITIES = ['low', 'medium', 'high'] as const;
-export type TimeOffSeverity = (typeof TIME_OFF_SEVERITIES)[number];
-
-export const TIME_OFF_SEVERITY_LABELS: Record<TimeOffSeverity, string> = {
-  low: 'Flexible',
-  medium: 'Needed',
-  high: 'Emergency',
-};
-
-/** What each level means, for pickers and tooltips. */
-export const TIME_OFF_SEVERITY_HINTS: Record<TimeOffSeverity, string> = {
-  low: 'Would prefer it off — can still work it if nobody covers',
-  medium: 'Needs it off — plans or commitments',
-  high: "Can't work it — illness or emergency",
-};
-
-export function isTimeOffSeverity(value: unknown): value is TimeOffSeverity {
-  return typeof value === 'string' && (TIME_OFF_SEVERITIES as readonly string[]).includes(value);
-}

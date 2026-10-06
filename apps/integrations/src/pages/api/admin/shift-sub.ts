@@ -9,13 +9,7 @@
 // (lib/schedule/settings.ts). Claiming and cancelling are not — an open
 // request made before the switch flipped must still be resolvable.
 
-import {
-  availabilityFor,
-  isTimeOffSeverity,
-  TIME_OFF_SEVERITY_LABELS,
-  timeToMinutes,
-  todayEastern,
-} from '@pyre/schedule-core';
+import { availabilityFor, timeToMinutes, todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { APIRoute } from 'astro';
 import { hasScheduleManage } from '@/components/admin/adminTools';
@@ -82,12 +76,11 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 
   const shiftId = body.shiftId;
   if (typeof shiftId !== 'string' || !shiftId) return json({ error: 'shiftId is required' }, 400);
-  // Optional: why they need it off (manager-side only) and how badly.
+  // Optional: why they need it off (manager-side only), and whether it's an
+  // emergency (everyone asked to cover is told).
   const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
-  const severity = body.severity ?? null;
-  if (severity !== null && !isTimeOffSeverity(severity)) {
-    return json({ error: "severity must be 'low', 'medium', or 'high'" }, 400);
-  }
+  const emergency = body.emergency ?? false;
+  if (typeof emergency !== 'boolean') return json({ error: 'emergency must be a boolean' }, 400);
 
   const self = await selfStaff(db, gate);
   if (!self) return json({ error: "Your login isn't linked to the schedule roster" }, 403);
@@ -130,7 +123,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       starts_at: assignment.starts_at,
       ends_at: assignment.ends_at,
       note: `Requested a sub for '${shift.label}'${reason ? `: ${reason}` : ''}`,
-      severity,
+      is_emergency: emergency,
       created_by: 'staff',
     })
     .select('*')
@@ -149,7 +142,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
       duties: assignment.duties,
       time_off_id: timeOff.id,
       reason: reason || null,
-      severity,
+      is_emergency: emergency,
     })
     .select('*')
     .single();
@@ -165,9 +158,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     entityType: 'sub_request',
     entityId: sub.id,
     action: 'create',
-    summary: `${self.display_name} requested a sub for ${shiftDesc} (${formatWindowLabel(sub)})${
-      severity ? ` — ${TIME_OFF_SEVERITY_LABELS[severity]}` : ''
-    }${reason ? `: ${reason}` : ''}`,
+    summary: `${self.display_name} requested a sub for ${shiftDesc} (${formatWindowLabel(sub)})${emergency ? ' — emergency' : ''}${reason ? `: ${reason}` : ''}`,
     details: { after: sub },
   });
   await logScheduleChange(db, {
@@ -227,7 +218,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           ...shared,
           firstName: person.display_name,
           requesterName: self.display_name,
-          severityLabel: severity ? TIME_OFF_SEVERITY_LABELS[severity] : null,
+          emergency,
           claimUrl: `${origin}/api/schedule/sub-claim?token=${encodeURIComponent(token)}`,
         },
         kind: 'transactional',
@@ -250,7 +241,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
           ...shared,
           staffName: self.display_name,
           notifiedCount: availableNotified,
-          severityLabel: severity ? TIME_OFF_SEVERITY_LABELS[severity] : null,
+          emergency,
           reason: reason || null,
         },
         kind: 'transactional',
@@ -269,7 +260,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     window: assignment,
     requesterStaffId: self.id,
     candidateStaffIds: available.map((person) => person.id),
-    severityLabel: severity ? TIME_OFF_SEVERITY_LABELS[severity] : null,
+    emergency,
     actorEmail: actor.email,
   });
 

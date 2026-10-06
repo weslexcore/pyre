@@ -110,15 +110,15 @@ export function subRequestText(input: {
   window: { starts_at: string; ends_at: string };
   requesterName: string;
   claimerName?: string | null;
-  /** "Emergency" etc., appended to the requested notice; null = not given. */
-  severityLabel?: string | null;
+  /** Marked an emergency — flagged on the requested notice. */
+  emergency?: boolean;
   /** The reader is the requester (claimed: "X is covering your shift"). */
   forRequester?: boolean;
   /** The reader could claim it (requested: "Can you cover…?"). */
   forCandidate?: boolean;
 }): { title: string; body: string } {
   const when = `${shiftPhrase(input.shift)}, ${shortWindow(input.window)}`;
-  const severity = input.severityLabel ? ` · ${input.severityLabel}` : '';
+  const severity = input.emergency ? ' · Emergency' : '';
   switch (input.event) {
     case 'requested':
       return input.forCandidate
