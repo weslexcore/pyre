@@ -41,7 +41,7 @@ import type {
 import { FIELD_LIMITS } from '@/lib/inventory/validate';
 import { useCardAutosave } from './boards/useCardAutosave';
 import { ErrorBanner } from './ErrorBanner';
-import { Chip, primaryButtonClass } from './incidentUi';
+import { Chip } from './incidentUi';
 import { dialogPanelClass, INVENTORY_API, LowBadge, takeItemParam } from './inventoryUi';
 import { Modal } from './Modal';
 
@@ -83,6 +83,20 @@ function useStableClose(close: () => Promise<void>) {
 const focusOnMount = (el: HTMLInputElement | null) => el?.focus();
 
 /** Edits to existing records save as they're made; this says how that's going. */
+/** A new record is added when its dialog closes; this says so, with a way out. */
+function AddOnClose({ busy, onDiscard }: { busy: boolean; onDiscard: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span role="status" className="flex-1 text-xs text-white/50">
+        {busy ? 'Saving…' : 'Saves when you close'}
+      </span>
+      <button type="button" disabled={busy} className={buttonClass} onClick={onDiscard}>
+        Discard
+      </button>
+    </div>
+  );
+}
+
 function SaveStatus({ autosave, problem }: { autosave: Autosave; problem?: string | null }) {
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   return (
@@ -295,9 +309,11 @@ function AreaDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A new area's missing name is only pointed out once they try to close.
+  const [triedClose, setTriedClose] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const autosave = useCardAutosave(onAutosave);
-  const problem = area && !name.trim() ? 'An area needs a name.' : null;
+  const problem = (area || triedClose) && !name.trim() ? 'An area needs a name.' : null;
 
   const submit = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -326,7 +342,14 @@ function AreaDialog({
     if (area) autosave.schedule({ countEveryDays: next }, 0);
   };
 
+  // Closing adds a new area; one left blank is just dropped.
   const close = useStableClose(async () => {
+    if (busy) return;
+    if (!area) {
+      if (!name.trim() && !description.trim() && countEveryDays === null) return onClose();
+      if (!name.trim()) return setTriedClose(true);
+      return submit({ name, description, countEveryDays });
+    }
     if (problem) return;
     if (await autosave.flush()) onClose();
   });
@@ -398,14 +421,7 @@ function AreaDialog({
           )}
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={busy || !name.trim()}
-          onClick={() => submit({ name, description, countEveryDays })}
-          className={`${primaryButtonClass} w-full`}
-        >
-          {busy ? 'Saving…' : 'Add area'}
-        </button>
+        <AddOnClose busy={busy} onDiscard={onClose} />
       )}
     </Modal>
   );
@@ -1153,7 +1169,7 @@ function ItemDialog({
   const categoryOptions = data.categories.filter((c) => c.active || c.id === item?.category_id);
 
   // An existing item saves each change as it's made (typing waits for a
-  // pause; picks save at once). A new item is added with the button.
+  // pause; picks save at once). A new item is added when the dialog closes.
   const autosave = useCardAutosave(async (patch) => {
     if (!item) return;
     await sendJson(`${ITEMS_API}?id=${item.id}`, 'PATCH', patch);
@@ -1174,9 +1190,29 @@ function ItemDialog({
         autosave.schedule(Object.fromEntries(keys.map((k) => [k, next[k]])), delay);
       }
     };
-  const problem = item ? (Object.values(itemProblems(form, isVariant))[0] ?? null) : null;
+  // A new item's problems are only pointed out once they try to close.
+  const [triedClose, setTriedClose] = useState(false);
+  const variantList = form.variants
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const firstProblem =
+    Object.values(itemProblems(form, isVariant))[0] ??
+    (withVariants && variantList.length === 0 ? 'List at least one variant.' : null);
+  const problem = item || triedClose ? firstProblem : null;
 
+  // Closing adds a new item; one left untouched is just dropped.
   const close = useStableClose(async () => {
+    if (busy) return;
+    if (!item) {
+      const untouched =
+        JSON.stringify(form) === JSON.stringify(formFor(null)) &&
+        Object.keys(placements).length === 0;
+      if (untouched) return onClose();
+      setTriedClose(true);
+      if (!firstProblem) await add();
+      return;
+    }
     if (problem) return;
     if (await autosave.flush()) onClose();
   });
@@ -1199,10 +1235,6 @@ function ItemDialog({
   const product = item?.product_id
     ? data.products.find((p) => p.id === item.product_id)
     : undefined;
-  const variantList = form.variants
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
 
   const add = () => {
     const { name, variant, variants, categoryId, ...settings } = form;
@@ -1556,20 +1588,9 @@ function ItemDialog({
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={
-            busy || !form.unitId || !form.name.trim() || (withVariants && variantList.length === 0)
-          }
-          onClick={add}
-          className={`${primaryButtonClass} mt-4 w-full`}
-        >
-          {busy
-            ? 'Saving…'
-            : withVariants
-              ? `Add ${variantList.length || ''} variant${variantList.length === 1 ? '' : 's'}`
-              : 'Add item'}
-        </button>
+        <div className="mt-4">
+          <AddOnClose busy={busy} onDiscard={onClose} />
+        </div>
       )}
     </Modal>
   );
