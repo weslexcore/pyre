@@ -323,9 +323,9 @@ describe('dose sizing by plunge volume', () => {
 });
 
 describe('scaleGrams and shockDoses', () => {
-  it('scales the shock pair', () => {
-    expect(shockDoses(120).map((d) => d.grams)).toEqual([10, 30]);
-    expect(shockDoses(60).map((d) => d.grams)).toEqual([5, 15]);
+  it('shocks with oxidizer only, scaled to the plunge', () => {
+    expect(shockDoses(120)).toEqual([{ chemical: PRODUCTS.oxidizer, grams: 30 }]);
+    expect(shockDoses(60)).toEqual([{ chemical: PRODUCTS.oxidizer, grams: 15 }]);
   });
 
   it('is the identity at the chart volume', () => {

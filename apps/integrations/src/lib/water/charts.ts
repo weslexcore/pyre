@@ -171,13 +171,13 @@ export const SALT_DOSE_TO_PPM = 2350;
 // Salt for a fresh fill of CHART_GALLONS.
 export const FRESH_FILL_SALT_GRAMS = 920;
 
-// Weekly shock treatment: fixed pair, tub closed, cover off 20+ min, reopen
-// only once chlorine is back in the 1–3 ppm range.
-export const SHOCK_DOSES = [
-  { chemical: PRODUCTS.sanitizer, grams: 10 },
-  { chemical: PRODUCTS.oxidizer, grams: 30 },
-] as const;
+// Weekly shock treatment: oxidizer only (potassium peroxymonosulfate), tub
+// closed, cover off 20+ min. The manual pairs it with 10 g of sanitizer, but
+// that dichlor adds ~14 ppm free chlorine in 120 gal and kept the tub above
+// the limit into the next day; the salt cell supplies the chlorine, and a low
+// reading is topped up by the test that comes first, sized to ~2 ppm.
+export const SHOCK_DOSES = [{ chemical: PRODUCTS.oxidizer, grams: 30 }] as const;
 
-/** The shock pair sized for a plunge's volume. */
+/** The shock dose sized for a plunge's volume. */
 export const shockDoses = (gallons: number): { chemical: string; grams: number }[] =>
   SHOCK_DOSES.map((dose) => ({ chemical: dose.chemical, grams: scaleGrams(dose.grams, gallons) }));

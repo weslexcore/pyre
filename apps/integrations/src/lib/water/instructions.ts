@@ -33,19 +33,20 @@ const buildInstructions = (gallons: number): Partial<Record<EntryType, Instructi
       {
         steps: [
           'Close the tub to guests.',
-          'Test first, log it, and adjust. Shock works poorly in unbalanced water.',
+          'Test first, log it, and adjust. Shock works poorly in unbalanced water. If free chlorine is low, the test recommends a small sanitizer dose — that is the only sanitizer a shock needs.',
           'Turn on the tub jets.',
-          'Add the sanitizer + oxidizer.',
+          'Add the oxidizer. No extra sanitizer: it sends chlorine far above the limit, and the tub cannot open the next day.',
           'Leave the cover OFF for at least 20 minutes with the pumps running. Mandatory: the gases need to vent, and trapped gas destroys the underside of the cover.',
           'Put everything away.',
           'Wait at least 1 hour from adding the oxidizer, then retest TA and pH.',
-          'Retest chlorine before reopening. The tub reopens only when chlorine is back in the 1–3 ppm range. Above 5 ppm: keep it closed, pumps running, retest every 30 minutes. Never let a guest in above 5 ppm.',
+          'Retest chlorine before reopening. The tub reopens only when chlorine is in the 1–3 ppm range. Above 5 ppm: keep it closed, pumps running, retest every 30 minutes. Never let a guest in above 5 ppm.',
+          "For about a day after a shock, combined chlorine (CC) can read falsely high — the oxidizer shows up as CC in the test. Don't shock again on that reading alone; retest the next day.",
           'Log it: doses added, final readings, notes.',
         ],
       },
     ],
     footnote:
-      'Closing for the night right after shocking? The tub can stay closed and chlorine drift down overnight, but the cover still stays off (or propped open) for the first 20+ minutes, and the opening shift must test before the first guest.',
+      'Closing for the night right after shocking? The cover still stays off (or propped open) for the first 20+ minutes, and the opening shift must test before the first guest.',
   },
   filter: {
     title: 'How to rinse or change the filter',
