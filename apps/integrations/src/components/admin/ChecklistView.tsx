@@ -13,7 +13,7 @@
 // run then shows ticked and locked, with Start again in the header, until
 // someone clears it.
 //
-// While a run is going, Outstanding only cuts the document down to the items
+// While a run is going, Show To Do cuts the document down to the items
 // still to do, so a long checklist reads as what's left rather than a scroll
 // past everything already ticked.
 //
@@ -37,7 +37,7 @@ const STICKY_TOP = { nav: 'top-14', none: 'top-0' } as const;
 const headerButtonClass =
   'px-3 py-1.5 rounded border border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-xs font-mono uppercase tracking-wide text-[var(--pyre-gold)] hover:border-[var(--pyre-gold)] transition-colors disabled:opacity-40';
 
-// Outstanding only, while off: quiet, like Discard, but without the red.
+// Show To Do, while off: quiet, like Discard, but without the red.
 const filterOffButtonClass =
   'rounded border border-white/10 px-3 py-1.5 font-mono text-xs uppercase tracking-wide text-white/50 transition-colors hover:border-white/30 hover:text-white/80';
 
@@ -161,7 +161,7 @@ export function ChecklistView({
                     aria-pressed={filtering}
                     onClick={() => setOutstandingOnly((on) => !on)}
                   >
-                    Outstanding only
+                    Show To Do
                   </button>
                   {onStartFresh && (
                     <button
