@@ -12,6 +12,7 @@
 import { cachedQuery } from '@/lib/cached-query';
 import { getDb } from '@/lib/db';
 import {
+  type AnySettingValue,
   parseEnvValue,
   parseSettingValue,
   SETTING_KEYS,
@@ -58,11 +59,11 @@ async function loadRows(): Promise<Map<string, Row>> {
   return (await settingsCache.get()) ?? new Map();
 }
 
-function fallbackFor(key: SettingKey): { value: boolean | string[]; source: 'env' | 'default' } {
+function fallbackFor(key: SettingKey): { value: AnySettingValue; source: 'env' | 'default' } {
   const fromEnv = parseEnvValue(key, ENV_READERS[key]?.());
   if (fromEnv !== undefined) return { value: fromEnv, source: 'env' };
-  const def: boolean | readonly string[] = SETTINGS[key].default;
-  return { value: typeof def === 'boolean' ? def : [...def], source: 'default' };
+  // A copy, so nothing downstream can change the registry's default.
+  return { value: structuredClone(SETTINGS[key].default) as AnySettingValue, source: 'default' };
 }
 
 function resolve(key: SettingKey, rows: Map<string, Row>): SettingView {
@@ -105,7 +106,7 @@ export async function getAllSettings(): Promise<SettingView[]> {
 /** Save a setting's value (already checked with parseSettingValue). */
 export async function saveSetting(
   key: SettingKey,
-  value: boolean | string[],
+  value: AnySettingValue,
   updatedBy: string | null
 ): Promise<{ error: string | null }> {
   const db = getDb();

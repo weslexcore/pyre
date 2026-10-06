@@ -15,9 +15,34 @@ describe('parsePayload board_card.create', () => {
         title: 'Replace filter',
         notesMd: '',
         dueDate: null,
+        assigneeEmails: [],
+        severity: null,
+        importance: null,
         properties: {},
       },
     });
+  });
+
+  it('reads assignees, severity and importance', () => {
+    const parsed = parsePayload('board_card.create', {
+      board: 'goals',
+      title: 'Fix the heater',
+      assigneeEmails: ['Jo@pyresauna.com', 'jo@pyresauna.com'],
+      severity: 'high',
+      importance: 'low',
+    });
+    expect(parsed.ok && parsed.value).toMatchObject({
+      assigneeEmails: ['jo@pyresauna.com'],
+      severity: 'high',
+      importance: 'low',
+    });
+  });
+
+  it('refuses an unknown rating or a bad assignee', () => {
+    const base = { board: 'goals', title: 'x' };
+    expect(parsePayload('board_card.create', { ...base, severity: 'urgent' }).ok).toBe(false);
+    expect(parsePayload('board_card.create', { ...base, importance: 'huge' }).ok).toBe(false);
+    expect(parsePayload('board_card.create', { ...base, assigneeEmails: ['jo'] }).ok).toBe(false);
   });
 
   it('refuses a missing title and a bad due date', () => {

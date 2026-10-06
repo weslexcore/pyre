@@ -5,13 +5,26 @@ import { loadColumns } from '@/lib/boards/store';
 import { GOALS_BOARD_SLUG, kindIsChecklist, kindIsSettled } from '@/lib/boards/types';
 import { normalizeProperties, parseCardCreate } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardRow } from '@/lib/db';
-import { cardHref, PAYLOAD_PARSERS } from '../types';
+import { IMPORTANCE_LABELS, SEVERITY_LABELS } from '../priority';
+import { type CardCreatePayload, cardHref, PAYLOAD_PARSERS } from '../types';
 import { type KindHandler, originDetail } from './handler';
 
-/** The link back, appended to the card's notes so it travels with the card. */
-function withOriginLine(notes: string, origin: { label: string; href: string } | null): string {
-  if (!origin) return notes;
-  const line = `From [${origin.label}](${origin.href})`;
+/**
+ * The link back and how urgent it was rated, appended to the card's notes so
+ * they travel with the card.
+ */
+function withOriginLine(
+  notes: string,
+  origin: { label: string; href: string } | null,
+  rating: Pick<CardCreatePayload, 'severity' | 'importance'>
+): string {
+  const parts = [
+    origin ? `From [${origin.label}](${origin.href})` : null,
+    rating.severity ? `${SEVERITY_LABELS[rating.severity]} severity` : null,
+    rating.importance ? `${IMPORTANCE_LABELS[rating.importance]} importance` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return notes;
+  const line = parts.join(' · ');
   return notes ? `${notes}\n\n${line}` : line;
 }
 
@@ -105,8 +118,10 @@ export const boardCardCreate: KindHandler<'board_card.create'> = {
 
     const parsed = parseCardCreate({
       title: payload.title,
-      notesMd: withOriginLine(payload.notesMd, context.origin),
+      notesMd: withOriginLine(payload.notesMd, context.origin, payload),
       dueDate: payload.dueDate,
+      // Empty takes the board's default assignees (the insert trigger).
+      assigneeEmails: payload.assigneeEmails,
       columnId,
     });
     if (!parsed.ok) throw new Error(parsed.error);
@@ -118,7 +133,11 @@ export const boardCardCreate: KindHandler<'board_card.create'> = {
       actor: context.actor,
       source: 'suggestion',
       suggestionId: context.suggestion.id,
-      eventDetail: originDetail(context),
+      eventDetail: {
+        ...originDetail(context),
+        ...(payload.severity ? { severity: payload.severity } : {}),
+        ...(payload.importance ? { importance: payload.importance } : {}),
+      },
     });
     if (!created.ok) throw new Error(created.error);
     return {

@@ -9,6 +9,7 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { readError } from '@/lib/client/api';
 import { etStamp } from '@/lib/client/format';
 import {
+  type AnySettingValue,
   SETTING_SECTIONS,
   SETTINGS,
   type SettingDefinition,
@@ -17,6 +18,14 @@ import {
 } from '@/lib/settings/registry';
 import type { PeopleNames } from '@/lib/sops/names';
 import { personName } from '@/lib/sops/names';
+import {
+  type DueDays,
+  IMPORTANCE_LABELS,
+  IMPORTANCES,
+  MAX_DUE_DAYS,
+  SEVERITIES,
+  SEVERITY_LABELS,
+} from '@/lib/suggestions/priority';
 import { ADMIN_TOOL_SECTIONS, HIDEABLE_TOOLS } from './adminTools';
 
 /** Settings that still live on the page they belong to. */
@@ -33,8 +42,9 @@ const ELSEWHERE: { href: string; label: string; description: string }[] = [
   },
 ];
 
-function describeValue(def: SettingDefinition, value: boolean | string[]): string {
+function describeValue(def: SettingDefinition, value: AnySettingValue): string {
   if (def.type === 'boolean') return value ? 'on' : 'off';
+  if (def.type === 'due_days') return 'the default days';
   const labels = def.options
     .filter((o) => (value as string[]).includes(o.value))
     .map((o) => o.label);
@@ -76,6 +86,105 @@ function Toggle({
   );
 }
 
+/** One cell of the due-days grid: whole days, or blank for no due date. Saves on blur. */
+function DueDaysCell({
+  value,
+  label,
+  disabled,
+  onCommit,
+}: {
+  value: number | null;
+  label: string;
+  disabled: boolean;
+  onCommit: (next: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(value === null ? '' : String(value));
+  useEffect(() => setDraft(value === null ? '' : String(value)), [value]);
+  const commit = () => {
+    const text = draft.trim();
+    const next = text === '' ? null : Number(text);
+    if (next !== null && (!Number.isInteger(next) || next < 0 || next > MAX_DUE_DAYS)) {
+      setDraft(value === null ? '' : String(value));
+      return;
+    }
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={MAX_DUE_DAYS}
+      aria-label={label}
+      placeholder="none"
+      disabled={disabled}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      className="w-16 rounded border border-white/15 bg-black/30 px-2 py-1 text-right font-mono text-xs text-[var(--pyre-creme)] focus:border-[var(--pyre-gold)]/60 focus:outline-none disabled:opacity-40"
+    />
+  );
+}
+
+function DueDaysGrid({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: DueDays;
+  disabled: boolean;
+  onChange: (next: DueDays) => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs">
+        <thead>
+          <tr>
+            <th className="pb-1 pr-3 text-left font-mono text-[10px] font-normal uppercase tracking-wide text-white/40">
+              Severity / importance
+            </th>
+            {IMPORTANCES.map((importance) => (
+              <th
+                key={importance}
+                className="px-1 pb-1 text-right font-mono text-[10px] font-normal uppercase tracking-wide text-white/50"
+              >
+                {IMPORTANCE_LABELS[importance]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {SEVERITIES.map((severity) => (
+            <tr key={severity}>
+              <th className="py-0.5 pr-3 text-left font-mono text-[10px] font-normal uppercase tracking-wide text-white/50">
+                {SEVERITY_LABELS[severity]}
+              </th>
+              {IMPORTANCES.map((importance) => (
+                <td key={importance} className="px-1 py-0.5 text-right">
+                  <DueDaysCell
+                    value={value[severity][importance]}
+                    label={`Days for ${SEVERITY_LABELS[severity]} severity, ${IMPORTANCE_LABELS[importance]} importance`}
+                    disabled={disabled}
+                    onCommit={(next) =>
+                      onChange({ ...value, [severity]: { ...value[severity], [importance]: next } })
+                    }
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 font-mono text-[10px] text-white/40">
+        Days from the day the task is suggested. 0 is due the same day.
+      </p>
+    </div>
+  );
+}
+
 function SettingRow({
   view,
   people,
@@ -86,7 +195,7 @@ function SettingRow({
   view: SettingView;
   people: PeopleNames;
   busy: boolean;
-  onSave: (key: SettingKey, value: boolean | string[]) => void;
+  onSave: (key: SettingKey, value: AnySettingValue) => void;
   onReset: (key: SettingKey) => void;
 }) {
   const def = SETTINGS[view.key] as SettingDefinition;
@@ -158,6 +267,13 @@ function SettingRow({
             </div>
           ))}
         </div>
+      )}
+      {def.type === 'due_days' && (
+        <DueDaysGrid
+          value={view.value as DueDays}
+          disabled={busy}
+          onChange={(next) => onSave(view.key, next)}
+        />
       )}
       {def.type === 'multi_choice' && view.key !== 'navigation.hiddenTools' && (
         <div className="flex flex-wrap gap-2">
@@ -236,7 +352,7 @@ export function SettingsPage({ initial, people }: { initial: SettingView[]; peop
     }
   };
 
-  const save = (key: SettingKey, value: boolean | string[]) =>
+  const save = (key: SettingKey, value: AnySettingValue) =>
     void call(
       key,
       fetch('/api/admin/settings', {

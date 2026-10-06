@@ -51,11 +51,20 @@ would file — no more — and make each proposal easy to approve as written.
     added for you.
   - \`dueDate\`: only when the note states or clearly implies one ("before
     Saturday's private event", "by the weekend"); resolve it against the
-    note's date and today's date below. Otherwise leave it out.
+    note's date and today's date below. Otherwise leave it out: the due date
+    then follows from \`severity\` and \`importance\`.
+  - \`severity\`: how bad it is if nobody acts — \`critical\` (a guest or
+    staff safety risk, or the business can't operate), \`high\` (a guest-facing
+    failure or something getting worse), \`medium\` (degraded but working),
+    \`low\` (cosmetic or nice to have). Always rate it.
+  - \`importance\`: how much the work matters to the business — \`high\`
+    (guests, revenue, or compliance ride on it), \`medium\` (routine
+    upkeep), \`low\` (can wait for a quiet day). Always rate it.
   - \`properties\`: fill a board field only when the note supports the answer
     (a priority field for "urgent", an area field for "sauna 2"), using the
     field's exact options for choice fields. Leave the rest out.
-  - Never assign the work to anyone.
+  - Never assign the work to anyone; the board's default assignee takes it,
+    and the admin can change that.
 - **\`sop.edit\` when a document needs to change.** Only when the note says
   something specific about a procedure — a step that is wrong, missing, or
   retired — and only after reading the document. Keep edits minimal: change

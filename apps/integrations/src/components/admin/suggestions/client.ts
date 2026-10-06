@@ -1,7 +1,9 @@
 // The review UI's calls to /api/admin/suggestions, shared by the panel on a
 // source record (useSuggestions) and the inbox. Client-bundle-safe.
 
+import type { Assignable } from '@/lib/boards/people';
 import type { BoardFieldRow } from '@/lib/db';
+import type { DueDays } from '@/lib/suggestions/priority';
 import type {
   SuggestionResultLink,
   SuggestionSourceType,
@@ -81,16 +83,25 @@ export interface BoardOption {
   /** Open columns, then done ones (for work already finished). */
   columns: { key: string; label: string; kind: 'open' | 'done' }[];
   fields: BoardFieldRow[];
+  /** Who a new card here is put on when nobody is named. */
+  default_assignee_emails: string[];
 }
 
-let boardsPromise: Promise<BoardOption[]> | null = null;
+/** What the card editor picks from: the boards, who can be assigned, and the due-days grid. */
+export interface CardContext {
+  boards: BoardOption[];
+  owners: Assignable[];
+  dueDays: DueDays;
+}
 
-/** The active boards, fetched once per page. */
-export function loadBoardOptions(): Promise<BoardOption[]> {
+let boardsPromise: Promise<CardContext> | null = null;
+
+/** The active boards and their pickers, fetched once per page. */
+export function loadBoardOptions(): Promise<CardContext> {
   boardsPromise ??= fetch(`${ENDPOINT}?context=boards`)
     .then(async (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return ((await res.json()) as { boards: BoardOption[] }).boards;
+      return (await res.json()) as CardContext;
     })
     .catch((error) => {
       boardsPromise = null;

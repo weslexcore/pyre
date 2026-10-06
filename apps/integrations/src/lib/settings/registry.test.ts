@@ -43,6 +43,15 @@ describe('parseEnvValue', () => {
   });
 });
 
+describe('the due-days grid', () => {
+  it('saves a grid and has no environment spelling', () => {
+    const grid = SETTINGS['suggestions.dueDays'].default;
+    expect(parseSettingValue('suggestions.dueDays', grid)).toEqual({ ok: true, value: grid });
+    expect(parseSettingValue('suggestions.dueDays', true).ok).toBe(false);
+    expect(parseEnvValue('suggestions.dueDays', '3')).toBeUndefined();
+  });
+});
+
 describe('the registry', () => {
   it('keeps every default valid', () => {
     for (const [key, def] of Object.entries(SETTINGS)) {

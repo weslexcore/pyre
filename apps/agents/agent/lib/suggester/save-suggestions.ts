@@ -44,7 +44,17 @@ export const saveSuggestionsInput = z.object({
               .max(4000)
               .optional()
               .describe('What whoever picks it up needs to know.'),
-            dueDate: dateString.optional().describe('Only when the note states or implies one.'),
+            dueDate: dateString
+              .optional()
+              .describe(
+                'Only when the note states or implies one; otherwise it follows from severity and importance.'
+              ),
+            severity: z
+              .enum(['critical', 'high', 'medium', 'low'])
+              .describe('How bad it is if nobody acts.'),
+            importance: z
+              .enum(['high', 'medium', 'low'])
+              .describe('How much the work matters to the business.'),
             properties: z
               .record(
                 z.string(),

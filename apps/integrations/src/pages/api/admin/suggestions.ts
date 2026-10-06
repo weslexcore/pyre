@@ -8,7 +8,7 @@
 //   GET ?status=pending|decided&kind=&sourceType=&limit=
 //                                    → { suggestions, sources, results, targets, people }  (the inbox)
 //   GET ?count=1                     → { pending }
-//   GET ?context=boards              → { boards } (the card editor's pickers)
+//   GET ?context=boards              → { boards, owners, dueDays } (the card editor's pickers)
 //   GET ?context=sop&id=<uuid>       → { sop } (current text, for the diff)
 //   PATCH { id, payload }            → { suggestion }  (save a working copy)
 //   POST { action: 'approve', id, payload?, note? } → { suggestion, result }
@@ -20,6 +20,7 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { listAssignable } from '@/lib/boards/people';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
@@ -108,10 +109,10 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
   const context = params.get('context');
   if (context === 'boards') {
-    const [boards, columns, fields] = await Promise.all([
+    const [boards, columns, fields, owners, dueDays] = await Promise.all([
       db
         .from('boards')
-        .select('id, slug, name, card_noun')
+        .select('id, slug, name, card_noun, default_assignee_emails')
         .eq('archived', false)
         .order('sort_order'),
       db
@@ -125,6 +126,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         .eq('archived', false)
         .neq('kind', 'files')
         .order('sort_order'),
+      listAssignable(),
+      getSetting('suggestions.dueDays'),
     ]);
     const error = boards.error ?? columns.error ?? fields.error;
     if (error) return dbError(error);
@@ -137,6 +140,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
         ),
         fields: ((fields.data ?? []) as BoardFieldRow[]).filter((f) => f.board_id === b.id),
       })),
+      owners,
+      dueDays,
     });
   }
   if (context === 'sop') {

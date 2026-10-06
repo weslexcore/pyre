@@ -11,6 +11,7 @@
 // saved value.
 
 import { HIDEABLE_TOOLS } from '@/components/admin/adminTools';
+import { DEFAULT_DUE_DAYS, type DueDays, parseDueDays } from '@/lib/suggestions/priority';
 
 export type SettingSection = 'suggestions' | 'navigation';
 
@@ -50,7 +51,16 @@ export interface MultiChoiceSetting extends Base {
   min?: number;
 }
 
-export type SettingDefinition = BooleanSetting | MultiChoiceSetting;
+/** Days until due for each severity and importance (lib/suggestions/priority). */
+export interface DueDaysSetting extends Base {
+  type: 'due_days';
+  default: DueDays;
+}
+
+export type SettingDefinition = BooleanSetting | MultiChoiceSetting | DueDaysSetting;
+
+/** Any setting's value, untyped by key. */
+export type AnySettingValue = boolean | string[] | DueDays;
 
 export const SETTINGS = {
   'navigation.hiddenTools': {
@@ -95,13 +105,23 @@ export const SETTINGS = {
     default: ['action', 'update'],
     min: 1,
   },
+  'suggestions.dueDays': {
+    type: 'due_days',
+    section: 'suggestions',
+    label: 'Due dates for suggested tasks',
+    description:
+      'How many days a suggested task gets, by how severe the problem is and how important the work is. The agent rates both; an admin can change either before approving, and the due date follows. A due date the note itself states wins. Leave a cell blank for no due date.',
+    default: DEFAULT_DUE_DAYS,
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;
 
 export type SettingValue<K extends SettingKey> = (typeof SETTINGS)[K] extends { type: 'boolean' }
   ? boolean
-  : string[];
+  : (typeof SETTINGS)[K] extends { type: 'due_days' }
+    ? DueDays
+    : string[];
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
@@ -117,13 +137,14 @@ export function settingDefinition(key: SettingKey): SettingDefinition {
 export function parseSettingValue(
   key: SettingKey,
   raw: unknown
-): { ok: true; value: boolean | string[] } | { ok: false; error: string } {
+): { ok: true; value: AnySettingValue } | { ok: false; error: string } {
   const def = settingDefinition(key);
   if (def.type === 'boolean') {
     return typeof raw === 'boolean'
       ? { ok: true, value: raw }
       : { ok: false, error: `${def.label} must be on or off` };
   }
+  if (def.type === 'due_days') return parseDueDays(raw);
   if (!Array.isArray(raw) || !raw.every((v) => typeof v === 'string')) {
     return { ok: false, error: `${def.label} must be a list of choices` };
   }
@@ -142,9 +163,11 @@ export function parseSettingValue(
 export function parseEnvValue(
   key: SettingKey,
   raw: string | undefined
-): boolean | string[] | undefined {
+): AnySettingValue | undefined {
   if (raw === undefined || raw.trim() === '') return undefined;
   const def = settingDefinition(key);
+  // A grid has no environment-variable spelling.
+  if (def.type === 'due_days') return undefined;
   const text = raw.trim().toLowerCase();
   if (def.type === 'boolean') {
     if (['on', 'true', '1', 'yes'].includes(text)) return true;
@@ -167,10 +190,10 @@ export type SettingSource = 'saved' | 'env' | 'default';
 /** One setting as the page shows it. */
 export interface SettingView {
   key: SettingKey;
-  value: boolean | string[];
+  value: AnySettingValue;
   source: SettingSource;
   /** The value it would have without the saved one (env, else default). */
-  fallback: boolean | string[];
+  fallback: AnySettingValue;
   updatedBy: string | null;
   updatedAt: string | null;
 }

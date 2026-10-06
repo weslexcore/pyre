@@ -1,12 +1,24 @@
 // How an admin edits each kind of suggestion before approving it: the same
-// fields the thing itself has (a card's board, title, notes, due date and
-// custom fields; a comment's words; an SOP's text, shown as a diff against
+// fields the thing itself has (a card's board, assignees, title, notes, due
+// date and custom fields, plus the severity and importance its due date
+// follows; a comment's words; an SOP's text, shown as a diff against
 // the document as it is now). The Record type makes a new kind in
 // lib/suggestions/types a type error here until it has an editor.
 
+import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
 import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
 import type { BoardFieldValue } from '@/lib/db';
+import {
+  describeDueDays,
+  dueDateFor,
+  IMPORTANCE_LABELS,
+  IMPORTANCES,
+  isImportance,
+  isSeverity,
+  SEVERITIES,
+  SEVERITY_LABELS,
+} from '@/lib/suggestions/priority';
 import type {
   CardCommentPayload,
   CardCreatePayload,
@@ -16,12 +28,18 @@ import type {
   SuggestionResultLink,
 } from '@/lib/suggestions/types';
 import { SUGGESTION_LIMITS } from '@/lib/suggestions/types';
+import { AssigneePicker } from '../boards/CardMeta';
 import { FieldRow } from '../guestUi';
 import { textareaClass } from '../ShiftNoteComposer';
 import { SopDiff } from '../SopDiff';
-import { type BoardOption, type CurrentSop, loadBoardOptions, loadCurrentSop } from './client';
+import { type CardContext, type CurrentSop, loadBoardOptions, loadCurrentSop } from './client';
 
 const labelClass = 'mb-1 block font-mono text-[10px] uppercase tracking-wide text-white/50';
+const hintClass = 'mt-1 block font-mono text-[10px] text-white/40';
+
+function sameEmails(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((email) => b.includes(email));
+}
 
 export interface EditorProps<K extends SuggestionKind> {
   value: PayloadByKind[K];
@@ -39,13 +57,13 @@ function CardCreateEditor({
   disabled,
   idPrefix,
 }: EditorProps<'board_card.create'>) {
-  const [boards, setBoards] = useState<BoardOption[] | null>(null);
+  const [context, setContext] = useState<CardContext | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     loadBoardOptions()
-      .then((list) => {
-        if (!cancelled) setBoards(list);
+      .then((loaded) => {
+        if (!cancelled) setContext(loaded);
       })
       .catch((e) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Could not load boards');
@@ -55,8 +73,38 @@ function CardCreateEditor({
     };
   }, []);
 
+  const boards = context?.boards;
   const board = boards?.find((b) => b.slug === value.board);
   const set = (patch: Partial<CardCreatePayload>) => onChange({ ...value, ...patch });
+
+  const boardDefaults = board?.default_assignee_emails ?? [];
+  const nameOf = (email: string) =>
+    context?.owners.find((owner) => owner.email === email)?.name ?? email;
+  const assigneeHint =
+    value.assigneeEmails.length === 0
+      ? boardDefaults.length > 0
+        ? `Nobody picked: goes to the board's default, ${boardDefaults.map(nameOf).join(', ')}.`
+        : 'Unassigned. This board has no default assignee.'
+      : boardDefaults.length > 0 && sameEmails(value.assigneeEmails, boardDefaults)
+        ? "The board's default assignee."
+        : null;
+
+  // The due date the rating gives today, and whether the date shown is it.
+  const days =
+    context && (value.severity || value.importance)
+      ? context.dueDays[value.severity ?? 'medium'][value.importance ?? 'medium']
+      : undefined;
+  const rate = (patch: Pick<Partial<CardCreatePayload>, 'severity' | 'importance'>) => {
+    const next = { ...value, ...patch };
+    set({
+      ...patch,
+      ...(context
+        ? {
+            dueDate: dueDateFor(next.severity, next.importance, context.dueDays, todayEastern()),
+          }
+        : {}),
+    });
+  };
 
   return (
     <div className="space-y-3">
@@ -70,10 +118,17 @@ function CardCreateEditor({
             onChange={(e) => {
               const next = boards?.find((b) => b.slug === e.target.value);
               const keys = new Set(next?.fields.map((f) => f.key) ?? []);
+              // Still on the old board's defaults (or nobody), the card moves
+              // to the new board's; anyone the admin picked stays picked.
+              const assigneeEmails =
+                value.assigneeEmails.length === 0 || sameEmails(value.assigneeEmails, boardDefaults)
+                  ? (next?.default_assignee_emails ?? [])
+                  : value.assigneeEmails;
               // A new board keeps only the answers its own fields can hold.
               set({
                 board: e.target.value,
                 columnKey: null,
+                assigneeEmails,
                 properties: Object.fromEntries(
                   Object.entries(value.properties).filter(([key]) => keys.has(key))
                 ),
@@ -125,6 +180,16 @@ function CardCreateEditor({
         </label>
       </div>
       {loadError && <p className="font-mono text-[10px] text-[var(--pyre-red)]">{loadError}</p>}
+      <div>
+        <span className={labelClass}>Assignees</span>
+        <AssigneePicker
+          owners={context?.owners ?? []}
+          value={value.assigneeEmails}
+          names={nameOf}
+          onChange={(assigneeEmails) => set({ assigneeEmails })}
+        />
+        {assigneeHint && <span className={hintClass}>{assigneeHint}</span>}
+      </div>
       <label className="block">
         <span className={labelClass}>Title</span>
         <input
@@ -148,16 +213,60 @@ function CardCreateEditor({
           A link back to the shift note is added when the card is created.
         </span>
       </label>
-      <label className="block">
-        <span className={labelClass}>Due date</span>
-        <input
-          type="date"
-          className={compactInputClass}
-          value={value.dueDate ?? ''}
-          disabled={disabled}
-          onChange={(e) => set({ dueDate: e.target.value || null })}
-        />
-      </label>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="block">
+          <span className={labelClass}>Severity</span>
+          <select
+            className={`${compactSelectClass} w-full`}
+            value={value.severity ?? ''}
+            disabled={disabled}
+            onChange={(e) => rate({ severity: isSeverity(e.target.value) ? e.target.value : null })}
+          >
+            <option value="">Not rated</option>
+            {SEVERITIES.map((severity) => (
+              <option key={severity} value={severity}>
+                {SEVERITY_LABELS[severity]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className={labelClass}>Importance</span>
+          <select
+            className={`${compactSelectClass} w-full`}
+            value={value.importance ?? ''}
+            disabled={disabled}
+            onChange={(e) =>
+              rate({ importance: isImportance(e.target.value) ? e.target.value : null })
+            }
+          >
+            <option value="">Not rated</option>
+            {IMPORTANCES.map((importance) => (
+              <option key={importance} value={importance}>
+                {IMPORTANCE_LABELS[importance]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className={labelClass}>Due date</span>
+          <input
+            type="date"
+            className={`${compactInputClass} w-full`}
+            value={value.dueDate ?? ''}
+            disabled={disabled}
+            onChange={(e) => set({ dueDate: e.target.value || null })}
+          />
+        </label>
+      </div>
+      {days !== undefined && (
+        <span className={hintClass}>
+          {describeDueDays(days)} for this rating.{' '}
+          <a href="/admin/settings" className="underline hover:text-white">
+            Change the days
+          </a>
+        </span>
+      )}
       {board && board.fields.length > 0 && (
         <div className="space-y-3">
           {board.fields.map((field) => (

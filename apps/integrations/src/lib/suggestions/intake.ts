@@ -2,11 +2,15 @@
 // and payload checked the same way an admin's approval will check them, so a
 // suggestion that could never be approved is refused while the agent can
 // still fix it. SOP edits arrive as find-and-replace hunks and leave here as
-// the whole proposed document. Server-only.
+// the whole proposed document. New cards leave with the board's default
+// assignees and a due date from their severity and importance. Server-only.
 
+import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSetting } from '@/lib/settings/store';
 import { applyHunks } from '@/lib/sops/sop-edit';
 import { checkPayload } from './approve';
+import { dueDateFor, isImportance, isSeverity } from './priority';
 import type { NewSuggestion } from './store';
 import {
   isSuggestionKind,
@@ -86,6 +90,30 @@ async function expandSopEdit(
   };
 }
 
+/**
+ * A new card as the admin first sees it: on the board's default assignees
+ * (the agent never names anyone), and due when its severity and importance
+ * say, unless the note gave a date of its own.
+ */
+async function fillCardDefaults(
+  db: SupabaseClient,
+  raw: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const board = typeof raw.board === 'string' ? raw.board.trim() : '';
+  const { data } = board
+    ? await db.from('boards').select('default_assignee_emails').eq('slug', board).maybeSingle()
+    : { data: null };
+  const defaults = (data as { default_assignee_emails: string[] | null } | null)
+    ?.default_assignee_emails;
+  const severity = isSeverity(raw.severity) ? raw.severity : null;
+  const importance = isImportance(raw.importance) ? raw.importance : null;
+  const hasDate = typeof raw.dueDate === 'string' && raw.dueDate.trim() !== '';
+  const dueDate = hasDate
+    ? raw.dueDate
+    : dueDateFor(severity, importance, await getSetting('suggestions.dueDays'), todayEastern());
+  return { ...raw, assigneeEmails: defaults ?? [], dueDate };
+}
+
 export async function intakeSuggestions(db: SupabaseClient, raw: unknown): Promise<IntakeResult> {
   if (!Array.isArray(raw))
     return { ok: false, status: 400, error: 'suggestions must be a list (it may be empty)' };
@@ -113,6 +141,7 @@ export async function intakeSuggestions(db: SupabaseClient, raw: unknown): Promi
       if (!expanded.ok) return { ...expanded, index };
       payload = expanded.payload;
     }
+    if (kind === 'board_card.create') payload = await fillCardDefaults(db, payload);
 
     const checked = await checkPayload(db, kind, payload);
     if (!checked.ok) {

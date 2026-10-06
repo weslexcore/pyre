@@ -13,6 +13,7 @@
 // editor in components/admin/suggestions/editors. The Record types make each
 // of those a type error until it exists.
 
+import { emailList } from '@/lib/boards/validate';
 import type {
   AgentSuggestionKind,
   AgentSuggestionRow,
@@ -20,6 +21,7 @@ import type {
   AgentSuggestionStatus,
 } from '@/lib/db';
 import { isUuid } from '@/lib/http/json';
+import { type Importance, isImportance, isSeverity, type Severity } from './priority';
 
 export type SuggestionKind = AgentSuggestionKind;
 export type SuggestionStatus = AgentSuggestionStatus;
@@ -80,6 +82,15 @@ export interface CardCreatePayload {
   notesMd: string;
   /** YYYY-MM-DD, or null. */
   dueDate: string | null;
+  /**
+   * Who the card is put on. Filled with the board's default assignees when
+   * the suggestion comes in; empty still takes them when the card is made.
+   */
+  assigneeEmails: string[];
+  /** How bad it is if nobody acts; with importance, picks the due date (./priority). */
+  severity: Severity | null;
+  /** How much the work matters to the business. */
+  importance: Importance | null;
   /** Answers to the board's own fields, keyed by field key. */
   properties: Record<string, unknown>;
 }
@@ -162,9 +173,32 @@ function parseCardCreatePayload(raw: unknown): ParseResult<CardCreatePayload> {
     }
     dueDate = o.dueDate;
   }
+  const assignees = emailList(o.assigneeEmails ?? []);
+  if (!assignees.ok) return fail('assigneeEmails must be a list of email addresses');
+  const severity = o.severity ?? null;
+  if (severity !== null && !isSeverity(severity)) {
+    return fail('severity must be critical, high, medium or low');
+  }
+  const importance = o.importance ?? null;
+  if (importance !== null && !isImportance(importance)) {
+    return fail('importance must be high, medium or low');
+  }
   const properties = asObject(o.properties ?? {});
   if (!properties) return fail('properties must be an object keyed by field key');
-  return { ok: true, value: { board, columnKey, title, notesMd, dueDate, properties } };
+  return {
+    ok: true,
+    value: {
+      board,
+      columnKey,
+      title,
+      notesMd,
+      dueDate,
+      assigneeEmails: assignees.value ?? [],
+      severity,
+      importance,
+      properties,
+    },
+  };
 }
 
 function parseCardCommentPayload(raw: unknown): ParseResult<CardCommentPayload> {
