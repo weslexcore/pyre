@@ -15,10 +15,10 @@
 
 /* ── Front: the words ───────────────────────────────────────── */
 
-/* Words sit at the top; 110px clears the 75px safe area with room to breathe. */
+/* Words sit high on the card; 80px is just inside the 75px safe area. */
 .card--front {
   align-items: flex-start;
-  padding-top: 110px;
+  padding-top: 80px;
 }
 
 .front__words {
