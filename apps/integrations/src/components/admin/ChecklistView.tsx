@@ -214,19 +214,6 @@ export function ChecklistView({
               <span className={filtering ? 'text-[var(--pyre-gold)]' : undefined}>Show To Do</span>
             </button>
           )}
-          {!allDone && (
-            <p className="font-mono text-[10px] text-white/40">
-              Check off or skip every item — the checklist finishes on its own.
-              {requiredLeft > 0 &&
-                ` ${requiredLeft} required item${requiredLeft === 1 ? '' : 's'} must be checked off.`}
-              {/* The swipe is worth pointing at, but only where there is a
-                    finger to do it with. */}
-              <span className="touch-only">
-                {' '}
-                Or swipe an item right to check it off, left to skip.
-              </span>
-            </p>
-          )}
           {run.sop_version !== currentVersion && (
             <p className="font-mono text-[10px] text-white/40">
               Showing v{run.sop_version}, the version this run started with (the document has since
