@@ -4,6 +4,7 @@
 // server-side, and is trivially unit-testable.
 
 import {
+  CHART_GALLONS,
   CHLORINE_RAISE_GRAMS,
   type ChartRow,
   HARD_LIMITS,
@@ -14,6 +15,7 @@ import {
   SALT_DOSE_TO_PPM,
   SALT_GRAMS_PER_STEP,
   SALT_PPM_PER_STEP,
+  scaleGrams,
   TA_RAISE,
   TARGETS,
 } from './charts';
@@ -41,7 +43,7 @@ export interface Recommendation {
   severity: Severity;
   /** Product to add; null when the advice isn't a dose (criticals, infos). */
   chemical: string | null;
-  /** Chart dose; null when the advice isn't a dose. */
+  /** Dose sized for the plunge's volume; null when the advice isn't a dose. */
   grams: number | null;
   /** Why this fired, e.g. "TA 70 ppm is below the 80–120 ppm target". */
   reason: string;
@@ -132,14 +134,24 @@ export const PH_BLOCKED_INSTRUCTION =
 
 export const TA_HIGH_INSTRUCTION = 'Nothing to do for TA — check pH and carry on as normal.';
 
+export interface DoseOptions {
+  /** The plunge's volume; chart amounts scale by gallons / CHART_GALLONS. */
+  gallons: number;
+}
+
 /**
  * Recommendations for a set of readings, criticals first, then dosing/info
  * rows in correction order (TA, then pH, then chlorine, then salt — TA
  * steadies pH, pH controls whether sanitizer works). Skipped (null) readings
- * produce nothing; all-in-range produces an empty array.
+ * produce nothing; all-in-range produces an empty array. Doses are sized for
+ * the plunge's volume (the charts' own 120 gal when not given).
  */
-export function getRecommendations(readings: Readings): Recommendation[] {
+export function getRecommendations(
+  readings: Readings,
+  { gallons }: DoseOptions = { gallons: CHART_GALLONS }
+): Recommendation[] {
   const { ta, ph, chlorine, cc, salt } = readings;
+  const scale = (grams: number) => scaleGrams(grams, gallons);
   const criticals: Recommendation[] = [];
   const doses: Recommendation[] = [];
 
@@ -180,7 +192,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
       parameter: 'ta',
       severity: 'action',
       chemical: PRODUCTS.taRaise,
-      grams: nearestDoseConservative(TA_RAISE, lowTa),
+      grams: scale(nearestDoseConservative(TA_RAISE, lowTa)),
       reason: `TA ${lowTa} ppm is below the ${range('ta')} ppm target`,
       instruction: TA_FIRST_INSTRUCTION,
     });
@@ -212,7 +224,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         parameter: 'ph',
         severity: 'action',
         chemical: PRODUCTS.phLower,
-        grams: nearestDoseConservative(PH_LOWER, ph),
+        grams: scale(nearestDoseConservative(PH_LOWER, ph)),
         reason: `pH ${ph} is above the ${range('ph')} target.`,
       });
     } else {
@@ -221,7 +233,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         parameter: 'ph',
         severity: 'action',
         chemical: PRODUCTS.phRaise,
-        grams: nearestDoseConservative(PH_RAISE, ph),
+        grams: scale(nearestDoseConservative(PH_RAISE, ph)),
         reason: `pH ${ph} is below the ${range('ph')} target.${
           offChart ? ' Reading is below the chart — dosing the lowest row; retest and repeat.' : ''
         }`,
@@ -238,7 +250,7 @@ export function getRecommendations(readings: Readings): Recommendation[] {
         parameter: 'chlorine',
         severity: 'action',
         chemical: PRODUCTS.sanitizer,
-        grams: CHLORINE_RAISE_GRAMS,
+        grams: scale(CHLORINE_RAISE_GRAMS),
         reason: `Free chlorine ${chlorine} ppm is below the ${range('chlorine')} ppm target`,
       });
     } else if (chlorine > chlorineMax) {
@@ -267,12 +279,12 @@ export function getRecommendations(readings: Readings): Recommendation[] {
   if (salt != null && salt <= HARD_LIMITS.salt && !inTarget('salt', salt)) {
     const [saltMin] = TARGETS.salt;
     if (salt < saltMin) {
-      const grams = Math.floor((SALT_DOSE_TO_PPM - salt) / SALT_PPM_PER_STEP) * SALT_GRAMS_PER_STEP;
+      const steps = Math.floor((SALT_DOSE_TO_PPM - salt) / SALT_PPM_PER_STEP);
       doses.push({
         parameter: 'salt',
         severity: 'action',
         chemical: PRODUCTS.salt,
-        grams,
+        grams: scale(steps * SALT_GRAMS_PER_STEP),
         reason: `Salt ${salt} ppm is below the ${range('salt')} ppm target (dosing toward ${SALT_DOSE_TO_PPM} ppm)`,
       });
     } else {

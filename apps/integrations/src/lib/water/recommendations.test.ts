@@ -3,11 +3,14 @@
 // boundary gets pinned down here.
 
 import { describe, expect, it } from 'vitest';
-import { PRODUCTS } from './charts';
+import { PRODUCTS, scaleGrams, shockDoses } from './charts';
 import { classifyReading, getGuestSafety, getRecommendations } from './recommendations';
 
-const only = (readings: Parameters<typeof getRecommendations>[0]) => {
-  const recs = getRecommendations(readings);
+const only = (
+  readings: Parameters<typeof getRecommendations>[0],
+  options?: Parameters<typeof getRecommendations>[1]
+) => {
+  const recs = getRecommendations(readings, options);
   expect(recs).toHaveLength(1);
   return recs[0];
 };
@@ -254,6 +257,51 @@ describe('getRecommendations', () => {
       const recs = getRecommendations({ ta: 100, ph: 7.9, chlorine: 0.5, cc: 1, salt: 2100 });
       expect(recs.map((r) => r.parameter)).toEqual(['ph', 'chlorine', 'cc', 'salt']);
     });
+  });
+});
+
+// Doses come from 120 gal charts; a plunge of another size gets each amount
+// scaled by gallons / 120, rounded down to 0.5 g.
+describe('dose sizing by plunge volume', () => {
+  it('uses the chart amounts unchanged at 120 gal (the default)', () => {
+    expect(only({ ta: 70 }, { gallons: 120 }).grams).toBe(23);
+    expect(only({ ta: 70 }).grams).toBe(23);
+  });
+
+  it('halves doses for a 60 gal plunge and doubles them for 240 gal', () => {
+    expect(only({ chlorine: 0.5 }, { gallons: 60 }).grams).toBe(3.5);
+    expect(only({ chlorine: 0.5 }, { gallons: 240 }).grams).toBe(14);
+    expect(only({ ph: 7.9 }, { gallons: 60 }).grams).toBe(5);
+    expect(only({ ph: 7.0 }, { gallons: 240 }).grams).toBe(14);
+  });
+
+  it('rounds down to the nearest 0.5 g, never below 0.5 g', () => {
+    // 23 g × 100 / 120 = 19.17 g
+    expect(only({ ta: 70 }, { gallons: 100 }).grams).toBe(19);
+    // 10 g × 5 / 120 = 0.42 g
+    expect(only({ ph: 7.9 }, { gallons: 5 }).grams).toBe(0.5);
+  });
+
+  it('scales the salt dose after counting chart steps', () => {
+    // 2100 ppm: 5 steps × 24 g = 120 g at 120 gal
+    expect(only({ salt: 2100 }, { gallons: 180 }).grams).toBe(180);
+  });
+
+  it('leaves the reasons and non-dose advice alone', () => {
+    expect(only({ ta: 70 }, { gallons: 60 }).reason).toBe(only({ ta: 70 }).reason);
+    expect(only({ chlorine: 6 }, { gallons: 60 }).grams).toBeNull();
+  });
+});
+
+describe('scaleGrams and shockDoses', () => {
+  it('scales the shock pair', () => {
+    expect(shockDoses(120).map((d) => d.grams)).toEqual([10, 30]);
+    expect(shockDoses(60).map((d) => d.grams)).toEqual([5, 15]);
+  });
+
+  it('is the identity at the chart volume', () => {
+    expect(scaleGrams(2.5, 120)).toBe(2.5);
+    expect(scaleGrams(920, 300)).toBe(2300);
   });
 });
 

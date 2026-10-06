@@ -37,6 +37,11 @@ describe('waterTestsToCsv', () => {
     );
   });
 
+  it('writes the plunge name when given a lookup', () => {
+    const [, first] = rows(waterTestsToCsv([record()], (id) => (id === 'left' ? 'Left' : id)));
+    expect(first.split(',')[1]).toBe('Left');
+  });
+
   it('leaves untested readings blank rather than zero', () => {
     const [, row] = rows(waterTestsToCsv([record({ ta_ppm: null, salt_ppm: null })]));
     expect(row.split(',').slice(4, 9)).toEqual(['', '7.4', '2', '0.2', '']);

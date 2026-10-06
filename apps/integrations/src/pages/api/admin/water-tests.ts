@@ -1,5 +1,5 @@
 // Cold-tub water testing log API for the /admin/water staff tool: GET lists
-// entries newest-first (optionally per tub or entry type, or as a CSV download
+// entries newest-first (optionally per plunge or entry type, or as a CSV download
 // with ?format=csv), POST records a new entry with readings and the chemicals
 // actually added, PATCH corrects an entry the caller recorded themselves (a
 // reading taken after the entry was saved), DELETE removes one.
@@ -10,8 +10,8 @@
 
 import type { APIRoute } from 'astro';
 import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
-import { type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
-import { dbError, json } from '@/lib/http/route';
+import { type ColdPlungeRow, type DoseRecord, getDb, type WaterTestRow } from '@/lib/db';
+import { type Db, dbError, json } from '@/lib/http/route';
 import {
   ENTRY_TYPES,
   type EntryType,
@@ -20,10 +20,9 @@ import {
   hasReadingPanel,
   TEST_METHODS,
   type TestMethod,
-  TUBS,
-  type Tub,
 } from '@/lib/water/charts';
 import { waterTestsToCsv } from '@/lib/water/csv';
+import { PLUNGE_ID_RE, plungeName } from '@/lib/water/plunges';
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 25;
@@ -110,10 +109,10 @@ function parseDoses(raw: unknown): DoseRecord[] | Response {
     if (!chemical || chemical.length > 64) {
       return json({ error: 'each dose needs a chemical name (max 64 chars)' }, 400);
     }
-    // Sanity bound only — a fresh salt fill is ~920 g, and dosing badly
-    // depleted salt water can top 1 kg.
-    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 2000) {
-      return json({ error: 'each dose needs grams between 0 and 2000' }, 400);
+    // Sanity bound only — a fresh salt fill is ~920 g per 120 gal, so a large
+    // plunge's fill (or badly depleted salt water) runs to several kg.
+    if (typeof grams !== 'number' || !Number.isFinite(grams) || grams <= 0 || grams > 20000) {
+      return json({ error: 'each dose needs grams between 0 and 20000' }, 400);
     }
     const dose: DoseRecord = { chemical, grams };
     if (typeof d.reason === 'string' && d.reason) dose.reason = d.reason.slice(0, 200);
@@ -123,6 +122,29 @@ function parseDoses(raw: unknown): DoseRecord[] | Response {
     doses.push(dose);
   }
   return doses;
+}
+
+/**
+ * The plunge named by `raw`, or the 400 to send back. New entries — and
+ * entries moved to another plunge — must go on an active one; an archived
+ * plunge only takes the entries it already has.
+ */
+async function parsePlunge(
+  db: Db,
+  raw: unknown,
+  { activeOnly }: { activeOnly: boolean }
+): Promise<ColdPlungeRow | Response> {
+  if (typeof raw !== 'string' || !PLUNGE_ID_RE.test(raw)) {
+    return json({ error: 'tub must be a plunge id' }, 400);
+  }
+  const { data, error } = await db.from('cold_plunges').select('*').eq('id', raw).maybeSingle();
+  if (error) return dbError(error);
+  const plunge = data as ColdPlungeRow | null;
+  if (!plunge) return json({ error: `No plunge "${raw}"` }, 400);
+  if (activeOnly && plunge.archived) {
+    return json({ error: `${plunge.name} is archived — pick an active plunge` }, 400);
+  }
+  return plunge;
 }
 
 const parseNotes = (raw: unknown): string =>
@@ -136,9 +158,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
   if (!db) return json({ error: 'Storage unavailable' }, 503);
 
   const tub = url.searchParams.get('tub');
-  if (tub && !TUBS.includes(tub as Tub)) {
-    return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
-  }
+  if (tub && !PLUNGE_ID_RE.test(tub)) return json({ error: 'tub must be a plunge id' }, 400);
 
   const entryType = url.searchParams.get('entryType');
   if (entryType && !ENTRY_TYPES.includes(entryType as EntryType)) {
@@ -163,11 +183,15 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     if (entryType) csvQuery = csvQuery.eq('entry_type', entryType);
     if (since) csvQuery = csvQuery.gte('created_at', since);
 
-    const { data: csvRows, error: csvError } = await csvQuery;
+    const [{ data: csvRows, error: csvError }, { data: plungeRows, error: plungeError }] =
+      await Promise.all([csvQuery, db.from('cold_plunges').select('id, name')]);
     if (csvError) return dbError(csvError);
+    if (plungeError) return dbError(plungeError);
+    const plunges = (plungeRows ?? []) as Pick<ColdPlungeRow, 'id' | 'name'>[];
 
     const filename = `water-log-${tub ?? 'all'}-${entryType ?? 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new Response(waterTestsToCsv((csvRows ?? []) as WaterTestRow[]), {
+    const csv = waterTestsToCsv((csvRows ?? []) as WaterTestRow[], (id) => plungeName(plunges, id));
+    return new Response(csv, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -218,10 +242,9 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const tub = body.tub;
-  if (typeof tub !== 'string' || !TUBS.includes(tub as Tub)) {
-    return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
-  }
+  const plunge = await parsePlunge(db, body.tub, { activeOnly: true });
+  if (plunge instanceof Response) return plunge;
+  const tub = plunge.id;
 
   const entryType = body.entryType ?? 'test';
   if (typeof entryType !== 'string' || !ENTRY_TYPES.includes(entryType as EntryType)) {
@@ -312,7 +335,7 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 
   const { data: existing, error: fetchError } = await db
     .from('water_tests')
-    .select('id, recorded_by, entry_type')
+    .select('id, recorded_by, entry_type, tub')
     .eq('id', id)
     .maybeSingle();
   if (fetchError) return dbError(fetchError);
@@ -331,12 +354,12 @@ export const PATCH: APIRoute = async ({ cookies, request, url }) => {
 
   // The one field on an entry that is about filing rather than measurement:
   // a panel run on the right tub and saved to the left is corrected by moving
-  // the row, not by re-logging it.
-  if ('tub' in body) {
-    if (typeof body.tub !== 'string' || !TUBS.includes(body.tub as Tub)) {
-      return json({ error: `tub must be one of: ${TUBS.join(', ')}` }, 400);
-    }
-    patch.tub = body.tub;
+  // the row, not by re-logging it. Staying put is always allowed (the edit
+  // form sends the tub back unchanged); a move needs an active plunge.
+  if ('tub' in body && body.tub !== existing.tub) {
+    const plunge = await parsePlunge(db, body.tub, { activeOnly: true });
+    if (plunge instanceof Response) return plunge;
+    patch.tub = plunge.id;
   }
 
   if ('readings' in body) {

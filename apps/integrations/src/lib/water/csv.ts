@@ -5,9 +5,11 @@
 import type { WaterTestRow } from '@/lib/db';
 import { FILTER_ACTION_LABELS, TEST_METHOD_LABELS } from './charts';
 
-const COLUMNS: Array<[string, (row: WaterTestRow) => string | number | null]> = [
+type Read = (row: WaterTestRow, plungeName: (id: string) => string) => string | number | null;
+
+const COLUMNS: Array<[string, Read]> = [
   ['Recorded at', (r) => r.created_at],
-  ['Tub', (r) => r.tub],
+  ['Tub', (r, plungeName) => plungeName(r.tub)],
   ['Entry type', (r) => r.entry_type],
   ['Filter service', (r) => (r.filter_action ? FILTER_ACTION_LABELS[r.filter_action] : null)],
   ['TA (ppm)', (r) => r.ta_ppm],
@@ -33,11 +35,17 @@ function cell(value: string | number | null): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** Header row plus one line per entry, in the order given. */
-export function waterTestsToCsv(records: readonly WaterTestRow[]): string {
+/**
+ * Header row plus one line per entry, in the order given. `plungeName` turns a
+ * plunge id into the name staff know it by (the id itself when not given).
+ */
+export function waterTestsToCsv(
+  records: readonly WaterTestRow[],
+  plungeName: (id: string) => string = (id) => id
+): string {
   const lines = [COLUMNS.map(([header]) => cell(header)).join(',')];
   for (const record of records) {
-    lines.push(COLUMNS.map(([, read]) => cell(read(record))).join(','));
+    lines.push(COLUMNS.map(([, read]) => cell(read(record, plungeName))).join(','));
   }
   // Leading BOM so Excel opens the file as UTF-8; CRLF line breaks per RFC 4180.
   return `\uFEFF${lines.join('\r\n')}\r\n`;

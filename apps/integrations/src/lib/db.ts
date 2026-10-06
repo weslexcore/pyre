@@ -158,9 +158,24 @@ export interface DoseRecord {
   recommended_grams?: number;
 }
 
+// A cold plunge the water log tracks (/admin/water/plunges). Doses scale from
+// the 120 gal charts by `gallons`.
+export interface ColdPlungeRow {
+  /** Permanent slug ("left", "garden-plunge"); water_tests.tub stores it. */
+  id: string;
+  name: string;
+  gallons: number;
+  sort_order: number;
+  archived: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WaterTestRow {
   id: string;
-  tub: 'left' | 'right';
+  /** The plunge (cold_plunges.id). */
+  tub: string;
   entry_type: 'test' | 'shock' | 'refill' | 'filter';
   ta_ppm: number | null;
   ph: number | null;

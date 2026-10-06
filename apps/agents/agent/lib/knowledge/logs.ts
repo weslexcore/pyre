@@ -23,7 +23,8 @@ function easternDateTime(iso: string): string {
 
 interface WaterTestRow {
   id: string;
-  tub: 'left' | 'right';
+  /** The plunge (cold_plunges.id). */
+  tub: string;
   entry_type: 'test' | 'shock' | 'refill' | 'filter';
   ta_ppm: number | null;
   ph: number | null;
@@ -40,7 +41,8 @@ interface WaterTestRow {
 }
 
 export interface WaterLogInput {
-  tub?: 'left' | 'right';
+  /** A plunge's name or id ("Left", "garden-plunge"). */
+  tub?: string;
   days?: number;
   limit?: number;
 }
@@ -58,6 +60,32 @@ export async function getWaterLog(scope: KnowledgeScope, input: WaterLogInput) {
   const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
+  // Plunges are configured on /admin/water/plunges; match the one asked for
+  // by name or id, case-insensitively.
+  const { data: plungeRows, error: plungeError } = await getDb()
+    .from('cold_plunges')
+    .select('id, name, gallons, archived');
+  if (plungeError) throw new Error(plungeError.message);
+  const plunges = (plungeRows ?? []) as Array<{
+    id: string;
+    name: string;
+    gallons: number;
+    archived: boolean;
+  }>;
+  let tubId: string | null = null;
+  if (input.tub) {
+    const wanted = input.tub.trim().toLowerCase();
+    const match = plunges.find((p) => p.id === wanted || p.name.toLowerCase() === wanted);
+    if (!match) {
+      return {
+        available: true as const,
+        error: `No plunge called "${input.tub}". Plunges: ${plunges.map((p) => p.name).join(', ')}.`,
+      };
+    }
+    tubId = match.id;
+  }
+  const nameOf = (id: string) => plunges.find((p) => p.id === id)?.name ?? id;
+
   let query = getDb()
     .from('water_tests')
     .select(
@@ -66,7 +94,7 @@ export async function getWaterLog(scope: KnowledgeScope, input: WaterLogInput) {
     .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (input.tub) query = query.eq('tub', input.tub);
+  if (tubId) query = query.eq('tub', tubId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -75,11 +103,12 @@ export async function getWaterLog(scope: KnowledgeScope, input: WaterLogInput) {
     available: true as const,
     url: siteUrl(WATER_LOG_URL_PATH),
     windowDays: days,
+    plunges: plunges.map((p) => ({ name: p.name, gallons: p.gallons, archived: p.archived })),
     count: rows.length,
     entries: rows.map((row) => ({
       id: row.id,
       recordedAt: easternDateTime(row.created_at),
-      tub: row.tub,
+      tub: nameOf(row.tub),
       entryType: row.entry_type,
       // Only ever set on a filter entry — what was done to the cartridge.
       filterAction: row.filter_action,

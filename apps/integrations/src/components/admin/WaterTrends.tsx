@@ -10,10 +10,14 @@
 // validated for CVD separation and 3:1 contrast on the dark surface
 // (dataviz palette validator — see the PR notes).
 import { useMemo, useRef, useState } from 'react';
-import type { WaterTestRow } from '@/lib/db';
-import { type EntryType, TARGETS, type Tub } from '@/lib/water/charts';
+import type { ColdPlungeRow, WaterTestRow } from '@/lib/db';
+import { type EntryType, TARGETS } from '@/lib/water/charts';
+import { plungeName } from '@/lib/water/plunges';
 
-const SERIES_COLOR: Record<Tub, string> = { left: '#5590c8', right: '#b58d35' };
+// One color per plunge, by its place in the list: the first two are the
+// original Left/Right pair, the rest extend the set for added plunges, and
+// colors cycle past the end.
+const SERIES_PALETTE = ['#5590c8', '#b58d35', '#8fa874', '#c46f5a', '#9a7fc0', '#5aa8a0'];
 // One letter per non-test entry, drawn above its dashed marker line: Shock,
 // Refill, Filter.
 const EVENT_GLYPH: Partial<Record<EntryType, string>> = {
@@ -21,7 +25,6 @@ const EVENT_GLYPH: Partial<Record<EntryType, string>> = {
   refill: 'R',
   filter: 'F',
 };
-const TUB_LABEL: Record<Tub, string> = { left: 'Left', right: 'Right' };
 const BAND_FILL = 'rgba(131, 151, 112, 0.14)'; // --pyre-sage wash
 const GRID = 'rgba(255, 255, 255, 0.08)';
 const SURFACE = '#23221c'; // --pyre-black; ring color so dots stay legible
@@ -74,10 +77,12 @@ const fmtFull = (t: number) =>
 
 export function WaterTrends({
   records,
+  plunges,
   visibleTubs,
 }: {
   records: WaterTestRow[];
-  visibleTubs: Tub[];
+  plunges: readonly ColdPlungeRow[];
+  visibleTubs: string[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -91,6 +96,13 @@ export function WaterTrends({
         .sort((a, b) => a.t - b.t),
     [records]
   );
+
+  const seriesColor = (tub: string): string => {
+    const index = plunges.findIndex((p) => p.id === tub);
+    return SERIES_PALETTE[(index < 0 ? 0 : index) % SERIES_PALETTE.length];
+  };
+  // The legend names only the plunges with entries in this range.
+  const chartedTubs = visibleTubs.filter((tub) => rows.some((r) => r.tub === tub));
 
   const events = rows.filter((r) => r.entry_type !== 'test');
   const pointCount = rows.reduce((n, r) => n + PANELS.filter((p) => r[p.column] != null).length, 0);
@@ -145,15 +157,15 @@ export function WaterTrends({
 
   return (
     <div ref={containerRef} className="relative">
-      {visibleTubs.length > 1 && (
-        <div className="mb-2 flex gap-4">
-          {visibleTubs.map((t) => (
+      {chartedTubs.length > 1 && (
+        <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+          {chartedTubs.map((t) => (
             <span key={t} className="flex items-center gap-1.5 font-mono text-xs text-white/60">
               <span
                 className="inline-block h-0.5 w-4 rounded"
-                style={{ backgroundColor: SERIES_COLOR[t] }}
+                style={{ backgroundColor: seriesColor(t) }}
               />
-              {TUB_LABEL[t]}
+              {plungeName(plunges, t)}
             </span>
           ))}
         </div>
@@ -249,7 +261,7 @@ export function WaterTrends({
                     <path
                       d={path}
                       fill="none"
-                      stroke={SERIES_COLOR[tubKey]}
+                      stroke={seriesColor(tubKey)}
                       strokeWidth={2}
                       strokeLinejoin="round"
                       strokeLinecap="round"
@@ -260,7 +272,7 @@ export function WaterTrends({
                         cx={x(r.t)}
                         cy={y(pi, r[panel.column] as number)}
                         r={hovered?.id === r.id ? 5 : 3.5}
-                        fill={SERIES_COLOR[tubKey]}
+                        fill={seriesColor(tubKey)}
                         stroke={SURFACE}
                         strokeWidth={2}
                       />
@@ -312,9 +324,9 @@ export function WaterTrends({
           <div className="mb-1 flex items-center gap-1.5 font-mono text-xs text-white/50">
             <span
               className="inline-block h-0.5 w-3 rounded"
-              style={{ backgroundColor: SERIES_COLOR[hovered.tub] }}
+              style={{ backgroundColor: seriesColor(hovered.tub) }}
             />
-            {TUB_LABEL[hovered.tub]} · {fmtFull(hovered.t)}
+            {plungeName(plunges, hovered.tub)} · {fmtFull(hovered.t)}
             {hovered.entry_type !== 'test' && ` · ${hovered.entry_type}`}
           </div>
           {PANELS.filter((p) => hovered[p.column] != null).map((p) => (

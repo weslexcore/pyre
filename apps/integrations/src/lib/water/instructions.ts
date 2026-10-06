@@ -2,7 +2,7 @@
 // expandable panel on /admin/water when the matching entry type is selected.
 // Like charts.ts, this is the single place to edit when the manual changes.
 
-import type { EntryType } from './charts';
+import { CHART_GALLONS, type EntryType, FRESH_FILL_SALT_GRAMS, scaleGrams } from './charts';
 
 export interface InstructionSection {
   heading?: string;
@@ -15,7 +15,18 @@ export interface Instructions {
   footnote?: string;
 }
 
-export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
+/**
+ * The procedure for an entry type, with amounts sized for the plunge's volume.
+ * Null for entry types without one (routine tests).
+ */
+export function instructionsFor(
+  entryType: EntryType,
+  gallons: number = CHART_GALLONS
+): Instructions | null {
+  return buildInstructions(gallons)[entryType] ?? null;
+}
+
+const buildInstructions = (gallons: number): Partial<Record<EntryType, Instructions>> => ({
   shock: {
     title: 'How to shock the tub',
     sections: [
@@ -61,8 +72,7 @@ export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
         ],
       },
     ],
-    footnote:
-      'Filters should be rinsed regularly and replaced every 2-3 weeks',
+    footnote: 'Filters should be rinsed regularly and replaced every 2-3 weeks',
   },
   refill: {
     title: 'How to drain + refill',
@@ -85,7 +95,7 @@ export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
           'Restore power (plug in, press GFCI Reset).',
           'Run each pump until jets are strong and steady (fully primed).',
           'Balance the fresh water: TA first, and only once TA is in range, pH.',
-          'Add ~920 g Dead Sea Salt into a bucket with water and stir. Pour right in front of the filter basket.',
+          `Add ~${scaleGrams(FRESH_FILL_SALT_GRAMS, gallons)} g Dead Sea Salt into a bucket with water and stir. Pour right in front of the filter basket.`,
           'Set temperature; allow ~16 hours to stabilize. Cover on and locked.',
         ],
       },
@@ -93,4 +103,4 @@ export const INSTRUCTIONS: Partial<Record<EntryType, Instructions>> = {
     footnote:
       'Drain, clean, and refill on the schedule. Stretch to 6 weeks only if the water still balances easily and stays clear.',
   },
-};
+});

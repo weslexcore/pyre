@@ -183,7 +183,12 @@ export default defineDynamic({
           description:
             'Recent entries from the cold tub water log (/admin/water): test readings (TA, pH, chlorine, salt), shock and refill entries, chemical doses, and notes, newest first. For questions like "when was the left tub last shocked" or "what was the chlorine yesterday". Available only when the staff member holds the water log page.',
           inputSchema: z.object({
-            tub: z.enum(['left', 'right']).optional().describe('One tub; omit for both.'),
+            tub: z
+              .string()
+              .min(1)
+              .max(40)
+              .optional()
+              .describe('One plunge, by name (e.g. "Left"); omit for all of them.'),
             days: z.number().int().min(1).max(365).optional().describe('Look-back window (default 30).'),
             limit: z.number().int().min(1).max(100).optional().describe('Max entries (default 20).'),
           }),

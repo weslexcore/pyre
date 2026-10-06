@@ -1,15 +1,30 @@
-// Cold-tub water chemistry constants for the two COLDTUB Icebreaker tubs
-// (120 gal each), transcribed from the ops manual's dosing charts. This file
-// is the single place to edit when the manual or house targets change —
-// recommendations.ts holds the logic, this holds the numbers.
+// Cold-plunge water chemistry constants, transcribed from the COLDTUB
+// Icebreaker ops manual's dosing charts. This file is the single place to edit
+// when the manual or house targets change — recommendations.ts holds the
+// logic, this holds the numbers.
 //
 // Chart rows are kept exactly as printed; the (house-adjusted) target ranges
 // are layered on top, so rows that fall inside a target simply never fire.
+// The plunges themselves (names, gallons) are rows in cold_plunges, managed on
+// /admin/water/plunges.
 
-export const TUB_GALLONS = 120;
+/**
+ * The volume every chart in this file is written for (one Icebreaker tub).
+ * A plunge of a different size gets each amount scaled by gallons / 120.
+ */
+export const CHART_GALLONS = 120;
 
-export const TUBS = ['left', 'right'] as const;
-export type Tub = (typeof TUBS)[number];
+/**
+ * A chart amount scaled to a plunge's volume, rounded DOWN to the nearest
+ * 0.5 g ("you can always add more; the only way to remove too much is
+ * draining water"), never below 0.5 g. At CHART_GALLONS it is the chart
+ * amount unchanged.
+ */
+export function scaleGrams(grams: number, gallons: number): number {
+  if (gallons === CHART_GALLONS) return grams;
+  const scaled = Math.floor(((grams * gallons) / CHART_GALLONS) * 2) / 2;
+  return Math.max(0.5, scaled);
+}
 
 export const ENTRY_TYPES = ['test', 'shock', 'refill', 'filter'] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
@@ -120,10 +135,13 @@ export const PH_RAISE: readonly ChartRow[] = [
 export const CHLORINE_RAISE_GRAMS = 7;
 
 // Raise salt — "Dead Sea Salt": 24 g raises ~50 ppm; dose to the target
-// midpoint. Fresh fill is ~920 g total.
+// midpoint.
 export const SALT_GRAMS_PER_STEP = 24;
 export const SALT_PPM_PER_STEP = 50;
 export const SALT_DOSE_TO_PPM = 2350;
+
+// Salt for a fresh fill of CHART_GALLONS.
+export const FRESH_FILL_SALT_GRAMS = 920;
 
 // Weekly shock treatment: fixed pair, tub closed, cover off 20+ min, reopen
 // only once chlorine is back in the 1–3 ppm range.
@@ -131,3 +149,7 @@ export const SHOCK_DOSES = [
   { chemical: PRODUCTS.sanitizer, grams: 10 },
   { chemical: PRODUCTS.oxidizer, grams: 30 },
 ] as const;
+
+/** The shock pair sized for a plunge's volume. */
+export const shockDoses = (gallons: number): { chemical: string; grams: number }[] =>
+  SHOCK_DOSES.map((dose) => ({ chemical: dose.chemical, grams: scaleGrams(dose.grams, gallons) }));

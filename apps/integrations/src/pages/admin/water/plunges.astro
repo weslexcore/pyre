@@ -1,0 +1,17 @@
+---
+// The cold plunges the water log tracks: names and the gallons each holds,
+// which size every recommended dose. Admin-only — anyone else with the water
+// log is bounced back to it here (UX; the /api/admin/cold-plunges route's own
+// check is the security boundary).
+import { ColdPlungesManager } from '@/components/admin/ColdPlungesManager';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+if (Astro.locals.adminAccess?.isAdmin !== true) return Astro.redirect('/admin/water');
+---
+
+<AdminLayout
+  title="Plunge Setup"
+  subtitle="The plunges the water log tracks, and the gallons each holds — doses are sized from them"
+>
+  <ColdPlungesManager client:load />
+</AdminLayout>

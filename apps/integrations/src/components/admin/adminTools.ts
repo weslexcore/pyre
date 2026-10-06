@@ -588,6 +588,13 @@ const ADMIN_SUBPAGES: AdminSubpage[] = [
     keywords: ['roster', 'today', 'sessions', 'attendees', 'booked', 'check in'],
   },
   {
+    href: '/admin/water/plunges',
+    title: 'Plunge Setup',
+    parent: '/admin/water',
+    keywords: ['tubs', 'gallons', 'volume', 'add plunge', 'configure'],
+    adminOnly: true,
+  },
+  {
     href: '/admin/guests/fields',
     title: 'Profile Fields',
     parent: '/admin/guests',

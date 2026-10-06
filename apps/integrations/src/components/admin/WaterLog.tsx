@@ -1,5 +1,6 @@
-// Cold-tub water testing log: staff enter readings for the Left/Right tubs,
-// get chart-based dosing recommendations (computed locally via
+// Cold-tub water testing log: staff enter readings for each plunge (the list
+// and their volumes are managed on /admin/water/plunges), get chart-based
+// dosing recommendations sized for that plunge's gallons (computed locally via
 // lib/water/recommendations — no network round-trip), and save entries with
 // the doses actually added. Feedback is live: each reading field tints and
 // shows its recommendation as soon as a value is typed, before "Check
@@ -7,9 +8,11 @@
 // AdminLayout; a 401/403 from the API mid-session renders a re-login prompt.
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
-import { SessionExpired } from '@/components/admin/SessionExpired';
-import type { DoseRecord, WaterTestRow } from '@/lib/db';
+import { isSessionExpired, SessionExpired } from '@/components/admin/SessionExpired';
+import { useCachedJson } from '@/lib/client/cachedJson';
+import type { ColdPlungeRow, DoseRecord, WaterTestRow } from '@/lib/db';
 import {
+  CHART_GALLONS,
   DEFAULT_FILTER_ACTION,
   DEFAULT_TEST_METHOD,
   type EntryType,
@@ -18,15 +21,14 @@ import {
   type FilterAction,
   hasReadingPanel,
   type Parameter,
-  SHOCK_DOSES,
+  shockDoses,
   TARGETS,
   TEST_METHOD_LABELS,
   TEST_METHODS,
   type TestMethod,
-  TUBS,
-  type Tub,
 } from '@/lib/water/charts';
-import { INSTRUCTIONS } from '@/lib/water/instructions';
+import { instructionsFor } from '@/lib/water/instructions';
+import { formatGallons, plungeName } from '@/lib/water/plunges';
 import {
   classifyReading,
   getGuestSafety,
@@ -50,6 +52,13 @@ const sinceIso = (rangeKey: RangeKey): string | null => {
   const days = RANGES.find((r) => r.key === rangeKey)?.days ?? null;
   return days == null ? null : new Date(Date.now() - days * 86_400_000).toISOString();
 };
+
+interface PlungesResponse {
+  plunges: ColdPlungeRow[];
+  canManage: boolean;
+}
+
+const PLUNGES_URL = '/api/admin/cold-plunges';
 
 interface LogResponse {
   records: WaterTestRow[];
@@ -101,6 +110,41 @@ const pillClass = (active: boolean) =>
       ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
       : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'
   }`;
+
+/**
+ * The plunge picker on the entry and edit forms: active plunges, plus — on the
+ * edit form — the archived one an old entry is already filed under.
+ */
+function PlungePicker({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: readonly ColdPlungeRow[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {options.map((plunge) => (
+        <button
+          key={plunge.id}
+          type="button"
+          onClick={() => onChange(plunge.id)}
+          disabled={disabled}
+          className={pillClass(value === plunge.id)}
+        >
+          {plunge.name}
+          <span className="ml-1.5 font-mono text-[10px] normal-case text-white/40">
+            {formatGallons(plunge.gallons)} gal
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const READING_FIELDS = [
   { key: 'ta', label: 'Total Alkalinity', chip: 'TA', unit: 'ppm', column: 'ta_ppm' },
@@ -279,8 +323,8 @@ function LiveFieldNote({
   );
 }
 
-function InstructionsPanel({ entryType }: { entryType: keyof typeof INSTRUCTIONS }) {
-  const instructions = INSTRUCTIONS[entryType];
+function InstructionsPanel({ entryType, gallons }: { entryType: EntryType; gallons: number }) {
+  const instructions = instructionsFor(entryType, gallons);
   if (!instructions) return null;
   return (
     <details className="mb-4 rounded border border-[var(--pyre-blue)]/30 bg-[var(--pyre-blue)]/5">
@@ -331,6 +375,7 @@ function parseReading(raw: string): number | null | undefined {
  */
 function EditEntryPanel({
   record,
+  plunges,
   infoParam,
   onInfoChange,
   onCancel,
@@ -338,6 +383,7 @@ function EditEntryPanel({
   onSessionExpired,
 }: {
   record: WaterTestRow;
+  plunges: readonly ColdPlungeRow[];
   infoParam: Parameter | null;
   onInfoChange: (parameter: Parameter | null) => void;
   onCancel: () => void;
@@ -348,7 +394,11 @@ function EditEntryPanel({
   // design, so there is nothing to correct on one but its doses and notes.
   const hasReadings = hasReadingPanel(record.entry_type);
 
-  const [tub, setTub] = useState<Tub>(record.tub);
+  const [tub, setTub] = useState<string>(record.tub);
+  // Entries move only onto active plunges; the one it is filed under stays
+  // offered even when archived, so saving other corrections never moves it.
+  const plungeOptions = plunges.filter((p) => !p.archived || p.id === record.tub);
+  const gallons = plunges.find((p) => p.id === tub)?.gallons ?? CHART_GALLONS;
   const [filterAction, setFilterAction] = useState<FilterAction>(
     record.filter_action ?? DEFAULT_FILTER_ACTION
   );
@@ -385,7 +435,10 @@ function EditEntryPanel({
     return readings as Readings;
   }, [readingInputs]);
 
-  const recommendations = useMemo(() => getRecommendations(liveReadings), [liveReadings]);
+  const recommendations = useMemo(
+    () => getRecommendations(liveReadings, { gallons }),
+    [liveReadings, gallons]
+  );
 
   const liveRecByParam = useMemo(() => {
     const map = new Map<ReadingKey, Recommendation>();
@@ -472,23 +525,12 @@ function EditEntryPanel({
       </div>
 
       {/* Logged against the wrong tub is the correction staff ask for most —
-       * the two are tested one after the other. */}
+       * the plunges are tested one after the other. */}
       <div className="mb-3">
         <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
           Tub
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {TUBS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTub(value)}
-              className={pillClass(tub === value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
+        <PlungePicker options={plungeOptions} value={tub} onChange={setTub} />
       </div>
 
       {record.entry_type === 'filter' && (
@@ -680,8 +722,13 @@ function EditEntryPanel({
 export function WaterLog({ userEmail }: { userEmail: string }) {
   const [sessionExpired, setSessionExpired] = useState(false);
 
+  // --- plunges (names + gallons; managed on /admin/water/plunges) ---
+  const plungesQuery = useCachedJson<PlungesResponse>(PLUNGES_URL);
+  const plunges = useMemo(() => plungesQuery.data?.plunges ?? [], [plungesQuery.data]);
+  const activePlunges = useMemo(() => plunges.filter((p) => !p.archived), [plunges]);
+
   // --- entry form ---
-  const [tub, setTub] = useState<Tub>('left');
+  const [tub, setTub] = useState<string>('');
   const [entryType, setEntryType] = useState<EntryType>('test');
   const [readingInputs, setReadingInputs] = useState<Record<ReadingKey, string>>({
     ta: '',
@@ -703,7 +750,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   // --- log ---
   const [records, setRecords] = useState<WaterTestRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [filter, setFilter] = useState<'all' | Tub>('all');
+  const [filter, setFilter] = useState<'all' | string>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [logLoading, setLogLoading] = useState(false);
   const [logError, setLogError] = useState('');
@@ -719,12 +766,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const [chartRecords, setChartRecords] = useState<WaterTestRow[]>([]);
 
   const loadLog = useCallback(
-    async (
-      offset: number,
-      tubFilter: 'all' | Tub,
-      rangeKey: RangeKey,
-      entryTypeFilter: TypeFilter
-    ) => {
+    async (offset: number, tubFilter: string, rangeKey: RangeKey, entryTypeFilter: TypeFilter) => {
       setLogLoading(true);
       setLogError('');
       try {
@@ -754,7 +796,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   // The chart wants the whole window in one fetch (up to the API's 100-row
   // cap), not the log's 25-row pages.
   const loadChart = useCallback(
-    async (tubFilter: 'all' | Tub, rangeKey: RangeKey, entryTypeFilter: TypeFilter) => {
+    async (tubFilter: string, rangeKey: RangeKey, entryTypeFilter: TypeFilter) => {
       try {
         const params = new URLSearchParams({ limit: '100' });
         if (tubFilter !== 'all') params.set('tub', tubFilter);
@@ -777,6 +819,17 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     void loadChart(filter, range, typeFilter);
   }, [loadLog, loadChart, filter, range, typeFilter]);
 
+  // Default to the first active plunge, and move off one archived since the
+  // list loaded.
+  useEffect(() => {
+    if (activePlunges.length > 0 && !activePlunges.some((p) => p.id === tub)) {
+      setTub(activePlunges[0].id);
+    }
+  }, [activePlunges, tub]);
+
+  const selectedPlunge = plunges.find((p) => p.id === tub) ?? null;
+  const gallons = selectedPlunge?.gallons ?? CHART_GALLONS;
+
   // Live per-field feedback: the recommendation engine is pure and local, so
   // rerunning it on every keystroke is free. Invalid text is treated as
   // not-tested here (the field flags it inline); recommendations compose
@@ -792,9 +845,9 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const liveRecByParam = useMemo(() => {
     const map = new Map<ReadingKey, Recommendation>();
-    for (const rec of getRecommendations(liveReadings)) map.set(rec.parameter, rec);
+    for (const rec of getRecommendations(liveReadings, { gallons })) map.set(rec.parameter, rec);
     return map;
-  }, [liveReadings]);
+  }, [liveReadings, gallons]);
 
   const collectReadings = (): Readings | null => {
     const readings: Record<string, number | null> = {};
@@ -811,21 +864,37 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const SHOCK_NOTE = 'Tub closed for shock. Cover off 20+ min, retest before reopening.';
 
+  const shockDrafts = (forGallons: number): DoseDraft[] =>
+    shockDoses(forGallons).map((d) => ({
+      chemical: d.chemical,
+      gramsStr: String(d.grams),
+      recommendedGrams: d.grams,
+      reason: 'Weekly shock treatment',
+      accepted: true,
+    }));
+
+  // Switching plunge mid-shock re-sizes the prefilled doses — but leaves any
+  // amount the employee already changed by hand.
+  const selectTub = (id: string) => {
+    setTub(id);
+    if (entryType !== 'shock') return;
+    const resized = shockDrafts(plunges.find((p) => p.id === id)?.gallons ?? CHART_GALLONS);
+    setDoseDrafts((prev) =>
+      prev.map((draft) => {
+        const next = resized.find((d) => d.chemical === draft.chemical);
+        const untouched = draft.gramsStr === String(draft.recommendedGrams);
+        return next && untouched ? next : draft;
+      })
+    );
+  };
+
   const switchEntryType = (type: EntryType) => {
     setEntryType(type);
     setPhase('entering');
     setRecommendations([]);
     setFormError('');
     if (type === 'shock') {
-      setDoseDrafts(
-        SHOCK_DOSES.map((d) => ({
-          chemical: d.chemical,
-          gramsStr: String(d.grams),
-          recommendedGrams: d.grams,
-          reason: 'Weekly shock treatment',
-          accepted: true,
-        }))
-      );
+      setDoseDrafts(shockDrafts(gallons));
       setNotes((prev) => prev.trim() || SHOCK_NOTE);
     } else {
       setDoseDrafts([]);
@@ -843,7 +912,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       setFormError('Enter at least one reading');
       return;
     }
-    const recs = getRecommendations(readings);
+    const recs = getRecommendations(readings, { gallons });
     setRecommendations(recs);
     setDoseDrafts(
       recs
@@ -862,6 +931,10 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
 
   const save = async () => {
     setFormError('');
+    if (!activePlunges.some((p) => p.id === tub)) {
+      setFormError('Pick a tub');
+      return;
+    }
     // Maintenance entries (drain/refill, filter service) record the job only —
     // tests are logged separately. Ignore any reading inputs typed before
     // switching type.
@@ -979,7 +1052,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
   const deleteEntry = async (record: WaterTestRow) => {
     if (
       !(await confirmAction({
-        title: `Delete this ${record.tub} tub entry?`,
+        title: `Delete this ${plungeName(plunges, record.tub)} tub entry?`,
         body: "This can't be undone.",
         confirmLabel: 'Delete',
         danger: true,
@@ -1010,7 +1083,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
     }
   };
 
-  if (sessionExpired) {
+  if (sessionExpired || isSessionExpired(plungesQuery.error)) {
     return <SessionExpired returnTo="/admin/water" />;
   }
 
@@ -1028,22 +1101,44 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
       {/* ---- Entry form ---- */}
       <div className="mb-10 rounded-lg border border-white/10 bg-white/[0.02] p-4">
         <div className="mb-4">
-          <div className="mb-1.5 text-xs font-mono-bold uppercase tracking-wide text-white/40">
-            Tub
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {TUBS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTub(value)}
-                disabled={reviewing}
-                className={pillClass(tub === value)}
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-xs font-mono-bold uppercase tracking-wide text-white/40">
+              Tub
+            </span>
+            {plungesQuery.data?.canManage && (
+              <a
+                href="/admin/water/plunges"
+                className="font-mono text-xs text-white/40 underline-offset-2 hover:text-white hover:underline"
               >
-                {value}
-              </button>
-            ))}
+                Manage plunges
+              </a>
+            )}
           </div>
+          {plungesQuery.error ? (
+            <p className="text-sm text-[var(--pyre-red)]">
+              Couldn't load the plunges ({plungesQuery.error}).{' '}
+              <button
+                type="button"
+                onClick={() => void plungesQuery.reload()}
+                className="underline"
+              >
+                Retry
+              </button>
+            </p>
+          ) : plungesQuery.loading ? (
+            <p className="text-sm text-white/40">Loading plunges…</p>
+          ) : activePlunges.length === 0 ? (
+            <p className="text-sm text-white/50">
+              No active plunges. An admin can add one under Manage plunges.
+            </p>
+          ) : (
+            <PlungePicker
+              options={activePlunges}
+              value={tub}
+              onChange={selectTub}
+              disabled={reviewing}
+            />
+          )}
         </div>
 
         <div className="mb-4">
@@ -1065,7 +1160,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           </div>
         </div>
 
-        {entryType !== 'test' && <InstructionsPanel entryType={entryType} />}
+        {entryType !== 'test' && <InstructionsPanel entryType={entryType} gallons={gallons} />}
 
         {entryType === 'refill' && (
           <p className="mb-4 font-mono text-xs text-white/30">
@@ -1162,6 +1257,11 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         {/* Review panel */}
         {reviewing && (
           <div className="mb-4">
+            {selectedPlunge && (
+              <p className="mb-3 font-mono text-xs text-white/40">
+                Doses sized for {selectedPlunge.name} ({formatGallons(selectedPlunge.gallons)} gal)
+              </p>
+            )}
             {!guestSafety.safe && criticals.length === 0 && (
               <div className="mb-3 rounded border border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 p-3">
                 <div className="font-mono-bold text-sm uppercase tracking-wide text-[var(--pyre-red)]">
@@ -1373,15 +1473,23 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-2">
-          {(['all', ...TUBS] as const).map((value) => (
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={pillClass(filter === 'all')}
+          >
+            all
+          </button>
+          {plunges.map((plunge) => (
             <button
-              key={value}
+              key={plunge.id}
               type="button"
-              onClick={() => setFilter(value)}
-              className={pillClass(filter === value)}
+              onClick={() => setFilter(plunge.id)}
+              title={plunge.archived ? 'Archived' : undefined}
+              className={`${pillClass(filter === plunge.id)}${plunge.archived ? ' opacity-60' : ''}`}
             >
-              {value}
+              {plunge.name}
             </button>
           ))}
         </div>
@@ -1411,7 +1519,8 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
         <div className="px-4 pb-4">
           <WaterTrends
             records={chartRecords}
-            visibleTubs={filter === 'all' ? [...TUBS] : [filter]}
+            plunges={plunges}
+            visibleTubs={filter === 'all' ? plunges.map((p) => p.id) : [filter]}
           />
         </div>
       </details>
@@ -1452,7 +1561,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
           >
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="rounded bg-white/10 px-2 py-0.5 font-mono-bold text-xs uppercase tracking-wide">
-                {record.tub}
+                {plungeName(plunges, record.tub)}
               </span>
               {record.entry_type !== 'test' && (
                 <span className="rounded bg-[var(--pyre-blue)]/20 px-2 py-0.5 font-mono-bold text-xs uppercase tracking-wide text-[var(--pyre-blue)]">
@@ -1473,6 +1582,7 @@ export function WaterLog({ userEmail }: { userEmail: string }) {
             {editing ? (
               <EditEntryPanel
                 record={record}
+                plunges={plunges}
                 infoParam={infoParam}
                 onInfoChange={setInfoParam}
                 onCancel={() => setEditingId(null)}
