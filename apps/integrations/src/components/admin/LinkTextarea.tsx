@@ -1,6 +1,9 @@
 // A markdown textarea with internal-link autocomplete, used by every markdown
-// field in the dashboard (SOPs, messages and replies, card notes, goal
-// descriptions): once the href of a markdown link starts with "/", a dropdown
+// field in the dashboard (SOPs, messages and replies, card notes and
+// checklists, goal descriptions, shift notes and their replies, the
+// suggestion editors) — though not a public form's intro and confirmation,
+// whose readers can't open admin pages: once the href of a markdown link
+// starts with "/", a dropdown
 // under the caret lists the SOPs and admin pages the signed-in user may open
 // (served by /api/admin/link-targets, ranked by lib/sops/link-suggest.ts,
 // drawn by LinkPicker). Arrow keys move, Enter or Tab picks, Escape hides the

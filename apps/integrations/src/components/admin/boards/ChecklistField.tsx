@@ -28,6 +28,7 @@ import type { PeopleNames } from '@/lib/sops/names';
 import type { CheckItems } from '@/lib/sops/optimistic';
 import { Checklist } from '../Checklist';
 import { textareaClass } from '../goalsUi';
+import { LinkTextarea } from '../LinkTextarea';
 
 export function ChecklistField({
   id,
@@ -114,16 +115,16 @@ export function ChecklistField({
 
       {editing ? (
         <>
-          <textarea
+          <LinkTextarea
             id={`${id}-md`}
             className={`${textareaClass} font-mono text-xs`}
             rows={Math.min(14, Math.max(5, draft.split('\n').length + 1))}
             maxLength={BOARD_LIMITS.checklist}
             value={draft}
             placeholder={'- [ ] An item\n- [!] An item that must be done, never skipped'}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              onChange(e.target.value.trim() ? editChecklist(answer, e.target.value) : null, false);
+            onChange={(next) => {
+              setDraft(next);
+              onChange(next.trim() ? editChecklist(answer, next) : null, false);
             }}
           />
           <p className="text-xs text-white/35">

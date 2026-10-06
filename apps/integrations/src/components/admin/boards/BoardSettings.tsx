@@ -60,6 +60,7 @@ import {
   SectionTitle,
   selectBaseClass,
 } from '../goalsUi';
+import { LinkTextarea } from '../LinkTextarea';
 import { BoardSopLinks } from './BoardSopLinks';
 import { AssigneePicker } from './CardMeta';
 import { ColumnOrder } from './ColumnOrder';
@@ -791,14 +792,14 @@ function ChecklistSettings({
         <label className="mb-1 block text-xs text-white/50" htmlFor={mdId}>
           Default checklist
         </label>
-        <textarea
+        <LinkTextarea
           id={mdId}
           className={`${inputClass} min-h-28 font-mono text-xs`}
           rows={Math.min(14, Math.max(4, draft.checklistMd.split('\n').length + 1))}
           maxLength={BOARD_LIMITS.checklist}
           placeholder={'- [ ] Contract signed\n- [!] W-9 received\n- [ ] Intro call booked'}
           value={draft.checklistMd}
-          onChange={(e) => onChange({ checklistMd: e.target.value })}
+          onChange={(next) => onChange({ checklistMd: next })}
         />
         <p className="mt-1 text-xs text-white/35">
           Markdown, like an SOP: “- [ ]” for an item, “- [!]” for one that must be checked off and

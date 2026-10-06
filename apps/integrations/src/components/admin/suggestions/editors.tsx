@@ -7,6 +7,7 @@
 
 import { todayEastern } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
+import { LinkTextarea } from '@/components/admin/LinkTextarea';
 import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
 import type { BoardFieldValue } from '@/lib/db';
 import {
@@ -202,12 +203,12 @@ function CardCreateEditor({
       </label>
       <label className="block">
         <span className={labelClass}>Notes</span>
-        <textarea
+        <LinkTextarea
           className={textareaClass}
           value={value.notesMd}
           maxLength={SUGGESTION_LIMITS.notes}
           disabled={disabled}
-          onChange={(e) => set({ notesMd: e.target.value })}
+          onChange={(next) => set({ notesMd: next })}
         />
         <span className="mt-1 block font-mono text-[10px] text-white/30">
           A link back to the shift note is added when the card is created.
@@ -310,12 +311,12 @@ function CardCommentEditor({
       </p>
       <label className="block">
         <span className={labelClass}>Comment</span>
-        <textarea
+        <LinkTextarea
           className={textareaClass}
           value={value.note}
           maxLength={SUGGESTION_LIMITS.comment}
           disabled={disabled}
-          onChange={(e) => set({ note: e.target.value })}
+          onChange={(next) => set({ note: next })}
         />
         <span className="mt-1 block font-mono text-[10px] text-white/30">
           A link back to the shift note is added when the comment is posted.
@@ -379,12 +380,12 @@ function SopEditEditor({ value, onChange, target, disabled }: EditorProps<'sop.e
         {showText ? 'Hide the full text' : 'Edit the wording'}
       </button>
       {showText && (
-        <textarea
+        <LinkTextarea
           className={`${textareaClass} min-h-64 font-mono text-xs`}
           value={value.contentMd}
           maxLength={SUGGESTION_LIMITS.sopContent}
           disabled={disabled}
-          onChange={(e) => set({ contentMd: e.target.value })}
+          onChange={(next) => set({ contentMd: next })}
         />
       )}
       <label className="block">
