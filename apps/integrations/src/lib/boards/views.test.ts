@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import type { LinkSummary } from './links';
-import { dateBucket, groupCards, type ViewSpec, viewProblem } from './views';
+import { dateBucket, groupCards, newViewDefaults, type ViewSpec, viewProblem } from './views';
 
 const col = (id: string, kind: BoardColumnRow['kind'], sort: number): BoardColumnRow =>
   ({
@@ -379,5 +379,40 @@ describe('viewProblem', () => {
     expect(
       viewProblem({ ...base, group_field_key: 'practice', sort_by: 'field:practice' }, fields)
     ).toMatch(/sorts by/);
+  });
+});
+
+describe('newViewDefaults', () => {
+  it("starts on the board's first date field, by month, sorted by it", () => {
+    const fields = [
+      field('practice', 'choice', { sort_order: 1 }),
+      field('event_date', 'date', { label: 'Event date', sort_order: 2 }),
+    ];
+    const body = newViewDefaults(fields);
+    expect(body).toEqual({
+      name: 'By event date',
+      groupBy: 'field',
+      groupFieldKey: 'event_date',
+      dateUnit: 'month',
+      sortBy: 'field:event_date',
+    });
+    expect(
+      viewProblem(
+        {
+          group_by: body.groupBy,
+          group_field_key: body.groupFieldKey,
+          date_unit: body.dateUnit,
+          sort_by: body.sortBy,
+        },
+        fields
+      )
+    ).toBeNull();
+  });
+
+  it('starts by assignee on a board with no dates', () => {
+    expect(newViewDefaults([field('practice', 'choice')])).toMatchObject({
+      groupBy: 'assignee',
+      dateUnit: null,
+    });
   });
 });

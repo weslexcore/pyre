@@ -21,7 +21,13 @@ import { isFinished } from './cards';
 import { checklistDone, checklistOf, formatChecklist } from './checklist';
 import { fileIdsOf } from './files';
 import { type LinkSummary, linkIdsOf } from './links';
-import { type DateUnit, type FieldKind, GROUPABLE_KINDS, SORTABLE_KINDS } from './types';
+import {
+  BOARD_LIMITS,
+  type DateUnit,
+  type FieldKind,
+  GROUPABLE_KINDS,
+  SORTABLE_KINDS,
+} from './types';
 import { formatProperty } from './validate';
 
 /** What grouping a view needs from its row. */
@@ -108,6 +114,42 @@ export function groupsByDate(
   return (
     groupBy === 'due_date' || groupBy === 'created_at' || (groupBy === 'field' && kind === 'date')
   );
+}
+
+/** The settings a new view starts from, as POST /api/admin/board-views takes them. */
+export interface NewViewBody {
+  name: string;
+  groupBy: BoardViewRow['group_by'];
+  groupFieldKey: string | null;
+  dateUnit: DateUnit | null;
+  sortBy: string;
+}
+
+/**
+ * What "+ View" makes before anyone has picked anything: the board's first
+ * date field by month, sorted by that date, since "what is on when" is what
+ * a board with dates gets asked first; and by assignee on a board without
+ * one, the other question its columns cannot answer. The view is saved as
+ * soon as it is made, and changed from there.
+ */
+export function newViewDefaults(fields: BoardFieldRow[]): NewViewBody {
+  const date = groupableFields(fields).find((field) => field.kind === 'date');
+  if (date) {
+    return {
+      name: `By ${date.label.toLowerCase()}`.slice(0, BOARD_LIMITS.viewName),
+      groupBy: 'field',
+      groupFieldKey: date.key,
+      dateUnit: 'month',
+      sortBy: `field:${date.key}`,
+    };
+  }
+  return {
+    name: 'By assignee',
+    groupBy: 'assignee',
+    groupFieldKey: null,
+    dateUnit: null,
+    sortBy: 'manual',
+  };
 }
 
 /**

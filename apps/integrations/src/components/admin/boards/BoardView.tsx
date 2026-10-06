@@ -39,6 +39,7 @@ import { planDrop, sortOrdersFor } from '@/lib/boards/reorder';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import type { LinkedSop } from '@/lib/boards/sops';
 import { BOARD_LIMITS, BOARDS_HREF } from '@/lib/boards/types';
+import { newViewDefaults } from '@/lib/boards/views';
 import { readError, sendJson } from '@/lib/client/api';
 import type {
   BoardCardRow,
@@ -126,7 +127,7 @@ export function BoardView({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // The view editor: null shut, 'new' for a new view, or the id being edited.
+  // The id of the view being edited, or null with the editor shut.
   const [editing, setEditing] = useState<string | null>(null);
   const settingsRef = useRef<BoardSettingsHandle>(null);
   const [ownerFilter, setOwnerFilter] = useState('all');
@@ -333,13 +334,40 @@ export function BoardView({ slug }: { slug: string }) {
     : view === 'calendar' && hasCalendar
       ? 'calendar'
       : 'board';
-  const editingView = editing && editing !== 'new' ? views.find((v) => v.id === editing) : null;
+  const editingView = editing ? (views.find((v) => v.id === editing) ?? null) : null;
+
+  const setViews = (next: (views: BoardViewRow[]) => BoardViewRow[]) =>
+    setBundle((current) => (current ? { ...current, views: next(current.views ?? []) } : current));
+
+  // "+ View" makes the view there and then, from the board's likeliest
+  // grouping, and opens it with its editor: nothing waits on a Save button.
+  const createView = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { view: created } = await sendJson<{ view: BoardViewRow }>(
+        '/api/admin/board-views',
+        'POST',
+        { board: slug, ...newViewDefaults(fields) }
+      );
+      setViews((current) => [...current, created]);
+      showView(created.id);
+      setEditing(created.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not make a view');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // The view rides in the URL so a refresh, a back button, and a link shared
   // in a message all land where the person was. replaceState rather than
   // pushState: flipping the view is not a place you want to go back through.
   const showView = (next: ViewMode) => {
     setView(next);
+    // The editor belongs to the view it opened on; leaving shuts it, and it
+    // sends whatever was still waiting as it goes.
+    if (next !== editing) setEditing(null);
     const url = new URL(window.location.href);
     if (next === 'board') url.searchParams.delete('view');
     else url.searchParams.set('view', next);
@@ -403,9 +431,9 @@ export function BoardView({ slug }: { slug: string }) {
             {views.length < BOARD_LIMITS.viewsPerBoard && (
               <button
                 type="button"
-                className={pillClass(editing === 'new')}
-                aria-expanded={editing === 'new'}
-                onClick={() => setEditing(editing === 'new' ? null : 'new')}
+                className={pillClass(false)}
+                disabled={busy}
+                onClick={() => void createView()}
               >
                 + View
               </button>
@@ -506,33 +534,17 @@ export function BoardView({ slug }: { slug: string }) {
         </div>
       )}
 
-      {editing && (editing === 'new' || editingView) && (
+      {editingView && (
         <ViewEditor
-          key={editing}
-          slug={slug}
-          view={editingView ?? null}
+          key={editingView.id}
+          view={editingView}
           fields={fields}
+          onChange={(next) =>
+            setViews((current) => current.map((v) => (v.id === next.id ? next : v)))
+          }
           onClose={() => setEditing(null)}
-          onSaved={(saved) => {
-            setBundle((current) =>
-              current
-                ? {
-                    ...current,
-                    views: (current.views ?? []).some((v) => v.id === saved.id)
-                      ? (current.views ?? []).map((v) => (v.id === saved.id ? saved : v))
-                      : [...(current.views ?? []), saved],
-                  }
-                : current
-            );
-            setEditing(null);
-            showView(saved.id);
-          }}
           onDeleted={(id) => {
-            setBundle((current) =>
-              current
-                ? { ...current, views: (current.views ?? []).filter((v) => v.id !== id) }
-                : current
-            );
+            setViews((current) => current.filter((v) => v.id !== id));
             setEditing(null);
             showView('board');
           }}
