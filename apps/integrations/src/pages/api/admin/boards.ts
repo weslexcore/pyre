@@ -131,16 +131,17 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 
     const boards = visibleBoards(gate.access, await loadBoards(db));
     // The viewer's own next few dated cards, for the strip on top.
-    const [index, upNext] = await Promise.all([
+    const [index, next] = await Promise.all([
       loadBoardsIndex(db, boards),
       loadUpNext(db, sessionEmail(gate), boards),
     ]);
+    const upNext = { upNext: next.cards, upNextTotal: next.total };
     const canManage = canManageBoards(gate.access);
-    if (!canManage) return json({ ...index, upNext, canManage });
+    if (!canManage) return json({ ...index, ...upNext, canManage });
 
     // The New board form needs the roster and the goals nobody has claimed.
     const [owners, unattached] = await Promise.all([listAssignable(), unattachedGoals(db)]);
-    return json({ ...index, upNext, canManage, owners, unattachedGoals: unattached });
+    return json({ ...index, ...upNext, canManage, owners, unattachedGoals: unattached });
   } catch (e) {
     return storeError('boards', e);
   }

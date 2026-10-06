@@ -489,24 +489,31 @@ export interface UpNextCard {
 }
 
 /** How many cards the strip shows. */
-export const UP_NEXT_LIMIT = 5;
+export const UP_NEXT_LIMIT = 20;
+
+/** The strip's cards, and how many are on the viewer in all. */
+export interface UpNext {
+  cards: UpNextCard[];
+  /** Every matching card, the ones past UP_NEXT_LIMIT included. */
+  total: number;
+}
 
 /**
  * The viewer's next open cards with a due date, soonest (so the late ones)
- * first, on the boards they may open. Archived boards are out: their work is
- * not anybody's next thing.
+ * first, on the boards they may open, and how many there are past the limit.
+ * Archived boards are out: their work is not anybody's next thing.
  */
 export async function loadUpNext(
   db: SupabaseClient,
   email: string,
   boards: BoardRow[]
-): Promise<UpNextCard[]> {
+): Promise<UpNext> {
   const viewer = email.trim().toLowerCase();
   const live = new Map(boards.filter((board) => !board.archived).map((b) => [b.id, b]));
-  if (!viewer || live.size === 0) return [];
-  const { data, error } = await db
+  if (!viewer || live.size === 0) return { cards: [], total: 0 };
+  const { data, count, error } = await db
     .from('board_cards')
-    .select('id, title, due_date, repeat_every, repeat_unit, board_id')
+    .select('id, title, due_date, repeat_every, repeat_unit, board_id', { count: 'exact' })
     .contains('assignee_emails', [viewer])
     .is('completed_at', null)
     .not('due_date', 'is', null)
@@ -515,7 +522,7 @@ export async function loadUpNext(
     .order('sort_order', { ascending: true })
     .limit(UP_NEXT_LIMIT);
   if (error) throw new Error(error.message);
-  return (
+  const cards = (
     (data ?? []) as (Pick<
       BoardCardRow,
       'id' | 'title' | 'repeat_every' | 'repeat_unit' | 'board_id'
@@ -526,4 +533,5 @@ export async function loadUpNext(
     const { board_id: _board, ...rest } = card;
     return [{ ...rest, board_slug: board.slug, board_name: board.name }];
   });
+  return { cards, total: Math.max(count ?? 0, cards.length) };
 }

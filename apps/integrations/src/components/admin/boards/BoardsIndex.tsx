@@ -50,6 +50,8 @@ interface BoardsResponse {
   formBoardIds: string[];
   /** The viewer's next few dated cards. */
   upNext?: UpNextCard[];
+  /** How many dated cards are on the viewer, the ones upNext leaves out included. */
+  upNextTotal?: number;
   canManage?: boolean;
   owners?: Assignable[];
   unattachedGoals?: GoalRow[];
@@ -215,7 +217,7 @@ export function BoardsIndex() {
         </div>
       )}
 
-      <UpNext cards={data.upNext ?? []} today={today} />
+      <UpNext cards={data.upNext ?? []} total={data.upNextTotal} today={today} />
 
       {canManage && creating && (
         <form onSubmit={create} className={cardClass}>

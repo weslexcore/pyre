@@ -4,7 +4,8 @@
 // it costs one line of the page whatever it holds. Each card opens on its
 // own board, drawer and all (#card-<id>, useCardDeepLink). A vertical rule
 // marks where this week (Monday to Sunday, as "Due this week" counts it)
-// ends and later weeks begin.
+// ends and later weeks begin. The strip holds the first UP_NEXT_LIMIT; a
+// tally at its end counts the rest.
 
 import { addDays, weekStartOf } from '@pyre/schedule-core';
 import { Fragment } from 'react';
@@ -12,7 +13,17 @@ import { describeRepeat, repeatRuleOf } from '@/lib/boards/recurrence';
 import type { UpNextCard } from '@/lib/boards/store';
 import { DueChip, QuietChip } from '../goalsUi';
 
-export function UpNext({ cards, today }: { cards: UpNextCard[]; today: string }) {
+export function UpNext({
+  cards,
+  total = cards.length,
+  today,
+}: {
+  cards: UpNextCard[];
+  /** Every dated card on the viewer, the ones left out of `cards` included. */
+  total?: number;
+  today: string;
+}) {
+  const hidden = Math.max(0, total - cards.length);
   const weekEnd = addDays(weekStartOf(today), 6);
   // Cards arrive soonest first, so the rule sits before the first one past Sunday.
   const firstLater = cards.findIndex((card) => card.due_date > weekEnd);
@@ -63,6 +74,11 @@ export function UpNext({ cards, today }: { cards: UpNextCard[]; today: string })
               </Fragment>
             );
           })}
+          {hidden > 0 && (
+            <li className="flex shrink-0 snap-start items-center rounded-lg border border-dashed border-white/15 px-4 font-mono text-xs text-white/50">
+              +{hidden} more not shown
+            </li>
+          )}
         </ul>
       )}
     </section>
