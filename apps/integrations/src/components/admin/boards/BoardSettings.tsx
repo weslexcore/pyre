@@ -44,6 +44,7 @@ import {
   FIELD_KINDS,
   GOALS_BOARD_SLUG,
   kindHasOptions,
+  kindIsDated,
   kindIsTime,
 } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
@@ -554,7 +555,7 @@ export function BoardSettings({
                     show label
                   </label>
                 )}
-                {draft.kind === 'date' && (
+                {kindIsDated(draft.kind) && (
                   <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                     <input
                       type="checkbox"
@@ -659,9 +660,10 @@ export function BoardSettings({
           Choose a field's type before adding it; archive it and add a new one to change it. A
           removed field is deleted if no card has answered it and archived if one has. A date field
           marked "on calendar" draws its answers on the board's calendar — pick a time field beside
-          it and each entry gets a time as well as a day. A linked cards field picks cards from
-          another board (or this one), and can show the same links on that board too. A checklist
-          gives every card a list to work through, and can move the card on once it is done.
+          it and each entry gets a time as well as a day; a date & time field brings its own. A
+          linked cards field picks cards from another board (or this one), and can show the same
+          links on that board too. A checklist gives every card a list to work through, and can move
+          the card on once it is done.
         </p>
       </div>
 

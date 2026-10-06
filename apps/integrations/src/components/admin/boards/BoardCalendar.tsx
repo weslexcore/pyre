@@ -14,6 +14,7 @@ import {
   monthStartOf,
   movePatch,
 } from '@/lib/boards/calendar';
+import { kindIsDated } from '@/lib/boards/types';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
@@ -36,7 +37,9 @@ export interface BoardCalendarProps {
  */
 export function boardHasCalendar(board: BoardRow, fields: BoardFieldRow[]): boolean {
   if (board.due_on_calendar) return true;
-  return fields.some((field) => field.kind === 'date' && field.show_on_calendar && !field.archived);
+  return fields.some(
+    (field) => kindIsDated(field.kind) && field.show_on_calendar && !field.archived
+  );
 }
 
 export function BoardCalendar({
@@ -55,7 +58,7 @@ export function BoardCalendar({
   const [only, setOnly] = useState<ReadonlySet<string>>(new Set());
 
   const dateFields = useMemo(
-    () => fields.filter((f) => f.kind === 'date' && f.show_on_calendar && !f.archived),
+    () => fields.filter((f) => kindIsDated(f.kind) && f.show_on_calendar && !f.archived),
     [fields]
   );
 
@@ -134,5 +137,5 @@ export function BoardCalendar({
 
 /** The chip key an entry answers to: its due-ness, or the field it came from. */
 function sourceOf(entry: CalendarEntry): string {
-  return entry.kind === 'due' ? 'due' : `field:${entry.id.split(':')[2] ?? ''}`;
+  return entry.kind === 'due' ? 'due' : `field:${entry.fieldKey ?? ''}`;
 }

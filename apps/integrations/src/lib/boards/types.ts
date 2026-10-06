@@ -53,6 +53,7 @@ export const FIELD_KINDS = [
   'choice',
   'multi_choice',
   'date',
+  'datetime',
   'time',
   'time_range',
   'files',
@@ -71,6 +72,7 @@ export const FIELD_KIND_LABELS: Record<FieldKind, string> = {
   choice: 'Pick one',
   multi_choice: 'Pick any',
   date: 'Date',
+  datetime: 'Date & time',
   time: 'Time',
   time_range: 'Time range',
   files: 'Files',
@@ -95,6 +97,24 @@ export function answerLimit(kind: FieldKind): number {
 /** Kinds whose answers come from `options`. */
 export function kindHasOptions(kind: FieldKind): boolean {
   return kind === 'choice' || kind === 'multi_choice';
+}
+
+/**
+ * Kinds whose answer is one or more days: a `date`, or a `datetime` that
+ * names the moment on the day as well. Both can take several answers, sit on
+ * the calendar, and group a view by day, week, month or year.
+ */
+export function kindIsDated(kind: FieldKind): boolean {
+  return kind === 'date' || kind === 'datetime';
+}
+
+/**
+ * Kinds that may hold one answer or several: days, moments, or times. A
+ * form question can ask for just one (`multiple`); the card drawer takes
+ * as many as are given.
+ */
+export function kindTakesSeveral(kind: FieldKind): boolean {
+  return kindIsDated(kind) || kind === 'time';
 }
 
 /**
@@ -290,6 +310,7 @@ export const GROUPABLE_KINDS: readonly FieldKind[] = [
   'choice',
   'multi_choice',
   'date',
+  'datetime',
   'time',
   'time_range',
   'files',
@@ -298,4 +319,10 @@ export const GROUPABLE_KINDS: readonly FieldKind[] = [
 ];
 
 /** The kinds a view can sort a group's cards by. */
-export const SORTABLE_KINDS: readonly FieldKind[] = ['date', 'number', 'time', 'time_range'];
+export const SORTABLE_KINDS: readonly FieldKind[] = [
+  'date',
+  'datetime',
+  'number',
+  'time',
+  'time_range',
+];

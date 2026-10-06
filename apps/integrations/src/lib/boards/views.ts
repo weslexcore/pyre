@@ -19,6 +19,7 @@ import { type PeopleNames, personName } from '@/lib/sops/names';
 import { formatMonth, monthStartOf, sundayStartOf } from './calendar';
 import { isFinished } from './cards';
 import { checklistDone, checklistOf, formatChecklist } from './checklist';
+import { dateTimeOf } from './datetime';
 import { fileIdsOf } from './files';
 import { type LinkSummary, linkIdsOf } from './links';
 import {
@@ -26,6 +27,7 @@ import {
   type DateUnit,
   type FieldKind,
   GROUPABLE_KINDS,
+  kindIsDated,
   SORTABLE_KINDS,
 } from './types';
 import { formatProperty } from './validate';
@@ -112,7 +114,9 @@ export function groupsByDate(
   kind: FieldKind | undefined
 ): boolean {
   return (
-    groupBy === 'due_date' || groupBy === 'created_at' || (groupBy === 'field' && kind === 'date')
+    groupBy === 'due_date' ||
+    groupBy === 'created_at' ||
+    (groupBy === 'field' && kind !== undefined && kindIsDated(kind))
   );
 }
 
@@ -133,7 +137,7 @@ export interface NewViewBody {
  * soon as it is made, and changed from there.
  */
 export function newViewDefaults(fields: BoardFieldRow[]): NewViewBody {
-  const date = groupableFields(fields).find((field) => field.kind === 'date');
+  const date = groupableFields(fields).find((field) => kindIsDated(field.kind));
   if (date) {
     return {
       name: `By ${date.label.toLowerCase()}`.slice(0, BOARD_LIMITS.viewName),
@@ -365,6 +369,26 @@ function datesOfAnswer(value: unknown): string[] {
   return list.filter((date): date is string => typeof date === 'string' && isYmd(date));
 }
 
+/**
+ * When a time answer starts: each of a time field's one or several, or the
+ * near end of a time range.
+ */
+function startTimes(field: BoardFieldRow, value: unknown): string[] {
+  const list =
+    field.kind === 'time_range'
+      ? [Array.isArray(value) ? value[0] : null]
+      : Array.isArray(value)
+        ? value
+        : [value];
+  return list.filter((time): time is string => typeof time === 'string' && TIME_RE.test(time));
+}
+
+/** A date & time answer's moments, one or several; what a sort reads. */
+function momentsOfAnswer(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : [value];
+  return list.map(dateTimeOf).filter((moment): moment is string => moment !== null);
+}
+
 // ---------------------------------------------------------------------------
 // Fields.
 
@@ -390,6 +414,13 @@ function fieldGrouping<C extends ViewCard>(
   switch (field.kind) {
     case 'date':
       return dateGrouping((card) => datesOfAnswer(answer(card)), unit);
+
+    case 'datetime':
+      // By the day each moment falls on; the time orders cards within it.
+      return dateGrouping(
+        (card) => [...new Set(momentsOfAnswer(answer(card)).map((moment) => moment.slice(0, 10)))],
+        unit
+      );
 
     case 'choice':
       return {
@@ -488,12 +519,14 @@ function fieldGrouping<C extends ViewCard>(
     case 'time_range':
       return {
         bucketsOf: (card) => {
-          const value = answer(card);
-          const start = Array.isArray(value) ? value[0] : value;
-          if (typeof start !== 'string' || !TIME_RE.test(start)) return [];
-          // By the hour it starts in: "6:00 PM" holds 6:00 through 6:59.
-          const hour = `${start.slice(0, 2)}:00`;
-          return [{ key: hour, label: formatProperty({ kind: 'time' }, hour), order: hour }];
+          // By the hour each starts in: "6:00 PM" holds 6:00 through 6:59. A
+          // range starts once; several times can each start in their own hour.
+          const hours = new Set(startTimes(field, answer(card)).map((t) => `${t.slice(0, 2)}:00`));
+          return [...hours].map((hour) => ({
+            key: hour,
+            label: formatProperty({ kind: 'time' }, hour),
+            order: hour,
+          }));
         },
         known: [],
         emptyLabel: 'No time',
@@ -530,20 +563,20 @@ function nullsLast<T extends string | number>(a: T | null, b: T | null, tie: () 
   return tie();
 }
 
-/** The value a field sort reads off a card: the earliest date, the number, the start time. */
+/** The value a field sort reads off a card: the earliest date or moment, the number, the start time. */
 function sortValue(field: BoardFieldRow, value: unknown): string | number | null {
   switch (field.kind) {
     case 'date': {
       const dates = datesOfAnswer(value).sort();
       return dates[0] ?? null;
     }
+    case 'datetime':
+      return momentsOfAnswer(value).sort()[0] ?? null;
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : null;
     case 'time':
-    case 'time_range': {
-      const start = Array.isArray(value) ? value[0] : value;
-      return typeof start === 'string' && TIME_RE.test(start) ? start : null;
-    }
+    case 'time_range':
+      return startTimes(field, value).sort()[0] ?? null;
     default:
       return null;
   }

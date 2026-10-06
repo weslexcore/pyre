@@ -39,7 +39,7 @@ import {
   TITLE_MODES,
 } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
-import { FIELD_KIND_LABELS } from '@/lib/boards/types';
+import { FIELD_KIND_LABELS, kindIsDated, kindTakesSeveral } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import { useCopy } from '@/lib/client/useCopy';
@@ -498,20 +498,25 @@ function Builder({ slug, initial }: { slug: string; initial: FormResponse }) {
                       />
                       required
                     </label>
-                    {field?.kind === 'date' && (
+                    {field && kindTakesSeveral(field.kind) && (
                       <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                         <input
                           type="checkbox"
                           checked={question.multiple === true}
-                          aria-label={`Allow several dates for ${item.label}`}
+                          aria-label={`Allow several answers for ${item.label}`}
                           onChange={(e) =>
                             setQuestion(index, { multiple: e.target.checked || undefined })
                           }
                         />
-                        several dates
+                        several{' '}
+                        {field.kind === 'datetime'
+                          ? 'dates & times'
+                          : field.kind === 'time'
+                            ? 'times'
+                            : 'dates'}
                       </label>
                     )}
-                    {field?.kind === 'date' && (
+                    {field && kindIsDated(field.kind) && (
                       <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
                         <input
                           type="checkbox"
@@ -840,6 +845,9 @@ function sampleAnswers(fields: BoardFieldRow[]): Record<string, BoardFieldValue>
         break;
       case 'date':
         answers[field.key] = '2026-10-03';
+        break;
+      case 'datetime':
+        answers[field.key] = '2026-10-03T18:00';
         break;
       case 'time':
         answers[field.key] = '18:00';

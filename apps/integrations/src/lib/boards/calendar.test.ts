@@ -602,3 +602,67 @@ describe('multiple date options on the calendar', () => {
     });
   });
 });
+
+describe('date & time fields on the calendar', () => {
+  const SESSION = field('leads', 'session', 'datetime', {
+    label: 'Session',
+    show_on_calendar: true,
+  });
+  const withSessions = (properties: Record<string, BoardFieldValue>) =>
+    input({ fields: [SESSION, TIME_FIELD], cards: [card('s', { properties })] });
+
+  it('draws each moment on its day at its own time', () => {
+    const entries = buildCalendar(
+      withSessions({
+        session: ['2026-10-03T18:30', '2026-10-05T09:00', '2026-10-03T18:30', 'later'],
+        requested_time: '12:00',
+      })
+    );
+    expect(entries.map((entry) => [entry.date, entry.time])).toEqual([
+      ['2026-10-03', '18:30'],
+      ['2026-10-05', '09:00'],
+    ]);
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(2);
+  });
+
+  it('moves one moment to another day and keeps its time', () => {
+    const [entry] = buildCalendar(
+      withSessions({ session: ['2026-10-03T18:30', '2026-11-10T09:00'] }),
+      { start: '2026-10-01', end: '2026-10-31' }
+    );
+    expect(movePatch(entry, '2026-10-04')).toEqual({
+      id: 's',
+      patch: { properties: { session: ['2026-10-04T18:30', '2026-11-10T09:00'] } },
+    });
+  });
+
+  it('moves a single answer as a single answer', () => {
+    const [entry] = buildCalendar(withSessions({ session: '2026-10-03T18:30' }));
+    expect(entry.id).toBe('field:s:session');
+    expect(movePatch(entry, '2026-10-06')).toEqual({
+      id: 's',
+      patch: { properties: { session: '2026-10-06T18:30' } },
+    });
+  });
+});
+
+describe('a date timed by several times', () => {
+  it('draws the date once per time, and each moves the same answer', () => {
+    const entries = buildCalendar(
+      input({
+        cards: [
+          card('t', {
+            properties: { requested_date: '2026-10-03', requested_time: ['20:00', '18:30'] },
+          }),
+        ],
+      })
+    );
+    expect(entries.map((entry) => entry.time)).toEqual(['18:30', '20:00']);
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(2);
+    expect(entries.every((entry) => entry.fieldKey === 'requested_date')).toBe(true);
+    expect(movePatch(entries[1], '2026-10-04')).toEqual({
+      id: 't',
+      patch: { properties: { requested_date: '2026-10-04' } },
+    });
+  });
+});

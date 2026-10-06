@@ -416,3 +416,47 @@ describe('newViewDefaults', () => {
     });
   });
 });
+
+describe('groupCards by a date & time field', () => {
+  const when = field('session', 'datetime');
+
+  it('groups by the day each moment falls on, and sorts by the moment', () => {
+    const spec = view({ group_field_key: 'session', date_unit: 'day', sort_by: 'field:session' });
+    const cards = [
+      card({ title: 'Evening', properties: { session: '2026-10-03T18:30' } }),
+      card({ title: 'Morning', properties: { session: '2026-10-03T09:00' } }),
+      card({
+        title: 'Both days',
+        properties: { session: ['2026-10-04T10:00', '2026-10-03T07:00'] },
+      }),
+      card({ title: 'Unset' }),
+    ];
+    const result = groups(spec, cards, [when]);
+    expect(result[0].titles).toEqual(['Both days', 'Morning', 'Evening']);
+    expect(result[1].titles).toEqual(['Both days']);
+    expect(result.at(-1)?.titles).toEqual(['Unset']);
+  });
+
+  it('is what a new view groups by when it is the first dated field', () => {
+    expect(newViewDefaults([when])).toMatchObject({
+      groupFieldKey: 'session',
+      dateUnit: 'month',
+      sortBy: 'field:session',
+    });
+  });
+});
+
+describe('groupCards by a time field with several times', () => {
+  it('puts the card under each hour it starts in, sorted by its earliest', () => {
+    const at = field('arrival', 'time');
+    const spec = view({ group_field_key: 'arrival', sort_by: 'field:arrival' });
+    const cards = [
+      card({ title: 'Twice', properties: { arrival: ['20:15', '18:45'] } }),
+      card({ title: 'Once', properties: { arrival: '18:00' } }),
+    ];
+    expect(groups(spec, cards, [at])).toEqual([
+      { label: '6:00 PM', titles: ['Once', 'Twice'] },
+      { label: '8:00 PM', titles: ['Twice'] },
+    ]);
+  });
+});

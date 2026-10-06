@@ -962,3 +962,60 @@ describe('parseViewInput', () => {
     );
   });
 });
+
+describe('date & time answers', () => {
+  const when: Pick<BoardFieldRow, 'kind' | 'options'> = { kind: 'datetime', options: [] };
+  const fieldsOf = (fields: unknown[]) => value(parseBoardPatch({ fields })).fields;
+
+  it('stores a day and a time, tidying the seconds and the separator', () => {
+    expect(normalizeAnswer(when, '2026-10-03T18:30')).toBe('2026-10-03T18:30');
+    expect(normalizeAnswer(when, ' 2026-10-03 18:30:00 ')).toBe('2026-10-03T18:30');
+    expect(normalizeAnswer(when, '2026-10-03')).toBeNull();
+    expect(normalizeAnswer(when, '2026-02-30T18:30')).toBeNull();
+    expect(normalizeAnswer(when, '2026-10-03T24:00')).toBeNull();
+  });
+
+  it('takes several, deduplicated, and drops what is not one', () => {
+    expect(
+      normalizeAnswer(when, ['2026-10-03T18:30', 'soon', '2026-10-03T18:30', '2026-10-04T09:00'])
+    ).toEqual(['2026-10-03T18:30', '2026-10-04T09:00']);
+    expect(normalizeAnswer(when, ['soon'])).toBeNull();
+  });
+
+  it('reads back as the house date and a clock time', () => {
+    expect(formatProperty(when, '2026-10-03T18:30')).toBe('10.03.26 6:30 PM');
+    expect(formatProperty(when, ['2026-10-03T09:05', '2026-10-04T00:00'])).toBe(
+      '10.03.26 9:05 AM, 10.04.26 12:00 AM'
+    );
+    expect(formatProperty(when, 'whenever')).toBe('whenever');
+  });
+
+  it('goes on the calendar without borrowing a time field', () => {
+    const fields = fieldsOf([
+      {
+        key: 'session',
+        label: 'Session',
+        kind: 'datetime',
+        showOnCalendar: true,
+        calendarTimeKey: 'requested_time',
+      },
+      { key: 'requested_time', label: 'Requested time', kind: 'time' },
+    ]);
+    expect(fields?.[0]).toMatchObject({ show_on_calendar: true, calendar_time_key: null });
+  });
+});
+
+describe('several times', () => {
+  const time: Pick<BoardFieldRow, 'kind' | 'options'> = { kind: 'time', options: [] };
+
+  it('takes one time or several, deduplicated', () => {
+    expect(normalizeAnswer(time, '18:30')).toBe('18:30');
+    expect(normalizeAnswer(time, ['18:30', 'noon', '20:00', '18:30'])).toEqual(['18:30', '20:00']);
+    expect(normalizeAnswer(time, ['noon'])).toBeNull();
+  });
+
+  it('reads back as a list of clock times', () => {
+    expect(formatProperty(time, ['18:30', '20:00'])).toBe('6:30 PM, 8:00 PM');
+    expect(formatProperty(time, '09:05')).toBe('9:05 AM');
+  });
+});

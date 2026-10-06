@@ -1073,6 +1073,8 @@ export type BoardFieldKind =
   | 'choice'
   | 'multi_choice'
   | 'date'
+  /** A day and a time, venue-local, stored as 'YYYY-MM-DDTHH:MM' — one, or a list of them. */
+  | 'datetime'
   | 'time'
   /** A start and an end, stored as a two-element ['HH:MM', 'HH:MM'] array. */
   | 'time_range'
@@ -1095,7 +1097,7 @@ export interface BoardFieldRow {
   show_on_card: boolean;
   /** Include the field label beside its value on cards. */
   show_label_on_card: boolean;
-  /** Only meaningful for kind 'date': this answer is an entry on the calendar. */
+  /** Only meaningful for kinds 'date' and 'datetime': this answer is an entry on the calendar. */
   show_on_calendar: boolean;
   /** A time/time_range field key on the same board that times this date; null is all day. */
   calendar_time_key: string | null;

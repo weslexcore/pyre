@@ -23,7 +23,8 @@ import { addDays, formatCompactTime } from '@pyre/schedule-core';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { goalOverviewHref, isClosedStatus } from '@/lib/goals/types';
 import { isYmd } from '@/lib/goals/validate';
-import { isFinishedKind, kindIsTime } from './types';
+import { dateTimeOf } from './datetime';
+import { isFinishedKind, kindIsDated, kindIsTime } from './types';
 
 /** Why an entry is on the day it is on. */
 export type CalendarEntryKind = 'due' | 'field' | 'goal';
@@ -47,6 +48,11 @@ export interface CalendarEntry {
   fieldKey?: string;
   /** All options, including ones outside the visible month, for moving one date. */
   fieldDates?: string[];
+  /**
+   * For a date & time field: the stored answer this entry is ('YYYY-MM-DDTHH:MM').
+   * A drag swaps its day and keeps its time; fieldDates then holds the full values.
+   */
+  fieldValue?: string;
   goalId?: string;
   boardId?: string;
   boardSlug?: string;
@@ -96,8 +102,9 @@ interface Timing {
 const ALL_DAY: Timing = { time: null, endTime: null, overnight: false };
 
 /**
- * The moment or window a date entry sits at, read from the companion field
- * the date field names. Every way this can fail — no pointer, a pointer at a
+ * The moments or window a date entry sits at, read from the companion field
+ * the date field names — one timing per time when the time field holds
+ * several, so a card offering 6pm and 8pm shows at both. Every way this can fail — no pointer, a pointer at a
  * field that is gone or archived or of the wrong kind, an unanswered or
  * malformed answer — lands on the same all-day result, because a rental
  * whose time nobody has agreed yet is still on that day.
@@ -106,27 +113,35 @@ function timingFor(
   field: BoardFieldRow,
   card: BoardCardRow,
   timeFields: Map<string, BoardFieldRow>
-): Timing {
-  if (field.calendar_time_key === null) return ALL_DAY;
+): Timing[] {
+  if (field.calendar_time_key === null) return [ALL_DAY];
   const companion = timeFields.get(field.calendar_time_key);
-  if (!companion) return ALL_DAY;
+  if (!companion) return [ALL_DAY];
 
   const answer = card.properties[companion.key];
   if (companion.kind === 'time') {
-    const time = timeOf(answer);
-    return time ? { time, endTime: null, overnight: false } : ALL_DAY;
+    const times = [
+      ...new Set(
+        (Array.isArray(answer) ? answer : [answer])
+          .map(timeOf)
+          .filter((time): time is string => time !== null)
+      ),
+    ];
+    return times.length > 0
+      ? times.map((time) => ({ time, endTime: null, overnight: false }))
+      : [ALL_DAY];
   }
 
   // time_range: both ends or nothing, the way normalizeAnswer stores it.
-  if (!Array.isArray(answer) || answer.length !== 2) return ALL_DAY;
+  if (!Array.isArray(answer) || answer.length !== 2) return [ALL_DAY];
   const start = timeOf(answer[0]);
   const end = timeOf(answer[1]);
-  if (!start || !end) return ALL_DAY;
+  if (!start || !end) return [ALL_DAY];
   // An end before a start is a window running past midnight, which
   // validate.ts allows on purpose. The entry stays on its start date and
   // sorts by its start; splitting it across two cells would say the rental
   // happens twice.
-  return { time: start, endTime: end, overnight: end < start };
+  return [{ time: start, endTime: end, overnight: end < start }];
 }
 
 /**
@@ -144,9 +159,12 @@ export function movePatch(
     // properties is merged server-side against the card's current answers
     // (normalizeProperties), so naming one key leaves the rest alone — the
     // requested time survives its date moving.
+    // A date & time keeps its time and trades its day; a date is the day.
+    const from = entry.fieldValue ?? entry.date;
+    const to = entry.fieldValue ? `${date}${entry.fieldValue.slice(10)}` : date;
     const answer = entry.fieldDates
-      ? [...new Set(entry.fieldDates.map((option) => (option === entry.date ? date : option)))]
-      : date;
+      ? [...new Set(entry.fieldDates.map((option) => (option === from ? to : option)))]
+      : to;
     return { id: entry.cardId, patch: { properties: { [entry.fieldKey]: answer } } };
   }
   return null;
@@ -208,7 +226,7 @@ export function buildCalendar(
   const timeFields = new Map<string, Map<string, BoardFieldRow>>();
   for (const field of fields) {
     if (field.archived || !boardsById.has(field.board_id)) continue;
-    if (field.kind === 'date' && field.show_on_calendar) {
+    if (kindIsDated(field.kind) && field.show_on_calendar) {
       const list = dateFields.get(field.board_id);
       if (list) list.push(field);
       else dateFields.set(field.board_id, [field]);
@@ -256,6 +274,33 @@ export function buildCalendar(
     const companions = timeFields.get(board.id) ?? new Map<string, BoardFieldRow>();
     for (const field of dateFields.get(board.id) ?? []) {
       const answer = card.properties[field.key];
+      if (field.kind === 'datetime') {
+        // Each answer is its own moment: the day and the time come together,
+        // so no companion field is consulted.
+        const moments = [
+          ...new Set(
+            (Array.isArray(answer) ? answer : [answer])
+              .map(dateTimeOf)
+              .filter((value): value is string => value !== null)
+          ),
+        ];
+        for (const moment of moments) {
+          entries.push({
+            id: `field:${card.id}:${field.key}${Array.isArray(answer) ? `:${moment}` : ''}`,
+            date: moment.slice(0, 10),
+            time: moment.slice(11),
+            endTime: null,
+            overnight: false,
+            kind: 'field',
+            detail: field.label,
+            fieldKey: field.key,
+            fieldValue: moment,
+            ...(Array.isArray(answer) ? { fieldDates: moments } : {}),
+            ...shared,
+          });
+        }
+        continue;
+      }
       const dates = [
         ...new Set(
           (Array.isArray(answer) ? answer : [answer])
@@ -263,17 +308,23 @@ export function buildCalendar(
             .filter((date): date is string => date !== null)
         ),
       ];
+      const timings = timingFor(field, card, companions);
       for (const date of dates) {
-        entries.push({
-          id: `field:${card.id}:${field.key}${Array.isArray(answer) ? `:${date}` : ''}`,
-          date,
-          ...timingFor(field, card, companions),
-          kind: 'field',
-          detail: field.label,
-          fieldKey: field.key,
-          ...(Array.isArray(answer) ? { fieldDates: dates } : {}),
-          ...shared,
-        });
+        for (const timing of timings) {
+          // The time joins the id only when there are several to tell apart,
+          // so a card's single entry keeps the id it always had.
+          const at = timings.length > 1 ? `@${timing.time}` : '';
+          entries.push({
+            id: `field:${card.id}:${field.key}${Array.isArray(answer) ? `:${date}` : ''}${at}`,
+            date,
+            ...timing,
+            kind: 'field',
+            detail: field.label,
+            fieldKey: field.key,
+            ...(Array.isArray(answer) ? { fieldDates: dates } : {}),
+            ...shared,
+          });
+        }
       }
     }
   }

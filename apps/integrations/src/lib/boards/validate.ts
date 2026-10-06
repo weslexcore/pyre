@@ -18,6 +18,7 @@ import {
   parseGoalCreate,
 } from '@/lib/goals/validate';
 import { formatChecklist, normalizeChecklist } from './checklist';
+import { dateTimeOf } from './datetime';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
 import { isRepeatUnit, REPEAT_EVERY_MAX, type RepeatUnit } from './recurrence';
@@ -32,6 +33,7 @@ import {
   isViewLayout,
   KEY_RE,
   kindHasOptions,
+  kindIsDated,
   kindIsTime,
   SLUG_RE,
   VIEW_SORTS,
@@ -368,18 +370,20 @@ function parseFields(value: unknown): ParseResult<FieldInput[]> {
       return fail(`Field "${key}" has a bad sort order`);
     }
 
-    // Only a date can be an event. A stale client sending the flag on a text
-    // field has it dropped rather than refused — the same choice
-    // normalizeProperties makes about an answer it cannot use. The pointer
-    // that goes with it is dropped too, so the two can never disagree.
+    // Only a date or a date & time can be an event. A stale client sending
+    // the flag on a text field has it dropped rather than refused — the same
+    // choice normalizeProperties makes about an answer it cannot use. The
+    // pointer that goes with it is dropped too, so the two can never
+    // disagree; and only a bare date borrows its time from another field,
+    // since a date & time carries its own.
     const link = parseLinkConfig(field, label);
     if (!link.ok) return link;
     const checklist = parseChecklistConfig(field, label);
     if (!checklist.ok) return checklist;
 
-    const onCalendar = field.kind === 'date' && field.showOnCalendar === true;
+    const onCalendar = kindIsDated(field.kind) && field.showOnCalendar === true;
     const timeKey =
-      onCalendar && typeof field.calendarTimeKey === 'string'
+      onCalendar && field.kind === 'date' && typeof field.calendarTimeKey === 'string'
         ? field.calendarTimeKey.trim() || null
         : null;
 
@@ -817,6 +821,19 @@ function timeOf(raw: unknown): string | null {
 }
 
 /**
+ * One answer, or several, deduplicated in the order they came — the shape a
+ * date, a date & time and a time all store.
+ */
+function oneOrSeveral(
+  raw: unknown,
+  read: (item: unknown) => string | null
+): string | string[] | null {
+  if (!Array.isArray(raw)) return read(raw);
+  const values = [...new Set(raw.map(read).filter((item): item is string => item !== null))];
+  return values.length > 0 ? values : null;
+}
+
+/**
  * An address, lowercased, or null. Deliberately not the full RFC: one @,
  * something either side, a dot in the domain, no spaces. That is the check
  * worth making at the door — whether the address exists is answered by
@@ -888,7 +905,7 @@ export function normalizeAnswer(
       return parsed === undefined ? null : parsed;
     }
     case 'time':
-      return timeOf(raw);
+      return oneOrSeveral(raw, timeOf);
     case 'time_range': {
       // Both ends or nothing: a window with one edge is not a window, and
       // storing half would leave the card showing a time that means nothing.
@@ -899,20 +916,12 @@ export function normalizeAnswer(
       const end = timeOf(raw[1]);
       return start && end ? [start, end] : null;
     }
-    case 'date': {
-      if (!Array.isArray(raw)) {
-        return typeof raw === 'string' && isYmd(raw.trim()) ? raw.trim() : null;
-      }
-      const dates = [
-        ...new Set(
-          raw
-            .filter((item): item is string => typeof item === 'string')
-            .map((item) => item.trim())
-            .filter(isYmd)
-        ),
-      ];
-      return dates.length > 0 ? dates : null;
-    }
+    case 'date':
+      return oneOrSeveral(raw, (item) =>
+        typeof item === 'string' && isYmd(item.trim()) ? item.trim() : null
+      );
+    case 'datetime':
+      return oneOrSeveral(raw, dateTimeOf);
     case 'choice': {
       if (typeof raw !== 'string') return null;
       const value = raw.trim();
@@ -1004,6 +1013,13 @@ export function formatYmd(value: unknown): string {
   return `${month}.${day}.${year.slice(2)}`;
 }
 
+/** '2026-10-03T18:30' as '10.03.26 6:30 PM'; anything else as it is stored. */
+export function formatDateTime(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const stored = dateTimeOf(value);
+  return stored ? `${formatYmd(stored.slice(0, 10))} ${formatTime(stored.slice(11))}` : value;
+}
+
 /** A stored answer as the words a card shows. */
 export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -1013,6 +1029,8 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
     case 'date':
       // One date, or the several a form may collect.
       return Array.isArray(value) ? value.map(formatYmd).join(', ') : formatYmd(value);
+    case 'datetime':
+      return Array.isArray(value) ? value.map(formatDateTime).join(', ') : formatDateTime(value);
     case 'phone':
       return formatPhone(value);
     case 'long_text':
@@ -1020,7 +1038,8 @@ export function formatProperty(field: Pick<BoardFieldRow, 'kind'>, value: unknow
       // what the row shows is the same words with the breaks closed up.
       return typeof value === 'string' ? value.replace(/\s+/g, ' ') : '';
     case 'time':
-      return formatTime(value);
+      // One time, or the several a card may hold.
+      return Array.isArray(value) ? value.map(formatTime).join(', ') : formatTime(value);
     case 'time_range': {
       if (!Array.isArray(value) || value.length !== 2) return '';
       const start = formatTime(value[0]);

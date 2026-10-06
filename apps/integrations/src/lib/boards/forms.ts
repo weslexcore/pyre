@@ -25,7 +25,7 @@ import type {
   BoardFormTitleMode,
 } from '@/lib/db';
 import { isYmd, type ParseResult } from '@/lib/goals/validate';
-import { BOARD_LIMITS, KEY_RE } from './types';
+import { BOARD_LIMITS, KEY_RE, kindIsDated, kindTakesSeveral } from './types';
 import { formatProperty, KIND_PROBLEMS, normalizeAnswer, normalizeProperties } from './validate';
 
 export const FORM_LIMITS = {
@@ -562,9 +562,9 @@ export interface ResolvedQuestion {
   label: string;
   hint: string | null;
   required: boolean;
-  /** A date question that takes more than one date; every other question is one answer. */
+  /** A date, date & time, or time question that takes more than one; every other question is one answer. */
   multiple: boolean;
-  /** A date question that refuses a date already gone. */
+  /** A date (or date & time) question that refuses a day already gone. */
   future: boolean;
   /** The field's shape, for a field question; null for a builtin. */
   field: Pick<BoardFieldRow, 'kind' | 'options'> | null;
@@ -616,8 +616,8 @@ export function formQuestions(
       label: question.label ?? field.label,
       hint: question.hint ?? field.hint,
       required: question.required,
-      multiple: field.kind === 'date' && question.multiple === true,
-      future: field.kind === 'date' && question.future === true,
+      multiple: kindTakesSeveral(field.kind) && question.multiple === true,
+      future: kindIsDated(field.kind) && question.future === true,
       field: { kind: field.kind, options: field.options },
     });
   }
@@ -652,7 +652,7 @@ export function answerOf(question: ResolvedQuestion, raw: unknown): BoardFieldVa
     const answer = normalizeAnswer(question.field, raw);
     // A date question asked for one date takes one, whatever the client
     // sent: the first, since that is the one the person picked first.
-    if (question.field.kind === 'date' && !question.multiple && Array.isArray(answer)) {
+    if (kindTakesSeveral(question.field.kind) && !question.multiple && Array.isArray(answer)) {
       return answer[0] ?? null;
     }
     return answer;
@@ -683,10 +683,15 @@ export function isAnswered(question: ResolvedQuestion, raw: unknown): boolean {
  * the same wall clock a card's due date is read against.
  */
 
-/** The dates in an answer, however many the question takes. */
+/**
+ * The days in an answer, however many the question takes. A date & time is
+ * read by its day, so a time earlier today still counts as today.
+ */
 function datesIn(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string');
-  return typeof raw === 'string' ? [raw] : [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.slice(0, 10));
 }
 
 /** Nothing was typed here, whatever shape the control hands back. */

@@ -73,7 +73,7 @@ export function AnswerPill({ label, value }: { label: string; value: string }) {
  * A field this control can render, structurally rather than by table: a guest
  * profile field and a board field ask the same questions in the same shapes,
  * so the control is shared and the row types stay where they belong. `kind`
- * is widened to the union of both — `date`, `time`, `time_range`, and
+ * is widened to the union of both — `date`, `datetime`, `time`, `time_range`, and
  * `files` only arrive from boards. A `files` answer is uploads, which need a
  * board to go to, so the card drawer and the form mount their own control
  * (boards/FilesField) for that kind; here it only says so.
@@ -87,6 +87,7 @@ export interface FieldDefinition {
     | 'email'
     | 'phone'
     | 'date'
+    | 'datetime'
     | 'time'
     | 'time_range'
     | 'files'
@@ -122,10 +123,13 @@ export function FieldInput({
   onChange: (next: GuestFieldValue | null) => void;
   /** Namespaces the input id so two forms on one page don't collide. */
   idPrefix?: string;
-  /** A date field takes several dates unless told to take one (a form question can say so). */
+  /**
+   * A date, date & time, or time field takes several unless told to take
+   * one (a form question can say so).
+   */
   multiple?: boolean;
   /**
-   * For a date field: the earliest date the picker offers. A form question
+   * For a date or date & time field: the earliest day the picker offers. A form question
    * that insists on a date still to come passes today, so the past is greyed
    * out rather than merely refused after the fact.
    */
@@ -240,15 +244,56 @@ export function FieldInput({
         );
       }
       return <DatesInput id={id} label={field.label} value={value} onChange={onChange} min={min} />;
-    case 'time':
+    case 'datetime': {
+      // The picker's floor is a moment; a day's floor is its first minute.
+      const floor = min ? `${min}T00:00` : undefined;
+      if (multiple === false) {
+        const single = Array.isArray(value)
+          ? (value[0] ?? '')
+          : typeof value === 'string'
+            ? value
+            : '';
+        return (
+          <input
+            id={id}
+            className={inputClass}
+            type="datetime-local"
+            min={floor}
+            value={single}
+            onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+          />
+        );
+      }
       return (
-        <input
+        <DatesInput
           id={id}
-          className={inputClass}
-          type={field.kind}
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+          label={field.label}
+          value={value}
+          onChange={onChange}
+          min={floor}
+          type="datetime-local"
         />
+      );
+    }
+    case 'time':
+      if (multiple === false) {
+        const single = Array.isArray(value)
+          ? (value[0] ?? '')
+          : typeof value === 'string'
+            ? value
+            : '';
+        return (
+          <input
+            id={id}
+            className={inputClass}
+            type="time"
+            value={single}
+            onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+          />
+        );
+      }
+      return (
+        <DatesInput id={id} label={field.label} value={value} onChange={onChange} type="time" />
       );
     case 'time_range':
       return <TimeRangeInput id={id} value={value} onChange={onChange} />;
@@ -322,7 +367,7 @@ function PhoneInput({
 }
 
 /**
- * One picker per date, with room for one more. The slots are the control's
+ * One picker per date (or date & time, or time — `type` says), with room for one more. The slots are the control's
  * own, not derived from the saved answer: a date input reports '' the
  * moment one of its segments is deleted, and a row that vanished on that
  * would take the half-typed date with it. So a slot stays while it is
@@ -336,14 +381,18 @@ function DatesInput({
   value,
   onChange,
   min,
+  type = 'date',
 }: {
   id: string;
   label: string;
   value: GuestFieldValue | null | undefined;
   onChange: (next: GuestFieldValue | null) => void;
-  /** The earliest date the picker offers; undefined offers any. */
+  /** The earliest value the picker offers, in its own shape; undefined offers any. */
   min?: string;
+  /** What each slot holds: a day, a day and a time, or a time. */
+  type?: 'date' | 'datetime-local' | 'time';
 }) {
+  const noun = type === 'datetime-local' ? 'date and time' : type;
   const stored = Array.isArray(value) ? value : typeof value === 'string' && value ? [value] : [];
   const storedKey = stored.join('|');
   const [slots, setSlots] = useState<string[]>(() => (stored.length > 0 ? stored : ['']));
@@ -377,9 +426,9 @@ function DatesInput({
         <div key={index} className="flex items-center gap-2">
           <input
             id={index === 0 ? id : `${id}-${index}`}
-            aria-label={`${label}, date ${index + 1}`}
+            aria-label={`${label}, ${noun} ${index + 1}`}
             className={inputClass}
-            type="date"
+            type={type}
             min={min}
             value={date}
             onChange={(event) => update(index, event.target.value)}
@@ -388,7 +437,7 @@ function DatesInput({
             <button
               type="button"
               className="text-xs text-white/60 hover:text-white"
-              aria-label={`Remove ${label} date ${index + 1}`}
+              aria-label={`Remove ${label} ${noun} ${index + 1}`}
               onClick={() => remove(index)}
             >
               Remove
@@ -402,7 +451,7 @@ function DatesInput({
           className="text-xs text-white/60 hover:text-white"
           onClick={() => setSlots((current) => [...current, ''])}
         >
-          Add another date
+          Add another {noun}
         </button>
       )}
     </div>

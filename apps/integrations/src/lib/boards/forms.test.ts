@@ -839,3 +839,84 @@ describe('what the form says while it is being filled in', () => {
     expect(answerProblem(question, 'dana@')).toBe(KIND_PROBLEMS.email);
   });
 });
+
+describe('a date & time question', () => {
+  const when = field({ key: 'session', label: 'Session', kind: 'datetime' });
+  const question = (extra: Partial<ResolvedQuestion> = {}): ResolvedQuestion => ({
+    id: 'session',
+    kind: 'field',
+    key: 'session',
+    label: 'Session',
+    hint: null,
+    required: false,
+    multiple: false,
+    future: false,
+    field: { kind: 'datetime', options: [] },
+    ...extra,
+  });
+
+  it('carries several and no-past flags, like a date', () => {
+    const [resolved] = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [
+          {
+            kind: 'field',
+            key: 'session',
+            label: null,
+            hint: null,
+            required: false,
+            multiple: true,
+            future: true,
+          },
+        ],
+      },
+      [when]
+    );
+    expect(resolved).toMatchObject({ multiple: true, future: true });
+  });
+
+  it('takes one unless asked for several', () => {
+    const pair = ['2026-10-03T18:30', '2026-10-04T09:00'];
+    expect(answerOf(question(), pair)).toBe('2026-10-03T18:30');
+    expect(answerOf(question({ multiple: true }), pair)).toEqual(pair);
+  });
+
+  it('reads "still to come" by the day, so earlier today still counts', () => {
+    const future = question({ future: true, multiple: true });
+    expect(answerProblem(future, '2026-09-22T06:00', '2026-09-22')).toBeNull();
+    expect(answerProblem(question({ future: true }), '2026-09-21T23:00', '2026-09-22')).toBe(
+      'That date has already passed.'
+    );
+    expect(answerProblem(future, ['2026-09-23T10:00', '2026-09-20T10:00'], '2026-09-22')).toMatch(
+      /today or later/
+    );
+  });
+});
+
+describe('a time question', () => {
+  const at = field({ key: 'arrival', label: 'Arrival', kind: 'time' });
+
+  it('takes several only when asked, and never insists on the future', () => {
+    const [resolved] = formQuestions(
+      {
+        titleMode: 'template',
+        questions: [
+          {
+            kind: 'field',
+            key: 'arrival',
+            label: null,
+            hint: null,
+            required: false,
+            multiple: true,
+            future: true,
+          },
+        ],
+      },
+      [at]
+    );
+    expect(resolved).toMatchObject({ multiple: true, future: false });
+    expect(answerOf(resolved, ['18:00', '20:00'])).toEqual(['18:00', '20:00']);
+    expect(answerOf({ ...resolved, multiple: false }, ['18:00', '20:00'])).toBe('18:00');
+  });
+});
