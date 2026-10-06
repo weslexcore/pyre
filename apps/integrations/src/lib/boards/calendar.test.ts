@@ -666,3 +666,28 @@ describe('a date timed by several times', () => {
     });
   });
 });
+
+describe('a date & time answer with no time', () => {
+  const SESSION = field('leads', 'session', 'datetime', {
+    label: 'Session',
+    show_on_calendar: true,
+  });
+
+  it('is an all-day entry that moves as a day', () => {
+    const entries = buildCalendar(
+      input({
+        fields: [SESSION],
+        cards: [card('d', { properties: { session: ['2026-10-03', '2026-10-03T18:30'] } })],
+      })
+    );
+    expect(entries.map((entry) => [entry.date, entry.time])).toEqual([
+      ['2026-10-03', '18:30'],
+      ['2026-10-03', null],
+    ]);
+    const allDay = entries[1];
+    expect(movePatch(allDay, '2026-10-05')).toEqual({
+      id: 'd',
+      patch: { properties: { session: ['2026-10-05', '2026-10-03T18:30'] } },
+    });
+  });
+});

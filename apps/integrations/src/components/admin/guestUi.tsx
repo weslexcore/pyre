@@ -244,37 +244,17 @@ export function FieldInput({
         );
       }
       return <DatesInput id={id} label={field.label} value={value} onChange={onChange} min={min} />;
-    case 'datetime': {
-      // The picker's floor is a moment; a day's floor is its first minute.
-      const floor = min ? `${min}T00:00` : undefined;
-      if (multiple === false) {
-        const single = Array.isArray(value)
-          ? (value[0] ?? '')
-          : typeof value === 'string'
-            ? value
-            : '';
-        return (
-          <input
-            id={id}
-            className={inputClass}
-            type="datetime-local"
-            min={floor}
-            value={single}
-            onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
-          />
-        );
-      }
+    case 'datetime':
       return (
-        <DatesInput
+        <DateTimesInput
           id={id}
           label={field.label}
           value={value}
           onChange={onChange}
-          min={floor}
-          type="datetime-local"
+          min={min}
+          single={multiple === false}
         />
       );
-    }
     case 'time':
       if (multiple === false) {
         const single = Array.isArray(value)
@@ -367,7 +347,7 @@ function PhoneInput({
 }
 
 /**
- * One picker per date (or date & time, or time — `type` says), with room for one more. The slots are the control's
+ * One picker per date (or time — `type` says), with room for one more. The slots are the control's
  * own, not derived from the saved answer: a date input reports '' the
  * moment one of its segments is deleted, and a row that vanished on that
  * would take the half-typed date with it. So a slot stays while it is
@@ -389,10 +369,10 @@ function DatesInput({
   onChange: (next: GuestFieldValue | null) => void;
   /** The earliest value the picker offers, in its own shape; undefined offers any. */
   min?: string;
-  /** What each slot holds: a day, a day and a time, or a time. */
-  type?: 'date' | 'datetime-local' | 'time';
+  /** What each slot holds: a day or a time. */
+  type?: 'date' | 'time';
 }) {
-  const noun = type === 'datetime-local' ? 'date and time' : type;
+  const noun = type;
   const stored = Array.isArray(value) ? value : typeof value === 'string' && value ? [value] : [];
   const storedKey = stored.join('|');
   const [slots, setSlots] = useState<string[]>(() => (stored.length > 0 ? stored : ['']));
@@ -452,6 +432,125 @@ function DatesInput({
           onClick={() => setSlots((current) => [...current, ''])}
         >
           Add another {noun}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A date & time slot as it is being filled in: the day, and the time if any. */
+interface MomentSlot {
+  date: string;
+  time: string;
+}
+
+function slotOf(stored: string): MomentSlot {
+  return { date: stored.slice(0, 10), time: stored.length > 10 ? stored.slice(11, 16) : '' };
+}
+
+/** What a slot stores: the day, with its time when one is given; '' until there is a day. */
+function momentOfSlot(slot: MomentSlot): string {
+  if (!slot.date) return '';
+  return slot.time ? `${slot.date}T${slot.time}` : slot.date;
+}
+
+/**
+ * A date and an optional time per answer, with room for one more unless
+ * `single`. Two inputs rather than one datetime-local, because that control
+ * cannot be left without a time, and a day whose hour nobody has agreed yet
+ * is still worth writing down. The slots are kept the way DatesInput keeps
+ * them: a time picked before its day waits in its slot rather than vanishing,
+ * and only finished answers are passed up.
+ */
+function DateTimesInput({
+  id,
+  label,
+  value,
+  onChange,
+  min,
+  single = false,
+}: {
+  id: string;
+  label: string;
+  value: GuestFieldValue | null | undefined;
+  onChange: (next: GuestFieldValue | null) => void;
+  /** The earliest day the picker offers; undefined offers any. */
+  min?: string;
+  /** One answer only: no adding, and a list from the drawer shows its first. */
+  single?: boolean;
+}) {
+  const all = Array.isArray(value) ? value : typeof value === 'string' && value ? [value] : [];
+  const stored = single ? all.slice(0, 1) : all;
+  const storedKey = stored.join('|');
+  const [slots, setSlots] = useState<MomentSlot[]>(() =>
+    stored.length > 0 ? stored.map(slotOf) : [{ date: '', time: '' }]
+  );
+  useEffect(() => {
+    setSlots((current) => {
+      if (current.map(momentOfSlot).filter(Boolean).join('|') === storedKey) return current;
+      return storedKey ? storedKey.split('|').map(slotOf) : [{ date: '', time: '' }];
+    });
+  }, [storedKey]);
+
+  const emit = (next: MomentSlot[]) => {
+    const unique = [...new Set(next.map(momentOfSlot).filter(Boolean))];
+    onChange(unique.length === 0 ? null : unique.length === 1 ? unique[0] : unique);
+  };
+  const update = (index: number, patch: Partial<MomentSlot>) => {
+    const next = slots.map((slot, i) => (i === index ? { ...slot, ...patch } : slot));
+    setSlots(next);
+    emit(next);
+  };
+  const remove = (index: number) => {
+    const rest = slots.filter((_, i) => i !== index);
+    const next = rest.length > 0 ? rest : [{ date: '', time: '' }];
+    setSlots(next);
+    emit(next);
+  };
+
+  return (
+    <div className="space-y-2">
+      {slots.map((slot, index) => {
+        const n = single ? '' : ` ${index + 1}`;
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: Controlled picker slots retain focus while their value changes.
+          <div key={index} className="flex items-center gap-2">
+            <input
+              id={index === 0 ? id : `${id}-${index}`}
+              aria-label={`${label}, date${n}`}
+              className={`${inputClass} min-w-0 flex-[3]`}
+              type="date"
+              min={min}
+              value={slot.date}
+              onChange={(event) => update(index, { date: event.target.value })}
+            />
+            <input
+              aria-label={`${label}, time${n} (optional)`}
+              className={`${inputClass} min-w-0 flex-[2]`}
+              type="time"
+              value={slot.time}
+              onChange={(event) => update(index, { time: event.target.value })}
+            />
+            {!single && (slots.length > 1 || slot.date || slot.time) && (
+              <button
+                type="button"
+                className="shrink-0 text-xs text-white/60 hover:text-white"
+                aria-label={`Remove ${label} date${n}`}
+                onClick={() => remove(index)}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {!single && slots.every((slot) => slot.date) && (
+        <button
+          type="button"
+          className="text-xs text-white/60 hover:text-white"
+          onClick={() => setSlots((current) => [...current, { date: '', time: '' }])}
+        >
+          Add another date
         </button>
       )}
     </div>

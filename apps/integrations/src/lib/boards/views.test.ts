@@ -460,3 +460,15 @@ describe('groupCards by a time field with several times', () => {
     ]);
   });
 });
+
+describe('a date & time field with some days untimed', () => {
+  it('sorts a day alone at the start of that day', () => {
+    const when = field('session', 'datetime');
+    const spec = view({ group_field_key: 'session', date_unit: 'day', sort_by: 'field:session' });
+    const cards = [
+      card({ title: 'Morning', properties: { session: '2026-10-03T09:00' } }),
+      card({ title: 'Some time', properties: { session: '2026-10-03' } }),
+    ];
+    expect(groups(spec, cards, [when])[0].titles).toEqual(['Some time', 'Morning']);
+  });
+});

@@ -970,7 +970,9 @@ describe('date & time answers', () => {
   it('stores a day and a time, tidying the seconds and the separator', () => {
     expect(normalizeAnswer(when, '2026-10-03T18:30')).toBe('2026-10-03T18:30');
     expect(normalizeAnswer(when, ' 2026-10-03 18:30:00 ')).toBe('2026-10-03T18:30');
-    expect(normalizeAnswer(when, '2026-10-03')).toBeNull();
+    // The time is optional: a day alone is an answer.
+    expect(normalizeAnswer(when, '2026-10-03')).toBe('2026-10-03');
+    expect(normalizeAnswer(when, ' 2026-10-03 ')).toBe('2026-10-03');
     expect(normalizeAnswer(when, '2026-02-30T18:30')).toBeNull();
     expect(normalizeAnswer(when, '2026-10-03T24:00')).toBeNull();
   });
@@ -986,6 +988,10 @@ describe('date & time answers', () => {
     expect(formatProperty(when, '2026-10-03T18:30')).toBe('10.03.26 6:30 PM');
     expect(formatProperty(when, ['2026-10-03T09:05', '2026-10-04T00:00'])).toBe(
       '10.03.26 9:05 AM, 10.04.26 12:00 AM'
+    );
+    expect(formatProperty(when, '2026-10-03')).toBe('10.03.26');
+    expect(formatProperty(when, ['2026-10-03', '2026-10-04T18:30'])).toBe(
+      '10.03.26, 10.04.26 6:30 PM'
     );
     expect(formatProperty(when, 'whenever')).toBe('whenever');
   });

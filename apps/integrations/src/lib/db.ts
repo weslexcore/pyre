@@ -1073,7 +1073,7 @@ export type BoardFieldKind =
   | 'choice'
   | 'multi_choice'
   | 'date'
-  /** A day and a time, venue-local, stored as 'YYYY-MM-DDTHH:MM' — one, or a list of them. */
+  /** A day and an optional time, venue-local: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM' — one, or a list. */
   | 'datetime'
   | 'time'
   /** A start and an end, stored as a two-element ['HH:MM', 'HH:MM'] array. */

@@ -23,7 +23,7 @@ import { addDays, formatCompactTime } from '@pyre/schedule-core';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { goalOverviewHref, isClosedStatus } from '@/lib/goals/types';
 import { isYmd } from '@/lib/goals/validate';
-import { dateTimeOf } from './datetime';
+import { dateTimeOf, timeOfDateTime } from './datetime';
 import { isFinishedKind, kindIsDated, kindIsTime } from './types';
 
 /** Why an entry is on the day it is on. */
@@ -49,8 +49,9 @@ export interface CalendarEntry {
   /** All options, including ones outside the visible month, for moving one date. */
   fieldDates?: string[];
   /**
-   * For a date & time field: the stored answer this entry is ('YYYY-MM-DDTHH:MM').
-   * A drag swaps its day and keeps its time; fieldDates then holds the full values.
+   * For a date & time field: the stored answer this entry is ('YYYY-MM-DD' or
+   * 'YYYY-MM-DDTHH:MM'). A drag swaps its day and keeps any time; fieldDates
+   * then holds the full values.
    */
   fieldValue?: string;
   goalId?: string;
@@ -275,8 +276,8 @@ export function buildCalendar(
     for (const field of dateFields.get(board.id) ?? []) {
       const answer = card.properties[field.key];
       if (field.kind === 'datetime') {
-        // Each answer is its own moment: the day and the time come together,
-        // so no companion field is consulted.
+        // Each answer carries its own time, or none, so no companion field
+        // is consulted.
         const moments = [
           ...new Set(
             (Array.isArray(answer) ? answer : [answer])
@@ -288,7 +289,8 @@ export function buildCalendar(
           entries.push({
             id: `field:${card.id}:${field.key}${Array.isArray(answer) ? `:${moment}` : ''}`,
             date: moment.slice(0, 10),
-            time: moment.slice(11),
+            // A day with no time agreed yet is an all-day entry.
+            time: timeOfDateTime(moment),
             endTime: null,
             overnight: false,
             kind: 'field',

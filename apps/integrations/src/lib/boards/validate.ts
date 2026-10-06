@@ -18,7 +18,7 @@ import {
   parseGoalCreate,
 } from '@/lib/goals/validate';
 import { formatChecklist, normalizeChecklist } from './checklist';
-import { dateTimeOf } from './datetime';
+import { dateTimeOf, timeOfDateTime } from './datetime';
 import { fileIdsOf, formatFileCount, normalizeFileIds } from './files';
 import { formatLinkCount, linkIdsOf, normalizeLinkIds } from './links';
 import { isRepeatUnit, REPEAT_EVERY_MAX, type RepeatUnit } from './recurrence';
@@ -1013,11 +1013,16 @@ export function formatYmd(value: unknown): string {
   return `${month}.${day}.${year.slice(2)}`;
 }
 
-/** '2026-10-03T18:30' as '10.03.26 6:30 PM'; anything else as it is stored. */
+/**
+ * '2026-10-03T18:30' as '10.03.26 6:30 PM', a day alone as '10.03.26';
+ * anything else as it is stored.
+ */
 export function formatDateTime(value: unknown): string {
   if (typeof value !== 'string') return '';
   const stored = dateTimeOf(value);
-  return stored ? `${formatYmd(stored.slice(0, 10))} ${formatTime(stored.slice(11))}` : value;
+  if (!stored) return value;
+  const time = timeOfDateTime(stored);
+  return time ? `${formatYmd(stored.slice(0, 10))} ${formatTime(time)}` : formatYmd(stored);
 }
 
 /** A stored answer as the words a card shows. */

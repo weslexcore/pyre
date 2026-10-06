@@ -5,10 +5,12 @@
 -- offering three possible evenings, each at a different hour, had nowhere to
 -- put the hours. A date & time field holds the day and the time together,
 -- one answer or several, the way a date field already takes one or several.
+-- The time is optional on each answer: a day whose hour nobody has agreed yet
+-- is still written down, and shows all day on the calendar.
 --
 -- A card's answer lives in board_cards.properties under the field's key, like
--- every typed answer: 'YYYY-MM-DDTHH:MM' on the bathhouse's wall clock (the
--- shape a datetime-local input speaks), or an array of them. The shape is
+-- every typed answer: 'YYYY-MM-DDTHH:MM' on the bathhouse's wall clock, or
+-- 'YYYY-MM-DD' when there is no time, or an array of either. The shape is
 -- checked in the app (lib/boards/datetime.ts).
 --
 -- show_on_calendar already means "draw this field's answers on the calendar";
