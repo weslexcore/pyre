@@ -525,6 +525,9 @@ export function BoardView({ slug }: { slug: string }) {
             owners={ownerOptions}
             people={bundle.people ?? {}}
             busy={busy}
+            hasGoal={goal !== null}
+            unattachedGoals={unattachedGoals}
+            mutate={mutate}
             onSaved={(result) =>
               setBundle((current) => (current ? { ...current, ...result } : current))
             }
@@ -560,7 +563,6 @@ export function BoardView({ slug }: { slug: string }) {
         columns={columns}
         people={people}
         owners={ownerOptions}
-        unattachedGoals={unattachedGoals}
         today={today}
         canManage={canManage}
         canWorkGoal={canWorkGoal}

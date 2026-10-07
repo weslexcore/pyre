@@ -14,8 +14,9 @@
 // The SOPs linked to the board sit under the form (BoardSopLinks), saved
 // on their own as each is linked or removed.
 //
-// The goal is not here: it is edited where it is shown, at the top of the
-// board (BoardGoal).
+// A goal is edited where it is shown, at the top of the board (BoardGoal).
+// A board without one shows nothing there, so setting its first goal is
+// here, under Goal (SetBoardGoal).
 //
 // Fields — the questions a card on this board answers — are edited the same
 // way, as a list saved whole, and reordered the same way, by dragging the
@@ -49,7 +50,7 @@ import {
 } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
-import type { BoardColumnRow, BoardFieldRow, BoardRow } from '@/lib/db';
+import type { BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
 import { ConfirmDialog } from '../ConfirmDialog';
 import {
@@ -62,6 +63,7 @@ import {
   selectBaseClass,
 } from '../goalsUi';
 import { LinkTextarea } from '../LinkTextarea';
+import { SetBoardGoal } from './BoardGoal';
 import { BoardSopLinks } from './BoardSopLinks';
 import { AssigneePicker } from './CardMeta';
 import { ColumnOrder } from './ColumnOrder';
@@ -122,6 +124,9 @@ export function BoardSettings({
   owners,
   people,
   busy = false,
+  hasGoal = true,
+  unattachedGoals = [],
+  mutate,
   onSaved,
   onSopsSaved,
   ref,
@@ -135,6 +140,12 @@ export function BoardSettings({
   owners: { email: string; name: string }[];
   people: PeopleNames;
   busy?: boolean;
+  /** Without a goal, the settings offer to set one (SetBoardGoal). */
+  hasGoal?: boolean;
+  /** Open goals no board serves yet, for a board without one. */
+  unattachedGoals?: GoalRow[];
+  /** Runs a write and reloads the board — how a goal set here reaches the board. */
+  mutate?: (run: () => Promise<unknown>) => Promise<void>;
   onSaved: (result: BoardSettingsResult) => void;
   /** The linked SOPs changed; the board refetches what its viewer may see. */
   onSopsSaved: () => void;
@@ -425,6 +436,19 @@ export function BoardSettings({
           unless whoever adds it picks someone else, or its column has assignees of its own.
         </p>
       </div>
+
+      {!hasGoal && mutate && (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <SectionTitle note="what this board is for">Goal</SectionTitle>
+          <SetBoardGoal
+            board={board}
+            owners={owners}
+            unattachedGoals={unattachedGoals}
+            busy={busy}
+            mutate={mutate}
+          />
+        </div>
+      )}
 
       <div className="mt-5 border-t border-white/10 pt-4">
         <SectionTitle note="renaming keeps the cards">Columns</SectionTitle>

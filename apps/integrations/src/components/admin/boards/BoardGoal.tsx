@@ -49,7 +49,6 @@ export function BoardGoal({
   columns,
   people,
   owners,
-  unattachedGoals = [],
   today,
   canManage,
   canWorkGoal,
@@ -64,8 +63,6 @@ export function BoardGoal({
   columns: BoardColumnRow[];
   people: PeopleNames;
   owners: Assignable[];
-  /** Open goals no board serves yet — offered when this board has none. */
-  unattachedGoals?: GoalRow[];
   today: string;
   canManage: boolean;
   canWorkGoal: boolean;
@@ -76,8 +73,6 @@ export function BoardGoal({
   onCompleted: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [settingGoal, setSettingGoal] = useState(false);
-  const [existingId, setExistingId] = useState('');
   const [completing, setCompleting] = useState(false);
   const [detaching, setDetaching] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -93,83 +88,10 @@ export function BoardGoal({
 
   const nowIso = new Date().toISOString();
 
-  if (!goal || !rollup) {
-    if (!canManage) return null;
-    return (
-      <section className={raisedCardClass}>
-        {/* <SectionTitle>Goal</SectionTitle> */}
-        {settingGoal ? (
-          <GoalForm
-            owners={owners}
-            busy={busy}
-            heading="What is this board for?"
-            onCancel={() => setSettingGoal(false)}
-            onSave={async (values) => {
-              await mutate(() =>
-                sendJson('/api/admin/goals', 'POST', { ...values, boardSlug: board.slug })
-              );
-              setSettingGoal(false);
-            }}
-          />
-        ) : (
-          <div className="space-y-3">
-            {/* <p className="text-sm text-white/50">
-              No goal yet. A board with a goal shows what it is for and the numbers that say whether
-              it is working; a board without one is just a list.
-            </p> */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={primaryButtonClass}
-                disabled={busy}
-                onClick={() => setSettingGoal(true)}
-              >
-                Set a goal
-              </button>
-              {unattachedGoals.length > 0 && (
-                <>
-                  <span className="font-mono text-xs text-white/35">
-                    or use one already written
-                  </span>
-                  <label className="sr-only" htmlFor="board-existing-goal">
-                    Existing goal
-                  </label>
-                  <select
-                    id="board-existing-goal"
-                    className={`${selectClass} w-auto`}
-                    value={existingId}
-                    onChange={(e) => setExistingId(e.target.value)}
-                  >
-                    <option value="">Pick a goal…</option>
-                    {unattachedGoals.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className={formButtonClass}
-                    disabled={busy || !existingId}
-                    onClick={() =>
-                      void mutate(() =>
-                        sendJson('/api/admin/boards', 'PATCH', {
-                          slug: board.slug,
-                          goalId: existingId,
-                        })
-                      ).then(() => setExistingId(''))
-                    }
-                  >
-                    Use this goal
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
-    );
-  }
+  // No goal yet: the board just shows its cards. Setting one is a
+  // manager's change to the board's shape, so it lives in Board settings
+  // (SetBoardGoal).
+  if (!goal || !rollup) return null;
 
   const preview = completionPreview(kpis, cards, columnsById);
 
@@ -340,5 +262,100 @@ export function BoardGoal({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A board with no goal: write one for it, or take one already written that
+ * no board serves yet. Shown in Board settings, to managers only.
+ */
+export function SetBoardGoal({
+  board,
+  owners,
+  unattachedGoals = [],
+  busy,
+  mutate,
+}: {
+  board: Pick<BoardRow, 'slug'>;
+  owners: Assignable[];
+  /** Open goals no board serves yet. */
+  unattachedGoals?: GoalRow[];
+  busy: boolean;
+  /** Runs a write and reloads the board; rejects with the API's message. */
+  mutate: (run: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [settingGoal, setSettingGoal] = useState(false);
+  const [existingId, setExistingId] = useState('');
+
+  return (
+    <>
+      {settingGoal ? (
+        <GoalForm
+          owners={owners}
+          busy={busy}
+          heading="What is this board for?"
+          onCancel={() => setSettingGoal(false)}
+          onSave={async (values) => {
+            await mutate(() =>
+              sendJson('/api/admin/goals', 'POST', { ...values, boardSlug: board.slug })
+            );
+            setSettingGoal(false);
+          }}
+        />
+      ) : (
+        <div className="space-y-3">
+          {/* <p className="text-sm text-white/50">
+          No goal yet. A board with a goal shows what it is for and the numbers that say whether
+          it is working; a board without one is just a list.
+        </p> */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={primaryButtonClass}
+              disabled={busy}
+              onClick={() => setSettingGoal(true)}
+            >
+              Set a goal
+            </button>
+            {unattachedGoals.length > 0 && (
+              <>
+                <span className="font-mono text-xs text-white/35">or use one already written</span>
+                <label className="sr-only" htmlFor="board-existing-goal">
+                  Existing goal
+                </label>
+                <select
+                  id="board-existing-goal"
+                  className={`${selectClass} w-auto`}
+                  value={existingId}
+                  onChange={(e) => setExistingId(e.target.value)}
+                >
+                  <option value="">Pick a goal…</option>
+                  {unattachedGoals.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={formButtonClass}
+                  disabled={busy || !existingId}
+                  onClick={() =>
+                    void mutate(() =>
+                      sendJson('/api/admin/boards', 'PATCH', {
+                        slug: board.slug,
+                        goalId: existingId,
+                      })
+                    ).then(() => setExistingId(''))
+                  }
+                >
+                  Use this goal
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
