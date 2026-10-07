@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readError, sendJson } from '@/lib/client/api';
+import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { GoalRow } from '@/lib/db';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
 import {
@@ -158,6 +159,10 @@ export function GoalsOverview() {
   const groups = useMemo(() => groupByStatus(shown), [shown]);
   const open = groups.filter((group) => !isClosedStatus(group.status));
   const closed = groups.filter((group) => isClosedStatus(group.status));
+
+  // The first load holds the header's loading bar, so moving between
+  // views reads as one load from click to content.
+  useLoadingBar(loading && !data);
 
   if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data) {

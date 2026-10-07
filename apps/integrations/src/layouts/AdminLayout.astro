@@ -186,36 +186,26 @@ const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';
     <script>
       import type { TransitionBeforePreparationEvent } from 'astro:transitions/client';
 
+      import { holdLoadingBar } from '@/lib/client/loadingBar';
+
       // Slow-navigation indicator for the ClientRouter. The router hands us
       // the function that fetches the next document (event.loader); wrapping
-      // it lets us start a timer and only reveal the loading bar if the
-      // fetch is still running when the timer fires. Prefetched links land
-      // well inside the delay, so the bar never flashes on fast navigations.
-      // Runs once per JS realm: the router keeps this module loaded across
-      // navigations, so the listener is never registered twice.
-      const LOADING_DELAY_MS = 250;
-      // Each navigation gets a fresh id. A navigation the router abandons
-      // (the user clicked again mid-load) can settle after its replacement
-      // has started, so both the timer and the cleanup check that they still
-      // belong to the newest navigation before touching the indicator.
-      let latest = 0;
-
-      function setLoading(on: boolean) {
-        document.documentElement.toggleAttribute('data-admin-loading', on);
-      }
-
+      // it holds the loading bar for as long as the fetch runs. The bar only
+      // shows once a hold has outlasted its delay, so prefetched links never
+      // flash it (lib/client/loadingBar). Runs once per JS realm: the router
+      // keeps this module loaded across navigations, so the listener is
+      // never registered twice.
+      //
+      // A navigation the router abandons (the user clicked again mid-load)
+      // settles on its own; each wrapped loader releases only its own hold.
       document.addEventListener('astro:before-preparation', (event: TransitionBeforePreparationEvent) => {
-        const id = ++latest;
         const load = event.loader;
         event.loader = async () => {
-          const timer = setTimeout(() => {
-            if (id === latest) setLoading(true);
-          }, LOADING_DELAY_MS);
+          const release = holdLoadingBar();
           try {
             await load();
           } finally {
-            clearTimeout(timer);
-            if (id === latest) setLoading(false);
+            release();
           }
         };
       });

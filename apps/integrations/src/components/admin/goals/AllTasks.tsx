@@ -16,6 +16,7 @@ import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
 import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
+import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
@@ -108,6 +109,10 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
       setBusy(false);
     }
   };
+
+  // The first load holds the header's loading bar, so moving between
+  // views reads as one load from click to content.
+  useLoadingBar(loading && !data);
 
   if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data || !built) {

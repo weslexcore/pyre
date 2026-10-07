@@ -22,6 +22,7 @@ import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boar
 import type { BoardTally, UpNextCard } from '@/lib/boards/store';
 import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
+import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
@@ -150,6 +151,10 @@ export function BoardsIndex() {
 
   const suggested = slugTouched ? slug : slugOf(name);
   const needsGoalTitle = goalChoice === NEW_GOAL && !goalTitle.trim();
+
+  // The first load holds the header's loading bar, so moving between
+  // views reads as one load from click to content.
+  useLoadingBar(loading && !data);
 
   if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
   if (!data) {

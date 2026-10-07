@@ -30,6 +30,7 @@ import {
 import type { Assignable } from '@/lib/boards/people';
 import { readError } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
+import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
 import { filterChipClass } from '../scheduleUi';
@@ -127,6 +128,10 @@ export function BoardsCalendar() {
       else next.add(key);
       return next;
     });
+
+  // The first load holds the header's loading bar, so moving between
+  // views reads as one load from click to content.
+  useLoadingBar(loading && !data);
 
   if (loading && !data) return <p className="font-mono text-xs text-white/40">Loading…</p>;
 
