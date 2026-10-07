@@ -117,7 +117,6 @@ describe('ChecklistView', () => {
     expect(html).not.toContain('>Finish<');
     expect(html).toContain('>Discard<');
     expect(html).toContain('width:33%');
-    expect(html).toContain('finishes on its own');
   });
 
   it('offers Start fresh beside Discard on an open run, never on a finished one', () => {
@@ -226,21 +225,6 @@ describe('ChecklistView', () => {
     // not that it is already done.
     expect(html.match(/type="checkbox"/g)?.length).toBe(2);
     expect(html).not.toContain('checked=""');
-  });
-
-  it('tells the header how many required items are still holding the run open', () => {
-    const content = '- [!] Uncover wood\n- [!] Ensure fire is out\n- [ ] Remove chimney\n';
-    const two = render({ content, run: RUN, checks: [] });
-    expect(two).toContain('2 required items must be checked off');
-    const one = render({ content, run: RUN, checks: [CHECK] });
-    expect(one).toContain('1 required item must be checked off');
-    const none = render({
-      content: '- [ ] Uncover wood\n- [ ] Ensure fire is out\n- [ ] Remove chimney\n',
-      run: RUN,
-      checks: [],
-    });
-    expect(none).toContain('finishes on its own');
-    expect(none).not.toContain('must be checked off');
   });
 
   it('keeps Undo on a required item skipped before the document required it', () => {

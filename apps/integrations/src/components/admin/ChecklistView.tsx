@@ -101,16 +101,6 @@ export function ChecklistView({
   const done = checks.length;
   const skippedCount = useMemo(() => checks.filter((c) => c.skipped).length, [checks]);
   const total = run?.task_count ?? parsed.tasks.length;
-  // Required items still waiting to be completed — the header names them as a
-  // count so nobody is left wondering why a checklist won't finish.
-  const requiredLeft = useMemo(() => {
-    const byIndex = new Map(checks.map((c) => [c.item_index, c]));
-    return parsed.tasks.filter((task) => {
-      if (!task.required) return false;
-      const check = byIndex.get(task.index);
-      return !check || check.skipped;
-    }).length;
-  }, [parsed, checks]);
   const finished = run !== null && run.status !== 'in_progress';
   // Only means something mid-run: before the first tap everything is
   // outstanding, and a finished run has nothing left.

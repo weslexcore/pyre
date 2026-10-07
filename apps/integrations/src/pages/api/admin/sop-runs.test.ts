@@ -398,7 +398,7 @@ describe('PATCH /api/admin/sop-runs', () => {
     const res = await PATCH(patchRequest({ runId: RUN_ID, action: 'complete' }) as any);
     expect(res.status).toBe(400);
     expect(((await res.json()) as PatchBody).error).toBe(
-      'action must be check, uncheck, or discard'
+      'action must be check, uncheck, discard, or abandon'
     );
   });
 
@@ -489,17 +489,16 @@ describe('PATCH /api/admin/sop-runs', () => {
       { item_index: 2, item_text: 'c', checked_by: 'bob@pyre.test' },
     ]);
     getDb.mockReturnValue(db);
-    const res = await PATCH(
-      // The bare single-item shorthand carries the flag too.
-      // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what PATCH reads
-      patchRequest({
-        runId: RUN_ID,
-        action: 'check',
-        itemIndex: 1,
-        itemText: 'b',
-        skipped: true,
-      }) as any
-    );
+    // The bare single-item shorthand carries the flag too.
+    const request = patchRequest({
+      runId: RUN_ID,
+      action: 'check',
+      itemIndex: 1,
+      itemText: 'b',
+      skipped: true,
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: the route's Astro context, narrowed to what PATCH reads
+    const res = await PATCH(request as any);
     const body = (await res.json()) as PatchBody;
     expect(body.run?.status).toBe('completed');
     expect(body.run?.ended_by).toBe('ada@pyre.test');
