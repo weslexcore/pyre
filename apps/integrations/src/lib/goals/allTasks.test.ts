@@ -76,8 +76,7 @@ describe('buildAllTasks', () => {
   it('lists only boards that opted in', () => {
     const cards = [card({ board_id: 'tasks' }), card({ board_id: 'leads' })];
     const built = buildAllTasks(cards, BOARDS, COLUMNS, {}, options);
-    expect(built.unfiled).toHaveLength(1);
-    expect(built.unfiled[0].board_id).toBe('tasks');
+    expect(built.groups.flatMap((g) => g.cards.map((c) => c.board_id))).toEqual(['tasks']);
   });
 
   it('puts finished cards only under Recently done', () => {
@@ -86,7 +85,7 @@ describe('buildAllTasks', () => {
     const dropped = card({ column_id: 'lost', completed_at: '2026-09-16T11:00:00Z' });
     const built = buildAllTasks([open, done, dropped], BOARDS, COLUMNS, {}, options);
 
-    expect(built.unfiled.map((c) => c.id)).toEqual([open.id]);
+    expect(built.groups[0].cards.map((c) => c.id)).toEqual([open.id]);
     expect(built.overdue).toHaveLength(0);
     expect(built.recentlyDone).toHaveLength(1);
     expect(built.recentlyDone[0].weekStart).toBe('2026-09-14');
@@ -106,7 +105,7 @@ describe('buildAllTasks', () => {
     expect(built.dueThisWeek.map((c) => c.id)).toEqual([today.id, sunday.id]);
   });
 
-  it('keeps unfiled chores out of the board groups and in their own section', () => {
+  it('lists a card under its board whether or not it has a goal', () => {
     const filed = card({ goal_id: 'g1' });
     const chore = card({ goal_id: null });
     const built = buildAllTasks([filed, chore], BOARDS, COLUMNS, {}, options);
@@ -114,7 +113,6 @@ describe('buildAllTasks', () => {
     expect(built.groups).toHaveLength(1);
     expect(built.groups[0]).toMatchObject({ key: 'tasks', label: 'goals', boardSlug: 'goals' });
     expect(built.groups[0].cards.map((c) => c.id)).toEqual([filed.id, chore.id]);
-    expect(built.unfiled.map((c) => c.id)).toEqual([chore.id]);
   });
 
   it('puts the viewer first and Unassigned last', () => {
@@ -159,13 +157,17 @@ describe('buildAllTasks', () => {
     const later = card({ due_date: '2026-09-20' });
     const undated = card({ due_date: null });
     const built = buildAllTasks([undated, later, late], BOARDS, COLUMNS, {}, options);
-    expect(built.unfiled.map((c) => c.due_date)).toEqual(['2026-09-19', '2026-09-20', null]);
+    expect(built.groups[0].cards.map((c) => c.due_date)).toEqual([
+      '2026-09-19',
+      '2026-09-20',
+      null,
+    ]);
   });
 
   it('treats a card whose column vanished as open, not as done', () => {
     const orphan = card({ column_id: 'gone' });
     const built = buildAllTasks([orphan], BOARDS, COLUMNS, {}, options);
-    expect(built.unfiled.map((c) => c.id)).toEqual([orphan.id]);
+    expect(built.groups[0].cards.map((c) => c.id)).toEqual([orphan.id]);
     expect(built.recentlyDone).toHaveLength(0);
   });
 

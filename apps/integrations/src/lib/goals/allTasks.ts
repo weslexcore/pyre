@@ -42,8 +42,6 @@ export interface AllTasks {
   /** Open, due today through Sunday of this week. */
   dueThisWeek: BoardCardRow[];
   groups: TaskGroup[];
-  /** Open cards on a board with no goal — the one-off chores. */
-  unfiled: BoardCardRow[];
   /** Finished cards, newest week first. */
   recentlyDone: DoneWeek[];
 }
@@ -113,14 +111,10 @@ export function buildAllTasks(
     (card) => card.due_date !== null && card.due_date >= today && card.due_date <= weekEnd
   );
 
-  // The unfiled chores are their own section whatever the grouping, so the
-  // "quick thing with no goal behind it" always has one obvious home.
-  const unfiled = open.filter((card) => card.goal_id === null);
-
   const groups =
     groupBy === 'owner' ? groupByOwner(open, people, viewerEmail) : groupByBoard(open, boardsById);
 
-  return { overdue, dueThisWeek, groups, unfiled, recentlyDone: groupDone(done) };
+  return { overdue, dueThisWeek, groups, recentlyDone: groupDone(done) };
 }
 
 /**

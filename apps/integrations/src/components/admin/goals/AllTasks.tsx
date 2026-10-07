@@ -4,18 +4,16 @@
 // only things on it that are genuinely urgent: what is late, and what is due
 // before Sunday. Below that the work groups by board — so a task always
 // reads in the context of the goal its board is for — with owner as the
-// other lens, and the unfiled chores (cards on a board with no goal) in a
-// section of their own so a quick thing still has an obvious home.
+// other lens. Every task is on a board, so each open one appears once
+// below the strips; New task (above the page) is how a quick one is added.
 //
 // Finished work is out of the way under "Recently done", by the week it
 // landed in, which is the other question the founders ask each other and
 // Trello could never answer.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
-import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardCardRow } from '@/lib/db';
@@ -25,7 +23,6 @@ import type { GroupBy } from '@/lib/goals/types';
 import { GROUP_BY } from '@/lib/goals/types';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
-import { QuickAdd } from '../boards/QuickAdd';
 import { SearchField } from '../boards/SearchField';
 import { useCardDeepLink } from '../boards/useCardDeepLink';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
@@ -132,9 +129,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const openCard = data.cards.find((card) => card.id === openCardId) ?? null;
   const boardNames = new Map(boards.map((board) => [board.id, board.name]));
 
-  const tasksBoard = boards.find((board) => board.slug === GOALS_BOARD_SLUG) ?? boards[0];
-  const tasksColumns = columns.filter((column) => column.board_id === tasksBoard?.id);
-
   const terms = searchTerms(query);
   const rowsFor = (cards: BoardCardRow[], showBoard = true) =>
     cards.map((card) => (
@@ -235,27 +229,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
           <div className="space-y-2">{rowsFor(group.cards, groupBy !== 'board')}</div>
         </section>
       ))}
-
-      <section className={cardClass}>
-        <SectionTitle note={String(built.unfiled.length)}>Unfiled</SectionTitle>
-        <p className="mb-3 text-xs text-white/35">
-          One-off chores on a board with no goal behind it. Not every task needs one.
-        </p>
-        {tasksBoard && defaultColumn(tasksColumns) && (
-          <div className="mb-3">
-            <QuickAdd
-              noun={tasksBoard.card_noun}
-              busy={busy}
-              onAdd={(title) =>
-                mutate(() =>
-                  sendJson('/api/admin/board-cards', 'POST', { board: tasksBoard.slug, title })
-                )
-              }
-            />
-          </div>
-        )}
-        <div className="space-y-2">{rowsFor(built.unfiled)}</div>
-      </section>
 
       <section className={cardClass}>
         <SectionTitle
