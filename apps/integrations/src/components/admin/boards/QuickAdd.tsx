@@ -60,7 +60,12 @@ export function QuickAdd({
         disabled={busy}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape' && onCancel) onCancel();
+          if (e.key === 'Escape' && onCancel) {
+            // Close this form, not a drawer it sits in.
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            onCancel();
+          }
         }}
         aria-label={`Add a ${noun}`}
       />

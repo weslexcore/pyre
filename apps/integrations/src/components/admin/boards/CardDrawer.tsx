@@ -355,17 +355,12 @@ export function CardDrawer({
                   const inputId = `card-${card.id}-${field.key}`;
                   return (
                     <div key={field.key}>
-                      <label className={labelClass} htmlFor={inputId}>
-                        {field.label}
-                        {field.archived && <span className="ml-2 text-white/30">(retired)</span>}
-                      </label>
-                      {field.hint && (
-                        <p className="-mt-1 mb-2 text-xs text-white/40">{field.hint}</p>
-                      )}
                       {field.link_board_id ? (
                         <CardLinkField
                           id={inputId}
                           label={field.label}
+                          hint={field.hint}
+                          retired={field.archived}
                           fieldId={field.id}
                           value={linkIdsOf(properties[field.key])}
                           multiple={field.link_multiple}
@@ -383,9 +378,17 @@ export function CardDrawer({
                           }}
                         />
                       ) : (
-                        <p className="text-xs text-white/35">
-                          The board this field linked to has been deleted.
-                        </p>
+                        <>
+                          <span className={labelClass}>
+                            {field.label}
+                            {field.archived && (
+                              <span className="ml-2 text-white/30">(retired)</span>
+                            )}
+                          </span>
+                          <p className="text-xs text-white/35">
+                            The board this field linked to has been deleted.
+                          </p>
+                        </>
                       )}
                     </div>
                   );

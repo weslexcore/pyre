@@ -9,17 +9,54 @@
 // route makes and undoes the links, so a save the route refuses (a column
 // the field doesn't offer, a practitioner already on another event) comes
 // back as the drawer's save error.
+//
+// It also draws the field's own label, with a plus beside it when the viewer
+// may add cards to the linked board: the plus opens a one-line quick-add
+// right here, the card is made on that board (POST board-link-options), and
+// it is linked like a pick — an event for a practitioner, written from the
+// practitioner's card. Whether the plus shows is asked once per field per
+// page (linkCreateInfoHref).
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { type LinkSummary, linkedCardHref, linkOptionsHref } from '@/lib/boards/links';
+import {
+  type LinkSummary,
+  linkCreateInfoHref,
+  linkedCardHref,
+  linkOptionsHref,
+} from '@/lib/boards/links';
 import { BOARD_LIMITS, isFinishedKind } from '@/lib/boards/types';
-import { readError } from '@/lib/client/api';
-import { inputClass } from '../goalsUi';
+import { readError, sendJson } from '@/lib/client/api';
+import { inputClass, labelClass } from '../goalsUi';
+import { QuickAdd } from './QuickAdd';
+
+interface CreateInfo {
+  noun: string;
+  boardName: string;
+}
+
+// One ask per field per page load: the drawer opens and closes often.
+const createInfoCache = new Map<string, Promise<CreateInfo | null>>();
+
+function loadCreateInfo(fieldId: string): Promise<CreateInfo | null> {
+  let pending = createInfoCache.get(fieldId);
+  if (!pending) {
+    pending = fetch(linkCreateInfoHref(fieldId))
+      .then(async (res) =>
+        res.ok ? (((await res.json()) as { create?: CreateInfo | null }).create ?? null) : null
+      )
+      .catch(() => null);
+    createInfoCache.set(fieldId, pending);
+  }
+  return pending;
+}
 
 export interface CardLinkFieldProps {
   id: string;
-  /** For the search box's accessible name: "Find a card for Practitioner". */
+  /** The field's name: the heading, and the search box's accessible name. */
   label: string;
+  hint?: string | null;
+  /** A retired field: marked as such, and read-only. */
+  retired?: boolean;
   /** The board_fields.id the options are asked for. */
   fieldId: string;
   /** The linked card ids, in the order they were linked. */
@@ -52,6 +89,8 @@ function ColumnBadge({ summary }: { summary: LinkSummary }) {
 export function CardLinkField({
   id,
   label,
+  hint,
+  retired = false,
   fieldId,
   value,
   multiple,
@@ -61,6 +100,20 @@ export function CardLinkField({
   onPicked,
 }: CardLinkFieldProps) {
   const listId = useId();
+  const [createInfo, setCreateInfo] = useState<CreateInfo | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (disabled) return;
+    let cancelled = false;
+    void loadCreateInfo(fieldId).then((info) => {
+      if (!cancelled) setCreateInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fieldId, disabled]);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<LinkSummary[]>([]);
@@ -119,13 +172,66 @@ export function CardLinkField({
     setOpen(false);
   };
 
+  const create = async (title: string) => {
+    setAddError(null);
+    try {
+      const { card } = await sendJson<{ card: LinkSummary }>(
+        '/api/admin/board-link-options',
+        'POST',
+        { field: fieldId, title }
+      );
+      pick(card);
+      setAdding(false);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : 'Could not add the card');
+    }
+  };
+
   const remove = (cardId: string) => {
     const next = value.filter((entry) => entry !== cardId);
     onChange(next.length > 0 ? next : null);
   };
 
+  const canAdd = createInfo !== null && !disabled && !full;
+
   return (
     <div ref={wrapRef} className="space-y-2">
+      <div className="-mb-0.5 flex items-center gap-2">
+        <label className={`${labelClass} mb-0`} htmlFor={id}>
+          {label}
+          {retired && <span className="ml-2 text-white/30">(retired)</span>}
+        </label>
+        {canAdd && (
+          <button
+            type="button"
+            className="flex h-5 w-5 items-center justify-center rounded border border-white/15 text-xs leading-none text-white/60 hover:border-white/40 hover:text-white"
+            aria-label={`Add a new ${createInfo.noun} to ${createInfo.boardName} and link it`}
+            title={`New ${createInfo.noun} on ${createInfo.boardName}`}
+            aria-expanded={adding}
+            onClick={() => {
+              setAdding((open) => !open);
+              setAddError(null);
+            }}
+          >
+            +
+          </button>
+        )}
+      </div>
+      {hint && <p className="text-xs text-white/40">{hint}</p>}
+
+      {adding && canAdd && (
+        <div className="space-y-1">
+          <QuickAdd
+            noun={createInfo.noun}
+            placeholder={`New ${createInfo.noun} on ${createInfo.boardName}…`}
+            focusOnMount
+            onAdd={create}
+            onCancel={() => setAdding(false)}
+          />
+          {addError && <p className="text-xs text-[var(--pyre-red)]">{addError}</p>}
+        </div>
+      )}
+
       {value.length > 0 && (
         <ul className="flex flex-wrap gap-2">
           {value.map((cardId) => {

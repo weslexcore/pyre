@@ -224,6 +224,11 @@ export function linkedCardHref(summary: Pick<LinkSummary, 'id' | 'board_slug'>):
 }
 
 /** Where the picker asks which cards a field may link. */
+/** Whether this viewer may add a card from the field, and what that board calls one. */
+export function linkCreateInfoHref(fieldId: string): string {
+  return `/api/admin/board-link-options?field=${encodeURIComponent(fieldId)}&info=1`;
+}
+
 export function linkOptionsHref(fieldId: string, query = ''): string {
   const q = query.trim();
   return `/api/admin/board-link-options?field=${encodeURIComponent(fieldId)}${
