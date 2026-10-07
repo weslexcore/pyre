@@ -14,6 +14,7 @@
 //
 // A column with assignees shows them beside its name: a card dropped there
 // is handed to them, so the hand-off is visible before the drop, not after.
+// One that unassigns shows an empty dashed badge in the same place.
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -76,6 +77,17 @@ export function ColumnHeader({
             >
               <span className="sr-only">, assigns to</span>
               <AvatarStack emails={assignees} names={nameOf} />
+            </span>
+          )}
+          {assignees.length === 0 && column.clears_assignees && (
+            <span className="inline-flex" title={`Moving a ${noun} here unassigns it`}>
+              <span className="sr-only">, unassigns</span>
+              <span
+                aria-hidden="true"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-white/30 text-[11px] text-white/50"
+              >
+                –
+              </span>
             </span>
           )}
         </span>

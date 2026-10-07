@@ -19,6 +19,7 @@ const col = (
     label: id,
     kind,
     assignee_emails: assignees,
+    clears_assignees: false,
     sort_order: sort,
     archived,
     created_at: '',
@@ -79,6 +80,11 @@ describe('columnPatch', () => {
 
   it('leaves the assignees alone for a column with nobody on it', () => {
     expect(columnPatch(card(), DOING, ME, NOW)).not.toHaveProperty('assignee_emails');
+  });
+
+  it('unassigns the card for a column that clears assignees', () => {
+    const onHold = { ...col('on_hold', 'open', 25), clears_assignees: true };
+    expect(columnPatch(card(), onHold, ME, NOW)?.assignee_emails).toEqual([]);
   });
 
   it('clears the stamp when a card is pulled back out of Done', () => {

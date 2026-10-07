@@ -84,6 +84,8 @@ interface ColumnDraft {
   kind: ColumnKind;
   /** Who a card moving in is handed to; [] leaves its assignees alone. */
   assigneeEmails: string[];
+  /** A card moving in is unassigned from everyone; only with no assigneeEmails. */
+  clearsAssignees: boolean;
   archived: boolean;
 }
 
@@ -152,6 +154,7 @@ export function BoardSettings({
         label: column.label,
         kind: column.kind,
         assigneeEmails: column.assignee_emails ?? [],
+        clearsAssignees: column.clears_assignees ?? false,
         archived: column.archived,
       }))
   );
@@ -247,6 +250,7 @@ export function BoardSettings({
         label: 'New column',
         kind: 'open',
         assigneeEmails: [],
+        clearsAssignees: false,
         archived: false,
       },
     ]);
@@ -452,7 +456,21 @@ export function BoardSettings({
                   owners={owners}
                   value={draft.assigneeEmails}
                   names={(email) => personName(email, people)}
-                  onChange={(next) => setDraft(index, { assigneeEmails: next })}
+                  onChange={(next) =>
+                    setDraft(index, {
+                      assigneeEmails: next,
+                      clearsAssignees: next.length > 0 ? false : draft.clearsAssignees,
+                    })
+                  }
+                  clears={draft.clearsAssignees}
+                  onClearsChange={(on) =>
+                    setDraft(
+                      index,
+                      on
+                        ? { clearsAssignees: true, assigneeEmails: [] }
+                        : { clearsAssignees: false }
+                    )
+                  }
                 />
               </div>
               <label className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-white/50">
@@ -480,8 +498,8 @@ export function BoardSettings({
         </button>
         <p className="mt-2 text-xs text-white/35">
           A {cardNoun} moved into a column with assignees is handed to them, in place of whoever had
-          it; a column with nobody leaves it with whoever had it. A removed column is deleted if it
-          is empty and archived if it still holds cards.
+          it; one set to No one is unassigned; a column with neither leaves it with whoever had it.
+          A removed column is deleted if it is empty and archived if it still holds cards.
         </p>
       </div>
 

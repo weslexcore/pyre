@@ -12,7 +12,14 @@ import type { ColumnKind } from './types';
 import { BOARD_LIMITS, KEY_RE } from './types';
 
 /** What a column carries through a whole-list save. */
-type ColumnFields = 'key' | 'label' | 'kind' | 'assignee_emails' | 'archived' | 'sort_order';
+type ColumnFields =
+  | 'key'
+  | 'label'
+  | 'kind'
+  | 'assignee_emails'
+  | 'clears_assignees'
+  | 'archived'
+  | 'sort_order';
 
 /** One column as PATCH /api/admin/boards takes it. */
 export interface ColumnPayload {
@@ -20,6 +27,7 @@ export interface ColumnPayload {
   label: string;
   kind: ColumnKind;
   assigneeEmails: string[];
+  clearsAssignees: boolean;
   archived: boolean;
   sortOrder: number;
 }
@@ -58,6 +66,7 @@ export function columnsPayload(columns: Pick<BoardColumnRow, ColumnFields>[]): C
       label: column.label,
       kind: column.kind,
       assigneeEmails: column.assignee_emails ?? [],
+      clearsAssignees: column.clears_assignees ?? false,
       archived: column.archived,
       sortOrder: column.sort_order,
     }));
@@ -114,6 +123,7 @@ export function appendColumn(
       label,
       kind,
       assigneeEmails: [],
+      clearsAssignees: false,
       archived: false,
       sortOrder: last + 10,
     },

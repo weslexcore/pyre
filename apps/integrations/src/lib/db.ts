@@ -1027,6 +1027,8 @@ export interface BoardColumnRow {
   kind: BoardColumnKind;
   /** Who a card moving in here is handed to; [] leaves its assignees alone. */
   assignee_emails: string[];
+  /** A card moving in here is unassigned from everyone (only with no assignee_emails). */
+  clears_assignees: boolean;
   sort_order: number;
   archived: boolean;
   created_at: string;

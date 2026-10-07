@@ -122,6 +122,8 @@ export interface ColumnInput {
   kind: ColumnKind;
   /** Who a card moving in is handed to. Absent leaves a saved column's list alone. */
   assignee_emails?: string[];
+  /** A card moving in is unassigned. Absent leaves a saved column's setting alone. */
+  clears_assignees?: boolean;
   sort_order: number;
   archived: boolean;
 }
@@ -169,11 +171,21 @@ function parseColumns(value: unknown): ParseResult<ColumnInput[]> {
       );
     }
 
+    if (column.clearsAssignees !== undefined && typeof column.clearsAssignees !== 'boolean') {
+      return fail(`Column "${key}" clearsAssignees must be true or false`);
+    }
+    // A column hands off or clears, never both: naming people wins.
+    const clears =
+      column.clearsAssignees === undefined
+        ? undefined
+        : column.clearsAssignees && !assignees.value?.length;
+
     columns.push({
       key,
       label,
       kind: column.kind,
       ...(assignees.value !== undefined ? { assignee_emails: assignees.value } : {}),
+      ...(clears !== undefined ? { clears_assignees: clears } : {}),
       sort_order: order,
       archived: column.archived === true,
     });

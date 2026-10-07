@@ -28,11 +28,14 @@ export type ColumnPatch = Pick<
  * pulled back out of Done reads as open again.
  *
  * A column with assignees of its own hands the card to them, replacing
- * whoever had it: that stage is theirs. One without leaves the card alone.
+ * whoever had it: that stage is theirs. One that clears assignees takes the
+ * card off everyone: that stage is nobody's. One with neither leaves the
+ * card alone.
  */
 export function columnPatch(
   card: Pick<BoardCardRow, 'column_id' | 'completed_at' | 'completed_by' | 'waiting_on'>,
-  next: Pick<BoardColumnRow, 'id' | 'kind'> & Partial<Pick<BoardColumnRow, 'assignee_emails'>>,
+  next: Pick<BoardColumnRow, 'id' | 'kind'> &
+    Partial<Pick<BoardColumnRow, 'assignee_emails' | 'clears_assignees'>>,
   email: string,
   nowIso: string
 ): ColumnPatch | null {
@@ -44,7 +47,11 @@ export function columnPatch(
     completed_at: finished ? (card.completed_at ?? nowIso) : null,
     completed_by: finished ? (card.completed_by ?? email) : null,
     waiting_on: finished ? null : card.waiting_on,
-    ...(next.assignee_emails?.length ? { assignee_emails: [...next.assignee_emails] } : {}),
+    ...(next.assignee_emails?.length
+      ? { assignee_emails: [...next.assignee_emails] }
+      : next.clears_assignees
+        ? { assignee_emails: [] }
+        : {}),
   };
 }
 

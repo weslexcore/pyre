@@ -359,9 +359,19 @@ async function applyColumns(
         .update({
           label: column.label,
           kind: column.kind,
+          // A column hands off or clears, never both
+          // (board_columns_clears_or_assigns): turning one on turns the
+          // other off, whichever of the two this save mentions.
           ...(column.assignee_emails !== undefined
             ? { assignee_emails: column.assignee_emails }
-            : {}),
+            : column.clears_assignees
+              ? { assignee_emails: [] }
+              : {}),
+          ...(column.clears_assignees !== undefined
+            ? { clears_assignees: column.clears_assignees }
+            : column.assignee_emails?.length
+              ? { clears_assignees: false }
+              : {}),
           sort_order: column.sort_order,
           archived: column.archived,
         })

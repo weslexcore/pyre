@@ -264,12 +264,23 @@ export function AssigneePicker({
   value,
   names,
   onChange,
+  clears,
+  onClearsChange,
 }: {
   owners: { email: string; name: string }[];
   value: string[];
   names: (email: string) => string;
   onChange: (next: string[]) => void;
+  /**
+   * For a column, not a card: an empty list there means "leave the card's
+   * assignees alone", so unassigning is a choice of its own — "No one".
+   * Given, the picker offers it; picking a person turns it off (the parent's
+   * onChange does that).
+   */
+  clears?: boolean;
+  onClearsChange?: (on: boolean) => void;
 }) {
+  const forColumn = onClearsChange !== undefined;
   // The roster's name for someone just picked, before any response names them.
   const nameOf = (email: string) =>
     owners.find((owner) => owner.email === email)?.name ?? names(email);
@@ -286,10 +297,26 @@ export function AssigneePicker({
   return (
     <Picker
       label={
-        value.length === 0 ? 'Assignees: nobody' : `Assignees: ${value.map(nameOf).join(', ')}`
+        value.length > 0
+          ? `Assignees: ${value.map(nameOf).join(', ')}`
+          : forColumn
+            ? clears
+              ? 'Assignees: unassigns the card'
+              : 'Assignees: left as they are'
+            : 'Assignees: nobody'
       }
       trigger={
-        value.length > 0 ? (
+        forColumn && clears ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-white/30 text-[11px] text-white/50"
+            >
+              –
+            </span>
+            <span className="text-white/70">No one</span>
+          </>
+        ) : value.length > 0 ? (
           <>
             <AvatarStack emails={value} names={nameOf} />
             {value.length === 1 && (
@@ -311,6 +338,17 @@ export function AssigneePicker({
     >
       {() => (
         <div>
+          {forColumn && (
+            <label className={`${menuItemClass} mb-0.5 cursor-pointer`}>
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-[var(--pyre-red)]"
+                checked={clears === true}
+                onChange={(e) => onClearsChange(e.target.checked)}
+              />
+              <span className="flex-1 truncate">No one (unassigns the card)</span>
+            </label>
+          )}
           {options.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-white/40">Nobody to assign yet.</p>
           ) : (
@@ -331,13 +369,13 @@ export function AssigneePicker({
               ))}
             </ul>
           )}
-          {value.length > 0 && (
+          {(value.length > 0 || (forColumn && clears)) && (
             <button
               type="button"
               className="mt-1 w-full rounded border border-white/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/50 hover:text-white"
-              onClick={() => onChange([])}
+              onClick={() => (forColumn ? onClearsChange(false) : onChange([]))}
             >
-              Unassign everyone
+              {forColumn ? 'Leave assignees as they are' : 'Unassign everyone'}
             </button>
           )}
         </div>

@@ -116,6 +116,7 @@ describe("a card's status", () => {
     label: 'Quote sent',
     kind: 'open',
     assignee_emails: [],
+    clears_assignees: false,
     sort_order: 10,
     archived: false,
     created_at: '',
