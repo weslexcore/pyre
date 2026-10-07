@@ -15,7 +15,6 @@
 // is not.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BOARDS_HREF } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type { GoalRow } from '@/lib/db';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
@@ -30,7 +29,6 @@ import { formatDaysLeft } from '@/lib/goals/progress';
 import type { GoalsOverviewData } from '@/lib/goals/store';
 import { GOAL_STATUS_LABELS, isClosedStatus } from '@/lib/goals/types';
 import { personName } from '@/lib/sops/names';
-import { BackLink } from '../BackLink';
 import {
   cardClass,
   formatYmd,
@@ -172,7 +170,6 @@ export function GoalsOverview() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <BackLink href={BOARDS_HREF}>All boards</BackLink>
         {!creating && (
           <button
             type="button"

@@ -28,12 +28,10 @@ import {
   movePatch,
 } from '@/lib/boards/calendar';
 import type { Assignable } from '@/lib/boards/people';
-import { BOARDS_HREF } from '@/lib/boards/types';
 import { readError } from '@/lib/client/api';
 import { useCachedJson } from '@/lib/client/cachedJson';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { BackLink } from '../BackLink';
 import { filterChipClass } from '../scheduleUi';
 import { CalendarMonth } from './CalendarMonth';
 import { CardDrawer } from './CardDrawer';
@@ -145,10 +143,6 @@ export function BoardsCalendar() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <BackLink href={BOARDS_HREF}>All boards</BackLink>
-      </div>
-
       {(error || saveError) && <ErrorBanner mono>{saveError ?? error}</ErrorBanner>}
 
       <CalendarMonth

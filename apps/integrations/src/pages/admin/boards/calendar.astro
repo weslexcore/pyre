@@ -1,4 +1,5 @@
 ---
+import BoardsTabs from '@/components/admin/BoardsTabs.astro';
 // The cross-board calendar. `calendar` is a more specific route than [slug],
 // so this wins over the board page for /admin/boards/calendar — and
 // parseBoardCreate refuses the slug, so no board can ever be shadowed.
@@ -10,12 +11,14 @@
 import { BoardsCalendar } from '@/components/admin/boards/BoardsCalendar';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { canManageBoards } from '@/lib/boards/access';
+import { BOARDS_CALENDAR_HREF } from '@/lib/boards/types';
 
 const access = Astro.locals.adminAccess ?? null;
 const allowed = !!access && canManageBoards(access);
 ---
 
 <AdminLayout title="Calendar" subtitle="Every dated thing on every board, and when each goal is due">
+  <BoardsTabs current={BOARDS_CALENDAR_HREF} />
   {
     allowed ? (
       <BoardsCalendar client:load />

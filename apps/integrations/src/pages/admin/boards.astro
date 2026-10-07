@@ -1,15 +1,18 @@
 ---
+import BoardsTabs from '@/components/admin/BoardsTabs.astro';
 // The boards this person may open, each with the goal it serves. Someone
 // holding a single board grant (board:<slug>) sees exactly that board here
 // and no New board form; the list is filtered server-side, so the page never
 // tells them what else exists.
 import { BoardsIndex } from '@/components/admin/boards/BoardsIndex';
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import { BOARDS_HREF } from '@/lib/boards/types';
 ---
 
 <AdminLayout
   title="Goals & Boards"
   subtitle="What we are trying to achieve, the goal each one serves, and the work under it"
 >
+  <BoardsTabs current={BOARDS_HREF} />
   <BoardsIndex client:load />
 </AdminLayout>

@@ -1,11 +1,13 @@
 ---
 // The tab row under a tool's page header (the schedule pages, the guest
 // pages). Callers decide which tabs a viewer sees; this only draws them.
+// `pill` rounds them fully (the boards views).
 interface Props {
   tabs: { href: string; label: string }[];
   current: string;
+  pill?: boolean;
 }
-const { tabs, current } = Astro.props;
+const { tabs, current, pill = false } = Astro.props;
 ---
 
 <nav class="mb-6 flex flex-wrap gap-2">
@@ -14,7 +16,7 @@ const { tabs, current } = Astro.props;
       <a
         href={tab.href}
         data-astro-prefetch
-        class={`px-3 py-1.5 rounded border text-xs font-mono uppercase tracking-wide transition-colors ${
+        class={`px-3 py-1.5 ${pill ? 'rounded-full' : 'rounded'} border text-xs font-mono uppercase tracking-wide transition-colors ${
           current === tab.href
             ? 'border-[var(--pyre-red)] bg-[var(--pyre-red)]/15 text-[var(--pyre-creme)]'
             : 'border-white/10 bg-white/5 text-white/50 hover:border-white/30 hover:text-white'

@@ -1,0 +1,27 @@
+---
+// The view pills shared by the cross-board pages — the boards index, the
+// calendar, all goals, and all tasks — so any one of them is a click from
+// the others. The three cross-board views turn single-board grantees away,
+// so those viewers get no pills at all: their one board is the whole tool.
+import { canManageBoards } from '@/lib/boards/access';
+import { BOARDS_CALENDAR_HREF, BOARDS_HREF } from '@/lib/boards/types';
+import { ALL_GOALS_HREF, ALL_TASKS_HREF } from '@/lib/goals/types';
+import SubNav from './SubNav.astro';
+
+interface Props {
+  current: string;
+}
+const { current } = Astro.props;
+
+const access = Astro.locals.adminAccess ?? null;
+const show = !!access && canManageBoards(access);
+
+const tabs = [
+  { href: BOARDS_HREF, label: 'All boards' },
+  { href: BOARDS_CALENDAR_HREF, label: 'Calendar' },
+  { href: ALL_GOALS_HREF, label: 'All goals' },
+  { href: ALL_TASKS_HREF, label: 'All tasks' },
+];
+---
+
+{show && <SubNav tabs={tabs} current={current} pill />}

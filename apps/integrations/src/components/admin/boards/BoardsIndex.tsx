@@ -20,12 +20,11 @@ import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally, UpNextCard } from '@/lib/boards/store';
-import { BOARD_LIMITS, BOARDS_CALENDAR_HREF, slugOf } from '@/lib/boards/types';
+import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
 import { daysLeft, formatDaysLeft, paceState } from '@/lib/goals/progress';
-import { ALL_GOALS_HREF, ALL_TASKS_HREF } from '@/lib/goals/types';
 import {
   cardClass,
   formatYmd,
@@ -41,9 +40,6 @@ import {
 } from '../goalsUi';
 import { BoardSections } from './BoardSections';
 import { UpNext } from './UpNext';
-
-const viewLinkClass =
-  'font-mono text-xs uppercase tracking-wide text-white/60 underline-offset-4 transition-colors hover:text-[var(--pyre-creme)] hover:underline';
 
 interface BoardsResponse {
   boards: BoardRow[];
@@ -198,44 +194,21 @@ export function BoardsIndex() {
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       {(canManage || canCreateTask) && (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          {/* Other ways to look at the same work: plain links, so they read
-              as places to go rather than things to make. */}
-          {canManage ? (
-            <nav aria-label="Other views" className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <a className={viewLinkClass} href={BOARDS_CALENDAR_HREF}>
-                Calendar
-              </a>
-              <a className={viewLinkClass} href={ALL_GOALS_HREF}>
-                All goals
-              </a>
-              <a className={viewLinkClass} href={ALL_TASKS_HREF}>
-                All tasks
-              </a>
-            </nav>
-          ) : (
-            <span />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canCreateTask && (
+            <button
+              type="button"
+              className={primaryButtonClass}
+              onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
+            >
+              New task
+            </button>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            {canCreateTask && (
-              <button
-                type="button"
-                className={primaryButtonClass}
-                onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
-              >
-                New task
-              </button>
-            )}
-            {canManage && !creating && (
-              <button
-                type="button"
-                className={primaryButtonClass}
-                onClick={() => setCreating(true)}
-              >
-                New board
-              </button>
-            )}
-          </div>
+          {canManage && !creating && (
+            <button type="button" className={primaryButtonClass} onClick={() => setCreating(true)}>
+              New board
+            </button>
+          )}
         </div>
       )}
 

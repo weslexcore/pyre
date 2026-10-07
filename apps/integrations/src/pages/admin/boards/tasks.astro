@@ -1,4 +1,5 @@
 ---
+import BoardsTabs from '@/components/admin/BoardsTabs.astro';
 // All Tasks: the cross-board page. `tasks` is a more specific route than
 // [slug], so this wins over the board page for /admin/boards/tasks — and
 // parseBoardCreate refuses the slug, so no board can ever be shadowed.
@@ -13,6 +14,7 @@
 import { AllTasks } from '@/components/admin/goals/AllTasks';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import { canManageBoards } from '@/lib/boards/access';
+import { ALL_TASKS_HREF } from '@/lib/goals/types';
 
 const viewerEmail = (Astro.locals.adminUser?.email ?? '').toLowerCase();
 const access = Astro.locals.adminAccess ?? null;
@@ -20,6 +22,7 @@ const allowed = !!access && canManageBoards(access);
 ---
 
 <AdminLayout title="All tasks" subtitle="Everything in flight, what is late, and who is on what">
+  <BoardsTabs current={ALL_TASKS_HREF} />
   {
     allowed ? (
       <AllTasks viewerEmail={viewerEmail} client:load />

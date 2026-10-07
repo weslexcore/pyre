@@ -14,14 +14,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
-import { BOARDS_HREF, GOALS_BOARD_SLUG } from '@/lib/boards/types';
+import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import type { BoardCardRow } from '@/lib/db';
 import { buildAllTasks } from '@/lib/goals/allTasks';
 import type { AllTasksData } from '@/lib/goals/store';
 import type { GroupBy } from '@/lib/goals/types';
 import { GROUP_BY } from '@/lib/goals/types';
-import { BackLink } from '../BackLink';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
@@ -138,9 +137,6 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <BackLink href={BOARDS_HREF}>All boards</BackLink>
-      </div>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
