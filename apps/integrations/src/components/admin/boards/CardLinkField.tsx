@@ -204,7 +204,9 @@ export function CardLinkField({
         {canAdd && (
           <button
             type="button"
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-white/15 text-[11px] leading-none text-white/60 hover:border-white/40 hover:text-white"
+            // Lifted a pixel: the label is all caps, so its letters sit above
+            // the middle of their line box.
+            className="-mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded border border-white/15 text-white/60 hover:border-white/40 hover:text-white"
             aria-label={`Add a new ${createInfo.noun} to ${createInfo.boardName} and link it`}
             title={`New ${createInfo.noun} on ${createInfo.boardName}`}
             aria-expanded={adding}
@@ -213,7 +215,10 @@ export function CardLinkField({
               setAddError(null);
             }}
           >
-            +
+            {/* Drawn, not typed: a "+" glyph sits below the middle of its box. */}
+            <svg aria-hidden="true" viewBox="0 0 8 8" className="h-2 w-2">
+              <path d="M4 0v8M0 4h8" stroke="currentColor" strokeWidth="1.25" />
+            </svg>
           </button>
         )}
       </div>
