@@ -1,6 +1,6 @@
 ---
-// The row at the top of every cross-board page — the boards index, the
-// calendar, all goals, and all tasks. On the left, view pills so any one of
+// The row at the top of every cross-board page — the boards index, all
+// goals, all tasks, and the calendar. On the left, view pills so any one of
 // them is a click from the others; on the right, New task, New board, and
 // New goal, each opening its form in a dialog over the page (CreateActions).
 //
@@ -23,9 +23,9 @@ const canManage = !!access && canManageBoards(access);
 
 const tabs = [
   { href: BOARDS_HREF, label: 'All boards' },
-  { href: BOARDS_CALENDAR_HREF, label: 'Calendar' },
   { href: ALL_GOALS_HREF, label: 'All goals' },
   { href: ALL_TASKS_HREF, label: 'All tasks' },
+  { href: BOARDS_CALENDAR_HREF, label: 'Calendar' },
 ];
 ---
 
