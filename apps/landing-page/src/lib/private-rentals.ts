@@ -38,8 +38,8 @@ const privateRentals: PrivateRentalsContent = {
   email: 'rentals@pyresauna.com',
   cta: {
     label: 'HIT US UP',
-    href: 'mailto:rentals@pyresauna.com?subject=Private%20Rental%20Inquiry',
-    ariaLabel: 'Send an email to inquire about a private sauna and cold plunge rental',
+    href: 'https://integrations.pyresauna.com/forms/rentals',
+    ariaLabel: 'Open the inquiry form for a private sauna and cold plunge rental',
   },
 };
 

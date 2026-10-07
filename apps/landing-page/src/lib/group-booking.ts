@@ -25,8 +25,8 @@ const groupBooking: GroupBookingContent = {
   email: 'groups@pyresauna.com',
   cta: {
     label: 'HIT US UP',
-    href: 'mailto:groups@pyresauna.com?subject=Group Booking Inquiry',
-    ariaLabel: 'Send an email to inquire about booking a private group session',
+    href: 'https://integrations.pyresauna.com/forms/rentals',
+    ariaLabel: 'Open the inquiry form to book a private group session',
   },
   // secondaryCta: {
   //   label: 'Call Us',
