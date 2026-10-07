@@ -54,7 +54,7 @@ import type { PeopleNames } from '@/lib/sops/names';
 import { BackLink } from '../BackLink';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
-import { cardClass, inputBaseClass, QuietChip, selectBaseClass } from '../goalsUi';
+import { cardClass, QuietChip, selectBaseClass } from '../goalsUi';
 import { pillClass } from '../scheduleUi';
 import { BoardCalendar, boardHasCalendar } from './BoardCalendar';
 import { BoardGoal } from './BoardGoal';
@@ -76,6 +76,7 @@ import {
 import { GroupedView } from './GroupedView';
 import { namesAsOwners } from './owners';
 import { QuickAdd } from './QuickAdd';
+import { SearchField } from './SearchField';
 import { useCardDeepLink } from './useCardDeepLink';
 import { useOptimisticCardSave } from './useOptimisticCardSave';
 import { ViewEditor } from './ViewEditor';
@@ -449,31 +450,7 @@ export function BoardView({ slug }: { slug: string }) {
             default, so the controls here are sized from the base class and
             the group as a whole drops under the link on a phone instead. */}
         <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="board-search">
-            Search
-          </label>
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/40">
-              <SearchIcon />
-            </span>
-            {/* A plain text input, like the global search: WebKit gives
-                type="search" its own chrome and does not honour the left
-                padding until the field is first painted with focus, which
-                left the icon sitting on top of the placeholder. */}
-            <input
-              id="board-search"
-              type="text"
-              inputMode="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              className={`${inputBaseClass} h-10 w-40 min-w-0 appearance-none pl-9 sm:w-56`}
-              placeholder="Search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
+          <SearchField id="board-search" value={query} onChange={setQuery} />
           <label className="sr-only" htmlFor="board-owner-filter">
             Filter by owner
           </label>
@@ -765,15 +742,6 @@ function DocumentIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 12l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

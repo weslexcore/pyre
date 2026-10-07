@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultColumn } from '@/lib/boards/cards';
 import type { Assignable } from '@/lib/boards/people';
+import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { readError, sendJson } from '@/lib/client/api';
 import { useLoadingBar } from '@/lib/client/loadingBar';
@@ -25,9 +26,11 @@ import { GROUP_BY } from '@/lib/goals/types';
 import { CardDrawer } from '../boards/CardDrawer';
 import { CardRow } from '../boards/CardRow';
 import { QuickAdd } from '../boards/QuickAdd';
+import { SearchField } from '../boards/SearchField';
 import { useCardDeepLink } from '../boards/useCardDeepLink';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
-import { cardClass, inputBaseClass, SectionTitle, selectClass } from '../goalsUi';
+import { cardClass, inputBaseClass, SectionTitle, selectBaseClass } from '../goalsUi';
+import { filterChipClass } from '../scheduleUi';
 
 type TasksData = AllTasksData & { owners?: Assignable[] };
 
@@ -51,6 +54,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const [groupBy, setGroupBy] = useState<GroupBy>('board');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [waitingOnly, setWaitingOnly] = useState(false);
+  const [query, setQuery] = useState('');
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -75,17 +79,21 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
 
   const saveCard = useOptimisticCardSave(data, setData);
 
+  // The search matches what a board's own search does: title, notes, who
+  // owns it, what it is waiting on, and its area.
   const filtered = useMemo(() => {
     if (!data) return [];
+    const terms = searchTerms(query);
     return data.cards.filter(
       (card) =>
         (ownerFilter === 'all' ||
           (ownerFilter === 'none'
             ? card.assignee_emails.length === 0
             : card.assignee_emails.includes(ownerFilter))) &&
-        (!waitingOnly || card.waiting_on !== null)
+        (!waitingOnly || card.waiting_on !== null) &&
+        cardMatches(card, terms, [], data.people)
     );
-  }, [data, ownerFilter, waitingOnly]);
+  }, [data, ownerFilter, waitingOnly, query]);
 
   const built = useMemo(() => {
     if (!data) return null;
@@ -144,13 +152,16 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
     <div className="space-y-5">
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
+      {/* The same compact row a board's own filters use: controls sized from
+          the base classes, so none of them stretches across the page. */}
       <div className="flex flex-wrap items-center gap-2">
+        <SearchField id="tasks-search" value={query} onChange={setQuery} />
         <label className="sr-only" htmlFor="tasks-group-by">
           Group by
         </label>
         <select
           id="tasks-group-by"
-          className={`${selectClass} w-auto`}
+          className={`${selectBaseClass} h-10 w-auto max-w-40 shrink-0`}
           value={groupBy}
           onChange={(e) => setGroupBy(e.target.value as GroupBy)}
         >
@@ -160,17 +171,16 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
             </option>
           ))}
         </select>
-
         <label className="sr-only" htmlFor="tasks-owner">
-          Owner
+          Filter by owner
         </label>
         <select
           id="tasks-owner"
-          className={`${selectClass} w-auto`}
+          className={`${selectBaseClass} h-10 w-auto max-w-40 shrink-0`}
           value={ownerFilter}
           onChange={(e) => setOwnerFilter(e.target.value)}
         >
-          <option value="all">Anyone</option>
+          <option value="all">Everyone</option>
           <option value="none">Unassigned</option>
           {owners.map((owner) => (
             <option key={owner.email} value={owner.email}>
@@ -178,16 +188,19 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
             </option>
           ))}
         </select>
-
-        <label className="flex items-center gap-2 text-sm text-white/60">
-          <input
-            type="checkbox"
-            checked={waitingOnly}
-            onChange={(e) => setWaitingOnly(e.target.checked)}
-          />
+        <button
+          type="button"
+          className={filterChipClass(waitingOnly)}
+          aria-pressed={waitingOnly}
+          onClick={() => setWaitingOnly((value) => !value)}
+        >
           Waiting on something
-        </label>
+        </button>
       </div>
+
+      {query.trim() && filtered.length === 0 && (
+        <p className="text-sm text-white/50">No tasks match “{query.trim()}”.</p>
+      )}
 
       {built.overdue.length > 0 && (
         <section className={cardClass}>
