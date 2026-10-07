@@ -64,6 +64,7 @@
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
 import { deleteBoardAttachments, removeAttachments } from '@/lib/boards/card-media';
+import { kindChangePatch } from '@/lib/boards/cards';
 import { columnKeyOf } from '@/lib/boards/columns';
 import { logBoardEvent } from '@/lib/boards/events';
 import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
@@ -267,7 +268,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }
 
   if (columns) {
-    const applied = await applyColumns(db, board.id, columns);
+    const applied = await applyColumns(db, board.id, columns, email);
     if (applied) return applied;
   }
 
@@ -345,9 +346,11 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
 async function applyColumns(
   db: Db,
   boardId: string,
-  next: ColumnInput[]
+  next: ColumnInput[],
+  email: string
 ): Promise<Response | null> {
   const existing = await loadColumns(db, boardId);
+  const nowIso = new Date().toISOString();
   const byKey = new Map(existing.map((column) => [column.key, column]));
   const wanted = new Set(next.map((column) => column.key));
 
@@ -377,6 +380,20 @@ async function applyColumns(
         })
         .eq('id', current.id);
       if (error) return dbError(error);
+      // A column that changes between open and finished takes the cards
+      // already in it along (lib/boards/cards kindChangePatch), so the
+      // stamp every count and strike-through reads keeps matching the column.
+      const change = kindChangePatch(current.kind, column.kind, email, nowIso);
+      if (change) {
+        const update = db
+          .from('board_cards')
+          .update({ ...change.patch, updated_by: email })
+          .eq('column_id', current.id);
+        const { error: cardsError } = change.finish
+          ? await update.is('completed_at', null)
+          : await update.not('completed_at', 'is', null);
+        if (cardsError) return dbError(cardsError);
+      }
     } else {
       const { error } = await db.from('board_columns').insert({ ...column, board_id: boardId });
       if (error) return dbError(error);

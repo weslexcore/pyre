@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardCardRow, BoardColumnRow } from '@/lib/db';
-import { cardsByColumn, columnPatch, defaultColumn, isFinished, nextSortOrder } from './cards';
+import {
+  cardsByColumn,
+  columnPatch,
+  defaultColumn,
+  isFinished,
+  kindChangePatch,
+  nextSortOrder,
+} from './cards';
 
 const NOW = '2026-09-21T12:00:00Z';
 const ME = 'wes@pyresauna.com';
@@ -107,6 +114,34 @@ describe('columnPatch', () => {
       completed_at: earlier,
       completed_by: 'maya@pyresauna.com',
     });
+  });
+});
+
+describe('kindChangePatch', () => {
+  const now = '2026-10-07T12:00:00.000Z';
+
+  it('finishes the cards when an open column becomes done or dropped', () => {
+    for (const to of ['done', 'dropped'] as const) {
+      expect(kindChangePatch('open', to, 'wes@pyresauna.com', now)).toEqual({
+        finish: true,
+        patch: { completed_at: now, completed_by: 'wes@pyresauna.com', waiting_on: null },
+      });
+    }
+  });
+
+  it('reopens the cards when a finished column becomes open', () => {
+    for (const from of ['done', 'dropped'] as const) {
+      expect(kindChangePatch(from, 'open', 'wes@pyresauna.com', now)).toEqual({
+        finish: false,
+        patch: { completed_at: null, completed_by: null },
+      });
+    }
+  });
+
+  it('leaves the cards alone when finished stays finished or open stays open', () => {
+    expect(kindChangePatch('done', 'dropped', 'wes@pyresauna.com', now)).toBeNull();
+    expect(kindChangePatch('dropped', 'done', 'wes@pyresauna.com', now)).toBeNull();
+    expect(kindChangePatch('open', 'open', 'wes@pyresauna.com', now)).toBeNull();
   });
 });
 

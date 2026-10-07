@@ -4,8 +4,8 @@
 // The column is the state. There is no separate status column on a card and
 // no "is done" flag to keep in step with it: a card is finished because it is
 // sitting in a column whose kind says so. `completed_at` is a stamp that
-// follows the move, applied here so the route and the island can never
-// disagree about when it gets set.
+// follows the move — and a change of the column's own kind — applied here
+// so the route and the island can never disagree about when it gets set.
 
 import type { BoardCardRow, BoardColumnRow } from '@/lib/db';
 import { isFinishedKind } from './types';
@@ -53,6 +53,31 @@ export function columnPatch(
         ? { assignee_emails: [] }
         : {}),
   };
+}
+
+/**
+ * What a column's change of kind means for the cards already in it, or null
+ * when it means nothing. The column is the state, so turning an open column
+ * into a done or dropped one finishes the cards sitting there — stamped the
+ * way a move into one stamps them (columnPatch), but only those not already
+ * stamped — and turning a finished column open makes them open again.
+ * Between done and dropped the cards stay finished and keep their stamps.
+ */
+export function kindChangePatch(
+  from: BoardColumnRow['kind'],
+  to: BoardColumnRow['kind'],
+  email: string,
+  nowIso: string
+):
+  | { finish: true; patch: Pick<BoardCardRow, 'completed_at' | 'completed_by' | 'waiting_on'> }
+  | { finish: false; patch: Pick<BoardCardRow, 'completed_at' | 'completed_by'> }
+  | null {
+  const wasFinished = isFinishedKind(from);
+  const nowFinished = isFinishedKind(to);
+  if (wasFinished === nowFinished) return null;
+  return nowFinished
+    ? { finish: true, patch: { completed_at: nowIso, completed_by: email, waiting_on: null } }
+    : { finish: false, patch: { completed_at: null, completed_by: null } };
 }
 
 /** Whether this card has landed somewhere final. */
