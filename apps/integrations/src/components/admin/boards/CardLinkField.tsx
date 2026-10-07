@@ -196,15 +196,15 @@ export function CardLinkField({
 
   return (
     <div ref={wrapRef} className="space-y-2">
-      <div className="-mb-0.5 flex items-center gap-2">
-        <label className={`${labelClass} mb-0`} htmlFor={id}>
+      <div className="flex items-center gap-2">
+        <label className={`${labelClass} mb-0 leading-4`} htmlFor={id}>
           {label}
           {retired && <span className="ml-2 text-white/30">(retired)</span>}
         </label>
         {canAdd && (
           <button
             type="button"
-            className="flex h-5 w-5 items-center justify-center rounded border border-white/15 text-xs leading-none text-white/60 hover:border-white/40 hover:text-white"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-white/15 text-[11px] leading-none text-white/60 hover:border-white/40 hover:text-white"
             aria-label={`Add a new ${createInfo.noun} to ${createInfo.boardName} and link it`}
             title={`New ${createInfo.noun} on ${createInfo.boardName}`}
             aria-expanded={adding}
