@@ -1,6 +1,7 @@
 // /admin/boards: the boards this person may open, under their sections,
 // each with the goal it serves — its status, its pace, how many KPIs are
-// met, how much of the work is still open — and the form for a new one.
+// met, how much of the work is still open. New boards are made from the row
+// above the page (CreateActions).
 // Arranging the sections is BoardSections' job. A board whose goal has been
 // called met leaves its section for Completed, at the bottom, so the
 // sections only ever hold work still in flight.
@@ -13,15 +14,12 @@
 // what else exists.
 
 import { todayEastern } from '@pyre/schedule-core';
-import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
-import { formButtonClass } from '@/components/admin/ui';
-import { useCreateRequest } from '@/lib/boards/createActions';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
-import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
+import { boardsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
 import type { BoardTally, UpNextCard } from '@/lib/boards/store';
-import { BOARD_LIMITS, slugOf } from '@/lib/boards/types';
-import { readError, sendJson } from '@/lib/client/api';
+import { readError } from '@/lib/client/api';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { BoardRow, BoardSectionRow, GoalKpiRow, GoalRow } from '@/lib/db';
 import { goalKpiSummary } from '@/lib/goals/kpis';
@@ -30,14 +28,10 @@ import {
   cardClass,
   formatYmd,
   GoalStatusBadge,
-  inputClass,
   KpiMeter,
-  labelClass,
   PaceChip,
-  primaryButtonClass,
   QuietChip,
   SectionTitle,
-  selectClass,
 } from '../goalsUi';
 import { BoardSections } from './BoardSections';
 import { UpNext } from './UpNext';
@@ -58,38 +52,11 @@ interface BoardsResponse {
   unattachedGoals?: GoalRow[];
 }
 
-// What a brand-new board starts with. Every board needs somewhere open to
-// put a card and somewhere to finish it; the rest is the owner's to add.
-const STARTER_COLUMNS = [
-  { key: 'new', label: 'New', kind: 'open', sortOrder: 10 },
-  { key: 'in_progress', label: 'In progress', kind: 'open', sortOrder: 20 },
-  { key: 'done', label: 'Done', kind: 'done', sortOrder: 30 },
-];
-
-/** The goal picker's two fixed choices, ahead of the goals nobody serves yet. */
-const NO_GOAL = '';
-const NEW_GOAL = '__new__';
-
 export function BoardsIndex() {
   const [data, setData] = useState<BoardsResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [cardNoun, setCardNoun] = useState('task');
-  const [includeInAllTasks, setIncludeInAllTasks] = useState(true);
-  const [sectionId, setSectionId] = useState('');
-  const [goalChoice, setGoalChoice] = useState<string>(NEW_GOAL);
-  const [goalTitle, setGoalTitle] = useState('');
-  const [goalTarget, setGoalTarget] = useState('');
-  const [goalOwner, setGoalOwner] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  // New board, from the row above the page or ?new=board (lib/boards/createActions).
-  useCreateRequest('board', () => setCreating(true));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,52 +76,6 @@ export function BoardsIndex() {
     void load();
   }, [load]);
 
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const goal =
-        goalChoice === NEW_GOAL
-          ? {
-              goal: {
-                title: goalTitle,
-                targetDate: goalTarget || null,
-                ownerEmail: goalOwner || null,
-                status: 'active',
-              },
-            }
-          : goalChoice === NO_GOAL
-            ? {}
-            : { goalId: goalChoice };
-      await sendJson('/api/admin/boards', 'POST', {
-        name,
-        slug: slug || slugOf(name),
-        cardNoun,
-        includeInAllTasks,
-        sectionId: sectionId || null,
-        ...goal,
-        columns: STARTER_COLUMNS,
-      });
-      setName('');
-      setSlug('');
-      setSlugTouched(false);
-      setGoalTitle('');
-      setGoalTarget('');
-      setGoalOwner('');
-      setGoalChoice(NEW_GOAL);
-      setCreating(false);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create that board');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const suggested = slugTouched ? slug : slugOf(name);
-  const needsGoalTitle = goalChoice === NEW_GOAL && !goalTitle.trim();
-
   // The first load holds the header's loading bar, so moving between
   // views reads as one load from click to content.
   useLoadingBar(loading && !data);
@@ -165,8 +86,8 @@ export function BoardsIndex() {
   }
 
   const { boards, sections, goals, kpis, tallies, canManage = false } = data;
-  const owners = data.owners ?? [];
-  const unattached = data.unattachedGoals ?? [];
+  const _owners = data.owners ?? [];
+  const _unattached = data.unattachedGoals ?? [];
   const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
   const talliesByBoard = new Map(tallies.map((tally) => [tally.board_id, tally]));
   const formBoardIds = new Set(data.formBoardIds ?? []);
@@ -202,180 +123,12 @@ export function BoardsIndex() {
 
       <UpNext cards={data.upNext ?? []} total={data.upNextTotal} today={today} />
 
-      {canManage && creating && (
-        <form onSubmit={create} className={cardClass}>
-          <SectionTitle>New board</SectionTitle>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass} htmlFor="new-board-name">
-                Name
-              </label>
-              <input
-                id="new-board-name"
-                className={inputClass}
-                type="text"
-                maxLength={BOARD_LIMITS.name}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="new-board-slug">
-                URL name
-              </label>
-              <input
-                id="new-board-slug"
-                className={inputClass}
-                type="text"
-                maxLength={BOARD_LIMITS.slug}
-                placeholder={slugOf(name) || 'group-bookings'}
-                value={suggested}
-                onChange={(e) => {
-                  setSlugTouched(true);
-                  setSlug(e.target.value);
-                }}
-              />
-              <p className="mt-1 text-xs text-white/35">
-                Permanent: it is the address and the grant key (board:{suggested || '…'}).
-              </p>
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="new-board-noun">
-                One card is a…
-              </label>
-              <input
-                id="new-board-noun"
-                className={inputClass}
-                type="text"
-                maxLength={BOARD_LIMITS.cardNoun}
-                value={cardNoun}
-                onChange={(e) => setCardNoun(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="new-board-section">
-                Section
-              </label>
-              <select
-                id="new-board-section"
-                className={selectClass}
-                value={sectionId}
-                onChange={(e) => setSectionId(e.target.value)}
-              >
-                <option value="">Other boards</option>
-                {sectionsInOrder(sections).map((section) => (
-                  <option key={section.id} value={section.id}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="new-board-goal">
-                Goal
-              </label>
-              <select
-                id="new-board-goal"
-                className={selectClass}
-                value={goalChoice}
-                onChange={(e) => setGoalChoice(e.target.value)}
-              >
-                <option value={NEW_GOAL}>Write a new goal</option>
-                <option value={NO_GOAL}>No goal — it is just a list</option>
-                {unattached.map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {goalChoice === NEW_GOAL && (
-            <div className="mt-4 grid grid-cols-1 gap-4 border-t border-white/10 pt-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="new-board-goal-title">
-                  What is this board for?
-                </label>
-                <input
-                  id="new-board-goal-title"
-                  className={inputClass}
-                  type="text"
-                  maxLength={200}
-                  placeholder="Ten private rentals booked by December"
-                  value={goalTitle}
-                  onChange={(e) => setGoalTitle(e.target.value)}
-                />
-                <p className="mt-1 text-xs text-white/35">
-                  The KPIs that say whether it worked come next, on the board.
-                </p>
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="new-board-goal-target">
-                  Target date
-                </label>
-                <input
-                  id="new-board-goal-target"
-                  className={inputClass}
-                  type="date"
-                  value={goalTarget}
-                  onChange={(e) => setGoalTarget(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="new-board-goal-owner">
-                  Who is driving it
-                </label>
-                <select
-                  id="new-board-goal-owner"
-                  className={selectClass}
-                  value={goalOwner}
-                  onChange={(e) => setGoalOwner(e.target.value)}
-                >
-                  <option value="">Nobody yet</option>
-                  {owners.map((owner) => (
-                    <option key={owner.email} value={owner.email}>
-                      {owner.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <label className="mt-4 flex items-center gap-2 text-sm text-white/70">
-            <input
-              type="checkbox"
-              checked={includeInAllTasks}
-              onChange={(e) => setIncludeInAllTasks(e.target.checked)}
-            />
-            Show these cards on All Tasks
-          </label>
-
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" className={formButtonClass} onClick={() => setCreating(false)}>
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={primaryButtonClass}
-              disabled={busy || !name.trim() || !suggested || needsGoalTitle}
-            >
-              {busy ? 'Creating…' : 'Create board'}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-white/35">
-            It starts with New / In progress / Done — rename them, add your own, on the board.
-          </p>
-        </form>
-      )}
-
       {(active.length > 0 || sections.length > 0) && (
         <BoardSections
           sections={sections}
           boards={active}
           canManage={canManage}
-          busy={busy}
+          busy={false}
           renderBoard={cardFor}
           onChanged={load}
           onError={setError}

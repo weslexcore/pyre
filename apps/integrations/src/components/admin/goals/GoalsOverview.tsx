@@ -15,10 +15,9 @@
 // is not.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useCreateRequest } from '@/lib/boards/createActions';
-import { readError, sendJson } from '@/lib/client/api';
+import { GOAL_CREATED_EVENT } from '@/lib/boards/createActions';
+import { readError } from '@/lib/client/api';
 import { useLoadingBar } from '@/lib/client/loadingBar';
-import type { GoalRow } from '@/lib/db';
 import type { GoalOverviewRow, GoalStatusGroup } from '@/lib/goals/overview';
 import {
   buildGoalRows,
@@ -43,7 +42,6 @@ import {
   selectClass,
   TaskBar,
 } from '../goalsUi';
-import { GoalForm } from './GoalForm';
 import { GoalPanel } from './GoalPanel';
 
 const GOAL_HASH = /^#goal-([0-9a-f-]{36})$/i;
@@ -60,13 +58,9 @@ export function GoalsOverview() {
   const [owner, setOwner] = useState('all');
   const [area, setArea] = useState('all');
   const [busy, setBusy] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   /** A goal to bring into view once it has rendered open. */
   const scrollTo = useRef<string | null>(null);
-
-  // New goal, from the row above the page or ?new=goal (lib/boards/createActions).
-  useCreateRequest('goal', () => setCreating(true));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +93,21 @@ export function GoalsOverview() {
     window.addEventListener('hashchange', openFromHash);
     return () => window.removeEventListener('hashchange', openFromHash);
   }, []);
+
+  // A goal written from New goal while on this page: show it, open, since
+  // the next thing it needs is a KPI or a board.
+  useEffect(() => {
+    const onCreated = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      void load().then(() => {
+        setOpenId(id);
+        scrollTo.current = id;
+        window.history.replaceState(window.history.state, '', `#${goalAnchorId(id)}`);
+      });
+    };
+    window.addEventListener(GOAL_CREATED_EVENT, onCreated);
+    return () => window.removeEventListener(GOAL_CREATED_EVENT, onCreated);
+  }, [load]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: openId is the retry once the row renders open
   useEffect(() => {
@@ -178,33 +187,6 @@ export function GoalsOverview() {
   return (
     <div className="space-y-6">
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
-
-      {creating && (
-        <GoalForm
-          owners={data.owners}
-          busy={busy}
-          onCancel={() => setCreating(false)}
-          onSave={async (values) => {
-            const created: { id?: string } = {};
-            await mutate(async () => {
-              const { goal } = await sendJson<{ goal: GoalRow }>(
-                '/api/admin/goals',
-                'POST',
-                values
-              );
-              created.id = goal.id;
-            });
-            setCreating(false);
-            // Open what was just written, since the next thing it needs is a
-            // KPI or a board.
-            if (created.id) {
-              setOpenId(created.id);
-              scrollTo.current = created.id;
-              window.history.replaceState(null, '', `#${goalAnchorId(created.id)}`);
-            }
-          }}
-        />
-      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="Active" value={summary.byStatus.active} />

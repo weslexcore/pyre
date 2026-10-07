@@ -31,6 +31,8 @@ export function GoalForm({
   owners,
   busy = false,
   heading,
+  className = cardClass,
+  headingId,
   onSave,
   onCancel,
 }: {
@@ -40,6 +42,10 @@ export function GoalForm({
   /** Overrides "Edit goal" / "New goal". */
   heading?: string;
   busy?: boolean;
+  /** The form's surface; a dialog brings its own. */
+  className?: string;
+  /** For a dialog's aria-labelledby. */
+  headingId?: string;
   onSave: (values: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -82,8 +88,8 @@ export function GoalForm({
   };
 
   return (
-    <form onSubmit={submit} className={cardClass}>
-      <SectionTitle>{heading ?? (goal ? 'Edit goal' : 'New goal')}</SectionTitle>
+    <form onSubmit={submit} className={className}>
+      <SectionTitle id={headingId}>{heading ?? (goal ? 'Edit goal' : 'New goal')}</SectionTitle>
 
       <div className="space-y-4">
         <div>

@@ -379,10 +379,21 @@ export function KpiMeter({
 }
 
 /** Section heading with an optional aside, as every panel here uses. */
-export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
+export function SectionTitle({
+  children,
+  note,
+  id,
+}: {
+  children: ReactNode;
+  note?: ReactNode;
+  /** For a dialog's aria-labelledby. */
+  id?: string;
+}) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-3">
-      <h2 className="font-mono text-xs uppercase tracking-wide text-white/50">{children}</h2>
+      <h2 id={id} className="font-mono text-xs uppercase tracking-wide text-white/50">
+        {children}
+      </h2>
       {note && <span className="font-mono text-[11px] text-white/35">{note}</span>}
     </div>
   );
