@@ -84,11 +84,14 @@ export function YesNo({
   label,
   value,
   onChange,
+  onClear,
   hint,
 }: {
   label: string;
   value: boolean | null;
   onChange: (next: boolean) => void;
+  /** When given, tapping the chosen answer again takes it back to unanswered. */
+  onClear?: () => void;
   hint?: string;
 }) {
   return (
@@ -105,7 +108,7 @@ export function YesNo({
           <button
             key={opt.text}
             type="button"
-            onClick={() => onChange(opt.on)}
+            onClick={() => (value === opt.on && onClear ? onClear() : onChange(opt.on))}
             aria-pressed={value === opt.on}
             className={`w-14 rounded border px-2 py-1.5 font-mono text-xs uppercase transition-colors ${
               value === opt.on

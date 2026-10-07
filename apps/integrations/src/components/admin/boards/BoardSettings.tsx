@@ -27,8 +27,8 @@
 // settings are LinkFieldSettings), and so are checklists, whose answers are
 // a card's own list and who ticked what (their default list and the column a
 // finished card moves to are ChecklistSettings). A removed field is deleted
-// if no card has answered it and archived if one has, so nothing typed is
-// ever lost.
+// with its answers on every card, after a confirm; a retired (archived) one
+// stops being asked on new cards and stays on the cards that answered it.
 
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
@@ -187,6 +187,8 @@ export function BoardSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<'archive' | 'delete' | null>(null);
+  // A saved field's remove asks first: it takes the answers off every card.
+  const [removingField, setRemovingField] = useState<FieldDraftWithLink | null>(null);
 
   const nextFieldId = useRef(0);
   const [newFieldKind, setNewFieldKind] = useState<FieldKind>('text');
@@ -578,13 +580,15 @@ export function BoardSettings({
                     checked={draft.archived}
                     onChange={(e) => setFieldDraft(index, { archived: e.target.checked })}
                   />
-                  archive
+                  retire
                 </label>
                 <button
                   type="button"
                   className="shrink-0 px-1 font-mono text-xs text-white/40 underline hover:text-[var(--pyre-red)]"
                   aria-label={`Remove ${draft.label}`}
-                  onClick={() => removeFieldDraft(index)}
+                  onClick={() =>
+                    savedByKey.has(draft.key) ? setRemovingField(draft) : removeFieldDraft(index)
+                  }
                 >
                   remove
                 </button>
@@ -657,13 +661,14 @@ export function BoardSettings({
           </button>
         </div>
         <p className="mt-2 text-xs text-white/35">
-          Choose a field's type before adding it; archive it and add a new one to change it. A
-          removed field is deleted if no card has answered it and archived if one has. A date field
-          marked "on calendar" draws its answers on the board's calendar — pick a time field beside
-          it and each entry gets a time as well as a day; a date & time field brings its own. A
-          linked cards field picks cards from another board (or this one), and can show the same
-          links on that board too. A checklist gives every card a list to work through, and can move
-          the card on once it is done.
+          Choose a field's type before adding it; retire it and add a new one to change it. A
+          retired field is not asked on new {nounPlural} but stays on the ones that answered it; a
+          removed field is deleted, along with its answers on every {cardNoun}. A date field marked
+          "on calendar" draws its answers on the board's calendar — pick a time field beside it and
+          each entry gets a time as well as a day; a date & time field brings its own. A linked
+          cards field picks cards from another board (or this one), and can show the same links on
+          that board too. A checklist gives every card a list to work through, and can move the card
+          on once it is done.
         </p>
       </div>
 
@@ -758,6 +763,20 @@ export function BoardSettings({
           onConfirm={() => {
             setConfirming(null);
             void remove();
+          }}
+        />
+      )}
+      {removingField && (
+        <ConfirmDialog
+          title={`Remove "${removingField.label}"?`}
+          body={`Deletes the field and its answers from every ${cardNoun} on this board. This cannot be undone. To stop asking it on new ${nounPlural} but keep the answers, retire it instead.`}
+          confirmLabel="Remove field"
+          danger
+          onCancel={() => setRemovingField(null)}
+          onConfirm={() => {
+            const gone = removingField.id;
+            setRemovingField(null);
+            setFieldDrafts((current) => current.filter((draft) => draft.id !== gone));
           }}
         />
       )}

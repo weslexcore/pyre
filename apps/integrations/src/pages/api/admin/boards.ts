@@ -14,7 +14,9 @@
 // from the list is archived if anything is sitting in it and removed only if
 // nothing is — an archived column keeps rendering while it still holds work
 // (lib/boards/cards.ts), so nothing is ever stranded somewhere invisible.
-// Fields follow the same rule against the answers on the cards. A field's
+// Fields do not: a field dropped from the list is deleted along with its
+// answers on every card, and one that should stop being asked while its
+// answers stay is retired (archived) instead. A field's
 // kind can be changed after the fact, and the answers already stored are
 // read through the new kind and written back — what does not survive the
 // change is cleared, the way an answer to a pick-one whose option is gone
@@ -61,7 +63,7 @@
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
 import { canManageBoards, canViewBoard, visibleBoards } from '@/lib/boards/access';
-import { deleteBoardAttachments } from '@/lib/boards/card-media';
+import { deleteBoardAttachments, removeAttachments } from '@/lib/boards/card-media';
 import { columnKeyOf } from '@/lib/boards/columns';
 import { logBoardEvent } from '@/lib/boards/events';
 import { boardViewerExtras, listAssignable } from '@/lib/boards/people';
@@ -91,7 +93,7 @@ import {
   parseBoardCreate,
   parseBoardPatch,
 } from '@/lib/boards/validate';
-import type { BoardCardRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
+import type { BoardAttachmentRow, BoardCardRow, BoardFieldRow, BoardRow, GoalRow } from '@/lib/db';
 import {
   type APIRoute,
   beginDelete,
@@ -444,11 +446,11 @@ async function convertAnswers(
 }
 
 /**
- * Reconcile a board's fields against the list that was sent, the way
- * applyColumns does: still listed (update), new (insert), gone but answered
- * on some card (archive), gone and unanswered (delete). An archived field
- * keeps showing in a drawer while the card has an answer under it
- * (CardDrawer), so nothing typed is ever hidden.
+ * Reconcile a board's fields against the list that was sent: still listed
+ * (update), new (insert), gone (delete, with its answers — deleteField).
+ * Unlike a column, a field is not kept back for its answers: retiring it
+ * (archived) is the way to keep them. A retired field keeps showing on a
+ * card that answered it (CardDrawer) and is not offered to a new one.
  *
  * A field's kind can change, and the answers already on the cards are put
  * through the new kind when it does (convertAnswers). Files are the one
@@ -469,21 +471,21 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
         current.kind === 'files'
           ? `"${current.label}" holds files, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
           : `"${current.label}" already has answers, so it cannot become a files field`;
-      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
+      return json({ error: `${reason}. Retire it and add a new one instead.` }, 400);
     }
     if (current.kind === 'checklist' || field.kind === 'checklist') {
       const reason =
         current.kind === 'checklist'
           ? `"${current.label}" is a checklist, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
           : `"${current.label}" already has answers, so it cannot become a checklist`;
-      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
+      return json({ error: `${reason}. Retire it and add a new one instead.` }, 400);
     }
     if (current.kind === 'card_link' || field.kind === 'card_link') {
       const reason =
         current.kind === 'card_link'
           ? `"${current.label}" links cards, so it cannot become a ${FIELD_KIND_LABELS[field.kind].toLowerCase()} field`
           : `"${current.label}" already has answers, so it cannot become a linked cards field`;
-      return json({ error: `${reason}. Archive it and add a new one instead.` }, 400);
+      return json({ error: `${reason}. Retire it and add a new one instead.` }, 400);
     }
     recast.push(field);
   }
@@ -569,37 +571,16 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
     if (failed) return failed;
   }
 
+  // A field taken off the list is deleted, answers and all: retiring it
+  // (archived) is how a field stops being asked while its answers stay.
   const dropped = existing.filter((field) => !wanted.has(field.key));
   for (const field of dropped) {
-    // A link field's answers are rows, not properties: any link it made, or
-    // its partner made that it reads, keeps it (archived) rather than
-    // deleting it and the links with it.
-    // Keys match ^[a-z][a-z0-9_]+$, so the JSON path is safe to build.
-    const { count, error: countError } =
-      field.kind === 'card_link'
-        ? await db
-            .from('board_card_links')
-            .select('id', { count: 'exact', head: true })
-            .in(
-              'field_id',
-              [field.id, field.link_inverse_field_id].filter((id): id is string => id !== null)
-            )
-        : await db
-            .from('board_cards')
-            .select('id', { count: 'exact', head: true })
-            .eq('board_id', boardId)
-            .not(`properties->${field.key}`, 'is', null);
-    if (countError) return dbError(countError);
-
-    const { error } =
-      (count ?? 0) > 0
-        ? await db.from('board_fields').update({ archived: true }).eq('id', field.id)
-        : await db.from('board_fields').delete().eq('id', field.id);
-    if (error) return dbError(error);
+    const failed = await deleteField(db, boardId, field);
+    if (failed) return failed;
   }
 
   // parseFields refuses a date field timed by something that is not a live
-  // time field — but only when both are on the list it was sent. The archive
+  // time field — but only when both are on the list it was sent. The retire
   // and delete passes above can leave a pointer dangling on a field nobody
   // touched, so the last word is a sweep over what is actually stored. The
   // calendar would draw those entries all-day anyway; this keeps the rows
@@ -623,6 +604,50 @@ async function applyFields(db: Db, boardId: string, next: FieldInput[]): Promise
 }
 
 /**
+ * A field gone for good, and its answers off every card with it — so a
+ * field added later under the same key starts empty. A files field's
+ * uploads go too, objects first (removeAttachments). A card_link field's
+ * links cascade with its row; a partner on another board keeps its own
+ * links and just stops being paired (link_inverse_field_id is set null).
+ */
+async function deleteField(
+  db: Db,
+  boardId: string,
+  field: BoardFieldRow
+): Promise<Response | null> {
+  // Keys match ^[a-z][a-z0-9_]+$, so the JSON path is safe to build.
+  const { data, error } = await db
+    .from('board_cards')
+    .select('id, properties')
+    .eq('board_id', boardId)
+    .not(`properties->${field.key}`, 'is', null);
+  if (error) return dbError(error);
+
+  for (const card of (data ?? []) as Pick<BoardCardRow, 'id' | 'properties'>[]) {
+    const { [field.key]: _gone, ...properties } = card.properties;
+    const { error: writeError } = await db
+      .from('board_cards')
+      .update({ properties })
+      .eq('id', card.id);
+    if (writeError) return dbError(writeError);
+  }
+
+  if (field.kind === 'files') {
+    const { data: files, error: filesError } = await db
+      .from('board_attachments')
+      .select('id, storage_path')
+      .eq('board_id', boardId)
+      .eq('field_key', field.key);
+    if (filesError) return dbError(filesError);
+    await removeAttachments(db, (files ?? []) as Pick<BoardAttachmentRow, 'id' | 'storage_path'>[]);
+  }
+
+  const { error: deleteError } = await db.from('board_fields').delete().eq('id', field.id);
+  if (deleteError) return dbError(deleteError);
+  return null;
+}
+
+/**
  * Every card_link field on the list names a board that exists and columns
  * that board has, and a field that already links somewhere keeps linking
  * there: its answers are cards on that board, and pointing it elsewhere
@@ -641,7 +666,7 @@ async function checkLinkTargets(
     if (current?.link_board_id && current.link_board_id !== field.link_board_id) {
       return json(
         {
-          error: `"${field.label}" already links cards on another board. Archive it and add a new one instead.`,
+          error: `"${field.label}" already links cards on another board. Retire it and add a new one instead.`,
         },
         400
       );

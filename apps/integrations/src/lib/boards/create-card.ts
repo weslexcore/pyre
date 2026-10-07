@@ -72,7 +72,9 @@ export async function createCard(
     : defaultColumn(columns);
   if (!column) return { ok: false, status: 400, error: 'That column is not on this board' };
 
-  const fields = await loadBoardFields(db, board.id);
+  // A retired field stays on the cards that answered it, but a new card is
+  // not asked it: no answer, no default checklist, no links.
+  const fields = (await loadBoardFields(db, board.id)).filter((field) => !field.archived);
   const { data: siblings } = await db
     .from('board_cards')
     .select('column_id, sort_order')

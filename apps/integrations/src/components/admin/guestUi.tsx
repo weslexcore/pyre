@@ -100,7 +100,7 @@ export interface FieldDefinition {
 
 /**
  * The control for one field, by kind. Value `undefined` means unanswered;
- * `onChange(null)` clears. Pick-one chips toggle off when tapped again so
+ * `onChange(null)` clears. Pick-one chips and yes/no toggle off when tapped again so
  * an answer can be withdrawn without a separate clear button.
  */
 function isPlainAnswer(
@@ -180,10 +180,11 @@ export function FieldInput({
     case 'yes_no':
       return (
         <YesNo
-          label={field.label}
+          label={field.archived ? `${field.label} (retired)` : field.label}
           hint={field.hint ?? undefined}
           value={typeof value === 'boolean' ? value : null}
           onChange={(next) => onChange(next)}
+          onClear={() => onChange(null)}
         />
       );
     case 'long_text':
