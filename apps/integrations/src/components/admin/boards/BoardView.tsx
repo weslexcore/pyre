@@ -631,6 +631,7 @@ export function BoardView({ slug }: { slug: string }) {
                   column={column}
                   count={columnCards.length}
                   noun={noun}
+                  people={people}
                   busy={busy}
                   onAdd={column.archived ? undefined : (title) => addCard(title, column.id)}
                 />

@@ -11,23 +11,30 @@
 //
 // Only a manager sees the controls. A single-board grantee works the cards;
 // they do not reshape the board.
+//
+// A column with assignees shows them beside its name: a card dropped there
+// is handed to them, so the hand-off is visible before the drop, not after.
 
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
 import { BOARD_LIMITS } from '@/lib/boards/types';
 import type { BoardColumnRow } from '@/lib/db';
-import { inputBaseClass, SectionTitle } from '../goalsUi';
+import { type PeopleNames, personName } from '@/lib/sops/names';
+import { AvatarStack, inputBaseClass, SectionTitle } from '../goalsUi';
 import { QuickAdd } from './QuickAdd';
 
 export function ColumnHeader({
   column,
   count,
   noun = 'card',
+  people = {},
   busy = false,
   onAdd,
 }: {
   column: BoardColumnRow;
   count: number;
+  /** Display names, for the column's assignees. */
+  people?: PeopleNames;
   /** What this board calls a card — for the plus button's label. */
   noun?: string;
   busy?: boolean;
@@ -35,6 +42,8 @@ export function ColumnHeader({
   onAdd?: (title: string) => Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
+  const assignees = column.assignee_emails ?? [];
+  const nameOf = (email: string) => personName(email, people);
 
   return (
     <>
@@ -57,8 +66,19 @@ export function ColumnHeader({
           </span>
         }
       >
-        {column.label}
-        {column.archived && <span className="ml-2 text-white/25">(archived)</span>}
+        <span className="inline-flex items-center gap-2">
+          {column.label}
+          {column.archived && <span className="text-white/25">(archived)</span>}
+          {assignees.length > 0 && (
+            <span
+              className="inline-flex"
+              title={`Moving a ${noun} here assigns it to ${assignees.map(nameOf).join(', ')}`}
+            >
+              <span className="sr-only">, assigns to</span>
+              <AvatarStack emails={assignees} names={nameOf} />
+            </span>
+          )}
+        </span>
       </SectionTitle>
 
       {adding && onAdd && (
