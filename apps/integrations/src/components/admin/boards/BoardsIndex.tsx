@@ -42,6 +42,9 @@ import {
 import { BoardSections } from './BoardSections';
 import { UpNext } from './UpNext';
 
+const viewLinkClass =
+  'font-mono text-xs uppercase tracking-wide text-white/60 underline-offset-4 transition-colors hover:text-[var(--pyre-creme)] hover:underline';
+
 interface BoardsResponse {
   boards: BoardRow[];
   sections: BoardSectionRow[];
@@ -174,6 +177,7 @@ export function BoardsIndex() {
     goalsById
   );
   const archived = boards.filter((board) => board.archived);
+  const canCreateTask = boards.some(isTaskCreationBoard);
 
   const cardFor = (board: BoardRow, handle: ReactNode = null) => (
     <BoardCard
@@ -193,37 +197,45 @@ export function BoardsIndex() {
     <div className="space-y-5">
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
-      {(canManage || boards.length > 0) && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {canManage && (
-            <a className={formButtonClass} href={BOARDS_CALENDAR_HREF}>
-              Calendar
-            </a>
+      {(canManage || canCreateTask) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          {/* Other ways to look at the same work: plain links, so they read
+              as places to go rather than things to make. */}
+          {canManage ? (
+            <nav aria-label="Other views" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <a className={viewLinkClass} href={BOARDS_CALENDAR_HREF}>
+                Calendar
+              </a>
+              <a className={viewLinkClass} href={ALL_GOALS_HREF}>
+                All goals
+              </a>
+              <a className={viewLinkClass} href={ALL_TASKS_HREF}>
+                All tasks
+              </a>
+            </nav>
+          ) : (
+            <span />
           )}
-          {canManage && (
-            <a className={formButtonClass} href={ALL_GOALS_HREF}>
-              All goals
-            </a>
-          )}
-          {canManage && (
-            <a className={formButtonClass} href={ALL_TASKS_HREF}>
-              All tasks
-            </a>
-          )}
-          {boards.some(isTaskCreationBoard) && (
-            <button
-              type="button"
-              className={formButtonClass}
-              onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
-            >
-              New task
-            </button>
-          )}
-          {canManage && !creating && (
-            <button type="button" className={formButtonClass} onClick={() => setCreating(true)}>
-              New board
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canCreateTask && (
+              <button
+                type="button"
+                className={primaryButtonClass}
+                onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
+              >
+                New task
+              </button>
+            )}
+            {canManage && !creating && (
+              <button
+                type="button"
+                className={primaryButtonClass}
+                onClick={() => setCreating(true)}
+              >
+                New board
+              </button>
+            )}
+          </div>
         </div>
       )}
 
