@@ -1,9 +1,16 @@
 ---
-// The view pills shared by the cross-board pages — the boards index, the
-// calendar, all goals, and all tasks — so any one of them is a click from
-// the others. The three cross-board views turn single-board grantees away,
-// so those viewers get no pills at all: their one board is the whole tool.
+// The row at the top of every cross-board page — the boards index, the
+// calendar, all goals, and all tasks. On the left, view pills so any one of
+// them is a click from the others; on the right, New task, New board, and
+// New goal, so any of them can be made from wherever the person is
+// (lib/boards/createActions).
+//
+// The three cross-board views turn single-board grantees away, and boards
+// and goals are made under the same manage grant, so those viewers get only
+// New task: the form offers just the boards they hold.
+import { primaryButtonClass } from '@/components/admin/goalsUi';
 import { canManageBoards } from '@/lib/boards/access';
+import { CREATE_HREFS } from '@/lib/boards/createActions';
 import { BOARDS_CALENDAR_HREF, BOARDS_HREF } from '@/lib/boards/types';
 import { ALL_GOALS_HREF, ALL_TASKS_HREF } from '@/lib/goals/types';
 import SubNav from './SubNav.astro';
@@ -14,7 +21,7 @@ interface Props {
 const { current } = Astro.props;
 
 const access = Astro.locals.adminAccess ?? null;
-const show = !!access && canManageBoards(access);
+const canManage = !!access && canManageBoards(access);
 
 const tabs = [
   { href: BOARDS_HREF, label: 'All boards' },
@@ -24,4 +31,31 @@ const tabs = [
 ];
 ---
 
-{show && <SubNav tabs={tabs} current={current} pill />}
+<div class="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+  {canManage ? <SubNav tabs={tabs} current={current} pill class="" /> : <span />}
+  <div class="flex flex-wrap items-center gap-2">
+    <button type="button" class={primaryButtonClass} data-create-task>New task</button>
+    {
+      canManage && (
+        <a class={primaryButtonClass} href={CREATE_HREFS.board} data-create="board">
+          New board
+        </a>
+      )
+    }
+    {
+      canManage && (
+        <a class={primaryButtonClass} href={CREATE_HREFS.goal} data-create="goal">
+          New goal
+        </a>
+      )
+    }
+  </div>
+</div>
+
+<script>
+  import { bindCreateActions } from '@/lib/boards/createActions';
+
+  // Module scripts run once per JS realm, and the ClientRouter keeps the
+  // realm across navigations, so this binds exactly once.
+  bindCreateActions();
+</script>

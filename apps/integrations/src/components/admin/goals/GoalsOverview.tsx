@@ -15,6 +15,7 @@
 // is not.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCreateRequest } from '@/lib/boards/createActions';
 import { readError, sendJson } from '@/lib/client/api';
 import { useLoadingBar } from '@/lib/client/loadingBar';
 import type { GoalRow } from '@/lib/db';
@@ -37,7 +38,6 @@ import {
   KpiMeter,
   labelClass,
   PaceChip,
-  primaryButtonClass,
   QuietChip,
   SectionTitle,
   selectClass,
@@ -64,6 +64,9 @@ export function GoalsOverview() {
   const [openId, setOpenId] = useState<string | null>(null);
   /** A goal to bring into view once it has rendered open. */
   const scrollTo = useRef<string | null>(null);
+
+  // New goal, from the row above the page or ?new=goal (lib/boards/createActions).
+  useCreateRequest('goal', () => setCreating(true));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,18 +177,6 @@ export function GoalsOverview() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {!creating && (
-          <button
-            type="button"
-            className={primaryButtonClass}
-            disabled={busy}
-            onClick={() => setCreating(true)}
-          >
-            New goal
-          </button>
-        )}
-      </div>
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
 
       {creating && (

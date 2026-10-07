@@ -1,16 +1,18 @@
 ---
 // The tab row under a tool's page header (the schedule pages, the guest
 // pages). Callers decide which tabs a viewer sees; this only draws them.
-// `pill` rounds them fully (the boards views).
+// `pill` rounds them fully (the boards views); `class` replaces the bottom
+// margin for a caller that lays the row out itself.
 interface Props {
   tabs: { href: string; label: string }[];
   current: string;
   pill?: boolean;
+  class?: string;
 }
-const { tabs, current, pill = false } = Astro.props;
+const { tabs, current, pill = false, class: spacing = 'mb-6' } = Astro.props;
 ---
 
-<nav class="mb-6 flex flex-wrap gap-2">
+<nav class={`${spacing} flex flex-wrap gap-2`}>
   {
     tabs.map((tab) => (
       <a

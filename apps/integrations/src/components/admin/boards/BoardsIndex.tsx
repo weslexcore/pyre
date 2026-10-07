@@ -15,7 +15,7 @@
 import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
-import { CREATE_TASK_EVENT, isTaskCreationBoard } from '@/lib/admin/globalSearch';
+import { useCreateRequest } from '@/lib/boards/createActions';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
@@ -87,6 +87,9 @@ export function BoardsIndex() {
   const [goalTarget, setGoalTarget] = useState('');
   const [goalOwner, setGoalOwner] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // New board, from the row above the page or ?new=board (lib/boards/createActions).
+  useCreateRequest('board', () => setCreating(true));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -178,7 +181,6 @@ export function BoardsIndex() {
     goalsById
   );
   const archived = boards.filter((board) => board.archived);
-  const canCreateTask = boards.some(isTaskCreationBoard);
 
   const cardFor = (board: BoardRow, handle: ReactNode = null) => (
     <BoardCard
@@ -197,25 +199,6 @@ export function BoardsIndex() {
   return (
     <div className="space-y-5">
       {error && <p className="text-sm text-[var(--pyre-red)]">{error}</p>}
-
-      {(canManage || canCreateTask) && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {canCreateTask && (
-            <button
-              type="button"
-              className={primaryButtonClass}
-              onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
-            >
-              New task
-            </button>
-          )}
-          {canManage && !creating && (
-            <button type="button" className={primaryButtonClass} onClick={() => setCreating(true)}>
-              New board
-            </button>
-          )}
-        </div>
-      )}
 
       <UpNext cards={data.upNext ?? []} total={data.upNextTotal} today={today} />
 
