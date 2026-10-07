@@ -44,10 +44,10 @@ export function UpNext({
         <BendRow
           className="-mx-4 sm:mx-0"
           contentClassName="snap-x snap-mandatory scroll-px-4 overscroll-x-contain sm:scroll-px-0"
-          zone={72}
-          angle={40}
-          rounding={48}
-          perspective={600}
+          zone={96}
+          angle={55}
+          rounding={64}
+          perspective={500}
           direction="out"
           ease={120}
           tilt={0}
