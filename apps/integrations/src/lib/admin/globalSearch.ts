@@ -330,3 +330,10 @@ export function isTaskCreationBoard(
 ): boolean {
   return !board.archived && board.include_in_all_tasks;
 }
+
+/**
+ * Opens the palette straight on its Create task form. Pages that offer their
+ * own New task button (the boards index) dispatch it on window, so they reuse
+ * the palette's form instead of carrying one of their own.
+ */
+export const CREATE_TASK_EVENT = 'admin:create-task';

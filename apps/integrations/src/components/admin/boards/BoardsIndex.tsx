@@ -15,6 +15,7 @@
 import { todayEastern } from '@pyre/schedule-core';
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { formButtonClass } from '@/components/admin/ui';
+import { CREATE_TASK_EVENT, isTaskCreationBoard } from '@/lib/admin/globalSearch';
 import { formHref } from '@/lib/boards/forms';
 import type { Assignable } from '@/lib/boards/people';
 import { boardsInOrder, sectionsInOrder, splitCompletedBoards } from '@/lib/boards/sections';
@@ -208,6 +209,15 @@ export function BoardsIndex() {
             <a className={formButtonClass} href={ALL_TASKS_HREF}>
               All tasks
             </a>
+          )}
+          {boards.some(isTaskCreationBoard) && (
+            <button
+              type="button"
+              className={formButtonClass}
+              onClick={() => window.dispatchEvent(new Event(CREATE_TASK_EVENT))}
+            >
+              New task
+            </button>
           )}
           {canManage && !creating && (
             <button type="button" className={formButtonClass} onClick={() => setCreating(true)}>

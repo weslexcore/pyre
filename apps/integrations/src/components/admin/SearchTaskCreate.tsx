@@ -29,6 +29,13 @@ export function SearchTaskCreate({
     input.current?.focus();
   }, []);
 
+  // Opened from a New task button, the form can mount before the boards
+  // have loaded; pick the default once they arrive.
+  useEffect(() => {
+    if (board || boards.length === 0) return;
+    setBoard((boards.find((item) => item.slug === GOALS_BOARD_SLUG) ?? boards[0]).slug);
+  }, [board, boards]);
+
   return (
     <form
       className="min-h-0 space-y-4 overflow-y-auto p-4"

@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildItems,
+  CREATE_TASK_EVENT,
   GROUP_LABELS,
   isTaskCreationBoard,
   MIN_QUERY_LENGTH,
@@ -285,6 +286,17 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // A page's own New task button opens the palette on the create form.
+  useEffect(() => {
+    const onCreateTask = () => {
+      setQuery('');
+      setCreating(true);
+      setOpen(true);
+    };
+    window.addEventListener(CREATE_TASK_EVENT, onCreateTask);
+    return () => window.removeEventListener(CREATE_TASK_EVENT, onCreateTask);
   }, []);
 
   useEffect(() => {
