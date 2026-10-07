@@ -25,8 +25,9 @@
 //     save that finishes a checklist whose field names a column moves the
 //     card there (lib/boards/checklist.ts), unless the same save moves it
 //     somewhere itself;
-//   * finishing a repeating card files the next one and hands it the rule
-//     (lib/boards/repeat-card.ts); the response carries it as `repeated`.
+//   * finishing a repeating card sends it back to the board's first open
+//     column, due on its next date (lib/boards/repeat-card.ts); the
+//     response carries the card as it is after that.
 //
 // Access is per board: `board:<slug>` opens exactly that board's cards.
 //
@@ -35,7 +36,7 @@
 //            waitingOn?, area?, notesMd?, properties? } → { card } 201
 //          (no assignees takes the board's defaults; repeat is
 //          { every, unit } or null)
-//   PATCH  { id, ...any of the above } → { card, repeated? }
+//   PATCH  { id, ...any of the above } → { card }
 //   DELETE ?id=<uuid>  → { ok: true }
 
 import { BOARDS_HREF } from '@/components/admin/adminTools';
@@ -52,7 +53,7 @@ import { createCard, goalTitle, loadBoardFields } from '@/lib/boards/create-card
 import { eventsForCardPatch } from '@/lib/boards/diff';
 import { logBoardEvents } from '@/lib/boards/events';
 import { boardViewerExtras } from '@/lib/boards/people';
-import { fileNextRepeat } from '@/lib/boards/repeat-card';
+import { restartRepeat } from '@/lib/boards/repeat-card';
 import { loadBoardSops, sopsForViewer } from '@/lib/boards/sops';
 import {
   loadBoardBundle,
@@ -250,11 +251,14 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   }));
   await logBoardEvents(db, events);
 
+  // A repeating card that was just finished goes straight back to the
+  // first open column for its next round; the finished state it had is
+  // what the completion notice below describes.
   const justFinished = written.completed_at !== null && before.completed_at === null;
-  const repeat = justFinished ? await fileNextRepeat(db, written, email) : null;
-  if (repeat) written = repeat.finished;
+  const finished = written;
+  const restarted = justFinished ? await restartRepeat(db, written, email) : null;
+  if (restarted) written = restarted;
   const [card] = await withLinks(db, fields, [written]);
-  const repeated = repeat ? (await withLinks(db, fields, [repeat.next]))[0] : undefined;
   const added = card.assignee_emails.filter((who) => !before.assignee_emails.includes(who));
   if (added.length > 0 || justFinished) {
     const board = await loadBoard(db, card.board_id);
@@ -265,13 +269,13 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
       // Only the assignees hear, and only when somebody else finished it —
       // notifyCardCompleted drops the case where they did it themselves.
       if (justFinished) {
-        const column = await loadColumn(db, card.column_id);
-        if (column) await notifyCardCompleted(db, card, board, column, email);
+        const column = await loadColumn(db, finished.column_id);
+        if (column) await notifyCardCompleted(db, finished, board, column, email);
       }
     }
   }
 
-  return json({ card, ...(repeated ? { repeated } : {}) });
+  return json({ card });
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {

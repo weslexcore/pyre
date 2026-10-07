@@ -1193,7 +1193,7 @@ export interface BoardCardRow {
   assignee_emails: string[];
   /** YYYY-MM-DD. */
   due_date: string | null;
-  /** With repeat_unit: finishing the card files the next one this much later. */
+  /** With repeat_unit: finishing the card sends it back to do again, due this much later. */
   repeat_every: number | null;
   repeat_unit: 'day' | 'week' | 'month' | 'year' | null;
   /** Why it is stuck, while it stays in progress. */

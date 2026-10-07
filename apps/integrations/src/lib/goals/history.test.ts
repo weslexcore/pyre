@@ -28,6 +28,16 @@ describe('describeEvent', () => {
     expect(describe_('moved', {})).toBe('moved it');
   });
 
+  it('says a repeating card went back for its next round, and when it is due', () => {
+    expect(
+      describe_('moved', {
+        repeated: true,
+        column_id: { from: 'col-doing', to: 'col-todo' },
+        due_date: { from: '2026-10-07', to: '2026-10-14' },
+      })
+    ).toBe('finished this round; it repeats, so it went back to To do, due 2026-10-14');
+  });
+
   it('turns an owner email into a name, and says when one was removed', () => {
     expect(describe_('assigned', { owner_email: { from: null, to: 'maya@pyresauna.com' } })).toBe(
       'assigned it to Maya Ortiz'

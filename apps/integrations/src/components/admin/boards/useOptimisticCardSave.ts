@@ -53,25 +53,24 @@ export function useOptimisticCardSave<
   return async (id: string, patch: Record<string, unknown>) => {
     const before = current.current?.cards.find((card) => card.id === id);
     if (!before || !current.current) throw new Error('This card is no longer available');
-    // `added` is the next copy of a repeating card the save just finished.
-    const replace = (card: BoardCardRow, added?: BoardCardRow) => {
+    const replace = (card: BoardCardRow) => {
       if (!current.current) return;
-      const cards = current.current.cards.map((row) => (row.id === id ? card : row));
       const next = {
         ...current.current,
-        cards: added && !cards.some((row) => row.id === added.id) ? [...cards, added] : cards,
+        cards: current.current.cards.map((row) => (row.id === id ? card : row)),
       };
       current.current = next;
       setData(next);
     };
     replace(optimisticCardPatch(before, patch, current.current.columns));
     try {
-      const result = await sendJson<{ card: BoardCardRow; repeated?: BoardCardRow }>(
-        '/api/admin/board-cards',
-        'PATCH',
-        { id, ...patch }
-      );
-      replace(result.card, result.repeated);
+      // A repeating card the save finished comes back already reset for
+      // its next round (lib/boards/repeat-card).
+      const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
+        id,
+        ...patch,
+      });
+      replace(result.card);
     } catch (error) {
       replace(before);
       throw error;

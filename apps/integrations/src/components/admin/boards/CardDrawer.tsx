@@ -95,11 +95,20 @@ export function CardDrawer({
   // Linked cards' summaries: what the board sent, plus anything picked here.
   const [known, setKnown] = useState<Map<string, LinkSummary>>(() => new Map(links ?? []));
   const autosave = useCardAutosave(onSave);
-  // The server ends a repeat when the card is finished (the next copy takes
-  // the rule); the chip follows what the card says now.
+  // The chip follows the rule the card holds now.
   useEffect(() => {
     setRepeat(repeatRuleOf({ repeat_every: card.repeat_every, repeat_unit: card.repeat_unit }));
   }, [card.repeat_every, card.repeat_unit]);
+  // The server can move the card itself: finishing a repeating card sends it
+  // back to the first open column, due on its next date, with its checklists
+  // started again (lib/boards/repeat-card). The drawer follows, rather than
+  // still showing the round that was just finished.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the server's column on purpose
+  useEffect(() => {
+    setColumnId(card.column_id);
+    setDueDate(card.due_date ?? '');
+    setProperties(card.properties);
+  }, [card.column_id]);
   const saving = autosave.status === 'saving' || autosave.status === 'pending';
   const error = !title.trim() ? 'A card needs a title.' : autosave.error;
   /** Resolves true once the drawer has closed with every edit saved. */

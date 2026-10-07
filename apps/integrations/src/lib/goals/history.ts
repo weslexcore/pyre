@@ -90,7 +90,8 @@ export function describeEvent(
 
   switch (event.action) {
     case 'created':
-      // The next copy of a repeating card, filed when the last one finished.
+      // The next copy of a repeating card, filed when the last one finished —
+      // how repeats worked before a finished card went back for its next round.
       if (typeof detail.repeatOf === 'string') return 'filed the next repeat';
       return subjectTitle ? `added “${subjectTitle}”` : 'added it';
 
@@ -101,6 +102,12 @@ export function describeEvent(
       const change = changeOf(detail, 'column_id');
       const to = change ? columnsById.get(str(change.to))?.label : undefined;
       const from = change ? columnsById.get(str(change.from))?.label : undefined;
+      // A repeating card finished and sent back for its next round.
+      if (detail.repeated === true) {
+        const due = str(changeOf(detail, 'due_date')?.to);
+        const back = to ? `back to ${to}` : 'back';
+        return `finished this round; it repeats, so it went ${back}${due ? `, due ${due}` : ''}`;
+      }
       if (to && from) return `moved it from ${from} to ${to}`;
       if (to) return `moved it to ${to}`;
       return 'moved it';

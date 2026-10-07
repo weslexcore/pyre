@@ -253,35 +253,38 @@ export function BoardView({ slug }: { slug: string }) {
     setBusy(true);
     setError(null);
     try {
+      // A repeating card dropped into Done comes straight back to the first
+      // open column for its next round, so it is not in the column the drop
+      // aimed at, and that column's order has nothing of it to save.
+      let restarted = false;
       if (plan.moved) {
-        const result = await sendJson<{ card: BoardCardRow; repeated?: BoardCardRow }>(
-          '/api/admin/board-cards',
-          'PATCH',
-          { id: plan.card.id, columnId: plan.columnId }
-        );
-        // A repeating card dropped into Done comes back with its next copy.
-        const { repeated } = result;
+        const result = await sendJson<{ card: BoardCardRow }>('/api/admin/board-cards', 'PATCH', {
+          id: plan.card.id,
+          columnId: plan.columnId,
+        });
+        restarted = result.card.column_id !== plan.columnId;
         setBundle((current) =>
           current
             ? {
                 ...current,
-                cards: [
-                  ...current.cards.map((row) =>
-                    row.id === result.card.id ? { ...result.card, sort_order: row.sort_order } : row
-                  ),
-                  ...(repeated && !current.cards.some((row) => row.id === repeated.id)
-                    ? [repeated]
-                    : []),
-                ],
+                cards: current.cards.map((row) =>
+                  row.id === result.card.id
+                    ? restarted
+                      ? result.card
+                      : { ...result.card, sort_order: row.sort_order }
+                    : row
+                ),
               }
             : current
         );
       }
-      await sendJson('/api/admin/board-cards/reorder', 'POST', {
-        board: slug,
-        columnId: plan.columnId,
-        cardIds: plan.orderedIds,
-      });
+      if (!restarted) {
+        await sendJson('/api/admin/board-cards/reorder', 'POST', {
+          board: slug,
+          columnId: plan.columnId,
+          cardIds: plan.orderedIds,
+        });
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not move this card');
       await load();

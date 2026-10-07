@@ -1,12 +1,11 @@
 // A card that comes back: "every 2 weeks", "monthly". Pure and client-safe —
 // the drawer shows the next date with the same arithmetic the route uses to
-// file it.
+// set it.
 //
 // The rule lives on the card (board_cards.repeat_every / repeat_unit). When a
-// repeating card is finished, the route files the next one due on
-// nextRepeatDate and hands the rule to it (lib/boards/repeat-card.ts); the
-// finished card stops repeating, so it can be pulled back out of Done without
-// leaving a second copy behind.
+// repeating card is finished, the route sends that same card back to the
+// board's first open column, due on nextRepeatDate, for its next round
+// (lib/boards/repeat-card.ts).
 
 import type { BoardCardRow } from '@/lib/db';
 
@@ -92,7 +91,7 @@ export function addInterval(ymd: string, rule: RepeatRule): string {
 }
 
 /**
- * The date the next copy is due: one step on from this one's due date (or
+ * The date the next round is due: one step on from this one's due date (or
  * from today, for a card that was never dated), and then on again until it
  * is after today — finishing a weekly task three weeks late files next
  * week's, not three overdue ones.

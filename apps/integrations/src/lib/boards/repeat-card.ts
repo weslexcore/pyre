@@ -1,13 +1,15 @@
-// Filing the next copy of a repeating card. Server-only.
+// Starting a repeating card's next round. Server-only.
 //
 // Called by the routes once a card has been finished (moved into a done or
-// dropped column, by hand or by its checklist). The rule moves to the new
-// card: the finished one stops repeating first — conditionally, so two saves
-// racing to finish the same card file one copy between them — and the copy
-// lands in the board's first open column, due on the next date, on the same
-// people, with the same notes and plain answers. Files, linked cards, and
-// checklist progress belong to the occurrence that did the work, so the copy
-// starts without them (a checklist starts again from its field's default).
+// dropped column, by hand or by its checklist). A repeating card is one
+// standing task, not a series of copies: finishing it sends the same card
+// back to the board's first open column, due on the next date, so it can be
+// done again. Its notes, answers, files, and links stay with it; a checklist
+// starts again from its field's default, since ticking it off was this
+// round's work. The round that was finished is kept in the card's trail.
+//
+// The reset is conditional on the card still sitting finished in the column
+// it was finished in, so two saves racing to finish it reset it once.
 
 import { todayEastern } from '@pyre/schedule-core';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -17,25 +19,19 @@ import { loadBoardFields } from './create-card';
 import { logBoardEvent } from './events';
 import { nextRepeatDate, repeatRuleOf } from './recurrence';
 import { loadColumns } from './store';
-import { kindIsChecklist, kindIsSettled } from './types';
-
-export interface RepeatResult {
-  /** The finished card, no longer repeating. */
-  finished: BoardCardRow;
-  /** The next occurrence. */
-  next: BoardCardRow;
-}
+import { kindIsChecklist } from './types';
 
 /**
- * The next occurrence of `card`, if it repeats and is finished. Null when
- * there is nothing to file, or another save already filed it.
+ * `card`, just finished, back in its board's first open column and due on
+ * its next date. Null when it does not repeat, is not finished, has nowhere
+ * open to go, or another save already reset it.
  */
-export async function fileNextRepeat(
+export async function restartRepeat(
   db: SupabaseClient,
   card: BoardCardRow,
   actor: string,
   today: string = todayEastern()
-): Promise<RepeatResult | null> {
+): Promise<BoardCardRow | null> {
   const rule = repeatRuleOf(card);
   if (!rule || card.completed_at === null) return null;
 
@@ -44,28 +40,13 @@ export async function fileNextRepeat(
   // A board whose only live columns are finished ones has nowhere to put it.
   if (column?.kind !== 'open') return null;
 
-  const { data: cleared, error: clearError } = await db
-    .from('board_cards')
-    .update({ repeat_every: null, repeat_unit: null, updated_by: actor })
-    .eq('id', card.id)
-    .not('repeat_unit', 'is', null)
-    .select('*');
-  if (clearError) {
-    console.warn('[boards] could not stop the finished card repeating:', clearError.message);
-    return null;
-  }
-  const finished = ((cleared ?? []) as BoardCardRow[])[0];
-  if (!finished) return null;
-
   const fields = await loadBoardFields(db, card.board_id);
-  const carried = new Set(
-    fields
-      .filter((field) => !kindIsSettled(field.kind) && !kindIsChecklist(field.kind))
-      .map((field) => field.key)
+  const checklists = new Set(
+    fields.filter((field) => kindIsChecklist(field.kind)).map((field) => field.key)
   );
   const properties: Record<string, BoardFieldValue> = {};
   for (const [key, value] of Object.entries(card.properties)) {
-    if (carried.has(key)) properties[key] = value;
+    if (!checklists.has(key)) properties[key] = value;
   }
 
   const { data: siblings } = await db
@@ -73,58 +54,48 @@ export async function fileNextRepeat(
     .select('column_id, sort_order')
     .eq('board_id', card.board_id);
 
+  const dueDate = nextRepeatDate(card.due_date, rule, today);
   const { data, error } = await db
     .from('board_cards')
-    .insert({
-      board_id: card.board_id,
+    .update({
       column_id: column.id,
-      goal_id: card.goal_id,
-      title: card.title,
-      notes_md: card.notes_md,
+      completed_at: null,
+      completed_by: null,
+      due_date: dueDate,
       // On whoever owns the column it lands in, if anyone does; otherwise
-      // on the people who had the last one.
+      // on the people who had it.
       assignee_emails: column.assignee_emails?.length
         ? column.assignee_emails
         : card.assignee_emails,
-      due_date: nextRepeatDate(card.due_date, rule, today),
-      repeat_every: rule.every,
-      repeat_unit: rule.unit,
-      area: card.area,
       properties,
       sort_order: nextSortOrder(
         (siblings ?? []) as Pick<BoardCardRow, 'column_id' | 'sort_order'>[],
         column.id
       ),
-      created_by: actor,
+      updated_by: actor,
     })
+    .eq('id', card.id)
+    .eq('column_id', card.column_id)
+    .not('completed_at', 'is', null)
     .select('*')
     .single();
   if (error) {
-    // Put the rule back, so the next finish (or a retry) tries again rather
-    // than the series quietly ending here.
-    await db
-      .from('board_cards')
-      .update({ repeat_every: rule.every, repeat_unit: rule.unit })
-      .eq('id', card.id);
-    console.warn('[boards] could not file the next repeat:', error.message);
+    // PGRST116: no row matched, so another save has already reset it.
+    if (error.code !== 'PGRST116') {
+      console.warn('[boards] could not start the next round of a repeat:', error.message);
+    }
     return null;
   }
 
-  const next = data as BoardCardRow;
-  await logBoardEvent(db, {
-    cardId: next.id,
-    action: 'created',
-    actor,
-    detail: { repeatOf: card.id },
-  });
   await logBoardEvent(db, {
     cardId: card.id,
-    action: 'updated',
+    action: 'moved',
     actor,
     detail: {
-      repeat_every: { from: rule.every, to: null },
-      repeat_unit: { from: rule.unit, to: null },
+      repeated: true,
+      column_id: { from: card.column_id, to: column.id },
+      due_date: { from: card.due_date, to: dueDate },
     },
   });
-  return { finished, next };
+  return data as BoardCardRow;
 }

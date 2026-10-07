@@ -545,7 +545,7 @@ export function DuePicker({
             )}
             {repeat && (
               <p className="mt-2 text-xs text-white/40">
-                When this one is finished, the next is filed due{' '}
+                When it is finished, it goes back to do again, due{' '}
                 {formatYmd(nextRepeatDate(value || today, repeat, today))}.
               </p>
             )}
