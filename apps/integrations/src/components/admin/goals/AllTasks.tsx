@@ -11,7 +11,7 @@
 // landed in, which is the other question the founders ask each other and
 // Trello could never answer.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { Assignable } from '@/lib/boards/people';
 import { cardMatches, searchTerms } from '@/lib/boards/search';
 import { readError, sendJson } from '@/lib/client/api';
@@ -26,7 +26,7 @@ import { CardRow } from '../boards/CardRow';
 import { SearchField } from '../boards/SearchField';
 import { useCardDeepLink } from '../boards/useCardDeepLink';
 import { useOptimisticCardSave } from '../boards/useOptimisticCardSave';
-import { cardClass, inputBaseClass, SectionTitle, selectBaseClass } from '../goalsUi';
+import { cardClass, inputBaseClass, selectBaseClass } from '../goalsUi';
 import { filterChipClass } from '../scheduleUi';
 
 type TasksData = AllTasksData & { owners?: Assignable[] };
@@ -41,6 +41,84 @@ function defaultSince(): string {
   return new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
 }
 
+// Which sections this person has folded away, remembered in this browser
+// only: it is a reading preference, not something anyone else should see.
+// Storage can be missing or refuse (a private window), so every touch is
+// guarded and the page simply starts with everything open.
+const COLLAPSED_KEY = 'admin:all-tasks:collapsed';
+
+function readCollapsed(): ReadonlySet<string> {
+  try {
+    const raw = typeof window === 'undefined' ? null : window.localStorage.getItem(COLLAPSED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsed(keys: ReadonlySet<string>) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...keys]));
+  } catch {
+    // Not remembered; the toggle still works for this visit.
+  }
+}
+
+/**
+ * One section of the page — a strip, a board or a person, Recently done —
+ * whose heading folds its cards away. The count stays on the heading, so a
+ * folded section still says how much is in it. `extra` sits beside the
+ * toggle rather than inside it, so a link or a date field there is its own
+ * control.
+ */
+function TaskSection({
+  title,
+  count,
+  collapsed,
+  onToggle,
+  extra,
+  children,
+}: {
+  title: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  extra?: ReactNode;
+  children: ReactNode;
+}) {
+  const bodyId = useId();
+  return (
+    <section className={cardClass}>
+      <div className={`flex items-center justify-between gap-3 ${collapsed ? '' : 'mb-3'}`}>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left font-mono text-xs uppercase tracking-wide text-white/50 hover:text-white/80"
+          aria-expanded={!collapsed}
+          aria-controls={bodyId}
+          onClick={onToggle}
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            aria-hidden="true"
+            className={`shrink-0 transition-transform motion-reduce:transition-none ${collapsed ? '-rotate-90' : ''}`}
+          >
+            <path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+          <h2 className="min-w-0 truncate">{title}</h2>
+          <span className="shrink-0 text-[11px] text-white/35">{count}</span>
+        </button>
+        {extra}
+      </div>
+      <div id={bodyId} hidden={collapsed}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const [data, setData] = useState<TasksData | null>(null);
   const [since, setSince] = useState(defaultSince);
@@ -52,6 +130,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [waitingOnly, setWaitingOnly] = useState(false);
   const [query, setQuery] = useState('');
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(readCollapsed);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -75,6 +154,16 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   useCardDeepLink(data?.cards, setOpenCardId, { drawerOpen: openCardId !== null, reload: load });
 
   const saveCard = useOptimisticCardSave(data, setData);
+
+  const toggleSection = (key: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      writeCollapsed(next);
+      return next;
+    });
+  };
 
   // The search matches what a board's own search does: title, notes, who
   // owns it, what it is waiting on, and its area.
@@ -199,56 +288,70 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
       )}
 
       {built.overdue.length > 0 && (
-        <section className={cardClass}>
-          <SectionTitle note={String(built.overdue.length)}>Overdue</SectionTitle>
+        <TaskSection
+          title="Overdue"
+          count={built.overdue.length}
+          collapsed={collapsed.has('overdue')}
+          onToggle={() => toggleSection('overdue')}
+        >
           <div className="space-y-2">{rowsFor(built.overdue)}</div>
-        </section>
+        </TaskSection>
       )}
 
       {built.dueThisWeek.length > 0 && (
-        <section className={cardClass}>
-          <SectionTitle note={String(built.dueThisWeek.length)}>Due this week</SectionTitle>
+        <TaskSection
+          title="Due this week"
+          count={built.dueThisWeek.length}
+          collapsed={collapsed.has('week')}
+          onToggle={() => toggleSection('week')}
+        >
           <div className="space-y-2">{rowsFor(built.dueThisWeek)}</div>
-        </section>
+        </TaskSection>
       )}
 
-      {built.groups.map((group) => (
-        <section key={group.key} className={cardClass}>
-          <SectionTitle note={String(group.cards.length)}>
-            {group.boardSlug ? (
-              <a
-                className="underline hover:text-white/80"
-                href={`/admin/boards/${group.boardSlug}`}
-              >
-                {group.label}
-              </a>
-            ) : (
-              group.label
-            )}
-          </SectionTitle>
-          <div className="space-y-2">{rowsFor(group.cards, groupBy !== 'board')}</div>
-        </section>
-      ))}
+      {built.groups.map((group) => {
+        const key = `${groupBy}:${group.key}`;
+        return (
+          <TaskSection
+            key={group.key}
+            title={group.label}
+            count={group.cards.length}
+            collapsed={collapsed.has(key)}
+            onToggle={() => toggleSection(key)}
+            extra={
+              group.boardSlug && (
+                <a
+                  className="font-mono text-[11px] uppercase tracking-wide text-white/35 underline-offset-4 hover:text-white/70 hover:underline"
+                  href={`/admin/boards/${group.boardSlug}`}
+                >
+                  Open board
+                </a>
+              )
+            }
+          >
+            <div className="space-y-2">{rowsFor(group.cards, groupBy !== 'board')}</div>
+          </TaskSection>
+        );
+      })}
 
-      <section className={cardClass}>
-        <SectionTitle
-          note={
-            <span className="flex items-center gap-2">
-              <label htmlFor="tasks-since" className="text-white/35">
-                since
-              </label>
-              <input
-                id="tasks-since"
-                className={`${inputBaseClass} w-36 py-1`}
-                type="date"
-                value={since}
-                onChange={(e) => setSince(e.target.value)}
-              />
-            </span>
-          }
-        >
-          Recently done
-        </SectionTitle>
+      <TaskSection
+        title="Recently done"
+        count={built.recentlyDone.reduce((sum, week) => sum + week.cards.length, 0)}
+        collapsed={collapsed.has('done')}
+        onToggle={() => toggleSection('done')}
+        extra={
+          <span className="flex items-center gap-2 font-mono text-[11px] text-white/35">
+            <label htmlFor="tasks-since">since</label>
+            <input
+              id="tasks-since"
+              className={`${inputBaseClass} w-36 py-1`}
+              type="date"
+              value={since}
+              onChange={(e) => setSince(e.target.value)}
+            />
+          </span>
+        }
+      >
         {built.recentlyDone.length === 0 && (
           <p className="font-mono text-xs text-white/35">Nothing finished in that window.</p>
         )}
@@ -262,7 +365,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
             </div>
           ))}
         </div>
-      </section>
+      </TaskSection>
 
       {openCard && (
         <CardDrawer
