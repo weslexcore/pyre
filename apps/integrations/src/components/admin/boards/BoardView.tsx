@@ -55,7 +55,6 @@ import { BackLink } from '../BackLink';
 import { Confetti } from '../Confetti';
 import { ActivityFeed } from '../goals/ActivityFeed';
 import { cardClass, inputBaseClass, QuietChip, selectBaseClass } from '../goalsUi';
-import { LinkedRow, linkedChipClass } from '../LinkedRow';
 import { pillClass } from '../scheduleUi';
 import { BoardCalendar, boardHasCalendar } from './BoardCalendar';
 import { BoardGoal } from './BoardGoal';
@@ -551,15 +550,7 @@ export function BoardView({ slug }: { slug: string }) {
         />
       )}
 
-      {sops.length > 0 && (
-        <LinkedRow label={sops.length === 1 ? 'SOP' : 'SOPs'}>
-          {sops.map((sop) => (
-            <a key={sop.id} className={linkedChipClass} href={`/admin/sops/${sop.slug}`}>
-              {sop.title}
-            </a>
-          ))}
-        </LinkedRow>
-      )}
+      {sops.length > 0 && <BoardSops sops={sops} />}
 
       <BoardGoal
         board={board}
@@ -717,6 +708,62 @@ export function BoardView({ slug }: { slug: string }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The SOPs linked to the board, as tiles rather than a row of chips: how
+ * this board's work is done is the first thing somebody new to it needs,
+ * so it sits above the goal where it cannot be missed.
+ */
+function BoardSops({ sops }: { sops: LinkedSop[] }) {
+  return (
+    <nav
+      aria-label={sops.length === 1 ? 'SOP for this board' : 'SOPs for this board'}
+      className={`grid gap-2 ${sops.length > 1 ? 'sm:grid-cols-2' : ''}`}
+    >
+      {sops.map((sop) => (
+        <a
+          key={sop.id}
+          href={`/admin/sops/${sop.slug}`}
+          className="group flex min-w-0 items-center gap-3 rounded-md border border-[var(--pyre-gold)]/35 border-l-4 border-l-[var(--pyre-gold)] bg-[var(--pyre-gold)]/[0.07] px-4 py-3 transition-colors hover:border-[var(--pyre-gold)]/70 hover:bg-[var(--pyre-gold)]/[0.12]"
+        >
+          <span className="shrink-0 text-[var(--pyre-gold)]">
+            <DocumentIcon />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]/80">
+              SOP
+            </span>
+            <span className="block truncate text-sm font-medium text-[var(--pyre-creme)]">
+              {sop.title}
+            </span>
+          </span>
+          <span className="shrink-0 font-mono text-[11px] uppercase tracking-wide text-white/50 transition-colors group-hover:text-[var(--pyre-gold)]">
+            Open SOP
+          </span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 3v5h5M9 13h6M9 17h6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
