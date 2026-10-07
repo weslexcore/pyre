@@ -18,6 +18,7 @@ import type {
 import { formatKpiValue, kpiFreshness, kpiProgress } from '@/lib/goals/kpis';
 import { PACE_LABELS, type PaceState, type TaskProgress } from '@/lib/goals/progress';
 import { GOAL_STATUS_LABELS } from '@/lib/goals/types';
+import { TermsMarked } from './Marked';
 
 // min-w-0 lets a date or time input, which carries its own intrinsic width,
 // shrink with a flex row or a grid cell on a phone instead of widening it.
@@ -109,13 +110,20 @@ export function QuietChip({
 }
 
 /** "Waiting on Sarah's availability" — why an in-progress card is stuck. */
-export function WaitingBadge({ waitingOn }: { waitingOn: string }) {
+export function WaitingBadge({
+  waitingOn,
+  highlight = [],
+}: {
+  waitingOn: string;
+  /** Search words to mark in the text (lib/boards/search searchTerms). */
+  highlight?: string[];
+}) {
   return (
     <span
       className={`${badgeBase} max-w-full overflow-hidden text-ellipsis border-[var(--pyre-gold)]/40 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]`}
       title={`Waiting on ${waitingOn}`}
     >
-      Waiting: {waitingOn}
+      Waiting: <TermsMarked text={waitingOn} terms={highlight} />
     </span>
   );
 }

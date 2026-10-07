@@ -135,6 +135,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
   const tasksBoard = boards.find((board) => board.slug === GOALS_BOARD_SLUG) ?? boards[0];
   const tasksColumns = columns.filter((column) => column.board_id === tasksBoard?.id);
 
+  const terms = searchTerms(query);
   const rowsFor = (cards: BoardCardRow[], showBoard = true) =>
     cards.map((card) => (
       <CardRow
@@ -145,6 +146,7 @@ export function AllTasks({ viewerEmail = '' }: { viewerEmail?: string }) {
         today={today}
         boardName={showBoard && boards.length > 1 ? boardNames.get(card.board_id) : undefined}
         onOpen={(next) => setOpenCardId(next.id)}
+        highlight={terms}
       />
     ));
 

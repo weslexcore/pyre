@@ -10,6 +10,7 @@
 import type { HTMLAttributes } from 'react';
 import { type LinkSummary, linkedTitles } from '@/lib/boards/links';
 import { describeRepeat, repeatRuleOf } from '@/lib/boards/recurrence';
+import { hasAnyTerm, termSnippet } from '@/lib/boards/search';
 import { formatProperty } from '@/lib/boards/validate';
 import type { BoardCardRow, BoardColumnRow, BoardFieldRow } from '@/lib/db';
 import { type PeopleNames, personName } from '@/lib/sops/names';
@@ -22,6 +23,7 @@ import {
   rowClass,
   WaitingBadge,
 } from '../goalsUi';
+import { TermsMarked } from '../Marked';
 
 export interface CardRowProps {
   card: BoardCardRow;
@@ -48,6 +50,12 @@ export interface CardRowProps {
    * grouped by something else), or nothing.
    */
   status?: 'dot' | 'label' | 'none';
+  /**
+   * The search's words (lib/boards/search searchTerms), marked in the title
+   * and the waiting badge; a word found only in the notes brings the line
+   * it is on under the title, since the row does not otherwise show notes.
+   */
+  highlight?: string[];
 }
 
 // A chip is one line, so one that outgrows the row (a long field value,
@@ -75,6 +83,7 @@ export function CardRow({
   dragProps,
   ghost = false,
   status = 'dot',
+  highlight = [],
 }: CardRowProps) {
   const column = columns.find((c) => c.id === card.column_id);
   const finished = card.completed_at !== null;
@@ -83,6 +92,10 @@ export function CardRow({
     .filter((field) => field.show_on_card && card.properties[field.key] != null)
     .map((field) => ({ field, text: shownText(field, card.properties[field.key], links) }))
     .filter(({ text }) => text !== '');
+  const notesOnly = highlight.filter(
+    (term) => !hasAnyTerm(card.title, [term]) && !hasAnyTerm(card.waiting_on ?? '', [term])
+  );
+  const snippet = notesOnly.length > 0 ? termSnippet(card.notes_md, notesOnly) : null;
 
   return (
     <div id={ghost ? undefined : cardAnchorId(card)}>
@@ -103,8 +116,13 @@ export function CardRow({
               finished ? 'text-white/40 line-through' : 'text-[var(--pyre-creme)]'
             }`}
           >
-            {card.title}
+            <TermsMarked text={card.title} terms={highlight} />
           </span>
+          {snippet && (
+            <span className="mt-0.5 block truncate text-xs text-white/50">
+              <TermsMarked text={snippet} terms={highlight} />
+            </span>
+          )}
           <span className="mt-1 flex flex-wrap items-center gap-1.5">
             {status === 'label' && column && (
               <QuietChip className={chipClip}>{column.label}</QuietChip>
@@ -123,7 +141,9 @@ export function CardRow({
                 repeat={repeat ? describeRepeat(repeat) : null}
               />
             )}
-            {card.waiting_on && !finished && <WaitingBadge waitingOn={card.waiting_on} />}
+            {card.waiting_on && !finished && (
+              <WaitingBadge waitingOn={card.waiting_on} highlight={highlight} />
+            )}
             {goalTitle && <QuietChip className={chipClip}>{goalTitle}</QuietChip>}
             {boardName && <QuietChip className={chipClip}>{boardName}</QuietChip>}
             {SOURCE_CHIPS[card.source] && <QuietChip>{SOURCE_CHIPS[card.source]}</QuietChip>}
