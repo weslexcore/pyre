@@ -16,7 +16,8 @@ import {
 } from '@/lib/notifications/types';
 import { useRowSwipe } from './useRowSwipe';
 
-const KIND_STYLE: Record<StaffNotificationRow['kind'], string> = {
+/** Chip colors per kind, shared with the inbox's type filter. */
+export const KIND_STYLE: Record<StaffNotificationRow['kind'], string> = {
   admin_message: 'border-[var(--pyre-gold)]/50 text-[var(--pyre-gold)]',
   message_reply: 'border-[var(--pyre-gold)]/30 text-[var(--pyre-gold)]/80',
   sop_updated: 'border-[var(--pyre-sage)]/50 text-[var(--pyre-sage)]',

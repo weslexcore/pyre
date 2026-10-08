@@ -612,6 +612,16 @@ export interface StaffNotificationRow {
   created_at: string;
 }
 
+// One person's notification opt-outs (see the staff notification prefs
+// migration). No row means every kind is delivered.
+export interface StaffNotificationPrefsRow {
+  user_email: string;
+  /** Kinds this person has switched off (lib/notifications/types). */
+  muted_kinds: NotificationKind[];
+  created_at: string;
+  updated_at: string;
+}
+
 // A bathhouse incident report (see the incidents migration). The taxonomy —
 // categories, severities, areas, contributing factors — lives in
 // lib/incidents/types.ts, which the table's check constraints mirror.

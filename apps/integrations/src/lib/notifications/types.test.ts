@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import type { NotificationKind } from '@/lib/db';
 import {
   excerpt,
+  filterInbox,
+  inboxFilterSearch,
   inboxSwipeAction,
   inCurrentWeek,
   isLive,
   isUnread,
+  kindCounts,
+  normalizeMutedKinds,
+  parseInboxFilter,
+  preferenceKinds,
   scheduleHref,
   shiftNotificationExpiry,
   sortInbox,
@@ -138,5 +145,59 @@ describe('inboxSwipeAction', () => {
     expect(inboxSwipeAction(true, 0, both)).toBeNull();
     expect(inboxSwipeAction(true, -80, { dismiss: false, toggleRead: true })).toBeNull();
     expect(inboxSwipeAction(false, 80, { dismiss: true, toggleRead: false })).toBeNull();
+  });
+});
+
+describe('notification preferences', () => {
+  it('offers admin-only kinds to admins alone', () => {
+    expect(preferenceKinds(true)).toContain('inventory_low');
+    expect(preferenceKinds(false)).not.toContain('inventory_low');
+    expect(preferenceKinds(false)).not.toContain('agent_suggestion');
+    expect(preferenceKinds(false)).toContain('schedule_change');
+  });
+
+  it('cleans a muted list: known, switchable, once each, in inbox order', () => {
+    expect(
+      normalizeMutedKinds([
+        'goal_activity',
+        'nope',
+        'admin_message',
+        'sop_updated',
+        'goal_activity',
+      ])
+    ).toEqual(['sop_updated', 'goal_activity']);
+    expect(normalizeMutedKinds(null)).toEqual([]);
+  });
+});
+
+describe('inbox filters', () => {
+  const rows = [
+    { ...row({ id: 'a' }), kind: 'schedule_change' as NotificationKind },
+    { ...row({ id: 'b', read_at: NOW }), kind: 'schedule_change' as NotificationKind },
+    { ...row({ id: 'c' }), kind: 'sop_updated' as NotificationKind },
+  ];
+
+  it('narrows by kind and read state', () => {
+    const ids = (f: Parameters<typeof filterInbox>[1]) =>
+      filterInbox(rows, f, NOW).map((r) => r.id);
+    expect(ids({ unreadOnly: false, kind: null })).toEqual(['a', 'b', 'c']);
+    expect(ids({ unreadOnly: true, kind: null })).toEqual(['a', 'c']);
+    expect(ids({ unreadOnly: false, kind: 'schedule_change' })).toEqual(['a', 'b']);
+    expect(ids({ unreadOnly: true, kind: 'schedule_change' })).toEqual(['a']);
+  });
+
+  it('counts each kind present, in inbox order', () => {
+    expect(kindCounts([...rows].reverse(), NOW)).toEqual([
+      { kind: 'sop_updated', total: 1, unread: 1 },
+      { kind: 'schedule_change', total: 2, unread: 1 },
+    ]);
+  });
+
+  it('round-trips through the URL and ignores unknown kinds', () => {
+    const f = { unreadOnly: true, kind: 'goal_activity' as const };
+    expect(inboxFilterSearch(f)).toBe('?type=goal_activity&unread=1');
+    expect(parseInboxFilter(inboxFilterSearch(f))).toEqual(f);
+    expect(inboxFilterSearch({ unreadOnly: false, kind: null })).toBe('');
+    expect(parseInboxFilter('?type=bogus')).toEqual({ unreadOnly: false, kind: null });
   });
 });

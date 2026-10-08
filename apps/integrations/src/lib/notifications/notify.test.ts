@@ -6,15 +6,21 @@ import { createNotifications } from './notify';
  * terminal shapes (delete / insert) are recorded so the test can see what
  * would have been written.
  */
-function fakeDb(opts: { failInsert?: boolean } = {}) {
+function fakeDb(opts: { failInsert?: boolean; muted?: string[]; failPrefs?: boolean } = {}) {
   const calls: { op: string; args: unknown }[] = [];
   // Every builder method chains, and awaiting the chain resolves to the
   // outcome: the object is a real Promise with the query methods bolted on.
   const chain = (op: string) => {
     const result =
-      op === 'insert' && opts.failInsert ? { error: { message: 'boom' } } : { error: null };
+      op === 'insert' && opts.failInsert
+        ? { error: { message: 'boom' } }
+        : op === 'select'
+          ? opts.failPrefs
+            ? { data: null, error: { message: 'prefs down' } }
+            : { data: (opts.muted ?? []).map((user_email) => ({ user_email })), error: null }
+          : { error: null };
     const query = Promise.resolve(result) as Promise<unknown> & Record<string, unknown>;
-    for (const m of ['in', 'eq', 'is', 'or', 'order', 'limit', 'lt']) {
+    for (const m of ['in', 'eq', 'is', 'or', 'order', 'limit', 'lt', 'contains']) {
       query[m] = (...args: unknown[]) => {
         calls.push({ op: `${op}.${m}`, args });
         return query;
@@ -31,6 +37,10 @@ function fakeDb(opts: { failInsert?: boolean } = {}) {
       insert: (rows: unknown) => {
         calls.push({ op: 'insert', args: rows });
         return chain('insert');
+      },
+      select: (columns: unknown) => {
+        calls.push({ op: 'select', args: [table, columns] });
+        return chain('select');
       },
     }),
   };
@@ -94,5 +104,36 @@ describe('createNotifications', () => {
     expect(empty.calls).toEqual([]);
     const failing = fakeDb({ failInsert: true });
     expect(await createNotifications(failing.db, ['a@x.y'], input)).toBe(0);
+  });
+
+  it('skips recipients who switched the kind off', async () => {
+    const { db, calls } = fakeDb({ muted: ['b@x.y'] });
+    const n = await createNotifications(db, ['a@x.y', 'b@x.y'], input);
+    expect(n).toBe(1);
+    expect(calls.find((c) => c.op === 'select.contains')?.args).toEqual([
+      'muted_kinds',
+      ['schedule_change'],
+    ]);
+    expect(insertedRows<{ recipient_email: string }>(calls).map((r) => r.recipient_email)).toEqual([
+      'a@x.y',
+    ]);
+  });
+
+  it('writes nothing when every recipient muted the kind', async () => {
+    const { db, calls } = fakeDb({ muted: ['a@x.y'] });
+    expect(await createNotifications(db, ['a@x.y'], { ...input, supersede: true })).toBe(0);
+    expect(calls.some((c) => c.op === 'insert' || c.op === 'delete')).toBe(false);
+  });
+
+  it('delivers to everyone when the preferences cannot be read', async () => {
+    const { db, calls } = fakeDb({ failPrefs: true, muted: ['a@x.y'] });
+    expect(await createNotifications(db, ['a@x.y', 'b@x.y'], input)).toBe(2);
+    expect(insertedRows(calls)).toHaveLength(2);
+  });
+
+  it('never consults preferences for always-on kinds', async () => {
+    const { db, calls } = fakeDb({ muted: ['a@x.y'] });
+    expect(await createNotifications(db, ['a@x.y'], { ...input, kind: 'admin_message' })).toBe(1);
+    expect(calls.some((c) => c.op === 'select')).toBe(false);
   });
 });
