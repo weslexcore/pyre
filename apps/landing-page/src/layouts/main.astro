@@ -106,7 +106,8 @@ const llmsTxtUrl = Astro.site ? new URL('/llms.txt', Astro.site).toString() : '/
     <link rel="icon" type="image/png" sizes="32x32" href={`${base}favicon.png`} />
     <link rel="icon" type="image/x-icon" href={`${base}favicon.ico`} />
     <link rel="icon" type="image/svg+xml" href={faviconHref} />
-    <link rel="apple-touch-icon" href={`${base}favicon.png`} />
+    <link rel="apple-touch-icon" sizes="180x180" href={`${base}apple-touch-icon.png`} />
+    <meta name="apple-mobile-web-app-title" content="Pyre" />
 		<title>{title}</title>
 		<meta name="description" content={description} />
 		
