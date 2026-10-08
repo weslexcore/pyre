@@ -2,11 +2,13 @@
 // Icons and install metadata for every page: the Pyre wave mark in brand gold.
 // The SVG uses currentColor, so it is recolored here and inlined as a data
 // URI (no extra request). Every PNG under public/ is rendered from the same
-// SVG: favicon.png for browsers that ignore SVG favicons (Safari),
-// apple-touch-icon.png for iOS home screens, and public/icons/* for the web
-// app manifest, which is what Android and desktop Chrome/Edge read when
-// someone installs the admin as an app. The maskable icons keep the mark
-// inside Android's central safe zone on a brand-black background.
+// SVG by scripts/render-icons.mjs: favicon.png for browsers that ignore SVG
+// favicons (Safari), apple-touch-icon.png for iOS home screens, and
+// public/icons/* for the web app manifest, which is what Android and desktop
+// Chrome/Edge read when someone installs the admin as an app. Home-screen and
+// install icons set the mark smaller and centered on brand black (iOS would
+// otherwise fill a transparent icon edge to edge); the maskable icons keep it
+// inside Android's central safe zone.
 //
 // Deployments of the staging branch swap the browser-tab favicon to brand
 // sage (favicon-staging.png is the same mark recolored) so a staging tab is
