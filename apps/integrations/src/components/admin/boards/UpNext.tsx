@@ -6,6 +6,11 @@
 // marks where this week (Monday to Sunday, as "Due this week" counts it)
 // ends and later weeks begin. The strip holds the first UP_NEXT_LIMIT; a
 // tally at its end counts the rest.
+//
+// The strip is `relative` so it, not the page, holds the rule's sr-only
+// label (position: absolute). Without that, a browser that does not treat the
+// rotated label as its container (iOS Safari) places the label out past the
+// strip's right edge, and the whole page scrolls sideways.
 
 import { addDays, weekStartOf } from '@pyre/schedule-core';
 import { Fragment } from 'react';
@@ -38,7 +43,7 @@ export function UpNext({
       {cards.length === 0 ? (
         <p className="font-mono text-xs text-white/35">Nothing with a due date is on you.</p>
       ) : (
-        <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:mx-0 sm:scroll-px-0 sm:px-0">
+        <ul className="relative -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:mx-0 sm:scroll-px-0 sm:px-0">
           {cards.map((card, index) => {
             const repeat = repeatRuleOf(card);
             return (
