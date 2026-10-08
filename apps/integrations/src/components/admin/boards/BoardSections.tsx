@@ -378,7 +378,7 @@ function SectionBlock({
             }}
           />
         ) : (
-          <h2 className="font-mono text-xs uppercase tracking-wide text-white/50">
+          <h2 className="min-w-0 break-words font-mono text-xs uppercase tracking-wide text-white/50">
             {section ? section.name : 'Other boards'}
           </h2>
         )}

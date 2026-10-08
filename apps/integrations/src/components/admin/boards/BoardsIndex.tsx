@@ -205,7 +205,9 @@ function BoardCard({
           </h2>
           {board.archived && <QuietChip>archived</QuietChip>}
         </div>
-        {board.description && <p className="mt-1 text-sm text-white/55">{board.description}</p>}
+        {board.description && (
+          <p className="mt-1 break-words text-sm text-white/55">{board.description}</p>
+        )}
 
         {goal ? (
           <div className="mt-3 border-t border-white/10 pt-3">
