@@ -24,7 +24,14 @@ const location: LocationContent = {
         { open: '16:00', close: '20:00' },
       ],
     },
-    { day: 'FRI', dayOfWeek: 'Friday', windows: [{ open: '16:00', close: '21:00' }] },
+    {
+      day: 'FRI',
+      dayOfWeek: 'Friday',
+      windows: [
+        { open: '07:00', close: '10:00' },
+        { open: '16:00', close: '21:00' },
+      ],
+    },
     { day: 'SAT', dayOfWeek: 'Saturday', windows: [{ open: '09:00', close: '20:00' }] },
     { day: 'SUN', dayOfWeek: 'Sunday', windows: [{ open: '13:00', close: '20:00' }] },
   ],
