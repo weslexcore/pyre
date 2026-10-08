@@ -38,6 +38,154 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   inventory_low: 'Low stock',
 };
 
+/**
+ * What each kind covers, in the words the preferences panel uses. `required`
+ * kinds can't be switched off (admin messages are how the admins reach the
+ * team); `adminOnly` kinds only ever reach admins, so nobody else is offered
+ * a switch for them.
+ */
+export const KIND_DETAILS: Record<
+  NotificationKind,
+  { label: string; description: string; required?: boolean; adminOnly?: boolean }
+> = {
+  admin_message: {
+    label: 'Admin messages',
+    description: 'New messages from the admins addressed to you.',
+    required: true,
+  },
+  message_reply: {
+    label: 'Message replies',
+    description: 'Replies in message threads you can see.',
+  },
+  sop_updated: {
+    label: 'SOP updates',
+    description: 'Edits to SOPs you can read.',
+  },
+  schedule_change: {
+    label: 'Schedule changes',
+    description: 'Changes to your shifts this week, and hours-change requests and decisions.',
+  },
+  shift_note_reply: {
+    label: 'Shift notes',
+    description: 'Replies on shift notes and status changes to notes you wrote.',
+  },
+  sub_request: {
+    label: 'Sub requests',
+    description: 'Requests to cover a shift, and what happened to yours.',
+  },
+  goal_activity: {
+    label: 'Goals & boards',
+    description: 'Cards assigned to you, comments, mentions, and goal updates.',
+  },
+  agent_suggestion: {
+    label: 'Agent suggestions',
+    description: 'New suggestions from the agent waiting for an admin to decide.',
+    adminOnly: true,
+  },
+  inventory_low: {
+    label: 'Low stock',
+    description: 'Inventory items that have dropped to their re-order level.',
+    adminOnly: true,
+  },
+};
+
+/** Whether a person may switch this kind off. */
+export function isMutableKind(kind: NotificationKind): boolean {
+  return !KIND_DETAILS[kind].required;
+}
+
+/** The kinds a person's preferences panel offers, in inbox order. */
+export function preferenceKinds(isAdmin: boolean): NotificationKind[] {
+  return NOTIFICATION_KINDS.filter((kind) => isAdmin || !KIND_DETAILS[kind].adminOnly);
+}
+
+/** One switch on the preferences panel. */
+export interface NotificationKindOption {
+  kind: NotificationKind;
+  label: string;
+  description: string;
+  /** Always delivered; drawn as a locked switch. */
+  required: boolean;
+}
+
+export function preferenceOptions(isAdmin: boolean): NotificationKindOption[] {
+  return preferenceKinds(isAdmin).map((kind) => ({
+    kind,
+    label: KIND_DETAILS[kind].label,
+    description: KIND_DETAILS[kind].description,
+    required: !isMutableKind(kind),
+  }));
+}
+
+/**
+ * A stored or submitted muted list, cleaned: known, switchable kinds only,
+ * each once, in inbox order. Unknown values (a kind since retired) drop out.
+ */
+export function normalizeMutedKinds(value: unknown): NotificationKind[] {
+  if (!Array.isArray(value)) return [];
+  const wanted = new Set(value.filter(isNotificationKind));
+  return NOTIFICATION_KINDS.filter((kind) => wanted.has(kind) && isMutableKind(kind));
+}
+
+/** The inbox's filter: a read state and, optionally, one kind. */
+export interface InboxFilter {
+  unreadOnly: boolean;
+  kind: NotificationKind | null;
+}
+
+/** The filter in a page URL's query (`?type=<kind>&unread=1`), so it survives a reload. */
+export function parseInboxFilter(search: string): InboxFilter {
+  const params = new URLSearchParams(search);
+  const type = params.get('type');
+  return {
+    unreadOnly: params.get('unread') === '1',
+    kind: isNotificationKind(type) ? type : null,
+  };
+}
+
+/** The query string for a filter ('' when it is the default view). */
+export function inboxFilterSearch(filter: InboxFilter): string {
+  const params = new URLSearchParams();
+  if (filter.kind) params.set('type', filter.kind);
+  if (filter.unreadOnly) params.set('unread', '1');
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+/** The rows a filter keeps, in the order given. */
+export function filterInbox<T extends NotificationState & Pick<StaffNotificationRow, 'kind'>>(
+  rows: T[],
+  filter: InboxFilter,
+  nowIso?: string
+): T[] {
+  const now = nowIso ?? new Date().toISOString();
+  return rows.filter(
+    (n) => (!filter.kind || n.kind === filter.kind) && (!filter.unreadOnly || isUnread(n, now))
+  );
+}
+
+/**
+ * Per-kind totals for the filter chips — every kind present in `rows`, in
+ * inbox order, with how many rows and how many unread.
+ */
+export function kindCounts<T extends NotificationState & Pick<StaffNotificationRow, 'kind'>>(
+  rows: T[],
+  nowIso?: string
+): { kind: NotificationKind; total: number; unread: number }[] {
+  const now = nowIso ?? new Date().toISOString();
+  const counts = new Map<NotificationKind, { total: number; unread: number }>();
+  for (const n of rows) {
+    const c = counts.get(n.kind) ?? { total: 0, unread: 0 };
+    c.total += 1;
+    if (isUnread(n, now)) c.unread += 1;
+    counts.set(n.kind, c);
+  }
+  return NOTIFICATION_KINDS.filter((kind) => counts.has(kind)).map((kind) => ({
+    kind,
+    ...(counts.get(kind) as { total: number; unread: number }),
+  }));
+}
+
 /** The subset of a row the rules below read. */
 export type NotificationState = Pick<
   StaffNotificationRow,

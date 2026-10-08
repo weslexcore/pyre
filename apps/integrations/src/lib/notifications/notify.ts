@@ -9,6 +9,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NotificationKind, StaffNotificationRow } from '@/lib/db';
 import { normalizeEmail } from '@/lib/email/address';
+import { isMutableKind, normalizeMutedKinds } from './types';
 
 /** Sanity bound far above the roster size. */
 const MAX_RECIPIENTS = 500;
@@ -43,7 +44,34 @@ function normalizeRecipients(recipients: Iterable<string>, actor: string | null)
 }
 
 /**
- * One row per recipient. Returns how many were written (0 when nothing
+ * Which of `emails` have switched `kind` off in their preferences. Fails
+ * open: if the preferences can't be read, everyone hears about the event.
+ */
+async function mutedRecipients(
+  db: SupabaseClient,
+  emails: string[],
+  kind: NotificationKind
+): Promise<Set<string>> {
+  if (!isMutableKind(kind)) return new Set();
+  try {
+    const { data, error } = await db
+      .from('staff_notification_prefs')
+      .select('user_email')
+      .in('user_email', emails)
+      .contains('muted_kinds', [kind]);
+    if (error) {
+      console.warn('[notifications] preferences read failed:', error.message);
+      return new Set();
+    }
+    return new Set((data ?? []).map((row: { user_email: string }) => row.user_email));
+  } catch (error) {
+    console.warn('[notifications] preferences read failed:', error);
+    return new Set();
+  }
+}
+
+/**
+ * One row per recipient, minus anyone who switched this kind off. Returns how many were written (0 when nothing
  * needed writing, or when storage failed).
  */
 export async function createNotifications(
@@ -52,10 +80,14 @@ export async function createNotifications(
   input: NotificationInput
 ): Promise<number> {
   const actor = normalizeEmail(input.actorEmail) || null;
-  const emails = normalizeRecipients(recipients, actor);
-  if (emails.length === 0) return 0;
+  const wanted = normalizeRecipients(recipients, actor);
+  if (wanted.length === 0) return 0;
 
   try {
+    const muted = await mutedRecipients(db, wanted, input.kind);
+    const emails = wanted.filter((email) => !muted.has(email));
+    if (emails.length === 0) return 0;
+
     if (input.supersede) {
       const { error } = await db
         .from('staff_notifications')
@@ -303,4 +335,30 @@ export async function resolveSourceForAll(
   } catch (error) {
     console.warn('[notifications] source resolve failed:', error);
   }
+}
+
+/** The kinds `email` has switched off; [] when none, or on any failure. */
+export async function getMutedKinds(
+  db: SupabaseClient,
+  email: string
+): Promise<{ muted: NotificationKind[]; error: string | null }> {
+  const { data, error } = await db
+    .from('staff_notification_prefs')
+    .select('muted_kinds')
+    .eq('user_email', email)
+    .maybeSingle();
+  if (error) return { muted: [], error: error.message };
+  return { muted: normalizeMutedKinds(data?.muted_kinds), error: null };
+}
+
+/** Replace `email`'s switched-off kinds with `muted` (already validated). */
+export async function setMutedKinds(
+  db: SupabaseClient,
+  email: string,
+  muted: NotificationKind[]
+): Promise<string | null> {
+  const { error } = await db
+    .from('staff_notification_prefs')
+    .upsert({ user_email: email, muted_kinds: muted }, { onConflict: 'user_email' });
+  return error ? error.message : null;
 }
