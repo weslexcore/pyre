@@ -5,6 +5,8 @@
 // pay rate) show wherever the viewer knows the rate — the server only ships
 // each person's own rate unless the viewer is an admin. A toggle regroups
 // the weekly rows into the bi-weekly pay periods payroll actually pays.
+// Picking a week or pay period (the "Jump to" menu, or clicking a row's
+// label) narrows the range to just that one, ready to export.
 
 import {
   addDays,
@@ -12,6 +14,7 @@ import {
   applyStipends,
   founderIdsOf,
   groupIntoPayPeriods,
+  payPeriodStartOf,
   payRatesOf,
   rollupHours,
   weekStartOf,
@@ -55,11 +58,59 @@ const todayLocal = (): string => {
   ).padStart(2, '0')}`;
 };
 
+// Default: four weeks back through two weeks ahead.
+const defaultRange = () => {
+  const week = weekStartOf(todayLocal());
+  return { start: addDays(week, -28), end: addDays(week, 20) };
+};
+
+/** "Jump to" choices: recent weeks and pay periods, newest first. */
+const jumpOptions = () => {
+  const week = weekStartOf(todayLocal());
+  const period = payPeriodStartOf(todayLocal());
+  const weeks = [0, 1, 2, 3].map((n) => {
+    const s = addDays(week, -7 * n);
+    const name = n === 0 ? 'This week' : n === 1 ? 'Last week' : `Week of ${s}`;
+    return { value: `week:${s}`, label: n < 2 ? `${name} (${s})` : name };
+  });
+  const periods = [-1, 0, 1, 2, 3, 4, 5].map((n) => {
+    const s = addDays(period, -14 * n);
+    const name = n === -1 ? 'Next' : n === 0 ? 'Current' : n === 1 ? 'Last' : null;
+    const dates = `${s} – ${addDays(s, 13)}, paid ${addDays(s, 14)}`;
+    return { value: `period:${s}`, label: name ? `${name}: ${dates}` : dates };
+  });
+  return { weeks, periods };
+};
+
 export function ScheduleHours() {
-  // Default: four weeks back through two weeks ahead.
-  const [start, setStart] = useState(() => addDays(weekStartOf(todayLocal()), -28));
-  const [end, setEnd] = useState(() => addDays(weekStartOf(todayLocal()), 20));
+  const [start, setStart] = useState(() => defaultRange().start);
+  const [end, setEnd] = useState(() => defaultRange().end);
   const [byPeriod, setByPeriod] = useState(false);
+  // The range in effect before a week / pay period was picked, so "Back"
+  // can restore it.
+  const [prevRange, setPrevRange] = useState<{ start: string; end: string } | null>(null);
+  const jump = useMemo(jumpOptions, []);
+
+  const pick = (kind: 'week' | 'period', from: string) => {
+    if (!prevRange) setPrevRange({ start, end });
+    setStart(from);
+    setEnd(addDays(from, kind === 'week' ? 6 : 13));
+    setByPeriod(kind === 'period');
+  };
+  const back = () => {
+    const range = prevRange ?? defaultRange();
+    setStart(range.start);
+    setEnd(range.end);
+    setPrevRange(null);
+  };
+  // The value the "Jump to" menu shows: the matching choice when the range
+  // is exactly one week or pay period, blank otherwise.
+  const jumpValue =
+    end === addDays(start, 6) && start === weekStartOf(start)
+      ? `week:${start}`
+      : end === addDays(start, 13) && start === payPeriodStartOf(start)
+        ? `period:${start}`
+        : '';
 
   // Shares the schedule-board cache entry with ScheduleCalendar whenever the
   // ranges line up, so moving between the schedule tabs often costs nothing.
@@ -215,7 +266,11 @@ export function ScheduleHours() {
             type="date"
             className={`${inputClass} min-w-0 flex-1`}
             value={start}
-            onChange={(e) => e.target.value && setStart(e.target.value)}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setStart(e.target.value);
+              setPrevRange(null);
+            }}
             aria-label="From"
           />
           <span className="shrink-0 font-mono text-xs uppercase tracking-wide text-white/40">
@@ -225,10 +280,50 @@ export function ScheduleHours() {
             type="date"
             className={`${inputClass} min-w-0 flex-1`}
             value={end}
-            onChange={(e) => e.target.value && setEnd(e.target.value)}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setEnd(e.target.value);
+              setPrevRange(null);
+            }}
             aria-label="To"
           />
         </div>
+        <select
+          className={inputClass}
+          value={jumpValue}
+          onChange={(e) => {
+            const [kind, from] = e.target.value.split(':');
+            if (from) pick(kind as 'week' | 'period', from);
+          }}
+          aria-label="Jump to a week or pay period"
+        >
+          <option value="">Jump to…</option>
+          <optgroup label="Pay periods">
+            {jump.periods.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Weeks">
+            {jump.weeks.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+          {/* Keep a picked week / period outside the recent list selectable. */}
+          {jumpValue && !jump.periods.concat(jump.weeks).some((o) => o.value === jumpValue) && (
+            <option value={jumpValue}>
+              {jumpValue.startsWith('week:') ? 'Week of' : 'Pay period'} {start}
+            </option>
+          )}
+        </select>
+        {prevRange && (
+          <button type="button" className={buttonClass} onClick={back}>
+            Back to {prevRange.start} – {prevRange.end}
+          </button>
+        )}
         <button
           type="button"
           className={`${buttonClass} ${byPeriod ? 'border-white/40 text-white' : ''}`}
@@ -298,7 +393,18 @@ export function ScheduleHours() {
                     <td
                       className={`whitespace-nowrap py-2 pr-3 font-mono text-white/70 ${labelColClass}`}
                     >
-                      {row.label}
+                      {rows.length > 1 ? (
+                        <button
+                          type="button"
+                          className="underline decoration-white/20 underline-offset-2 hover:text-white hover:decoration-white/60"
+                          title={`Show only this ${byPeriod ? 'pay period' : 'week'}`}
+                          onClick={() => pick(byPeriod ? 'period' : 'week', row.key)}
+                        >
+                          {row.label}
+                        </button>
+                      ) : (
+                        row.label
+                      )}
                       {row.partial && (
                         <span title="The picked range doesn't cover this whole pay period"> *</span>
                       )}
