@@ -40,7 +40,14 @@ describe('classifyQuestions', () => {
 });
 
 describe('classifySignals', () => {
-  const PROBABILITIES = { action: 0.82, question: 0.1, update: 0.05, feedback: 0.2, safety: 0.4 };
+  const PROBABILITIES = {
+    action: 0.82,
+    question: 0.1,
+    update: 0.05,
+    hours: 0.15,
+    feedback: 0.2,
+    safety: 0.4,
+  };
   const answers = Object.fromEntries(
     Object.entries(PROBABILITIES).map(([k, p]) => [k, { type: 'boolean' as const, probability: p }])
   );

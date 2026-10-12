@@ -104,11 +104,12 @@ export const SETTINGS = {
     options: [
       { value: 'action', label: 'Action' },
       { value: 'update', label: 'Update' },
+      { value: 'hours', label: 'Hours' },
       { value: 'question', label: 'Question' },
       { value: 'safety', label: 'Safety' },
       { value: 'feedback', label: 'Feedback' },
     ],
-    default: ['action', 'update'],
+    default: ['action', 'update', 'hours'],
     min: 1,
   },
   'sops.assist': {

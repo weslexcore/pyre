@@ -43,6 +43,7 @@ import {
   saveSuggestions,
   saveSuggestionsInput,
 } from '../lib/suggester/save-suggestions';
+import { findShiftAssignments } from '../lib/suggester/shifts';
 import { readSopForEdit, suggesterSopContents } from '../lib/suggester/sops';
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
@@ -105,6 +106,20 @@ export default defineDynamic({
             execute(input, ctx) {
               suggestTargetOf(ctx);
               return readSopForEdit(input.slug);
+            },
+          }),
+          find_shift_assignments: defineTool({
+            description:
+              "The live shifts on one day and who worked each: every person's assignmentId, name, email and scheduled hours. Use it when a note says someone worked other hours than scheduled (stayed late, came in early, left early), to find the assignments to re-time.",
+            inputSchema: z.object({
+              date: z
+                .string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/)
+                .describe("YYYY-MM-DD; usually the note's date."),
+            }),
+            execute(input, ctx) {
+              suggestTargetOf(ctx);
+              return findShiftAssignments(input.date);
             },
           }),
           save_suggestions: defineTool({

@@ -73,6 +73,67 @@ export async function withOpenCard<T>(
   }
 }
 
+/**
+ * A live shift on `date` with the eval author and one more person on it,
+ * both scheduled for the same hours; removed afterwards (assignments
+ * cascade with the shift).
+ */
+export async function withCrewedShift<T>(
+  input: { date: string; other: string; startsAt: string; endsAt: string },
+  fn: (assignments: { author: string; other: string }) => Promise<T>
+): Promise<T> {
+  const db = getDb();
+  const { data: staff, error: staffError } = await db
+    .from('staff')
+    .insert([
+      { display_name: 'Eval Author', email: EVAL_AUTHOR },
+      { display_name: input.other, email: null },
+    ])
+    .select('id, email');
+  if (staffError) throw new Error(`fixture staff: ${staffError.message}`);
+  const rows = (staff ?? []) as { id: string; email: string | null }[];
+  const authorId = rows.find((r) => r.email === EVAL_AUTHOR)?.id as string;
+  const otherId = rows.find((r) => r.email === null)?.id as string;
+  let shiftId: string | null = null;
+  try {
+    const { data: shift, error: shiftError } = await db
+      .from('shifts')
+      .insert({
+        shift_date: input.date,
+        label: 'Eval evening',
+        starts_at: input.startsAt,
+        ends_at: input.endsAt,
+        source: 'manual',
+      })
+      .select('id')
+      .single();
+    if (shiftError) throw new Error(`fixture shift: ${shiftError.message}`);
+    shiftId = (shift as { id: string }).id;
+    const { data: assigned, error: assignError } = await db
+      .from('shift_assignments')
+      .insert(
+        [authorId, otherId].map((staffId) => ({
+          shift_id: shiftId,
+          staff_id: staffId,
+          starts_at: input.startsAt,
+          ends_at: input.endsAt,
+        }))
+      )
+      .select('id, staff_id');
+    if (assignError) throw new Error(`fixture assignments: ${assignError.message}`);
+    const byStaff = new Map(
+      ((assigned ?? []) as { id: string; staff_id: string }[]).map((a) => [a.staff_id, a.id])
+    );
+    return await fn({
+      author: byStaff.get(authorId) as string,
+      other: byStaff.get(otherId) as string,
+    });
+  } finally {
+    if (shiftId) await db.from('shifts').delete().eq('id', shiftId);
+    await db.from('staff').delete().in('id', [authorId, otherId]);
+  }
+}
+
 /** The headers the integrations app sends when it starts the suggester on a note. */
 export function suggesterHeaders(noteId: string): Record<string, string> {
   return {

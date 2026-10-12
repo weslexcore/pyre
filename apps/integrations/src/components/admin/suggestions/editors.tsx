@@ -2,10 +2,11 @@
 // fields the thing itself has (a card's board, assignees, title, notes, due
 // date and custom fields, plus the severity and importance its due date
 // follows; a comment's words; an SOP's text, shown as a diff against
-// the document as it is now). The Record type makes a new kind in
+// the document as it is now; an assignment's hours, next to what was
+// scheduled). The Record type makes a new kind in
 // lib/suggestions/types a type error here until it has an editor.
 
-import { todayEastern } from '@pyre/schedule-core';
+import { timeToMinutes, todayEastern } from '@pyre/schedule-core';
 import { useEffect, useState } from 'react';
 import { LinkTextarea } from '@/components/admin/LinkTextarea';
 import { compactInputClass, compactSelectClass } from '@/components/admin/ui';
@@ -24,6 +25,7 @@ import type {
   CardCommentPayload,
   CardCreatePayload,
   PayloadByKind,
+  ShiftTimesPayload,
   SopEditPayload,
   SuggestionKind,
   SuggestionResultLink,
@@ -409,10 +411,94 @@ function SopEditEditor({ value, onChange, target, disabled }: EditorProps<'sop.e
   );
 }
 
+/** "+0.5h" — how far the new hours move the assignment's total. */
+function hoursDelta(value: ShiftTimesPayload): string | null {
+  if (!value.scheduledStartsAt || !value.scheduledEndsAt || value.endsAt <= value.startsAt) {
+    return null;
+  }
+  const minutes =
+    timeToMinutes(value.endsAt) -
+    timeToMinutes(value.startsAt) -
+    (timeToMinutes(value.scheduledEndsAt) - timeToMinutes(value.scheduledStartsAt));
+  if (minutes === 0) return null;
+  const hours = Math.round((minutes / 60) * 100) / 100;
+  return `${hours > 0 ? '+' : ''}${hours}h`;
+}
+
+function ShiftTimesEditor({
+  value,
+  onChange,
+  target,
+  disabled,
+  idPrefix,
+}: EditorProps<'shift_assignment.update'>) {
+  const set = (patch: Partial<ShiftTimesPayload>) => onChange({ ...value, ...patch });
+  const delta = hoursDelta(value);
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-white/60">
+        {target?.href ? (
+          <a href={target.href} className="text-[var(--pyre-gold)] underline hover:text-white">
+            {target.label}
+          </a>
+        ) : (
+          <span>
+            {target?.label ?? `${value.staffName} on ${value.shiftLabel}, ${value.shiftDate}`}
+          </span>
+        )}
+        {value.scheduledStartsAt && (
+          <span className="font-mono text-[10px] text-white/40">
+            {' '}
+            · scheduled {value.scheduledStartsAt}–{value.scheduledEndsAt}
+          </span>
+        )}
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor={`${idPrefix}-starts`} className={labelClass}>
+            Started
+          </label>
+          <input
+            id={`${idPrefix}-starts`}
+            type="time"
+            className={compactInputClass}
+            value={value.startsAt}
+            disabled={disabled}
+            onChange={(e) => e.target.value && set({ startsAt: e.target.value.slice(0, 5) })}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${idPrefix}-ends`} className={labelClass}>
+            Finished
+          </label>
+          <input
+            id={`${idPrefix}-ends`}
+            type="time"
+            className={compactInputClass}
+            value={value.endsAt}
+            disabled={disabled}
+            onChange={(e) => e.target.value && set({ endsAt: e.target.value.slice(0, 5) })}
+          />
+        </div>
+        {delta && <span className="pb-1.5 font-mono text-xs text-white/60">{delta}</span>}
+      </div>
+      {value.endsAt <= value.startsAt && (
+        <p className="font-mono text-[10px] text-[var(--pyre-red)]">
+          The finish has to be after the start, on the same day.
+        </p>
+      )}
+      <span className={hintClass}>
+        Changes this person's hours on the shift, which is what the timesheet pays.
+      </span>
+    </div>
+  );
+}
+
 export const SUGGESTION_EDITORS: {
   [K in SuggestionKind]: (props: EditorProps<K>) => React.JSX.Element;
 } = {
   'board_card.create': CardCreateEditor,
   'board_card.comment': CardCommentEditor,
   'sop.edit': SopEditEditor,
+  'shift_assignment.update': ShiftTimesEditor,
 };

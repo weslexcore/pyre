@@ -104,3 +104,41 @@ describe('helpers', () => {
     expect(sourceHref('shift_note', UUID)).toBe(`/admin/shift-notes#note-${UUID}`);
   });
 });
+
+describe('parsePayload shift_assignment.update', () => {
+  it('reads an end time alone, leaving the start to be filled from the assignment', () => {
+    const parsed = parsePayload('shift_assignment.update', { assignmentId: UUID, endsAt: '20:30' });
+    expect(parsed.ok && parsed.value).toMatchObject({
+      assignmentId: UUID,
+      startsAt: '',
+      endsAt: '20:30',
+    });
+  });
+
+  it('trims seconds off a time', () => {
+    const parsed = parsePayload('shift_assignment.update', {
+      assignmentId: UUID,
+      startsAt: '15:00:00',
+    });
+    expect(parsed.ok && parsed.value.startsAt).toBe('15:00');
+  });
+
+  it('refuses a payload with no times, a bad time, or no assignment', () => {
+    expect(parsePayload('shift_assignment.update', { assignmentId: UUID }).ok).toBe(false);
+    expect(
+      parsePayload('shift_assignment.update', { assignmentId: UUID, endsAt: '8:30pm' }).ok
+    ).toBe(false);
+    expect(parsePayload('shift_assignment.update', { endsAt: '20:30' }).ok).toBe(false);
+  });
+
+  it('describes the person and their new hours', () => {
+    expect(
+      describeSuggestion('shift_assignment.update', {
+        staffName: 'Sam',
+        shiftDate: '2026-10-11',
+        startsAt: '16:00',
+        endsAt: '20:30',
+      })
+    ).toBe('Hours change: Sam 2026-10-11 16:00–20:30');
+  });
+});

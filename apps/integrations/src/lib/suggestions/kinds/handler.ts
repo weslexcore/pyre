@@ -13,7 +13,7 @@ export type Validation<P> =
       /** The payload as it will be stored or applied (e.g. normalized fields). */
       payload: P;
       /** The existing record it acts on, if any. */
-      target?: { type: 'board_card' | 'sop'; id: string } | null;
+      target?: { type: NonNullable<AgentSuggestionRow['target_type']>; id: string } | null;
     }
   | {
       ok: false;

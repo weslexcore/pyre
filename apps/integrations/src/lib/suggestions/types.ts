@@ -31,6 +31,7 @@ export const SUGGESTION_KINDS: readonly SuggestionKind[] = [
   'board_card.create',
   'board_card.comment',
   'sop.edit',
+  'shift_assignment.update',
 ];
 
 export const SUGGESTION_SOURCE_TYPES: readonly SuggestionSourceType[] = ['shift_note'];
@@ -49,6 +50,7 @@ export const KIND_LABELS: Record<SuggestionKind, string> = {
   'board_card.create': 'New task',
   'board_card.comment': 'Comment on task',
   'sop.edit': 'SOP edit',
+  'shift_assignment.update': 'Hours change',
 };
 
 export const SOURCE_LABELS: Record<SuggestionSourceType, string> = {
@@ -124,10 +126,33 @@ export interface SopEditPayload {
   edits: SopHunk[];
 }
 
+/**
+ * New hours for one person's assignment on a shift — what they actually
+ * worked, which is what the timesheet pays. The agent sends the assignment
+ * and the time(s) the note gives; the rest is filled from the live
+ * assignment when it is checked, for the admin reading it.
+ */
+export interface ShiftTimesPayload {
+  assignmentId: string;
+  /** HH:MM. */
+  startsAt: string;
+  /** HH:MM. */
+  endsAt: string;
+  staffName: string;
+  shiftId: string;
+  shiftLabel: string;
+  /** YYYY-MM-DD. */
+  shiftDate: string;
+  /** The assignment's hours when this was last checked: what it changes from. */
+  scheduledStartsAt: string;
+  scheduledEndsAt: string;
+}
+
 export interface PayloadByKind {
   'board_card.create': CardCreatePayload;
   'board_card.comment': CardCommentPayload;
   'sop.edit': SopEditPayload;
+  'shift_assignment.update': ShiftTimesPayload;
 }
 
 export type SuggestionPayload = PayloadByKind[SuggestionKind];
@@ -135,6 +160,7 @@ export type SuggestionPayload = PayloadByKind[SuggestionKind];
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HM_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export { isUuid };
 
@@ -263,6 +289,40 @@ function parseSopEditPayload(raw: unknown): ParseResult<SopEditPayload> {
   };
 }
 
+function parseShiftTimesPayload(raw: unknown): ParseResult<ShiftTimesPayload> {
+  const o = asObject(raw);
+  if (!o) return fail('payload must be an object');
+  if (!isUuid(o.assignmentId)) {
+    return fail('assignmentId must be the UUID of an assignment from find_shift_assignments');
+  }
+  // Either time may be left out ("stayed until 8:30" only moves the end):
+  // checking the payload fills it from the assignment as it stands.
+  const time = (key: 'startsAt' | 'endsAt'): string | null => {
+    const value = o[key];
+    if (value === undefined || value === null || value === '') return '';
+    return typeof value === 'string' && HM_RE.test(value) ? value.slice(0, 5) : null;
+  };
+  const startsAt = time('startsAt');
+  const endsAt = time('endsAt');
+  if (startsAt === null) return fail('startsAt must be HH:MM (24-hour)');
+  if (endsAt === null) return fail('endsAt must be HH:MM (24-hour)');
+  if (!startsAt && !endsAt) return fail('give startsAt, endsAt, or both');
+  return {
+    ok: true,
+    value: {
+      assignmentId: o.assignmentId,
+      startsAt,
+      endsAt,
+      staffName: str(o.staffName),
+      shiftId: str(o.shiftId),
+      shiftLabel: str(o.shiftLabel),
+      shiftDate: str(o.shiftDate),
+      scheduledStartsAt: str(o.scheduledStartsAt),
+      scheduledEndsAt: str(o.scheduledEndsAt),
+    },
+  };
+}
+
 /** Shape checks per kind; the live-data checks are each kind's validate() in ./kinds. */
 export const PAYLOAD_PARSERS: {
   [K in SuggestionKind]: (raw: unknown) => ParseResult<PayloadByKind[K]>;
@@ -270,6 +330,7 @@ export const PAYLOAD_PARSERS: {
   'board_card.create': parseCardCreatePayload,
   'board_card.comment': parseCardCommentPayload,
   'sop.edit': parseSopEditPayload,
+  'shift_assignment.update': parseShiftTimesPayload,
 };
 
 export function parsePayload<K extends SuggestionKind>(
@@ -296,6 +357,11 @@ export function describeSuggestion(kind: SuggestionKind, payload: unknown): stri
       return `Comment on a task: ${str(o.note).slice(0, 80)}`;
     case 'sop.edit':
       return `Edit SOP: ${str(o.title) || str(o.slug) || 'untitled'}`;
+    case 'shift_assignment.update':
+      return `Hours change: ${str(o.staffName) || 'someone'} ${str(o.shiftDate)} ${str(o.startsAt)}–${str(o.endsAt)}`.replace(
+        /\s+/g,
+        ' '
+      );
   }
 }
 

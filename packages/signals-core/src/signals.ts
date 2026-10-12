@@ -109,6 +109,23 @@ export const SIGNAL_DEFINITIONS = [
     actionable: true,
   },
   {
+    key: 'hours',
+    label: 'Hours',
+    definition:
+      'Someone worked different hours than the schedule says: stayed late, came in early, left early, ran over, or covered part of a shift. Their recorded hours, which payroll pays from, need correcting.',
+    examples: [
+      'Sam and I stayed until 8:30 to finish the deep clean.',
+      'Came in at 3 instead of 4 to set up for the private event.',
+      'Jo left at 6, so I closed on my own.',
+    ],
+    notThis: {
+      means:
+        'Everyone worked the hours they were scheduled for, or the note only talks about future shifts or availability (a swap request, time off) rather than hours already worked.',
+      examples: ['Smooth close, out the door on time.', 'Can someone cover my Saturday morning?'],
+    },
+    actionable: true,
+  },
+  {
     key: 'feedback',
     label: 'Feedback',
     definition:

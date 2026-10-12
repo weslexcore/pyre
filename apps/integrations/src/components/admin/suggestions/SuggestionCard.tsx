@@ -30,6 +30,8 @@ const KIND_TONES: Record<SuggestionKind, string> = {
     'border-[var(--pyre-gold)]/50 bg-[var(--pyre-gold)]/10 text-[var(--pyre-gold)]',
   'board_card.comment': 'border-white/20 bg-white/5 text-white/70',
   'sop.edit': 'border-[var(--pyre-creme)]/40 bg-[var(--pyre-creme)]/10 text-[var(--pyre-creme)]',
+  'shift_assignment.update':
+    'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/10 text-[var(--pyre-blue)]',
 };
 
 export function KindBadge({ kind }: { kind: SuggestionKind }) {

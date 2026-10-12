@@ -10,6 +10,7 @@ import { postAgentApi } from '../api';
 import type { SuggestTarget } from '../role';
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM, 24-hour');
 
 const common = {
   rationale: z
@@ -98,6 +99,28 @@ export const saveSuggestionsInput = z.object({
               .max(20),
             changeNote: z.string().min(1).max(300).describe('The change, in plain words.'),
           }),
+        }),
+        z.object({
+          kind: z.literal('shift_assignment.update'),
+          ...common,
+          payload: z
+            .object({
+              assignmentId: z
+                .string()
+                .uuid()
+                .describe("The person's assignmentId from find_shift_assignments."),
+              startsAt: timeString
+                .optional()
+                .describe('When they actually started; omit when the note only changes the end.'),
+              endsAt: timeString
+                .optional()
+                .describe(
+                  'When they actually finished; omit when the note only changes the start.'
+                ),
+            })
+            .refine((p) => p.startsAt !== undefined || p.endsAt !== undefined, {
+              message: 'Give startsAt, endsAt, or both.',
+            }),
         }),
       ])
     )

@@ -45,7 +45,9 @@ function priorSummary(row: {
       ? `new card "${String(payload.title ?? '')}" on ${String(payload.board ?? '')}`
       : row.kind === 'board_card.comment'
         ? `comment on card ${String(payload.cardId ?? '')}: ${String(payload.note ?? '').slice(0, 200)}`
-        : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
+        : row.kind === 'shift_assignment.update'
+          ? `hours for ${String(payload.staffName ?? '')} on ${String(payload.shiftLabel ?? '')} ${String(payload.shiftDate ?? '')} (assignment ${String(payload.assignmentId ?? '')}): ${String(payload.startsAt ?? '')}–${String(payload.endsAt ?? '')}`
+          : `edit to SOP ${String(payload.slug ?? '')}: ${String(payload.changeNote ?? '')}`;
   return {
     kind: row.kind,
     status: row.status,
@@ -125,6 +127,7 @@ export async function getSuggestionContext(source: Source) {
     note: {
       date: note.note_date,
       author: author ?? 'a staff member',
+      authorEmail: note.author_email,
       status: note.status,
       text: note.body,
       url: siteUrl(`/admin/shift-notes#note-${note.id}`),

@@ -10,7 +10,14 @@ const { contentHash, runClassification } = await import('./request');
 
 const NOTE_ID = '11111111-1111-4111-8111-111111111111';
 
-const PROBABILITIES = { action: 0.82, question: 0.1, update: 0.05, feedback: 0.2, safety: 0.01 };
+const PROBABILITIES = {
+  action: 0.82,
+  question: 0.1,
+  update: 0.05,
+  hours: 0.15,
+  feedback: 0.2,
+  safety: 0.01,
+};
 
 /** A Jev stand-in answering with `probabilities` (or throwing), counting its calls. */
 function jev(answer: () => Record<string, unknown> = () => PROBABILITIES) {
