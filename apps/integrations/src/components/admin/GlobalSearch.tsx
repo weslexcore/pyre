@@ -29,6 +29,7 @@ import {
   type SearchItem,
   type SearchResponse,
 } from '@/lib/admin/globalSearch';
+import type { Assignable } from '@/lib/boards/people';
 import { BOARDS_HREF } from '@/lib/boards/types';
 import { readError } from '@/lib/client/api';
 import { usePresence } from '@/lib/client/usePresence';
@@ -260,6 +261,8 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [boards, setBoards] = useState<BoardRow[]>([]);
+  // The staff roster, handed only to whoever holds the whole boards tool.
+  const [owners, setOwners] = useState<Assignable[]>([]);
   const [server, setServer] = useState<SearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,14 +359,17 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
   useEffect(() => {
     if (!open) return;
     setBoards([]);
+    setOwners([]);
     if (!pages.some((page) => page.href === BOARDS_HREF)) return;
     const controller = new AbortController();
     void (async () => {
       try {
         const res = await fetch('/api/admin/boards', { signal: controller.signal });
         if (!res.ok) return;
-        const data = (await res.json()) as { boards: BoardRow[] };
-        if (!controller.signal.aborted) setBoards(data.boards);
+        const data = (await res.json()) as { boards: BoardRow[]; owners?: Assignable[] };
+        if (controller.signal.aborted) return;
+        setBoards(data.boards);
+        setOwners(data.owners ?? []);
       } catch {
         // No verified task access: keep the action hidden.
       }
@@ -475,6 +481,7 @@ export function GlobalSearch({ pages }: { pages: SearchPage[] }) {
             {creating ? (
               <SearchTaskCreate
                 boards={boards.filter(isTaskCreationBoard)}
+                owners={owners}
                 initialTitle={term}
                 onBack={() => {
                   setCreating(false);
