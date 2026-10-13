@@ -6,7 +6,7 @@
 // migration): email_template_overrides pins a template live or gated
 // regardless of the env pattern, and email_whitelist adds recipients alongside
 // the env ones. Enforced at the single sendTemplate() choke point so ALL
-// emails (confirmations, first-timer, cron/journeys) honor it automatically.
+// emails (confirmations, staff notices, journeys) honor it automatically.
 //
 // Reads go through getEmailGate(), which snapshots both tables (cached ~30s,
 // invalidated by the /api/admin/email-gate mutations) and falls back to

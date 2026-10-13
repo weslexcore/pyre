@@ -39,13 +39,6 @@ export interface FaqItem {
   answer: string;
 }
 
-export interface FirstTimerEmailProps {
-  firstName: string;
-  faqs: FaqItem[];
-  // manageUrl: string;
-  directionsUrl: string;
-}
-
 // Marketing templates all carry unsubscribeUrl — sendTemplate() injects it for
 // kind: 'marketing' sends and EmailLayout renders it in the footer.
 export interface MarketingEmailBaseProps {
@@ -336,7 +329,6 @@ export interface ScheduleLintProps {
 
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
-  'first-timer-welcome': FirstTimerEmailProps;
   journey: JourneyEmailProps;
   'partner-verification-request': PartnerVerificationRequestProps;
   'partner-verified': PartnerVerifiedProps;

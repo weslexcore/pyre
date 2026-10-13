@@ -4,7 +4,6 @@
 // Typed against EmailPropsByTemplate so it cannot drift from the registry.
 
 import { sampleConfirmationProps } from './components/ConfirmationEmail';
-import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
@@ -26,7 +25,6 @@ import type { EmailPropsByTemplate } from './types';
 
 export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailPropsByTemplate[K] } = {
   confirmation: sampleConfirmationProps,
-  'first-timer-welcome': FirstTimerWelcome.PreviewProps,
   journey: JourneyEmail.PreviewProps,
   'partner-verification-request': PartnerVerificationRequest.PreviewProps,
   'partner-verified': PartnerVerified.PreviewProps,

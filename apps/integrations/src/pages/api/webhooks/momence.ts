@@ -91,7 +91,6 @@ async function handleBookingEvent(
     await sendBookingConfirmationEmails({
       sessionId: payload.sessionId,
       sessionBookingId: payload.sessionBookingId,
-      memberId: payload.targetMemberId,
       member: { email: member.email, firstName: member.firstName },
       session,
       tracer,

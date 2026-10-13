@@ -100,8 +100,8 @@ function memberSessions(memberId: string, pageSize: number) {
 /**
  * Whether the booking that just triggered the webhook is the member's first:
  * true for a first-timer, false with prior bookings, null when it can't be
- * told (the first-timer email is then skipped rather than risk sending it to
- * an existing member).
+ * told (callers then skip rather than risk treating an existing member as
+ * new).
  */
 export async function isMemberFirstBooking(
   memberId: string,

@@ -23,19 +23,23 @@ const WHAT_TO_BRING: Record<string, FaqItem> = {
   },
 };
 
+// Not in any set right now (they went out with the retired first-timer
+// welcome); kept for the commented-out slots in the confirmation sets below.
+// biome-ignore lint/correctness/noUnusedVariables: available to the sets below
 const SAUNA_TEMP: FaqItem = {
   question: 'How hot does the sauna get?',
   answer: 'Our traditional Finnish saunas reach temperatures between 170-195°F.',
 };
 
+// biome-ignore lint/correctness/noUnusedVariables: available to the sets below
 const SAUNA_PLUNGE_TIMING: FaqItem = {
   question: 'How long should I stay in the sauna and cold plunge?',
   answer:
     'We recommend 10-20 minute sauna sessions followed by 1-3 minute cold plunge immersions. Repeat 2-4 rounds for optimal benefits.',
 };
 
-// Shared first-timer FAQ items (mirrors the first-timer welcome email) appended
-// to every confirmation set so even returning guests have the basics on hand.
+// Basics appended to every confirmation FAQ set so even returning guests have
+// them on hand.
 const HAVE_QUESTIONS: FaqItem = {
   question: 'What if I have questions?',
   answer:
@@ -44,16 +48,10 @@ const HAVE_QUESTIONS: FaqItem = {
 
 /**
  * Parking directions. The confirmation email prints this right under the
- * address on its details card (so it's not repeated in that email's FAQ); the
- * first-timer welcome still carries it as a question.
+ * address on its details card, so it's not repeated in that email's FAQ.
  */
 export const PARKING_DIRECTIONS =
   'Street parking is available on Westover Hills Blvd. and W 49th St. You can also park in the gravel lot off W 49th St. (look for the big Pyre sign on our sauna) or in the lot off Westover Hills Blvd. marked by the Living Water sign.';
-
-const PARKING: FaqItem = {
-  question: 'Where should I park?',
-  answer: PARKING_DIRECTIONS,
-};
 
 const CANCELLATION: FaqItem = {
   question: 'What if I need to cancel?',
@@ -76,39 +74,24 @@ const WEATHER: FaqItem = {
 // Shared items appended to the end of every confirmation FAQ set. Parking and
 // arrival time are deliberately absent: the confirmation's details card shows
 // both next to the address and start time, where guests actually look.
-const FIRST_TIMER_TAIL: FaqItem[] = [HAVE_QUESTIONS, CANCELLATION, WEATHER];
-
-/**
- * Curated FAQ set sent with the first-timer welcome email. Kept here (rather
- * than imported from landing-page, a separate workspace) so all email FAQ copy
- * lives in one place.
- */
-export const FIRST_TIMER_FAQS: FaqItem[] = [
-  WHAT_TO_BRING['regular'],
-  HAVE_QUESTIONS,
-  SAUNA_TEMP,
-  SAUNA_PLUNGE_TIMING,
-  PARKING,
-  CANCELLATION,
-  WEATHER,
-];
+const SHARED_TAIL: FaqItem[] = [HAVE_QUESTIONS, CANCELLATION, WEATHER];
 
 /** Used for open hours and any session type without a bespoke set. */
 export const DEFAULT_FAQS: FaqItem[] = [
   WHAT_TO_BRING['regular'],
   // SAUNA_TEMP,
   // SAUNA_PLUNGE_TIMING,
-  ...FIRST_TIMER_TAIL,
+  ...SHARED_TAIL,
 ];
 
 /** Bespoke FAQ sets per session type. */
 export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
-  'open hours': [WHAT_TO_BRING['regular'], ...FIRST_TIMER_TAIL],
+  'open hours': [WHAT_TO_BRING['regular'], ...SHARED_TAIL],
   // Yoga and other fitness classes (pilates, etc.) need a mat, not a swimsuit.
-  yoga: [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
-  fitness: [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
+  yoga: [WHAT_TO_BRING['yoga'], ...SHARED_TAIL],
+  fitness: [WHAT_TO_BRING['yoga'], ...SHARED_TAIL],
   // Sound baths are lie-down sessions, so guests bring a mat.
-  'sound bath': [WHAT_TO_BRING['yoga'], ...FIRST_TIMER_TAIL],
+  'sound bath': [WHAT_TO_BRING['yoga'], ...SHARED_TAIL],
   guided: [
     WHAT_TO_BRING['regular'],
     {
@@ -117,7 +100,7 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
         'One of our sauna masters will lead you through rounds of sauna and cold plunge, guiding the breath and pacing so you can relax and get the most out of the experience.',
     },
     // SAUNA_PLUNGE_TIMING,
-    ...FIRST_TIMER_TAIL,
+    ...SHARED_TAIL,
   ],
   social: [
     WHAT_TO_BRING['regular'],
@@ -127,13 +110,13 @@ export const FAQS_BY_TYPE: Record<string, FaqItem[]> = {
         'Social sessions are a lively, communal sweat — come meet new people or bring a friend. Expect a relaxed, conversational atmosphere.',
     },
     // SAUNA_TEMP,
-    ...FIRST_TIMER_TAIL,
+    ...SHARED_TAIL,
   ],
   'special event': [
     WHAT_TO_BRING['regular'],
     // SAUNA_TEMP,
     // SAUNA_PLUNGE_TIMING,
-    ...FIRST_TIMER_TAIL,
+    ...SHARED_TAIL,
   ],
 };
 

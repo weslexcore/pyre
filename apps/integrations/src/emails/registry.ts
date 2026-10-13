@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react';
 import { ConfirmationEmail } from './components/ConfirmationEmail';
-import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { JourneyEmail } from './templates/JourneyEmail';
@@ -37,10 +36,6 @@ export const EMAIL_TEMPLATES: Registry = {
         ? `You're booked: ${p.sessionTitle} · ${p.dateLabel}`
         : `You're booked: ${p.sessionTitle}`,
     Component: ConfirmationEmail,
-  },
-  'first-timer-welcome': {
-    subject: () => 'Welcome to Pyre - what to expect',
-    Component: FirstTimerWelcome,
   },
   // Every dashboard-built journey email; the subject is written per step.
   journey: {
