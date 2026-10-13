@@ -587,8 +587,8 @@ export function ScheduleBoard() {
   const staffById = useMemo(() => new Map((data?.staff ?? []).map((s) => [s.id, s])), [data]);
 
   // Shift id → the on-call people the rule would name instead, for live
-  // shifts the auto action owns whose on-call no longer follows rule 1 (a
-  // founder working that day takes the call) — someone was added or moved
+  // shifts the auto action owns whose day's on-call no longer follows rule 1
+  // (a founder working that day takes the call) — someone was added or moved
   // since the fill. Manage side only; re-running Auto on-call fixes them.
   const onCallDrift = useMemo(() => {
     const drift = new Map<string, string[]>();
@@ -598,12 +598,7 @@ export function ScheduleBoard() {
     for (const shift of data?.shifts ?? []) {
       if (shift.status !== 'active' || shift.is_draft || shift.on_call_manual) continue;
       if (shift.shift_date < today) continue;
-      const { onShift, onDay } = workingOnCall(
-        shift,
-        shiftsByDate.get(shift.shift_date) ?? [],
-        eligibleIds
-      );
-      const expected = onShift.length > 0 ? onShift : onDay;
+      const expected = workingOnCall(shiftsByDate.get(shift.shift_date) ?? [], eligibleIds);
       if (expected.length > 0 && !expected.includes(shift.on_call_staff_id ?? '')) {
         drift.set(shift.id, expected);
       }
@@ -931,7 +926,7 @@ export function ScheduleBoard() {
     run(() => api('POST', '/api/admin/schedule-proposals', body));
 
   // Fill on-call across the visible range by the rule (schedule-core
-  // on-call.ts); the server skips past days and hand-picked shifts.
+  // on-call.ts), one person per day; the server skips past and hand-picked days.
   const autoOnCall = () =>
     run(async () => {
       const res = await fetch('/api/admin/shift-on-call', {
@@ -947,7 +942,7 @@ export function ScheduleBoard() {
       invalidateJson('/api/admin/schedule-board');
       return body.unfilled
         ? {
-            error: `${body.unfilled} shift${body.unfilled === 1 ? '' : 's'} left with nobody on call — everyone on call has time off then.`,
+            error: `${body.unfilled} day${body.unfilled === 1 ? '' : 's'} left with nobody on call — everyone on call has time off then.`,
           }
         : {};
     });
@@ -1699,7 +1694,7 @@ export function ScheduleBoard() {
                                         ? 'bg-[var(--pyre-gold)]/20 text-[var(--pyre-gold)]'
                                         : 'bg-white/10 text-white/70'
                                     }`}
-                                    title={`On call for this shift${shift.on_call_manual ? ' (picked by hand)' : ''}`}
+                                    title={`On call for the whole day${shift.on_call_manual ? ' (picked by hand)' : ''}`}
                                   >
                                     {shift.on_call_staff_id === selfId
                                       ? "you're on call"
@@ -3052,9 +3047,10 @@ function ShiftDetail({
 }
 
 /**
- * Who's on call for a shift, in edit mode: "Auto" hands it to the rule (what
- * Auto on-call fills); a name or "Nobody" picks by hand, which the auto
- * action then leaves alone.
+ * Who's on call for the shift's day, in edit mode — on-call covers the whole
+ * day, so a change here applies to every shift that day. "Auto" hands the day
+ * to the rule (what Auto on-call fills); a name or "Nobody" picks by hand,
+ * which the auto action then leaves alone.
  */
 function OnCallPicker({
   shift,
@@ -3079,7 +3075,7 @@ function OnCallPicker({
         htmlFor={`on-call-${shift.id}`}
         className="font-mono text-xs uppercase tracking-wide text-white/40"
       >
-        On call
+        On call (all day)
       </label>
       <select
         id={`on-call-${shift.id}`}

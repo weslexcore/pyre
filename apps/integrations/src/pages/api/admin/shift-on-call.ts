@@ -1,11 +1,13 @@
-// Who's on call for each shift (shifts.on_call_staff_id), for /admin/schedule.
-//   POST  { start, end }            — Auto on-call: fill every live shift in
-//                                     the range, today onward, by the rule in
+// Who's on call each day, for /admin/schedule. On-call is held for a whole
+// day; it's stored on every live shift that day (shifts.on_call_staff_id).
+//   POST  { start, end }            — Auto on-call: fill every day in the
+//                                     range, today onward, by the rule in
 //                                     schedule-core on-call.ts. Hand-picked
-//                                     shifts are left alone.
-//   PATCH { id, staffId }           — pick by hand (staffId null = nobody);
-//                                     the auto action then skips the shift
-//   PATCH { id, auto: true }        — hand the shift back to the rule
+//                                     days are left alone.
+//   PATCH { id, staffId }           — pick by hand for the day of shift `id`
+//                                     (staffId null = nobody); the auto
+//                                     action then skips the day
+//   PATCH { id, auto: true }        — hand that day back to the rule
 //
 // Reads come from schedule-board (the columns ride on the shift rows). All
 // writes need schedule:manage, like every other change to a shift.
@@ -15,8 +17,8 @@ import type { APIRoute } from 'astro';
 import { requireScheduleManage } from '@/lib/auth/admin';
 import { getDb, type ShiftRow } from '@/lib/db';
 import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
-import { actorFromGate, describeShift, logScheduleChange } from '@/lib/schedule/change-log';
-import { fillOnCall, loadOnCallInputs } from '@/lib/schedule/on-call';
+import { actorFromGate, logScheduleChange } from '@/lib/schedule/change-log';
+import { applyOnCallChanges, fillOnCall, loadOnCallInputs } from '@/lib/schedule/on-call';
 
 export const prerender = false;
 
@@ -103,21 +105,43 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (shift.is_draft) {
     return json({ error: 'Accept the draft shift before choosing who is on call' }, 400);
   }
+  if (shift.status !== 'active') {
+    return json({ error: 'Pick on-call from a live shift that day' }, 400);
+  }
 
-  let fields: Pick<ShiftRow, 'on_call_staff_id' | 'on_call_manual'>;
+  const date = shift.shift_date;
+  const nameOf = async (staffId: string | null) => {
+    if (!staffId) return 'nobody';
+    const { data: row } = await db
+      .from('staff')
+      .select('display_name')
+      .eq('id', staffId)
+      .maybeSingle();
+    return (row?.display_name as string | undefined) ?? 'Unknown staff';
+  };
+  const from = await nameOf(shift.on_call_staff_id);
+
+  let to: string | null;
   if (auto) {
-    // Back to the rule: plan this shift as the auto action would, from its
-    // own date so the split counts everything before it.
-    const inputs = await loadOnCallInputs(db, shift.shift_date, shift.shift_date);
+    // Back to the rule: plan the day as the auto action would, from its own
+    // date so the split counts everything before it.
+    const inputs = await loadOnCallInputs(db, date, date);
     if ('error' in inputs) return dbError(inputs.error);
-    const shifts = inputs.shifts.map((s) => (s.id === id ? { ...s, on_call_manual: false } : s));
-    const change = planOnCall({ ...inputs, shifts, fromDate: shift.shift_date }).find(
-      (c) => c.shiftId === id
+    const shifts = inputs.shifts.map((s) =>
+      s.shift_date === date ? { ...s, on_call_manual: false } : s
     );
-    fields = {
-      on_call_staff_id: change ? change.to : shift.on_call_staff_id,
-      on_call_manual: false,
-    };
+    const changes = planOnCall({ ...inputs, shifts, fromDate: date });
+    const { error: clearError } = await db
+      .from('shifts')
+      .update({ on_call_manual: false })
+      .eq('shift_date', date)
+      .eq('is_draft', false)
+      .eq('status', 'active');
+    if (clearError) return dbError(clearError);
+    const applyError = await applyOnCallChanges(db, changes);
+    if (applyError) return dbError(applyError);
+    const mine = changes.find((c) => c.shiftId === id);
+    to = mine ? mine.to : shift.on_call_staff_id;
   } else {
     const staffId = body.staffId as string | null;
     if (staffId !== null) {
@@ -131,44 +155,33 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
         return json({ error: 'That person is not set up to be on call' }, 400);
       }
     }
-    fields = { on_call_staff_id: staffId, on_call_manual: true };
+    const { error } = await db
+      .from('shifts')
+      .update({ on_call_staff_id: staffId, on_call_manual: true })
+      .eq('shift_date', date)
+      .eq('is_draft', false)
+      .eq('status', 'active');
+    if (error) return dbError(error);
+    to = staffId;
   }
 
-  const { data, error } = await db.from('shifts').update(fields).eq('id', id).select('*').single();
-  if (error) return dbError(error);
-  const updated = data as ShiftRow;
-
-  if (
-    updated.on_call_staff_id !== shift.on_call_staff_id ||
-    updated.on_call_manual !== shift.on_call_manual
-  ) {
-    const nameOf = async (staffId: string | null) => {
-      if (!staffId) return 'nobody';
-      const { data: row } = await db
-        .from('staff')
-        .select('display_name')
-        .eq('id', staffId)
-        .maybeSingle();
-      return (row?.display_name as string | undefined) ?? 'Unknown staff';
-    };
-    const [from, to] = await Promise.all([
-      nameOf(shift.on_call_staff_id),
-      nameOf(updated.on_call_staff_id),
-    ]);
+  if (to !== shift.on_call_staff_id || auto === shift.on_call_manual) {
+    const toName = await nameOf(to);
     await logScheduleChange(db, {
       actor: actorFromGate(gate),
       entityType: 'shift',
       entityId: id,
       action: 'update',
       summary: auto
-        ? `On-call for shift ${describeShift(updated)} back to the rule: ${to}`
-        : `On-call for shift ${describeShift(updated)} set by hand: ${from} → ${to}`,
+        ? `On-call for ${date} back to the rule: ${toName}`
+        : `On-call for ${date} set by hand: ${from} → ${toName}`,
       details: {
+        date,
         before: { on_call_staff_id: shift.on_call_staff_id, on_call_manual: shift.on_call_manual },
-        after: fields,
+        after: { on_call_staff_id: to, on_call_manual: !auto },
       },
     });
   }
 
-  return json({ shift: updated });
+  return json({ date, staffId: to, manual: !auto });
 };

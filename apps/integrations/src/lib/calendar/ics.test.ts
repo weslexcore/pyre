@@ -8,6 +8,8 @@ import {
   generateIcs,
   generateIcsCalendar,
   type LocalCalendarEvent,
+  nextIcsDate,
+  type TimedCalendarEvent,
   toIcsLocal,
   toIcsUtc,
 } from './ics';
@@ -102,7 +104,7 @@ describe('toIcsLocal', () => {
 });
 
 describe('generateIcsCalendar', () => {
-  const shiftEvent = (over: Partial<LocalCalendarEvent> = {}): LocalCalendarEvent => ({
+  const shiftEvent = (over: Partial<TimedCalendarEvent> = {}): TimedCalendarEvent => ({
     uid: 'pyre-shift-abc@pyresauna.com',
     date: '2026-08-14',
     startTime: '14:00:00',
@@ -148,6 +150,28 @@ describe('generateIcsCalendar', () => {
     expect(lines).toContain(`DTEND;TZID=${ET_TZID}:20260814T203000`);
     // A shift written as an instant would silently drift across DST.
     expect(lines.some((l) => /^DT(START|END):\d{8}T\d{6}Z$/.test(l))).toBe(false);
+  });
+
+  it('writes an all-day event as a free, date-only day', () => {
+    const lines = build([
+      {
+        uid: 'pyre-oncall-2026-08-14@pyresauna.com',
+        date: '2026-08-14',
+        allDay: true,
+        summary: 'Pyre — On call',
+        location: 'Pyre Sauna',
+        description: "You're on call all day.",
+      },
+    ]);
+    expect(lines).toContain('DTSTART;VALUE=DATE:20260814');
+    expect(lines).toContain('DTEND;VALUE=DATE:20260815');
+    expect(lines).toContain('TRANSP:TRANSPARENT');
+    expect(lines.some((l) => l.startsWith('DTSTART;TZID'))).toBe(false);
+  });
+
+  it('rolls an all-day DTEND over month and year ends', () => {
+    expect(nextIcsDate('2026-08-31')).toBe('20260901');
+    expect(nextIcsDate('2026-12-31')).toBe('20270101');
   });
 
   it('emits one VEVENT per event, defaulting STATUS to CONFIRMED', () => {

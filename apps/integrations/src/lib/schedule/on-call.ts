@@ -6,7 +6,8 @@
 //   - fillOnCall after a proposal is approved (or resolves item by item): the
 //     week is re-planned from what actually went live, so a rejected item
 //     can't leave a stale recommendation behind.
-// Hand-picked shifts (on_call_manual) are never touched, and nothing before
+// On-call is held for a whole day and written to every live shift on it.
+// Hand-picked days (on_call_manual) are never touched, and nothing before
 // today is rewritten.
 
 import {
@@ -131,8 +132,8 @@ function describeChanges(changes: OnCallChange[], inputs: OnCallInputs) {
 }
 
 /**
- * Run the rule over `start`..`end` (today onward) and write it. Returns what
- * changed and how many live shifts were left with nobody on call.
+ * Run the rule over `start`..`end` (today onward) and write it. Returns how
+ * many shifts changed and how many days were left with nobody on call.
  */
 export async function fillOnCall(
   db: SupabaseClient,
@@ -150,11 +151,15 @@ export async function fillOnCall(
   if (applyError) return { error: applyError };
 
   const changedTo = new Map(changes.map((c) => [c.shiftId, c.to]));
-  const unfilled = inputs.shifts.filter(
-    (s) =>
-      s.shift_date >= fromDate &&
-      (changedTo.has(s.id) ? changedTo.get(s.id) : s.on_call_staff_id) === null
-  ).length;
+  const unfilled = new Set(
+    inputs.shifts
+      .filter(
+        (s) =>
+          s.shift_date >= fromDate &&
+          (changedTo.has(s.id) ? changedTo.get(s.id) : s.on_call_staff_id) === null
+      )
+      .map((s) => s.shift_date)
+  ).size;
 
   if (changes.length > 0) {
     await logScheduleChange(db, {

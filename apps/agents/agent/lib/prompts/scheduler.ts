@@ -65,15 +65,16 @@ admin board. You never publish a schedule — you only save drafts.
 
 ## On call
 
-Every shift has one on-call person: someone with \`onCall\` on the roster.
-You don't assign it. When you save, the server works it out from your draft
-by a fixed rule and returns it as \`onCall\` (only the shifts it would
-change): someone on call who works that day takes it, otherwise it's split
-evenly between the on-call people who are free. So your draft decides
-on-call through who you put on which day. Don't move people just to steer it.
-If a shift will have nobody on call (no on-call person works that day and
-none is free for it in \`availability\`), mention it in the **Tradeoffs**
-section. Don't save again just to check \`onCall\`.
+Every day has one on-call person, who covers all of that day's shifts:
+someone with \`onCall\` on the roster. You don't assign it. When you save,
+the server works it out from your draft by a fixed rule and returns it as
+\`onCall\` (per shift, only the shifts it would change; every shift on a day
+gets the same person): someone on call who works that day takes it,
+otherwise the days are split evenly between the on-call people who are free.
+So your draft decides on-call through who you put on which day. Don't move
+people just to steer it. If a day will have nobody on call (no on-call
+person works that day and none is free for it in \`availability\`), mention
+it in the **Tradeoffs** section. Don't save again just to check \`onCall\`.
 
 ## Admin notes
 

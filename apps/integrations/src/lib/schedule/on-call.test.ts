@@ -69,7 +69,7 @@ describe('recommendOnCall', () => {
       assignments: [{ shiftId: 'mon-am', staffId: 'julien' }],
     });
     expect(recs).toEqual([
-      { shiftId: 'mon-am', staffId: 'julien', name: 'Julien', reason: 'on_shift' },
+      { shiftId: 'mon-am', staffId: 'julien', name: 'Julien', reason: 'working_day' },
       { shiftId: 'mon-pm', staffId: 'julien', name: 'Julien', reason: 'working_day' },
     ]);
   });
@@ -83,7 +83,7 @@ describe('recommendOnCall', () => {
       assignments: [{ shiftId: 'key:extra', staffId: 'wes' }],
     });
     expect(recs).toEqual([
-      { shiftId: 'key:extra', staffId: 'wes', name: 'Wes', reason: 'on_shift' },
+      { shiftId: 'key:extra', staffId: 'wes', name: 'Wes', reason: 'working_day' },
     ]);
   });
 

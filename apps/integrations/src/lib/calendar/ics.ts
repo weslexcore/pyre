@@ -126,15 +126,11 @@ export function toIcsLocal(date: string, time: string): string {
   return `${date.replace(/-/g, '')}T${h.padStart(2, '0')}${m.padStart(2, '0')}${s.padStart(2, '0')}`;
 }
 
-/** One event in a wall-clock calendar. Dates/times are ET, exactly as stored. */
-export interface LocalCalendarEvent {
+interface LocalCalendarEventBase {
   /** Stable across edits — clients update the matching entry instead of duplicating. */
   uid: string;
   /** YYYY-MM-DD */
   date: string;
-  /** HH:MM or HH:MM:SS */
-  startTime: string;
-  endTime: string;
   summary: string;
   location: string;
   description: string;
@@ -143,6 +139,45 @@ export interface LocalCalendarEvent {
   status?: 'CONFIRMED' | 'TENTATIVE' | 'CANCELLED';
   /** ISO timestamp (row updated_at) — helps clients spot a changed event. */
   lastModified?: string;
+}
+
+/** A timed event: dates/times are ET, exactly as stored. */
+export interface TimedCalendarEvent extends LocalCalendarEventBase {
+  allDay?: false;
+  /** HH:MM or HH:MM:SS */
+  startTime: string;
+  endTime: string;
+}
+
+/**
+ * An all-day event on `date` (on-call days). Shown in the calendar's all-day
+ * strip and marked free, so it doesn't block the day out as busy.
+ */
+export interface AllDayCalendarEvent extends LocalCalendarEventBase {
+  allDay: true;
+}
+
+/** One event in a wall-clock calendar. */
+export type LocalCalendarEvent = TimedCalendarEvent | AllDayCalendarEvent;
+
+/** '2026-08-14' -> '20260815': an all-day DTEND is the (exclusive) next day. */
+export function nextIcsDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function eventTimes(event: LocalCalendarEvent): string[] {
+  if (event.allDay) {
+    return [
+      `DTSTART;VALUE=DATE:${event.date.replace(/-/g, '')}`,
+      `DTEND;VALUE=DATE:${nextIcsDate(event.date)}`,
+      'TRANSP:TRANSPARENT',
+    ];
+  }
+  return [
+    `DTSTART;TZID=${ET_TZID}:${toIcsLocal(event.date, event.startTime)}`,
+    `DTEND;TZID=${ET_TZID}:${toIcsLocal(event.date, event.endTime)}`,
+  ];
 }
 
 /**
@@ -173,8 +208,7 @@ export function generateIcsCalendar(args: {
       'BEGIN:VEVENT',
       `UID:${event.uid}`,
       `DTSTAMP:${stamp}`,
-      `DTSTART;TZID=${ET_TZID}:${toIcsLocal(event.date, event.startTime)}`,
-      `DTEND;TZID=${ET_TZID}:${toIcsLocal(event.date, event.endTime)}`,
+      ...eventTimes(event),
       `SUMMARY:${escapeText(event.summary)}`,
       `LOCATION:${escapeText(event.location)}`,
       `DESCRIPTION:${escapeText(event.description)}`,

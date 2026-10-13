@@ -117,7 +117,7 @@ export interface ShapedShift {
   }>;
   /** The asker's own hours on this shift; 0 when they are not on it. */
   myHours: number;
-  /** Who the crew calls for this shift; null when nobody is on call yet. */
+  /** Who the crew calls that day (on-call covers the whole day); null when nobody is on call yet. */
   onCall: string | null;
 }
 

@@ -69,13 +69,14 @@ export const GET: APIRoute = async ({ cookies, request, url }) => {
   const self = allStaff.find((s) => (s.email ?? '').toLowerCase() === email);
   if (!self) return text("Your login isn't linked to the schedule roster.", 403);
 
-  const [event] = buildPersonalEvents({
+  // The shift's own event, not the all-day on-call one that may ride along.
+  const event = buildPersonalEvents({
     staffId: self.id,
     shifts: [shift],
     staffById: new Map(allStaff.map((s) => [s.id, s])),
     origin: new URL(request.url).origin,
     dutyCatalog: await loadDutyCatalog(db),
-  });
+  }).find((e) => !e.allDay);
   // The button only renders for shifts you're on, so an empty result means the
   // assignment changed between the page load and the click.
   if (!event) return text("You're not on this shift.", 404);

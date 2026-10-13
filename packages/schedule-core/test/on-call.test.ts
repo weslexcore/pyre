@@ -1,6 +1,6 @@
-// The on-call rule: a founder working that day takes the call, otherwise the
-// free founders split it evenly. Hand-picked shifts and history are never
-// rewritten but do count toward the split.
+// The on-call rule: one person per day. A founder working that day takes the
+// call, otherwise the free founders split the days evenly. Hand-picked days
+// and history are never rewritten but do count toward the split.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -87,12 +87,46 @@ describe("planOnCall", () => {
 		expect(result[evening.id]).toBe("julien");
 	});
 
-	it("prefers the founder on this shift over one working elsewhere that day", () => {
-		const morning = shift("2026-10-05", ["julien"]);
-		const evening = shift("2026-10-05", ["wes"], { starts_at: "17:00:00", ends_at: "21:00:00" });
+	it("names one person for the whole day when both founders work it", () => {
+		const morning = shift("2026-10-05", ["wes"]);
+		const evening = shift("2026-10-05", ["julien"], { starts_at: "17:00:00", ends_at: "21:00:00" });
 		const result = outcome([morning, evening]);
 		expect(result[morning.id]).toBe("julien");
+		expect(result[evening.id]).toBe("julien");
+	});
+
+	it("keeps the current holder when both founders work the day", () => {
+		const morning = shift("2026-10-05", ["wes"], { on_call_staff_id: "wes" });
+		const evening = shift("2026-10-05", ["julien"], { starts_at: "17:00:00", ends_at: "21:00:00" });
+		const result = outcome([morning, evening]);
+		expect(result[morning.id]).toBe("wes");
 		expect(result[evening.id]).toBe("wes");
+	});
+
+	it("splits by day, giving every shift that day the same person", () => {
+		const shifts = [
+			shift("2026-10-05", ["sunny"]),
+			shift("2026-10-05", ["sunny"], { starts_at: "17:00:00", ends_at: "21:00:00" }),
+			shift("2026-10-06", ["sunny"]),
+			shift("2026-10-06", ["sunny"], { starts_at: "17:00:00", ends_at: "21:00:00" }),
+		];
+		const result = outcome(shifts);
+		expect(result[shifts[0].id]).toBe(result[shifts[1].id]);
+		expect(result[shifts[2].id]).toBe(result[shifts[3].id]);
+		expect([result[shifts[0].id], result[shifts[2].id]].sort()).toEqual(["julien", "wes"]);
+	});
+
+	it("checks time off across the whole day, not one shift", () => {
+		// Julien is off for the evening only; Wes is free all day.
+		const shifts = [
+			shift("2026-10-05", ["sunny"]),
+			shift("2026-10-05", ["sunny"], { starts_at: "17:00:00", ends_at: "21:00:00" }),
+		];
+		const result = outcome(shifts, [
+			timeOff("julien", "2026-10-05", { starts_at: "18:00:00", ends_at: "20:00:00" }),
+		]);
+		expect(result[shifts[0].id]).toBe("wes");
+		expect(result[shifts[1].id]).toBe("wes");
 	});
 
 	it("splits days neither founder works evenly", () => {
@@ -151,11 +185,18 @@ describe("planOnCall", () => {
 		]);
 	});
 
-	it("leaves hand-picked shifts alone but counts them", () => {
+	it("leaves hand-picked days alone but counts them", () => {
 		const pinned = shift("2026-10-05", ["sunny"], { on_call_staff_id: "julien", on_call_manual: true });
 		const next = shift("2026-10-06", ["sunny"]);
 		const changes = planOnCall({ shifts: [pinned, next], people, timeOff: [], fromDate: "2026-10-05" });
 		expect(changes).toEqual([{ shiftId: next.id, from: null, to: "wes", reason: "split" }]);
+	});
+
+	it("puts a shift added to a hand-picked day on the pick", () => {
+		const pinned = shift("2026-10-05", ["wes"], { on_call_staff_id: "julien", on_call_manual: true });
+		const added = shift("2026-10-05", ["wes"], { starts_at: "17:00:00", ends_at: "21:00:00" });
+		const changes = planOnCall({ shifts: [pinned, added], people, timeOff: [], fromDate: "2026-10-05" });
+		expect(changes).toEqual([{ shiftId: added.id, from: null, to: "julien", reason: "hand_picked" }]);
 	});
 
 	it("leaves history alone but carries its split forward", () => {
@@ -167,6 +208,18 @@ describe("planOnCall", () => {
 		const next = shift("2026-10-05", ["sunny"]);
 		const changes = planOnCall({ shifts: [...past, next], people, timeOff: [], fromDate: "2026-10-05" });
 		expect(changes).toEqual([{ shiftId: next.id, from: null, to: "wes", reason: "split" }]);
+	});
+
+	it("counts a past day once however many shifts it had", () => {
+		const past = [
+			shift("2026-09-28", ["sunny"], { on_call_staff_id: "julien" }),
+			shift("2026-09-28", ["sunny"], { on_call_staff_id: "julien", starts_at: "17:00:00", ends_at: "21:00:00" }),
+			shift("2026-09-29", ["sunny"], { on_call_staff_id: "wes" }),
+		];
+		const next = shift("2026-10-05", ["sunny"]);
+		const changes = planOnCall({ shifts: [...past, next], people, timeOff: [], fromDate: "2026-10-05" });
+		// One day each, so the tie goes by name.
+		expect(changes).toEqual([{ shiftId: next.id, from: null, to: "julien", reason: "split" }]);
 	});
 
 	it("keeps the current holder on a tie, so a re-run is a no-op", () => {
@@ -195,10 +248,10 @@ describe("planOnCall", () => {
 });
 
 describe("workingOnCall", () => {
-	it("splits the founders on this shift from those elsewhere that day", () => {
+	it("lists the on-call people working any shift that day", () => {
 		const a = shift("2026-10-05", ["wes", "sunny"]);
 		const b = shift("2026-10-05", ["julien"]);
 		const ids = new Set(["wes", "julien"]);
-		expect(workingOnCall(a, [a, b], ids)).toEqual({ onShift: ["wes"], onDay: ["julien"] });
+		expect(workingOnCall([a, b], ids).sort()).toEqual(["julien", "wes"]);
 	});
 });

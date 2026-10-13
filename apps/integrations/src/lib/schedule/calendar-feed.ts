@@ -7,7 +7,7 @@
 // that clock with TZID rather than converting to an instant.
 
 import { type DutyCatalog, formatDuties } from '@pyre/schedule-core';
-import type { LocalCalendarEvent } from '@/lib/calendar/ics';
+import type { AllDayCalendarEvent, LocalCalendarEvent } from '@/lib/calendar/ics';
 import { VENUE_ADDRESS } from '@/lib/calendar/links';
 import type { ShiftAssignmentRow, ShiftRow, StaffRow } from '@/lib/db';
 import { formatWindowLabel } from '@/lib/schedule/sub';
@@ -32,9 +32,50 @@ function nameOf(staffById: Map<string, StaffRow>, id: string): string {
   return staffById.get(id)?.display_name ?? 'Someone';
 }
 
-/** "On call: Wes" for a shift's description, or null when nobody is. */
+/** "On call today: Wes" for a shift's description, or null when nobody is. */
 function onCallLine(staffById: Map<string, StaffRow>, shift: ShiftRow): string | null {
-  return shift.on_call_staff_id ? `On call: ${nameOf(staffById, shift.on_call_staff_id)}` : null;
+  return shift.on_call_staff_id
+    ? `On call today: ${nameOf(staffById, shift.on_call_staff_id)}`
+    : null;
+}
+
+/** Deep link to a day on the board. */
+function dayUrl(origin: string, date: string): string {
+  return `${origin}/admin/schedule?view=week&date=${date}`;
+}
+
+/** Non-draft shifts by date, each day in start order. */
+function shiftsByDate(shifts: ShiftWithAssignments[]): Map<string, ShiftWithAssignments[]> {
+  const byDate = new Map<string, ShiftWithAssignments[]>();
+  for (const shift of [...shifts].sort(
+    (a, b) => a.shift_date.localeCompare(b.shift_date) || a.starts_at.localeCompare(b.starts_at)
+  )) {
+    if (shift.is_draft) continue;
+    const list = byDate.get(shift.shift_date) ?? [];
+    list.push(shift);
+    byDate.set(shift.shift_date, list);
+  }
+  return byDate;
+}
+
+/** "Morning 9a–1p: Sunny, Julien" for each shift in a day's on-call event. */
+function dayLines(staffById: Map<string, StaffRow>, day: ShiftWithAssignments[]): string[] {
+  return day
+    .filter((s) => s.status === 'active')
+    .map((s) => {
+      const crew = s.assignments
+        .filter((a) => !a.is_draft)
+        .map((a) => nameOf(staffById, a.staff_id));
+      return `${s.label} ${formatWindowLabel(s)}: ${crew.length > 0 ? crew.join(', ') : 'nobody assigned yet'}`;
+    });
+}
+
+/** The latest updated_at among the rows — on-call changes touch every shift that day. */
+function latest(rows: Array<{ updated_at: string }>): string | undefined {
+  return rows.reduce<string | undefined>(
+    (max, r) => (!max || r.updated_at > max ? r.updated_at : max),
+    undefined
+  );
 }
 
 /**
@@ -42,11 +83,12 @@ function onCallLine(staffById: Map<string, StaffRow>, shift: ShiftRow): string |
  * a sub claim deletes the requester's row and inserts the claimer's, so the
  * event correctly disappears from one calendar and appears in the other.
  *
- * On-call rides along. Working a shift you're also on call for marks that
- * shift's event rather than doubling the block. Being on call for a shift
- * you're not working adds its own event over the shift window, keyed on the
- * shift: when on-call moves to someone else it leaves this feed and appears
- * in theirs.
+ * On-call is held for a whole day, so it is its own all-day event — one per
+ * day they're on call, whether or not they work that day — never a timed
+ * block. That keeps "working" and "on call" apart at a glance. Keyed on the
+ * date: when on-call moves to someone else it leaves this feed and appears
+ * in theirs. Shift events come first, so a caller after one shift's event
+ * can take the first non-all-day one.
  */
 export function buildPersonalEvents(args: {
   staffId: string;
@@ -63,11 +105,7 @@ export function buildPersonalEvents(args: {
     // Drafts are proposals under review, not commitments — never in a feed.
     if (shift.is_draft) continue;
     const mine = shift.assignments.find((a) => a.staff_id === staffId && !a.is_draft);
-    const onCall = shift.on_call_staff_id === staffId;
-    if (!mine) {
-      if (onCall) events.push(onCallEvent(shift, staffById, origin));
-      continue;
-    }
+    if (!mine) continue;
 
     const coworkers = shift.assignments
       .filter((a) => a.staff_id !== staffId && !a.is_draft)
@@ -79,11 +117,11 @@ export function buildPersonalEvents(args: {
       // The assignment's own hours, not the shift's — people come and go at different times.
       startTime: mine.starts_at,
       endTime: mine.ends_at,
-      summary: `Pyre — ${shift.label}${onCall ? ' (on call)' : ''}`,
+      summary: `Pyre — ${shift.label}`,
       location: VENUE_ADDRESS,
       description: describe([
         `${shift.label}, ${formatWindowLabel(mine)}`,
-        onCall ? "You're on call for this shift." : onCallLine(staffById, shift),
+        shift.on_call_staff_id === staffId ? "You're on call today." : onCallLine(staffById, shift),
         // Duties travel with the event so the phone shows what the shift is,
         // not only when it is.
         formatDuties(dutyCatalog, mine.duties) &&
@@ -103,35 +141,42 @@ export function buildPersonalEvents(args: {
     });
   }
 
+  for (const [date, day] of shiftsByDate(shifts)) {
+    const held = day.filter((s) => s.on_call_staff_id === staffId);
+    if (held.length > 0) events.push(onCallDayEvent(date, day, held, staffById, origin));
+  }
+
   return events;
 }
 
-/** An on-call block for a shift the person isn't working. */
-function onCallEvent(
-  shift: ShiftWithAssignments,
+/**
+ * The all-day on-call event for one day. `held` is the day's shifts naming
+ * this person; if every one of them is cancelled the event is too, so a
+ * client that merges rather than replaces doesn't keep a stale day.
+ */
+function onCallDayEvent(
+  date: string,
+  day: ShiftWithAssignments[],
+  held: ShiftWithAssignments[],
   staffById: Map<string, StaffRow>,
   origin: string
-): LocalCalendarEvent {
-  const crew = shift.assignments
-    .filter((a) => !a.is_draft)
-    .map((a) => nameOf(staffById, a.staff_id));
+): AllDayCalendarEvent {
+  const live = held.some((s) => s.status === 'active');
   return {
-    uid: `pyre-oncall-${shift.id}@pyresauna.com`,
-    date: shift.shift_date,
-    startTime: shift.starts_at,
-    endTime: shift.ends_at,
-    summary: `Pyre — On call (${shift.label})`,
+    uid: `pyre-oncall-${date}@pyresauna.com`,
+    date,
+    allDay: true,
+    summary: 'Pyre — On call',
     location: VENUE_ADDRESS,
     description: describe([
-      `You're on call for ${shift.label}, ${formatWindowLabel(shift)}. The crew may reach out with questions.`,
-      crew.length > 0 ? `On shift: ${crew.join(', ')}` : 'Nobody assigned yet.',
-      shift.notes ? `Notes: ${shift.notes}` : null,
-      shift.status === 'cancelled' ? 'This shift was cancelled.' : null,
-      boardUrl(origin, shift),
+      "You're on call all day. The crew may reach out with questions.",
+      ...dayLines(staffById, day),
+      live ? null : "The day's shifts were cancelled.",
+      dayUrl(origin, date),
     ]),
-    url: boardUrl(origin, shift),
-    status: statusOf(shift),
-    lastModified: shift.updated_at,
+    url: dayUrl(origin, date),
+    status: live ? 'CONFIRMED' : 'CANCELLED',
+    lastModified: latest(day),
   };
 }
 
@@ -173,6 +218,32 @@ export function buildTeamEvents(args: {
       url: boardUrl(origin, shift),
       status: statusOf(shift),
       lastModified: shift.updated_at,
+    });
+  }
+
+  // Who's on call each day, as its own all-day event so it reads apart from
+  // the shifts in a month view.
+  for (const [date, day] of shiftsByDate(shifts)) {
+    const live = day.filter((s) => s.status === 'active');
+    const holders = [
+      ...new Set(live.map((s) => s.on_call_staff_id).filter((id): id is string => !!id)),
+    ];
+    if (holders.length === 0) continue;
+    const names = holders.map((id) => nameOf(staffById, id)).join(' / ');
+    events.push({
+      uid: `pyre-oncall-day-${date}@pyresauna.com`,
+      date,
+      allDay: true,
+      summary: `On call: ${names}`,
+      location: VENUE_ADDRESS,
+      description: describe([
+        `${names} ${holders.length === 1 ? 'is' : 'are'} on call all day.`,
+        ...dayLines(staffById, day),
+        dayUrl(origin, date),
+      ]),
+      url: dayUrl(origin, date),
+      status: 'CONFIRMED',
+      lastModified: latest(live),
     });
   }
 
