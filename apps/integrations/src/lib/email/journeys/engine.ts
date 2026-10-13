@@ -778,6 +778,7 @@ async function runDueStep(
         background: content.background,
         blocks: content.blocks,
         campaign: journey.id,
+        stepKey: step.key,
       },
     };
   } else {

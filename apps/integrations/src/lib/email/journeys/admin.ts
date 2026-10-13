@@ -35,7 +35,11 @@ const PREVIEW_UNSUBSCRIBE = 'https://pyre-integrations.vercel.app/api/unsubscrib
 export async function renderStep(
   journeyId: string,
   content: StepContent,
-  { memberId, memberEmail }: { memberId?: number; memberEmail?: string } = {}
+  {
+    memberId,
+    memberEmail,
+    stepKey,
+  }: { memberId?: number; memberEmail?: string; stepKey?: string } = {}
 ): Promise<RenderedStep | { error: string }> {
   if (content.type === 'none') return { error: 'This step sends no email' };
 
@@ -93,6 +97,7 @@ export async function renderStep(
     background: filled.background,
     blocks: filled.blocks,
     campaign: journeyId,
+    stepKey,
     unsubscribeUrl: PREVIEW_UNSUBSCRIBE,
   };
   return {

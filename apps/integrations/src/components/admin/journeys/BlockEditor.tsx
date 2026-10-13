@@ -2,7 +2,8 @@
 // background, and an ordered list of blocks. Merge-field chips insert
 // {{field}} at the cursor of whichever field was focused last.
 
-import { useRef } from 'react';
+import { type ReactNode, useRef } from 'react';
+import { isTaggedHost, journeyLink, journeyLinkContent } from '@/emails/components/utm';
 import { MERGE_FIELD_KEYS, MERGE_FIELDS } from '@/lib/email/journeys/merge-fields';
 import {
   type BlockContent,
@@ -26,10 +27,17 @@ const textareaClass = `${compactInputClass} w-full font-sans leading-relaxed`;
 export function BlockEditor({
   content,
   onChange,
+  journeyId,
+  stepKey,
 }: {
   content: BlockContent;
   onChange: (next: BlockContent) => void;
+  journeyId: string;
+  stepKey: string;
 }) {
+  const tracked = (label: string, url: string) => (
+    <TrackedLink url={url} label={label} journeyId={journeyId} stepKey={stepKey} />
+  );
   // The last-focused field's insert function, for the merge-field chips.
   const inserter = useRef<Inserter | null>(null);
 
@@ -157,7 +165,12 @@ export function BlockEditor({
                 </button>
               </span>
             </div>
-            <BlockFields block={block} onChange={(b) => updateBlock(i, b)} field={field} />
+            <BlockFields
+              block={block}
+              onChange={(b) => updateBlock(i, b)}
+              field={field}
+              tracked={tracked}
+            />
           </li>
         ))}
       </ol>
@@ -191,10 +204,12 @@ function BlockFields({
   block,
   onChange,
   field,
+  tracked,
 }: {
   block: EmailBlock;
   onChange: (b: EmailBlock) => void;
   field: FieldProps;
+  tracked: (label: string, url: string) => ReactNode;
 }) {
   switch (block.type) {
     case 'heading':
@@ -238,6 +253,7 @@ function BlockFields({
             placeholder="https://..."
             {...field(block.url, (url) => onChange({ ...block, url }))}
           />
+          <div className="sm:col-span-2">{tracked(block.label, block.url)}</div>
         </div>
       );
     case 'image':
@@ -260,9 +276,52 @@ function BlockFields({
               onChange({ ...block, ...(href ? { href } : { href: undefined }) })
             )}
           />
+          {block.href && (
+            <div className="sm:col-span-3">{tracked(block.alt || 'image', block.href)}</div>
+          )}
         </div>
       );
     case 'divider':
       return <p className="text-xs text-white/40">A thin line between sections.</p>;
   }
+}
+
+/** The link as it will actually be sent, so nobody has to build tracked links by hand. */
+function TrackedLink({
+  url,
+  label,
+  journeyId,
+  stepKey,
+}: {
+  url: string;
+  label: string;
+  journeyId: string;
+  stepKey: string;
+}) {
+  const raw = url.trim();
+  if (!raw || raw.includes('{{')) return null;
+  if (!/^https?:\/\//i.test(raw)) {
+    return <p className="text-[11px] text-[var(--pyre-red)]">Links must start with https://</p>;
+  }
+  if (!isTaggedHost(raw)) {
+    return (
+      <p className="text-[11px] text-white/40">
+        Not tagged (not our site or Momence) - clicks still show on the People tab.
+      </p>
+    );
+  }
+  let sent: string;
+  try {
+    sent = journeyLink(raw, journeyId, journeyLinkContent(stepKey, label, raw));
+  } catch {
+    return null;
+  }
+  return (
+    <p
+      className="break-all font-mono text-[10px] text-white/35"
+      title="The link as it will be sent"
+    >
+      Sent as {sent}
+    </p>
+  );
 }

@@ -8,7 +8,7 @@ import {
 } from '@/lib/email/journeys/inline-markdown';
 import type { EmailBlock } from '@/lib/email/journeys/schema';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
-import { emailLink } from '../components/utm';
+import { journeyLink, journeyLinkContent } from '../components/utm';
 import type { JourneyEmailProps } from '../types';
 
 // The one template behind every dashboard-built journey email: an ordered list
@@ -16,35 +16,17 @@ import type { JourneyEmailProps } from '../types';
 // in the standard branded shell. Copy lives in the journey definition, not
 // here — this file only decides how each block type looks.
 
-// Our own and Momence checkout links get UTM tags so web-side attribution
-// joins with the journey events; third-party links (Google reviews, maps) are
-// left exactly as written.
-const TAGGED_HOSTS = ['pyresauna.com', 'momence.com'];
-
-function trackedHref(href: string, campaign: string, content: string): string {
-  try {
-    const url = new URL(href);
-    const host = url.hostname.replace(/^www\./, '');
-    if (!TAGGED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return href;
-    return emailLink(href, campaign, content);
-  } catch {
-    return href;
-  }
-}
-
-function slug(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'link'
-  );
-}
-
 const linkStyle = { color: COLORS.creme, textDecoration: 'underline' };
 
-function Inline({ tokens, campaign }: { tokens: InlineToken[]; campaign: string }): ReactNode {
+function Inline({
+  tokens,
+  campaign,
+  stepKey,
+}: {
+  tokens: InlineToken[];
+  campaign: string;
+  stepKey?: string;
+}): ReactNode {
   return tokens.map((t, i) => {
     switch (t.kind) {
       case 'bold':
@@ -55,8 +37,12 @@ function Inline({ tokens, campaign }: { tokens: InlineToken[]; campaign: string 
         return <em key={i}>{t.text}</em>;
       case 'link':
         return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-          <Link key={i} href={trackedHref(t.href, campaign, slug(t.text))} style={linkStyle}>
+          <Link
+            // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
+            key={i}
+            href={journeyLink(t.href, campaign, journeyLinkContent(stepKey, t.text, t.href))}
+            style={linkStyle}
+          >
             {t.text}
           </Link>
         );
@@ -68,7 +54,15 @@ function Inline({ tokens, campaign }: { tokens: InlineToken[]; campaign: string 
 
 const listItem = { ...text, margin: '0 0 8px', paddingLeft: '4px' };
 
-function Block({ block, campaign }: { block: EmailBlock; campaign: string }): ReactNode {
+function Block({
+  block,
+  campaign,
+  stepKey,
+}: {
+  block: EmailBlock;
+  campaign: string;
+  stepKey?: string;
+}): ReactNode {
   switch (block.type) {
     case 'heading':
       return <Text style={heading}>{block.text}</Text>;
@@ -76,7 +70,7 @@ function Block({ block, campaign }: { block: EmailBlock; campaign: string }): Re
       return splitParagraphs(block.text).map((p, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
         <Text key={i} style={text}>
-          <Inline tokens={parseInline(p)} campaign={campaign} />
+          <Inline tokens={parseInline(p)} campaign={campaign} stepKey={stepKey} />
         </Text>
       ));
     case 'list':
@@ -86,7 +80,7 @@ function Block({ block, campaign }: { block: EmailBlock; campaign: string }): Re
             // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
             <Text key={i} style={listItem}>
               {'• '}
-              <Inline tokens={parseInline(item)} campaign={campaign} />
+              <Inline tokens={parseInline(item)} campaign={campaign} stepKey={stepKey} />
             </Text>
           ))}
         </Section>
@@ -94,7 +88,10 @@ function Block({ block, campaign }: { block: EmailBlock; campaign: string }): Re
     case 'button':
       if (!block.label || !isSafeHref(block.url)) return null;
       return (
-        <Button href={trackedHref(block.url, campaign, slug(block.label))} style={button}>
+        <Button
+          href={journeyLink(block.url, campaign, journeyLinkContent(stepKey, block.label))}
+          style={button}
+        >
           {block.label}
         </Button>
       );
@@ -111,7 +108,15 @@ function Block({ block, campaign }: { block: EmailBlock; campaign: string }): Re
         />
       );
       return block.href && isSafeHref(block.href) ? (
-        <Link href={trackedHref(block.href, campaign, 'image')}>{img}</Link>
+        <Link
+          href={journeyLink(
+            block.href,
+            campaign,
+            journeyLinkContent(stepKey, block.alt || 'image')
+          )}
+        >
+          {img}
+        </Link>
       ) : (
         img
       );
@@ -126,13 +131,14 @@ export function JourneyEmail({
   background,
   blocks,
   campaign,
+  stepKey,
   unsubscribeUrl,
 }: JourneyEmailProps) {
   return (
     <EmailLayout preview={preview} background={background} unsubscribeUrl={unsubscribeUrl}>
       {blocks.map((block, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static render, order never changes
-        <Block key={i} block={block} campaign={campaign} />
+        <Block key={i} block={block} campaign={campaign} stepKey={stepKey} />
       ))}
     </EmailLayout>
   );

@@ -19,7 +19,7 @@ const base: JourneyEmailProps = {
 };
 
 const html = (blocks: JourneyEmailProps['blocks']) =>
-  render(<JourneyEmail {...base} blocks={blocks} />);
+  render(<JourneyEmail {...base} stepKey="prorate-offer" blocks={blocks} />);
 
 describe('JourneyEmail', () => {
   it('renders bold text and splits paragraphs on blank lines', async () => {
@@ -35,9 +35,32 @@ describe('JourneyEmail', () => {
       { type: 'button', label: 'Buy', url: 'https://momence.com/m/630916' },
     ]);
     expect(out).toContain('utm_campaign=intro-to-membership');
-    expect(out).toContain('utm_content=see-memberships');
+    expect(out).toContain('utm_content=prorate-offer-see-memberships');
+    expect(out).toContain('utm_source=lifecycle');
+    expect(out).toContain('utm_medium=email');
     expect(out).toContain('href="https://g.page/r/abc/review"');
     expect(out).toContain('https://momence.com/m/630916?utm_source=lifecycle');
+  });
+
+  it('keeps tags already on a link, such as one built in the Campaigns tool', async () => {
+    const out = await html([
+      {
+        type: 'button',
+        label: 'Rest Fest',
+        url: 'https://pyresauna.com/events?utm_campaign=rest-fest-2026&utm_source=newsletter',
+      },
+    ]);
+    expect(out).toContain('utm_campaign=rest-fest-2026');
+    expect(out).toContain('utm_source=newsletter');
+    expect(out).not.toContain('utm_campaign=intro-to-membership');
+    expect(out).toContain('utm_medium=email');
+  });
+
+  it('turns a pasted URL into a tagged link named after its page', async () => {
+    const out = await html([{ type: 'paragraph', text: 'Book at https://pyresauna.com/events.' }]);
+    expect(out).toContain('href="https://pyresauna.com/events?utm_source=lifecycle');
+    expect(out).toContain('utm_content=prorate-offer-events');
+    expect(out).toMatch(/<\/a>\./);
   });
 
   it('drops buttons and images with unsafe URLs', async () => {

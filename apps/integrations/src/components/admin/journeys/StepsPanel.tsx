@@ -395,9 +395,16 @@ function StepEditor({
               <BlockEditor
                 content={step.content}
                 onChange={(content: BlockContent) => onChange({ content })}
+                journeyId={journeyId}
+                stepKey={step.key}
               />
             )}
-            <EmailPreview journeyId={journeyId} content={step.content} viewerEmail={viewerEmail} />
+            <EmailPreview
+              journeyId={journeyId}
+              stepKey={step.key}
+              content={step.content}
+              viewerEmail={viewerEmail}
+            />
           </div>
         )}
       </section>
@@ -409,10 +416,12 @@ function StepEditor({
 
 function EmailPreview({
   journeyId,
+  stepKey,
   content,
   viewerEmail,
 }: {
   journeyId: string;
+  stepKey: string;
   content: StepContent;
   viewerEmail: string;
 }) {
@@ -433,6 +442,7 @@ function EmailPreview({
           'POST',
           {
             content: JSON.parse(contentJson),
+            stepKey,
             memberId: customer?.memberId,
           }
         );
@@ -445,7 +455,7 @@ function EmailPreview({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [journeyId, contentJson, customer?.memberId]);
+  }, [journeyId, stepKey, contentJson, customer?.memberId]);
 
   const sendTest = async () => {
     setTestState('Sending...');
@@ -453,7 +463,7 @@ function EmailPreview({
       const result = await sendJson<{ to: string; missing: string[] }>(
         `/api/admin/journeys/${journeyId}/test-send`,
         'POST',
-        { content, to: testTo, memberId: customer?.memberId }
+        { content, to: testTo, stepKey, memberId: customer?.memberId }
       );
       setTestState(
         `Sent to ${result.to}${result.missing.length ? ` (missing: ${result.missing.join(', ')})` : ''}`

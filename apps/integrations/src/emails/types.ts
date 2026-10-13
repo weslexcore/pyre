@@ -79,6 +79,8 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
   blocks: EmailBlock[];
   /** utm_campaign for tracked links — the journey id. */
   campaign: string;
+  /** The step's key, prefixed onto each link's utm_content. */
+  stepKey?: string;
 }
 
 export interface UnusedCreditReminderProps extends MarketingEmailBaseProps {

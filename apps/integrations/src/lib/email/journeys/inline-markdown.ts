@@ -1,5 +1,6 @@
-// The markdown subset journey paragraphs accept: **bold**, *italic*, and
-// [label](https://url). Anything else is literal text. Parsed into a flat
+// The markdown subset journey paragraphs accept: **bold**, *italic*,
+// [label](https://url), and bare https:// URLs (turned into links so they get
+// tracking tags like any other). Anything else is literal text. Parsed into a flat
 // token list so the email component can render it with React Email
 // primitives (no HTML string ever reaches the email).
 
@@ -9,7 +10,8 @@ export type InlineToken =
   | { kind: 'italic'; text: string }
   | { kind: 'link'; text: string; href: string };
 
-const INLINE_RE = /\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
+const INLINE_RE =
+  /\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"])/g;
 
 export function isSafeHref(href: string): boolean {
   return /^(https?:\/\/|mailto:)/i.test(href.trim());
@@ -23,6 +25,7 @@ export function parseInline(text: string): InlineToken[] {
     if (index > last) tokens.push({ kind: 'text', text: text.slice(last, index) });
     if (m[1] !== undefined) tokens.push({ kind: 'bold', text: m[1] });
     else if (m[2] !== undefined) tokens.push({ kind: 'italic', text: m[2] });
+    else if (m[5] !== undefined) tokens.push({ kind: 'link', text: m[5], href: m[5] });
     else if (isSafeHref(m[4])) tokens.push({ kind: 'link', text: m[3], href: m[4] });
     else tokens.push({ kind: 'text', text: m[3] });
     last = index + m[0].length;

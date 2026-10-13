@@ -29,6 +29,7 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
     typeof body.memberEmail === 'string' && body.memberEmail.trim()
       ? body.memberEmail.trim().toLowerCase()
       : undefined;
+  const stepKey = typeof body.stepKey === 'string' ? body.stepKey : undefined;
   const memberId =
     typeof body.memberId === 'number' && Number.isInteger(body.memberId)
       ? body.memberId
@@ -38,7 +39,7 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
   if (!resend) return json({ error: 'Resend not configured (RESEND_API_KEY unset)' }, 503);
 
   const journeyId = params.id ?? 'preview';
-  const rendered = await renderStep(journeyId, content.data, { memberId, memberEmail });
+  const rendered = await renderStep(journeyId, content.data, { memberId, memberEmail, stepKey });
   if ('error' in rendered) return json({ error: rendered.error }, 400);
 
   const subject = `[TEST] ${rendered.subject}`;
