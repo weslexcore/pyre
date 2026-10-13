@@ -418,10 +418,14 @@ export interface HostTag {
 const TAGS_CACHE_KEY = 'cache:momence:tags';
 const TAGS_CACHE_TTL_SECONDS = 60 * 60 * 24;
 
-export async function fetchTagMap(): Promise<Record<string, number>> {
+export async function fetchTagMap({
+  fresh = false,
+}: {
+  fresh?: boolean;
+} = {}): Promise<Record<string, number>> {
   const redis = getRedis();
 
-  if (redis) {
+  if (redis && !fresh) {
     const cached = await redis.get<Record<string, number>>(TAGS_CACHE_KEY);
     if (cached) return cached;
   }
@@ -433,7 +437,7 @@ export async function fetchTagMap(): Promise<Record<string, number>> {
       query: { page: String(page), pageSize: '100' },
     });
     const tags = data.payload ?? [];
-    for (const tag of tags) map[tag.name.toLowerCase()] = tag.id;
+    for (const tag of tags) map[tag.name.trim().toLowerCase()] = tag.id;
     if (tags.length < 100) break;
     page += 1;
   }
@@ -445,9 +449,33 @@ export async function fetchTagMap(): Promise<Record<string, number>> {
   return map;
 }
 
-export async function getTagIdByName(name: string): Promise<number | null> {
+// A tag made in the Momence dashboard after the map was cached would stay
+// invisible for up to a day. So a lookup that misses re-reads the list from
+// Momence — at most once a minute, so a tag that really doesn't exist (a
+// typo in a journey) can't turn every lookup into a full tag scan.
+const TAGS_REFRESH_LOCK_KEY = 'cache:momence:tags:refreshed';
+const TAGS_REFRESH_MIN_INTERVAL_SECONDS = 60;
+
+/** The tag map, re-read from Momence first if any of `names` is missing from the cache. */
+export async function fetchTagMapFor(names: string[]): Promise<Record<string, number>> {
   const map = await fetchTagMap();
-  return map[name.toLowerCase()] ?? null;
+  const missing = names.some((n) => !(n.trim().toLowerCase() in map));
+  if (!missing) return map;
+
+  const redis = getRedis();
+  if (redis) {
+    const acquired = await redis.set(TAGS_REFRESH_LOCK_KEY, 1, {
+      nx: true,
+      ex: TAGS_REFRESH_MIN_INTERVAL_SECONDS,
+    });
+    if (!acquired) return map;
+  }
+  return fetchTagMap({ fresh: true });
+}
+
+export async function getTagIdByName(name: string): Promise<number | null> {
+  const map = await fetchTagMapFor([name]);
+  return map[name.trim().toLowerCase()] ?? null;
 }
 
 export async function assignMemberTag(memberId: number, tagId: number): Promise<void> {

@@ -5,6 +5,7 @@ import type { Db } from '@/lib/http/route';
 import {
   fetchHostMember,
   fetchTagMap,
+  fetchTagMapFor,
   findMemberByEmail,
   type HostMember,
 } from '@/lib/momence/host-api';
@@ -190,8 +191,8 @@ export function tagsIn(definition: JourneyDefinition): string[] {
 export async function missingTags(tags: string[]): Promise<string[] | null> {
   if (tags.length === 0) return [];
   try {
-    const map = await fetchTagMap();
-    return tags.filter((t) => !(t.toLowerCase() in map));
+    const map = await fetchTagMapFor(tags);
+    return tags.filter((t) => !(t.trim().toLowerCase() in map));
   } catch {
     return null;
   }
