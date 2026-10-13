@@ -20,6 +20,7 @@ import {
   type TimingAnchor,
 } from '@/lib/email/journeys/schema';
 import { BlockEditor } from './BlockEditor';
+import { CustomerPicker, type PickedCustomer } from './CustomerPicker';
 import {
   badgeClass,
   buttonClass,
@@ -415,7 +416,7 @@ function EmailPreview({
   content: StepContent;
   viewerEmail: string;
 }) {
-  const [memberEmail, setMemberEmail] = useState('');
+  const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testTo, setTestTo] = useState(viewerEmail);
@@ -432,7 +433,7 @@ function EmailPreview({
           'POST',
           {
             content: JSON.parse(contentJson),
-            memberEmail: memberEmail.trim() || undefined,
+            memberId: customer?.memberId,
           }
         );
         if (mine !== seq.current) return;
@@ -444,7 +445,7 @@ function EmailPreview({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [journeyId, contentJson, memberEmail]);
+  }, [journeyId, contentJson, customer?.memberId]);
 
   const sendTest = async () => {
     setTestState('Sending...');
@@ -452,7 +453,7 @@ function EmailPreview({
       const result = await sendJson<{ to: string; missing: string[] }>(
         `/api/admin/journeys/${journeyId}/test-send`,
         'POST',
-        { content, to: testTo, memberEmail: memberEmail.trim() || undefined }
+        { content, to: testTo, memberId: customer?.memberId }
       );
       setTestState(
         `Sent to ${result.to}${result.missing.length ? ` (missing: ${result.missing.join(', ')})` : ''}`
@@ -464,15 +465,7 @@ function EmailPreview({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className={microLabelClass}>Preview as</span>
-        <input
-          className={`${compactInputClass} min-w-0 flex-1`}
-          placeholder="Sample data - or type a customer's email"
-          value={memberEmail}
-          onChange={(e) => setMemberEmail(e.target.value)}
-        />
-      </div>
+      <CustomerPicker selected={customer} onSelect={setCustomer} />
       {error && <ErrorBanner mono>{error}</ErrorBanner>}
       {preview && (
         <>
@@ -485,7 +478,7 @@ function EmailPreview({
           {preview.missing.length > 0 && (
             <ErrorBanner mono>
               No value for {preview.missing.map((m) => `{{${m}}}`).join(', ')}
-              {memberEmail ? ' for this customer' : ''} - this step would be skipped for them. Add a
+              {customer ? ' for this customer' : ''} - this step would be skipped for them. Add a
               fallback ({'{{field|text}}'}) to send anyway.
             </ErrorBanner>
           )}

@@ -2,7 +2,12 @@ import { render } from '@react-email/components';
 import { type ComponentType, createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { Db } from '@/lib/http/route';
-import { fetchTagMap, findMemberByEmail } from '@/lib/momence/host-api';
+import {
+  fetchHostMember,
+  fetchTagMap,
+  findMemberByEmail,
+  type HostMember,
+} from '@/lib/momence/host-api';
 import { buildContext, mergeValues } from './context';
 import { fillContent, type MergeValues, sampleMergeValues, usedFields } from './merge-fields';
 import type { JourneyDefinition, StepContent } from './schema';
@@ -23,20 +28,28 @@ export interface RenderedStep {
 const PREVIEW_UNSUBSCRIBE = 'https://pyre-integrations.vercel.app/api/unsubscribe?token=preview';
 
 /**
- * Render step content. With `memberEmail`, merge fields come from that
- * member's live Momence data; otherwise from the catalog's samples.
+ * Render step content. With `memberId` (or `memberEmail`), merge fields come
+ * from that member's live Momence data; otherwise from the catalog's samples.
  */
 export async function renderStep(
   journeyId: string,
   content: StepContent,
-  { memberEmail }: { memberEmail?: string } = {}
+  { memberId, memberEmail }: { memberId?: number; memberEmail?: string } = {}
 ): Promise<RenderedStep | { error: string }> {
   if (content.type === 'none') return { error: 'This step sends no email' };
 
   let values: MergeValues = sampleMergeValues();
-  if (memberEmail) {
-    const member = await findMemberByEmail(memberEmail);
-    if (!member) return { error: `No Momence customer with the email ${memberEmail}` };
+  if (memberId !== undefined || memberEmail) {
+    let member: HostMember | null;
+    try {
+      member =
+        memberId !== undefined
+          ? await fetchHostMember(memberId)
+          : await findMemberByEmail(memberEmail ?? '');
+    } catch {
+      member = null;
+    }
+    if (!member) return { error: 'That customer could not be found in Momence' };
     const ctx = buildContext(
       {
         memberId: member.id,

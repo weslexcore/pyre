@@ -22,7 +22,8 @@ import { requireAnyPage } from '@/lib/auth/admin';
 import { json } from '@/lib/http/route';
 import { fetchMembersFiltered } from '@/lib/momence/host-api';
 
-const PAGES = ['/admin/incidents', '/admin/lost-found', '/admin/guests'];
+// Journeys uses the guest search to preview an email as a real customer.
+const PAGES = ['/admin/incidents', '/admin/lost-found', '/admin/guests', '/admin/journeys'];
 
 /** Below this a search matches half the customer list; the form waits. */
 const MIN_QUERY_LENGTH = 2;
