@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createWebhookLogger } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
+import { getDb } from '@/lib/db';
 import { suppressEmail } from '@/lib/email/suppression';
 import { json } from '@/lib/http/route';
 import { instrumentWebhook, type TracedAPIRoute } from '@/lib/webhooks/instrument';
@@ -16,6 +17,9 @@ const log = createWebhookLogger('Resend');
 //  2. Engagement analytics — delivered/opened/clicked/bounced/complained become
 //     PostHog events (distinctId = recipient email, matching booking_completed)
 //     with the template/journey/campaign tags attached at send time.
+//  3. Engagement on the send log — the first delivered/opened/clicked/bounced
+//     time is stamped on the email_sends row (matched by resend_id), so
+//     /admin/journeys can show who received and engaged with each step.
 
 // --- Svix signature verification (HMAC-SHA256, no svix dependency needed) ---
 // Signed content is `${svix-id}.${svix-timestamp}.${rawBody}`; the secret is
@@ -92,6 +96,34 @@ const ANALYTICS_EVENTS: Record<string, string> = {
   'email.complained': 'email_complained',
 };
 
+// email.* types stamped onto the matching email_sends row.
+const ENGAGEMENT_COLUMNS: Record<
+  string,
+  'delivered_at' | 'opened_at' | 'clicked_at' | 'bounced_at'
+> = {
+  'email.delivered': 'delivered_at',
+  'email.opened': 'opened_at',
+  'email.clicked': 'clicked_at',
+  'email.bounced': 'bounced_at',
+};
+
+async function stampEngagement(
+  resendId: string,
+  column: 'delivered_at' | 'opened_at' | 'clicked_at' | 'bounced_at',
+  event: ResendWebhookEvent
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const at = event.created_at ?? new Date().toISOString();
+  // Only the first time counts; a later open never overwrites it.
+  const { error } = await db
+    .from('email_sends')
+    .update({ [column]: at })
+    .eq('resend_id', resendId)
+    .is(column, null);
+  if (error) log.warn(`Could not stamp ${column} for ${resendId}: ${error.message}`);
+}
+
 const handler: TracedAPIRoute = async ({ request }, tracer) => {
   const secret = import.meta.env.RESEND_WEBHOOK_SECRET;
   if (!secret) {
@@ -164,6 +196,13 @@ const handler: TracedAPIRoute = async ({ request }, tracer) => {
         })
       );
     }
+  }
+
+  // 3. First-engagement stamps on the send log (best-effort).
+  const stampColumn = ENGAGEMENT_COLUMNS[event.type];
+  const resendId = event.data?.email_id;
+  if (stampColumn && resendId) {
+    await tracer.span(`Stamp ${stampColumn}`, () => stampEngagement(resendId, stampColumn, event));
   }
 
   return json({ success: true });

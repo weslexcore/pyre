@@ -1,0 +1,13 @@
+---
+// One email journey: its steps and emails, the rules around them, who is in
+// it, and its revision history. Data loads through /api/admin/journeys/[id],
+// which re-checks access on every request.
+import { JourneyEditor } from '@/components/admin/journeys/JourneyEditor';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+
+const id = Astro.params.id ?? '';
+---
+
+<AdminLayout title="Journey" subtitle="Build the emails, set when they go out, and watch who is in it." wide>
+  <JourneyEditor client:load journeyId={id} />
+</AdminLayout>

@@ -2,8 +2,12 @@ import { createWebhookLogger } from '@pyre/webhook-core';
 import { cachedQuery } from '@/lib/cached-query';
 import { getDb, type JourneyRevisionRow, type JourneyRow } from '@/lib/db';
 import { unknownTokens } from './merge-fields';
+
+export { isTemplateStepKey, TEMPLATE_STEP_KEYS, type TemplateStepKey } from './schema';
+
 import {
   definitionSchema,
+  isTemplateStepKey,
   JOURNEY_ID_RE,
   type JourneyDefinition,
   type JourneyRecord,
@@ -16,20 +20,6 @@ const log = createWebhookLogger('Journeys');
 // email gate); every mutation invalidates it. A row whose definition no
 // longer parses is left out of the engine's list (and logged) rather than
 // crashing every tick — the admin page shows it with the error.
-
-/** Coded templates a step may send instead of blocks (the converted journeys). */
-export const TEMPLATE_STEP_KEYS = [
-  'intro-follow-up',
-  'credit-pack-pitch',
-  'membership-pitch',
-  'review-request',
-] as const;
-
-export type TemplateStepKey = (typeof TEMPLATE_STEP_KEYS)[number];
-
-export function isTemplateStepKey(key: string): key is TemplateStepKey {
-  return (TEMPLATE_STEP_KEYS as readonly string[]).includes(key);
-}
 
 export function toRecord(row: JourneyRow): { record: JourneyRecord | null; error: string | null } {
   const parsed = definitionSchema.safeParse(row.definition);

@@ -1,0 +1,15 @@
+---
+// Email journeys: the list, the on/off switches, and new-journey creation.
+// The /api/admin/journeys routes re-check access on every request — this page
+// gate is UX; the API gate is the security boundary.
+import { JourneysIndex } from '@/components/admin/journeys/JourneysIndex';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+---
+
+<AdminLayout
+  title="Journeys"
+  subtitle="Automated email sequences - what starts each one, what it sends and when, and who is in it."
+  wide
+>
+  <JourneysIndex client:load />
+</AdminLayout>

@@ -221,6 +221,15 @@ export const ADMIN_TOOLS: AdminTool[] = [
     ],
   },
   {
+    href: '/admin/journeys',
+    title: 'Journeys',
+    navLabel: 'Journeys',
+    description:
+      'Automated email sequences: build each step, turn journeys on and off, and see who is enrolled and what they received.',
+    section: 'marketing',
+    keywords: ['email', 'drip', 'sequence', 'automation', 'follow-up', 'win-back', 'intro'],
+  },
+  {
     href: '/admin/email-templates',
     title: 'Email Templates',
     navLabel: 'Templates',

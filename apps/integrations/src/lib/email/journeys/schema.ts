@@ -120,6 +120,8 @@ export const triggerSchema = z.discriminatedUnion('type', [
     type: z.literal('sweep'),
     /** Last seen in the studio at least this many days ago. */
     inactiveDays: z.number().int().min(1).max(3650).optional(),
+    /** ...but no more than this many days ago (keeps long-lapsed customers out). */
+    maxInactiveDays: z.number().int().min(1).max(3650).optional(),
     /** Lifetime checked-in visits at least this many. */
     minVisits: z.number().int().min(0).max(1000).optional(),
     /** Members carrying ALL of these tags. */
@@ -228,6 +230,20 @@ export const blockContentSchema = z.object({
 });
 
 export type BlockContent = z.infer<typeof blockContentSchema>;
+
+/** Coded templates a step may send instead of blocks (the converted journeys). */
+export const TEMPLATE_STEP_KEYS = [
+  'intro-follow-up',
+  'credit-pack-pitch',
+  'membership-pitch',
+  'review-request',
+] as const;
+
+export type TemplateStepKey = (typeof TEMPLATE_STEP_KEYS)[number];
+
+export function isTemplateStepKey(key: string): key is TemplateStepKey {
+  return (TEMPLATE_STEP_KEYS as readonly string[]).includes(key);
+}
 
 /** A coded React Email template from src/emails/registry.ts (converted journeys). */
 export const templateContentSchema = z.object({
@@ -358,7 +374,8 @@ export function describeCondition(c: Condition): string {
   return base;
 }
 
-export function describeTiming(t: StepTiming): string {
+/** "4 hours after the session ends", "2 days before intro expiry". */
+export function describeTiming(t: StepTiming, sessionTrigger = false): string {
   const abs = Math.abs(t.offsetHours);
   const amount =
     abs === 0
@@ -368,10 +385,15 @@ export function describeTiming(t: StepTiming): string {
         : `${abs} ${abs === 1 ? 'hour' : 'hours'}`;
   const anchor =
     t.anchor === 'trigger'
-      ? 'enrollment'
+      ? sessionTrigger
+        ? 'the session ends'
+        : 'enrollment'
       : t.anchor === 'previous'
         ? 'the previous email'
         : 'intro expiry';
-  if (!amount) return t.anchor === 'previous' ? 'Right after the previous email' : `At ${anchor}`;
+  if (!amount) {
+    if (t.anchor === 'previous') return 'Right after the previous email';
+    return t.anchor === 'trigger' && sessionTrigger ? 'When the session ends' : `At ${anchor}`;
+  }
   return `${amount} ${t.offsetHours < 0 ? 'before' : 'after'} ${anchor}`;
 }

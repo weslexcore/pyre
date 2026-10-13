@@ -303,6 +303,7 @@ async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Prom
   const wantTags = trigger.withTags.map((t) => t.toLowerCase());
   const minVisits = trigger.minVisits ?? 0;
   const inactiveMs = trigger.inactiveDays ? trigger.inactiveDays * DAY_MS : null;
+  const maxInactiveMs = trigger.maxInactiveDays ? trigger.maxInactiveDays * DAY_MS : null;
 
   return {
     filter: Object.keys(filter).length > 1 ? filter : undefined,
@@ -310,9 +311,12 @@ async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Prom
     matches(member) {
       // The visits filter may count bookings; require actual check-ins.
       if (member.visits.totalVisits < minVisits) return false;
-      if (inactiveMs !== null) {
+      if (inactiveMs !== null || maxInactiveMs !== null) {
         const lastSeen = Date.parse(member.lastSeen);
-        if (!Number.isFinite(lastSeen) || Date.now() - lastSeen < inactiveMs) return false;
+        if (!Number.isFinite(lastSeen)) return false;
+        const away = Date.now() - lastSeen;
+        if (inactiveMs !== null && away < inactiveMs) return false;
+        if (maxInactiveMs !== null && away > maxInactiveMs) return false;
       }
       const names = new Set(member.customerTags.map((t) => t.name.toLowerCase()));
       return wantTags.every((t) => names.has(t));
