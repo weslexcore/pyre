@@ -82,6 +82,26 @@ export interface EnrollmentDto {
   enrolledAt: string;
   endedAt: string | null;
   sends: EnrollmentSendDto[];
+  /** What happened at each step, oldest first. */
+  events: StepEventDto[];
+  /** Whitelisted address: the test controls (run now, move, restart) apply. */
+  testable: boolean;
+}
+
+export interface StepEventDto {
+  kind:
+    | 'enrolled'
+    | 'sent'
+    | 'skipped'
+    | 'deferred'
+    | 'exited'
+    | 'completed'
+    | 'moved'
+    | 'restarted';
+  stepKey: string | null;
+  /** In words (see lib/email/journeys/reasons.ts). */
+  detail: string;
+  at: string;
 }
 
 export interface EnrollmentsResponse {

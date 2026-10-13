@@ -169,12 +169,22 @@ interface EnrollOptions {
    * journey right now still blocks a second run.
    */
   manual?: boolean;
+  /** Who added them by hand (recorded in the step log). */
+  enrolledBy?: string;
 }
 
 export async function enrollMember(
   journey: JourneyRecord,
   identity: MemberIdentity,
-  { dryRun = false, anchorAt, context = {}, ctx, gate, manual = false }: EnrollOptions = {}
+  {
+    dryRun = false,
+    anchorAt,
+    context = {},
+    ctx,
+    gate,
+    manual = false,
+    enrolledBy,
+  }: EnrollOptions = {}
 ): Promise<EnrollOutcome> {
   const db = getDb();
   if (!db) return 'unavailable';
@@ -226,18 +236,22 @@ export async function enrollMember(
   );
   const fullContext = rememberExpiries(context, expiries);
 
-  const { error } = await db.from('journey_enrollments').insert({
-    journey_id: journey.id,
-    member_id: identity.memberId,
-    email,
-    cycle,
-    step: 0,
-    current_step_key: steps[first].key,
-    next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, ...expiries }, now),
-    status: 'active',
-    anchor_at: new Date(anchor).toISOString(),
-    context: fullContext,
-  });
+  const { data: inserted, error } = await db
+    .from('journey_enrollments')
+    .insert({
+      journey_id: journey.id,
+      member_id: identity.memberId,
+      email,
+      cycle,
+      step: 0,
+      current_step_key: steps[first].key,
+      next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, ...expiries }, now),
+      status: 'active',
+      anchor_at: new Date(anchor).toISOString(),
+      context: fullContext,
+    })
+    .select('id')
+    .single();
 
   if (error) {
     // Unique violation: a concurrent delivery enrolled them first.
@@ -247,6 +261,14 @@ export async function enrollMember(
   }
 
   log.info(`Enrolled member ${identity.memberId} into ${journey.id} (cycle ${cycle})`);
+  if (inserted) {
+    await logEvent(
+      { id: (inserted as { id: string }).id, journey_id: journey.id, member_id: identity.memberId },
+      'enrolled',
+      null,
+      manual ? (enrolledBy ? `manual:${enrolledBy}` : 'manual') : null
+    );
+  }
   await captureEvent({
     distinctId: email,
     event: 'journey_enrolled',
@@ -259,7 +281,8 @@ export async function enrollMember(
 /** Add someone by hand from the People tab — by Momence member id, or by email. */
 export async function enrollManually(
   journey: JourneyRecord,
-  who: { memberId: number } | { email: string }
+  who: { memberId: number } | { email: string },
+  actor?: string
 ): Promise<{ outcome: EnrollOutcome | 'not-found'; memberId?: number; email?: string }> {
   let member: HostMember | null;
   try {
@@ -278,7 +301,7 @@ export async function enrollManually(
       firstName: member.firstName,
       lastName: member.lastName,
     },
-    { manual: true }
+    { manual: true, enrolledBy: actor }
   );
   return { outcome, memberId: member.id, email: member.email };
 }
@@ -629,7 +652,7 @@ async function recentMarketingSends(email: string, now: number): Promise<number[
   return (data as { sent_at: string }[]).map((r) => Date.parse(r.sent_at));
 }
 
-type StepOutcome =
+export type StepOutcome =
   | { kind: 'sent' }
   | { kind: 'advanced'; reason: string }
   | { kind: 'exited'; reason: string }
@@ -705,7 +728,19 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
 async function runDueStep(
   journey: JourneyRecord,
   row: JourneyEnrollmentRow,
-  { dryRun, gate }: { dryRun: boolean; gate: EmailGate }
+  {
+    dryRun,
+    gate,
+    immediate = false,
+  }: {
+    dryRun: boolean;
+    gate: EmailGate;
+    /**
+     * Run it now regardless of its time (an admin's "run next step now" on a
+     * test address): no waiting, no too-late skip, no frequency cap.
+     */
+    immediate?: boolean;
+  }
 ): Promise<StepOutcome> {
   const steps = journey.definition.steps;
   const index = row.current_step_key ? currentStepIndex(steps, row.current_step_key) : null;
@@ -755,11 +790,11 @@ async function runDueStep(
       if (!dryRun) await advance(journey, row, step, memberCtx, 'no-expiry-date');
       return { kind: 'advanced', reason: 'no-expiry-date' };
     }
-    if (dueAt > now + EARLY_TOLERANCE_MS) {
-      if (!dryRun) await reschedule(row, scheduleAt(step, anchors, now));
+    if (!immediate && dueAt > now + EARLY_TOLERANCE_MS) {
+      if (!dryRun) await reschedule(row, scheduleAt(step, anchors, now), step.key, 'not-yet-due');
       return { kind: 'deferred', until: dueAt, reason: 'not-yet-due' };
     }
-    if (isStale(step.timing, dueAt, anchors, now)) {
+    if (!immediate && isStale(step.timing, dueAt, anchors, now)) {
       if (!dryRun) await advance(journey, row, step, memberCtx, 'stale');
       return { kind: 'advanced', reason: 'stale' };
     }
@@ -784,12 +819,16 @@ async function runDueStep(
   }
 
   // Frequency cap across every journey — nobody gets a pile of marketing at once.
-  const capUntil = frequencyCapUntil(await recentMarketingSends(row.email, now), now);
+  const capUntil = immediate
+    ? null
+    : frequencyCapUntil(await recentMarketingSends(row.email, now), now);
   if (capUntil !== null) {
     if (!dryRun)
       await reschedule(
         row,
-        new Date(isFastMode() ? capUntil : clampToSendWindow(capUntil)).toISOString()
+        new Date(isFastMode() ? capUntil : clampToSendWindow(capUntil)).toISOString(),
+        step.key,
+        'frequency-cap'
       );
     return { kind: 'deferred', until: capUntil, reason: 'frequency-cap' };
   }
@@ -848,8 +887,9 @@ async function runDueStep(
 
   // 'sent', 'already-sent', and dev-gate suppression all advance — the step
   // is done either way.
-  await advance(journey, row, step, memberCtx, result.status);
-  return result.status === 'sent' ? { kind: 'sent' } : { kind: 'advanced', reason: result.status };
+  const outcome = result.status === 'sent' ? 'sent' : `${result.status}:${result.reason}`;
+  await advance(journey, row, step, memberCtx, outcome);
+  return result.status === 'sent' ? { kind: 'sent' } : { kind: 'advanced', reason: outcome };
 }
 
 async function advance(
@@ -862,6 +902,12 @@ async function advance(
   const steps = journey.definition.steps;
   const nextIndex = nextStepIndex(steps, step.key);
   if (reason !== 'sent') log.info(`${journey.id}/${step.key} member ${row.member_id}: ${reason}`);
+  await logEvent(
+    row,
+    reason === 'sent' ? 'sent' : 'skipped',
+    step.key,
+    reason === 'sent' ? null : reason
+  );
   if (nextIndex === null) {
     await completeJourney(journey, row);
     return;
@@ -881,6 +927,7 @@ async function advance(
 }
 
 async function completeJourney(journey: JourneyRecord, row: JourneyEnrollmentRow): Promise<void> {
+  await logEvent(row, 'completed', null, null);
   await transition(row, {
     status: 'completed',
     next_at: null,
@@ -904,6 +951,7 @@ export async function exitJourney(
   reason: string,
   stepKey?: string
 ): Promise<void> {
+  await logEvent({ ...row, journey_id: journey.id }, 'exited', stepKey ?? null, reason);
   await transition(row, {
     status: 'exited',
     exit_reason: reason,
@@ -918,8 +966,46 @@ export async function exitJourney(
   await runActions(journey.definition.onEnd, row.member_id);
 }
 
-async function reschedule(row: JourneyEnrollmentRow, nextAt: string): Promise<void> {
+async function reschedule(
+  row: JourneyEnrollmentRow,
+  nextAt: string,
+  stepKey: string,
+  reason: string
+): Promise<void> {
+  await logEvent(row, 'deferred', stepKey, `${reason}:${nextAt}`);
   await transition(row, { next_at: nextAt });
+}
+
+// --- Step log (journey_step_events) ---
+
+export type StepEventKind =
+  | 'enrolled'
+  | 'sent'
+  | 'skipped'
+  | 'deferred'
+  | 'exited'
+  | 'completed'
+  | 'moved'
+  | 'restarted';
+
+/** Best-effort: a failed log write never fails the step it describes. */
+async function logEvent(
+  row: Pick<JourneyEnrollmentRow, 'id' | 'journey_id' | 'member_id'>,
+  kind: StepEventKind,
+  stepKey: string | null,
+  detail: string | null
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  const { error } = await db.from('journey_step_events').insert({
+    enrollment_id: row.id,
+    journey_id: row.journey_id,
+    member_id: row.member_id,
+    step_key: stepKey,
+    kind,
+    detail: detail?.slice(0, 500) ?? null,
+  });
+  if (error) log.warn(`Step log write failed for ${row.id}: ${error.message}`);
 }
 
 async function transition(
@@ -1003,4 +1089,91 @@ export async function rescheduleWaiting(
     updated += 1;
   }
   return updated;
+}
+
+// --- Test controls (People tab, whitelisted addresses only) ---
+//
+// For walking a test address through a journey end to end without waiting
+// days. Callers (the enrollments route) check the address is whitelisted —
+// these never touch a real customer's run.
+
+async function loadActiveEnrollment(
+  journey: JourneyRecord,
+  enrollmentId: string
+): Promise<JourneyEnrollmentRow | null> {
+  const db = getDb();
+  if (!db) return null;
+  const { data } = await db
+    .from('journey_enrollments')
+    .select('*')
+    .eq('id', enrollmentId)
+    .eq('journey_id', journey.id)
+    .eq('status', 'active')
+    .maybeSingle();
+  return (data as JourneyEnrollmentRow | null) ?? null;
+}
+
+export type StepNowResult =
+  | { ok: true; stepKey: string | null; outcome: StepOutcome }
+  | { ok: false; error: string };
+
+/**
+ * Run someone's waiting step right now, through the real engine: exit rules,
+ * skip rules, tag actions and the actual send. Ignores the step's time, the
+ * too-late rule and the frequency cap; everything else is exactly what the
+ * hourly tick would do.
+ */
+export async function runStepNow(
+  journey: JourneyRecord,
+  enrollmentId: string
+): Promise<StepNowResult> {
+  const row = await loadActiveEnrollment(journey, enrollmentId);
+  if (!row) return { ok: false, error: 'They are not in this journey any more' };
+  const gate = await getEmailGate();
+  const outcome = await runDueStep(journey, row, { dryRun: false, gate, immediate: true });
+  return { ok: true, stepKey: row.current_step_key, outcome };
+}
+
+/** Put someone on a given step, due now — to test one branch without the earlier emails. */
+export async function moveToStep(
+  journey: JourneyRecord,
+  enrollmentId: string,
+  stepKey: string,
+  actor: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const step = journey.definition.steps.find((s) => s.key === stepKey);
+  if (!step) return { ok: false, error: 'That step no longer exists' };
+  if (step.archived) return { ok: false, error: 'That step is archived' };
+  const row = await loadActiveEnrollment(journey, enrollmentId);
+  if (!row) return { ok: false, error: 'They are not in this journey any more' };
+  await logEvent(row, 'moved', stepKey, `by:${actor}`);
+  await transition(row, { current_step_key: stepKey, next_at: new Date().toISOString() });
+  return { ok: true };
+}
+
+/**
+ * End someone's current run and start a fresh one from step 1. A new run's
+ * send keys carry its cycle, so every email goes out again.
+ */
+export async function restartRun(
+  journey: JourneyRecord,
+  enrollmentId: string,
+  actor: string
+): Promise<{ ok: true; outcome: EnrollOutcome } | { ok: false; error: string }> {
+  const row = await loadActiveEnrollment(journey, enrollmentId);
+  if (!row) return { ok: false, error: 'They are not in this journey any more' };
+  await logEvent(row, 'restarted', row.current_step_key, `by:${actor}`);
+  await exitJourney(journey, row, `restarted-by:${actor}`, row.current_step_key ?? undefined);
+  const member = await fetchHostMember(row.member_id);
+  const outcome = await enrollMember(
+    journey,
+    {
+      memberId: row.member_id,
+      email: row.email,
+      firstName: member.firstName,
+      lastName: member.lastName,
+    },
+    { manual: true, enrolledBy: actor }
+  );
+  return { ok: true, outcome };
 }

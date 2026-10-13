@@ -1,11 +1,26 @@
 // Who is in a journey: GET lists enrollments (newest first, filterable by
-// status and email) with each person's sends from this journey; POST enrolls
-// someone by email or takes someone out.
+// status and email) with each person's sends and step log from this journey;
+// POST enrolls someone, takes someone out, or — for whitelisted test
+// addresses only — runs their next step now, moves them to a step, or
+// restarts their run.
 
 import type { APIRoute } from 'astro';
 import type { EmailSendRow, JourneyEnrollmentRow } from '@/lib/db';
-import type { EnrollmentDto, EnrollmentsResponse } from '@/lib/email/journeys/api-types';
-import { enrollManually, exitJourney } from '@/lib/email/journeys/engine';
+import { getEmailGate } from '@/lib/email/dev-mode';
+import type {
+  EnrollmentDto,
+  EnrollmentsResponse,
+  StepEventDto,
+} from '@/lib/email/journeys/api-types';
+import {
+  enrollManually,
+  exitJourney,
+  moveToStep,
+  restartRun,
+  runStepNow,
+  type StepOutcome,
+} from '@/lib/email/journeys/engine';
+import { describeReason } from '@/lib/email/journeys/reasons';
 import { getJourneyRow, toRecord } from '@/lib/email/journeys/store';
 import { beginMutation, beginRead, json, storeError } from '@/lib/http/route';
 
@@ -44,13 +59,14 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
     }
     if (q) query = query.ilike('email', `%${q.replace(/[%_]/g, '')}%`);
 
-    const [rowsRes, countsRes] = await Promise.all([
+    const [rowsRes, countsRes, gate] = await Promise.all([
       query,
       ready.db
         .from('journey_enrollments')
         .select('status')
         .eq('journey_id', journeyId)
         .limit(50_000),
+      getEmailGate(),
     ]);
     if (rowsRes.error) throw new Error(rowsRes.error.message);
     if (countsRes.error) throw new Error(countsRes.error.message);
@@ -75,6 +91,36 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
       }
     }
 
+    const eventsByEnrollment = new Map<string, StepEventDto[]>();
+    if (rows.length > 0) {
+      const { data, error } = await ready.db
+        .from('journey_step_events')
+        .select('enrollment_id, kind, step_key, detail, created_at')
+        .in(
+          'enrollment_id',
+          rows.map((r) => r.id)
+        )
+        .order('created_at', { ascending: true })
+        .limit(10_000);
+      if (error) throw new Error(error.message);
+      for (const e of data as {
+        enrollment_id: string;
+        kind: StepEventDto['kind'];
+        step_key: string | null;
+        detail: string | null;
+        created_at: string;
+      }[]) {
+        const list = eventsByEnrollment.get(e.enrollment_id) ?? [];
+        list.push({
+          kind: e.kind,
+          stepKey: e.step_key,
+          detail: describeReason(e.detail),
+          at: e.created_at,
+        });
+        eventsByEnrollment.set(e.enrollment_id, list);
+      }
+    }
+
     const counts = { active: 0, completed: 0, exited: 0 };
     for (const r of countsRes.data as { status: keyof typeof counts }[]) counts[r.status] += 1;
 
@@ -90,7 +136,7 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
         cycle: r.cycle,
         currentStepKey: r.current_step_key,
         nextAt: r.next_at,
-        exitReason: r.exit_reason,
+        exitReason: r.exit_reason ? describeReason(r.exit_reason) : null,
         enrolledAt: r.enrolled_at,
         endedAt: r.ended_at,
         sends: (sendsByMember.get(r.member_id) ?? [])
@@ -109,6 +155,8 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
             bouncedAt: s.bounced_at,
             error: s.error,
           })),
+        events: eventsByEnrollment.get(r.id) ?? [],
+        testable: gate.isAllowed(r.email),
       };
     });
 
@@ -126,11 +174,12 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
 export const POST: APIRoute = async ({ cookies, params, request }) => {
   const ready = await beginMutation(cookies, request, PAGE);
   if (ready instanceof Response) return ready;
-  const { action, email, memberId, enrollmentId } = ready.body as {
+  const { action, email, memberId, enrollmentId, stepKey } = ready.body as {
     action?: unknown;
     email?: unknown;
     memberId?: unknown;
     enrollmentId?: unknown;
+    stepKey?: unknown;
   };
 
   const row = await getJourneyRow(params.id ?? '');
@@ -151,7 +200,7 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
         return json({ error: 'Pick a customer or enter a valid email' }, 400);
       who = { email: address };
     }
-    const result = await enrollManually(record, who);
+    const result = await enrollManually(record, who, ready.email);
     const base = OUTCOME_MESSAGES[result.outcome] ?? result.outcome;
     const message = result.outcome === 'enrolled' && result.email ? `Added ${result.email}.` : base;
     return json({ outcome: result.outcome, message }, result.outcome === 'enrolled' ? 200 : 409);
@@ -177,5 +226,73 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
     return json({ ok: true });
   }
 
+  if (action === 'run-now' || action === 'move' || action === 'restart') {
+    if (typeof enrollmentId !== 'string') return json({ error: 'enrollmentId is required' }, 400);
+    const { data, error } = await ready.db
+      .from('journey_enrollments')
+      .select('email, status')
+      .eq('id', enrollmentId)
+      .eq('journey_id', record.id)
+      .maybeSingle();
+    if (error) return json({ error: error.message }, 503);
+    if (!data) return json({ error: 'Enrollment not found' }, 404);
+    // Test controls skip the journey's timing: never for a real customer.
+    const gate = await getEmailGate();
+    if (!gate.isAllowed(data.email)) {
+      return json(
+        {
+          error: 'Test controls only work for whitelisted addresses (Email Templates > whitelist)',
+        },
+        403
+      );
+    }
+
+    if (action === 'move') {
+      if (typeof stepKey !== 'string') return json({ error: 'stepKey is required' }, 400);
+      const moved = await moveToStep(record, enrollmentId, stepKey, ready.email);
+      if (!moved.ok) return json({ error: moved.error }, 409);
+      const name = record.definition.steps.find((s) => s.key === stepKey)?.name || stepKey;
+      return json({
+        message: `Moved to "${name}". Run it now, or it runs on the next hourly tick.`,
+      });
+    }
+
+    if (action === 'restart') {
+      const restarted = await restartRun(record, enrollmentId, ready.email);
+      if (!restarted.ok) return json({ error: restarted.error }, 409);
+      return json({
+        message:
+          restarted.outcome === 'enrolled'
+            ? 'Started a fresh run from the first step. Its emails will send again.'
+            : (OUTCOME_MESSAGES[restarted.outcome] ?? restarted.outcome),
+      });
+    }
+
+    const ran = await runStepNow(record, enrollmentId);
+    if (!ran.ok) return json({ error: ran.error }, 409);
+    const name = ran.stepKey
+      ? record.definition.steps.find((s) => s.key === ran.stepKey)?.name || ran.stepKey
+      : null;
+    return json({ message: describeOutcome(ran.outcome, name), outcome: ran.outcome.kind });
+  }
+
   return json({ error: 'Unknown action' }, 400);
 };
+
+function describeOutcome(outcome: StepOutcome, stepName: string | null): string {
+  const step = stepName ? `"${stepName}"` : 'the step';
+  switch (outcome.kind) {
+    case 'sent':
+      return `Sent ${step}.`;
+    case 'advanced':
+      return outcome.reason === 'completed'
+        ? 'No steps left - they finished the journey.'
+        : `Skipped ${step}: ${describeReason(outcome.reason)}.`;
+    case 'exited':
+      return `They left the journey at ${step}: ${describeReason(outcome.reason)}.`;
+    case 'deferred':
+      return `${step} is waiting: ${describeReason(outcome.reason)}.`;
+    case 'would-send':
+      return outcome.label;
+  }
+}

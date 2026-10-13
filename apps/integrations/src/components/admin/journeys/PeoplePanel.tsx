@@ -1,6 +1,8 @@
 // The People tab: who is in the journey now, who finished or left (and why),
-// and every email each person got from it — delivered, opened, clicked. Also
-// where to add someone by hand or take someone out.
+// and every email each person got from it — delivered, opened, clicked — with
+// a step-by-step log. Also where to add someone by hand or take someone out,
+// and, for whitelisted test addresses, walk them through the journey without
+// waiting (run the next step now, move to a step, start over).
 
 import { useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
@@ -8,26 +10,23 @@ import { ErrorBanner } from '@/components/admin/ErrorBanner';
 import { sendJson } from '@/lib/client/api';
 import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { fmtDateTime } from '@/lib/client/format';
-import type { EnrollmentDto, EnrollmentsResponse } from '@/lib/email/journeys/api-types';
+import type {
+  EnrollmentDto,
+  EnrollmentsResponse,
+  StepEventDto,
+} from '@/lib/email/journeys/api-types';
 import type { JourneyDefinition } from '@/lib/email/journeys/schema';
 import { CustomerPicker, type PickedCustomer } from './CustomerPicker';
-import { badgeClass, buttonClass, cardClass, compactInputClass, pillClass } from './journeyUi';
+import {
+  badgeClass,
+  buttonClass,
+  cardClass,
+  compactInputClass,
+  compactSelectClass,
+  pillClass,
+} from './journeyUi';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'exited';
-
-const EXIT_REASONS: Record<string, string> = {
-  unsubscribed: 'Unsubscribed',
-  'not-whitelisted': 'Not on the test whitelist',
-  'journey-removed': 'Journey removed',
-};
-
-function describeExit(reason: string | null): string {
-  if (!reason) return '';
-  if (EXIT_REASONS[reason]) return EXIT_REASONS[reason];
-  if (reason.startsWith('exit:')) return `Exit rule: ${reason.slice(5).replace(/-/g, ' ')}`;
-  if (reason.startsWith('removed-by:')) return `Removed by ${reason.slice(11)}`;
-  return reason;
-}
 
 export function PeoplePanel({
   journeyId,
@@ -177,7 +176,7 @@ export function PeoplePanel({
                     ? `Next: ${stepName(row.currentStepKey)}${row.nextAt ? ` · ${fmtDateTime(row.nextAt)}` : ''}`
                     : row.status === 'completed'
                       ? `Finished ${row.endedAt ? fmtDateTime(row.endedAt) : ''}`
-                      : `Left: ${describeExit(row.exitReason)}`}
+                      : `Left: ${row.exitReason ?? ''}`}
                 </span>
                 <span className="font-mono text-[11px] text-white/30">
                   {row.sends.filter((s) => s.status === 'sent').length} sent
@@ -193,6 +192,21 @@ export function PeoplePanel({
               <div className="border-t border-white/10 px-3 py-2">
                 <p className="font-mono text-[11px] text-white/40">
                   Enrolled {fmtDateTime(row.enrolledAt)} · Momence member {row.memberId}
+                </p>
+                {row.status === 'active' && (
+                  <TestControls
+                    journeyId={journeyId}
+                    row={row}
+                    definition={definition}
+                    onDone={async () => {
+                      invalidateJson(`/api/admin/journeys/${journeyId}`);
+                      await reload();
+                    }}
+                  />
+                )}
+                <StepLog row={row} stepName={stepName} />
+                <p className="mt-3 font-mono text-[10px] uppercase tracking-wide text-white/30">
+                  Emails
                 </p>
                 {row.sends.length === 0 ? (
                   <p className="mt-1 text-xs text-white/40">No emails yet.</p>
@@ -246,6 +260,177 @@ export function PeoplePanel({
       {data?.truncated && (
         <p className="text-xs text-white/40">Showing the newest 200. Search to narrow.</p>
       )}
+    </div>
+  );
+}
+
+const EVENT_LABELS: Record<StepEventDto['kind'], string> = {
+  enrolled: 'Entered the journey',
+  sent: 'Sent',
+  skipped: 'Skipped',
+  deferred: 'Waiting',
+  exited: 'Left the journey',
+  completed: 'Finished the journey',
+  moved: 'Moved to this step',
+  restarted: 'Run restarted',
+};
+
+/** Every step outcome for this run, oldest first. */
+function StepLog({
+  row,
+  stepName,
+}: {
+  row: EnrollmentDto;
+  stepName: (key: string | null) => string;
+}) {
+  if (row.events.length === 0) return null;
+  return (
+    <>
+      <p className="mt-3 font-mono text-[10px] uppercase tracking-wide text-white/30">
+        Step by step
+      </p>
+      <ol className="mt-1 flex flex-col gap-0.5 text-xs">
+        {row.events.map((e, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: an append-only log; position is identity
+          <li key={i} className="flex flex-wrap gap-x-2">
+            <span className="w-28 shrink-0 font-mono text-[11px] text-white/35">
+              {fmtDateTime(e.at)}
+            </span>
+            <span
+              className={
+                e.kind === 'sent'
+                  ? 'text-emerald-400'
+                  : e.kind === 'exited'
+                    ? 'text-[var(--pyre-red)]'
+                    : 'text-white/70'
+              }
+            >
+              {EVENT_LABELS[e.kind]}
+              {e.stepKey && e.kind !== 'exited' && e.kind !== 'completed'
+                ? ` "${stepName(e.stepKey)}"`
+                : ''}
+            </span>
+            {e.detail && <span className="text-white/45">- {e.detail}</span>}
+          </li>
+        ))}
+      </ol>
+    </>
+  );
+}
+
+/**
+ * Test controls for one run. Only offered (and only accepted by the API) for
+ * whitelisted addresses: they skip the journey's waiting times, so they must
+ * never touch a real customer.
+ */
+function TestControls({
+  journeyId,
+  row,
+  definition,
+  onDone,
+}: {
+  journeyId: string;
+  row: EnrollmentDto;
+  definition: JourneyDefinition;
+  onDone: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [target, setTarget] = useState(row.currentStepKey ?? '');
+
+  if (!row.testable) {
+    return (
+      <p className="mt-2 text-[11px] text-white/35">
+        Test controls (run the next step now, jump to a step, start over) are available for
+        whitelisted addresses.
+      </p>
+    );
+  }
+
+  const act = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await sendJson<{ message: string }>(
+        `/api/admin/journeys/${journeyId}/enrollments`,
+        'POST',
+        {
+          enrollmentId: row.id,
+          ...body,
+        }
+      );
+      setResult({ ok: true, text: res.message });
+      await onDone();
+    } catch (e) {
+      setResult({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const live = definition.steps.filter((st) => !st.archived);
+
+  return (
+    <div className="mt-2 rounded border border-[var(--pyre-gold)]/30 bg-[var(--pyre-gold)]/5 p-2">
+      <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--pyre-gold)]">
+        Test this run
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy}
+          onClick={() => void act({ action: 'run-now' })}
+        >
+          {busy ? 'Working...' : 'Run next step now'}
+        </button>
+        <select
+          className={compactSelectClass}
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          aria-label="Step to move to"
+          disabled={busy}
+        >
+          {live.map((st) => (
+            <option key={st.key} value={st.key}>
+              {st.name || st.key}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy || !target}
+          onClick={() => void act({ action: 'move', stepKey: target })}
+        >
+          Jump to step
+        </button>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={busy}
+          onClick={async () => {
+            const ok = await confirmAction({
+              title: 'Start this run over?',
+              body: 'Ends this run and starts a fresh one from the first step. Every email sends again. End-of-journey tag actions run for the run being ended.',
+              confirmLabel: 'Start over',
+            });
+            if (ok) await act({ action: 'restart' });
+          }}
+        >
+          Start over
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-white/40">
+        Runs the real step - exit rules, skip rules, tag actions and the email - but ignores its
+        timing, the send window and the one-a-day limit.
+      </p>
+      {result &&
+        (result.ok ? (
+          <p className="mt-1 text-xs text-emerald-400">{result.text}</p>
+        ) : (
+          <ErrorBanner mono>{result.text}</ErrorBanner>
+        ))}
     </div>
   );
 }
