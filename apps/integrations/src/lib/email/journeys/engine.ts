@@ -281,6 +281,12 @@ interface SweepAudience {
   matches(member: HostMember): boolean;
   /** A required tag doesn't exist in Momence, so nobody can match. */
   impossible?: string;
+  /**
+   * Last seen longer ago than the audience reaches. Members come sorted by
+   * last visit, newest first, so once one is past the window everyone after
+   * them is too and the scan can stop.
+   */
+  pastWindow(member: HostMember): boolean;
 }
 
 async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Promise<SweepAudience> {
@@ -308,6 +314,11 @@ async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Prom
   return {
     filter: Object.keys(filter).length > 1 ? filter : undefined,
     impossible: missingWith.length > 0 ? `missing tag: ${missingWith.join(', ')}` : undefined,
+    pastWindow(member) {
+      if (maxInactiveMs === null) return false;
+      const lastSeen = Date.parse(member.lastSeen);
+      return Number.isFinite(lastSeen) && Date.now() - lastSeen > maxInactiveMs;
+    },
     matches(member) {
       // The visits filter may count bookings; require actual check-ins.
       if (member.visits.totalVisits < minVisits) return false;
@@ -324,54 +335,114 @@ async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Prom
   };
 }
 
-/**
- * Who an audience journey would enroll right now, from the first few pages
- * only (a dashboard estimate, not a full scan).
- */
-export async function previewAudience(
-  journey: JourneyRecord,
-  { maxPages = 3 } = {}
-): Promise<{
+// Members are read in this order everywhere, which is what lets a scan stop
+// as soon as it passes an audience's "seen within N days" edge.
+const SWEEP_SORT = { sortBy: 'lastSeenAt', sortOrder: 'DESC' } as const;
+
+const PREVIEW_MAX_PAGES = 30;
+/** Enroll conditions can cost a Momence call each; check a sample and extrapolate. */
+const PREVIEW_CONDITION_SAMPLE = 60;
+const PREVIEW_CONDITION_CONCURRENCY = 10;
+
+export interface AudiencePreview {
+  /** Members read from Momence. */
   scanned: number;
-  matched: number;
+  /** Members Momence's own filter returned in total. */
   totalCandidates: number;
+  /** Matched the audience (days away, visits, tags). */
+  inAudience: number;
+  /** Of those, how many had the enroll conditions checked, and how many passed. */
+  checked: number;
+  passed: number;
+  /** Estimated enrollments right now (exact when every match was checked). */
+  estimated: number;
   sample: string[];
+  /** The scan stopped at its page limit before reaching the end. */
   partial: boolean;
-}> {
+}
+
+/**
+ * Who an audience journey would enroll right now. Reads the member list the
+ * way the sweep does (newest visit first, stopping once past the audience's
+ * window), then checks the enroll conditions on a sample of the matches.
+ * Doesn't look at who is already enrolled.
+ */
+export async function previewAudience(journey: JourneyRecord): Promise<AudiencePreview> {
+  const empty: AudiencePreview = {
+    scanned: 0,
+    totalCandidates: 0,
+    inAudience: 0,
+    checked: 0,
+    passed: 0,
+    estimated: 0,
+    sample: [],
+    partial: false,
+  };
   const trigger = journey.definition.trigger;
-  if (trigger.type !== 'sweep')
-    return { scanned: 0, matched: 0, totalCandidates: 0, sample: [], partial: false };
+  if (trigger.type !== 'sweep') return empty;
   const audience = await sweepAudience(trigger);
-  if (audience.impossible)
-    return { scanned: 0, matched: 0, totalCandidates: 0, sample: [], partial: false };
+  if (audience.impossible) return empty;
 
   let scanned = 0;
-  let matched = 0;
   let totalCandidates = 0;
-  const sample: string[] = [];
-  let page = 0;
-  for (; page < maxPages; page += 1) {
+  let partial = true;
+  const matches: HostMember[] = [];
+  for (let page = 0; page < PREVIEW_MAX_PAGES; page += 1) {
     const { members, totalCount } = await fetchMembersFiltered({
       page,
       pageSize: SWEEP_PAGE_SIZE,
       filter: audience.filter,
+      ...SWEEP_SORT,
     });
     totalCandidates = totalCount;
     scanned += members.length;
+    let done = members.length < SWEEP_PAGE_SIZE;
     for (const member of members) {
-      if (!audience.matches(member)) continue;
-      const ctx = buildContext(memberIdentity(member), { member });
-      if (
-        journey.definition.enrollIf.length > 0 &&
-        !(await allMatch(ctx, journey.definition.enrollIf))
-      )
-        continue;
-      matched += 1;
-      if (sample.length < 10) sample.push(member.email);
+      if (audience.pastWindow(member)) {
+        done = true;
+        break;
+      }
+      if (audience.matches(member)) matches.push(member);
     }
-    if (members.length < SWEEP_PAGE_SIZE) break;
+    if (done) {
+      partial = false;
+      break;
+    }
   }
-  return { scanned, matched, totalCandidates, sample, partial: scanned < totalCandidates };
+
+  const toCheck = matches.slice(0, PREVIEW_CONDITION_SAMPLE);
+  const passedMembers: HostMember[] = [];
+  if (journey.definition.enrollIf.length === 0) {
+    passedMembers.push(...toCheck);
+  } else {
+    for (let i = 0; i < toCheck.length; i += PREVIEW_CONDITION_CONCURRENCY) {
+      const batch = toCheck.slice(i, i + PREVIEW_CONDITION_CONCURRENCY);
+      const results = await Promise.all(
+        batch.map((member) =>
+          allMatch(
+            buildContext(memberIdentity(member), { member }),
+            journey.definition.enrollIf
+          ).catch(() => false)
+        )
+      );
+      batch.forEach((member, j) => {
+        if (results[j]) passedMembers.push(member);
+      });
+    }
+  }
+
+  const checked = toCheck.length;
+  const passed = passedMembers.length;
+  return {
+    scanned,
+    totalCandidates,
+    inAudience: matches.length,
+    checked,
+    passed,
+    estimated: checked === 0 ? 0 : Math.round((passed / checked) * matches.length),
+    sample: passedMembers.slice(0, 10).map((m) => m.email),
+    partial,
+  };
 }
 
 function memberIdentity(member: HostMember): MemberIdentity {
@@ -425,10 +496,16 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
         page,
         pageSize: SWEEP_PAGE_SIZE,
         filter: audience.filter,
+        ...SWEEP_SORT,
       });
       scanned += members.length;
 
+      let passedWindow = false;
       for (const member of members) {
+        if (audience.pastWindow(member)) {
+          passedWindow = true;
+          break;
+        }
         try {
           if (!audience.matches(member)) continue;
           if (journey.testMode && !gate.isAllowed(member.email)) continue;
@@ -446,9 +523,11 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
         }
       }
 
-      if (members.length < SWEEP_PAGE_SIZE) {
-        // End of the audience — next tick starts over (enrollment is
-        // idempotent, so rescanning is cheap and catches new matches).
+      if (members.length < SWEEP_PAGE_SIZE || passedWindow) {
+        // End of the audience (or past its "seen within" edge — everyone
+        // further down was seen even longer ago) — next tick starts over
+        // (enrollment is idempotent, so rescanning is cheap and catches new
+        // matches).
         page = 0;
         wrapped = true;
         break;

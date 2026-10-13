@@ -1,7 +1,7 @@
-// "Who would this enroll?" — for an audience (sweep) journey, scans the first
-// few pages of matching Momence members and counts who passes the journey's
-// filters and enroll conditions. An estimate for the dashboard, not a full
-// scan; booking and manual journeys only enroll going forward.
+// "Who would this enroll?" — for an audience (sweep) journey, reads Momence
+// members the way the sweep does and counts who matches the audience, then
+// checks the enroll conditions on a sample of them. Booking and manual
+// journeys only enroll going forward.
 
 import type { APIRoute } from 'astro';
 import type { AudienceResponse } from '@/lib/email/journeys/api-types';
@@ -35,8 +35,11 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
     const response: AudienceResponse = {
       kind: trigger === 'session-booked' ? 'event' : 'manual',
       scanned: 0,
-      matched: 0,
       totalCandidates: 0,
+      inAudience: 0,
+      checked: 0,
+      passed: 0,
+      estimated: 0,
       sample: [],
       partial: false,
     };

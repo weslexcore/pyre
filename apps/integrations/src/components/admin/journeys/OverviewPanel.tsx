@@ -296,13 +296,29 @@ function AudienceEstimate({
       </button>
       {error && <ErrorBanner mono>{error}</ErrorBanner>}
       {result && (
-        <p className="text-xs text-white/60">
-          {result.matched} of the first {result.scanned} candidates match
-          {result.partial ? ` (out of about ${result.totalCandidates} - an estimate)` : ''}.
+        <div className="text-xs text-white/60">
+          <p>
+            <span className="text-sm text-[var(--pyre-creme)]">
+              {result.checked < result.inAudience ? 'About ' : ''}
+              {result.estimated} {result.estimated === 1 ? 'person' : 'people'}
+            </span>{' '}
+            would enroll right now.
+          </p>
+          <p className="mt-0.5 text-white/40">
+            {result.inAudience} match the audience
+            {definition.enrollIf.length > 0
+              ? result.checked < result.inAudience
+                ? `; ${result.passed} of a sample of ${result.checked} also meet the enroll requirements`
+                : `; ${result.passed} also meet the enroll requirements`
+              : ''}
+            . Read {result.scanned} of {result.totalCandidates} customers
+            {result.partial ? ' (stopped early - the real number may be higher)' : ''}. People
+            already in, or still cooling down from, this journey are not subtracted.
+          </p>
           {result.sample.length > 0 && (
-            <span className="block text-white/40">e.g. {result.sample.join(', ')}</span>
+            <p className="mt-0.5 text-white/40">e.g. {result.sample.join(', ')}</p>
           )}
-        </p>
+        </div>
       )}
     </div>
   );

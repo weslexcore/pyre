@@ -98,8 +98,15 @@ export interface PreviewResponse {
 export interface AudienceResponse {
   kind: 'sweep' | 'event' | 'manual';
   scanned: number;
-  matched: number;
   totalCandidates: number;
+  /** Matched the audience settings (days away, visits, tags). */
+  inAudience: number;
+  /** Of those, how many had the enroll conditions checked, and how many passed. */
+  checked: number;
+  passed: number;
+  /** Estimated enrollments right now. */
+  estimated: number;
   sample: string[];
+  /** The scan hit its page limit before the end of the list. */
   partial: boolean;
 }
