@@ -36,7 +36,7 @@ import {
   isPostHogQueryConfigured,
   queryHogQL,
 } from '@/lib/analytics/posthog-query';
-import { requirePage } from '@/lib/auth/admin';
+import { requireAnyPage } from '@/lib/auth/admin';
 import {
   BOOKING,
   BOOKING_BACKFILL,
@@ -475,7 +475,8 @@ function onlyCampaign(report: PerformanceResponse, slug: string | null): Perform
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requirePage(cookies, '/admin/campaigns');
+  // Read-only, so the Journeys page can show a journey's linked campaign too.
+  const gate = await requireAnyPage(cookies, ['/admin/campaigns', '/admin/journeys']);
   if (gate instanceof Response) return gate;
 
   const daysRaw = Number.parseInt(url.searchParams.get('days') ?? '', 10);

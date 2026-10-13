@@ -25,14 +25,16 @@ import {
 } from './journeyUi';
 import { OverviewPanel } from './OverviewPanel';
 import { PeoplePanel } from './PeoplePanel';
+import { PerformancePanel } from './PerformancePanel';
 import { StepsPanel } from './StepsPanel';
 
-type Tab = 'steps' | 'overview' | 'people' | 'history';
+type Tab = 'steps' | 'overview' | 'people' | 'performance' | 'history';
 
 const TAB_LABELS: Record<Tab, string> = {
   steps: 'Steps and emails',
   overview: 'Settings',
   people: 'People',
+  performance: 'Performance',
   history: 'History',
 };
 
@@ -282,7 +284,7 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
       )}
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {(['steps', 'overview', 'people', 'history'] as Tab[]).map((t) => (
+        {(['steps', 'overview', 'people', 'performance', 'history'] as Tab[]).map((t) => (
           <button key={t} type="button" className={pillClass(tab === t)} onClick={() => setTab(t)}>
             {TAB_LABELS[t]}
             {t === 'people' ? ` (${journey.stats.active})` : ''}
@@ -384,6 +386,14 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
           journeyId={journey.id}
           definition={draft.definition}
           testMode={journey.testMode}
+        />
+      )}
+      {tab === 'performance' && (
+        <PerformancePanel
+          journeyId={journey.id}
+          campaignSlug={journey.definition.campaign}
+          campaigns={data.campaigns}
+          onOpenSettings={() => setTab('overview')}
         />
       )}
       {tab === 'history' && (

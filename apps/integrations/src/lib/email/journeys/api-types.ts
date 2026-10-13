@@ -132,3 +132,33 @@ export interface AudienceResponse {
   /** The scan hit its page limit before the end of the list. */
   partial: boolean;
 }
+
+// --- Performance tab (/api/admin/journeys/[id]/performance) ---
+
+export interface StepPerformance {
+  key: string;
+  name: string;
+  archived: boolean;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  skipped: number;
+  /** Most common skip reasons, in words, with counts. */
+  skipReasons: { reason: string; count: number }[];
+}
+
+export interface JourneyPerformanceResponse {
+  days: number;
+  entered: number;
+  finished: number;
+  left: number;
+  /** In the journey right now (any start date). */
+  active: number;
+  leaveReasons: { reason: string; count: number }[];
+  totals: { sent: number; delivered: number; opened: number; clicked: number; bounced: number };
+  steps: StepPerformance[];
+  /** The step log only exists from when it shipped; skip counts before then are unknown. */
+  stepLogSince: string | null;
+}

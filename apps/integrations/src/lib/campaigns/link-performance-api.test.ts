@@ -17,7 +17,10 @@ vi.mock('@pyre/webhook-core', async (importOriginal) => ({
   getShortLinks: mocks.shorts,
   listShortLinks: mocks.legacy,
 }));
-vi.mock('@/lib/auth/admin', () => ({ requirePage: async () => ({ user: {} }) }));
+vi.mock('@/lib/auth/admin', () => ({
+  requirePage: async () => ({ user: {} }),
+  requireAnyPage: async () => ({ user: {} }),
+}));
 vi.mock('@/lib/analytics/posthog-query', () => ({
   queryHogQL: mocks.query,
   isPostHogQueryConfigured: mocks.configured,

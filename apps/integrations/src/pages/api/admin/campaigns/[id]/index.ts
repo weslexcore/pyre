@@ -5,7 +5,7 @@
 
 import { deleteCampaign, getCampaignWithLinks, updateCampaign } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
+import { assertSameOrigin, requireAnyPage, requirePage } from '@/lib/auth/admin';
 import {
   LANDING_ORIGIN,
   loadShortLinkIndex,
@@ -17,7 +17,8 @@ import { normalizeCampaignPatch } from '@/lib/campaigns/validate';
 import { json } from '@/lib/http/route';
 
 export const GET: APIRoute = async ({ cookies, params }) => {
-  const gate = await requirePage(cookies, '/admin/campaigns');
+  // Read-only, so the Journeys page can show a journey's linked campaign too.
+  const gate = await requireAnyPage(cookies, ['/admin/campaigns', '/admin/journeys']);
   if (gate instanceof Response) return gate;
 
   const id = params.id ?? '';
