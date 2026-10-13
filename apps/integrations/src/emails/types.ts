@@ -1,6 +1,8 @@
 // Per-template prop interfaces and the template -> props map that keeps the
 // registry, sendTemplate(), and call sites type-safe.
 
+import type { EmailBlock } from '@/lib/email/journeys/schema';
+
 // Add-to-calendar URLs, built at send time (lib/calendar/links.ts). `ics` is
 // the hosted signed .ics link ("Apple"); absent when no signing secret is set.
 export interface CalendarLinks {
@@ -67,6 +69,16 @@ export interface CreditExpiryReminderProps extends MarketingEmailBaseProps {
   /** e.g. "August 12" */
   expiresOn: string;
   daysLeft: number;
+}
+
+/** Dashboard-built journey email (/admin/journeys): blocks with merge fields already filled. */
+export interface JourneyEmailProps extends MarketingEmailBaseProps {
+  subject: string;
+  preview: string;
+  background: 'clouds' | 'trees' | 'lamps';
+  blocks: EmailBlock[];
+  /** utm_campaign for tracked links — the journey id. */
+  campaign: string;
 }
 
 export interface UnusedCreditReminderProps extends MarketingEmailBaseProps {
@@ -352,6 +364,7 @@ export interface EmailPropsByTemplate {
   'review-request': ReviewRequestProps;
   'credit-expiry-reminder': CreditExpiryReminderProps;
   'unused-credit-reminder': UnusedCreditReminderProps;
+  journey: JourneyEmailProps;
   'partner-verification-request': PartnerVerificationRequestProps;
   'partner-verified': PartnerVerifiedProps;
   'partner-denied': PartnerDeniedProps;

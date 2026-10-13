@@ -16,16 +16,6 @@ export interface TemplateOption {
   source: 'db' | 'env';
 }
 
-export interface JourneyOption {
-  id: string;
-  kind: 'marketing' | 'transactional';
-  /** Step count, for the summary line. */
-  steps: number;
-  enrollSource: 'sweep' | 'event';
-  /** False = paused: no new enrollments, in-flight members hold their step. */
-  enabled: boolean;
-}
-
 export interface WhitelistEntry {
   email: string;
   /** 'env' entries are read-only; 'db' rows are managed here. */
@@ -40,15 +30,12 @@ interface GateTemplateState {
 /** Mirror of the /api/admin/email-gate snapshot every mutation returns. */
 interface GateSnapshot {
   templates: { key: string; live: boolean; source: 'db' | 'env' }[];
-  journeys: JourneyOption[];
   whitelist: WhitelistEntry[];
   dbAvailable: boolean;
 }
 
 interface EmailTemplatePreviewProps {
   templates: TemplateOption[];
-  /** Journeys from the code registry with their current pause state. */
-  journeys: JourneyOption[];
   /** Session types with dedicated confirmation copy — preset chips. */
   confirmationSessionTypes: string[];
   /** Raw EMAIL_LIVE_TEMPLATES value, for the config summary. */
@@ -76,7 +63,6 @@ const TEST_EMAIL_STORAGE_KEY = 'pyre-admin-test-email';
 
 export function EmailTemplatePreview({
   templates,
-  journeys,
   confirmationSessionTypes,
   liveTemplatesConfig,
   whitelist,
@@ -96,7 +82,6 @@ export function EmailTemplatePreview({
   const [gateTemplates, setGateTemplates] = useState<Record<string, GateTemplateState>>(() =>
     Object.fromEntries(templates.map((t) => [t.key, { live: t.live, source: t.source }]))
   );
-  const [gateJourneys, setGateJourneys] = useState<JourneyOption[]>(journeys);
   const [gateWhitelist, setGateWhitelist] = useState<WhitelistEntry[]>(whitelist);
   const [gateDbAvailable, setGateDbAvailable] = useState(dbAvailable);
   const [gateBusy, setGateBusy] = useState<string | null>(null);
@@ -240,7 +225,6 @@ export function EmailTemplatePreview({
           snapshot.templates.map((t) => [t.key, { live: t.live, source: t.source }])
         )
       );
-      setGateJourneys(snapshot.journeys);
       setGateWhitelist(snapshot.whitelist);
       setGateDbAvailable(snapshot.dbAvailable);
       return true;
@@ -260,13 +244,6 @@ export function EmailTemplatePreview({
 
   const clearTemplateOverride = (key: string) => {
     void postGateAction({ action: 'set-template', template: key, live: null }, key);
-  };
-
-  const toggleJourney = (journey: JourneyOption) => {
-    void postGateAction(
-      { action: 'set-journey', journey: journey.id, enabled: !journey.enabled },
-      `journey:${journey.id}`
-    );
   };
 
   const addWhitelist = async () => {
@@ -416,50 +393,14 @@ export function EmailTemplatePreview({
         </div>
       </section>
 
-      {/* Journeys: pause/resume the multi-step sequences without a deploy.
-          Separate from the template gate above — gating a step's template
-          suppresses the mail but still advances the member's enrollment. */}
-      {gateJourneys.length > 0 && (
-        <section className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="font-mono text-xs uppercase tracking-wide text-white/40">Journeys</p>
-          <p className="mt-1 text-xs text-white/50">
-            Off pauses the journey — no new enrollments, and members mid-journey hold their place
-            until it's back on.
-          </p>
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {gateJourneys.map((journey) => (
-              <li
-                key={journey.id}
-                className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs uppercase tracking-wide text-[var(--pyre-creme)]">
-                    {journey.id}
-                  </p>
-                  <p className="mt-0.5 font-mono text-[11px] text-white/40">
-                    {journey.kind} · {journey.steps} {journey.steps === 1 ? 'step' : 'steps'} ·{' '}
-                    {journey.enrollSource}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleJourney(journey)}
-                  disabled={!gateDbAvailable || gateBusy !== null}
-                  aria-pressed={journey.enabled}
-                  title={journey.enabled ? 'Running — click to pause' : 'Paused — click to resume'}
-                  className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors disabled:opacity-40 ${
-                    journey.enabled
-                      ? 'border-emerald-400/40 text-emerald-400 hover:border-emerald-400'
-                      : 'border-white/20 text-white/40 hover:border-white/40 hover:text-white/70'
-                  }`}
-                >
-                  {gateBusy === `journey:${journey.id}` ? '…' : journey.enabled ? 'on' : 'off'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <p className="text-xs text-white/50">
+        Journeys (the multi-step sequences) are built and switched on and off in{' '}
+        <a href="/admin/journeys" className="underline hover:text-white/80">
+          Journeys
+        </a>
+        . Their block-built emails all send as the <span className="font-mono">journey</span>{' '}
+        template below, so it must be live for any journey to reach real recipients.
+      </p>
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Template list */}

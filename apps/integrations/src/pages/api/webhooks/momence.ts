@@ -106,6 +106,8 @@ async function handleBookingEvent(
       lastName: member.lastName,
       sessionId: payload.sessionId,
       sessionBookingId: payload.sessionBookingId,
+      // Journeys time follow-ups from when the session ends.
+      ...(session && { sessionStartsAt: session.isoDate, sessionEndsAt: session.endIso }),
     });
 
     // Referral conversion + reward consumption (best-effort by contract —

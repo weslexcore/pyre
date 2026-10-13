@@ -31,17 +31,18 @@ const handler: APIRoute = async ({ request, url }) => {
   const enrollMemberId = url.searchParams.get('enroll');
   const enrollJourneyId = url.searchParams.get('journey');
   if (enrollMemberId && enrollJourneyId) {
-    const [{ enrollMember }, { JOURNEYS }, { fetchHostMember }] = await Promise.all([
+    const [{ enrollMember }, { loadJourneys }, { fetchHostMember }] = await Promise.all([
       import('@/lib/email/journeys/engine'),
-      import('@/lib/email/journeys/registry'),
+      import('@/lib/email/journeys/store'),
       import('@/lib/momence/host-api'),
     ]);
-    const journey = JOURNEYS.find((j) => j.id === enrollJourneyId);
+    const journeys = await loadJourneys({ fresh: true });
+    const journey = journeys.find((j) => j.id === enrollJourneyId);
     if (!journey) {
       return json(
         {
           error: `Unknown journey '${enrollJourneyId}'`,
-          known: JOURNEYS.map((j) => j.id),
+          known: journeys.map((j) => j.id),
         },
         400
       );

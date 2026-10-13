@@ -42,6 +42,13 @@ export interface SendTemplateArgs<K extends EmailTemplateKey> {
   journeyId?: string;
   stepId?: string;
   campaign?: string;
+  /** Journey revision that produced this send (recorded in the send log). */
+  journeyRevision?: number;
+  /**
+   * Restrict delivery to whitelisted addresses even if the template is live
+   * (journeys in test mode).
+   */
+  whitelistOnly?: boolean;
 }
 
 /**
@@ -64,6 +71,8 @@ export async function sendTemplate<K extends EmailTemplateKey>({
   journeyId,
   stepId,
   campaign,
+  journeyRevision,
+  whitelistOnly = false,
 }: SendTemplateArgs<K>): Promise<SendResult> {
   const resend = getResend();
   if (!resend) {
@@ -75,7 +84,7 @@ export async function sendTemplate<K extends EmailTemplateKey>({
   // per-template from /admin/email-templates) only deliver to whitelisted
   // addresses — emails still in development stay dark for real recipients.
   const emailGate = await getEmailGate();
-  const devGated = !emailGate.isLive(template);
+  const devGated = whitelistOnly || !emailGate.isLive(template);
   if (devGated && !emailGate.isAllowed(to)) {
     console.info(`[Email] Template not live: suppressing ${template} to ${to} (not whitelisted)`);
     return { status: 'suppressed', reason: 'template-not-live' };
@@ -86,6 +95,9 @@ export async function sendTemplate<K extends EmailTemplateKey>({
   const ccList = cc == null ? [] : Array.isArray(cc) ? cc : [cc];
   const effectiveCc = devGated ? ccList.filter((addr) => emailGate.isAllowed(addr)) : ccList;
 
+  const entry = EMAIL_TEMPLATES[template];
+  const subject = entry.subject(props);
+
   const logEntry = {
     email: to,
     memberId,
@@ -95,6 +107,7 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     stepId,
     campaign,
     sendKey,
+    ...(journeyRevision !== undefined && { subject, journeyRevision }),
   };
 
   let unsubscribeUrl: string | undefined;
@@ -134,7 +147,6 @@ export async function sendTemplate<K extends EmailTemplateKey>({
     claimedId = claim.id;
   }
 
-  const entry = EMAIL_TEMPLATES[template];
   const from = import.meta.env.RESEND_FROM ?? 'Pyre <hello@pyresauna.com>';
 
   // Marketing templates declare unsubscribeUrl in their props; injecting it here
@@ -156,7 +168,7 @@ export async function sendTemplate<K extends EmailTemplateKey>({
       from,
       to,
       ...(effectiveCc.length > 0 && { cc: effectiveCc }),
-      subject: entry.subject(props),
+      subject,
       react: createElement(entry.Component, renderProps),
       ...(Object.keys(headers).length > 0 && { headers }),
       tags,

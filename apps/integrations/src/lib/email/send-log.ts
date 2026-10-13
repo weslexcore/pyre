@@ -17,6 +17,9 @@ export interface SendLogEntry {
   stepId?: string;
   campaign?: string;
   sendKey?: string;
+  /** Journey sends record what actually went out (dashboard-written subjects). */
+  subject?: string;
+  journeyRevision?: number;
 }
 
 type ClaimResult =
@@ -95,6 +98,10 @@ function toRow(entry: SendLogEntry, status: string) {
     step_id: entry.stepId ?? null,
     campaign: entry.campaign ?? null,
     send_key: entry.sendKey ?? null,
+    // Only journey sends carry these; leaving them off otherwise keeps every
+    // other send path independent of the journey_builder migration.
+    ...(entry.subject !== undefined && { subject: entry.subject }),
+    ...(entry.journeyRevision !== undefined && { journey_revision: entry.journeyRevision }),
     status,
   };
 }

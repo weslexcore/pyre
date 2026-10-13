@@ -65,7 +65,7 @@ interface UpcomingStep {
   journey_id: string;
   email: string;
   member_id: number;
-  step: number;
+  current_step_key: string | null;
   next_at: string;
 }
 
@@ -73,7 +73,7 @@ interface EnrollmentRow {
   journey_id: string;
   email: string;
   member_id: number;
-  step: number;
+  current_step_key: string | null;
   status: string;
   exit_reason: string | null;
   enrolled_at: string;
@@ -305,7 +305,7 @@ export function EmailDashboard() {
                     <div className="min-w-0">
                       <span className="block truncate">{s.email}</span>
                       <span className="font-mono text-[10px] text-white/40">
-                        {s.journey_id} · step {s.step + 1}
+                        {s.journey_id} · {s.current_step_key ?? 'finishing'}
                       </span>
                     </div>
                     <span
@@ -450,7 +450,8 @@ export function EmailDashboard() {
                   <div className="min-w-0">
                     <span className="block truncate">{e.email}</span>
                     <span className="font-mono text-[10px] text-white/40">
-                      {e.journey_id} · step {e.step + 1} · {e.status}
+                      {e.journey_id}
+                      {e.current_step_key ? ` · ${e.current_step_key}` : ''} · {e.status}
                       {e.exit_reason ? ` (${e.exit_reason})` : ''}
                     </span>
                   </div>

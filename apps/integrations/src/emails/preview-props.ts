@@ -10,6 +10,7 @@ import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
+import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
 import { MembershipPitch } from './templates/MembershipPitch';
@@ -38,6 +39,7 @@ export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailProp
   'review-request': ReviewRequest.PreviewProps,
   'credit-expiry-reminder': CreditExpiryReminder.PreviewProps,
   'unused-credit-reminder': UnusedCreditReminder.PreviewProps,
+  journey: JourneyEmail.PreviewProps,
   'partner-verification-request': PartnerVerificationRequest.PreviewProps,
   'partner-verified': PartnerVerified.PreviewProps,
   'partner-denied': PartnerDenied.PreviewProps,

@@ -2,146 +2,266 @@ import { createWebhookLogger, getRedis } from '@pyre/webhook-core';
 import { captureEvent } from '@/lib/analytics/posthog';
 import type { CronJobContext } from '@/lib/cron/jobs';
 import { getDb, type JourneyEnrollmentRow } from '@/lib/db';
+import { type EmailGate, getEmailGate } from '@/lib/email/dev-mode';
 import { sendTemplate } from '@/lib/email/send';
 import {
   assignMemberTag,
   fetchHostMember,
-  fetchMemberActivePacks,
   fetchMembersFiltered,
+  findMemberByEmail,
   getTagIdByName,
   type HostMember,
+  type MemberListFilter,
+  removeMemberTag,
 } from '@/lib/momence/host-api';
-import type { TriggerEvent } from '@/lib/triggers/dispatch';
-import { JOURNEYS } from './registry';
-import { getDisabledJourneyIds, getJourneySettings } from './settings';
-import type { Journey, JourneyContext } from './types';
+import { isMemberFirstBooking } from '@/lib/momence/members';
+import type { BookingTriggerEvent, TriggerEvent } from '@/lib/triggers/dispatch';
+import {
+  allMatch,
+  buildContext,
+  type EnrollmentContext,
+  firstMatch,
+  type JourneyContext,
+  type MemberIdentity,
+  mergeValues,
+  resolveIntroExpiry,
+} from './context';
+import { fillContent, usedFields } from './merge-fields';
+import type { JourneyAction, JourneyRecord, JourneyStep, Trigger } from './schema';
+import { isTemplateStepKey, loadJourneys } from './store';
+import {
+  type AnchorTimes,
+  clampToSendWindow,
+  currentStepIndex,
+  frequencyCapUntil,
+  isStale,
+  nextStepIndex,
+  sendKeyFor,
+  stepDueAt,
+} from './timing';
 
 const log = createWebhookLogger('Journeys');
 
-// The journey engine. Three entry points:
-//   enrollFromEvent()      — called by the trigger bus (webhook / sales poller)
-//   runEnrollmentSweeps()  — hourly cron job discovering sweep-journey audiences
-//   advanceDueJourneys()   — hourly cron job sending due steps
-// State lives in Supabase journey_enrollments (unique per journey+member, rows
-// never deleted); send dedupe rides email_sends.send_key inside sendTemplate.
+// The journey engine. Journeys are rows in the journeys table (built in
+// /admin/journeys, loaded through ./store). Three entry points:
+//   enrollFromEvent()      — called by the trigger bus (Momence booking webhook)
+//   runEnrollmentSweeps()  — hourly cron job finding audience-journey matches
+//   advanceDueJourneys()   — hourly cron job running due steps
+// Enrollment rows in journey_enrollments remember WHERE someone is (journey,
+// waiting step, when it's due) and how they entered — never WHY. Exit, skip
+// and enroll conditions re-read live Momence data right before each decision.
+// Send dedupe rides email_sends.send_key inside sendTemplate.
 //
-// All three consult the journey_settings pause switch (/admin/email-templates,
-// see ./settings). A paused journey neither enrolls nor advances, so members
-// mid-journey hold their step until it's switched back on — gating the step's
-// template is NOT equivalent, since a suppressed send still advances the row.
+// A switched-off journey neither enrolls nor advances: members mid-journey
+// hold their step until it's switched back on. Test mode limits a journey to
+// whitelisted addresses, end to end.
 
-// --- Timing ---
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 
 function isFastMode(): boolean {
   return import.meta.env.JOURNEY_FAST_MODE === 'true';
 }
 
-function delayToMs(delayHours: number): number {
-  // Fast mode: hours become minutes so a whitelist test walks a multi-day
-  // journey in minutes.
-  return isFastMode() ? delayHours * 60_000 : delayHours * 3_600_000;
+// --- Scheduling ---
+
+/** When a step should run: its anchor + offset, kept inside the send window. */
+function scheduleAt(step: JourneyStep, anchors: AnchorTimes, now: number): string {
+  const fastMode = isFastMode();
+  // Unknown anchor (no intro offer): due now, and the due-time check skips it.
+  const due = stepDueAt(step.timing, anchors, { fastMode }) ?? now;
+  const at = Math.max(due, now);
+  return new Date(fastMode ? at : clampToSendWindow(at)).toISOString();
 }
 
-function nextAtForStep(journey: Journey, stepIndex: number, fromMs: number): string | null {
-  const step = journey.steps[stepIndex];
-  if (!step) return null;
-  return new Date(fromMs + delayToMs(step.delayHours)).toISOString();
-}
-
-// --- Context ---
-
-interface MemberIdentity {
-  memberId: number;
-  email: string;
-  firstName: string;
-  lastName: string;
-}
-
-function buildContext(identity: MemberIdentity, preloaded?: HostMember): JourneyContext {
-  let memberPromise: Promise<HostMember> | null = preloaded ? Promise.resolve(preloaded) : null;
-  let packsPromise: ReturnType<typeof fetchMemberActivePacks> | null = null;
-
+function anchorsFor(
+  row: Pick<JourneyEnrollmentRow, 'anchor_at' | 'enrolled_at' | 'last_step_at'>,
+  introExpiresAt: number | null
+): AnchorTimes {
   return {
-    ...identity,
-    member() {
-      memberPromise ??= fetchHostMember(identity.memberId);
-      return memberPromise;
-    },
-    activePacks() {
-      packsPromise ??= fetchMemberActivePacks(identity.memberId);
-      return packsPromise;
-    },
+    triggerAt: Date.parse(row.anchor_at ?? row.enrolled_at),
+    previousAt: row.last_step_at ? Date.parse(row.last_step_at) : null,
+    introExpiresAt,
   };
+}
+
+function usesIntroExpiry(journey: JourneyRecord): boolean {
+  return journey.definition.steps.some((s) => s.timing.anchor === 'intro-expiry');
+}
+
+// --- Actions ---
+
+async function runActions(actions: JourneyAction[], memberId: number): Promise<void> {
+  for (const action of actions) {
+    try {
+      const tagId = await getTagIdByName(action.tag);
+      if (!tagId) {
+        log.warn(`Tag "${action.tag}" not found in Momence — create it in the dashboard`);
+        continue;
+      }
+      if (action.type === 'add-tag') await assignMemberTag(memberId, tagId);
+      else await removeMemberTag(memberId, tagId);
+    } catch (error) {
+      log.warn(`Action ${action.type} "${action.tag}" failed for member ${memberId}`, error);
+    }
+  }
 }
 
 // --- Enrollment ---
 
-export type EnrollOutcome = 'enrolled' | 'already-enrolled' | 'unavailable';
+export type EnrollOutcome =
+  | 'enrolled'
+  | 'already-enrolled'
+  | 'cooling-down'
+  | 'not-whitelisted'
+  | 'no-steps'
+  | 'unavailable';
+
+interface EnrollOptions {
+  dryRun?: boolean;
+  /** What step timing counts from; defaults to now. */
+  anchorAt?: number;
+  context?: EnrollmentContext;
+  /** Live context, when the caller already built one (enrollIf checks). */
+  ctx?: JourneyContext;
+  gate?: EmailGate;
+}
 
 export async function enrollMember(
-  journey: Journey,
+  journey: JourneyRecord,
   identity: MemberIdentity,
-  { dryRun = false }: { dryRun?: boolean } = {}
+  { dryRun = false, anchorAt, context = {}, ctx, gate }: EnrollOptions = {}
 ): Promise<EnrollOutcome> {
   const db = getDb();
   if (!db) return 'unavailable';
+  const email = identity.email.toLowerCase();
 
-  if (dryRun) {
-    const { data } = await db
-      .from('journey_enrollments')
-      .select('id')
-      .eq('journey_id', journey.id)
-      .eq('member_id', identity.memberId)
-      .maybeSingle();
-    return data ? 'already-enrolled' : 'enrolled';
+  if (journey.testMode && !(gate ?? (await getEmailGate())).isAllowed(email)) {
+    return 'not-whitelisted';
   }
 
-  // The unique constraint is the guard: completed/exited rows persist forever,
-  // so once-per-lifetime journeys can never re-enroll a member.
-  const { data, error } = await db
+  const steps = journey.definition.steps;
+  const first = nextStepIndex(steps, null);
+  if (first === null) return 'no-steps';
+
+  const { data: latest, error: latestError } = await db
     .from('journey_enrollments')
-    .upsert(
-      {
-        journey_id: journey.id,
-        member_id: identity.memberId,
-        email: identity.email.toLowerCase(),
-        step: 0,
-        next_at: nextAtForStep(journey, 0, Date.now()),
-        status: 'active',
-      },
-      { onConflict: 'journey_id,member_id', ignoreDuplicates: true }
-    )
-    .select('id')
+    .select('status, cycle, ended_at, updated_at')
+    .eq('journey_id', journey.id)
+    .eq('member_id', identity.memberId)
+    .order('cycle', { ascending: false })
+    .limit(1)
     .maybeSingle();
+  if (latestError) {
+    log.error(
+      `Enroll lookup failed: ${journey.id} member ${identity.memberId}: ${latestError.message}`
+    );
+    return 'unavailable';
+  }
+
+  let cycle = 0;
+  if (latest) {
+    if (latest.status === 'active') return 'already-enrolled';
+    const reentry = journey.definition.reentry;
+    if (reentry.mode === 'once') return 'already-enrolled';
+    const endedAt = Date.parse(latest.ended_at ?? latest.updated_at);
+    if (Date.now() - endedAt < reentry.days * DAY_MS) return 'cooling-down';
+    cycle = latest.cycle + 1;
+  }
+
+  if (dryRun) return 'enrolled';
+
+  const now = Date.now();
+  const anchor = anchorAt ?? now;
+  let introExpiresAt: number | null = null;
+  if (usesIntroExpiry(journey)) {
+    const memberCtx = ctx ?? buildContext(identity, { enrollment: context });
+    introExpiresAt = await resolveIntroExpiry(memberCtx).catch(() => null);
+  }
+  const fullContext: EnrollmentContext = {
+    ...context,
+    ...(introExpiresAt !== null && { introExpiresAt: new Date(introExpiresAt).toISOString() }),
+  };
+
+  const { error } = await db.from('journey_enrollments').insert({
+    journey_id: journey.id,
+    member_id: identity.memberId,
+    email,
+    cycle,
+    step: 0,
+    current_step_key: steps[first].key,
+    next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, introExpiresAt }, now),
+    status: 'active',
+    anchor_at: new Date(anchor).toISOString(),
+    context: fullContext,
+  });
 
   if (error) {
+    // Unique violation: a concurrent delivery enrolled them first.
+    if (error.code === '23505') return 'already-enrolled';
     log.error(`Enroll failed: ${journey.id} member ${identity.memberId}: ${error.message}`);
     return 'unavailable';
   }
-  if (!data) return 'already-enrolled';
 
-  log.info(`Enrolled member ${identity.memberId} into ${journey.id}`);
+  log.info(`Enrolled member ${identity.memberId} into ${journey.id} (cycle ${cycle})`);
   await captureEvent({
-    distinctId: identity.email.toLowerCase(),
+    distinctId: email,
     event: 'journey_enrolled',
-    properties: { journey: journey.id },
+    properties: { journey: journey.id, cycle },
   });
   return 'enrolled';
 }
 
+/** Enroll someone by email from the admin People tab. */
+export async function enrollByEmail(
+  journey: JourneyRecord,
+  email: string
+): Promise<{ outcome: EnrollOutcome | 'not-found'; memberId?: number }> {
+  const member = await findMemberByEmail(email);
+  if (!member) return { outcome: 'not-found' };
+  const outcome = await enrollMember(journey, {
+    memberId: member.id,
+    email: member.email,
+    firstName: member.firstName,
+    lastName: member.lastName,
+  });
+  return { outcome, memberId: member.id };
+}
+
+function bookingContext(event: BookingTriggerEvent): EnrollmentContext {
+  return {
+    sessionId: event.sessionId,
+    sessionBookingId: event.sessionBookingId,
+    ...(event.sessionStartsAt && { sessionStartsAt: event.sessionStartsAt }),
+    ...(event.sessionEndsAt && { sessionEndsAt: event.sessionEndsAt }),
+  };
+}
+
 export async function enrollFromEvent(event: TriggerEvent): Promise<void> {
-  const settings = await getJourneySettings();
+  if (event.type !== 'session-booked') return;
 
-  for (const journey of JOURNEYS) {
-    if (journey.enroll.source !== 'event') continue;
-    if (!journey.enroll.events.includes(event.type)) continue;
-    if (settings[journey.id] === false) continue;
+  const journeys = (await loadJourneys()).filter(
+    (j) => j.enabled && j.definition.trigger.type === 'session-booked'
+  );
+  if (journeys.length === 0) return;
 
-    const ctx = buildContext(event);
+  const gate = await getEmailGate();
+  const context = bookingContext(event);
+  const anchorAt = event.sessionEndsAt ? Date.parse(event.sessionEndsAt) : Date.now();
+  let firstBooking: Promise<boolean | null> | null = null;
+
+  for (const journey of journeys) {
+    const trigger = journey.definition.trigger as Extract<Trigger, { type: 'session-booked' }>;
     try {
-      if (await journey.enroll.when(event, ctx)) {
-        await enrollMember(journey, event);
+      if (journey.testMode && !gate.isAllowed(event.email)) continue;
+      if (trigger.firstBookingOnly) {
+        firstBooking ??= isMemberFirstBooking(String(event.memberId), event.sessionBookingId);
+        // Fails safe — null (unknown) means no enrollment.
+        if ((await firstBooking) !== true) continue;
       }
+      const ctx = buildContext(event, { enrollment: context });
+      if (!(await allMatch(ctx, journey.definition.enrollIf))) continue;
+      await enrollMember(journey, event, { anchorAt, context, ctx, gate });
     } catch (error) {
       log.warn(`Event enrollment check failed for ${journey.id}`, error);
     }
@@ -155,14 +275,119 @@ const SWEEP_PAGE_SIZE = 100;
 // Leave enough budget for advanceDueJourneys to run after the sweeps.
 const SWEEP_MIN_REMAINING_MS = 20_000;
 
+interface SweepAudience {
+  filter?: MemberListFilter;
+  /** Code-level checks for what the Momence filter can't express. */
+  matches(member: HostMember): boolean;
+  /** A required tag doesn't exist in Momence, so nobody can match. */
+  impossible?: string;
+}
+
+async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Promise<SweepAudience> {
+  const withoutIds = (await Promise.all(trigger.withoutTags.map(getTagIdByName))).filter(
+    (id): id is number => id !== null
+  );
+  const missingWith = [];
+  for (const tag of trigger.withTags) {
+    if ((await getTagIdByName(tag)) === null) missingWith.push(tag);
+  }
+
+  const filter: MemberListFilter = { type: 'and' };
+  if (trigger.minVisits) {
+    filter.visits = { count: { type: 'moreThan', value: trigger.minVisits - 1 } };
+  }
+  if (withoutIds.length > 0) {
+    filter.customerTags = { type: 'and', customerHaveTag: 'not-have', tags: withoutIds };
+  }
+
+  const wantTags = trigger.withTags.map((t) => t.toLowerCase());
+  const minVisits = trigger.minVisits ?? 0;
+  const inactiveMs = trigger.inactiveDays ? trigger.inactiveDays * DAY_MS : null;
+
+  return {
+    filter: Object.keys(filter).length > 1 ? filter : undefined,
+    impossible: missingWith.length > 0 ? `missing tag: ${missingWith.join(', ')}` : undefined,
+    matches(member) {
+      // The visits filter may count bookings; require actual check-ins.
+      if (member.visits.totalVisits < minVisits) return false;
+      if (inactiveMs !== null) {
+        const lastSeen = Date.parse(member.lastSeen);
+        if (!Number.isFinite(lastSeen) || Date.now() - lastSeen < inactiveMs) return false;
+      }
+      const names = new Set(member.customerTags.map((t) => t.name.toLowerCase()));
+      return wantTags.every((t) => names.has(t));
+    },
+  };
+}
+
+/**
+ * Who an audience journey would enroll right now, from the first few pages
+ * only (a dashboard estimate, not a full scan).
+ */
+export async function previewAudience(
+  journey: JourneyRecord,
+  { maxPages = 3 } = {}
+): Promise<{
+  scanned: number;
+  matched: number;
+  totalCandidates: number;
+  sample: string[];
+  partial: boolean;
+}> {
+  const trigger = journey.definition.trigger;
+  if (trigger.type !== 'sweep')
+    return { scanned: 0, matched: 0, totalCandidates: 0, sample: [], partial: false };
+  const audience = await sweepAudience(trigger);
+  if (audience.impossible)
+    return { scanned: 0, matched: 0, totalCandidates: 0, sample: [], partial: false };
+
+  let scanned = 0;
+  let matched = 0;
+  let totalCandidates = 0;
+  const sample: string[] = [];
+  let page = 0;
+  for (; page < maxPages; page += 1) {
+    const { members, totalCount } = await fetchMembersFiltered({
+      page,
+      pageSize: SWEEP_PAGE_SIZE,
+      filter: audience.filter,
+    });
+    totalCandidates = totalCount;
+    scanned += members.length;
+    for (const member of members) {
+      if (!audience.matches(member)) continue;
+      const ctx = buildContext(memberIdentity(member), { member });
+      if (
+        journey.definition.enrollIf.length > 0 &&
+        !(await allMatch(ctx, journey.definition.enrollIf))
+      )
+        continue;
+      matched += 1;
+      if (sample.length < 10) sample.push(member.email);
+    }
+    if (members.length < SWEEP_PAGE_SIZE) break;
+  }
+  return { scanned, matched, totalCandidates, sample, partial: scanned < totalCandidates };
+}
+
+function memberIdentity(member: HostMember): MemberIdentity {
+  return {
+    memberId: member.id,
+    email: member.email,
+    firstName: member.firstName,
+    lastName: member.lastName,
+  };
+}
+
 export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<string, unknown>> {
   const redis = getRedis();
-  const settings = await getJourneySettings();
+  const journeys = (await loadJourneys()).filter((j) => j.definition.trigger.type === 'sweep');
+  const gate = await getEmailGate();
   const summary: Record<string, unknown> = {};
 
-  for (const journey of JOURNEYS) {
-    if (journey.enroll.source !== 'sweep') continue;
-    if (settings[journey.id] === false) {
+  for (const journey of journeys) {
+    const trigger = journey.definition.trigger as Extract<Trigger, { type: 'sweep' }>;
+    if (!journey.enabled) {
       // Leave the Redis cursor alone — the sweep resumes mid-audience when the
       // journey comes back on.
       summary[journey.id] = { skipped: 'disabled' };
@@ -173,6 +398,13 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
       continue;
     }
 
+    const audience = await sweepAudience(trigger);
+    if (audience.impossible) {
+      log.warn(`Sweep ${journey.id} can't match anyone (${audience.impossible})`);
+      summary[journey.id] = { skipped: audience.impossible };
+      continue;
+    }
+
     const cursorKey = `${SWEEP_CURSOR_PREFIX}${journey.id}:cursor`;
     let page = 0;
     if (redis) {
@@ -180,7 +412,6 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
       if (typeof cursor === 'number') page = cursor;
     }
 
-    const audience = await journey.enroll.audience();
     let scanned = 0;
     let enrolled = 0;
     let wrapped = false;
@@ -190,26 +421,24 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
         page,
         pageSize: SWEEP_PAGE_SIZE,
         filter: audience.filter,
-        filterPreset: audience.filterPreset,
       });
       scanned += members.length;
 
       for (const member of members) {
-        const identity = {
-          memberId: member.id,
-          email: member.email,
-          firstName: member.firstName,
-          lastName: member.lastName,
-        };
         try {
-          if (audience.predicate) {
-            const memberCtx = buildContext(identity, member);
-            if (!(await audience.predicate(member, memberCtx))) continue;
-          }
-          const outcome = await enrollMember(journey, identity, { dryRun: ctx.dryRun });
+          if (!audience.matches(member)) continue;
+          if (journey.testMode && !gate.isAllowed(member.email)) continue;
+          const identity = memberIdentity(member);
+          const memberCtx = buildContext(identity, { member });
+          if (!(await allMatch(memberCtx, journey.definition.enrollIf))) continue;
+          const outcome = await enrollMember(journey, identity, {
+            dryRun: ctx.dryRun,
+            ctx: memberCtx,
+            gate,
+          });
           if (outcome === 'enrolled') enrolled += 1;
         } catch (error) {
-          log.warn(`Sweep predicate/enroll failed for ${journey.id} member ${member.id}`, error);
+          log.warn(`Sweep check/enroll failed for ${journey.id} member ${member.id}`, error);
         }
       }
 
@@ -237,27 +466,61 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
 
 const ADVANCE_BATCH_SIZE = 50;
 const ADVANCE_MIN_REMAINING_MS = 5_000;
+/** A step whose anchor moved later (intro extended, timing edited) waits again. */
+const EARLY_TOLERANCE_MS = 5 * 60_000;
+
+async function recentMarketingSends(email: string, now: number): Promise<number[]> {
+  const db = getDb();
+  if (!db) return [];
+  const { data, error } = await db
+    .from('email_sends')
+    .select('sent_at')
+    .eq('email', email)
+    .eq('kind', 'marketing')
+    .eq('status', 'sent')
+    .gte('sent_at', new Date(now - 7 * DAY_MS).toISOString());
+  if (error) {
+    log.warn(`Frequency-cap lookup failed for ${email}: ${error.message}`);
+    return [];
+  }
+  return (data as { sent_at: string }[]).map((r) => Date.parse(r.sent_at));
+}
+
+function templateProps(key: string, firstName: string): Record<string, unknown> {
+  if (key === 'review-request') {
+    // Source: apps/social/posts/google-review-card (the QR postcard). No utm
+    // params: it's a Google deep link we don't control.
+    return {
+      firstName,
+      reviewUrl: import.meta.env.GOOGLE_REVIEW_URL ?? 'https://g.page/r/CbPLgfm6vte6EAI/review',
+    };
+  }
+  return { firstName };
+}
+
+type StepOutcome =
+  | { kind: 'sent' }
+  | { kind: 'advanced'; reason: string }
+  | { kind: 'exited'; reason: string }
+  | { kind: 'deferred'; until: number; reason: string }
+  | { kind: 'would-send'; label: string };
 
 export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<string, unknown>> {
   const db = getDb();
   if (!db) return { skipped: 'supabase-not-configured' };
 
-  // Paused journeys are filtered out in the query rather than skipped in the
-  // loop below: their rows stay due and sort oldest-first, so an in-loop skip
-  // would let one paused journey's backlog eat the whole batch and stall every
-  // other journey.
-  const disabled = await getDisabledJourneyIds();
+  // Only switched-on journeys' rows are loaded: a paused journey's backlog
+  // stays due and sorts oldest-first, so skipping it in the loop would let it
+  // eat the whole batch and stall every other journey.
+  const journeys = new Map((await loadJourneys()).filter((j) => j.enabled).map((j) => [j.id, j]));
+  if (journeys.size === 0) return { due: 0, enabledJourneys: 0 };
 
-  let query = db
+  const { data: due, error } = await db
     .from('journey_enrollments')
     .select('*')
     .eq('status', 'active')
-    .lte('next_at', new Date().toISOString());
-  if (disabled.length > 0) {
-    query = query.not('journey_id', 'in', `(${disabled.map((id) => `"${id}"`).join(',')})`);
-  }
-
-  const { data: due, error } = await query
+    .lte('next_at', new Date().toISOString())
+    .in('journey_id', [...journeys.keys()])
     .order('next_at', { ascending: true })
     .limit(ADVANCE_BATCH_SIZE);
 
@@ -266,101 +529,35 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
     return { error: error.message };
   }
 
-  let sent = 0;
-  let skippedSteps = 0;
-  let exited = 0;
-  let completed = 0;
+  const gate = await getEmailGate();
+  const counts = { sent: 0, skippedSteps: 0, exited: 0, completed: 0, deferred: 0 };
   const wouldSend: string[] = [];
 
   for (const row of (due ?? []) as JourneyEnrollmentRow[]) {
     if (ctx.timeRemainingMs() < ADVANCE_MIN_REMAINING_MS) break;
-
-    const journey = JOURNEYS.find((j) => j.id === row.journey_id);
-    if (!journey) {
-      await transition(row, { status: 'exited', exit_reason: 'journey-removed' });
-      exited += 1;
-      continue;
-    }
-
-    const step = journey.steps[row.step];
-    if (!step) {
-      await completeJourney(journey, row);
-      completed += 1;
-      continue;
-    }
+    const journey = journeys.get(row.journey_id);
+    if (!journey) continue;
 
     try {
-      // The row only stores id + email; pull the live member once per row so
-      // exit checks, skip checks, and template props all share it.
-      const member = await fetchHostMember(row.member_id);
-      const memberCtx = buildContext(
-        {
-          memberId: row.member_id,
-          email: row.email,
-          firstName: member.firstName,
-          lastName: member.lastName,
-        },
-        member
-      );
-
-      // Live re-check against Momence — the whole point of keeping state thin.
-      const exitReason = journey.exitWhen ? await journey.exitWhen(memberCtx) : null;
-      if (exitReason) {
-        if (!ctx.dryRun) {
-          await transition(row, { status: 'exited', exit_reason: exitReason });
-          await captureEvent({
-            distinctId: row.email,
-            event: 'journey_exited',
-            properties: { journey: journey.id, step: step.id, reason: exitReason },
-          });
-        }
-        exited += 1;
-        continue;
+      const outcome = await runDueStep(journey, row, { dryRun: ctx.dryRun, gate });
+      switch (outcome.kind) {
+        case 'sent':
+          counts.sent += 1;
+          break;
+        case 'advanced':
+          counts.skippedSteps += outcome.reason === 'completed' ? 0 : 1;
+          if (outcome.reason === 'completed') counts.completed += 1;
+          break;
+        case 'exited':
+          counts.exited += 1;
+          break;
+        case 'deferred':
+          counts.deferred += 1;
+          break;
+        case 'would-send':
+          wouldSend.push(outcome.label);
+          break;
       }
-
-      if (step.skipIf && (await step.skipIf(memberCtx))) {
-        if (!ctx.dryRun) await advance(journey, row);
-        skippedSteps += 1;
-        continue;
-      }
-
-      if (ctx.dryRun) {
-        wouldSend.push(`${journey.id}/${step.id} -> ${row.email}`);
-        continue;
-      }
-
-      const props = await step.props(memberCtx);
-      const result = await sendTemplate({
-        to: row.email,
-        template: step.template,
-        // defineStep() guarantees the template/props pairing per step; the
-        // heterogeneous steps array erases it for the compiler.
-        props: props as never,
-        kind: journey.kind,
-        sendKey: `journey:${journey.id}:${row.member_id}:${step.id}`,
-        memberId: row.member_id,
-        journeyId: journey.id,
-        stepId: step.id,
-      });
-
-      if (result.status === 'suppressed' && result.reason === 'unsubscribed') {
-        await transition(row, { status: 'exited', exit_reason: 'unsubscribed' });
-        exited += 1;
-        continue;
-      }
-
-      if (result.status === 'sent') {
-        sent += 1;
-        await captureEvent({
-          distinctId: row.email,
-          event: 'journey_email_sent',
-          properties: { journey: journey.id, step: step.id, template: step.template },
-        });
-      }
-
-      // 'sent', 'already-sent', and dev-mode suppression all advance — the
-      // step is done either way.
-      await advance(journey, row);
     } catch (error) {
       // Leave the row as-is; next tick retries (send dedupe makes that safe).
       log.warn(`Advance failed for ${row.journey_id} member ${row.member_id}`, error);
@@ -369,54 +566,272 @@ export async function advanceDueJourneys(ctx: CronJobContext): Promise<Record<st
 
   return {
     due: due?.length ?? 0,
-    sent,
-    skippedSteps,
-    exited,
-    completed,
-    ...(disabled.length > 0 && { disabled }),
+    ...counts,
     ...(ctx.dryRun && { wouldSend }),
   };
 }
 
-async function advance(journey: Journey, row: JourneyEnrollmentRow): Promise<void> {
-  const nextIndex = row.step + 1;
-  if (journey.steps[nextIndex]) {
-    await transition(row, {
-      step: nextIndex,
-      next_at: nextAtForStep(journey, nextIndex, Date.now()),
-    });
-  } else {
-    await completeJourney(journey, row);
+async function runDueStep(
+  journey: JourneyRecord,
+  row: JourneyEnrollmentRow,
+  { dryRun, gate }: { dryRun: boolean; gate: EmailGate }
+): Promise<StepOutcome> {
+  const steps = journey.definition.steps;
+  const index = row.current_step_key ? currentStepIndex(steps, row.current_step_key) : null;
+  if (index === null) {
+    if (!dryRun) await completeJourney(journey, row);
+    return { kind: 'advanced', reason: 'completed' };
   }
+  const step = steps[index];
+
+  if (journey.testMode && !gate.isAllowed(row.email)) {
+    if (!dryRun) await exitJourney(journey, row, 'not-whitelisted', step.key);
+    return { kind: 'exited', reason: 'not-whitelisted' };
+  }
+
+  // The row only stores id + email; pull the live member once per row so exit
+  // checks, skip checks and merge fields all share it. Packs fresh: this is
+  // the last look before a send.
+  const member = await fetchHostMember(row.member_id);
+  const memberCtx = buildContext(
+    {
+      memberId: row.member_id,
+      email: row.email,
+      firstName: member.firstName,
+      lastName: member.lastName,
+    },
+    {
+      member,
+      enrolledAt: Date.parse(row.enrolled_at),
+      enrollment: row.context as EnrollmentContext,
+      freshPacks: true,
+    }
+  );
+
+  const exit = await firstMatch(memberCtx, journey.definition.exitIf);
+  if (exit) {
+    const reason = `exit:${exit.negate ? 'not-' : ''}${exit.type}`;
+    if (!dryRun) await exitJourney(journey, row, reason, step.key);
+    return { kind: 'exited', reason };
+  }
+
+  const now = Date.now();
+  const introExpiresAt =
+    step.timing.anchor === 'intro-expiry' ? await resolveIntroExpiry(memberCtx) : null;
+  const anchors = anchorsFor(row, introExpiresAt);
+
+  if (step.timing.anchor !== 'previous') {
+    const dueAt = stepDueAt(step.timing, anchors, { fastMode: isFastMode() });
+    if (dueAt === null) {
+      if (!dryRun) await advance(journey, row, step, memberCtx, 'no-intro-offer');
+      return { kind: 'advanced', reason: 'no-intro-offer' };
+    }
+    if (dueAt > now + EARLY_TOLERANCE_MS) {
+      if (!dryRun) await reschedule(row, scheduleAt(step, anchors, now));
+      return { kind: 'deferred', until: dueAt, reason: 'not-yet-due' };
+    }
+    if (isStale(step.timing, dueAt, anchors, now)) {
+      if (!dryRun) await advance(journey, row, step, memberCtx, 'stale');
+      return { kind: 'advanced', reason: 'stale' };
+    }
+  }
+
+  const skip = await firstMatch(memberCtx, step.skipIf);
+  if (skip) {
+    const reason = `skip:${skip.negate ? 'not-' : ''}${skip.type}`;
+    if (!dryRun) await advance(journey, row, step, memberCtx, reason);
+    return { kind: 'advanced', reason };
+  }
+
+  if (step.content.type === 'none') {
+    if (dryRun)
+      return {
+        kind: 'would-send',
+        label: `${journey.id}/${step.key} (actions only) -> ${row.email}`,
+      };
+    await runActions(step.actions, row.member_id);
+    await advance(journey, row, step, memberCtx, 'actions-only');
+    return { kind: 'advanced', reason: 'actions-only' };
+  }
+
+  // Frequency cap across every journey — nobody gets a pile of marketing at once.
+  const capUntil = frequencyCapUntil(await recentMarketingSends(row.email, now), now);
+  if (capUntil !== null) {
+    if (!dryRun)
+      await reschedule(
+        row,
+        new Date(isFastMode() ? capUntil : clampToSendWindow(capUntil)).toISOString()
+      );
+    return { kind: 'deferred', until: capUntil, reason: 'frequency-cap' };
+  }
+
+  let send: Parameters<typeof sendTemplate>[0];
+  const common = {
+    to: row.email,
+    kind: 'marketing' as const,
+    sendKey: sendKeyFor(journey.id, row.member_id, step.key, row.cycle),
+    memberId: row.member_id,
+    journeyId: journey.id,
+    stepId: step.key,
+    journeyRevision: journey.revision,
+    whitelistOnly: journey.testMode,
+  };
+
+  if (step.content.type === 'blocks') {
+    const values = await mergeValues(memberCtx, usedFields(step.content));
+    const { content, missing } = fillContent(step.content, values);
+    if (missing.length > 0) {
+      const reason = `missing-merge-field:${missing.join(',')}`;
+      if (!dryRun) await advance(journey, row, step, memberCtx, reason);
+      return { kind: 'advanced', reason };
+    }
+    send = {
+      ...common,
+      template: 'journey',
+      props: {
+        firstName: memberCtx.firstName,
+        subject: content.subject,
+        preview: content.preview,
+        background: content.background,
+        blocks: content.blocks,
+        campaign: journey.id,
+      },
+    };
+  } else {
+    if (!isTemplateStepKey(step.content.key)) {
+      if (!dryRun) await advance(journey, row, step, memberCtx, 'unknown-template');
+      return { kind: 'advanced', reason: 'unknown-template' };
+    }
+    send = {
+      ...common,
+      template: step.content.key,
+      props: templateProps(step.content.key, memberCtx.firstName) as never,
+    };
+  }
+
+  if (dryRun) return { kind: 'would-send', label: `${journey.id}/${step.key} -> ${row.email}` };
+
+  await runActions(step.actions, row.member_id);
+  const result = await sendTemplate(send);
+
+  if (result.status === 'suppressed' && result.reason === 'unsubscribed') {
+    await exitJourney(journey, row, 'unsubscribed', step.key);
+    return { kind: 'exited', reason: 'unsubscribed' };
+  }
+
+  if (result.status === 'sent') {
+    await captureEvent({
+      distinctId: row.email,
+      event: 'journey_email_sent',
+      properties: {
+        journey: journey.id,
+        step: step.key,
+        template: send.template,
+        cycle: row.cycle,
+      },
+    });
+  }
+
+  // 'sent', 'already-sent', and dev-gate suppression all advance — the step
+  // is done either way.
+  await advance(journey, row, step, memberCtx, result.status);
+  return result.status === 'sent' ? { kind: 'sent' } : { kind: 'advanced', reason: result.status };
 }
 
-async function completeJourney(journey: Journey, row: JourneyEnrollmentRow): Promise<void> {
-  await transition(row, { status: 'completed', next_at: null });
+async function advance(
+  journey: JourneyRecord,
+  row: JourneyEnrollmentRow,
+  step: JourneyStep,
+  memberCtx: JourneyContext,
+  reason: string
+): Promise<void> {
+  const steps = journey.definition.steps;
+  const nextIndex = nextStepIndex(steps, step.key);
+  if (reason !== 'sent') log.info(`${journey.id}/${step.key} member ${row.member_id}: ${reason}`);
+  if (nextIndex === null) {
+    await completeJourney(journey, row);
+    return;
+  }
+
+  const next = steps[nextIndex];
+  const now = Date.now();
+  let context = row.context as EnrollmentContext;
+  let introExpiresAt: number | null = null;
+  if (next.timing.anchor === 'intro-expiry') {
+    introExpiresAt = await resolveIntroExpiry(memberCtx).catch(() => null);
+    if (introExpiresAt !== null) {
+      context = { ...context, introExpiresAt: new Date(introExpiresAt).toISOString() };
+    }
+  }
+  const lastStepAt = new Date(now).toISOString();
+  await transition(row, {
+    current_step_key: next.key,
+    last_step_at: lastStepAt,
+    context: context as Record<string, unknown>,
+    next_at: scheduleAt(
+      next,
+      anchorsFor({ ...row, last_step_at: lastStepAt }, introExpiresAt),
+      now
+    ),
+  });
+}
+
+async function completeJourney(journey: JourneyRecord, row: JourneyEnrollmentRow): Promise<void> {
+  await transition(row, {
+    status: 'completed',
+    next_at: null,
+    current_step_key: null,
+    ended_at: new Date().toISOString(),
+  });
   await captureEvent({
     distinctId: row.email,
     event: 'journey_completed',
     properties: { journey: journey.id },
   });
 
-  if (journey.completionTag) {
-    try {
-      const tagId = await getTagIdByName(journey.completionTag);
-      if (tagId) {
-        await assignMemberTag(row.member_id, tagId);
-      } else {
-        log.warn(
-          `Completion tag "${journey.completionTag}" not found in Momence — create it in the dashboard`
-        );
-      }
-    } catch (error) {
-      log.warn(`Could not write completion tag for ${journey.id}`, error);
-    }
-  }
+  const { completionTag, onEnd } = journey.definition;
+  if (completionTag) await runActions([{ type: 'add-tag', tag: completionTag }], row.member_id);
+  await runActions(onEnd, row.member_id);
+}
+
+export async function exitJourney(
+  journey: JourneyRecord,
+  row: Pick<JourneyEnrollmentRow, 'id' | 'email' | 'member_id'>,
+  reason: string,
+  stepKey?: string
+): Promise<void> {
+  await transition(row, {
+    status: 'exited',
+    exit_reason: reason,
+    next_at: null,
+    ended_at: new Date().toISOString(),
+  });
+  await captureEvent({
+    distinctId: row.email,
+    event: 'journey_exited',
+    properties: { journey: journey.id, step: stepKey, reason },
+  });
+  await runActions(journey.definition.onEnd, row.member_id);
+}
+
+async function reschedule(row: JourneyEnrollmentRow, nextAt: string): Promise<void> {
+  await transition(row, { next_at: nextAt });
 }
 
 async function transition(
-  row: JourneyEnrollmentRow,
-  patch: Partial<Pick<JourneyEnrollmentRow, 'step' | 'next_at' | 'status' | 'exit_reason'>>
+  row: Pick<JourneyEnrollmentRow, 'id'>,
+  patch: Partial<
+    Pick<
+      JourneyEnrollmentRow,
+      | 'current_step_key'
+      | 'next_at'
+      | 'status'
+      | 'exit_reason'
+      | 'last_step_at'
+      | 'context'
+      | 'ended_at'
+    >
+  >
 ): Promise<void> {
   const db = getDb();
   if (!db) return;
@@ -424,4 +839,65 @@ async function transition(
   if (error) {
     log.error(`Enrollment update failed for ${row.id}: ${error.message}`);
   }
+}
+
+// --- Admin-triggered maintenance ---
+
+/**
+ * Pull every step that came due while a journey was paused forward to now.
+ * Without this, a journey paused for a month leaves rows sorted a month deep
+ * at the head of the `order by next_at` queue, crowding out every other
+ * journey's genuinely-due sends batch after batch. (Anchored steps that went
+ * stale meanwhile are skipped at run time, not sent late.)
+ */
+export async function resumeHeldEnrollments(journeyId: string): Promise<number> {
+  const db = getDb();
+  if (!db) return 0;
+  const now = new Date().toISOString();
+  const { data, error } = await db
+    .from('journey_enrollments')
+    .update({ next_at: now })
+    .eq('journey_id', journeyId)
+    .eq('status', 'active')
+    .lt('next_at', now)
+    .select('id');
+  if (error) {
+    log.error(`Resume reschedule failed for ${journeyId}: ${error.message}`);
+    return 0;
+  }
+  return data?.length ?? 0;
+}
+
+/**
+ * Re-time people waiting on steps whose timing just changed. Uses what the
+ * row remembers (anchor, previous step, last known intro expiry) — the
+ * due-time check re-reads Momence anyway.
+ */
+export async function rescheduleWaiting(
+  journey: JourneyRecord,
+  stepKeys: string[]
+): Promise<number> {
+  const db = getDb();
+  if (!db || stepKeys.length === 0) return 0;
+  const { data, error } = await db
+    .from('journey_enrollments')
+    .select('*')
+    .eq('journey_id', journey.id)
+    .eq('status', 'active')
+    .in('current_step_key', stepKeys);
+  if (error) {
+    log.error(`Reschedule lookup failed for ${journey.id}: ${error.message}`);
+    return 0;
+  }
+  const now = Date.now();
+  let updated = 0;
+  for (const row of data as JourneyEnrollmentRow[]) {
+    const step = journey.definition.steps.find((s) => s.key === row.current_step_key);
+    if (!step) continue;
+    const remembered = (row.context as EnrollmentContext).introExpiresAt;
+    const anchors = anchorsFor(row, remembered ? Date.parse(remembered) : null);
+    await transition(row, { next_at: scheduleAt(step, anchors, now) });
+    updated += 1;
+  }
+  return updated;
 }

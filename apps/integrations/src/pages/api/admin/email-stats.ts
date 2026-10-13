@@ -6,7 +6,7 @@
 import type { APIRoute } from 'astro';
 import { requirePage } from '@/lib/auth/admin';
 import { getDb } from '@/lib/db';
-import { JOURNEYS } from '@/lib/email/journeys/registry';
+import { loadJourneys } from '@/lib/email/journeys/store';
 import { json } from '@/lib/http/route';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -96,14 +96,14 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     db.from('journey_enrollments').select('journey_id, status, next_at').limit(MAX_ENROLLMENT_ROWS),
     db
       .from('journey_enrollments')
-      .select('journey_id, email, member_id, step, next_at')
+      .select('journey_id, email, member_id, current_step_key, next_at')
       .eq('status', 'active')
       .not('next_at', 'is', null)
       .order('next_at', { ascending: true })
       .limit(15),
     db
       .from('journey_enrollments')
-      .select('journey_id, email, member_id, step, status, exit_reason, enrolled_at')
+      .select('journey_id, email, member_id, current_step_key, status, exit_reason, enrolled_at')
       .order('enrolled_at', { ascending: false })
       .limit(10),
   ]);
@@ -187,7 +187,8 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       nextDueAt: string | null;
     }
   >();
-  for (const journey of JOURNEYS) {
+  const registered = await loadJourneys();
+  for (const journey of registered) {
     journeyStats.set(journey.id, {
       active: 0,
       completed: 0,
@@ -211,11 +212,11 @@ export const GET: APIRoute = async ({ cookies, url }) => {
     }
   }
 
-  const registry = new Map(JOURNEYS.map((j) => [j.id, j]));
+  const registry = new Map(registered.map((j) => [j.id, j]));
   const journeys = [...journeyStats.entries()].map(([id, stats]) => ({
     id,
-    kind: registry.get(id)?.kind ?? null,
-    stepCount: registry.get(id)?.steps.length ?? null,
+    kind: registry.has(id) ? ('marketing' as const) : null,
+    stepCount: registry.get(id)?.definition.steps.filter((s) => !s.archived).length ?? null,
     registered: registry.has(id),
     ...stats,
   }));

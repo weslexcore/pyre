@@ -6,6 +6,7 @@ import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
 import { IntroFollowUp } from './templates/IntroFollowUp';
+import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
 import { MembershipPitch } from './templates/MembershipPitch';
@@ -66,6 +67,11 @@ export const EMAIL_TEMPLATES: Registry = {
   'credit-expiry-reminder': {
     subject: (p) => `Your ${p.creditsLabel} expire ${p.expiresOn}`,
     Component: CreditExpiryReminder,
+  },
+  // Every dashboard-built journey email; the subject is written per step.
+  journey: {
+    subject: (p) => p.subject,
+    Component: JourneyEmail,
   },
   'unused-credit-reminder': {
     subject: (p) => `You still have ${p.creditsLabel} at Pyre`,

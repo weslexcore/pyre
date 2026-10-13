@@ -13,12 +13,49 @@ export interface JourneyEnrollmentRow {
   journey_id: string;
   member_id: number;
   email: string;
+  /** Legacy position index — superseded by current_step_key, no longer written. */
   step: number;
+  /** The step waiting to run; null once there is none left. */
+  current_step_key: string | null;
+  /** Re-entry run number (0 = first time through). */
+  cycle: number;
   next_at: string | null;
   status: 'active' | 'completed' | 'exited';
   exit_reason: string | null;
+  /** What step timing counts from (session end, or enrollment). */
+  anchor_at: string | null;
+  /** How they entered — see EnrollmentContext in lib/email/journeys/context.ts. */
+  context: Record<string, unknown>;
+  last_step_at: string | null;
+  ended_at: string | null;
   enrolled_at: string;
   updated_at: string;
+}
+
+// A dashboard-built journey (/admin/journeys). `definition` is validated by
+// lib/email/journeys/schema.ts on read and on every save.
+export interface JourneyRow {
+  id: string;
+  name: string;
+  enabled: boolean;
+  test_mode: boolean;
+  archived: boolean;
+  revision: number;
+  definition: unknown;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JourneyRevisionRow {
+  id: string;
+  journey_id: string;
+  revision: number;
+  name: string;
+  definition: unknown;
+  edited_by: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 export interface EmailSendRow {
@@ -34,6 +71,12 @@ export interface EmailSendRow {
   resend_id: string | null;
   status: 'sent' | 'skipped' | 'suppressed' | 'failed';
   error: string | null;
+  subject: string | null;
+  journey_revision: number | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  bounced_at: string | null;
   sent_at: string;
 }
 
@@ -243,17 +286,6 @@ export interface EmailWhitelistRow {
   email: string;
   added_by: string | null;
   created_at: string;
-}
-
-// Per-journey pause switch managed from /admin/email-templates and read
-// through the cached settings in lib/email/journeys/settings.ts. No row =
-// enabled.
-export interface JourneySettingRow {
-  journey_id: string;
-  enabled: boolean;
-  updated_by: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 // Raw Momence report-run results, one row per (report type, ET day), written

@@ -21,6 +21,9 @@ export interface BookingTriggerEvent {
   lastName: string;
   sessionId: number;
   sessionBookingId: number;
+  /** ISO times of the booked session, when the events feed resolved it. */
+  sessionStartsAt?: string;
+  sessionEndsAt?: string;
 }
 
 export interface PurchaseTriggerEvent {
