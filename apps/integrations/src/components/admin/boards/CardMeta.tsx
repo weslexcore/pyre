@@ -5,9 +5,11 @@
 // a form of labelled selects.
 
 import {
+  createContext,
   type KeyboardEvent,
   type ReactNode,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -39,6 +41,13 @@ const menuItemClass =
 const EDGE_MARGIN = 8;
 
 /**
+ * Set where the pickers sit in a scrolling box too small to hold their
+ * menus — the create form in global search. Each menu then floats over
+ * the page, pinned to its chip, instead of opening inside the box.
+ */
+export const FloatingPickers = createContext(false);
+
+/**
  * A chip and the menu it opens. Escape and a press outside close the menu
  * without closing the drawer around it.
  */
@@ -60,19 +69,61 @@ function Picker({
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const floating = useContext(FloatingPickers);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(rootRef, open, close);
 
-  // Keep the menu on screen when its chip sits near the right edge.
-  const positionPanel = useCallback((panel: HTMLDivElement | null) => {
-    if (!panel || !rootRef.current) return;
-    panel.style.transform = '';
-    const viewport = document.documentElement.clientWidth;
-    const left = rootRef.current.getBoundingClientRect().left;
-    const rightmost = Math.max(EDGE_MARGIN, viewport - EDGE_MARGIN - panel.offsetWidth);
-    const offset = Math.min(Math.max(left, EDGE_MARGIN), rightmost) - left;
-    if (offset !== 0) panel.style.transform = `translateX(${offset}px)`;
+  // A floating menu is fixed to the viewport: under its chip, or above it
+  // when there is more room there, and never wider or taller than the
+  // screen. It follows the chip while anything behind it scrolls.
+  const floatPanel = useCallback(() => {
+    const panel = panelRef.current;
+    const chip = buttonRef.current;
+    if (!panel || !chip) return;
+    const rect = chip.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight;
+    const below = viewportHeight - rect.bottom - EDGE_MARGIN - 4;
+    const above = rect.top - EDGE_MARGIN - 4;
+    const up = panel.scrollHeight > below && above > below;
+    panel.style.maxHeight = `${Math.max(up ? above : below, 120)}px`;
+    panel.style.left = `${Math.min(
+      Math.max(rect.left, EDGE_MARGIN),
+      Math.max(EDGE_MARGIN, viewportWidth - EDGE_MARGIN - panel.offsetWidth)
+    )}px`;
+    panel.style.top = up ? '' : `${rect.bottom + 4}px`;
+    panel.style.bottom = up ? `${viewportHeight - rect.top + 4}px` : '';
   }, []);
+
+  useEffect(() => {
+    if (!open || !floating) return;
+    window.addEventListener('scroll', floatPanel, true);
+    window.addEventListener('resize', floatPanel);
+    return () => {
+      window.removeEventListener('scroll', floatPanel, true);
+      window.removeEventListener('resize', floatPanel);
+    };
+  }, [open, floating, floatPanel]);
+
+  // Keep the menu on screen when its chip sits near the right edge.
+  const positionPanel = useCallback(
+    (panel: HTMLDivElement | null) => {
+      panelRef.current = panel;
+      if (!panel || !rootRef.current) return;
+      if (floating) {
+        floatPanel();
+        return;
+      }
+      panel.style.transform = '';
+      const viewport = document.documentElement.clientWidth;
+      const left = rootRef.current.getBoundingClientRect().left;
+      const rightmost = Math.max(EDGE_MARGIN, viewport - EDGE_MARGIN - panel.offsetWidth);
+      const offset = Math.min(Math.max(left, EDGE_MARGIN), rightmost) - left;
+      if (offset !== 0) panel.style.transform = `translateX(${offset}px)`;
+    },
+    [floating, floatPanel]
+  );
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !open) return;
@@ -104,7 +155,7 @@ function Picker({
           ref={positionPanel}
           role="dialog"
           aria-label={label}
-          className={`absolute left-0 top-full z-30 mt-1 max-h-[60vh] max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-white/15 bg-[var(--pyre-black)] p-2 shadow-xl ${panelClassName}`}
+          className={`${floating ? 'fixed z-[60]' : 'absolute left-0 top-full z-30 mt-1 max-h-[60vh]'} max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-white/15 bg-[var(--pyre-black)] p-2 shadow-xl ${panelClassName}`}
         >
           {children(() => {
             setOpen(false);

@@ -7,7 +7,7 @@ import { BOARD_LIMITS, GOALS_BOARD_SLUG } from '@/lib/boards/types';
 import { sendJson } from '@/lib/client/api';
 import type { BoardCardRow, BoardRow } from '@/lib/db';
 import type { PeopleNames } from '@/lib/sops/names';
-import { AssigneePicker, DuePicker } from './boards/CardMeta';
+import { AssigneePicker, DuePicker, FloatingPickers } from './boards/CardMeta';
 import { namesAsOwners } from './boards/owners';
 import { inputClass, primaryButtonClass, selectClass } from './goalsUi';
 
@@ -148,19 +148,21 @@ export function SearchTaskCreate({
           <fieldset className="space-y-1 text-sm text-white/60" disabled={saving}>
             <legend className="mb-1">Assignees and due date</legend>
             <div className="flex flex-wrap items-center gap-2">
-              <AssigneePicker
-                owners={ownerOptions}
-                value={assignees}
-                names={nameOf}
-                onChange={setAssignees}
-              />
-              <DuePicker
-                value={dueDate}
-                repeat={repeat}
-                today={todayEastern()}
-                onDateChange={setDueDate}
-                onRepeatChange={(next) => setRepeat(next)}
-              />
+              <FloatingPickers.Provider value={true}>
+                <AssigneePicker
+                  owners={ownerOptions}
+                  value={assignees}
+                  names={nameOf}
+                  onChange={setAssignees}
+                />
+                <DuePicker
+                  value={dueDate}
+                  repeat={repeat}
+                  today={todayEastern()}
+                  onDateChange={setDueDate}
+                  onRepeatChange={(next) => setRepeat(next)}
+                />
+              </FloatingPickers.Provider>
             </div>
             {assignees.length === 0 && defaults.length > 0 && (
               <p className="text-xs text-white/40">
