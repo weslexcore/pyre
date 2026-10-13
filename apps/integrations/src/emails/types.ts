@@ -1,7 +1,7 @@
 // Per-template prop interfaces and the template -> props map that keeps the
 // registry, sendTemplate(), and call sites type-safe.
 
-import type { EmailBlock } from '@/lib/email/journeys/schema';
+import type { EmailBlockInput } from '@/lib/email/journeys/schema';
 
 // Add-to-calendar URLs, built at send time (lib/calendar/links.ts). `ics` is
 // the hosted signed .ics link ("Apple"); absent when no signing secret is set.
@@ -76,7 +76,7 @@ export interface JourneyEmailProps extends MarketingEmailBaseProps {
   subject: string;
   preview: string;
   background: 'clouds' | 'trees' | 'lamps';
-  blocks: EmailBlock[];
+  blocks: EmailBlockInput[];
   /** utm_campaign for tracked links — the journey id. */
   campaign: string;
   /** The step's key, prefixed onto each link's utm_content. */

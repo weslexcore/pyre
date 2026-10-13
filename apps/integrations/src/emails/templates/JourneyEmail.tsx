@@ -6,7 +6,7 @@ import {
   parseInline,
   splitParagraphs,
 } from '@/lib/email/journeys/inline-markdown';
-import type { EmailBlock } from '@/lib/email/journeys/schema';
+import { BUTTON_COLORS, type EmailBlockInput } from '@/lib/email/journeys/schema';
 import { button, COLORS, EmailLayout, heading, text } from '../components/EmailLayout';
 import { journeyLink, journeyLinkContent } from '../components/utm';
 import type { JourneyEmailProps } from '../types';
@@ -59,7 +59,7 @@ function Block({
   campaign,
   stepKey,
 }: {
-  block: EmailBlock;
+  block: EmailBlockInput;
   campaign: string;
   stepKey?: string;
 }): ReactNode {
@@ -85,16 +85,40 @@ function Block({
           ))}
         </Section>
       );
-    case 'button':
+    case 'button': {
       if (!block.label || !isSafeHref(block.url)) return null;
+      const href = journeyLink(block.url, campaign, journeyLinkContent(stepKey, block.label));
+      const color = BUTTON_COLORS[block.color ?? 'red'] ?? BUTTON_COLORS.red;
+      if (block.style === 'link') {
+        return (
+          <Text style={{ ...text, margin: '0 0 24px' }}>
+            <Link
+              href={href}
+              style={{ color: color.hex, fontWeight: 600, textDecoration: 'underline' }}
+            >
+              {block.label}
+            </Link>
+          </Text>
+        );
+      }
+      const width = block.fullWidth
+        ? {
+            display: 'block',
+            width: '100%',
+            textAlign: 'center' as const,
+            boxSizing: 'border-box' as const,
+          }
+        : {};
+      const look =
+        block.style === 'outline'
+          ? { backgroundColor: 'transparent', color: color.hex, border: `2px solid ${color.hex}` }
+          : { backgroundColor: color.hex, color: color.text };
       return (
-        <Button
-          href={journeyLink(block.url, campaign, journeyLinkContent(stepKey, block.label))}
-          style={button}
-        >
+        <Button href={href} style={{ ...button, ...look, ...width }}>
           {block.label}
         </Button>
       );
+    }
     case 'divider':
       return <Hr style={{ borderColor: COLORS.sky, margin: '28px 0 20px' }} />;
     case 'image': {

@@ -197,6 +197,25 @@ export type JourneyAction = z.infer<typeof actionSchema>;
 
 export const EMAIL_BACKGROUNDS = ['trees', 'clouds', 'lamps'] as const;
 
+/** Button colors — the Pyre brand palette (hex, since email clients need it). */
+export const BUTTON_COLORS = {
+  red: { label: 'Ember red', hex: '#d15232', text: '#f5f1e9' },
+  sky: { label: 'Sky blue', hex: '#3991b7', text: '#f5f1e9' },
+  gold: { label: 'Gold', hex: '#dbb155', text: '#23221c' },
+  sage: { label: 'Sage', hex: '#839770', text: '#f5f1e9' },
+  creme: { label: 'Creme', hex: '#f5f1e9', text: '#23221c' },
+} as const;
+export const BUTTON_COLOR_KEYS = ['red', 'sky', 'gold', 'sage', 'creme'] as const;
+export type ButtonColor = (typeof BUTTON_COLOR_KEYS)[number];
+
+export const BUTTON_STYLES = ['filled', 'outline', 'link'] as const;
+export type ButtonStyle = (typeof BUTTON_STYLES)[number];
+export const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
+  filled: 'Solid button',
+  outline: 'Outline button',
+  link: 'Text link',
+};
+
 export const blockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('heading'), text: z.string().max(200) }),
   /** Markdown subset: **bold**, *italic*, [label](url). Blank lines split paragraphs. */
@@ -206,6 +225,12 @@ export const blockSchema = z.discriminatedUnion('type', [
     type: z.literal('button'),
     label: z.string().max(80),
     url: z.string().max(1000),
+    /** Brand color (see BUTTON_COLORS). */
+    color: z.enum(BUTTON_COLOR_KEYS).default('red'),
+    /** filled = solid button, outline = bordered, link = underlined text. */
+    style: z.enum(BUTTON_STYLES).default('filled'),
+    /** Stretch across the email's width. */
+    fullWidth: z.boolean().default(false),
   }),
   z.object({ type: z.literal('divider') }),
   z.object({
@@ -218,6 +243,8 @@ export const blockSchema = z.discriminatedUnion('type', [
 ]);
 
 export type EmailBlock = z.infer<typeof blockSchema>;
+/** A block before defaults are filled in (older saved buttons have no color/style). */
+export type EmailBlockInput = z.input<typeof blockSchema>;
 export type EmailBlockType = EmailBlock['type'];
 
 export const blockContentSchema = z.object({

@@ -112,7 +112,14 @@ export function newStep(steps: JourneyStep[]): JourneyStep {
       blocks: [
         { type: 'heading', text: 'Hi {{firstName|there}}' },
         { type: 'paragraph', text: '' },
-        { type: 'button', label: 'Book a session', url: 'https://pyresauna.com/events' },
+        {
+          type: 'button',
+          label: 'Book a session',
+          url: 'https://pyresauna.com/events',
+          color: 'red',
+          style: 'filled',
+          fullWidth: false,
+        },
         { type: 'signoff', text: 'Wes + Julien' },
       ],
     },
@@ -138,7 +145,14 @@ export function newBlock(type: EmailBlockType): EmailBlock {
     case 'list':
       return { type, items: [''] };
     case 'button':
-      return { type, label: 'Book a session', url: 'https://pyresauna.com/events' };
+      return {
+        type,
+        label: 'Book a session',
+        url: 'https://pyresauna.com/events',
+        color: 'red',
+        style: 'filled',
+        fullWidth: false,
+      };
     case 'divider':
       return { type };
     case 'image':

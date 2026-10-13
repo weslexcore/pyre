@@ -181,7 +181,14 @@ describe('merge fields', () => {
       background: 'trees',
       blocks: [
         { type: 'list', items: ['{{creditsLabel}}'] },
-        { type: 'button', label: 'Go', url: 'https://pyresauna.com/events' },
+        {
+          type: 'button',
+          label: 'Go',
+          url: 'https://pyresauna.com/events',
+          color: 'red',
+          style: 'filled',
+          fullWidth: false,
+        },
       ],
     };
     const { content: filled, missing } = fillContent(content, { firstName: 'Ana' });

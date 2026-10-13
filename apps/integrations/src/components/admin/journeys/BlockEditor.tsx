@@ -2,11 +2,16 @@
 // background, and an ordered list of blocks. Merge-field chips insert
 // {{field}} at the cursor of whichever field was focused last.
 
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useId, useRef } from 'react';
 import { isTaggedHost, journeyLink, journeyLinkContent } from '@/emails/components/utm';
 import { MERGE_FIELD_KEYS, MERGE_FIELDS } from '@/lib/email/journeys/merge-fields';
 import {
   type BlockContent,
+  BUTTON_COLOR_KEYS,
+  BUTTON_COLORS,
+  BUTTON_STYLE_LABELS,
+  BUTTON_STYLES,
+  type ButtonStyle,
   EMAIL_BACKGROUNDS,
   type EmailBlock,
   type EmailBlockType,
@@ -212,6 +217,8 @@ function BlockFields({
   field: FieldProps;
   tracked: (label: string, url: string) => ReactNode;
 }) {
+  // Names the color radio group per block.
+  const id = useId();
   switch (block.type) {
     case 'heading':
     case 'signoff':
@@ -254,6 +261,54 @@ function BlockFields({
             placeholder="https://..."
             {...field(block.url, (url) => onChange({ ...block, url }))}
           />
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+            <select
+              className={compactSelectClass}
+              value={block.style}
+              aria-label="Button style"
+              onChange={(e) => onChange({ ...block, style: e.target.value as ButtonStyle })}
+            >
+              {BUTTON_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {BUTTON_STYLE_LABELS[style]}
+                </option>
+              ))}
+            </select>
+            <fieldset className="flex gap-1">
+              <legend className="sr-only">Button color</legend>
+              {BUTTON_COLOR_KEYS.map((key) => (
+                <label
+                  key={key}
+                  title={BUTTON_COLORS[key].label}
+                  className={`h-6 w-6 cursor-pointer rounded-full border-2 transition-transform has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-white/60 ${
+                    block.color === key
+                      ? 'scale-110 border-white'
+                      : 'border-white/20 hover:border-white/50'
+                  }`}
+                  style={{ backgroundColor: BUTTON_COLORS[key].hex }}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    name={`button-color-${id}`}
+                    checked={block.color === key}
+                    onChange={() => onChange({ ...block, color: key })}
+                    aria-label={BUTTON_COLORS[key].label}
+                  />
+                </label>
+              ))}
+            </fieldset>
+            {block.style !== 'link' && (
+              <label className="flex items-center gap-1.5 text-xs text-white/60">
+                <input
+                  type="checkbox"
+                  checked={block.fullWidth}
+                  onChange={(e) => onChange({ ...block, fullWidth: e.target.checked })}
+                />
+                Full width
+              </label>
+            )}
+          </div>
           <div className="sm:col-span-2">{tracked(block.label, block.url)}</div>
         </div>
       );

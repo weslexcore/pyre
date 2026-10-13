@@ -63,6 +63,41 @@ describe('JourneyEmail', () => {
     expect(out).toMatch(/<\/a>\./);
   });
 
+  it('draws buttons in the chosen color and style', async () => {
+    const solid = await html([
+      { type: 'button', label: 'Go', url: 'https://pyresauna.com/', color: 'sky', style: 'filled' },
+    ]);
+    expect(solid).toMatch(/background-color:#3991b7/);
+
+    const outline = await html([
+      {
+        type: 'button',
+        label: 'Go',
+        url: 'https://pyresauna.com/',
+        color: 'gold',
+        style: 'outline',
+      },
+    ]);
+    expect(outline).toMatch(/border:2px solid #dbb155/);
+
+    const link = await html([
+      {
+        type: 'button',
+        label: 'Read more',
+        url: 'https://pyresauna.com/',
+        color: 'sage',
+        style: 'link',
+      },
+    ]);
+    expect(link).toMatch(/color:#839770/);
+    expect(link).toContain('text-decoration:underline');
+  });
+
+  it('draws a button saved before colors existed as the solid red default', async () => {
+    const out = await html([{ type: 'button', label: 'Go', url: 'https://pyresauna.com/' }]);
+    expect(out).toMatch(/background-color:#d15232/);
+  });
+
   it('drops buttons and images with unsafe URLs', async () => {
     const out = await html([
       { type: 'button', label: 'Bad', url: 'javascript:alert(1)' },
