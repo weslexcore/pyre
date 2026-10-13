@@ -3,11 +3,8 @@ import { cachedQuery } from '@/lib/cached-query';
 import { getDb, type JourneyRevisionRow, type JourneyRow } from '@/lib/db';
 import { unknownTokens } from './merge-fields';
 
-export { isTemplateStepKey, TEMPLATE_STEP_KEYS, type TemplateStepKey } from './schema';
-
 import {
   definitionSchema,
-  isTemplateStepKey,
   JOURNEY_ID_RE,
   type JourneyDefinition,
   type JourneyRecord,
@@ -103,9 +100,9 @@ export async function listRevisions(id: string): Promise<JourneyRevisionRow[]> {
 // --- Validation beyond the schema ---
 
 /**
- * Problems the zod schema can't see: unknown merge fields, unknown coded
- * templates, and steps that vanished since the last revision (members may be
- * waiting on them — archive instead).
+ * Problems the zod schema can't see: unknown merge fields, and steps that
+ * vanished since the last revision (members may be waiting on them — archive
+ * instead).
  */
 export function definitionProblems(
   definition: JourneyDefinition,
@@ -120,9 +117,6 @@ export function definitionProblems(
           `Step "${step.name || step.key}" uses unknown merge field${unknown.length === 1 ? '' : 's'}: ${unknown.map((u) => `{{${u}}}`).join(', ')}`
         );
       }
-    }
-    if (step.content.type === 'template' && !isTemplateStepKey(step.content.key)) {
-      problems.push(`Step "${step.name || step.key}" uses unknown template "${step.content.key}"`);
     }
   }
   if (previous) {

@@ -18,6 +18,7 @@ export const CONDITION_TYPES = [
   'ever-bought-intro',
   'has-non-intro-purchase',
   'has-credits',
+  'credits-expire-within',
   'intro-expired',
   'attended-trigger-session',
   'visited-since-enrollment',
@@ -33,7 +34,7 @@ export const conditionSchema = z.object({
   negate: z.boolean().default(false),
   /** Only has-tag reads this. */
   tag: z.string().trim().max(80).optional(),
-  /** Only total-visits-at-least reads this. */
+  /** total-visits-at-least: visits. credits-expire-within: days. */
   count: z.number().int().min(0).max(1000).optional(),
 });
 
@@ -74,6 +75,12 @@ export const CONDITIONS: Record<ConditionType, ConditionMeta> = {
     label: 'Has credits left',
     negatedLabel: 'Has no credits left',
     description: 'Unused credits on any active pack (intro included).',
+  },
+  'credits-expire-within': {
+    label: 'Has credits expiring within (days)',
+    negatedLabel: 'Has no credits expiring within (days)',
+    description: 'A pack with credits left that expires in this many days or fewer.',
+    param: 'count',
   },
   'intro-expired': {
     label: 'Intro offer has expired',
@@ -128,6 +135,8 @@ export const triggerSchema = z.discriminatedUnion('type', [
     withTags: z.array(z.string().trim().min(1).max(80)).max(10).default([]),
     /** Members carrying NONE of these tags. */
     withoutTags: z.array(z.string().trim().min(1).max(80)).max(10).default([]),
+    /** Only members holding an active membership or credit pack. */
+    withActivePurchase: z.boolean().default(false),
   }),
   z.object({ type: z.literal('manual') }),
 ]);
@@ -153,12 +162,12 @@ export const TRIGGERS: Record<TriggerType, { label: string; description: string 
 
 // --- Timing ---
 
-export const TIMING_ANCHORS = ['trigger', 'previous', 'intro-expiry'] as const;
+export const TIMING_ANCHORS = ['trigger', 'previous', 'intro-expiry', 'credits-expiry'] as const;
 export type TimingAnchor = (typeof TIMING_ANCHORS)[number];
 
 export const timingSchema = z.object({
   anchor: z.enum(TIMING_ANCHORS),
-  /** Hours from the anchor; negative = before it (only meaningful for intro-expiry). */
+  /** Hours from the anchor; negative = before it (only for the expiry anchors). */
   offsetHours: z
     .number()
     .min(-24 * 365)
@@ -182,7 +191,15 @@ export const ANCHORS: Record<TimingAnchor, { label: string; description: string 
     description:
       'When their intro offer pack expires. The step is skipped if they have no intro offer.',
   },
+  'credits-expiry': {
+    label: 'Credits expiry',
+    description:
+      'When their soonest-expiring credits run out (a pack with credits left). Skipped if none expire.',
+  },
 };
+
+/** Anchors that can be counted backwards from ("2 days before ..."). */
+export const EXPIRY_ANCHORS: readonly TimingAnchor[] = ['intro-expiry', 'credits-expiry'];
 
 // --- Actions ---
 
@@ -258,34 +275,10 @@ export const blockContentSchema = z.object({
 
 export type BlockContent = z.infer<typeof blockContentSchema>;
 
-/** Coded templates a step may send instead of blocks (the converted journeys). */
-export const TEMPLATE_STEP_KEYS = [
-  'intro-follow-up',
-  'credit-pack-pitch',
-  'membership-pitch',
-  'review-request',
-] as const;
-
-export type TemplateStepKey = (typeof TEMPLATE_STEP_KEYS)[number];
-
-export function isTemplateStepKey(key: string): key is TemplateStepKey {
-  return (TEMPLATE_STEP_KEYS as readonly string[]).includes(key);
-}
-
-/** A coded React Email template from src/emails/registry.ts (converted journeys). */
-export const templateContentSchema = z.object({
-  type: z.literal('template'),
-  key: z.string().min(1),
-});
-
 /** No email: the step only waits and runs its actions (e.g. a discount window closing). */
 export const noContentSchema = z.object({ type: z.literal('none') });
 
-export const contentSchema = z.discriminatedUnion('type', [
-  blockContentSchema,
-  templateContentSchema,
-  noContentSchema,
-]);
+export const contentSchema = z.discriminatedUnion('type', [blockContentSchema, noContentSchema]);
 
 export type StepContent = z.infer<typeof contentSchema>;
 
@@ -434,7 +427,9 @@ export function describeTiming(t: StepTiming, sessionTrigger = false): string {
         : 'enrollment'
       : t.anchor === 'previous'
         ? 'the previous email'
-        : 'intro expiry';
+        : t.anchor === 'intro-expiry'
+          ? 'intro expiry'
+          : 'their credits expire';
   if (!amount) {
     if (t.anchor === 'previous') return 'Right after the previous email';
     return t.anchor === 'trigger' && sessionTrigger ? 'When the session ends' : `At ${anchor}`;

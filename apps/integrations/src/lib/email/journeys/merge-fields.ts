@@ -12,6 +12,7 @@ export const MERGE_FIELDS = {
   creditsLeft: { label: 'Credits left (number)', sample: '3' },
   creditsLabel: { label: 'Credits left ("3 credits")', sample: '3 credits' },
   creditsExpireOn: { label: 'Soonest credit expiry date', sample: 'November 2' },
+  daysUntilCreditsExpire: { label: 'Days until credits expire', sample: '3' },
   introExpiresOn: { label: 'Intro offer expiry date', sample: 'October 27' },
   daysUntilIntroExpiry: { label: 'Days until intro expires', sample: '2' },
 } as const;

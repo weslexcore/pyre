@@ -5,10 +5,10 @@
 //   utm_source   = lifecycle   (automated journey email; broadcasts will use
 //                               a different source, e.g. "newsletter")
 //   utm_medium   = email
-//   utm_campaign = the journey/campaign id used everywhere else
-//                  (post-intro-offer, review-request, credit-expiry,
-//                  unused-credit) so web-side attribution joins cleanly with
-//                  the journey_* and email_* events
+//   utm_campaign = the campaign the email belongs to (for journeys, the
+//                  journey's linked campaign, else its id) so web-side
+//                  attribution joins cleanly with the journey_* and email_*
+//                  events
 //   utm_content  = which link/CTA inside the email
 //
 // Do NOT apply to third-party deep links we don't control (the Google review

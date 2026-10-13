@@ -11,12 +11,12 @@ import {
   type BlockContent,
   describeCondition,
   describeTiming,
+  EXPIRY_ANCHORS,
   type JourneyDefinition,
   type JourneyStep,
   journeyCampaign,
   type StepContent,
   type StepTiming,
-  TEMPLATE_STEP_KEYS,
   TIMING_ANCHORS,
   type TimingAnchor,
 } from '@/lib/email/journeys/schema';
@@ -28,7 +28,6 @@ import {
   compactInputClass,
   compactSelectClass,
   labelClass,
-  microLabelClass,
   newStep,
   sectionHeading,
 } from './journeyUi';
@@ -93,9 +92,7 @@ export function StepsPanel({
                     ? 'Archived - skipped'
                     : step.content.type === 'blocks'
                       ? step.content.subject
-                      : step.content.type === 'template'
-                        ? `Coded template: ${step.content.key}`
-                        : 'No email - actions only'}
+                      : 'No email - actions only'}
                 </span>
                 {step.skipIf.length > 0 && !step.archived && (
                   <span className="mt-0.5 block truncate text-[11px] text-white/40">
@@ -170,8 +167,8 @@ function TimingEditor({
     const a = next.amount ?? amount;
     const u = next.unit ?? unit;
     const anchor = next.anchor ?? timing.anchor;
-    // Only intro expiry can be counted backwards from.
-    const b = anchor === 'intro-expiry' ? (next.before ?? before) : false;
+    // Only the expiry dates can be counted backwards from.
+    const b = EXPIRY_ANCHORS.includes(anchor) ? (next.before ?? before) : false;
     onChange({ anchor, offsetHours: (b ? -1 : 1) * a * UNITS[u] });
   };
 
@@ -193,7 +190,7 @@ function TimingEditor({
         <option value="hours">hours</option>
         <option value="days">days</option>
       </select>
-      {timing.anchor === 'intro-expiry' ? (
+      {EXPIRY_ANCHORS.includes(timing.anchor) ? (
         <select
           className={compactSelectClass}
           value={before ? 'before' : 'after'}
@@ -259,8 +256,6 @@ function StepEditor({
     if (type === step.content.type) return;
     if (type === 'blocks') {
       onChange({ content: newStep([]).content });
-    } else if (type === 'template') {
-      onChange({ content: { type: 'template', key: TEMPLATE_STEP_KEYS[0] } });
     } else {
       onChange({ content: { type: 'none' } });
     }
@@ -360,7 +355,6 @@ function StepEditor({
             onChange={(e) => setContentType(e.target.value as StepContent['type'])}
           >
             <option value="blocks">Write an email</option>
-            <option value="template">Coded template</option>
             <option value="none">No email (wait, then run actions)</option>
           </select>
         </div>
@@ -370,27 +364,6 @@ function StepEditor({
             This step sends nothing: it waits for its time, then runs its tag actions (for example,
             to end a discount window).
           </p>
-        )}
-
-        {step.content.type === 'template' && (
-          <label>
-            <span className={microLabelClass}>Template</span>
-            <select
-              className={`${compactSelectClass} mt-1`}
-              value={step.content.key}
-              onChange={(e) => onChange({ content: { type: 'template', key: e.target.value } })}
-            >
-              {TEMPLATE_STEP_KEYS.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-xs text-white/40">
-              A coded email from the original journeys; its copy can only change in code. Switch to
-              "Write an email" to edit it here.
-            </span>
-          </label>
         )}
 
         {step.content.type !== 'none' && (

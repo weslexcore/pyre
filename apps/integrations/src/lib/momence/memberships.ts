@@ -8,8 +8,8 @@
 // back — the number stops meaning "how many people pay us every month".
 //
 // The distinctions Momence does expose are BoughtMembership.type, the frozen
-// flag, and the origin catalog id (which the post-intro-offer journey already
-// uses to recognize the intro).
+// flag, and the origin catalog id (which the journeys' intro-offer conditions
+// also use to recognize the intro).
 
 import type { BoughtMembership } from '@/lib/momence/host-api';
 

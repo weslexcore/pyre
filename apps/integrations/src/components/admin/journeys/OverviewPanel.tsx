@@ -48,7 +48,7 @@ export function OverviewPanel({
       type === 'session-booked'
         ? { type, firstBookingOnly: false }
         : type === 'sweep'
-          ? { type, withTags: [], withoutTags: [] }
+          ? { type, withTags: [], withoutTags: [], withActivePurchase: false }
           : { type };
     set({ trigger: next });
   };
@@ -100,6 +100,18 @@ export function OverviewPanel({
           </label>
         )}
 
+        {trigger.type === 'sweep' && (
+          <label className="flex items-center gap-2 text-sm text-white/70">
+            <input
+              type="checkbox"
+              checked={trigger.withActivePurchase}
+              onChange={(e) =>
+                set({ trigger: { ...trigger, withActivePurchase: e.target.checked } })
+              }
+            />
+            Only people with an active membership or credit pack
+          </label>
+        )}
         {trigger.type === 'sweep' && (
           <div className="grid gap-2 sm:grid-cols-2">
             <label>

@@ -26,6 +26,8 @@ export interface EnrollmentContext {
   sessionEndsAt?: string;
   /** Last known intro expiry — the fallback once Momence stops listing the pack as active. */
   introExpiresAt?: string | null;
+  /** Last known soonest credit expiry, likewise. */
+  creditsExpireAt?: string | null;
 }
 
 export interface MemberIdentity {
@@ -85,12 +87,34 @@ export function buildContext(
 
 // --- Pack helpers ---
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function isIntro(pack: BoughtMembership, introIds: readonly number[]): boolean {
   return pack.membership !== null && introIds.includes(pack.membership.id);
 }
 
 function hasCreditsLeft(pack: BoughtMembership): boolean {
   return (pack.eventCreditsLeft ?? 0) > 0 || (pack.moneyCreditsLeft ?? 0) > 0;
+}
+
+/** Expiry times of active, unfrozen packs that still have credits, soonest first. */
+function creditExpiries(packs: BoughtMembership[], now: number): number[] {
+  return packs
+    .filter((p) => !p.isFrozen && hasCreditsLeft(p) && p.endDate)
+    .map((p) => Date.parse(p.endDate as string))
+    .filter((t) => Number.isFinite(t) && t > now)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * When their soonest-expiring credits run out: from live packs, else what
+ * enrollment last saw (an expired pack drops off the active list).
+ */
+export async function resolveCreditsExpiry(ctx: JourneyContext): Promise<number | null> {
+  const soonest = creditExpiries(await ctx.activePacks(), Date.now())[0];
+  if (soonest !== undefined) return soonest;
+  const remembered = ctx.enrollment.creditsExpireAt;
+  return remembered ? Date.parse(remembered) : null;
 }
 
 function latestEnd(packs: BoughtMembership[]): number | null {
@@ -147,6 +171,11 @@ const CHECKS: Record<ConditionType, ConditionCheck> = {
   async 'has-credits'(ctx) {
     return (await ctx.activePacks()).some(hasCreditsLeft);
   },
+  async 'credits-expire-within'(ctx, c) {
+    const now = Date.now();
+    const soonest = creditExpiries(await ctx.activePacks(), now)[0];
+    return soonest !== undefined && soonest - now <= (c.count ?? 0) * DAY_MS;
+  },
   async 'intro-expired'(ctx, c) {
     const bought = await CHECKS['ever-bought-intro'](ctx, c);
     return bought && !(await CHECKS['has-active-intro'](ctx, c));
@@ -202,8 +231,6 @@ export async function allMatch(ctx: JourneyContext, conditions: Condition[]): Pr
 
 // --- Merge values ---
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export function formatDay(ms: number): string {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: STUDIO_TIME_ZONE,
@@ -213,7 +240,8 @@ export function formatDay(ms: number): string {
 }
 
 function creditsSummary(packs: BoughtMembership[]): { count: number; label: string } | null {
-  const withCredits = packs.filter(hasCreditsLeft);
+  // Frozen packs can't be used right now, so they don't count as waiting credits.
+  const withCredits = packs.filter((p) => !p.isFrozen && hasCreditsLeft(p));
   if (withCredits.length === 0) return null;
   const events = withCredits.reduce((n, p) => n + (p.eventCreditsLeft ?? 0), 0);
   const money = withCredits.reduce((n, p) => n + (p.moneyCreditsLeft ?? 0), 0);
@@ -226,17 +254,24 @@ export async function mergeValues(ctx: JourneyContext, fields: Set<string>): Pro
   const values: MergeValues = { firstName: ctx.firstName };
 
   if (fields.has('creditsLeft') || fields.has('creditsLabel') || fields.has('creditsExpireOn')) {
+    // The same packs the credits-expiry anchor reads: unfrozen, credits left.
     const packs = await ctx.activePacks();
     const summary = creditsSummary(packs);
     if (summary) {
       values.creditsLeft = String(summary.count);
       values.creditsLabel = summary.label;
     }
-    const ends = packs
-      .filter(hasCreditsLeft)
-      .map((p) => (p.endDate ? Date.parse(p.endDate) : Number.NaN))
-      .filter(Number.isFinite);
-    if (ends.length > 0) values.creditsExpireOn = formatDay(Math.min(...ends));
+    const soonest = creditExpiries(packs, Date.now())[0];
+    if (soonest !== undefined) values.creditsExpireOn = formatDay(soonest);
+  }
+
+  if (fields.has('daysUntilCreditsExpire')) {
+    const expiry = await resolveCreditsExpiry(ctx);
+    if (expiry !== null) {
+      values.daysUntilCreditsExpire = String(
+        Math.max(0, Math.ceil((expiry - Date.now()) / DAY_MS))
+      );
+    }
   }
 
   if (fields.has('introExpiresOn') || fields.has('daysUntilIntroExpiry')) {

@@ -244,20 +244,29 @@ describe('definition validation', () => {
     ).toBe(false);
   });
 
-  it('refuses to drop a step people may be waiting on, and unknown templates', () => {
+  it('refuses to drop a step people may be waiting on', () => {
     const before = definitionSchema.parse(base);
     const after = definitionSchema.parse({
       ...base,
       steps: [
-        {
-          key: 'b',
-          timing: { anchor: 'previous', offsetHours: 1 },
-          content: { type: 'template', key: 'nope' },
-        },
+        { key: 'b', timing: { anchor: 'previous', offsetHours: 1 }, content: { type: 'none' } },
       ],
     });
     const problems = definitionProblems(after, before);
     expect(problems.some((p) => p.includes('Archive it instead'))).toBe(true);
-    expect(problems.some((p) => p.includes('unknown template'))).toBe(true);
+  });
+
+  it('no longer accepts steps that send a coded template', () => {
+    const parsed = definitionSchema.safeParse({
+      ...base,
+      steps: [
+        {
+          key: 'a',
+          timing: { anchor: 'previous', offsetHours: 1 },
+          content: { type: 'template', key: 'review-request' },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
   });
 });

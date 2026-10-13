@@ -53,39 +53,16 @@ export interface MarketingEmailBaseProps {
   unsubscribeUrl?: string;
 }
 
-export type IntroFollowUpProps = MarketingEmailBaseProps;
-
-export type CreditPackPitchProps = MarketingEmailBaseProps;
-
-export type MembershipPitchProps = MarketingEmailBaseProps;
-
-export interface ReviewRequestProps extends MarketingEmailBaseProps {
-  reviewUrl: string;
-}
-
-export interface CreditExpiryReminderProps extends MarketingEmailBaseProps {
-  /** e.g. "3 credits" or "$50 in credit" */
-  creditsLabel: string;
-  /** e.g. "August 12" */
-  expiresOn: string;
-  daysLeft: number;
-}
-
 /** Dashboard-built journey email (/admin/journeys): blocks with merge fields already filled. */
 export interface JourneyEmailProps extends MarketingEmailBaseProps {
   subject: string;
   preview: string;
   background: 'clouds' | 'trees' | 'lamps';
   blocks: EmailBlockInput[];
-  /** utm_campaign for tracked links — the journey id. */
+  /** utm_campaign for tracked links — the journey's campaign, else its id. */
   campaign: string;
   /** The step's key, prefixed onto each link's utm_content. */
   stepKey?: string;
-}
-
-export interface UnusedCreditReminderProps extends MarketingEmailBaseProps {
-  /** e.g. "2 credits" or "$25 in credit" */
-  creditsLabel: string;
 }
 
 // Partner verification lifecycle (all transactional — no unsubscribeUrl).
@@ -360,12 +337,6 @@ export interface ScheduleLintProps {
 export interface EmailPropsByTemplate {
   confirmation: ConfirmationEmailProps;
   'first-timer-welcome': FirstTimerEmailProps;
-  'intro-follow-up': IntroFollowUpProps;
-  'credit-pack-pitch': CreditPackPitchProps;
-  'membership-pitch': MembershipPitchProps;
-  'review-request': ReviewRequestProps;
-  'credit-expiry-reminder': CreditExpiryReminderProps;
-  'unused-credit-reminder': UnusedCreditReminderProps;
   journey: JourneyEmailProps;
   'partner-verification-request': PartnerVerificationRequestProps;
   'partner-verified': PartnerVerifiedProps;

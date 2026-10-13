@@ -4,41 +4,29 @@
 // Typed against EmailPropsByTemplate so it cannot drift from the registry.
 
 import { sampleConfirmationProps } from './components/ConfirmationEmail';
-import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
-import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
-import { IntroFollowUp } from './templates/IntroFollowUp';
 import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
-import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
-import { ReviewRequest } from './templates/ReviewRequest';
 import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
-import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate } from './types';
 
 export const EMAIL_PREVIEW_PROPS: { [K in keyof EmailPropsByTemplate]: EmailPropsByTemplate[K] } = {
   confirmation: sampleConfirmationProps,
   'first-timer-welcome': FirstTimerWelcome.PreviewProps,
-  'intro-follow-up': IntroFollowUp.PreviewProps,
-  'credit-pack-pitch': CreditPackPitch.PreviewProps,
-  'membership-pitch': MembershipPitch.PreviewProps,
-  'review-request': ReviewRequest.PreviewProps,
-  'credit-expiry-reminder': CreditExpiryReminder.PreviewProps,
-  'unused-credit-reminder': UnusedCreditReminder.PreviewProps,
   journey: JourneyEmail.PreviewProps,
   'partner-verification-request': PartnerVerificationRequest.PreviewProps,
   'partner-verified': PartnerVerified.PreviewProps,

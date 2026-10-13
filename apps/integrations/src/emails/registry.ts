@@ -1,28 +1,22 @@
 import type { ComponentType } from 'react';
 import { ConfirmationEmail } from './components/ConfirmationEmail';
-import { CreditExpiryReminder } from './templates/CreditExpiryReminder';
-import { CreditPackPitch } from './templates/CreditPackPitch';
 import { FirstTimerWelcome } from './templates/FirstTimerWelcome';
 import { HoursChangeDecision } from './templates/HoursChangeDecision';
 import { IncidentReported } from './templates/IncidentReported';
-import { IntroFollowUp } from './templates/IntroFollowUp';
 import { JourneyEmail } from './templates/JourneyEmail';
 import { LostFoundClaimed } from './templates/LostFoundClaimed';
 import { LostFoundFound } from './templates/LostFoundFound';
-import { MembershipPitch } from './templates/MembershipPitch';
 import { PartnerDenied } from './templates/PartnerDenied';
 import { PartnerReconciliation } from './templates/PartnerReconciliation';
 import { PartnerVerificationRequest } from './templates/PartnerVerificationRequest';
 import { PartnerVerified } from './templates/PartnerVerified';
 import { ReferralRedeemed } from './templates/ReferralRedeemed';
 import { ReferralRewardEarned } from './templates/ReferralRewardEarned';
-import { ReviewRequest } from './templates/ReviewRequest';
 import { ScheduleLint } from './templates/ScheduleLint';
 import { ShiftRequestDecision } from './templates/ShiftRequestDecision';
 import { SubClaimedNotice } from './templates/SubClaimedNotice';
 import { SubOpenNotice } from './templates/SubOpenNotice';
 import { SubRequestNotice } from './templates/SubRequestNotice';
-import { UnusedCreditReminder } from './templates/UnusedCreditReminder';
 import { WeeklyShifts } from './templates/WeeklyShifts';
 import type { EmailPropsByTemplate, EmailTemplateKey } from './types';
 
@@ -48,34 +42,10 @@ export const EMAIL_TEMPLATES: Registry = {
     subject: () => 'Welcome to Pyre - what to expect',
     Component: FirstTimerWelcome,
   },
-  'intro-follow-up': {
-    subject: (p) => `How was it, ${p.firstName}?`,
-    Component: IntroFollowUp,
-  },
-  'credit-pack-pitch': {
-    subject: () => 'Make the sauna a ritual - credit packs',
-    Component: CreditPackPitch,
-  },
-  'membership-pitch': {
-    subject: () => 'Founding memberships - lock in your rate for life',
-    Component: MembershipPitch,
-  },
-  'review-request': {
-    subject: () => 'Mind sharing the heat?',
-    Component: ReviewRequest,
-  },
-  'credit-expiry-reminder': {
-    subject: (p) => `Your ${p.creditsLabel} expire ${p.expiresOn}`,
-    Component: CreditExpiryReminder,
-  },
   // Every dashboard-built journey email; the subject is written per step.
   journey: {
     subject: (p) => p.subject,
     Component: JourneyEmail,
-  },
-  'unused-credit-reminder': {
-    subject: (p) => `You still have ${p.creditsLabel} at Pyre`,
-    Component: UnusedCreditReminder,
   },
   'partner-verification-request': {
     subject: (p) => `Membership check: ${p.customerName} - Pyre x ${p.partnerName}`,

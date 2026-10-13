@@ -1,5 +1,5 @@
 import { render } from '@react-email/components';
-import { type ComponentType, createElement } from 'react';
+import { createElement } from 'react';
 import { EMAIL_TEMPLATES } from '@/emails/registry';
 import type { Db } from '@/lib/http/route';
 import {
@@ -12,7 +12,6 @@ import {
 import { buildContext, mergeValues } from './context';
 import { fillContent, type MergeValues, sampleMergeValues, usedFields } from './merge-fields';
 import type { JourneyDefinition, StepContent } from './schema';
-import { isTemplateStepKey } from './store';
 
 // Server-side pieces behind /admin/journeys: rendering a step as it would
 // send (sample or live member data), the list page's numbers, and the tag
@@ -65,29 +64,7 @@ export async function renderStep(
       },
       { member }
     );
-    values =
-      content.type === 'blocks'
-        ? await mergeValues(ctx, usedFields(content))
-        : { firstName: member.firstName };
-  }
-
-  if (content.type === 'template') {
-    if (!isTemplateStepKey(content.key)) return { error: `Unknown template "${content.key}"` };
-    const entry = EMAIL_TEMPLATES[content.key] as unknown as {
-      subject: (props: Record<string, unknown>) => string;
-      Component: ComponentType<Record<string, unknown>>;
-    };
-    const props = {
-      firstName: values.firstName ?? 'there',
-      reviewUrl: 'https://g.page/r/CbPLgfm6vte6EAI/review',
-      unsubscribeUrl: PREVIEW_UNSUBSCRIBE,
-    };
-    return {
-      subject: entry.subject(props),
-      html: await render(createElement(entry.Component, props)),
-      missing: [],
-      values,
-    };
+    values = await mergeValues(ctx, usedFields(content));
   }
 
   const { content: filled, missing } = fillContent(content, values);

@@ -26,6 +26,8 @@ export interface AnchorTimes {
   previousAt: number | null;
   /** When their intro offer pack expires; null when they have none. */
   introExpiresAt: number | null;
+  /** When their soonest-expiring credits run out; null when none expire. */
+  creditsExpireAt?: number | null;
 }
 
 export function anchorTime(timing: StepTiming, anchors: AnchorTimes): number | null {
@@ -36,6 +38,8 @@ export function anchorTime(timing: StepTiming, anchors: AnchorTimes): number | n
       return anchors.previousAt ?? anchors.triggerAt;
     case 'intro-expiry':
       return anchors.introExpiresAt;
+    case 'credits-expiry':
+      return anchors.creditsExpireAt ?? null;
   }
 }
 
@@ -70,14 +74,14 @@ export function isStale(
   now: number
 ): boolean {
   if (timing.anchor === 'previous') return false;
-  if (
-    timing.anchor === 'intro-expiry' &&
-    timing.offsetHours < 0 &&
-    anchors.introExpiresAt !== null &&
-    now >= anchors.introExpiresAt
-  ) {
-    return true;
-  }
+  // A "before it expires" email never goes out once it has.
+  const expiry =
+    timing.anchor === 'intro-expiry'
+      ? anchors.introExpiresAt
+      : timing.anchor === 'credits-expiry'
+        ? (anchors.creditsExpireAt ?? null)
+        : null;
+  if (timing.offsetHours < 0 && expiry !== null && now >= expiry) return true;
   return now - dueAt > MAX_ANCHORED_LATENESS_MS;
 }
 

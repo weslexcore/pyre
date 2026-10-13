@@ -61,6 +61,7 @@ export function describeTrigger(trigger: Trigger): string {
       if (trigger.minVisits) parts.push(`${trigger.minVisits}+ visits`);
       if (trigger.withTags.length) parts.push(`tagged ${trigger.withTags.join(', ')}`);
       if (trigger.withoutTags.length) parts.push(`not tagged ${trigger.withoutTags.join(', ')}`);
+      if (trigger.withActivePurchase) parts.push('holding a pack or membership');
       return parts.length ? `Audience: ${parts.join(', ')}` : 'Audience: every customer';
     }
     case 'manual':
@@ -167,7 +168,7 @@ export function blankDefinition(trigger: Trigger['type']): JourneyDefinition {
     trigger === 'session-booked'
       ? { type: 'session-booked', firstBookingOnly: false }
       : trigger === 'sweep'
-        ? { type: 'sweep', withTags: [], withoutTags: [] }
+        ? { type: 'sweep', withTags: [], withoutTags: [], withActivePurchase: false }
         : { type: 'manual' };
   return {
     description: '',

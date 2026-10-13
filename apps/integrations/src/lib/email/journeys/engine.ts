@@ -24,6 +24,7 @@ import {
   type JourneyContext,
   type MemberIdentity,
   mergeValues,
+  resolveCreditsExpiry,
   resolveIntroExpiry,
 } from './context';
 import { fillContent, usedFields } from './merge-fields';
@@ -34,7 +35,7 @@ import {
   journeyCampaign,
   type Trigger,
 } from './schema';
-import { isTemplateStepKey, loadJourneys } from './store';
+import { loadJourneys } from './store';
 import {
   type AnchorTimes,
   clampToSendWindow,
@@ -80,19 +81,50 @@ function scheduleAt(step: JourneyStep, anchors: AnchorTimes, now: number): strin
   return new Date(fastMode ? at : clampToSendWindow(at)).toISOString();
 }
 
+interface Expiries {
+  introExpiresAt: number | null;
+  creditsExpireAt: number | null;
+}
+
 function anchorsFor(
   row: Pick<JourneyEnrollmentRow, 'anchor_at' | 'enrolled_at' | 'last_step_at'>,
-  introExpiresAt: number | null
+  expiries: Expiries
 ): AnchorTimes {
   return {
     triggerAt: Date.parse(row.anchor_at ?? row.enrolled_at),
     previousAt: row.last_step_at ? Date.parse(row.last_step_at) : null,
-    introExpiresAt,
+    ...expiries,
   };
 }
 
-function usesIntroExpiry(journey: JourneyRecord): boolean {
-  return journey.definition.steps.some((s) => s.timing.anchor === 'intro-expiry');
+/** Live expiry dates for whichever expiry anchors these steps are timed from. */
+async function resolveExpiries(steps: JourneyStep[], ctx: JourneyContext): Promise<Expiries> {
+  const anchors = new Set(steps.map((s) => s.timing.anchor));
+  const [introExpiresAt, creditsExpireAt] = await Promise.all([
+    anchors.has('intro-expiry') ? resolveIntroExpiry(ctx).catch(() => null) : null,
+    anchors.has('credits-expiry') ? resolveCreditsExpiry(ctx).catch(() => null) : null,
+  ]);
+  return { introExpiresAt, creditsExpireAt };
+}
+
+/** Expiry dates as remembered on the enrollment row (the fallback once a pack expires). */
+function rememberExpiries(context: EnrollmentContext, expiries: Expiries): EnrollmentContext {
+  return {
+    ...context,
+    ...(expiries.introExpiresAt !== null && {
+      introExpiresAt: new Date(expiries.introExpiresAt).toISOString(),
+    }),
+    ...(expiries.creditsExpireAt !== null && {
+      creditsExpireAt: new Date(expiries.creditsExpireAt).toISOString(),
+    }),
+  };
+}
+
+function rememberedExpiries(context: EnrollmentContext): Expiries {
+  return {
+    introExpiresAt: context.introExpiresAt ? Date.parse(context.introExpiresAt) : null,
+    creditsExpireAt: context.creditsExpireAt ? Date.parse(context.creditsExpireAt) : null,
+  };
 }
 
 // --- Actions ---
@@ -188,15 +220,11 @@ export async function enrollMember(
 
   const now = Date.now();
   const anchor = anchorAt ?? now;
-  let introExpiresAt: number | null = null;
-  if (usesIntroExpiry(journey)) {
-    const memberCtx = ctx ?? buildContext(identity, { enrollment: context });
-    introExpiresAt = await resolveIntroExpiry(memberCtx).catch(() => null);
-  }
-  const fullContext: EnrollmentContext = {
-    ...context,
-    ...(introExpiresAt !== null && { introExpiresAt: new Date(introExpiresAt).toISOString() }),
-  };
+  const expiries = await resolveExpiries(
+    steps,
+    ctx ?? buildContext(identity, { enrollment: context })
+  );
+  const fullContext = rememberExpiries(context, expiries);
 
   const { error } = await db.from('journey_enrollments').insert({
     journey_id: journey.id,
@@ -205,7 +233,7 @@ export async function enrollMember(
     cycle,
     step: 0,
     current_step_key: steps[first].key,
-    next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, introExpiresAt }, now),
+    next_at: scheduleAt(steps[first], { triggerAt: anchor, previousAt: null, ...expiries }, now),
     status: 'active',
     anchor_at: new Date(anchor).toISOString(),
     context: fullContext,
@@ -304,6 +332,8 @@ const SWEEP_MIN_REMAINING_MS = 20_000;
 
 interface SweepAudience {
   filter?: MemberListFilter;
+  /** Momence's own "holds an active membership or pack" filter. */
+  filterPreset?: 'with-active-membership';
   /** Code-level checks for what the Momence filter can't express. */
   matches(member: HostMember): boolean;
   /** A required tag doesn't exist in Momence, so nobody can match. */
@@ -340,6 +370,7 @@ async function sweepAudience(trigger: Extract<Trigger, { type: 'sweep' }>): Prom
 
   return {
     filter: Object.keys(filter).length > 1 ? filter : undefined,
+    filterPreset: trigger.withActivePurchase ? 'with-active-membership' : undefined,
     impossible: missingWith.length > 0 ? `missing tag: ${missingWith.join(', ')}` : undefined,
     pastWindow(member) {
       if (maxInactiveMs === null) return false;
@@ -419,6 +450,7 @@ export async function previewAudience(journey: JourneyRecord): Promise<AudienceP
       page,
       pageSize: SWEEP_PAGE_SIZE,
       filter: audience.filter,
+      filterPreset: audience.filterPreset,
       ...SWEEP_SORT,
     });
     totalCandidates = totalCount;
@@ -523,6 +555,7 @@ export async function runEnrollmentSweeps(ctx: CronJobContext): Promise<Record<s
         page,
         pageSize: SWEEP_PAGE_SIZE,
         filter: audience.filter,
+        filterPreset: audience.filterPreset,
         ...SWEEP_SORT,
       });
       scanned += members.length;
@@ -594,18 +627,6 @@ async function recentMarketingSends(email: string, now: number): Promise<number[
     return [];
   }
   return (data as { sent_at: string }[]).map((r) => Date.parse(r.sent_at));
-}
-
-function templateProps(key: string, firstName: string): Record<string, unknown> {
-  if (key === 'review-request') {
-    // Source: apps/social/posts/google-review-card (the QR postcard). No utm
-    // params: it's a Google deep link we don't control.
-    return {
-      firstName,
-      reviewUrl: import.meta.env.GOOGLE_REVIEW_URL ?? 'https://g.page/r/CbPLgfm6vte6EAI/review',
-    };
-  }
-  return { firstName };
 }
 
 type StepOutcome =
@@ -726,15 +747,13 @@ async function runDueStep(
   }
 
   const now = Date.now();
-  const introExpiresAt =
-    step.timing.anchor === 'intro-expiry' ? await resolveIntroExpiry(memberCtx) : null;
-  const anchors = anchorsFor(row, introExpiresAt);
+  const anchors = anchorsFor(row, await resolveExpiries([step], memberCtx));
 
   if (step.timing.anchor !== 'previous') {
     const dueAt = stepDueAt(step.timing, anchors, { fastMode: isFastMode() });
     if (dueAt === null) {
-      if (!dryRun) await advance(journey, row, step, memberCtx, 'no-intro-offer');
-      return { kind: 'advanced', reason: 'no-intro-offer' };
+      if (!dryRun) await advance(journey, row, step, memberCtx, 'no-expiry-date');
+      return { kind: 'advanced', reason: 'no-expiry-date' };
     }
     if (dueAt > now + EARLY_TOLERANCE_MS) {
       if (!dryRun) await reschedule(row, scheduleAt(step, anchors, now));
@@ -775,50 +794,34 @@ async function runDueStep(
     return { kind: 'deferred', until: capUntil, reason: 'frequency-cap' };
   }
 
-  let send: Parameters<typeof sendTemplate>[0];
-  const common = {
+  const values = await mergeValues(memberCtx, usedFields(step.content));
+  const { content, missing } = fillContent(step.content, values);
+  if (missing.length > 0) {
+    const reason = `missing-merge-field:${missing.join(',')}`;
+    if (!dryRun) await advance(journey, row, step, memberCtx, reason);
+    return { kind: 'advanced', reason };
+  }
+
+  const send: Parameters<typeof sendTemplate<'journey'>>[0] = {
     to: row.email,
-    kind: 'marketing' as const,
+    kind: 'marketing',
     sendKey: sendKeyFor(journey.id, row.member_id, step.key, row.cycle),
     memberId: row.member_id,
     journeyId: journey.id,
     stepId: step.key,
     journeyRevision: journey.revision,
     whitelistOnly: journey.testMode,
+    template: 'journey',
+    props: {
+      firstName: memberCtx.firstName,
+      subject: content.subject,
+      preview: content.preview,
+      background: content.background,
+      blocks: content.blocks,
+      campaign: journeyCampaign(journey.id, journey.definition),
+      stepKey: step.key,
+    },
   };
-
-  if (step.content.type === 'blocks') {
-    const values = await mergeValues(memberCtx, usedFields(step.content));
-    const { content, missing } = fillContent(step.content, values);
-    if (missing.length > 0) {
-      const reason = `missing-merge-field:${missing.join(',')}`;
-      if (!dryRun) await advance(journey, row, step, memberCtx, reason);
-      return { kind: 'advanced', reason };
-    }
-    send = {
-      ...common,
-      template: 'journey',
-      props: {
-        firstName: memberCtx.firstName,
-        subject: content.subject,
-        preview: content.preview,
-        background: content.background,
-        blocks: content.blocks,
-        campaign: journeyCampaign(journey.id, journey.definition),
-        stepKey: step.key,
-      },
-    };
-  } else {
-    if (!isTemplateStepKey(step.content.key)) {
-      if (!dryRun) await advance(journey, row, step, memberCtx, 'unknown-template');
-      return { kind: 'advanced', reason: 'unknown-template' };
-    }
-    send = {
-      ...common,
-      template: step.content.key,
-      props: templateProps(step.content.key, memberCtx.firstName) as never,
-    };
-  }
 
   if (dryRun) return { kind: 'would-send', label: `${journey.id}/${step.key} -> ${row.email}` };
 
@@ -866,24 +869,14 @@ async function advance(
 
   const next = steps[nextIndex];
   const now = Date.now();
-  let context = row.context as EnrollmentContext;
-  let introExpiresAt: number | null = null;
-  if (next.timing.anchor === 'intro-expiry') {
-    introExpiresAt = await resolveIntroExpiry(memberCtx).catch(() => null);
-    if (introExpiresAt !== null) {
-      context = { ...context, introExpiresAt: new Date(introExpiresAt).toISOString() };
-    }
-  }
+  const expiries = await resolveExpiries([next], memberCtx);
+  const context = rememberExpiries(row.context as EnrollmentContext, expiries);
   const lastStepAt = new Date(now).toISOString();
   await transition(row, {
     current_step_key: next.key,
     last_step_at: lastStepAt,
     context: context as Record<string, unknown>,
-    next_at: scheduleAt(
-      next,
-      anchorsFor({ ...row, last_step_at: lastStepAt }, introExpiresAt),
-      now
-    ),
+    next_at: scheduleAt(next, anchorsFor({ ...row, last_step_at: lastStepAt }, expiries), now),
   });
 }
 
@@ -1005,8 +998,7 @@ export async function rescheduleWaiting(
   for (const row of data as JourneyEnrollmentRow[]) {
     const step = journey.definition.steps.find((s) => s.key === row.current_step_key);
     if (!step) continue;
-    const remembered = (row.context as EnrollmentContext).introExpiresAt;
-    const anchors = anchorsFor(row, remembered ? Date.parse(remembered) : null);
+    const anchors = anchorsFor(row, rememberedExpiries(row.context as EnrollmentContext));
     await transition(row, { next_at: scheduleAt(step, anchors, now) });
     updated += 1;
   }

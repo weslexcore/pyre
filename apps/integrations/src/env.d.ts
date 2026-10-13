@@ -76,8 +76,6 @@ interface ImportMetaEnv {
   readonly PARTNER_CC_EMAIL?: string;
   // Momence membership ids that count as the intro offer (comma-separated)
   readonly MOMENCE_INTRO_OFFER_MEMBERSHIP_IDS?: string;
-  // Google review deep link used by the review-request journey
-  readonly GOOGLE_REVIEW_URL?: string;
   // Speed up journey delays for whitelist testing (hours -> minutes)
   readonly JOURNEY_FAST_MODE?: string;
   // Addresses that receive ALL emails, including templates not yet live
