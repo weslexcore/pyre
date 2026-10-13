@@ -25,13 +25,16 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
       ? body.memberEmail.trim().toLowerCase()
       : undefined;
   const stepKey = typeof body.stepKey === 'string' ? body.stepKey : undefined;
+  // The draft's campaign (unsaved edits preview immediately); else the journey id.
+  const campaign =
+    typeof body.campaign === 'string' && body.campaign.trim() ? body.campaign.trim() : undefined;
   const memberId =
     typeof body.memberId === 'number' && Number.isInteger(body.memberId)
       ? body.memberId
       : undefined;
 
   try {
-    const rendered = await renderStep(params.id ?? 'preview', content.data, {
+    const rendered = await renderStep(campaign ?? params.id ?? 'preview', content.data, {
       memberId,
       memberEmail,
       stepKey,

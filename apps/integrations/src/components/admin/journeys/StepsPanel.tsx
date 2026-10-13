@@ -13,6 +13,7 @@ import {
   describeTiming,
   type JourneyDefinition,
   type JourneyStep,
+  journeyCampaign,
   type StepContent,
   type StepTiming,
   TEMPLATE_STEP_KEYS,
@@ -122,6 +123,7 @@ export function StepsPanel({
         <StepEditor
           key={current.key}
           journeyId={journeyId}
+          campaign={journeyCampaign(journeyId, definition)}
           step={current}
           index={steps.indexOf(current)}
           count={steps.length}
@@ -228,6 +230,7 @@ function TimingEditor({
 
 function StepEditor({
   journeyId,
+  campaign,
   step,
   index,
   count,
@@ -240,6 +243,7 @@ function StepEditor({
   onDelete,
 }: {
   journeyId: string;
+  campaign: string;
   step: JourneyStep;
   index: number;
   count: number;
@@ -395,12 +399,13 @@ function StepEditor({
               <BlockEditor
                 content={step.content}
                 onChange={(content: BlockContent) => onChange({ content })}
-                journeyId={journeyId}
+                campaign={campaign}
                 stepKey={step.key}
               />
             )}
             <EmailPreview
               journeyId={journeyId}
+              campaign={campaign}
               stepKey={step.key}
               content={step.content}
               viewerEmail={viewerEmail}
@@ -416,11 +421,13 @@ function StepEditor({
 
 function EmailPreview({
   journeyId,
+  campaign,
   stepKey,
   content,
   viewerEmail,
 }: {
   journeyId: string;
+  campaign: string;
   stepKey: string;
   content: StepContent;
   viewerEmail: string;
@@ -443,6 +450,7 @@ function EmailPreview({
           {
             content: JSON.parse(contentJson),
             stepKey,
+            campaign,
             memberId: customer?.memberId,
           }
         );
@@ -455,7 +463,7 @@ function EmailPreview({
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [journeyId, stepKey, contentJson, customer?.memberId]);
+  }, [journeyId, campaign, stepKey, contentJson, customer?.memberId]);
 
   const sendTest = async () => {
     setTestState('Sending...');
@@ -463,7 +471,7 @@ function EmailPreview({
       const result = await sendJson<{ to: string; missing: string[] }>(
         `/api/admin/journeys/${journeyId}/test-send`,
         'POST',
-        { content, to: testTo, stepKey, memberId: customer?.memberId }
+        { content, to: testTo, stepKey, campaign, memberId: customer?.memberId }
       );
       setTestState(
         `Sent to ${result.to}${result.missing.length ? ` (missing: ${result.missing.join(', ')})` : ''}`

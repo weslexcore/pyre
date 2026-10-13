@@ -8,6 +8,7 @@ import { getEmailGate } from '@/lib/email/dev-mode';
 import { allTagNames, journeyStats, missingTags, tagsIn } from '@/lib/email/journeys/admin';
 import { toSummary } from '@/lib/email/journeys/admin-dto';
 import type { JourneyDetailResponse } from '@/lib/email/journeys/api-types';
+import { listCampaignOptions } from '@/lib/email/journeys/campaign';
 import { rescheduleWaiting, resumeHeldEnrollments } from '@/lib/email/journeys/engine';
 import {
   getJourneyRow,
@@ -29,12 +30,13 @@ export const GET: APIRoute = async ({ cookies, params }) => {
     const row = await getJourneyRow(params.id ?? '');
     if (!row) return json({ error: 'Journey not found' }, 404);
     const record = toRecord(row).record;
-    const [revisions, stats, tags, missing, gate] = await Promise.all([
+    const [revisions, stats, tags, missing, gate, campaigns] = await Promise.all([
       listRevisions(row.id),
       journeyStats(ready.db),
       allTagNames(),
       record ? missingTags(tagsIn(record.definition)) : Promise.resolve([]),
       getEmailGate(),
+      listCampaignOptions(),
     ]);
     const body: JourneyDetailResponse = {
       journey: toSummary(row, stats[row.id]),
@@ -51,6 +53,7 @@ export const GET: APIRoute = async ({ cookies, params }) => {
       journeyTemplateLive: gate.isLive('journey'),
       viewerEmail: sessionEmail(ready.gate),
       whitelist: gate.whitelist.map((w) => w.email),
+      campaigns,
     };
     return json(body);
   } catch (e) {

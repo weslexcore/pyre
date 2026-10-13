@@ -33,7 +33,8 @@ const PREVIEW_UNSUBSCRIBE = 'https://pyre-integrations.vercel.app/api/unsubscrib
  * from that member's live Momence data; otherwise from the catalog's samples.
  */
 export async function renderStep(
-  journeyId: string,
+  /** utm_campaign for the email's links: the journey's campaign, or its id. */
+  campaign: string,
   content: StepContent,
   {
     memberId,
@@ -96,7 +97,7 @@ export async function renderStep(
     preview: filled.preview,
     background: filled.background,
     blocks: filled.blocks,
-    campaign: journeyId,
+    campaign,
     stepKey,
     unsubscribeUrl: PREVIEW_UNSUBSCRIBE,
   };

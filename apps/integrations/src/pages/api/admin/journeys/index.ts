@@ -1,13 +1,15 @@
 // Journeys (/admin/journeys): GET lists every journey with its enrollment
 // counts and 30-day send numbers; POST creates one — blank, or a copy of an
 // existing journey (`duplicateFrom`). New journeys start switched off and in
-// test mode.
+// test mode, linked to a campaign of the same name in the Campaigns tool
+// (created if none exists) so their email links report there.
 
 import type { APIRoute } from 'astro';
 import { getEmailGate } from '@/lib/email/dev-mode';
 import { journeyStats } from '@/lib/email/journeys/admin';
 import { toSummary } from '@/lib/email/journeys/admin-dto';
 import type { JourneyListResponse } from '@/lib/email/journeys/api-types';
+import { ensureJourneyCampaign } from '@/lib/email/journeys/campaign';
 import { createJourney, getJourneyRow, listJourneyRows } from '@/lib/email/journeys/store';
 import { beginMutation, beginRead, json, storeError } from '@/lib/http/route';
 
@@ -52,6 +54,15 @@ export const POST: APIRoute = async ({ cookies, request }) => {
     const original = await getJourneyRow(duplicateFrom);
     if (!original) return json({ error: 'The journey to copy no longer exists' }, 404);
     source = original.definition;
+  }
+
+  // Link the new journey to its campaign. A failure here doesn't block
+  // creating the journey — its links fall back to the journey id, and the
+  // Overview tab offers the link again.
+  if (source && typeof source === 'object' && !Array.isArray(source)) {
+    const linked = await ensureJourneyCampaign({ id: id.trim(), name: name.trim() }, ready.email);
+    if (linked.ok)
+      source = { ...(source as Record<string, unknown>), campaign: linked.campaign.slug };
   }
 
   const result = await createJourney({ id: id.trim(), name, definition: source }, ready.email);

@@ -25,14 +25,18 @@ import { ActionList, ConditionList, TagListInput } from './RuleLists';
 
 export function OverviewPanel({
   journeyId,
+  journeyName,
   definition,
   onChange,
   tags,
+  campaigns,
 }: {
   journeyId: string;
+  journeyName: string;
   definition: JourneyDefinition;
   onChange: (next: JourneyDefinition) => void;
   tags: string[];
+  campaigns: CampaignChoice[];
 }) {
   const set = (patch: Partial<JourneyDefinition>) => onChange({ ...definition, ...patch });
   const trigger = definition.trigger;
@@ -61,6 +65,14 @@ export function OverviewPanel({
           onChange={(e) => set({ description: e.target.value })}
         />
       </section>
+
+      <CampaignSection
+        journeyId={journeyId}
+        journeyName={journeyName}
+        value={definition.campaign}
+        campaigns={campaigns}
+        onChange={(campaign) => set({ campaign })}
+      />
 
       <section className={`${cardClass} flex flex-col gap-3`}>
         <p className={sectionHeading}>Starts when someone</p>
@@ -321,5 +333,117 @@ function AudienceEstimate({
         </div>
       )}
     </div>
+  );
+}
+
+export interface CampaignChoice {
+  id: string;
+  slug: string;
+  name: string;
+  archived: boolean;
+}
+
+/**
+ * Which Campaigns-tool campaign the journey's email links report into. Its
+ * slug becomes utm_campaign on every link, so the journey's visits, bookings
+ * and purchases show on that campaign's row on /admin/campaigns.
+ */
+function CampaignSection({
+  journeyId,
+  journeyName,
+  value,
+  campaigns,
+  onChange,
+}: {
+  journeyId: string;
+  journeyName: string;
+  value: string | undefined;
+  campaigns: CampaignChoice[];
+  onChange: (slug: string | undefined) => void;
+}) {
+  const [extra, setExtra] = useState<CampaignChoice[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const all = [...campaigns, ...extra.filter((e) => !campaigns.some((c) => c.slug === e.slug))];
+  const current = value ? all.find((c) => c.slug === value) : undefined;
+  const options = all.filter((c) => !c.archived || c.slug === value);
+
+  const create = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await sendJson<{ campaign: CampaignChoice; created: boolean }>(
+        `/api/admin/journeys/${journeyId}/campaign`,
+        'POST',
+        { name: journeyName }
+      );
+      setExtra((prev) => [...prev, result.campaign]);
+      onChange(result.campaign.slug);
+      setMessage({
+        ok: true,
+        text: `${result.created ? 'Created' : 'Found the existing'} campaign "${result.campaign.name}". Save the journey to link it.`,
+      });
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className={`${cardClass} flex flex-col gap-2`}>
+      <p className={sectionHeading}>Campaign</p>
+      <select
+        className={compactSelectClass}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || undefined)}
+      >
+        <option value="">Not linked - links are tagged {journeyId}</option>
+        {options.map((c) => (
+          <option key={c.slug} value={c.slug}>
+            {c.name}
+            {c.archived ? ' (archived)' : ''}
+          </option>
+        ))}
+        {value && !current && <option value={value}>{value} (not in the Campaigns tool)</option>}
+      </select>
+      <p className="text-xs text-white/40">
+        Every link in this journey's emails is tagged utm_campaign=
+        <span className="font-mono">{value ?? journeyId}</span>, so its visits, bookings and
+        purchases count toward{' '}
+        {current ? (
+          <a href={`/admin/campaigns/${current.id}`} className="underline hover:text-white/70">
+            {current.name}
+          </a>
+        ) : (
+          'that campaign'
+        )}{' '}
+        on the Campaigns page. Several journeys can share one campaign. Links that already carry a
+        campaign keep it.
+      </p>
+      {!value && (
+        <button
+          type="button"
+          className={`${buttonClass} self-start`}
+          onClick={() => void create()}
+          disabled={busy}
+        >
+          {busy ? 'Creating...' : `Create a campaign for this journey`}
+        </button>
+      )}
+      {value && !current && (
+        <p className="text-xs text-[var(--pyre-red)]">
+          No campaign in the Campaigns tool has this slug, so bookings and purchases won't show on a
+          campaign row.
+        </p>
+      )}
+      {message &&
+        (message.ok ? (
+          <p className="text-xs text-emerald-400">{message.text}</p>
+        ) : (
+          <ErrorBanner mono>{message.text}</ErrorBanner>
+        ))}
+    </section>
   );
 }

@@ -27,16 +27,17 @@ const textareaClass = `${compactInputClass} w-full font-sans leading-relaxed`;
 export function BlockEditor({
   content,
   onChange,
-  journeyId,
+  campaign,
   stepKey,
 }: {
   content: BlockContent;
   onChange: (next: BlockContent) => void;
-  journeyId: string;
+  /** utm_campaign the links will carry. */
+  campaign: string;
   stepKey: string;
 }) {
   const tracked = (label: string, url: string) => (
-    <TrackedLink url={url} label={label} journeyId={journeyId} stepKey={stepKey} />
+    <TrackedLink url={url} label={label} campaign={campaign} stepKey={stepKey} />
   );
   // The last-focused field's insert function, for the merge-field chips.
   const inserter = useRef<Inserter | null>(null);
@@ -290,12 +291,12 @@ function BlockFields({
 function TrackedLink({
   url,
   label,
-  journeyId,
+  campaign,
   stepKey,
 }: {
   url: string;
   label: string;
-  journeyId: string;
+  campaign: string;
   stepKey: string;
 }) {
   const raw = url.trim();
@@ -312,7 +313,7 @@ function TrackedLink({
   }
   let sent: string;
   try {
-    sent = journeyLink(raw, journeyId, journeyLinkContent(stepKey, label, raw));
+    sent = journeyLink(raw, campaign, journeyLinkContent(stepKey, label, raw));
   } catch {
     return null;
   }

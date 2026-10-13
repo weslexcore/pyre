@@ -342,9 +342,11 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
         <>
           <OverviewPanel
             journeyId={journey.id}
+            journeyName={draft.name}
             definition={draft.definition}
             onChange={updateDefinition}
             tags={data.tags}
+            campaigns={data.campaigns}
           />
           <div className="flex justify-end">
             <button

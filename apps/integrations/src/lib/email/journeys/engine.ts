@@ -27,7 +27,13 @@ import {
   resolveIntroExpiry,
 } from './context';
 import { fillContent, usedFields } from './merge-fields';
-import type { JourneyAction, JourneyRecord, JourneyStep, Trigger } from './schema';
+import {
+  type JourneyAction,
+  type JourneyRecord,
+  type JourneyStep,
+  journeyCampaign,
+  type Trigger,
+} from './schema';
 import { isTemplateStepKey, loadJourneys } from './store';
 import {
   type AnchorTimes,
@@ -777,7 +783,7 @@ async function runDueStep(
         preview: content.preview,
         background: content.background,
         blocks: content.blocks,
-        campaign: journey.id,
+        campaign: journeyCampaign(journey.id, journey.definition),
         stepKey: step.key,
       },
     };

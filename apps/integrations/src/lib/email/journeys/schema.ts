@@ -303,6 +303,15 @@ export const definitionSchema = z
     onEnd: z.array(actionSchema).max(5).default([]),
     /** Momence tag written after the final step (visible to staff). */
     completionTag: z.string().trim().max(80).optional(),
+    /**
+     * The Campaigns-tool campaign (its slug) this journey's links report into,
+     * as utm_campaign. Absent: links use the journey id.
+     */
+    campaign: z
+      .string()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'campaign must be a campaign slug')
+      .max(120)
+      .optional(),
     steps: z.array(stepSchema).max(30),
   })
   .superRefine((def, ctx) => {
@@ -364,6 +373,14 @@ export interface JourneyRecord {
   updatedAt: string;
   updatedBy: string | null;
   definition: JourneyDefinition;
+}
+
+/** The utm_campaign every link in this journey's emails carries. */
+export function journeyCampaign(
+  journeyId: string,
+  definition: Pick<JourneyDefinition, 'campaign'>
+): string {
+  return definition.campaign || journeyId;
 }
 
 export function describeCondition(c: Condition): string {

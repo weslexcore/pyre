@@ -54,6 +54,8 @@ export interface JourneyDetailResponse {
   /** The signed-in admin, the default test-send recipient. */
   viewerEmail: string;
   whitelist: string[];
+  /** Campaigns-tool campaigns a journey's links can report into. */
+  campaigns: { id: string; slug: string; name: string; archived: boolean }[];
 }
 
 export interface EnrollmentSendDto {
