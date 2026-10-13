@@ -20,6 +20,7 @@ export interface JourneySummaryDto {
   testMode: boolean;
   archived: boolean;
   revision: number;
+  sortOrder: number;
   updatedAt: string;
   updatedBy: string | null;
   /** Null when the stored definition no longer validates. */

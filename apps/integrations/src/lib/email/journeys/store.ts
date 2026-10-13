@@ -71,7 +71,11 @@ export async function listJourneyRows(): Promise<
 > {
   const db = getDb();
   if (!db) return [];
-  const { data, error } = await db.from('journeys').select('*').order('name');
+  const { data, error } = await db
+    .from('journeys')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
   if (error) throw new Error(error.message);
   return (data as JourneyRow[]).map((row) => ({ row, ...toRecord(row) }));
 }
@@ -173,6 +177,15 @@ export async function createJourney(
     return { ok: false, status: 400, error: 'The journey is not valid', issues: problems };
   }
 
+  // New journeys go to the end of the list.
+  const { data: last } = await db
+    .from('journeys')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sortOrder = ((last as { sort_order: number } | null)?.sort_order ?? 0) + 1;
+
   const { data, error } = await db
     .from('journeys')
     .insert({
@@ -181,6 +194,7 @@ export async function createJourney(
       definition: parsed.definition,
       enabled: false,
       test_mode: true,
+      sort_order: sortOrder,
       updated_by: actor,
     })
     .select('*')
@@ -311,4 +325,33 @@ export async function setJourneyFlags(
   if (error) return { ok: false, status: 503, error: error.message };
   invalidateJourneysCache();
   return { ok: true, row: data as JourneyRow, wasEnabled: current.enabled };
+}
+
+/**
+ * Save the list order: `ids` in their new order, positions 1..n. Journeys not
+ * named keep their place after them (a stale tab that didn't know about a new
+ * journey can't drop it off the end).
+ */
+export async function saveJourneyOrder(ids: string[]): Promise<{ error: string | null }> {
+  const db = getDb();
+  if (!db) return { error: 'Storage unavailable' };
+  const { data, error } = await db
+    .from('journeys')
+    .select('id')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) return { error: error.message };
+  const known = (data as { id: string }[]).map((r) => r.id);
+  const wanted = ids.filter((id) => known.includes(id));
+  const order = [...wanted, ...known.filter((id) => !wanted.includes(id))];
+  const results = await Promise.all(
+    order.map((id, i) =>
+      db
+        .from('journeys')
+        .update({ sort_order: i + 1 })
+        .eq('id', id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  return { error: failed?.error?.message ?? null };
 }

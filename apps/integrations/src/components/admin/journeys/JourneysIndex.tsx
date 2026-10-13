@@ -26,20 +26,50 @@ import {
   describeTrigger,
   goldButtonClass,
   inputClass,
+  mergeVisibleOrder,
   pct,
+  pillClass,
   sectionHeading,
   selectClass,
   slugify,
 } from './journeyUi';
+import { DragHandle, SortableList } from './Sortable';
 
 const LIST_URL = '/api/admin/journeys';
 
+type StatusFilter = 'all' | 'on' | 'off' | 'archived';
+
+const FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All',
+  on: 'On',
+  off: 'Off',
+  archived: 'Archived',
+};
+
+function matchesFilter(j: JourneySummaryDto, filter: StatusFilter): boolean {
+  if (filter === 'archived') return j.archived;
+  if (j.archived) return false;
+  if (filter === 'on') return j.enabled;
+  if (filter === 'off') return !j.enabled;
+  return true;
+}
+
+function matchesSearch(j: JourneySummaryDto, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [j.name, j.id, j.definition?.description ?? ''].some((text) =>
+    text.toLowerCase().includes(q)
+  );
+}
+
 export function JourneysIndex() {
-  const { data, error, reload } = useCachedJson<JourneyListResponse>(LIST_URL);
+  const { data, error, reload, setData } = useCachedJson<JourneyListResponse>(LIST_URL);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState<{ duplicateFrom?: JourneySummaryDto } | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilter] = useState<StatusFilter>('all');
+  const [query, setQuery] = useState('');
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const toggle = async (journey: JourneySummaryDto, enabled: boolean) => {
     setBusy(journey.id);
@@ -55,8 +85,34 @@ export function JourneysIndex() {
     }
   };
 
-  const journeys = (data?.journeys ?? []).filter((j) => showArchived || !j.archived);
-  const archivedCount = (data?.journeys ?? []).filter((j) => j.archived).length;
+  const all = data?.journeys ?? [];
+  const counts = {
+    all: all.filter((j) => !j.archived).length,
+    on: all.filter((j) => !j.archived && j.enabled).length,
+    off: all.filter((j) => !j.archived && !j.enabled).length,
+    archived: all.filter((j) => j.archived).length,
+  };
+  const journeys = all.filter((j) => matchesFilter(j, filter) && matchesSearch(j, query));
+
+  // Drag within whatever is showing; hidden journeys keep their places.
+  const reorder = async (visible: JourneySummaryDto[]) => {
+    if (!data) return;
+    const ids = mergeVisibleOrder(
+      all.map((j) => j.id),
+      journeys.map((j) => j.id),
+      visible.map((j) => j.id)
+    );
+    const byId = new Map(all.map((j) => [j.id, j]));
+    setData({ ...data, journeys: ids.map((id) => byId.get(id) as JourneySummaryDto) });
+    setOrderError(null);
+    try {
+      await sendJson('/api/admin/journeys/order', 'POST', { ids });
+      invalidateJson('/api/admin/journeys');
+    } catch (e) {
+      setOrderError(`The new order wasn't saved: ${e instanceof Error ? e.message : String(e)}`);
+      await reload();
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,6 +127,31 @@ export function JourneysIndex() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          className={`${inputClass} min-w-0 flex-1 sm:max-w-sm`}
+          placeholder="Search journeys by name or what they do"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search journeys"
+        />
+        <fieldset className="flex flex-wrap gap-1.5">
+          <legend className="sr-only">Show</legend>
+          {(['all', 'on', 'off', 'archived'] as StatusFilter[]).map((f) => (
+            <button
+              key={f}
+              type="button"
+              className={pillClass(filter === f)}
+              aria-pressed={filter === f}
+              onClick={() => setFilter(f)}
+            >
+              {FILTER_LABELS[f]} {counts[f]}
+            </button>
+          ))}
+        </fieldset>
+      </div>
+
       {data && !data.journeyTemplateLive && (
         <ErrorBanner>
           The shared <span className="font-mono">journey</span> email template is not live, so
@@ -83,18 +164,35 @@ export function JourneysIndex() {
       )}
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
+      {orderError && <ErrorBanner>{orderError}</ErrorBanner>}
 
       {!data && !error && <p className="text-sm text-white/40">Loading journeys...</p>}
 
-      <ul className="flex flex-col gap-2">
-        {journeys.map((journey) => {
+      {data && journeys.length === 0 && (
+        <p className="rounded border border-dashed border-white/15 p-6 text-center text-sm text-white/50">
+          {query.trim() || filter !== 'all'
+            ? 'No journeys match. Try another search or filter.'
+            : 'No journeys yet. Create the first one.'}
+        </p>
+      )}
+
+      <SortableList
+        items={journeys}
+        getId={(j) => j.id}
+        getLabel={(j) => j.name}
+        onReorder={(next) => void reorder(next)}
+        className="flex flex-col gap-2"
+      >
+        {(journey, _i, drag) => {
           const s = journey.stats;
           const steps = journey.definition?.steps.filter((st) => !st.archived).length ?? 0;
           return (
-            <li
-              key={journey.id}
-              className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center`}
+            <div
+              className={`${cardClass} flex flex-col gap-3 sm:flex-row sm:items-center ${drag.isDragging ? 'bg-[var(--pyre-black)]' : ''}`}
             >
+              <div className="self-start sm:self-center">
+                <DragHandle drag={drag} label={journey.name} />
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <a
@@ -171,19 +269,14 @@ export function JourneysIndex() {
                   Copy
                 </button>
               </div>
-            </li>
+            </div>
           );
-        })}
-      </ul>
-
-      {archivedCount > 0 && (
-        <button
-          type="button"
-          className="self-start font-mono text-xs uppercase tracking-wide text-white/40 hover:text-white/70"
-          onClick={() => setShowArchived((v) => !v)}
-        >
-          {showArchived ? 'Hide' : 'Show'} {archivedCount} archived
-        </button>
+        }}
+      </SortableList>
+      {journeys.length > 1 && (
+        <p className="text-xs text-white/40">
+          Drag a journey by its handle to change the order. Everyone sees the same order.
+        </p>
       )}
 
       {creating && (

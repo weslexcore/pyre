@@ -24,6 +24,7 @@ export function toSummary(row: JourneyRow, stats?: JourneyStats): JourneySummary
     testMode: row.test_mode,
     archived: row.archived,
     revision: row.revision,
+    sortOrder: row.sort_order ?? 0,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
     definition: record?.definition ?? null,

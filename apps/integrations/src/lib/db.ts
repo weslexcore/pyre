@@ -42,6 +42,8 @@ export interface JourneyRow {
   archived: boolean;
   revision: number;
   definition: unknown;
+  /** Position on /admin/journeys, lowest first (shared by everyone). */
+  sort_order: number;
   updated_by: string | null;
   created_at: string;
   updated_at: string;

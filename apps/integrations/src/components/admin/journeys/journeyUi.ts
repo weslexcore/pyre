@@ -180,3 +180,22 @@ export function blankDefinition(trigger: Trigger['type']): JourneyDefinition {
     steps: [newStep([])],
   };
 }
+
+/**
+ * The full order after reordering only the visible (filtered) items: the
+ * visible items take the slots they occupied before, in their new order, so
+ * hidden items never move.
+ */
+export function mergeVisibleOrder(
+  fullIds: string[],
+  visibleBefore: string[],
+  visibleAfter: string[]
+): string[] {
+  const visible = new Set(visibleBefore);
+  const slots = fullIds.flatMap((id, i) => (visible.has(id) ? [i] : []));
+  const next = [...fullIds];
+  slots.forEach((slot, i) => {
+    next[slot] = visibleAfter[i];
+  });
+  return next;
+}

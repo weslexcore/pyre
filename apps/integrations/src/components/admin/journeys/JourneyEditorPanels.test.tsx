@@ -88,3 +88,17 @@ describe('journey editor panels', () => {
     expect(html).toContain('Subject line');
   });
 });
+
+describe('mergeVisibleOrder', () => {
+  it('reorders only the visible journeys, leaving hidden ones in place', async () => {
+    const { mergeVisibleOrder } = await import('./journeyUi');
+    // a, c and e are visible (say, the "On" filter); b and d are hidden.
+    expect(mergeVisibleOrder(['a', 'b', 'c', 'd', 'e'], ['a', 'c', 'e'], ['e', 'a', 'c'])).toEqual([
+      'e',
+      'b',
+      'a',
+      'd',
+      'c',
+    ]);
+  });
+});
