@@ -23,6 +23,8 @@ export const CATEGORY_TAGS = [
   'Yoga',
   'Breathwork',
   'Qigong',
+  'Mat Pilates',
+  'Sound Bath',
   'Open Hours',
 ];
 
