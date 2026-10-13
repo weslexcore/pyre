@@ -26,6 +26,9 @@ export class MomenceApiError extends Error {
   }
 }
 
+const RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_MAX_WAIT_MS = 5_000;
+
 export async function momenceRequest<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
@@ -35,15 +38,31 @@ export async function momenceRequest<T>(
   const qs = options.query ? `?${new URLSearchParams(options.query)}` : '';
   const url = `${MOMENCE_API_V2}${path}${qs}`;
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      ...(options.body != null && { 'Content-Type': 'application/json' }),
-    },
-    ...(options.body != null && { body: JSON.stringify(options.body) }),
-  });
+  const send = () =>
+    fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        ...(options.body != null && { 'Content-Type': 'application/json' }),
+      },
+      ...(options.body != null && { body: JSON.stringify(options.body) }),
+    });
+
+  // Rate limited (journey sweeps page the member list hourly): wait as long
+  // as Momence asks — capped, so a cron tick's time budget survives — and try
+  // again, twice at most.
+  let response = await send();
+  for (let attempt = 0; response.status === 429 && attempt < RATE_LIMIT_RETRIES; attempt += 1) {
+    const retryAfter = Number(response.headers.get('retry-after'));
+    const waitMs = Math.min(
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt,
+      RATE_LIMIT_MAX_WAIT_MS
+    );
+    log.warn(`${method} ${path} rate limited — retrying in ${waitMs}ms`);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    response = await send();
+  }
 
   const text = await response.text();
   if (!response.ok) {
