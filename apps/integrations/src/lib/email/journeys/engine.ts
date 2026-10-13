@@ -131,12 +131,18 @@ interface EnrollOptions {
   /** Live context, when the caller already built one (enrollIf checks). */
   ctx?: JourneyContext;
   gate?: EmailGate;
+  /**
+   * Added by hand from the People tab: the re-entry rule (once ever, or the
+   * cooldown) doesn't apply — an admin adding someone means it. Being in the
+   * journey right now still blocks a second run.
+   */
+  manual?: boolean;
 }
 
 export async function enrollMember(
   journey: JourneyRecord,
   identity: MemberIdentity,
-  { dryRun = false, anchorAt, context = {}, ctx, gate }: EnrollOptions = {}
+  { dryRun = false, anchorAt, context = {}, ctx, gate, manual = false }: EnrollOptions = {}
 ): Promise<EnrollOutcome> {
   const db = getDb();
   if (!db) return 'unavailable';
@@ -169,9 +175,12 @@ export async function enrollMember(
   if (latest) {
     if (latest.status === 'active') return 'already-enrolled';
     const reentry = journey.definition.reentry;
-    if (reentry.mode === 'once') return 'already-enrolled';
-    const endedAt = Date.parse(latest.ended_at ?? latest.updated_at);
-    if (Date.now() - endedAt < reentry.days * DAY_MS) return 'cooling-down';
+    if (!manual) {
+      if (reentry.mode === 'once') return 'already-enrolled';
+      const endedAt = Date.parse(latest.ended_at ?? latest.updated_at);
+      if (Date.now() - endedAt < reentry.days * DAY_MS) return 'cooling-down';
+    }
+    // A new run: its send keys carry the cycle, so its emails go out again.
     cycle = latest.cycle + 1;
   }
 
@@ -219,19 +228,31 @@ export async function enrollMember(
 }
 
 /** Enroll someone by email from the admin People tab. */
-export async function enrollByEmail(
+/** Add someone by hand from the People tab — by Momence member id, or by email. */
+export async function enrollManually(
   journey: JourneyRecord,
-  email: string
-): Promise<{ outcome: EnrollOutcome | 'not-found'; memberId?: number }> {
-  const member = await findMemberByEmail(email);
+  who: { memberId: number } | { email: string }
+): Promise<{ outcome: EnrollOutcome | 'not-found'; memberId?: number; email?: string }> {
+  let member: HostMember | null;
+  try {
+    member =
+      'memberId' in who ? await fetchHostMember(who.memberId) : await findMemberByEmail(who.email);
+  } catch {
+    member = null;
+  }
   if (!member) return { outcome: 'not-found' };
-  const outcome = await enrollMember(journey, {
-    memberId: member.id,
-    email: member.email,
-    firstName: member.firstName,
-    lastName: member.lastName,
-  });
-  return { outcome, memberId: member.id };
+  if (!member.email) return { outcome: 'not-found' };
+  const outcome = await enrollMember(
+    journey,
+    {
+      memberId: member.id,
+      email: member.email,
+      firstName: member.firstName,
+      lastName: member.lastName,
+    },
+    { manual: true }
+  );
+  return { outcome, memberId: member.id, email: member.email };
 }
 
 function bookingContext(event: BookingTriggerEvent): EnrollmentContext {

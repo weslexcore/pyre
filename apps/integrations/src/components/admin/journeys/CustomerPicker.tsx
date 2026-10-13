@@ -1,5 +1,5 @@
-// "Preview as": find a Momence customer by name or email, as you type, so a
-// journey email can be previewed (or test-sent) with their real data. Backed
+// Find a Momence customer by name or email, as you type — to preview a
+// journey email with their real data, or to add them to a journey. Backed
 // by the same Momence customer search the incident and Lost & Found forms use
 // (/api/admin/incident-people?source=guest), which matches names and emails.
 
@@ -25,9 +25,17 @@ const MIN_QUERY_LENGTH = 2;
 export function CustomerPicker({
   selected,
   onSelect,
+  label = 'Preview as',
+  placeholder = 'Sample data - or search a customer by name or email',
+  clearLabel = 'Use sample data',
+  id = 'journey-preview-customer',
 }: {
   selected: PickedCustomer | null;
   onSelect: (customer: PickedCustomer | null) => void;
+  label?: string;
+  placeholder?: string;
+  clearLabel?: string;
+  id?: string;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -40,7 +48,7 @@ export function CustomerPicker({
   if (selected) {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={microLabelClass}>Preview as</span>
+        <span className={microLabelClass}>{label}</span>
         <span className="min-w-0 flex-1 truncate rounded border border-white/10 bg-white/5 px-2 py-1 text-sm">
           {selected.name}
           <span className="ml-2 font-mono text-xs text-white/45">{selected.email}</span>
@@ -53,7 +61,7 @@ export function CustomerPicker({
             setQuery('');
           }}
         >
-          Use sample data
+          {clearLabel}
         </button>
       </div>
     );
@@ -64,13 +72,13 @@ export function CustomerPicker({
   return (
     <div className="relative">
       <div className="flex flex-wrap items-center gap-1.5">
-        <label className={microLabelClass} htmlFor="journey-preview-customer">
-          Preview as
+        <label className={microLabelClass} htmlFor={id}>
+          {label}
         </label>
         <input
-          id="journey-preview-customer"
+          id={id}
           className={`${compactInputClass} min-w-0 flex-1`}
-          placeholder="Sample data - or search a customer by name or email"
+          placeholder={placeholder}
           value={query}
           autoComplete="off"
           onChange={(e) => {

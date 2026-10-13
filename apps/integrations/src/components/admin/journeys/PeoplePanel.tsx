@@ -10,6 +10,7 @@ import { invalidateJson, useCachedJson } from '@/lib/client/cachedJson';
 import { fmtDateTime } from '@/lib/client/format';
 import type { EnrollmentDto, EnrollmentsResponse } from '@/lib/email/journeys/api-types';
 import type { JourneyDefinition } from '@/lib/email/journeys/schema';
+import { CustomerPicker, type PickedCustomer } from './CustomerPicker';
 import { badgeClass, buttonClass, cardClass, compactInputClass, pillClass } from './journeyUi';
 
 type StatusFilter = 'all' | 'active' | 'completed' | 'exited';
@@ -39,7 +40,8 @@ export function PeoplePanel({
 }) {
   const [status, setStatus] = useState<StatusFilter>('active');
   const [query, setQuery] = useState('');
-  const [enrollEmail, setEnrollEmail] = useState('');
+  const [toAdd, setToAdd] = useState<PickedCustomer | null>(null);
+  const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -53,30 +55,31 @@ export function PeoplePanel({
     key ? definition.steps.find((s) => s.key === key)?.name || key : '';
 
   const enroll = async () => {
+    if (!toAdd) return;
     setMessage(null);
+    setAdding(true);
     try {
       const result = await sendJson<{ message: string }>(
         `/api/admin/journeys/${journeyId}/enrollments`,
         'POST',
-        {
-          action: 'enroll',
-          email: enrollEmail,
-        }
+        { action: 'enroll', memberId: toAdd.memberId }
       );
       setMessage({ ok: true, text: result.message });
-      setEnrollEmail('');
+      setToAdd(null);
       invalidateJson(`/api/admin/journeys/${journeyId}`);
       await reload();
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAdding(false);
     }
   };
 
   const remove = async (row: EnrollmentDto) => {
     const ok = await confirmAction({
-      title: `Take ${row.email} out of this journey?`,
+      title: `Remove ${row.email} from this journey?`,
       body: 'They get no more emails from it. Any end-of-journey tag actions run now.',
-      confirmLabel: 'Take out',
+      confirmLabel: 'Remove',
       danger: true,
     });
     if (!ok) return;
@@ -98,28 +101,30 @@ export function PeoplePanel({
     <div className="flex flex-col gap-4">
       <div className={`${cardClass} flex flex-col gap-2`}>
         <p className="text-sm text-white/70">
-          Add someone by hand
-          {testMode ? ' (test mode: only whitelisted addresses can be added)' : ''}.
+          Add someone by hand. They start at the first step now
+          {testMode ? ' (test mode: only whitelisted addresses can be added)' : ''}. People who
+          already went through this journey start a fresh run - its emails go to them again.
           {definition.trigger.type === 'session-booked' &&
-            ' They start without a booked session, so steps that check the session are skipped.'}
+            ' They have no booked session, so steps that check the session are skipped.'}
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          <input
-            className={`${compactInputClass} min-w-0 flex-1`}
-            placeholder="customer@email.com"
-            value={enrollEmail}
-            onChange={(e) => setEnrollEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void enroll();
-            }}
-          />
+        <div className="flex flex-wrap items-start gap-1.5">
+          <div className="min-w-0 flex-1">
+            <CustomerPicker
+              id="journey-add-customer"
+              label="Add"
+              placeholder="Search a customer by name or email"
+              clearLabel="Change"
+              selected={toAdd}
+              onSelect={setToAdd}
+            />
+          </div>
           <button
             type="button"
             className={buttonClass}
             onClick={() => void enroll()}
-            disabled={!enrollEmail.trim()}
+            disabled={!toAdd || adding}
           >
-            Enroll
+            {adding ? 'Adding...' : 'Add to journey'}
           </button>
         </div>
         {message &&
@@ -158,25 +163,32 @@ export function PeoplePanel({
       <ul className="flex flex-col gap-1">
         {data?.enrollments.map((row) => (
           <li key={row.id} className="rounded border border-white/10 bg-white/[0.03]">
-            <button
-              type="button"
-              className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left"
-              onClick={() => setOpen(open === row.id ? null : row.id)}
-              aria-expanded={open === row.id}
-            >
-              <span className="min-w-0 flex-1 truncate text-sm">{row.email}</span>
-              {row.cycle > 0 && <span className={badgeClass('off')}>run {row.cycle + 1}</span>}
-              <span className="font-mono text-[11px] text-white/50">
-                {row.status === 'active'
-                  ? `Next: ${stepName(row.currentStepKey)}${row.nextAt ? ` · ${fmtDateTime(row.nextAt)}` : ''}`
-                  : row.status === 'completed'
-                    ? `Finished ${row.endedAt ? fmtDateTime(row.endedAt) : ''}`
-                    : `Left: ${describeExit(row.exitReason)}`}
-              </span>
-              <span className="font-mono text-[11px] text-white/30">
-                {row.sends.filter((s) => s.status === 'sent').length} sent
-              </span>
-            </button>
+            <div className="flex items-center gap-2 pr-2">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left"
+                onClick={() => setOpen(open === row.id ? null : row.id)}
+                aria-expanded={open === row.id}
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">{row.email}</span>
+                {row.cycle > 0 && <span className={badgeClass('off')}>run {row.cycle + 1}</span>}
+                <span className="font-mono text-[11px] text-white/50">
+                  {row.status === 'active'
+                    ? `Next: ${stepName(row.currentStepKey)}${row.nextAt ? ` · ${fmtDateTime(row.nextAt)}` : ''}`
+                    : row.status === 'completed'
+                      ? `Finished ${row.endedAt ? fmtDateTime(row.endedAt) : ''}`
+                      : `Left: ${describeExit(row.exitReason)}`}
+                </span>
+                <span className="font-mono text-[11px] text-white/30">
+                  {row.sends.filter((s) => s.status === 'sent').length} sent
+                </span>
+              </button>
+              {row.status === 'active' && (
+                <button type="button" className={buttonClass} onClick={() => void remove(row)}>
+                  Remove
+                </button>
+              )}
+            </div>
             {open === row.id && (
               <div className="border-t border-white/10 px-3 py-2">
                 <p className="font-mono text-[11px] text-white/40">
@@ -225,15 +237,6 @@ export function PeoplePanel({
                       ))}
                     </tbody>
                   </table>
-                )}
-                {row.status === 'active' && (
-                  <button
-                    type="button"
-                    className={`${buttonClass} mt-2`}
-                    onClick={() => void remove(row)}
-                  >
-                    Take out of journey
-                  </button>
                 )}
               </div>
             )}

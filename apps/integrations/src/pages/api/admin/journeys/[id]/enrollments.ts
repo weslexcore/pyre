@@ -5,7 +5,7 @@
 import type { APIRoute } from 'astro';
 import type { EmailSendRow, JourneyEnrollmentRow } from '@/lib/db';
 import type { EnrollmentDto, EnrollmentsResponse } from '@/lib/email/journeys/api-types';
-import { enrollByEmail, exitJourney } from '@/lib/email/journeys/engine';
+import { enrollManually, exitJourney } from '@/lib/email/journeys/engine';
 import { getJourneyRow, toRecord } from '@/lib/email/journeys/store';
 import { beginMutation, beginRead, json, storeError } from '@/lib/http/route';
 
@@ -17,12 +17,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const OUTCOME_MESSAGES: Record<string, string> = {
   enrolled: 'Enrolled.',
-  'already-enrolled': 'Already in this journey (or has been, and it only runs once).',
+  'already-enrolled': 'Already in this journey right now.',
   'cooling-down': 'Finished this journey too recently to re-enter it yet.',
   'not-whitelisted': 'The journey is in test mode and this address is not on the whitelist.',
   'no-steps': 'The journey has no steps to run.',
   unavailable: 'Storage unavailable — try again.',
-  'not-found': 'No Momence customer has that email.',
+  'not-found': 'That customer could not be found in Momence (or has no email).',
 };
 
 export const GET: APIRoute = async ({ cookies, params, url }) => {
@@ -126,9 +126,10 @@ export const GET: APIRoute = async ({ cookies, params, url }) => {
 export const POST: APIRoute = async ({ cookies, params, request }) => {
   const ready = await beginMutation(cookies, request, PAGE);
   if (ready instanceof Response) return ready;
-  const { action, email, enrollmentId } = ready.body as {
+  const { action, email, memberId, enrollmentId } = ready.body as {
     action?: unknown;
     email?: unknown;
+    memberId?: unknown;
     enrollmentId?: unknown;
   };
 
@@ -138,11 +139,22 @@ export const POST: APIRoute = async ({ cookies, params, request }) => {
   if (!record) return json({ error: 'This journey has an invalid definition — fix it first' }, 409);
 
   if (action === 'enroll') {
-    const address = typeof email === 'string' ? email.trim().toLowerCase() : '';
-    if (!EMAIL_RE.test(address)) return json({ error: 'Enter a valid email' }, 400);
-    const { outcome } = await enrollByEmail(record, address);
-    const message = OUTCOME_MESSAGES[outcome] ?? outcome;
-    return json({ outcome, message }, outcome === 'enrolled' ? 200 : 409);
+    // By Momence member id (picked from the customer search) or by email.
+    // Manual adds skip the journey's re-entry rule: someone who already went
+    // through it starts a fresh run.
+    let who: { memberId: number } | { email: string };
+    if (typeof memberId === 'number' && Number.isInteger(memberId)) {
+      who = { memberId };
+    } else {
+      const address = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!EMAIL_RE.test(address))
+        return json({ error: 'Pick a customer or enter a valid email' }, 400);
+      who = { email: address };
+    }
+    const result = await enrollManually(record, who);
+    const base = OUTCOME_MESSAGES[result.outcome] ?? result.outcome;
+    const message = result.outcome === 'enrolled' && result.email ? `Added ${result.email}.` : base;
+    return json({ outcome: result.outcome, message }, result.outcome === 'enrolled' ? 200 : 409);
   }
 
   if (action === 'exit') {
