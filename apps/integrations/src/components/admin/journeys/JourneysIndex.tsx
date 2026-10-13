@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { InfoTip } from '@/components/admin/InfoTip';
 import { Modal, modalPanelClass } from '@/components/admin/Modal';
 import { Toggle } from '@/components/admin/Toggle';
 import { ApiError, sendJson } from '@/lib/client/api';
@@ -25,7 +26,6 @@ import {
   describeTrigger,
   goldButtonClass,
   inputClass,
-  labelClass,
   pct,
   sectionHeading,
   selectClass,
@@ -252,7 +252,13 @@ function NewJourneyDialog({
       </h2>
       <div className="mt-4 flex flex-col gap-4">
         <label>
-          <span className={labelClass}>Name</span>
+          <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[var(--pyre-creme)]">
+            Name
+            <InfoTip
+              label="the name"
+              text="What staff see in the list. You can rename it any time."
+            />
+          </span>
           <input
             className={`${inputClass} w-full`}
             value={name}
@@ -263,7 +269,13 @@ function NewJourneyDialog({
           />
         </label>
         <label>
-          <span className={labelClass}>Id (permanent)</span>
+          <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[var(--pyre-creme)]">
+            Id (permanent)
+            <InfoTip
+              label="the id"
+              text="A short code filled in from the name. It appears in the journey's address and its tracking, so it can never change after you create the journey."
+            />
+          </span>
           <input
             className={`${inputClass} w-full font-mono`}
             value={effectiveId}
@@ -278,7 +290,13 @@ function NewJourneyDialog({
         </label>
         {!duplicateFrom && (
           <label>
-            <span className={labelClass}>Starts when someone</span>
+            <span className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[var(--pyre-creme)]">
+              Starts when someone
+              <InfoTip
+                label="what starts it"
+                text="What puts people into the journey. You can change this later on the Settings tab."
+              />
+            </span>
             <select
               className={`${selectClass} w-full`}
               value={trigger}

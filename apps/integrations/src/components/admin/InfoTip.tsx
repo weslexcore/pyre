@@ -4,7 +4,16 @@
 
 import { useState } from 'react';
 
-export function InfoTip({ label, text }: { label: string; text: string }) {
+export function InfoTip({
+  label,
+  text,
+  align = 'left',
+}: {
+  label: string;
+  text: string;
+  /** 'right' opens the panel leftward, for a tip at the right edge of a card. */
+  align?: 'left' | 'right';
+}) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative inline-flex group">
@@ -20,7 +29,7 @@ export function InfoTip({ label, text }: { label: string; text: string }) {
       </button>
       <span
         role="tooltip"
-        className={`pointer-events-none absolute left-0 top-5 z-20 w-56 max-w-[70vw] rounded border border-white/20 bg-[var(--pyre-black)] px-2.5 py-1.5 text-[11px] font-normal normal-case tracking-normal leading-snug text-white/70 shadow-lg transition-opacity group-hover:opacity-100 ${
+        className={`pointer-events-none absolute ${align === 'right' ? 'right-0' : 'left-0'} top-5 z-20 w-56 max-w-[70vw] rounded border border-white/20 bg-[var(--pyre-black)] px-2.5 py-1.5 text-[11px] font-normal normal-case tracking-normal leading-snug text-white/70 shadow-lg transition-opacity group-hover:opacity-100 ${
           open ? 'opacity-100' : 'opacity-0'
         }`}
       >

@@ -1,9 +1,11 @@
-// The Overview tab: what starts the journey, who may enter, what takes them
-// out, how often someone can go through it again, and the tags written at
-// the end — plus an estimate of who an audience journey would enroll.
+// The Overview tab, in the order you'd think it through: who enters, what
+// takes them out, whether they can go through it again, what happens at the
+// end, and which campaign its links report to — plus an estimate of who an
+// audience journey would enroll.
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { InfoTip } from '@/components/admin/InfoTip';
 import { sendJson } from '@/lib/client/api';
 import type { AudienceResponse } from '@/lib/email/journeys/api-types';
 import {
@@ -12,16 +14,66 @@ import {
   TRIGGERS,
   type Trigger,
 } from '@/lib/email/journeys/schema';
-import {
-  buttonClass,
-  cardClass,
-  compactInputClass,
-  compactSelectClass,
-  labelClass,
-  microLabelClass,
-  sectionHeading,
-} from './journeyUi';
+import { Field, Section } from './Field';
+import { buttonClass, compactInputClass, compactSelectClass } from './journeyUi';
 import { ActionList, ConditionList, TagListInput } from './RuleLists';
+
+const TIPS = {
+  trigger:
+    'What puts someone into this journey. A booking enrolls them the moment Momence reports it; an audience is checked every hour against your Momence customers; "added by hand" only enrolls people you add on the People tab.',
+  firstBooking:
+    "Only a customer's first-ever booking at Pyre enrolls them - use this for welcome and intro-offer journeys.",
+  activePurchase:
+    'Only customers holding an active membership or credit pack in Momence. Use it for credit-related journeys; it also makes the hourly check much faster.',
+  inactiveDays: 'Last checked in at least this many days ago. Leave empty for "any time".',
+  maxInactiveDays:
+    'Last checked in no more than this many days ago. Keeps people who left long ago out, so switching the journey on does not email your whole history at once.',
+  minVisits: 'Lifetime checked-in visits (not just bookings). Leave empty for "any".',
+  withTags: 'Momence customer tags they must all have. Separate several with commas.',
+  withoutTags:
+    'Momence customer tags that keep someone out, e.g. "Google Review" for people who already reviewed. Separate several with commas.',
+  enrollIf:
+    'Extra requirements checked against live Momence data at the moment someone would enter. They must meet all of them.',
+  exitIf:
+    'Checked before every email. The moment any of these is true, they leave the journey and get nothing more from it.',
+  reentry:
+    'Whether someone can go through this journey more than once. Most journeys run once per person; re-engagement journeys can repeat after a waiting period.',
+  cooldown: 'Counted from when their last run finished or they left it.',
+  onEnd:
+    'Momence tag changes made when someone finishes or leaves, for any reason - e.g. removing a discount tag so the discount ends with the journey.',
+  completionTag:
+    'Added in Momence only when someone reaches the end (not when they leave early), so staff can see who got the full journey.',
+  campaign:
+    "Links in this journey's emails are tagged with this campaign, so the visits, bookings and purchases they bring in show on that campaign in the Campaigns tool.",
+  description:
+    'Only staff see this. Say what the journey is for and anything to know before editing it.',
+} as const;
+
+function NumberInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  min = 0,
+}: {
+  id?: string;
+  value: number | undefined;
+  onChange: (next: number | undefined) => void;
+  placeholder: string;
+  min?: number;
+}) {
+  return (
+    <input
+      id={id}
+      type="number"
+      min={min}
+      className={`${compactInputClass} w-full`}
+      value={value ?? ''}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+    />
+  );
+}
 
 export function OverviewPanel({
   journeyId,
@@ -41,6 +93,7 @@ export function OverviewPanel({
   const set = (patch: Partial<JourneyDefinition>) => onChange({ ...definition, ...patch });
   const trigger = definition.trigger;
   const sessionTrigger = trigger.type === 'session-booked';
+  const ids = useId();
 
   const setTriggerType = (type: Trigger['type']) => {
     if (type === trigger.type) return;
@@ -54,17 +107,232 @@ export function OverviewPanel({
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <section className={`${cardClass} flex flex-col gap-3`}>
-        <p className={sectionHeading}>About</p>
-        <textarea
-          rows={3}
-          className={`${compactInputClass} w-full`}
-          placeholder="What this journey is for (only staff see this)"
-          value={definition.description}
-          onChange={(e) => set({ description: e.target.value })}
-        />
-      </section>
+    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+      <Section
+        number={1}
+        title="Who enters"
+        description="What puts someone into this journey, and anything they must meet first."
+      >
+        <Field label="Starts when someone" tip={TIPS.trigger}>
+          <div
+            className="grid gap-2 sm:grid-cols-3"
+            role="radiogroup"
+            aria-label="Starts when someone"
+          >
+            {TRIGGER_TYPES.map((t) => (
+              <label
+                key={t}
+                className={`cursor-pointer rounded border p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--pyre-gold)]/60 ${
+                  trigger.type === t
+                    ? 'border-[var(--pyre-gold)]/70 bg-[var(--pyre-gold)]/10'
+                    : 'border-white/10 bg-white/[0.02] hover:border-white/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  className="sr-only"
+                  name={`${ids}-trigger`}
+                  checked={trigger.type === t}
+                  onChange={() => setTriggerType(t)}
+                />
+                <span className="block text-sm font-medium text-[var(--pyre-creme)]">
+                  {TRIGGERS[t].label}
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-white/50">
+                  {TRIGGERS[t].description}
+                </span>
+              </label>
+            ))}
+          </div>
+        </Field>
+
+        {trigger.type === 'session-booked' && (
+          <label className="flex items-center gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={trigger.firstBookingOnly}
+              onChange={(e) => set({ trigger: { ...trigger, firstBookingOnly: e.target.checked } })}
+            />
+            Only their first-ever booking
+            <InfoTip label="first-ever booking" text={TIPS.firstBooking} />
+          </label>
+        )}
+
+        {trigger.type === 'sweep' && (
+          <>
+            <label className="flex items-center gap-2 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={trigger.withActivePurchase}
+                onChange={(e) =>
+                  set({ trigger: { ...trigger, withActivePurchase: e.target.checked } })
+                }
+              />
+              Only people with an active membership or credit pack
+              <InfoTip label="active membership or credit pack" text={TIPS.activePurchase} />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field
+                label="Not seen for at least"
+                tip={TIPS.inactiveDays}
+                htmlFor={`${ids}-inactive`}
+                hint="days"
+              >
+                <NumberInput
+                  id={`${ids}-inactive`}
+                  min={1}
+                  value={trigger.inactiveDays}
+                  placeholder="Any time"
+                  onChange={(inactiveDays) => set({ trigger: { ...trigger, inactiveDays } })}
+                />
+              </Field>
+              <Field
+                label="...but seen within"
+                tip={TIPS.maxInactiveDays}
+                htmlFor={`${ids}-max`}
+                hint="days"
+              >
+                <NumberInput
+                  id={`${ids}-max`}
+                  min={1}
+                  value={trigger.maxInactiveDays}
+                  placeholder="Any time"
+                  onChange={(maxInactiveDays) => set({ trigger: { ...trigger, maxInactiveDays } })}
+                />
+              </Field>
+              <Field
+                label="Checked-in visits, at least"
+                tip={TIPS.minVisits}
+                htmlFor={`${ids}-visits`}
+              >
+                <NumberInput
+                  id={`${ids}-visits`}
+                  value={trigger.minVisits}
+                  placeholder="Any"
+                  onChange={(minVisits) => set({ trigger: { ...trigger, minVisits } })}
+                />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Has all of these tags" tip={TIPS.withTags}>
+                <TagListInput
+                  value={trigger.withTags}
+                  onChange={(withTags) => set({ trigger: { ...trigger, withTags } })}
+                  tags={tags}
+                  placeholder="e.g. VIP, Founding member"
+                />
+              </Field>
+              <Field label="Has none of these tags" tip={TIPS.withoutTags}>
+                <TagListInput
+                  value={trigger.withoutTags}
+                  onChange={(withoutTags) => set({ trigger: { ...trigger, withoutTags } })}
+                  tags={tags}
+                  placeholder="e.g. Google Review"
+                />
+              </Field>
+            </div>
+          </>
+        )}
+
+        <Field
+          label="Only enroll people who"
+          tip={TIPS.enrollIf}
+          hint="All of these must be true when they would enter."
+        >
+          <ConditionList
+            conditions={definition.enrollIf}
+            onChange={(enrollIf) => set({ enrollIf })}
+            allowSession={sessionTrigger}
+            tags={tags}
+            emptyText="No extra requirements - everyone the trigger finds enters."
+            addLabel="Add requirement"
+          />
+        </Field>
+
+        {trigger.type === 'sweep' && (
+          <AudienceEstimate journeyId={journeyId} definition={definition} />
+        )}
+      </Section>
+
+      <Section
+        number={2}
+        title="When they leave early"
+        description="Checked against live Momence data before every email."
+      >
+        <Field label="Take them out if" tip={TIPS.exitIf} hint="Any one of these is enough.">
+          <ConditionList
+            conditions={definition.exitIf}
+            onChange={(exitIf) => set({ exitIf })}
+            allowSession={sessionTrigger}
+            tags={tags}
+            emptyText="No exit rules - they stay until the last step."
+            addLabel="Add exit rule"
+          />
+        </Field>
+      </Section>
+
+      <Section number={3} title="Going through it again">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Each person can go through it"
+            tip={TIPS.reentry}
+            htmlFor={`${ids}-reentry`}
+          >
+            <select
+              id={`${ids}-reentry`}
+              className={compactSelectClass}
+              value={definition.reentry.mode}
+              onChange={(e) =>
+                set({
+                  reentry:
+                    e.target.value === 'once' ? { mode: 'once' } : { mode: 'cooldown', days: 90 },
+                })
+              }
+            >
+              <option value="once">Once, ever</option>
+              <option value="cooldown">Again, after a waiting period</option>
+            </select>
+          </Field>
+          {definition.reentry.mode === 'cooldown' && (
+            <Field
+              label="Waiting period"
+              tip={TIPS.cooldown}
+              htmlFor={`${ids}-cooldown`}
+              hint="days after they finish or leave"
+            >
+              <NumberInput
+                id={`${ids}-cooldown`}
+                min={1}
+                value={definition.reentry.days}
+                placeholder="90"
+                onChange={(days) =>
+                  set({ reentry: { mode: 'cooldown', days: Math.max(1, days ?? 1) } })
+                }
+              />
+            </Field>
+          )}
+        </div>
+      </Section>
+
+      <Section number={4} title="At the end">
+        <Field label="When they finish or leave" tip={TIPS.onEnd}>
+          <ActionList
+            actions={definition.onEnd}
+            onChange={(onEnd) => set({ onEnd })}
+            tags={tags}
+            emptyText="No tag changes."
+          />
+        </Field>
+        <Field label="Tag people who finish" tip={TIPS.completionTag} htmlFor={`${ids}-completion`}>
+          <input
+            id={`${ids}-completion`}
+            className={`${compactInputClass} w-full sm:w-80`}
+            placeholder="Optional, e.g. Review Requested"
+            value={definition.completionTag ?? ''}
+            onChange={(e) => set({ completionTag: e.target.value || undefined })}
+          />
+        </Field>
+      </Section>
 
       <CampaignSection
         journeyId={journeyId}
@@ -74,209 +342,22 @@ export function OverviewPanel({
         onChange={(campaign) => set({ campaign })}
       />
 
-      <section className={`${cardClass} flex flex-col gap-3`}>
-        <p className={sectionHeading}>Starts when someone</p>
-        <select
-          className={compactSelectClass}
-          value={trigger.type}
-          onChange={(e) => setTriggerType(e.target.value as Trigger['type'])}
+      <Section number={6} title="Notes">
+        <Field
+          label="What this journey is for"
+          tip={TIPS.description}
+          htmlFor={`${ids}-description`}
         >
-          {TRIGGER_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {TRIGGERS[t].label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-white/40">{TRIGGERS[trigger.type].description}</p>
-
-        {trigger.type === 'session-booked' && (
-          <label className="flex items-center gap-2 text-sm text-white/70">
-            <input
-              type="checkbox"
-              checked={trigger.firstBookingOnly}
-              onChange={(e) => set({ trigger: { ...trigger, firstBookingOnly: e.target.checked } })}
-            />
-            Only their first-ever booking
-          </label>
-        )}
-
-        {trigger.type === 'sweep' && (
-          <label className="flex items-center gap-2 text-sm text-white/70">
-            <input
-              type="checkbox"
-              checked={trigger.withActivePurchase}
-              onChange={(e) =>
-                set({ trigger: { ...trigger, withActivePurchase: e.target.checked } })
-              }
-            />
-            Only people with an active membership or credit pack
-          </label>
-        )}
-        {trigger.type === 'sweep' && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label>
-              <span className={microLabelClass}>Not seen for at least (days)</span>
-              <input
-                type="number"
-                min={1}
-                className={`${compactInputClass} mt-1 w-full`}
-                value={trigger.inactiveDays ?? ''}
-                placeholder="Any"
-                onChange={(e) =>
-                  set({
-                    trigger: {
-                      ...trigger,
-                      inactiveDays: e.target.value ? Number(e.target.value) : undefined,
-                    },
-                  })
-                }
-              />
-            </label>
-            <label>
-              <span className={microLabelClass}>...but seen within (days)</span>
-              <input
-                type="number"
-                min={1}
-                className={`${compactInputClass} mt-1 w-full`}
-                value={trigger.maxInactiveDays ?? ''}
-                placeholder="Any time"
-                onChange={(e) =>
-                  set({
-                    trigger: {
-                      ...trigger,
-                      maxInactiveDays: e.target.value ? Number(e.target.value) : undefined,
-                    },
-                  })
-                }
-              />
-            </label>
-            <label>
-              <span className={microLabelClass}>Checked-in visits at least</span>
-              <input
-                type="number"
-                min={0}
-                className={`${compactInputClass} mt-1 w-full`}
-                value={trigger.minVisits ?? ''}
-                placeholder="Any"
-                onChange={(e) =>
-                  set({
-                    trigger: {
-                      ...trigger,
-                      minVisits: e.target.value ? Number(e.target.value) : undefined,
-                    },
-                  })
-                }
-              />
-            </label>
-            <div>
-              <span className={microLabelClass}>Has all of these tags</span>
-              <div className="mt-1">
-                <TagListInput
-                  value={trigger.withTags}
-                  onChange={(withTags) => set({ trigger: { ...trigger, withTags } })}
-                  tags={tags}
-                  placeholder="Comma separated"
-                />
-              </div>
-            </div>
-            <div>
-              <span className={microLabelClass}>Has none of these tags</span>
-              <div className="mt-1">
-                <TagListInput
-                  value={trigger.withoutTags}
-                  onChange={(withoutTags) => set({ trigger: { ...trigger, withoutTags } })}
-                  tags={tags}
-                  placeholder="Comma separated"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-        {trigger.type === 'sweep' && (
-          <AudienceEstimate journeyId={journeyId} definition={definition} />
-        )}
-      </section>
-
-      <section className={`${cardClass} flex flex-col gap-2`}>
-        <p className={sectionHeading}>Only enroll people who</p>
-        <ConditionList
-          conditions={definition.enrollIf}
-          onChange={(enrollIf) => set({ enrollIf })}
-          allowSession={sessionTrigger}
-          tags={tags}
-          emptyText="Everyone the trigger finds enters."
-          addLabel="Add requirement"
-        />
-        <p className="text-xs text-white/40">All of these must be true, checked when they enter.</p>
-      </section>
-
-      <section className={`${cardClass} flex flex-col gap-2`}>
-        <p className={sectionHeading}>Take them out if</p>
-        <ConditionList
-          conditions={definition.exitIf}
-          onChange={(exitIf) => set({ exitIf })}
-          allowSession={sessionTrigger}
-          tags={tags}
-          emptyText="They stay until the last step."
-          addLabel="Add exit rule"
-        />
-        <p className="text-xs text-white/40">
-          Any one of these, checked against live Momence data before every email.
-        </p>
-      </section>
-
-      <section className={`${cardClass} flex flex-col gap-2`}>
-        <p className={sectionHeading}>Going through it again</p>
-        <select
-          className={compactSelectClass}
-          value={definition.reentry.mode}
-          onChange={(e) =>
-            set({
-              reentry:
-                e.target.value === 'once' ? { mode: 'once' } : { mode: 'cooldown', days: 90 },
-            })
-          }
-        >
-          <option value="once">Once per person, ever</option>
-          <option value="cooldown">Again after a waiting period</option>
-        </select>
-        {definition.reentry.mode === 'cooldown' && (
-          <label className="flex items-center gap-2 text-sm text-white/70">
-            Wait
-            <input
-              type="number"
-              min={1}
-              className={`${compactInputClass} w-24`}
-              value={definition.reentry.days}
-              onChange={(e) =>
-                set({
-                  reentry: { mode: 'cooldown', days: Math.max(1, Number(e.target.value) || 1) },
-                })
-              }
-            />
-            days after they finish or leave
-          </label>
-        )}
-      </section>
-
-      <section className={`${cardClass} flex flex-col gap-2`}>
-        <p className={sectionHeading}>When they finish or leave</p>
-        <ActionList
-          actions={definition.onEnd}
-          onChange={(onEnd) => set({ onEnd })}
-          tags={tags}
-          emptyText="Nothing happens."
-        />
-        <label>
-          <span className={labelClass}>Tag after the last step</span>
-          <input
+          <textarea
+            id={`${ids}-description`}
+            rows={3}
             className={`${compactInputClass} w-full`}
-            placeholder="Optional, e.g. Review Requested"
-            value={definition.completionTag ?? ''}
-            onChange={(e) => set({ completionTag: e.target.value || undefined })}
+            placeholder="e.g. Turns intro-offer customers into members before the intro expires."
+            value={definition.description}
+            onChange={(e) => set({ description: e.target.value })}
           />
-        </label>
-      </section>
+        </Field>
+      </Section>
     </div>
   );
 }
@@ -404,22 +485,24 @@ function CampaignSection({
   };
 
   return (
-    <section className={`${cardClass} flex flex-col gap-2`}>
-      <p className={sectionHeading}>Campaign</p>
-      <select
-        className={compactSelectClass}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value || undefined)}
-      >
-        <option value="">Not linked - links are tagged {journeyId}</option>
-        {options.map((c) => (
-          <option key={c.slug} value={c.slug}>
-            {c.name}
-            {c.archived ? ' (archived)' : ''}
-          </option>
-        ))}
-        {value && !current && <option value={value}>{value} (not in the Campaigns tool)</option>}
-      </select>
+    <Section number={5} title="Tracking">
+      <Field label="Campaign" tip={TIPS.campaign}>
+        <select
+          className={`${compactSelectClass} sm:w-96`}
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          aria-label="Campaign"
+        >
+          <option value="">Not linked - links are tagged {journeyId}</option>
+          {options.map((c) => (
+            <option key={c.slug} value={c.slug}>
+              {c.name}
+              {c.archived ? ' (archived)' : ''}
+            </option>
+          ))}
+          {value && !current && <option value={value}>{value} (not in the Campaigns tool)</option>}
+        </select>
+      </Field>
       <p className="text-xs text-white/40">
         Every link in this journey's emails is tagged utm_campaign=
         <span className="font-mono">{value ?? journeyId}</span>, so its visits, bookings and
@@ -456,6 +539,6 @@ function CampaignSection({
         ) : (
           <ErrorBanner mono>{message.text}</ErrorBanner>
         ))}
-    </section>
+    </Section>
   );
 }

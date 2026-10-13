@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { confirmAction } from '@/components/admin/ConfirmDialog';
 import { ErrorBanner } from '@/components/admin/ErrorBanner';
+import { InfoTip } from '@/components/admin/InfoTip';
 import { SopDiff } from '@/components/admin/SopDiff';
 import { Toggle } from '@/components/admin/Toggle';
 import { sendJson } from '@/lib/client/api';
@@ -27,6 +28,13 @@ import { PeoplePanel } from './PeoplePanel';
 import { StepsPanel } from './StepsPanel';
 
 type Tab = 'steps' | 'overview' | 'people' | 'history';
+
+const TAB_LABELS: Record<Tab, string> = {
+  steps: 'Steps and emails',
+  overview: 'Settings',
+  people: 'People',
+  history: 'History',
+};
 
 interface Draft {
   name: string;
@@ -226,6 +234,11 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
                 onChange={(enabled) => void setFlags({ enabled })}
               />
               {journey.enabled ? 'On' : 'Off'}
+              <InfoTip
+                label="on and off"
+                align="right"
+                text="On: people enter and get its emails. Off pauses it: nobody new enters, and people already in it wait where they are until it is back on."
+              />
             </span>
             <span className="flex items-center gap-2 text-sm">
               <Toggle
@@ -235,6 +248,11 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
                 onChange={(testMode) => void setFlags({ testMode })}
               />
               Test mode
+              <InfoTip
+                label="test mode"
+                align="right"
+                text="Only addresses on the email whitelist can enter or receive anything, so you can try the whole journey before customers see it. Turn it off to go live."
+              />
             </span>
           </div>
           {journey.testMode && (
@@ -266,7 +284,8 @@ export function JourneyEditor({ journeyId }: { journeyId: string }) {
       <div className="flex flex-wrap items-center gap-1.5">
         {(['steps', 'overview', 'people', 'history'] as Tab[]).map((t) => (
           <button key={t} type="button" className={pillClass(tab === t)} onClick={() => setTab(t)}>
-            {t === 'people' ? `People (${journey.stats.active})` : t}
+            {TAB_LABELS[t]}
+            {t === 'people' ? ` (${journey.stats.active})` : ''}
           </button>
         ))}
         <span className="ml-auto flex flex-wrap items-center gap-1.5">

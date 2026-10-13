@@ -103,6 +103,7 @@ export function ConditionList({
             >
               Remove
             </button>
+            <p className="w-full text-[11px] text-white/40">{meta.description}</p>
           </div>
         );
       })}
