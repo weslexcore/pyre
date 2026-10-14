@@ -1,9 +1,9 @@
 ---
 // People: pay, roles, and dashboard access in one list (shift preferences
-// live on /admin/schedule/availability). Admin-only
-// (canViewPath never grants /admin/users to non-admins); the /api/admin/users
-// routes re-check requireAdmin on every request — this page gate is UX, the
-// API gate is the security boundary.
+// live on /admin/schedule/availability). Only for people granted this page —
+// which is every grant there is, since whoever holds it sets everyone's
+// access. The /api/admin/users routes re-check the grant on every request —
+// this page gate is UX, the API gate is the security boundary.
 import { UsersManager } from '@/components/admin/UsersManager';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 ---

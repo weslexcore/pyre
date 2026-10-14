@@ -1,13 +1,16 @@
 // People management for /admin/users: list, add, edit, and remove `staff`
 // rows — one row per person, covering both dashboard access (is_admin, pages)
 // and the scheduling roster (display_name, is_founder, active), plus pay rate.
-// Admin-only on every method, CSRF-guarded on mutations. Scheduling
+// Gated on the People page grant on every method (whoever holds it sets
+// everyone's access, admin included), CSRF-guarded on mutations. Scheduling
 // preferences (target hours, shifts per week) are set from the Availability
 // tab via /api/admin/staff-preferences instead.
 //
 // Guards: an admin can't demote, unlink, or delete themselves; the last admin
-// row can't be demoted or deleted; and access can't be granted to a row with
-// no email (nobody could log in as them). Rows referenced by assignments or
+// row can't be demoted or deleted; nobody can take People away from
+// themselves, and the last person holding it can't lose it (or the page that
+// grants every page would be unreachable); and access can't be granted to a
+// row with no email (nobody could log in as them). Rows referenced by assignments or
 // time off are deactivated instead of deleted, so schedule history survives.
 
 import type { APIRoute } from 'astro';
@@ -19,9 +22,10 @@ import {
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
+  USERS_HREF,
 } from '@/components/admin/adminTools';
 import { getEnvAllowlist, invalidateAccessCache, listStaff } from '@/lib/auth/access';
-import { requireAdmin } from '@/lib/auth/admin';
+import { requirePage } from '@/lib/auth/admin';
 import { boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from '@/lib/boards/types';
 import { getDb, redactCalendarToken, type StaffRow, type StaffStipendRow } from '@/lib/db';
 import { dbError, gateMutation, json, sessionEmail } from '@/lib/http/route';
@@ -97,13 +101,23 @@ async function gateAdmin(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<{ email: string } | Response> {
-  const gate = await gateMutation(cookies, request, requireAdmin);
+  const gate = await gateMutation(cookies, request, USERS_HREF);
   return gate instanceof Response ? gate : { email: sessionEmail(gate) };
 }
 
 /** True when `row` is the only admin row in the table. */
 function isLastAdmin(rows: StaffRow[], row: StaffRow): boolean {
   return row.is_admin && rows.filter((r) => r.is_admin).length === 1;
+}
+
+/** Whether `row` can open People: a login email and the page grant. */
+function holdsPeople(row: StaffRow): boolean {
+  return !!row.email && row.pages.includes(USERS_HREF);
+}
+
+/** True when `row` is the only one left who can open People. */
+function isLastPeopleHolder(rows: StaffRow[], row: StaffRow): boolean {
+  return holdsPeople(row) && rows.filter(holdsPeople).length === 1;
 }
 
 /**
@@ -130,7 +144,7 @@ async function lookupMember(
 }
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, USERS_HREF);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -305,6 +319,12 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
   if (body.pages !== undefined) {
     const pages = parsePages(body.pages, await liveBoardSlugs(db));
     if (pages instanceof Response) return pages;
+    if (row.pages.includes(USERS_HREF) && !pages.includes(USERS_HREF)) {
+      if (isSelf) return json({ error: 'You cannot remove your own access to People' }, 400);
+      if (isLastPeopleHolder(rows, row)) {
+        return json({ error: 'Someone else needs People access first' }, 400);
+      }
+    }
     fields.pages = pages;
   }
 
@@ -321,6 +341,9 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
     if (email && !EMAIL_RE.test(email)) return json({ error: 'Invalid email' }, 400);
     if (email !== row.email) {
       if (isSelf) return json({ error: 'You cannot change your own login email' }, 400);
+      if (!email && isLastPeopleHolder(rows, row)) {
+        return json({ error: 'Someone else needs People access first' }, 400);
+      }
       fields.email = email;
       if (email) {
         const member = await lookupMember(email);
@@ -381,6 +404,9 @@ export const DELETE: APIRoute = async ({ cookies, request, url }) => {
     return json({ error: 'You cannot remove your own access' }, 400);
   }
   if (isLastAdmin(rows, row)) return json({ error: 'Cannot remove the last admin' }, 400);
+  if (isLastPeopleHolder(rows, row)) {
+    return json({ error: 'Someone else needs People access first' }, 400);
+  }
 
   const { error } = await db.from('staff').delete().eq('id', id);
 

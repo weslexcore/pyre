@@ -56,9 +56,29 @@ describe('canReplyToMessage / canTouchReply', () => {
 
 const rows = [
   { email: 'Admin@pyre.test', active: true, is_admin: true, is_shift_lead: false, pages: [] },
-  { email: 'lead@pyre.test', active: true, is_admin: false, is_shift_lead: true, pages: [] },
-  { email: 'staff@pyre.test', active: true, is_admin: false, is_shift_lead: false, pages: [] },
-  { email: 'named@pyre.test', active: true, is_admin: false, is_shift_lead: false, pages: [] },
+  {
+    email: 'lead@pyre.test',
+    active: true,
+    is_admin: false,
+    is_shift_lead: true,
+    pages: ['/admin/shift-notes'],
+  },
+  {
+    email: 'staff@pyre.test',
+    active: true,
+    is_admin: false,
+    is_shift_lead: false,
+    pages: ['/admin/shift-notes'],
+  },
+  {
+    email: 'named@pyre.test',
+    active: true,
+    is_admin: false,
+    is_shift_lead: false,
+    pages: ['/admin/shift-notes'],
+  },
+  // On the schedule with no page ticked: no dashboard, so no messages.
+  { email: 'unticked@pyre.test', active: true, is_admin: false, is_shift_lead: true, pages: [] },
   // Left: off the schedule, no grants, no dashboard.
   { email: 'left@pyre.test', active: false, is_admin: false, is_shift_lead: true, pages: [] },
   // Off the schedule but granted a page: still signs in and reads messages.

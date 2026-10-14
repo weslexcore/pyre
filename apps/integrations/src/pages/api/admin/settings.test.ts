@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const requireAdmin = vi.fn();
+const requirePage = vi.fn();
 const assertSameOrigin = vi.fn();
 const getDb = vi.fn();
 vi.mock('@/lib/auth/admin', () => ({
-  requireAdmin: (...args: unknown[]) => requireAdmin(...args),
+  requirePage: (...args: unknown[]) => requirePage(...args),
   assertSameOrigin: (...args: unknown[]) => assertSameOrigin(...args),
 }));
 vi.mock('@/lib/db', () => ({ getDb: () => getDb() }));
@@ -29,7 +29,7 @@ describe('page visibility settings API', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     invalidateSettingsCache();
-    requireAdmin.mockResolvedValue({ user: { email: 'admin@example.test' } });
+    requirePage.mockResolvedValue({ user: { email: 'admin@example.test' } });
     assertSameOrigin.mockReturnValue(null);
     const rows = new Map<string, Record<string, unknown>>();
     getDb.mockReturnValue({
@@ -66,8 +66,8 @@ describe('page visibility settings API', () => {
     expect(await getSetting(key)).toEqual([]);
   });
 
-  it('rejects non-admin changes and resets before touching storage', async () => {
-    requireAdmin.mockResolvedValue(new Response('Forbidden', { status: 403 }));
+  it('rejects changes from anyone without the Settings page, before touching storage', async () => {
+    requirePage.mockResolvedValue(new Response('Forbidden', { status: 403 }));
     expect((await PUT(context())).status).toBe(403);
     expect((await DELETE(context())).status).toBe(403);
     expect(getDb).not.toHaveBeenCalled();

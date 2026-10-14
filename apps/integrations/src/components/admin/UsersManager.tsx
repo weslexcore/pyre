@@ -1,9 +1,11 @@
 // People manager for /admin/users: one row per person, covering pay, roles
 // (admin, founder, shift lead, available to schedule), and dashboard access
-// (per-page grants). Each person is a one-line summary that expands into an
+// (per-page grants — every page is ticked explicitly, admins included; the
+// admin role only unlocks the manage side of the pages ticked). Each person is a one-line summary that expands into an
 // editor, one at a time. Scheduling preferences (hours target, shifts per
 // week) live on the schedule's Availability tab, not here. The API enforces the real
-// guards (admin-only, last-admin/self protection, access needs an email);
+// guards (People-page gate, last-admin/self/last-People protection, access
+// needs an email);
 // this island just mirrors them in the UI.
 import { weekStartOf } from '@pyre/schedule-core';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,6 +26,8 @@ import {
   PARTNERS_MANAGE,
   REFERRALS_MANAGE,
   SCHEDULE_MANAGE,
+  SHIFT_NOTES_HREF,
+  USERS_HREF,
 } from './adminTools';
 
 /** One board a 'board:<slug>' checkbox can grant, as the API lists them. */
@@ -50,6 +54,9 @@ interface UsersResponse {
 }
 
 const checkClass = 'flex items-center gap-1.5 font-mono text-xs text-white/60';
+
+// What the add form starts with ticked.
+const DEFAULT_NEW_PAGES = ['/admin/schedule', SHIFT_NOTES_HREF];
 
 /** A row's typed-but-unsaved text fields, as the inputs hold them. */
 interface PersonDraft {
@@ -367,12 +374,15 @@ function PagePicker({
   pages,
   boards,
   disabled,
+  locked = [],
   onChange,
 }: {
   pages: string[];
   /** The live boards, from the users API. */
   boards: BoardOption[];
   disabled: boolean;
+  /** Granted pages that can't be unticked here (your own People access). */
+  locked?: string[];
   onChange: (next: string[]) => void;
 }) {
   // Dropping a page drops its manage capability with it, so a revoked page
@@ -380,7 +390,7 @@ function PagePicker({
   // so granting it clears the per-board grants rather than leaving dead keys
   // nobody would think to untick later.
   const apply = (grant: string[], revoke: string[]) => {
-    const revoked = new Set(revoke);
+    const revoked = new Set(revoke.filter((key) => !locked.includes(key)));
     for (const key of revoke) {
       const capability = MANAGE_CAPABILITIES[key];
       if (capability) revoked.add(capability.key);
@@ -443,7 +453,7 @@ function PagePicker({
                       <input
                         type="checkbox"
                         checked={on}
-                        disabled={disabled}
+                        disabled={disabled || (on && locked.includes(tool.href))}
                         onChange={(e) => toggle(tool.href, e.target.checked)}
                       />
                       <span className={on ? 'text-[var(--pyre-creme)]' : ''}>{tool.navLabel}</span>
@@ -502,11 +512,15 @@ interface Roles {
 }
 
 const ROLE_OPTIONS: Array<{ key: keyof Roles; label: string; hint: string }> = [
-  { key: 'isAdmin', label: 'Admin', hint: 'Sees every page, and manages this list and pay.' },
+  {
+    key: 'isAdmin',
+    label: 'Admin',
+    hint: 'Can manage everything on the pages ticked below: every can-manage option, plus admin-only views like the whole shift notes log. Opens no page by itself.',
+  },
   {
     key: 'active',
     label: 'Available to schedule',
-    hint: 'Can be assigned shifts, and can open Shift Notes (their own notes only). Turn off for anyone who does not work shifts: they keep the pages ticked below and still get messages. When someone leaves, turn this off and untick their pages too; their past shifts and hours stay.',
+    hint: 'Can be assigned shifts. Turn off for anyone who does not work shifts: they keep the pages ticked below and still get messages. When someone leaves, turn this off and untick their pages too; their past shifts and hours stay.',
   },
   {
     key: 'isShiftLead',
@@ -568,14 +582,15 @@ const chipClass =
 
 /** One-line access summary for a collapsed row. */
 function accessLabel(person: StaffRow): string {
-  if (person.is_admin) return 'Admin';
   const pages = person.pages.filter((p) => ADMIN_TOOLS.some((t) => t.href === p)).length;
   const boards = person.pages.filter(isBoardGrantKey).length;
   const parts = [
     pages > 0 ? `${pages} page${pages === 1 ? '' : 's'}` : '',
     boards > 0 ? `${boards} board${boards === 1 ? '' : 's'}` : '',
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join(' + ') : 'No access';
+  const summary = parts.length > 0 ? parts.join(' + ') : 'No pages';
+  if (person.is_admin) return `Admin · ${summary}`;
+  return parts.length > 0 ? summary : 'No access';
 }
 
 const isFormer = (person: StaffRow): boolean =>
@@ -619,8 +634,9 @@ export function UsersManager() {
     onCallEligible: false,
     active: true,
   });
-  // Employee default: view the schedule, manage their own blackout dates.
-  const [newPages, setNewPages] = useState<string[]>(['/admin/schedule']);
+  // Employee default: view the schedule (managing their own blackout dates)
+  // and write shift notes.
+  const [newPages, setNewPages] = useState<string[]>(DEFAULT_NEW_PAGES);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -750,7 +766,7 @@ export function UsersManager() {
       onCallEligible: false,
       active: true,
     });
-    setNewPages(['/admin/schedule']);
+    setNewPages(DEFAULT_NEW_PAGES);
   };
 
   const addPerson = async () => {
@@ -761,7 +777,7 @@ export function UsersManager() {
       displayName: newName.trim(),
       email: newEmail.trim(),
       isAdmin: newRoles.isAdmin,
-      pages: newRoles.isAdmin ? [] : newPages,
+      pages: newPages,
       isFounder: newRoles.isFounder,
       isShiftLead: newRoles.isShiftLead,
       onCallEligible: newRoles.onCallEligible,
@@ -908,11 +924,7 @@ export function UsersManager() {
             />
           </EditorSection>
           <EditorSection title="Page access">
-            {newRoles.isAdmin ? (
-              <p className="font-mono text-xs text-white/40">Admins can view every page.</p>
-            ) : (
-              <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
-            )}
+            <PagePicker pages={newPages} boards={boards} disabled={busy} onChange={setNewPages} />
           </EditorSection>
           <div className="flex gap-2">
             <button
@@ -1075,18 +1087,13 @@ export function UsersManager() {
                   </EditorSection>
 
                   <EditorSection title="Page access">
-                    {person.is_admin ? (
-                      <p className="font-mono text-xs text-white/40">
-                        Admins can view every page and manage this list.
-                      </p>
-                    ) : (
-                      <PagePicker
-                        pages={person.pages}
-                        boards={boards}
-                        disabled={busy}
-                        onChange={(next) => void patch(person.id, { pages: next })}
-                      />
-                    )}
+                    <PagePicker
+                      pages={person.pages}
+                      boards={boards}
+                      disabled={busy}
+                      locked={isSelf ? [USERS_HREF] : []}
+                      onChange={(next) => void patch(person.id, { pages: next })}
+                    />
                   </EditorSection>
 
                   <EditorSection title="Stipends">

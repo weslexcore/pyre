@@ -5,14 +5,15 @@
 // while the table holds no admin row (or Supabase is unreachable), so a fresh
 // deployment can never lock every admin out.
 
-import { SHIFT_NOTES_HREF } from '@/components/admin/adminTools';
+import { ADMIN_TOOLS } from '@/components/admin/adminTools';
 import { cachedQuery } from '@/lib/cached-query';
 import { canUseDashboard } from '@/lib/sops/levels';
 import { getDb, type StaffRow } from '../db';
 
 export interface DashboardAccess {
   isAdmin: boolean;
-  /** Admin page hrefs this user may view; irrelevant for admins (all pages). */
+  /** Admin page hrefs this user may view — for admins too, who hold pages
+   * like everyone else (admin unlocks the manage side of those pages). */
   pages: string[];
   /** 'env' = bootstrap allowlist fallback, no staff row matched. */
   source: 'db' | 'env';
@@ -21,6 +22,10 @@ export interface DashboardAccess {
 // Pages the env STAFF_EMAILS fallback maps to — the two tools that were
 // staff-accessible under the old allowlist contract.
 const ENV_STAFF_PAGES = ['/admin/schedule', '/admin/water'];
+
+// The bootstrap ADMIN_EMAILS fallback opens every page: it exists so the first
+// admin can reach /admin/users and set the real grants.
+const ENV_ADMIN_PAGES = ADMIN_TOOLS.map((tool) => tool.href);
 
 // The roster is tiny (a dozen rows), so cache the whole table briefly rather
 // than querying per request. Mutations in /api/admin/users invalidate it. A
@@ -72,7 +77,7 @@ export function getEnvAllowlist(): EnvAllowlistEntry[] {
   const admins = envList(import.meta.env.ADMIN_EMAILS);
   const adminSet = new Set(admins);
   return [
-    ...admins.map((email) => ({ email, isAdmin: true, pages: [] as string[] })),
+    ...admins.map((email) => ({ email, isAdmin: true, pages: ENV_ADMIN_PAGES })),
     ...envList(import.meta.env.STAFF_EMAILS)
       .filter((email) => !adminSet.has(email))
       .map((email) => ({ email, isAdmin: false, pages: ENV_STAFF_PAGES })),
@@ -87,20 +92,10 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   const rows = await listStaff();
   const row = rows?.find((r) => r.email === normalized);
   // A row without access is a roster-only person (scheduled, but no dashboard)
-  // — they fall through to the same env check as anyone unknown. Shift notes
-  // are the exception: leaving notes as things come up on shift is
-  // something everyone on the roster does, so an active staff row implies that page
-  // (and with it, dashboard access) without an admin ticking the checkbox on
-  // /admin/users. The page still splits by role — admins read the whole log,
-  // everyone else only the notes they wrote (see lib/shift-notes/access).
-  // Inactive rows are people who have left: no implicit grant, so their
-  // access ends with the job.
+  // — they fall through to the same env check as anyone unknown. Every page
+  // comes from the row's explicit grants; nothing is implied by a role.
   if (row && canUseDashboard(row)) {
-    const pages =
-      row.active && !row.pages.includes(SHIFT_NOTES_HREF)
-        ? [...row.pages, SHIFT_NOTES_HREF]
-        : row.pages;
-    return { isAdmin: row.is_admin, pages, source: 'db' };
+    return { isAdmin: row.is_admin, pages: row.pages, source: 'db' };
   }
 
   // Env fallback applies only while no admin row exists (bootstrap phase, or
@@ -109,7 +104,7 @@ export async function getAccess(email: string): Promise<DashboardAccess | null> 
   const hasDbAdmin = rows?.some((r) => r.is_admin) ?? false;
   if (!hasDbAdmin) {
     if (envList(import.meta.env.ADMIN_EMAILS).includes(normalized)) {
-      return { isAdmin: true, pages: [], source: 'env' };
+      return { isAdmin: true, pages: ENV_ADMIN_PAGES, source: 'env' };
     }
     if (envList(import.meta.env.STAFF_EMAILS).includes(normalized)) {
       return { isAdmin: false, pages: ENV_STAFF_PAGES, source: 'env' };

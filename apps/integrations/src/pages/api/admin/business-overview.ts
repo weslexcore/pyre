@@ -1,4 +1,4 @@
-// Read side of /admin/business — one admin-only GET returning the business
+// Read side of /admin/business — one GET, gated on the page grant, returning the business
 // series over a caller-chosen date range, grouped by day, week, or month:
 // Momence-sourced metrics (revenue, memberships, attendance) from
 // business_metrics_daily, joined with labor cost computed live from the
@@ -17,7 +17,8 @@
 
 import { addDays, completedWeekStarts, utcToEastern, weekStartOf } from '@pyre/schedule-core';
 import type { APIRoute } from 'astro';
-import { requireAdmin } from '@/lib/auth/admin';
+import { BUSINESS_TOOL } from '@/components/admin/adminTools';
+import { requirePage } from '@/lib/auth/admin';
 import { computeDailyCosts } from '@/lib/business/costs';
 import { type BusinessCostRow, type BusinessMetricRow, getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
@@ -164,7 +165,7 @@ function nextPeriodStart(periodStart: string, group: BucketGroup): string {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const db = getDb();

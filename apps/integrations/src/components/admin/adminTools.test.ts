@@ -4,14 +4,19 @@ import {
   ADMIN_TOOLS,
   ALL_TASKS_HREF,
   BOARDS_HREF,
+  BUSINESS_TOOL,
   canViewPage,
   canViewPath,
   GOALS_HREF,
   HIDEABLE_TOOLS,
+  hasIncidentsManage,
+  hasScheduleManage,
   SETTINGS_TOOL,
   STAFF_PAGES,
+  SUGGESTIONS_TOOL,
   searchablePages,
   toolsForAccess,
+  USERS_TOOL,
   visibleTools,
 } from './adminTools';
 
@@ -100,6 +105,39 @@ describe('staff pages', () => {
   });
 });
 
+const everyPage = { isAdmin: true, pages: ADMIN_TOOLS.map((tool) => tool.href) };
+
+describe('every page is an explicit grant', () => {
+  it('opens no page for the admin flag alone', () => {
+    const bareAdmin = { isAdmin: true, pages: [] };
+    expect(toolsForAccess(bareAdmin)).toEqual([]);
+    expect(canViewPage(bareAdmin, BUSINESS_TOOL.href)).toBe(false);
+    expect(canViewPath(bareAdmin, '/admin/users')).toBe(false);
+    expect(canViewPath(bareAdmin, '/admin/schedule/insights')).toBe(false);
+    // The directory and the staff pages are still everyone's.
+    expect(canViewPath(bareAdmin, '/admin')).toBe(true);
+    expect(canViewPath(bareAdmin, '/admin/messages')).toBe(true);
+  });
+
+  it('grants the formerly admin-only pages like any other', () => {
+    const finance = { isAdmin: false, pages: [BUSINESS_TOOL.href] };
+    expect(toolsForAccess(finance)).toEqual([BUSINESS_TOOL]);
+    expect(canViewPath(finance, BUSINESS_TOOL.href)).toBe(true);
+    expect(canViewPath(finance, SETTINGS_TOOL.href)).toBe(false);
+    for (const tool of [BUSINESS_TOOL, USERS_TOOL, SUGGESTIONS_TOOL, SETTINGS_TOOL]) {
+      expect(ADMIN_TOOLS).toContain(tool);
+    }
+  });
+
+  it('keeps admin manage powers inside the pages held', () => {
+    expect(hasScheduleManage({ isAdmin: true, pages: ['/admin/schedule'] })).toBe(true);
+    expect(hasScheduleManage({ isAdmin: true, pages: ['/admin/water'] })).toBe(false);
+    expect(hasIncidentsManage({ isAdmin: true, pages: [] })).toBe(false);
+    // The capability key still works on its own, as before.
+    expect(hasScheduleManage({ isAdmin: false, pages: ['schedule:manage'] })).toBe(true);
+  });
+});
+
 describe('global tool visibility', () => {
   it.each([true, false])(
     'hides listings and subpage search without changing access (admin=%s)',
@@ -119,7 +157,7 @@ describe('global tool visibility', () => {
 
   it('keeps Settings and staff pages reachable when every tool is hidden', () => {
     expect(HIDEABLE_TOOLS).not.toContainEqual(SETTINGS_TOOL);
-    const tools = visibleTools(toolsForAccess({ isAdmin: true, pages: [] }), [
+    const tools = visibleTools(toolsForAccess(everyPage), [
       ...HIDEABLE_TOOLS.map((t) => t.href),
       SETTINGS_TOOL.href,
     ]);
@@ -130,7 +168,7 @@ describe('global tool visibility', () => {
   });
 
   it('restores the original listing when nothing is hidden', () => {
-    const tools = toolsForAccess({ isAdmin: true, pages: [] });
+    const tools = toolsForAccess(everyPage);
     expect(visibleTools(tools, [])).toEqual(tools);
   });
 });

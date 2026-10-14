@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ADMIN_TOOLS,
-  BUSINESS_TOOL,
-  type SearchPage,
-  searchablePages,
-  USERS_TOOL,
-} from '@/components/admin/adminTools';
+import { ADMIN_TOOLS, type SearchPage, searchablePages } from '@/components/admin/adminTools';
 import type { BoardRow } from '@/lib/db';
 import {
   askHref,
@@ -18,7 +12,7 @@ import {
   taskHref,
 } from './globalSearch';
 
-const ALL_TOOLS = [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL];
+const ALL_TOOLS = ADMIN_TOOLS;
 
 describe('searchablePages', () => {
   it('lists the dashboard, every tool, and the sub-pages under held tools', () => {

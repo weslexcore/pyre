@@ -18,11 +18,13 @@ describe('board mentions', () => {
     expect(
       mentionPeople(
         [
-          person('admin', { is_admin: true }),
+          person('admin', { is_admin: true, pages: ['/admin/boards'] }),
+          // The admin flag alone opens no board.
+          person('bare-admin', { is_admin: true }),
           person('all', { pages: ['/admin/boards'] }),
           person('member', { pages: ['board:rentals'] }),
           person('other', { pages: ['board:other'] }),
-          person('unscheduled-admin', { is_admin: true, active: false }),
+          person('unscheduled-admin', { is_admin: true, active: false, pages: ['/admin/boards'] }),
           person('unscheduled-all', { pages: ['/admin/boards'], active: false }),
           person('unscheduled-legacy', { pages: ['/admin/goals'], active: false }),
           person('unscheduled-member', { pages: ['board:rentals'], active: false }),

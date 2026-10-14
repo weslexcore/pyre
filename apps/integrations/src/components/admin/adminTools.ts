@@ -1,7 +1,8 @@
 // Single source of truth for the admin tool directory. The /admin dashboard
-// cards and the AdminNav menu both render from this list, filtered per user:
-// admins see everything, other users see the pages granted to them in
-// the staff table (managed from /admin/users).
+// cards and the AdminNav menu both render from this list, filtered per user
+// to the pages granted to them in the staff table (managed from /admin/users).
+// Every page is an explicit grant, for admins too: the admin flag unlocks the
+// manage side of the pages a person holds, never a page by itself.
 
 import { BOARDS_CALENDAR_HREF, BOARDS_HREF, isBoardGrantKey } from '@/lib/boards/types';
 import { ALL_GOALS_HREF, ALL_TASKS_HREF, GOALS_HREF } from '@/lib/goals/types';
@@ -35,12 +36,8 @@ export const ADMIN_TOOL_SECTIONS: { key: AdminToolSection; label: string }[] = [
   { key: 'admin', label: 'Admin' },
 ];
 
-// Shift Notes is a normal grantable page with one twist: everyone active on
-// the roster gets it without an explicit grant (the implicit grant lives in
-// lib/auth/access — noting things as you work is everyone's job). The
-// checkbox on /admin/users still works for giving it to anyone else, e.g.
-// someone off the schedule. Access to the page is not access to the log:
-// only admins read everyone's notes, everyone else reads their own.
+// Shift Notes is a normal grantable page. Access to the page is not access to
+// the log: only admins read everyone's notes, everyone else reads their own.
 export const SHIFT_NOTES_HREF = '/admin/shift-notes';
 
 // Pages every dashboard user gets, whatever their grants: the inbox the
@@ -73,6 +70,60 @@ function isStaffPagePath(pathname: string): boolean {
   return STAFF_PAGES.some((page) => pathname === page.href || pathname.startsWith(`${page.href}/`));
 }
 
+// The pages that used to be admin-only. They are grantable like any other
+// tool now — every page, these included, is ticked per person on
+// /admin/users — but they hand out the most, so they sit in their own
+// section and are worth a second look before ticking.
+
+// Revenue and labor cost together are the most sensitive numbers in the
+// building.
+export const BUSINESS_TOOL: AdminTool = {
+  href: '/admin/business',
+  title: 'Business Overview',
+  navLabel: 'Business',
+  description:
+    'Revenue, labor cost vs revenue, memberships, and attendance — Momence reports joined with the schedule.',
+  section: 'admin',
+  keywords: ['revenue', 'finance', 'money', 'costs', 'memberships', 'attendance'],
+};
+
+// Whoever holds People can grant anything, themselves included — admin and
+// every other page.
+export const USERS_HREF = '/admin/users';
+export const USERS_TOOL: AdminTool = {
+  href: USERS_HREF,
+  title: 'People',
+  navLabel: 'People',
+  description:
+    'Everyone at Pyre: dashboard access and permissions, founders, and who is available to schedule.',
+  section: 'admin',
+  keywords: ['users', 'staff', 'roster', 'permissions', 'access'],
+};
+
+// What the suggestion agent proposes, to edit and approve or dismiss.
+export const SUGGESTIONS_HREF = '/admin/suggestions';
+export const SUGGESTIONS_TOOL: AdminTool = {
+  href: SUGGESTIONS_HREF,
+  title: 'Suggestions',
+  navLabel: 'Suggestions',
+  description:
+    'Tasks, task comments, and SOP edits the agent proposes from shift notes — edit and approve or dismiss each one.',
+  section: 'operations',
+  keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox'],
+};
+
+// Settings change what the whole app does.
+export const SETTINGS_TOOL: AdminTool = {
+  href: '/admin/settings',
+  title: 'Settings',
+  navLabel: 'Settings',
+  description:
+    'Turn features on and off and adjust how they behave, without changing environment variables or redeploying.',
+  section: 'admin',
+  keywords: ['features', 'toggles', 'flags', 'configuration', 'preferences'],
+};
+
+// Every page on the dashboard, each one granted per person on /admin/users.
 export const ADMIN_TOOLS: AdminTool[] = [
   {
     href: '/admin/schedule',
@@ -288,61 +339,23 @@ export const ADMIN_TOOLS: AdminTool[] = [
     description: 'Inspect recent webhook events, payloads, traces, and failures.',
     section: 'monitoring',
   },
+  SUGGESTIONS_TOOL,
+  BUSINESS_TOOL,
+  USERS_TOOL,
+  SETTINGS_TOOL,
 ];
-
-// Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
-// can't show up in the page-permission checkboxes. Revenue and labor cost
-// together are the most sensitive numbers in the building.
-export const BUSINESS_TOOL: AdminTool = {
-  href: '/admin/business',
-  title: 'Business Overview',
-  navLabel: 'Business',
-  description:
-    'Revenue, labor cost vs revenue, memberships, and attendance — Momence reports joined with the schedule.',
-  section: 'admin',
-  keywords: ['revenue', 'finance', 'money', 'costs', 'memberships', 'attendance'],
-};
-
-// Admin-only and never grantable as a page — kept out of ADMIN_TOOLS so it
-// can't show up in the page-permission checkboxes.
-export const USERS_TOOL: AdminTool = {
-  href: '/admin/users',
-  title: 'People',
-  navLabel: 'People',
-  description:
-    'Everyone at Pyre: dashboard access and permissions, founders, and who is available to schedule.',
-  section: 'admin',
-  keywords: ['users', 'staff', 'roster', 'permissions', 'access'],
-};
-
-// Admin-only, like People: what the suggestion agent proposes is for the
-// admins to decide, so the inbox is never a grantable page.
-export const SUGGESTIONS_HREF = '/admin/suggestions';
-export const SUGGESTIONS_TOOL: AdminTool = {
-  href: SUGGESTIONS_HREF,
-  title: 'Suggestions',
-  navLabel: 'Suggestions',
-  description:
-    'Tasks, task comments, and SOP edits the agent proposes from shift notes — edit and approve or dismiss each one.',
-  section: 'operations',
-  keywords: ['agent', 'ai', 'proposals', 'approve', 'review', 'inbox'],
-};
-
-// Admin-only: settings change what the whole app does.
-export const SETTINGS_TOOL: AdminTool = {
-  href: '/admin/settings',
-  title: 'Settings',
-  navLabel: 'Settings',
-  description:
-    'Turn features on and off and adjust how they behave, without changing environment variables or redeploying.',
-  section: 'admin',
-  keywords: ['features', 'toggles', 'flags', 'configuration', 'preferences'],
-};
 
 /** The isAdmin/pages half of DashboardAccess (kept client-bundle-safe here). */
 export interface PageAccess {
   isAdmin: boolean;
   pages: string[];
+}
+
+// The manage side of a page: its capability key, or being an admin who holds
+// the page. Admin is manage-everything only inside the pages it was granted —
+// an admin without the schedule page can't edit shifts either.
+function holdsManage(access: PageAccess, page: string, key: string): boolean {
+  return access.pages.includes(key) || (access.isAdmin && access.pages.includes(page));
 }
 
 // Capability key stored in the same `pages` array as the tool hrefs. A plain
@@ -354,7 +367,7 @@ export interface PageAccess {
 export const SCHEDULE_MANAGE = 'schedule:manage';
 
 export function hasScheduleManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(SCHEDULE_MANAGE);
+  return holdsManage(access, '/admin/schedule', SCHEDULE_MANAGE);
 }
 
 // Same split for partners: a plain '/admin/partners' grant is read-only —
@@ -364,7 +377,7 @@ export function hasScheduleManage(access: PageAccess): boolean {
 export const PARTNERS_MANAGE = 'partners:manage';
 
 export function hasPartnersManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(PARTNERS_MANAGE);
+  return holdsManage(access, '/admin/partners', PARTNERS_MANAGE);
 }
 
 // Same split for referrals: a plain '/admin/referrals' grant is read-only.
@@ -373,7 +386,7 @@ export function hasPartnersManage(access: PageAccess): boolean {
 export const REFERRALS_MANAGE = 'referrals:manage';
 
 export function hasReferralsManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(REFERRALS_MANAGE);
+  return holdsManage(access, '/admin/referrals', REFERRALS_MANAGE);
 }
 
 // Same split for incidents, and the most consequential of the four. A plain
@@ -386,7 +399,7 @@ export function hasReferralsManage(access: PageAccess): boolean {
 export const INCIDENTS_MANAGE = 'incidents:manage';
 
 export function hasIncidentsManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(INCIDENTS_MANAGE);
+  return holdsManage(access, '/admin/incidents', INCIDENTS_MANAGE);
 }
 
 // Same split for lost and found. A plain '/admin/lost-found' grant is the
@@ -398,7 +411,7 @@ export function hasIncidentsManage(access: PageAccess): boolean {
 export const LOST_FOUND_MANAGE = 'lost-found:manage';
 
 export function hasLostFoundManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(LOST_FOUND_MANAGE);
+  return holdsManage(access, '/admin/lost-found', LOST_FOUND_MANAGE);
 }
 
 // Same split for guest profiles. A plain '/admin/guests' grant is the working
@@ -410,7 +423,7 @@ export function hasLostFoundManage(access: PageAccess): boolean {
 export const GUESTS_MANAGE = 'guests:manage';
 
 export function hasGuestsManage(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(GUESTS_MANAGE);
+  return holdsManage(access, '/admin/guests', GUESTS_MANAGE);
 }
 
 /** Manage capabilities that imply view access to the page they govern. */
@@ -434,11 +447,12 @@ const LEGACY_PAGE_GRANTS: Record<string, string[]> = {
   [BOARDS_HREF]: [GOALS_HREF],
 };
 
-/** Whether this user may view `href` — admin, a direct grant, a legacy grant
- * for a page this one replaced, or the manage capability that implies it. */
+/** Whether this user may view `href` — a direct grant, a legacy grant for a
+ * page this one replaced, or the manage capability that implies it. Being an
+ * admin is not one of them: admins hold their pages like everyone else. */
 export function canViewPage(access: PageAccess, href: string): boolean {
   if (STAFF_PAGES.some((page) => page.href === href)) return true;
-  if (access.isAdmin || access.pages.includes(href)) return true;
+  if (access.pages.includes(href)) return true;
   // A single-board grant ('board:rentals') opens the Boards tool, and with it
   // /admin/boards/* — which is safe because each board page checks its own
   // slug against the grant (lib/boards/access). Without this the community
@@ -451,16 +465,11 @@ export function canViewPage(access: PageAccess, href: string): boolean {
 
 /** The tools this user's nav and directory cards should show. */
 export function toolsForAccess(access: PageAccess): AdminTool[] {
-  if (access.isAdmin) {
-    return [...ADMIN_TOOLS, USERS_TOOL, BUSINESS_TOOL, SUGGESTIONS_TOOL, SETTINGS_TOOL];
-  }
   return ADMIN_TOOLS.filter((tool) => canViewPage(access, tool.href));
 }
 
 /** Tools admins can hide from shared listings. Settings must remain reachable. */
-export const HIDEABLE_TOOLS = toolsForAccess({ isAdmin: true, pages: [] }).filter(
-  (tool) => tool.href !== SETTINGS_TOOL.href
-);
+export const HIDEABLE_TOOLS = ADMIN_TOOLS.filter((tool) => tool.href !== SETTINGS_TOOL.href);
 
 /** Visibility is independent of authorization: direct links keep working. */
 export function visibleTools(tools: AdminTool[], hiddenHrefs: readonly string[]): AdminTool[] {
@@ -470,7 +479,6 @@ export function visibleTools(tools: AdminTool[], hiddenHrefs: readonly string[])
 
 /** Whether this user may view the admin page at `pathname`. */
 export function canViewPath(access: PageAccess, pathname: string): boolean {
-  if (access.isAdmin) return true;
   // The /admin directory itself is fine for anyone with access — it only
   // shows the cards they hold.
   if (pathname === '/admin' || pathname === '/admin/') return true;

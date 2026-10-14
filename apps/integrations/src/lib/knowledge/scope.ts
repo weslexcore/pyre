@@ -32,12 +32,13 @@ export async function knowledgeScopeFor(gate: AdminGate): Promise<KnowledgeScope
   return {
     role,
     email,
-    // Shift notes: admins read every note, everyone else only their own.
-    shiftNotes: gate.access.isAdmin
-      ? 'all'
-      : canViewPage(gate.access, SHIFT_NOTES_HREF)
-        ? 'mine'
-        : null,
+    // Shift notes: only with the page; then admins read every note, everyone
+    // else only their own.
+    shiftNotes: canViewPage(gate.access, SHIFT_NOTES_HREF)
+      ? gate.access.isAdmin
+        ? 'all'
+        : 'mine'
+      : null,
     // Incidents: incidents:manage (or admin) reads the whole log, a plain page
     // grant is reporter-level — only the reports they filed.
     incidents: hasIncidentsManage(gate.access)

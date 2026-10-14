@@ -3,13 +3,13 @@
 // sweeps.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const requireAdmin = vi.fn();
+const requirePage = vi.fn();
 const runBusinessReportSync = vi.fn();
 const runActivityMetricsSync = vi.fn();
 const getRedis = vi.fn();
 
 vi.mock('@/lib/auth/admin', () => ({
-  requireAdmin: (c: unknown) => requireAdmin(c),
+  requirePage: (c: unknown, page: unknown) => requirePage(c, page),
   assertSameOrigin: () => null,
 }));
 vi.mock('@/lib/reports/sync', () => ({
@@ -70,7 +70,9 @@ const post = (headers: Record<string, string> = { 'content-type': 'application/j
 
 describe('POST /api/admin/business-sync', () => {
   beforeEach(() => {
-    requireAdmin.mockReset().mockResolvedValue({ user: {}, access: { isAdmin: true } });
+    requirePage
+      .mockReset()
+      .mockResolvedValue({ user: {}, access: { isAdmin: false, pages: ['/admin/business'] } });
     runBusinessReportSync.mockReset().mockResolvedValue(reportSummary());
     runActivityMetricsSync.mockReset().mockResolvedValue(activitySummary());
     getRedis.mockReset();
@@ -83,10 +85,11 @@ describe('POST /api/admin/business-sync', () => {
     expect(runBusinessReportSync).not.toHaveBeenCalled();
   });
 
-  it('passes the admin gate through untouched', async () => {
-    requireAdmin.mockResolvedValue(new Response('nope', { status: 403 }));
+  it('gates on the Business Overview page and passes its refusal through untouched', async () => {
+    requirePage.mockResolvedValue(new Response('nope', { status: 403 }));
     const res = await post();
     expect(res.status).toBe(403);
+    expect(requirePage.mock.calls[0][1]).toBe('/admin/business');
     expect(runBusinessReportSync).not.toHaveBeenCalled();
   });
 

@@ -3,13 +3,14 @@
 // one, PUT rewrites one by id, DELETE removes one. The overview API folds
 // these into daily profit math (lib/business/costs.ts).
 //
-// Admin-only like the rest of /admin/business — costs plus revenue are the
-// whole P&L. Mutations are CSRF-guarded in-route via assertSameOrigin plus
+// Gated on the Business Overview page grant like the rest of /admin/business
+// — costs plus revenue are the whole P&L. Mutations are CSRF-guarded in-route via assertSameOrigin plus
 // the JSON content-type requirement (global checkOrigin stays off for the
 // Mailchimp webhook; see astro.config.mjs).
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { BUSINESS_TOOL } from '@/components/admin/adminTools';
+import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { parseCostInput } from '@/lib/business/validate';
 import { type BusinessCostRow, getDb } from '@/lib/db';
 import { dbError, json } from '@/lib/http/route';
@@ -21,7 +22,7 @@ export interface BusinessCostsPayload {
 }
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const db = getDb();
@@ -37,7 +38,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);
@@ -75,7 +76,7 @@ export const POST: APIRoute = async ({ cookies, request }) => {
 };
 
 export const PUT: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);
@@ -114,7 +115,7 @@ export const PUT: APIRoute = async ({ cookies, request, url }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);

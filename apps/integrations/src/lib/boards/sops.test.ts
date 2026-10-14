@@ -49,7 +49,7 @@ describe('sopsForViewer', () => {
   });
 
   it('never shows an archived SOP, even to an admin', () => {
-    const admin = { isAdmin: true, pages: [] };
+    const admin = { isAdmin: true, pages: ['/admin/sops'] };
     expect(
       sopsForViewer(linked, admin, { role: 'admin', email: 'a@example.com' }).map((s) => s.slug)
     ).toEqual(['rentals', 'group-bookings', 'pricing']);

@@ -85,10 +85,10 @@ describe('GET /api/admin/link-targets', () => {
     expect(list).toContain('/admin/water');
   });
 
-  it('gives admins every page and every live SOP, still no archived ones', async () => {
+  it('gives admins the pages they hold and every live SOP, still no archived ones', async () => {
     requireStaff.mockResolvedValue({
       user: { email: 'boss@pyre.test' },
-      access: { isAdmin: true, pages: [] },
+      access: { isAdmin: true, pages: ['/admin/sops', '/admin/users', '/admin/business'] },
     });
     getSopRole.mockResolvedValue('admin');
 
@@ -97,5 +97,6 @@ describe('GET /api/admin/link-targets', () => {
     expect(list).not.toContain('/admin/sops/old');
     expect(list).toContain('/admin/users');
     expect(list).toContain('/admin/business');
+    expect(list).not.toContain('/admin/settings');
   });
 });

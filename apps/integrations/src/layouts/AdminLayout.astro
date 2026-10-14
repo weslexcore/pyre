@@ -3,8 +3,9 @@
 // and the sticky header with the tool nav (mobile hamburger included).
 // Unauthenticated visitors never reach this layout — src/middleware.ts
 // redirects them to the login page at the site root and stores the validated
-// user + their staff-row access in locals. Which pages a user may view
-// is decided per user on /admin/users; the current pathname is checked here.
+// user + their staff-row access in locals. Which pages a user may view is
+// decided per user on /admin/users — admins included, every page explicit;
+// the current pathname is checked here.
 // The /api/admin/* routes each page calls re-check the session on every
 // request (this gate is UX; the API gate is the security boundary).
 import { ClientRouter } from 'astro:transitions';
@@ -66,10 +67,10 @@ const pinnedHrefs =
 // The bell's badge, painted by the server so it is right on first paint; the
 // island keeps it fresh from there. Zero when storage is down — never blocks.
 const unreadCount = allowed && user?.email ? await getUnreadCount(user.email) : 0;
-// Agent suggestions waiting for an admin, beside the Suggestions entry in the
-// menu. Admins only; zero when storage is down.
+// Agent suggestions waiting for a decision, beside the Suggestions entry in
+// the menu — for whoever holds that page. Zero when storage is down.
 const pendingSuggestions =
-  allowed && access?.isAdmin && tools.some((tool) => tool.href === SUGGESTIONS_HREF)
+  allowed && tools.some((tool) => tool.href === SUGGESTIONS_HREF)
     ? await getPendingSuggestionCount()
     : 0;
 const widthClass = wide ? 'max-w-7xl' : 'max-w-6xl';

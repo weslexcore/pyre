@@ -122,7 +122,9 @@ describe('comment notifications', () => {
   });
   it('links a goal no board serves to the overview, for whoever holds the whole tool', async () => {
     listStaff.mockResolvedValue(
-      roster.map((row) => (row.email === 'owner@pyre.test' ? { ...row, is_admin: true } : row))
+      roster.map((row) =>
+        row.email === 'owner@pyre.test' ? { ...row, pages: ['/admin/boards'] } : row
+      )
     );
     const { db, insert } = database();
     await notifyGoalComment(

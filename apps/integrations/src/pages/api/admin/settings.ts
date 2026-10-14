@@ -1,6 +1,6 @@
 // App settings (/admin/settings): feature switches and choices admins change
-// here instead of in environment variables. Admin-only — these change what
-// the whole app does. Definitions live in lib/settings/registry; values in the
+// here instead of in environment variables. Gated on the Settings page grant
+// — these change what the whole app does. Definitions live in lib/settings/registry; values in the
 // app_settings table (lib/settings/store).
 //
 //   GET                          → { settings: SettingView[] }
@@ -10,7 +10,8 @@
 // Mutations are CSRF-guarded in-route via assertSameOrigin.
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { SETTINGS_TOOL } from '@/components/admin/adminTools';
+import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { normalizeEmail } from '@/lib/email/address';
 import { json } from '@/lib/http/route';
 import { isSettingKey, parseSettingValue, SETTINGS } from '@/lib/settings/registry';
@@ -19,13 +20,13 @@ import { getAllSettings, resetSetting, saveSetting } from '@/lib/settings/store'
 export const prerender = false;
 
 export const GET: APIRoute = async ({ cookies }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, SETTINGS_TOOL.href);
   if (gate instanceof Response) return gate;
   return json({ settings: await getAllSettings() });
 };
 
 export const PUT: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, SETTINGS_TOOL.href);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
@@ -50,7 +51,7 @@ export const PUT: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, SETTINGS_TOOL.href);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;

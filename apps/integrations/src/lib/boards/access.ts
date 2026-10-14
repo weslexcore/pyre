@@ -22,8 +22,9 @@ import { GOALS_HREF } from '@/lib/goals/types';
 import { BOARDS_HREF, boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from './types';
 
 /**
- * Holding every board: admin, the page grant itself, or the legacy goals
- * grant it absorbed.
+ * Holding every board: the page grant itself, or the legacy goals grant it
+ * absorbed. Being an admin is not enough — admins hold pages like everyone
+ * else, so an admin given only one board sees only that board.
  *
  * Deliberately not adminTools.canViewPage, which answers a different
  * question. canViewPage(BOARDS_HREF) is true for a single-board grantee too,
@@ -32,7 +33,7 @@ import { BOARDS_HREF, boardGrantKey, boardSlugFromGrant, isBoardGrantKey } from 
  * per-board grant exists to prevent.
  */
 function holdsEveryBoard(access: PageAccess): boolean {
-  return access.isAdmin || access.pages.includes(BOARDS_HREF) || access.pages.includes(GOALS_HREF);
+  return access.pages.includes(BOARDS_HREF) || access.pages.includes(GOALS_HREF);
 }
 
 /**

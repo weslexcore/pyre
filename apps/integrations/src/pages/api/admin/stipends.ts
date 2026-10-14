@@ -1,8 +1,9 @@
 // Stipend management: recurring weekly stipend hours (staff_stipends, edited
 // next to pay rates on /admin/users) and their per-week overrides
 // (stipend_overrides, adjusted on /admin/schedule/timesheet).
-// Admin-only on every method — a stipend is a pay commitment, so it's gated
-// like pay rates, not like schedule managing. CSRF-guarded like users.ts.
+// Admins (for the timesheet) and whoever holds People, on every method — a
+// stipend is a pay commitment, so it's gated like pay rates, not like
+// schedule managing. CSRF-guarded like users.ts.
 //
 // Weeks are Monday-keyed: any date arriving in effectiveFrom/effectiveUntil/
 // weekStart is snapped to its week's Monday, matching the hours rollup.
@@ -10,12 +11,15 @@
 // rows created by mistake and removes their weeks from the report entirely.
 
 import { weekStartOf } from '@pyre/schedule-core';
-import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import type { APIRoute, AstroCookies } from 'astro';
+import { USERS_HREF } from '@/components/admin/adminTools';
+import { assertSameOrigin, requireAdminOrPage } from '@/lib/auth/admin';
 import { getDb, type StaffStipendRow, type StipendOverrideRow } from '@/lib/db';
 import { dbError, gateMutation, json, readJsonBody } from '@/lib/http/route';
 
 export const prerender = false;
+
+const requirePayGate = (cookies: AstroCookies) => requireAdminOrPage(cookies, USERS_HREF);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -49,7 +53,7 @@ async function gatedBody(
   cookies: Parameters<APIRoute>[0]['cookies'],
   request: Request
 ): Promise<Record<string, unknown> | Response> {
-  const gate = await gateMutation(cookies, request, requireAdmin);
+  const gate = await gateMutation(cookies, request, requirePayGate);
   if (gate instanceof Response) return gate;
   return readJsonBody(request);
 }
@@ -168,7 +172,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ cookies, request, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePayGate(cookies);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;

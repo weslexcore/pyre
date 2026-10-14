@@ -12,7 +12,10 @@ import {
 
 const boards = [{ slug: 'goals' }, { slug: 'rentals' }, { slug: 'merch' }];
 
-const admin = { isAdmin: true, pages: [] };
+const admin = { isAdmin: true, pages: ['/admin/boards'] };
+// Admins hold pages like everyone else: the flag alone opens nothing.
+const adminNoPage = { isAdmin: true, pages: ['/admin/shift-notes'] };
+const adminOneBoard = { isAdmin: true, pages: ['board:rentals'] };
 const wholeTool = { isAdmin: false, pages: ['/admin/boards'] };
 const oneBoard = { isAdmin: false, pages: ['board:rentals'] };
 const legacyGoals = { isAdmin: false, pages: ['/admin/goals'] };
@@ -35,6 +38,15 @@ describe('canViewBoard', () => {
 
   it('keeps everyone else out', () => {
     expect(canViewBoard(none, 'rentals')).toBe(false);
+  });
+
+  it('gives an admin only the boards they were granted', () => {
+    expect(canViewBoard(adminNoPage, 'rentals')).toBe(false);
+    expect(canViewBoard(adminOneBoard, 'rentals')).toBe(true);
+    expect(canViewBoard(adminOneBoard, 'goals')).toBe(false);
+    expect(canViewBoardsTool(adminNoPage)).toBe(false);
+    expect(canManageBoards(adminNoPage)).toBe(false);
+    expect(canManageBoards(adminOneBoard)).toBe(false);
   });
 });
 

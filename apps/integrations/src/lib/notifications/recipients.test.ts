@@ -22,7 +22,8 @@ function person(overrides: Partial<RosterRow> & { id: string }): RosterRow {
 }
 
 const roster: RosterRow[] = [
-  person({ id: 'admin', is_admin: true }),
+  // Admins hold their pages like everyone else.
+  person({ id: 'admin', is_admin: true, pages: ['/admin/sops', '/admin/schedule'] }),
   person({ id: 'lead', is_shift_lead: true, pages: ['/admin/sops', '/admin/schedule'] }),
   person({ id: 'staff', pages: ['/admin/sops'] }),
   person({ id: 'nosops', pages: ['/admin/schedule'] }),
@@ -61,7 +62,7 @@ describe('sopUpdateRecipients', () => {
     archived: false,
   };
 
-  it('needs the SOP page and a view grant; admins always qualify', () => {
+  it('needs the SOP page and a view grant; admins with the page always qualify', () => {
     expect(sopUpdateRecipients(roster, sop)).toEqual([
       'admin@pyre.test',
       'lead@pyre.test',
@@ -78,8 +79,9 @@ describe('sopUpdateRecipients', () => {
 });
 
 describe('canOpenSchedule / nameFor', () => {
-  it('reads the schedule grant, or admin', () => {
+  it('reads the schedule grant, admins included', () => {
     expect(canOpenSchedule(roster[0])).toBe(true);
+    expect(canOpenSchedule(person({ id: 'bare', is_admin: true }))).toBe(false);
     expect(canOpenSchedule(roster[2])).toBe(false);
     expect(canOpenSchedule(roster[3])).toBe(true);
   });
@@ -93,7 +95,9 @@ describe('canOpenSchedule / nameFor', () => {
 
 describe('boardRecipients', () => {
   const boardRoster: RosterRow[] = [
-    person({ id: 'boss', is_admin: true }),
+    person({ id: 'boss', is_admin: true, pages: ['/admin/boards'] }),
+    // An admin without the page hears about no board.
+    person({ id: 'bookkeeper', is_admin: true, pages: ['/admin/business'] }),
     person({ id: 'cofounder', pages: ['/admin/boards'] }),
     person({ id: 'community', pages: ['board:rentals'] }),
     person({ id: 'attendant', pages: ['/admin/shift-notes'] }),
@@ -103,7 +107,7 @@ describe('boardRecipients', () => {
     person({ id: 'advisor', pages: ['/admin/boards'], active: false }),
   ];
 
-  it('reaches admins, the page grant, and that board\u2019s own grant', () => {
+  it('reaches the page grant, admins included, and that board\u2019s own grant', () => {
     expect(boardRecipients(boardRoster, 'rentals').sort()).toEqual([
       'advisor@pyre.test',
       'boss@pyre.test',
@@ -125,6 +129,7 @@ describe('boardRecipients', () => {
   it('skips people with no board access and people off the roster', () => {
     const reached = boardRecipients(boardRoster, 'rentals');
     expect(reached).not.toContain('attendant@pyre.test');
+    expect(reached).not.toContain('bookkeeper@pyre.test');
     expect(reached).not.toContain('former@pyre.test');
   });
 });

@@ -50,9 +50,9 @@ export async function requireAdmin(cookies: AstroCookies): Promise<AdminGate | R
 
 /**
  * Same contract as requireAdmin, for routes serving one admin page: passes
- * admins, and any user granted view access to `page` (a tool href from
- * adminTools.ts, e.g. '/admin/water'). schedule:manage implies the schedule
- * view grant.
+ * any user granted view access to `page` (a tool href from adminTools.ts,
+ * e.g. '/admin/water'), admins included only when they hold it too.
+ * schedule:manage implies the schedule view grant.
  */
 export async function requirePage(
   cookies: AstroCookies,
@@ -62,10 +62,22 @@ export async function requirePage(
 }
 
 /**
+ * For a route an admin uses from inside other pages as well as from its own:
+ * passes admins, and anyone granted `page`. The suggestion review panel sits
+ * on Shift Notes for admins and on the Suggestions page for whoever holds it.
+ */
+export async function requireAdminOrPage(
+  cookies: AstroCookies,
+  page: string
+): Promise<AdminGate | Response> {
+  return requireAccess(cookies, (access) => access.isAdmin || canViewPage(access, page));
+}
+
+/**
  * Same, for a route serving more than one admin page — the guest lookup is
  * used by both the incident form and the lost-and-found form, and a person
- * granted either page may use it. Passes admins and anyone holding view
- * access to any of `pages`.
+ * granted either page may use it. Passes anyone holding view access to
+ * any of `pages`.
  */
 export async function requireAnyPage(
   cookies: AstroCookies,
@@ -76,8 +88,7 @@ export async function requireAnyPage(
 
 /**
  * Weakest gate: passes anyone getAccess resolves — i.e. any user with
- * dashboard access at all, including roster-only staff who hold nothing but
- * the implicit shift-notes grant. For routes serving the /admin directory
+ * dashboard access at all, however few pages they hold. For routes serving the /admin directory
  * itself (e.g. tool pins), which every dashboard user may use.
  */
 export async function requireStaff(cookies: AstroCookies): Promise<AdminGate | Response> {
@@ -86,8 +97,8 @@ export async function requireStaff(cookies: AstroCookies): Promise<AdminGate | R
 
 /**
  * Gate for the schedule's manage side (shift/assignment mutations, roster,
- * Momence sync, AI drafts, other people's time off): passes admins and users
- * holding the schedule:manage capability.
+ * Momence sync, AI drafts, other people's time off): passes users holding
+ * the schedule:manage capability, and admins who hold the schedule page.
  */
 export async function requireScheduleManage(cookies: AstroCookies): Promise<AdminGate | Response> {
   return requireAccess(cookies, hasScheduleManage);

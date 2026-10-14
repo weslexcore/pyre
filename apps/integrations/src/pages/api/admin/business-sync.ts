@@ -16,7 +16,8 @@
 
 import { getRedis } from '@pyre/webhook-core';
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { BUSINESS_TOOL } from '@/components/admin/adminTools';
+import { assertSameOrigin, requirePage } from '@/lib/auth/admin';
 import { json } from '@/lib/http/route';
 import { type ActivitySyncSummary, runActivityMetricsSync } from '@/lib/reports/activity';
 import { type ReportSyncSummary, runBusinessReportSync } from '@/lib/reports/sync';
@@ -76,7 +77,7 @@ function describe(reports: ReportSyncSummary, activity: ActivitySyncSummary): st
 }
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requirePage(cookies, BUSINESS_TOOL.href);
   if (gate instanceof Response) return gate;
 
   const crossOrigin = assertSameOrigin(request);

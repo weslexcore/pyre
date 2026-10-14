@@ -1,7 +1,8 @@
-// Agent suggestions, for the admins who decide them. Everything here is
-// admin-only: suggestions are proposals about other people's notes and the
-// team's boards and SOPs, and nothing an agent proposes happens until an
-// admin approves it here. See lib/suggestions for the lifecycle.
+// Agent suggestions, for the people who decide them: admins (who review them
+// inline on Shift Notes) and anyone granted the Suggestions page.
+// Suggestions are proposals about other people's notes and the team's
+// boards and SOPs, and nothing an agent proposes happens until someone
+// approves it here. See lib/suggestions for the lifecycle.
 //
 //   GET ?source=shift_note&ids=a,b  → { suggestions: { [id]: SuggestionView[] },
 //                                       runs: { [id]: RunView }, results, targets }
@@ -19,7 +20,8 @@
 // Mutations are CSRF-guarded in-route via assertSameOrigin.
 
 import type { APIRoute } from 'astro';
-import { assertSameOrigin, requireAdmin } from '@/lib/auth/admin';
+import { SUGGESTIONS_HREF } from '@/components/admin/adminTools';
+import { assertSameOrigin, requireAdminOrPage } from '@/lib/auth/admin';
 import { listAssignable } from '@/lib/boards/people';
 import type { AgentSuggestionRow, AgentSuggestionRunRow, BoardFieldRow } from '@/lib/db';
 import { getDb } from '@/lib/db';
@@ -98,7 +100,7 @@ function noteOf(value: unknown): string | null {
 }
 
 export const GET: APIRoute = async ({ cookies, url }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireAdminOrPage(cookies, SUGGESTIONS_HREF);
   if (gate instanceof Response) return gate;
   const db = getDb();
   if (!db) return json({ error: 'Storage unavailable' }, 503);
@@ -230,7 +232,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
 };
 
 export const PATCH: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireAdminOrPage(cookies, SUGGESTIONS_HREF);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;
@@ -249,7 +251,7 @@ export const PATCH: APIRoute = async ({ cookies, request }) => {
 };
 
 export const POST: APIRoute = async ({ cookies, request }) => {
-  const gate = await requireAdmin(cookies);
+  const gate = await requireAdminOrPage(cookies, SUGGESTIONS_HREF);
   if (gate instanceof Response) return gate;
   const crossOrigin = assertSameOrigin(request);
   if (crossOrigin) return crossOrigin;

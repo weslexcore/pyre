@@ -2,10 +2,10 @@
 // pure functions over StaffRow[] so the rules are testable, with the roster
 // fetched by the callers (the cached listStaff in lib/auth/access).
 //
-// Everyone who can use the dashboard (canUseDashboard: an admin, anyone
-// granted a page, or anyone available to schedule) can open the inbox —
-// being on the schedule is not required, so an admin who never works a
-// shift or a marketer granted Campaigns still hears about things. Whether they can open the page an event lives on is a separate
+// Everyone who can use the dashboard (canUseDashboard: an admin, or anyone
+// granted a page) can open the inbox — being on the schedule is not
+// required, so an admin who never works a shift or a marketer granted
+// Campaigns still hears about things. Whether they can open the page an event lives on is a separate
 // question, answered per event: an SOP notice only goes to people who can
 // read that SOP, and a schedule notice reaches the person scheduled either
 // way but links to the board only when they hold the schedule page.
