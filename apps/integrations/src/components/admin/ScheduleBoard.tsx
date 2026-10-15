@@ -2106,6 +2106,33 @@ function ShiftDetail({
   const defaultEndMin = timeToMinutes(defaultWindow.endsAt);
   const assignedIds = new Set(shift.assignments.map((a) => a.staff_id));
   const candidates = data.staff.filter((s) => s.active && !assignedIds.has(s.id));
+  // Where each candidate already works this day — another shift earlier or
+  // later — so the picker shows who'd be doubling up. Drafts count, marked.
+  const sameDayHours = new Map<
+    string,
+    Array<{ startsAt: string; endsAt: string; draft: boolean }>
+  >();
+  for (const other of data.shifts) {
+    if (other.id === shift.id || other.shift_date !== shift.shift_date) continue;
+    if (other.status !== 'active') continue;
+    for (const a of other.assignments) {
+      const list = sameDayHours.get(a.staff_id) ?? [];
+      list.push({ startsAt: a.starts_at, endsAt: a.ends_at, draft: a.is_draft || other.is_draft });
+      sameDayHours.set(a.staff_id, list);
+    }
+  }
+  const sameDayNote = (staffId: string): string | null => {
+    const hours = sameDayHours.get(staffId);
+    if (!hours) return null;
+    return [...hours]
+      .sort((x, y) => timeToMinutes(x.startsAt) - timeToMinutes(y.startsAt))
+      .map((h) => {
+        const when = timeToMinutes(h.startsAt) < defaultStartMin ? 'earlier' : 'later';
+        const draft = h.draft ? ' (draft)' : '';
+        return `${when} ${formatCompactTime(h.startsAt)}–${formatCompactTime(h.endsAt)}${draft}`;
+      })
+      .join(', ');
+  };
 
   // Employee request composer: Request opens it with the default hours
   // prefilled, and the times are the hours they're offering to work.
@@ -2951,18 +2978,24 @@ function ShiftDetail({
                   return c.note ? `${when}: ${c.note}` : when;
                 })
                 .join('; ');
+              const workingNote = sameDayNote(s.id);
               return (
                 <button
                   key={s.id}
                   type="button"
                   disabled={busy}
-                  className="rounded border border-white/10 bg-white/5 px-3 py-1.5 text-left text-sm hover:border-white/30 disabled:opacity-40"
+                  className={`rounded border px-3 py-1.5 text-left text-sm hover:border-white/30 disabled:opacity-40 ${
+                    workingNote
+                      ? 'border-[var(--pyre-blue)]/50 bg-[var(--pyre-blue)]/15'
+                      : 'border-white/10 bg-white/5'
+                  }`}
                   title={
                     [
                       ...(availability.status === 'free'
                         ? []
                         : availability.conflicts.map((c) => c.note || 'unavailable')),
                       ...(restNote ? [restNote] : []),
+                      ...(workingNote ? [`Already working today: ${workingNote}`] : []),
                     ].join('; ') || undefined
                   }
                   onClick={() =>
@@ -2982,6 +3015,11 @@ function ShiftDetail({
                   {availability.status !== 'free' && conflictNote && (
                     <span className="block font-mono text-[10px] text-white/40">
                       {conflictNote}
+                    </span>
+                  )}
+                  {workingNote && (
+                    <span className="block font-mono text-[10px] text-[var(--pyre-creme)]/80">
+                      Working today · {workingNote}
                     </span>
                   )}
                   {restNote && (
