@@ -1,9 +1,6 @@
 ---
 export const prerender = true;
 
-// Embody's brand fonts, loaded on this page only.
-import '@fontsource/crimson-text/400.css';
-import '@fontsource/open-sans/300.css';
 import PartnerLanding from '../components/PartnerLanding.astro';
 import embody from '../lib/embody';
 ---
@@ -11,10 +8,11 @@ import embody from '../lib/embody';
 <PartnerLanding content={embody}>
   <span
     slot="logo"
-    class="font-['Open_Sans',sans-serif] font-light text-xl sm:text-2xl md:text-4xl leading-none whitespace-nowrap text-[var(--pyre-creme)]"
+    class="flex flex-col items-center font-primary-semibold text-2xl md:text-4xl uppercase tracking-[0.08em] leading-[0.95] text-[var(--pyre-creme)]"
     role="img"
     aria-label="Embody Pilates"
   >
-    Embody Pilates
+    <span>Embody</span>
+    <span>Pilates</span>
   </span>
 </PartnerLanding>

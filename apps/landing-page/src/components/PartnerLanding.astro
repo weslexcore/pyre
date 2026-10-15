@@ -69,15 +69,10 @@ const packHref = (id: string, href?: string): string =>
             PYRE
           </span>
         </div>
-        <h1
-          class={`mb-4 md:mb-6 ${
-            content.hero.titleClass ??
-            'font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05]'
-          }`}
-        >
+        <h1 class="font-primary-semibold text-[clamp(2.5rem,6vw,4.5rem)] tracking-[-0.02em] uppercase leading-[1.05] whitespace-pre-line text-balance mb-4 md:mb-6">
           {content.hero.title}
         </h1>
-        <p class={`max-w-xl mx-auto mb-8 ${content.hero.subtitleClass ?? 'text-base md:text-lg opacity-80'}`}>
+        <p class="text-base md:text-lg opacity-80 max-w-xl mx-auto mb-8">
           {content.hero.subtitle}
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
