@@ -52,6 +52,7 @@ export function MessageThread({
   const [message, setMessage] = useState<AdminMessageRow | null>(initial?.message ?? null);
   const [replies, setReplies] = useState<AdminMessageReplyRow[]>(initial?.replies ?? []);
   const [people, setPeople] = useState<PeopleNames>(initial?.people ?? {});
+  const emailedTo = initial?.emailedTo ?? [];
   const [staff, setStaff] = useState<GrantablePerson[]>([]);
   const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
@@ -256,6 +257,11 @@ export function MessageThread({
             <div className="mt-3">
               <SopMarkdown content={message.body_md} />
             </div>
+            {emailedTo.length > 0 && (
+              <p className="mt-3 font-mono text-[10px] text-white/40">
+                Emailed to {emailedTo.map((email) => personName(email, people)).join(', ')}
+              </p>
+            )}
             {isAdmin && (
               <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-3">
                 <button

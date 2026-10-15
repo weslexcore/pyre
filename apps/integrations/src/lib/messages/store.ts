@@ -20,6 +20,8 @@ export interface MessageThreadPayload {
   message: AdminMessageRow;
   replies: AdminMessageReplyRow[];
   people: PeopleNames;
+  /** Who the message was emailed to (empty when it wasn't emailed). */
+  emailedTo: string[];
 }
 
 export type LoadResult =
@@ -85,6 +87,25 @@ export async function listMessagesForViewer(
 }
 
 /**
+ * The people a message was emailed to, read from the send log: each delivered
+ * email holds the key `admin-message:<id>:<recipient>`, and a send that was
+ * gated or failed leaves no row behind. Best-effort — [] on any failure.
+ */
+async function loadEmailedTo(db: SupabaseClient, id: string): Promise<string[]> {
+  const { data, error } = await db
+    .from('email_sends')
+    .select('email')
+    .like('send_key', `admin-message:${id}:%`)
+    .eq('status', 'sent')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[messages] emailed-to read failed:', error.message);
+    return [];
+  }
+  return [...new Set((data ?? []).map((row: { email: string }) => row.email))];
+}
+
+/**
  * One thread for `viewer`. A message they may not see reads as missing,
  * the way the other routes treat invisible rows.
  */
@@ -108,10 +129,12 @@ export async function loadMessageForViewer(
   if (replyError) return { ok: false, status: 500, error: replyError.message };
   const replies = (replyRows ?? []) as AdminMessageReplyRow[];
 
+  const emailedTo = await loadEmailedTo(db, id);
   const people = await getPeopleNames([
     message.author_email,
     message.updated_by ?? '',
     ...replies.flatMap((r) => [r.author_email, r.updated_by ?? '']),
+    ...emailedTo,
   ]);
-  return { ok: true, thread: { message, replies, people } };
+  return { ok: true, thread: { message, replies, people, emailedTo } };
 }
