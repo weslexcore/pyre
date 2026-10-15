@@ -48,20 +48,16 @@ export function canManageMessages(viewer: SopViewer): boolean {
 }
 
 /**
- * Whether holders of a granted role are told about the message (bell and
- * email). Every audience carries the admin role — admins see everything —
- * so that grant says nothing about who it is *for*: admins are told only
- * when the message also goes to another role (a team-wide note) or names
- * nobody at all (an admins-only note). A message to named people reaches
- * just them; the other admins can still open it, they just aren't pinged.
+ * Whether holders of a role are told about the message (bell and email):
+ * the role is ticked. Admins can open every message either way, so leaving
+ * the admin role off a note to one person keeps the other admins from being
+ * pinged without hiding it from them.
  */
 export function roleIsNotified(
-  message: Pick<AdminMessageRow, 'audience_roles' | 'audience_emails'>,
+  message: Pick<AdminMessageRow, 'audience_roles'>,
   role: SopRole
 ): boolean {
-  if (!message.audience_roles.includes(role)) return false;
-  if (role !== 'admin') return true;
-  return message.audience_roles.some((r) => r !== 'admin') || message.audience_emails.length === 0;
+  return message.audience_roles.includes(role);
 }
 
 /**

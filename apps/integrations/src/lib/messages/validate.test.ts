@@ -24,11 +24,19 @@ describe('normalizeTitle / normalizeBody', () => {
 });
 
 describe('parseAudience', () => {
-  it('always carries admin and lowercases + dedupes emails', () => {
+  it('keeps the roles as given and lowercases + dedupes emails', () => {
     expect(parseAudience(['staff'], ['A@x.y', 'a@x.y', ' b@x.y '])).toEqual({
       ok: true,
-      audience: { roles: ['staff', 'admin'], emails: ['a@x.y', 'b@x.y'] },
+      audience: { roles: ['staff'], emails: ['a@x.y', 'b@x.y'] },
     });
+    expect(parseAudience([], ['a@x.y'])).toEqual({
+      ok: true,
+      audience: { roles: [], emails: ['a@x.y'] },
+    });
+  });
+
+  it('needs at least one role or person', () => {
+    expect(parseAudience([], [])).toEqual({ ok: false, error: 'Pick at least one role or person' });
   });
 
   it('rejects unknown roles and non-string emails', () => {

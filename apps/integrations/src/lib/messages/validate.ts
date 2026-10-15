@@ -34,8 +34,9 @@ export interface Audience {
 }
 
 /**
- * The audience a request body names. Roles must be SOP roles and always
- * include admin (they see everything regardless, and the row should say so);
+ * The audience a request body names. Roles must be SOP roles — admin is
+ * optional: admins read every message regardless, so the role only decides
+ * whether they're told — and at least one role or person must be named;
  * emails are lowercased and deduped. Whether the emails are real roster
  * members is the route's check — it has the roster, this module doesn't.
  */
@@ -50,10 +51,12 @@ export function parseAudience(
     return { ok: false, error: 'audienceEmails must be a list of emails' };
   }
   const uniqueRoles = [...new Set(roles as SopRole[])];
-  if (!uniqueRoles.includes('admin')) uniqueRoles.push('admin');
   const uniqueEmails = [...new Set((emails as string[]).map(normalizeEmail).filter(Boolean))];
   if (uniqueEmails.length > AUDIENCE_EMAILS_MAX) {
     return { ok: false, error: `audienceEmails may name at most ${AUDIENCE_EMAILS_MAX} people` };
+  }
+  if (uniqueRoles.length === 0 && uniqueEmails.length === 0) {
+    return { ok: false, error: 'Pick at least one role or person' };
   }
   return { ok: true, audience: { roles: uniqueRoles, emails: uniqueEmails } };
 }

@@ -38,6 +38,7 @@ export function SopAccessPicker({
   grant,
   staff,
   disabled,
+  lockAdmins = true,
   onChange,
 }: {
   title: string;
@@ -45,13 +46,18 @@ export function SopAccessPicker({
   grant: SopGrant;
   staff: GrantablePerson[];
   disabled?: boolean;
+  /**
+   * Admins always hold an SOP grant, so the admin box is locked on. A message
+   * audience is who gets told, not who may read, so the composer unlocks it.
+   */
+  lockAdmins?: boolean;
   onChange: (next: SopGrant) => void;
 }) {
   const toggleRole = (role: SopRole) => {
     const roles = grant.roles.includes(role)
       ? grant.roles.filter((r) => r !== role)
       : [...grant.roles, role];
-    onChange({ ...grant, roles: withAdmins(roles) });
+    onChange({ ...grant, roles: lockAdmins ? withAdmins(roles) : roles });
   };
 
   const toggleEmail = (email: string) => {
@@ -72,20 +78,20 @@ export function SopAccessPicker({
           <label
             key={role}
             className={`flex items-center gap-1.5 text-xs ${
-              role === 'admin' ? 'text-white/40' : 'cursor-pointer text-white/70'
+              role === 'admin' && lockAdmins ? 'text-white/40' : 'cursor-pointer text-white/70'
             }`}
           >
             <input
               type="checkbox"
               className={checkboxClass}
-              checked={role === 'admin' || grant.roles.includes(role)}
+              checked={(role === 'admin' && lockAdmins) || grant.roles.includes(role)}
               // Unticking admins wouldn't take their access away, so the box
               // says what's true and refuses to pretend otherwise.
-              disabled={disabled || role === 'admin'}
+              disabled={disabled || (role === 'admin' && lockAdmins)}
               onChange={() => toggleRole(role)}
             />
             {ROLE_LABELS[role]}
-            {role === 'admin' && <span className="text-white/30">(always)</span>}
+            {role === 'admin' && lockAdmins && <span className="text-white/30">(always)</span>}
           </label>
         ))}
       </div>
@@ -97,7 +103,8 @@ export function SopAccessPicker({
           </p>
           <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
             {staff.map((person) => {
-              const viaRole = grant.roles.includes(person.role) || person.role === 'admin';
+              const viaRole =
+                grant.roles.includes(person.role) || (lockAdmins && person.role === 'admin');
               return (
                 <label
                   key={person.email}

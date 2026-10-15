@@ -10,12 +10,7 @@ import { BODY_MAX, TITLE_MAX } from '@/lib/messages/validate';
 import type { SopRole } from '@/lib/sops/levels';
 import { LinkTextarea } from './LinkTextarea';
 import { buttonClass, textareaClass } from './messagesUi';
-import {
-  type GrantablePerson,
-  SopAccessPicker,
-  type SopGrant,
-  withAdmins,
-} from './SopAccessPicker';
+import { type GrantablePerson, SopAccessPicker, type SopGrant } from './SopAccessPicker';
 import { SopMarkdown } from './SopMarkdown';
 
 export interface MessageDraft {
@@ -60,10 +55,12 @@ export function MessageComposer({
 }) {
   const [draft, setDraft] = useState<MessageDraft>(initial);
   const [preview, setPreview] = useState(false);
-  const canSubmit = draft.title.trim().length > 0 && draft.bodyMd.trim().length > 0 && !busy;
+  const hasAudience = draft.audience.roles.length > 0 || draft.audience.emails.length > 0;
+  const canSubmit =
+    draft.title.trim().length > 0 && draft.bodyMd.trim().length > 0 && hasAudience && !busy;
   // Who a new message will ping, by the same rule the server fans out with.
   const sent = {
-    audience_roles: withAdmins(draft.audience.roles),
+    audience_roles: draft.audience.roles,
     audience_emails: draft.audience.emails,
   };
   const reached = staff.filter(
@@ -75,11 +72,7 @@ export function MessageComposer({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (canSubmit)
-          onSubmit({
-            ...draft,
-            audience: { ...draft.audience, roles: withAdmins(draft.audience.roles) },
-          });
+        if (canSubmit) onSubmit(draft);
       }}
     >
       <input
@@ -134,11 +127,12 @@ export function MessageComposer({
       )}
 
       <SopAccessPicker
-        title="Who sees this"
-        hint="Everyone with a granted role, plus anyone named."
+        title="Who it's for"
+        hint="Everyone with a ticked role, plus anyone named. Admins can open every message either way."
         grant={draft.audience}
         staff={staff}
         disabled={busy}
+        lockAdmins={false}
         onChange={(audience) => setDraft((d) => ({ ...d, audience }))}
       />
 

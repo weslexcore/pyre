@@ -126,15 +126,19 @@ describe('resolveAudience', () => {
 });
 
 describe('roleIsNotified', () => {
-  it('pings admins on team-wide and admins-only notes, not on notes to named people', () => {
-    const toOne = { audience_roles: ['admin' as const], audience_emails: ['named@pyre.test'] };
+  it('pings a role only when it is ticked, admins included', () => {
+    const toOne = { audience_roles: [] as 'admin'[], audience_emails: ['named@pyre.test'] };
     expect(roleIsNotified(toOne, 'admin')).toBe(false);
     expect(resolveAudience(rows, toOne)).toEqual(['named@pyre.test']);
 
-    const adminsOnly = { audience_roles: ['admin' as const], audience_emails: [] };
-    expect(roleIsNotified(adminsOnly, 'admin')).toBe(true);
     expect(roleIsNotified(message, 'admin')).toBe(true);
     expect(roleIsNotified(message, 'staff')).toBe(false);
+  });
+
+  it('still lets admins open a message their role was left off', () => {
+    const toOne = { ...message, audience_roles: [] as 'admin'[] };
+    expect(canViewMessage(admin, toOne)).toBe(true);
+    expect(canViewMessage(lead, toOne)).toBe(false);
   });
 });
 
